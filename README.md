@@ -114,21 +114,6 @@ python -m pipeline.main list-sources
 python -m pipeline.main preview pleiades --limit 20
 ```
 
-## API (Coming Soon)
-
-The API will provide:
-- `/api/v1/sites` - List sites with pagination
-- `/api/v1/sites/{id}` - Get single site
-- `/api/v1/sites/bbox` - Sites in bounding box
-- `/api/v1/search` - Full-text search
-- `/api/v1/export/geojson` - Export data
-
-API tiers for monetization:
-- Anonymous: 100 requests/day
-- Free (API key): 1,000 requests/day
-- Pro: 50,000 requests/day
-- Enterprise: Unlimited
-
 ## Documentation
 
 - `ANCIENT_NERDS_MAP_DATA_SOURCES.md` - Complete list of 100+ data sources
@@ -155,4 +140,3 @@ Contributions welcome! Especially:
 
 - **Issues & Bugs**: [GitHub Issues](https://github.com/AncientNerds/AncientMap/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/AncientNerds/AncientMap/discussions)
-- **Email**: ancientnerds@proton.me
