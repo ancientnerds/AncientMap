@@ -1,0 +1,6 @@
+{
+  "license": "MIT",
+  "devDependencies": {
+    "puppeteer": "^24.35.0"
+  }
+}

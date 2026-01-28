@@ -1,0 +1,184 @@
+{
+  "roman": [
+    { "name": "Rome", "lat": 41.9028, "lng": 12.4964, "years": [-509, 330], "type": "capital" },
+    { "name": "Constantinople", "lat": 41.0082, "lng": 28.9784, "years": [330, 476], "type": "capital" },
+    { "name": "Ravenna", "lat": 44.4184, "lng": 12.2035, "years": [402, 476], "type": "capital" }
+  ],
+  "byzantine": [
+    { "name": "Constantinople", "lat": 41.0082, "lng": 28.9784, "years": [330, 1453], "type": "capital" },
+    { "name": "Nicaea", "lat": 40.4289, "lng": 29.7208, "years": [1204, 1261], "type": "capital" }
+  ],
+  "greek": [
+    { "name": "Athens", "lat": 37.9838, "lng": 23.7275, "years": [-800, -338], "type": "capital" },
+    { "name": "Sparta", "lat": 37.0755, "lng": 22.4303, "years": [-800, -338], "type": "major" },
+    { "name": "Corinth", "lat": 37.9059, "lng": 22.8792, "years": [-800, -338], "type": "major" },
+    { "name": "Thebes", "lat": 38.3192, "lng": 23.3178, "years": [-800, -338], "type": "major" }
+  ],
+  "macedonian": [
+    { "name": "Pella", "lat": 40.7611, "lng": 22.5236, "years": [-413, -168], "type": "capital" },
+    { "name": "Alexandria", "lat": 31.2001, "lng": 29.9187, "years": [-331, -30], "type": "capital" },
+    { "name": "Babylon", "lat": 32.5364, "lng": 44.4208, "years": [-331, -323], "type": "capital" }
+  ],
+  "carthaginian": [
+    { "name": "Carthage", "lat": 36.8528, "lng": 10.3233, "years": [-814, -146], "type": "capital" }
+  ],
+  "achaemenid": [
+    { "name": "Persepolis", "lat": 29.9352, "lng": 52.8914, "years": [-550, -330], "type": "capital" },
+    { "name": "Susa", "lat": 32.1877, "lng": 48.2527, "years": [-550, -330], "type": "capital" },
+    { "name": "Ecbatana", "lat": 34.7989, "lng": 48.5146, "years": [-550, -330], "type": "major" },
+    { "name": "Pasargadae", "lat": 30.1936, "lng": 53.1678, "years": [-550, -530], "type": "capital" }
+  ],
+  "parthian": [
+    { "name": "Ctesiphon", "lat": 33.0933, "lng": 44.5817, "years": [-247, 224], "type": "capital" },
+    { "name": "Hecatompylos", "lat": 36.4167, "lng": 54.9167, "years": [-247, -200], "type": "capital" }
+  ],
+  "sassanid": [
+    { "name": "Ctesiphon", "lat": 33.0933, "lng": 44.5817, "years": [224, 651], "type": "capital" },
+    { "name": "Istakhr", "lat": 29.9667, "lng": 52.8833, "years": [224, 651], "type": "major" }
+  ],
+  "seleucid": [
+    { "name": "Seleucia", "lat": 33.1167, "lng": 44.5333, "years": [-312, -141], "type": "capital" },
+    { "name": "Antioch", "lat": 36.2028, "lng": 36.1606, "years": [-300, -63], "type": "capital" }
+  ],
+  "mongol": [
+    { "name": "Karakorum", "lat": 47.1989, "lng": 102.8333, "years": [1220, 1260], "type": "capital" },
+    { "name": "Khanbaliq (Beijing)", "lat": 39.9042, "lng": 116.4074, "years": [1271, 1368], "type": "capital" },
+    { "name": "Sarai", "lat": 47.0500, "lng": 47.5000, "years": [1250, 1395], "type": "capital" }
+  ],
+  "timurid": [
+    { "name": "Samarkand", "lat": 39.6542, "lng": 66.9597, "years": [1370, 1507], "type": "capital" },
+    { "name": "Herat", "lat": 34.3529, "lng": 62.2040, "years": [1405, 1507], "type": "capital" }
+  ],
+  "egyptian": [
+    { "name": "Memphis", "lat": 29.8448, "lng": 31.2548, "years": [-3100, -2180], "type": "capital" },
+    { "name": "Thebes", "lat": 25.7188, "lng": 32.6573, "years": [-2055, -1650], "type": "capital" },
+    { "name": "Pi-Ramesses", "lat": 30.7833, "lng": 31.8333, "years": [-1279, -1078], "type": "capital" },
+    { "name": "Alexandria", "lat": 31.2001, "lng": 29.9187, "years": [-331, -30], "type": "capital" }
+  ],
+  "akkadian": [
+    { "name": "Akkad", "lat": 33.1000, "lng": 44.1000, "years": [-2334, -2154], "type": "capital" }
+  ],
+  "babylonian": [
+    { "name": "Babylon", "lat": 32.5364, "lng": 44.4208, "years": [-1894, -539], "type": "capital" }
+  ],
+  "assyrian": [
+    { "name": "Assur", "lat": 35.4564, "lng": 43.2594, "years": [-2500, -879], "type": "capital" },
+    { "name": "Nineveh", "lat": 36.3597, "lng": 43.1522, "years": [-705, -612], "type": "capital" },
+    { "name": "Nimrud", "lat": 36.0958, "lng": 43.3281, "years": [-879, -706], "type": "capital" }
+  ],
+  "hittite": [
+    { "name": "Hattusa", "lat": 40.0211, "lng": 34.6156, "years": [-1600, -1178], "type": "capital" }
+  ],
+  "han": [
+    { "name": "Chang'an (Xi'an)", "lat": 34.2658, "lng": 108.9541, "years": [-206, 25], "type": "capital" },
+    { "name": "Luoyang", "lat": 34.6836, "lng": 112.4536, "years": [25, 220], "type": "capital" }
+  ],
+  "tang": [
+    { "name": "Chang'an (Xi'an)", "lat": 34.2658, "lng": 108.9541, "years": [618, 907], "type": "capital" },
+    { "name": "Luoyang", "lat": 34.6836, "lng": 112.4536, "years": [684, 705], "type": "capital" }
+  ],
+  "song": [
+    { "name": "Kaifeng", "lat": 34.7972, "lng": 114.3481, "years": [960, 1127], "type": "capital" },
+    { "name": "Hangzhou", "lat": 30.2741, "lng": 120.1551, "years": [1127, 1279], "type": "capital" }
+  ],
+  "ming": [
+    { "name": "Nanjing", "lat": 32.0603, "lng": 118.7969, "years": [1368, 1421], "type": "capital" },
+    { "name": "Beijing", "lat": 39.9042, "lng": 116.4074, "years": [1421, 1644], "type": "capital" }
+  ],
+  "qing": [
+    { "name": "Beijing", "lat": 39.9042, "lng": 116.4074, "years": [1644, 1912], "type": "capital" },
+    { "name": "Mukden (Shenyang)", "lat": 41.8057, "lng": 123.4315, "years": [1625, 1644], "type": "capital" }
+  ],
+  "qin": [
+    { "name": "Xianyang", "lat": 34.3368, "lng": 108.7147, "years": [-221, -206], "type": "capital" }
+  ],
+  "shang": [
+    { "name": "Yin (Anyang)", "lat": 36.0925, "lng": 114.3525, "years": [-1300, -1046], "type": "capital" }
+  ],
+  "zhou": [
+    { "name": "Haojing (Xi'an)", "lat": 34.2658, "lng": 108.9541, "years": [-1046, -771], "type": "capital" },
+    { "name": "Luoyang", "lat": 34.6836, "lng": 112.4536, "years": [-771, -256], "type": "capital" }
+  ],
+  "maurya": [
+    { "name": "Pataliputra (Patna)", "lat": 25.5941, "lng": 85.1376, "years": [-322, -185], "type": "capital" }
+  ],
+  "gupta": [
+    { "name": "Pataliputra (Patna)", "lat": 25.5941, "lng": 85.1376, "years": [320, 550], "type": "capital" },
+    { "name": "Ujjain", "lat": 23.1765, "lng": 75.7885, "years": [320, 550], "type": "major" }
+  ],
+  "mughal": [
+    { "name": "Agra", "lat": 27.1767, "lng": 78.0081, "years": [1526, 1648], "type": "capital" },
+    { "name": "Delhi", "lat": 28.7041, "lng": 77.1025, "years": [1648, 1857], "type": "capital" },
+    { "name": "Fatehpur Sikri", "lat": 27.0945, "lng": 77.6679, "years": [1571, 1585], "type": "capital" },
+    { "name": "Lahore", "lat": 31.5204, "lng": 74.3587, "years": [1584, 1598], "type": "capital" }
+  ],
+  "chola": [
+    { "name": "Thanjavur", "lat": 10.7870, "lng": 79.1378, "years": [850, 1279], "type": "capital" },
+    { "name": "Gangaikonda Cholapuram", "lat": 11.2108, "lng": 79.4500, "years": [1025, 1279], "type": "capital" }
+  ],
+  "khmer": [
+    { "name": "Angkor", "lat": 13.4125, "lng": 103.8670, "years": [802, 1431], "type": "capital" }
+  ],
+  "majapahit": [
+    { "name": "Trowulan", "lat": -7.5500, "lng": 112.3833, "years": [1293, 1527], "type": "capital" }
+  ],
+  "srivijaya": [
+    { "name": "Palembang", "lat": -2.9761, "lng": 104.7754, "years": [650, 1377], "type": "capital" }
+  ],
+  "kush": [
+    { "name": "Meroe", "lat": 16.9333, "lng": 33.7333, "years": [-590, 350], "type": "capital" },
+    { "name": "Napata", "lat": 18.5333, "lng": 31.8333, "years": [-760, -590], "type": "capital" }
+  ],
+  "mali": [
+    { "name": "Niani", "lat": 11.3833, "lng": -8.1833, "years": [1235, 1600], "type": "capital" },
+    { "name": "Timbuktu", "lat": 16.7666, "lng": -3.0026, "years": [1235, 1600], "type": "major" }
+  ],
+  "songhai": [
+    { "name": "Gao", "lat": 16.2667, "lng": -0.0500, "years": [1464, 1591], "type": "capital" },
+    { "name": "Timbuktu", "lat": 16.7666, "lng": -3.0026, "years": [1464, 1591], "type": "major" }
+  ],
+  "ghana": [
+    { "name": "Koumbi Saleh", "lat": 15.7667, "lng": -7.9667, "years": [300, 1200], "type": "capital" }
+  ],
+  "maya": [
+    { "name": "Tikal", "lat": 17.2220, "lng": -89.6237, "years": [-400, 900], "type": "major" },
+    { "name": "Calakmul", "lat": 18.1053, "lng": -89.8108, "years": [-400, 900], "type": "major" },
+    { "name": "Chichen Itza", "lat": 20.6843, "lng": -88.5678, "years": [600, 1200], "type": "major" },
+    { "name": "Copan", "lat": 14.8400, "lng": -89.1400, "years": [-400, 900], "type": "major" }
+  ],
+  "aztec": [
+    { "name": "Tenochtitlan", "lat": 19.4326, "lng": -99.1332, "years": [1325, 1521], "type": "capital" },
+    { "name": "Texcoco", "lat": 19.5144, "lng": -98.8833, "years": [1428, 1521], "type": "major" },
+    { "name": "Tlacopan", "lat": 19.4500, "lng": -99.2000, "years": [1428, 1521], "type": "major" }
+  ],
+  "inca": [
+    { "name": "Cusco", "lat": -13.5319, "lng": -71.9675, "years": [1438, 1533], "type": "capital" },
+    { "name": "Machu Picchu", "lat": -13.1631, "lng": -72.5450, "years": [1450, 1572], "type": "major" }
+  ],
+  "umayyad": [
+    { "name": "Damascus", "lat": 33.5138, "lng": 36.2765, "years": [661, 750], "type": "capital" },
+    { "name": "Cordoba", "lat": 37.8882, "lng": -4.7794, "years": [756, 1031], "type": "capital" }
+  ],
+  "abbasid": [
+    { "name": "Baghdad", "lat": 33.3152, "lng": 44.3661, "years": [762, 1258], "type": "capital" },
+    { "name": "Samarra", "lat": 34.1981, "lng": 43.8753, "years": [836, 892], "type": "capital" }
+  ],
+  "fatimid": [
+    { "name": "Cairo", "lat": 30.0444, "lng": 31.2357, "years": [969, 1171], "type": "capital" },
+    { "name": "Mahdia", "lat": 35.5047, "lng": 11.0622, "years": [909, 969], "type": "capital" }
+  ],
+  "ottoman": [
+    { "name": "Bursa", "lat": 40.1885, "lng": 29.0610, "years": [1326, 1365], "type": "capital" },
+    { "name": "Edirne", "lat": 41.6771, "lng": 26.5557, "years": [1365, 1453], "type": "capital" },
+    { "name": "Constantinople (Istanbul)", "lat": 41.0082, "lng": 28.9784, "years": [1453, 1922], "type": "capital" }
+  ],
+  "ayyubid": [
+    { "name": "Cairo", "lat": 30.0444, "lng": 31.2357, "years": [1171, 1250], "type": "capital" },
+    { "name": "Damascus", "lat": 33.5138, "lng": 36.2765, "years": [1174, 1260], "type": "major" }
+  ],
+  "hre": [
+    { "name": "Aachen", "lat": 50.7753, "lng": 6.0839, "years": [800, 1531], "type": "capital" },
+    { "name": "Vienna", "lat": 48.2082, "lng": 16.3738, "years": [1438, 1806], "type": "capital" },
+    { "name": "Prague", "lat": 50.0755, "lng": 14.4378, "years": [1346, 1437], "type": "capital" }
+  ]
+}

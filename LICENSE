@@ -1,0 +1,44 @@
+MIT License
+
+Copyright (c) 2025-2026 Ancient Nerds Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+THIRD-PARTY LICENSES AND DATA ATTRIBUTION
+
+This software incorporates data and code from various sources with different
+licenses. See ATTRIBUTION.md for complete details.
+
+IMPORTANT NOTES:
+
+1. Data Sources: The archaeological site data displayed by this software comes
+   from 30+ external sources, each with their own licenses. Using this software
+   to display data does not grant you rights to the underlying data beyond what
+   each source's license permits.
+
+2. Mapbox: The frontend uses Mapbox GL JS which has a proprietary license.
+   Commercial use may require a Mapbox account and appropriate subscription.
+   See: https://www.mapbox.com/legal/tos
+
+3. python-Levenshtein: This dependency is licensed under GPL-2.0+. If you
+   distribute modified versions of this software that include python-Levenshtein,
+   you may need to comply with GPL-2.0 requirements for that component.
+   Alternatively, you can replace it with rapidfuzz (MIT licensed).

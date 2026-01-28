@@ -1,0 +1,26 @@
+# CODEOWNERS - Ancient Nerds Map
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for everything in the repo
+* @AncientNerds/maintainers
+
+# API and backend
+/api/ @AncientNerds/backend
+/pipeline/ @AncientNerds/backend
+
+# Frontend
+/ancient-nerds-map/ @AncientNerds/frontend
+
+# Infrastructure and DevOps
+/Dockerfile @AncientNerds/devops
+/docker-compose.yml @AncientNerds/devops
+/.github/ @AncientNerds/devops
+
+# Documentation
+*.md @AncientNerds/maintainers
+/docs/ @AncientNerds/maintainers
+
+# Security-sensitive files require maintainer review
+/api/routes/ai.py @AncientNerds/maintainers
+/api/services/access_control.py @AncientNerds/maintainers
+SECURITY.md @AncientNerds/maintainers

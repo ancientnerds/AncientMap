@@ -1,0 +1,92 @@
+/* OfflineIndicator.css - Styles for offline status badge */
+
+.offline-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: rgba(10, 21, 32, 0.9);
+  border: 1px solid rgba(0, 180, 180, 0.3);
+  border-radius: 16px;
+  font-size: 11px;
+  color: #a0a0a0;
+}
+
+/* Status dot */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transition: background-color 0.3s ease;
+}
+
+.status-dot.online {
+  background-color: #4ade80;
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.5);
+}
+
+.status-dot.offline {
+  background-color: #ef4444;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
+}
+
+.status-dot.syncing {
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* Pending badge */
+.pending-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  background: #c02023;
+  color: white;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+/* Offline data badge */
+.offline-data-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #00b4b4;
+}
+
+/* Manage button */
+.manage-offline-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid rgba(0, 180, 180, 0.4);
+  border-radius: 50%;
+  color: #00b4b4;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.manage-offline-btn:hover {
+  background: rgba(0, 180, 180, 0.15);
+  border-color: #00b4b4;
+}
+
+.manage-offline-btn:active {
+  transform: scale(0.95);
+}

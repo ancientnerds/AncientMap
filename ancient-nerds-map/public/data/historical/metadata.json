@@ -1,0 +1,433 @@
+{
+  "empires": {
+    "Africa": [
+      {
+        "id": "ghana",
+        "name": "Ghana Empire",
+        "startYear": 938,
+        "endYear": 1231,
+        "color": 13808780,
+        "defaultYear": 938,
+        "yearCount": 3
+      },
+      {
+        "id": "kush",
+        "name": "Kingdom of Kush",
+        "startYear": 46,
+        "endYear": 230,
+        "color": 13789470,
+        "defaultYear": 140,
+        "yearCount": 11
+      },
+      {
+        "id": "mali",
+        "name": "Mali Empire",
+        "startYear": 1238,
+        "endYear": 1610,
+        "color": 14596231,
+        "defaultYear": 1438,
+        "yearCount": 9
+      },
+      {
+        "id": "songhai",
+        "name": "Songhai Empire",
+        "startYear": 1465,
+        "endYear": 1605,
+        "color": 16032864,
+        "defaultYear": 1579,
+        "yearCount": 8
+      }
+    ],
+    "Americas": [
+      {
+        "id": "aztec",
+        "name": "Aztec Empire",
+        "startYear": 1434,
+        "endYear": 1864,
+        "color": 8190976,
+        "defaultYear": 1814,
+        "yearCount": 17
+      },
+      {
+        "id": "inca",
+        "name": "Inca Empire",
+        "startYear": 1444,
+        "endYear": 1567,
+        "color": 8388352,
+        "defaultYear": 1515,
+        "yearCount": 8
+      },
+      {
+        "id": "maya",
+        "name": "Maya Civilization",
+        "startYear": 6,
+        "endYear": 844,
+        "color": 65407,
+        "defaultYear": 426,
+        "yearCount": 5
+      }
+    ],
+    "Ancient Near East": [
+      {
+        "id": "akkadian",
+        "name": "Akkadian Empire",
+        "startYear": -2276,
+        "endYear": -2151,
+        "color": 13468991,
+        "defaultYear": -2226,
+        "yearCount": 3
+      },
+      {
+        "id": "assyrian",
+        "name": "Assyrian Empire",
+        "startYear": -1781,
+        "endYear": -608,
+        "color": 8388608,
+        "defaultYear": -623,
+        "yearCount": 20
+      },
+      {
+        "id": "babylonian",
+        "name": "Babylonian",
+        "startYear": -1781,
+        "endYear": -536,
+        "color": 9127187,
+        "defaultYear": -576,
+        "yearCount": 18
+      },
+      {
+        "id": "egyptian",
+        "name": "Egyptian Empire",
+        "startYear": -2401,
+        "endYear": -29,
+        "color": 16766720,
+        "defaultYear": -325,
+        "yearCount": 43
+      },
+      {
+        "id": "hittite",
+        "name": "Hittite Empire",
+        "startYear": -1551,
+        "endYear": -1176,
+        "color": 10506797,
+        "defaultYear": -1271,
+        "yearCount": 7
+      }
+    ],
+    "East Asia": [
+      {
+        "id": "han",
+        "name": "Han Dynasty",
+        "startYear": -200,
+        "endYear": 230,
+        "color": 14423100,
+        "defaultYear": 98,
+        "yearCount": 27
+      },
+      {
+        "id": "ming",
+        "name": "Ming Dynasty",
+        "startYear": 1379,
+        "endYear": 1643,
+        "color": 16766720,
+        "defaultYear": 1425,
+        "yearCount": 26
+      },
+      {
+        "id": "qin",
+        "name": "Qin Dynasty",
+        "startYear": -216,
+        "endYear": 1911,
+        "color": 9109504,
+        "defaultYear": 1806,
+        "yearCount": 70
+      },
+      {
+        "id": "qing",
+        "name": "Qing Dynasty",
+        "startYear": 1646,
+        "endYear": 1911,
+        "color": 16753920,
+        "defaultYear": 1806,
+        "yearCount": 67
+      },
+      {
+        "id": "shang",
+        "name": "Shang Dynasty",
+        "startYear": -1421,
+        "endYear": -1051,
+        "color": 12092939,
+        "defaultYear": -1421,
+        "yearCount": 3
+      },
+      {
+        "id": "song",
+        "name": "Song Dynasty",
+        "startYear": 961,
+        "endYear": 1275,
+        "color": 16737095,
+        "defaultYear": 1132,
+        "yearCount": 15
+      },
+      {
+        "id": "tang",
+        "name": "Tang Dynasty",
+        "startYear": 624,
+        "endYear": 905,
+        "color": 16729344,
+        "defaultYear": 663,
+        "yearCount": 32
+      },
+      {
+        "id": "zhou",
+        "name": "Zhou Dynasty",
+        "startYear": -901,
+        "endYear": 1036,
+        "color": 14329120,
+        "defaultYear": 581,
+        "yearCount": 17
+      }
+    ],
+    "Islamic": [
+      {
+        "id": "abbasid",
+        "name": "Abbasid Caliphate",
+        "startYear": 750,
+        "endYear": 1254,
+        "color": 65280,
+        "defaultYear": 780,
+        "yearCount": 40
+      },
+      {
+        "id": "ayyubid",
+        "name": "Ayyubid Dynasty",
+        "startYear": 1182,
+        "endYear": 1245,
+        "color": 25600,
+        "defaultYear": 1196,
+        "yearCount": 8
+      },
+      {
+        "id": "fatimid",
+        "name": "Fatimid Caliphate",
+        "startYear": 916,
+        "endYear": 1172,
+        "color": 3329330,
+        "defaultYear": 984,
+        "yearCount": 19
+      },
+      {
+        "id": "ottoman",
+        "name": "Ottoman Empire",
+        "startYear": 1315,
+        "endYear": 1922,
+        "color": 2263842,
+        "defaultYear": 1597,
+        "yearCount": 138
+      },
+      {
+        "id": "umayyad",
+        "name": "Umayyad Caliphate",
+        "startYear": 658,
+        "endYear": 755,
+        "color": 64154,
+        "defaultYear": 736,
+        "yearCount": 15
+      }
+    ],
+    "Medieval Europe": [
+      {
+        "id": "hre",
+        "name": "Holy Roman Empire",
+        "startYear": 965,
+        "endYear": 1806,
+        "color": 6591981,
+        "defaultYear": 1172,
+        "yearCount": 131
+      }
+    ],
+    "Mediterranean": [
+      {
+        "id": "byzantine",
+        "name": "Byzantine Empire",
+        "startYear": 395,
+        "endYear": 1471,
+        "color": 8388736,
+        "defaultYear": 563,
+        "yearCount": 135
+      },
+      {
+        "id": "carthaginian",
+        "name": "Carthaginian Empire",
+        "startYear": -641,
+        "endYear": -155,
+        "color": 14423100,
+        "defaultYear": -218,
+        "yearCount": 28
+      },
+      {
+        "id": "greek",
+        "name": "Greek City-States",
+        "startYear": -1051,
+        "endYear": 1974,
+        "color": 4286945,
+        "defaultYear": -155,
+        "yearCount": 76
+      },
+      {
+        "id": "macedonian",
+        "name": "Macedonian Empire",
+        "startYear": -613,
+        "endYear": -168,
+        "color": 10040012,
+        "defaultYear": -317,
+        "yearCount": 39
+      },
+      {
+        "id": "roman",
+        "name": "Roman Empire",
+        "startYear": -419,
+        "endYear": 2024,
+        "color": 12591139,
+        "defaultYear": 121,
+        "yearCount": 129
+      }
+    ],
+    "Persian/Central Asia": [
+      {
+        "id": "achaemenid",
+        "name": "Achaemenid Persia",
+        "startYear": -546,
+        "endYear": -329,
+        "color": 2003199,
+        "defaultYear": -466,
+        "yearCount": 13
+      },
+      {
+        "id": "mongol",
+        "name": "Mongol Empire",
+        "startYear": 1207,
+        "endYear": 1693,
+        "color": 3100495,
+        "defaultYear": 1281,
+        "yearCount": 52
+      },
+      {
+        "id": "parthian",
+        "name": "Parthian Empire",
+        "startYear": -202,
+        "endYear": 230,
+        "color": 52945,
+        "defaultYear": 162,
+        "yearCount": 26
+      },
+      {
+        "id": "sassanid",
+        "name": "Sassanid Empire",
+        "startYear": 219,
+        "endYear": 642,
+        "color": 2142890,
+        "defaultYear": 624,
+        "yearCount": 46
+      },
+      {
+        "id": "seleucid",
+        "name": "Seleucid Empire",
+        "startYear": -317,
+        "endYear": -65,
+        "color": 4620980,
+        "defaultYear": -297,
+        "yearCount": 32
+      },
+      {
+        "id": "timurid",
+        "name": "Timurid Empire",
+        "startYear": 1379,
+        "endYear": 1504,
+        "color": 5597999,
+        "defaultYear": 1404,
+        "yearCount": 17
+      }
+    ],
+    "South Asia": [
+      {
+        "id": "chola",
+        "name": "Chola Dynasty",
+        "startYear": 867,
+        "endYear": 1254,
+        "color": 3978097,
+        "defaultYear": 1030,
+        "yearCount": 28
+      },
+      {
+        "id": "gupta",
+        "name": "Gupta Empire",
+        "startYear": 335,
+        "endYear": 550,
+        "color": 2263842,
+        "defaultYear": 430,
+        "yearCount": 13
+      },
+      {
+        "id": "maurya",
+        "name": "Maurya Empire",
+        "startYear": -317,
+        "endYear": -180,
+        "color": 3329330,
+        "defaultYear": -241,
+        "yearCount": 7
+      },
+      {
+        "id": "mughal",
+        "name": "Mughal Empire",
+        "startYear": 1465,
+        "endYear": 1857,
+        "color": 25600,
+        "defaultYear": 1700,
+        "yearCount": 69
+      }
+    ],
+    "Southeast Asia": [
+      {
+        "id": "khmer",
+        "name": "Khmer Empire",
+        "startYear": 802,
+        "endYear": 1977,
+        "color": 9419919,
+        "defaultYear": 1212,
+        "yearCount": 29
+      },
+      {
+        "id": "majapahit",
+        "name": "Majapahit Empire",
+        "startYear": 1318,
+        "endYear": 1517,
+        "color": 9498256,
+        "defaultYear": 1382,
+        "yearCount": 10
+      },
+      {
+        "id": "srivijaya",
+        "name": "Srivijaya",
+        "startYear": 677,
+        "endYear": 1289,
+        "color": 10025880,
+        "defaultYear": 788,
+        "yearCount": 8
+      }
+    ]
+  },
+  "totalEmpires": 44,
+  "regions": [
+    "Africa",
+    "Americas",
+    "Ancient Near East",
+    "East Asia",
+    "Islamic",
+    "Medieval Europe",
+    "Mediterranean",
+    "Persian/Central Asia",
+    "South Asia",
+    "Southeast Asia"
+  ]
+}

@@ -1,0 +1,53 @@
+server {
+    server_name ancientnerds.com www.ancientnerds.com;
+
+    root /var/www/ancientnerds/ancient-nerds-map/dist;
+    index index.html;
+
+    # Force service worker to always revalidate
+    location = /sw.js {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
+    }
+
+    # Force index.html to always revalidate (loads new JS/CSS hashes)
+    location = /index.html {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+    }
+
+    # Workbox files - no cache
+    location ~* ^/workbox.*\.js$ {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000/api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    listen 443 ssl default_server;
+    ssl_certificate /etc/letsencrypt/live/ancientnerds.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/ancientnerds.com/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+}
+
+server {
+    if ($host = www.ancientnerds.com) {
+        return 301 https://$host$request_uri;
+    }
+
+    if ($host = ancientnerds.com) {
+        return 301 https://$host$request_uri;
+    }
+
+    listen 80;
+    server_name ancientnerds.com www.ancientnerds.com;
+    return 404;
+}

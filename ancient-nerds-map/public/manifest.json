@@ -1,0 +1,21 @@
+{
+  "name": "Ancient Nerds Research Platform",
+  "short_name": "Ancient Map",
+  "description": "Interactive 3D globe of 800K+ archaeological sites worldwide",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#0a1520",
+  "background_color": "#0a1520",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["education", "travel", "reference"],
+  "lang": "en",
+  "dir": "ltr"
+}

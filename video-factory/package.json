@@ -1,0 +1,37 @@
+{
+  "name": "ancient-nerds-video-factory",
+  "version": "1.0.0",
+  "description": "Standalone video generation system for Ancient Nerds archaeological site videos",
+  "main": "cli.ts",
+  "scripts": {
+    "cli": "ts-node cli.ts",
+    "teaser": "ts-node cli.ts teaser",
+    "short": "ts-node cli.ts short",
+    "studio": "remotion studio",
+    "render": "remotion render",
+    "build": "tsc"
+  },
+  "keywords": [
+    "remotion",
+    "video",
+    "archaeology",
+    "ancient-nerds"
+  ],
+  "author": "Ancient Nerds",
+  "license": "MIT",
+  "dependencies": {
+    "@remotion/cli": "^4.0.0",
+    "@remotion/player": "^4.0.0",
+    "commander": "^11.1.0",
+    "puppeteer": "^21.6.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "remotion": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.0"
+  }
+}

@@ -1,0 +1,88 @@
+# ANCIENT NERDS - Research Platform - Data Pipeline & API Dependencies
+# Python 3.11+ recommended
+
+# =============================================================================
+# DATABASE
+# =============================================================================
+psycopg2-binary>=2.9.9      # PostgreSQL adapter
+sqlalchemy>=2.0.0           # ORM
+geoalchemy2>=0.14.0         # PostGIS support for SQLAlchemy
+alembic>=1.13.0             # Database migrations
+
+# =============================================================================
+# API (FastAPI)
+# =============================================================================
+fastapi>=0.109.0            # Web framework
+uvicorn[standard]>=0.27.0   # ASGI server
+pydantic>=2.5.0             # Data validation
+pydantic-settings>=2.1.0    # Settings management
+python-jose[cryptography]>=3.3.0  # JWT tokens
+passlib[bcrypt]>=1.7.4      # Password hashing
+slowapi>=0.1.9              # Rate limiting
+python-multipart>=0.0.6     # Form data parsing
+
+# =============================================================================
+# DATA PROCESSING
+# =============================================================================
+polars>=0.20.0              # Fast DataFrames (better than pandas for large data)
+pandas>=2.1.0               # Data manipulation (for compatibility)
+geopandas>=0.14.0           # Geospatial DataFrames
+h3>=3.7.6                   # Uber H3 hexagonal indexing
+pyproj>=3.6.0               # Coordinate transformations
+shapely>=2.0.0              # Geometric operations
+
+# =============================================================================
+# NAME MATCHING & DEDUPLICATION
+# =============================================================================
+rapidfuzz>=3.6.0            # Fast fuzzy string matching (MIT license, includes Levenshtein)
+jellyfish>=1.0.0            # Phonetic algorithms (Soundex, Metaphone)
+# NOTE: python-Levenshtein removed (GPL-2.0) - use rapidfuzz.distance.Levenshtein instead
+unidecode>=1.3.0            # Unicode to ASCII transliteration
+
+# =============================================================================
+# HTTP & NETWORKING
+# =============================================================================
+httpx>=0.26.0               # Modern HTTP client (async support)
+aiohttp>=3.9.0              # Async HTTP
+tenacity>=8.2.0             # Retry logic with backoff
+aiofiles>=23.2.0            # Async file operations
+
+# =============================================================================
+# IMAGE PROCESSING
+# =============================================================================
+Pillow>=10.0.0              # Image manipulation for OG image generation
+
+# =============================================================================
+# UTILITIES
+# =============================================================================
+python-dotenv>=1.0.0        # Environment variables
+pyyaml>=6.0.0               # YAML config files
+tqdm>=4.66.0                # Progress bars
+loguru>=0.7.0               # Better logging
+click>=8.1.0                # CLI framework
+rich>=13.7.0                # Beautiful terminal output
+
+# =============================================================================
+# AI AGENT (BitNet RAG)
+# =============================================================================
+qdrant-client>=1.7.0        # Vector database for RAG (multi-collection support)
+sentence-transformers>=2.2.2  # Embedding model (all-MiniLM-L6-v2)
+transformers>=4.40.0        # Hugging Face transformers for BitNet
+torch>=2.0.0                # PyTorch (CPU version recommended: pip install torch --index-url https://download.pytorch.org/whl/cpu)
+
+# =============================================================================
+# TESTING
+# =============================================================================
+pytest>=7.4.0               # Testing framework
+pytest-asyncio>=0.23.0      # Async test support
+pytest-cov>=4.1.0           # Coverage reporting
+httpx>=0.26.0               # For testing FastAPI
+
+# =============================================================================
+# DEVELOPMENT
+# =============================================================================
+black>=23.12.0              # Code formatting
+ruff>=0.1.0                 # Fast linting
+mypy>=1.8.0                 # Type checking
+ipython>=8.19.0             # Interactive shell
+openpyxl>=3.1.0

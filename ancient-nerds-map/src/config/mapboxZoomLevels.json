@@ -1,0 +1,41 @@
+{
+  "description": "Maps zoom slider % to Mapbox tile zoom level. 5% steps (0-75%), 2.5% steps (75-90%), 1% steps (90-100%). 100% = ~500m altitude (z18).",
+  "maxZoom": {
+    "dark": 18,
+    "satellite": 19
+  },
+  "zoomMapping": [
+    { "sliderPercent": 0,    "mapboxZoom": 1 },
+    { "sliderPercent": 5,    "mapboxZoom": 1 },
+    { "sliderPercent": 10,   "mapboxZoom": 2 },
+    { "sliderPercent": 15,   "mapboxZoom": 2 },
+    { "sliderPercent": 20,   "mapboxZoom": 3 },
+    { "sliderPercent": 25,   "mapboxZoom": 3 },
+    { "sliderPercent": 30,   "mapboxZoom": 4 },
+    { "sliderPercent": 35,   "mapboxZoom": 4 },
+    { "sliderPercent": 40,   "mapboxZoom": 5 },
+    { "sliderPercent": 45,   "mapboxZoom": 5 },
+    { "sliderPercent": 50,   "mapboxZoom": 6 },
+    { "sliderPercent": 55,   "mapboxZoom": 7 },
+    { "sliderPercent": 60,   "mapboxZoom": 8 },
+    { "sliderPercent": 65,   "mapboxZoom": 9 },
+    { "sliderPercent": 70,   "mapboxZoom": 10 },
+    { "sliderPercent": 75,   "mapboxZoom": 11 },
+    { "sliderPercent": 77.5, "mapboxZoom": 11 },
+    { "sliderPercent": 80,   "mapboxZoom": 12 },
+    { "sliderPercent": 82.5, "mapboxZoom": 13 },
+    { "sliderPercent": 85,   "mapboxZoom": 14 },
+    { "sliderPercent": 87.5, "mapboxZoom": 15 },
+    { "sliderPercent": 90,   "mapboxZoom": 16 },
+    { "sliderPercent": 91,   "mapboxZoom": 16 },
+    { "sliderPercent": 92,   "mapboxZoom": 16 },
+    { "sliderPercent": 93,   "mapboxZoom": 17 },
+    { "sliderPercent": 94,   "mapboxZoom": 17 },
+    { "sliderPercent": 95,   "mapboxZoom": 17 },
+    { "sliderPercent": 96,   "mapboxZoom": 17 },
+    { "sliderPercent": 97,   "mapboxZoom": 18 },
+    { "sliderPercent": 98,   "mapboxZoom": 18 },
+    { "sliderPercent": 99,   "mapboxZoom": 18 },
+    { "sliderPercent": 100,  "mapboxZoom": 18 }
+  ]
+}
