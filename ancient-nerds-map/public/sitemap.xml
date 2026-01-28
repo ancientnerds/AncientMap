@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+
+  <!-- Homepage -->
+  <url>
+    <loc>https://ancientnerds.com/</loc>
+    <lastmod>2026-01-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <image:image>
+      <image:loc>https://ancientnerds.com/api/og/homepage</image:loc>
+      <image:title>Ancient Nerds Interactive Archaeological Map</image:title>
+      <image:caption>Explore over 6,000 archaeological sites worldwide on an interactive 3D globe</image:caption>
+    </image:image>
+  </url>
+
+  <!-- Note: Individual site pages are dynamically accessible via /?site={id} -->
+  <!-- For comprehensive site indexing, consider implementing a dynamic sitemap API endpoint -->
+  <!-- Example: https://ancientnerds.com/api/sitemap.xml -->
+
+</urlset>

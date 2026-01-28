@@ -1,0 +1,150 @@
+# =============================================================================
+# ENVIRONMENT & SECRETS - Never commit these!
+# =============================================================================
+.env
+.env.local
+.env.*.local
+
+# Note: .env.production is committed as a template with placeholders
+# .env.production.local is for local production overrides (gitignored via .env.*.local)
+*.key
+*.pem
+*.p12
+credentials.json
+secrets.json
+
+# Note: config.json is committed but should not contain secrets
+# All sensitive values should be in .env
+
+# =============================================================================
+# LOGS
+# =============================================================================
+*.log
+api.log
+logs/
+
+# =============================================================================
+# BACKUPS & TEMP FILES
+# =============================================================================
+*.bak
+*.tmp
+*.temp
+*.swap
+*.swp
+*.swo
+*~
+*.backup*
+backup/
+backups/
+_all_backups/
+tmpclaude-*/
+
+# =============================================================================
+# DATABASE FILES
+# =============================================================================
+*.dump
+*.sql.gz
+data/qdrant/
+data/chroma_db/
+data/cache/
+
+# =============================================================================
+# BUILD ARTIFACTS - Python
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# =============================================================================
+# BUILD ARTIFACTS - JavaScript/Node
+# =============================================================================
+node_modules/
+ancient-nerds-map/dist/
+ancient-nerds-map/build/
+*.tsbuildinfo
+
+# =============================================================================
+# TESTING & COVERAGE
+# =============================================================================
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+test*.png
+screenshot/
+screenshots/
+
+# =============================================================================
+# IDE & EDITOR FILES
+# =============================================================================
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+.spyderproject
+.spyproject
+.ropeproject
+
+# =============================================================================
+# DEPLOYMENT ARCHIVES
+# =============================================================================
+deployment-*.tar.gz
+*.tar.gz
+
+# =============================================================================
+# OS FILES
+# =============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+nul
+desktop.ini
+
+# =============================================================================
+# MISC
+# =============================================================================
+*.pid
+*.seed
+*.pid.lock
+
+# Large data files (use Git LFS or download separately)
+data/raw/
+*.geojson.gz
+*.csv.gz
+
+# Large frontend data assets (download separately - see README)
+public/data/sites/details/
+ancient-nerds-map/public/data/sites/details/
+ancient-nerds-map/public/data/basemaps/
+ancient-nerds-map/public/data/sea-levels/

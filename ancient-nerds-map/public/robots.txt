@@ -1,0 +1,20 @@
+# robots.txt for ancientnerds.com
+# https://ancientnerds.com/robots.txt
+
+User-agent: *
+Allow: /
+
+# Sitemap location (dynamic API-generated sitemap with all sites)
+Sitemap: https://ancientnerds.com/api/sitemap/sitemap.xml
+
+# Crawl-delay for polite crawling
+Crawl-delay: 1
+
+# Disallow API endpoints from being indexed
+Disallow: /api/
+Disallow: /data/basemaps/
+Disallow: /data/historical/
+
+# Allow important data files
+Allow: /data/labels.json
+Allow: /data/sites/

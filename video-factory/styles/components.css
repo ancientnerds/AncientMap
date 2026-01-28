@@ -1,0 +1,400 @@
+/**
+ * Component styles for Video Factory
+ *
+ * Standalone CSS extracted from Ancient Nerds design.
+ * Glass-morphism, badges, and other UI elements.
+ */
+
+/* =============================================================================
+   Reset & Base
+   ============================================================================= */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* =============================================================================
+   Glass-morphism Cards
+   ============================================================================= */
+
+.glass-card {
+  background: rgba(0, 20, 25, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 180, 180, 0.2);
+  border-radius: 12px;
+}
+
+.glass-card-light {
+  background: rgba(0, 20, 25, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(0, 180, 180, 0.15);
+  border-radius: 8px;
+}
+
+/* =============================================================================
+   Category Badges
+   ============================================================================= */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.badge-outline {
+  background: transparent;
+  border: 1px solid currentColor;
+}
+
+.badge-filled {
+  background: currentColor;
+  color: #000;
+}
+
+/* =============================================================================
+   Text Styles
+   ============================================================================= */
+
+.text-gradient {
+  background: linear-gradient(135deg, #FFD700 0%, #c02023 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-glow {
+  text-shadow: 0 0 20px rgba(0, 180, 180, 0.5);
+}
+
+.text-glow-gold {
+  text-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+}
+
+/* =============================================================================
+   Overlays & Gradients
+   ============================================================================= */
+
+.overlay-top {
+  background: linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%);
+}
+
+.overlay-bottom {
+  background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 100%);
+}
+
+.overlay-full {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+/* =============================================================================
+   Animations
+   ============================================================================= */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes glow {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(0, 180, 180, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(0, 180, 180, 0.6);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.5s ease-out forwards;
+}
+
+.animate-fade-in-down {
+  animation: fadeInDown 0.5s ease-out forwards;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.3s ease-out forwards;
+}
+
+.animate-pulse {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.animate-glow {
+  animation: glow 2s ease-in-out infinite;
+}
+
+/* =============================================================================
+   Logo Styles
+   ============================================================================= */
+
+.logo-container {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.logo-image {
+  width: auto;
+  height: 80px;
+  object-fit: contain;
+}
+
+.logo-text {
+  font-size: 32px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 2px;
+}
+
+/* =============================================================================
+   Site Info Styles
+   ============================================================================= */
+
+.site-name {
+  font-size: 48px;
+  font-weight: 700;
+  color: #ffffff;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+
+.site-location {
+  font-size: 24px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.8);
+  margin-top: 8px;
+}
+
+.site-period {
+  font-size: 18px;
+  font-weight: 500;
+  color: #00b4b4;
+  margin-top: 4px;
+}
+
+.site-description {
+  font-size: 16px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.6;
+  max-width: 600px;
+}
+
+/* =============================================================================
+   Stats Display
+   ============================================================================= */
+
+.stats-container {
+  display: flex;
+  gap: 48px;
+  justify-content: center;
+}
+
+.stat-item {
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 48px;
+  font-weight: 700;
+  color: #FFD700;
+}
+
+.stat-label {
+  font-size: 16px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 4px;
+}
+
+/* =============================================================================
+   CTA Button
+   ============================================================================= */
+
+.cta-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 32px;
+  background: #c02023;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 600;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: all 0.3s ease;
+}
+
+.cta-button:hover {
+  background: #a01c1f;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(192, 32, 35, 0.3);
+}
+
+/* =============================================================================
+   Video Container
+   ============================================================================= */
+
+.video-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+}
+
+.video-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* =============================================================================
+   Short Video (9:16 vertical) specific styles
+   ============================================================================= */
+
+.short-container {
+  width: 1080px;
+  height: 1920px;
+  position: relative;
+  background: #000;
+  overflow: hidden;
+}
+
+.short-content {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 48px 32px;
+  z-index: 10;
+}
+
+.short-site-name {
+  font-size: 56px;
+  font-weight: 700;
+  color: #ffffff;
+  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
+  line-height: 1.1;
+}
+
+.short-location {
+  font-size: 28px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.9);
+  margin-top: 12px;
+}
+
+.short-badge {
+  display: inline-block;
+  padding: 8px 20px;
+  background: rgba(0, 180, 180, 0.3);
+  border: 1px solid rgba(0, 180, 180, 0.5);
+  border-radius: 9999px;
+  color: #00b4b4;
+  font-size: 16px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 16px;
+}
+
+/* =============================================================================
+   Teaser Video (16:9 horizontal) specific styles
+   ============================================================================= */
+
+.teaser-container {
+  width: 1920px;
+  height: 1080px;
+  position: relative;
+  background: #000;
+  overflow: hidden;
+}
+
+.teaser-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  z-index: 10;
+}
+
+.teaser-title {
+  font-size: 96px;
+  font-weight: 900;
+  color: #ffffff;
+  text-transform: uppercase;
+  letter-spacing: 8px;
+  text-shadow: 0 4px 30px rgba(0, 0, 0, 0.8);
+}
+
+.teaser-tagline {
+  font-size: 32px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.9);
+  margin-top: 24px;
+}

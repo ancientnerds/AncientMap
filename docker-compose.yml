@@ -1,0 +1,116 @@
+# ANCIENT NERDS - Research Platform - Docker Compose Configuration
+# PostgreSQL + PostGIS for geospatial data storage
+
+version: '3.8'
+
+services:
+  # ==========================================================================
+  # PostgreSQL Database with PostGIS Extension
+  # ==========================================================================
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: ancient_nerds_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ancient_map}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env file}
+      POSTGRES_DB: ${POSTGRES_DB:-ancient_map}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_extensions.sql:/docker-entrypoint-initdb.d/init_extensions.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ancient_map} -d ${POSTGRES_DB:-ancient_map}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================================================
+  # Redis for API rate limiting and caching (optional, for later)
+  # ==========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: ancient_nerds_redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================================================
+  # Qdrant Vector Database for AI Search
+  # ==========================================================================
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: ancient_nerds_qdrant
+    restart: unless-stopped
+    ports:
+      - "${QDRANT_PORT:-6333}:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================================================
+  # SearXNG - Self-hosted Web Search (FREE FOREVER)
+  # ==========================================================================
+  searxng:
+    image: searxng/searxng:latest
+    container_name: ancient_nerds_searxng
+    restart: unless-stopped
+    ports:
+      - "${SEARXNG_PORT:-8888}:8080"
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:${SEARXNG_PORT:-8888}
+    volumes:
+      - searxng_data:/etc/searxng
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ==========================================================================
+  # pgAdmin for database management (optional, for development)
+  # ==========================================================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: ancient_nerds_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:?PGADMIN_EMAIL required}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?PGADMIN_PASSWORD required}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - db
+    profiles:
+      - dev  # Only start with: docker compose --profile dev up
+
+volumes:
+  postgres_data:
+    name: ancient_map_postgres_data
+  redis_data:
+    name: ancient_map_redis_data
+  pgadmin_data:
+    name: ancient_map_pgadmin_data
+  qdrant_data:
+    name: ancient_map_qdrant_data
+  searxng_data:
+    name: ancient_map_searxng_data
+
+networks:
+  default:
+    name: ancient_map_network

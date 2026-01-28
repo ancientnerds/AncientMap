@@ -1,0 +1,30 @@
+{
+  "_comment": "Configuration for AncientMap Pipeline",
+  "_note": "API keys and secrets should be in .env file. See .env.example for required variables.",
+
+  "api_keys": {
+    "_note": "API keys moved to .env file for security. See .env.example.",
+
+    "mapbox": {
+      "access_token": "",
+      "_url": "https://account.mapbox.com/access-tokens/",
+      "_hint": "Required for map tiles. Get free token at mapbox.com"
+    }
+  },
+
+  "database": {
+    "_note": "Database credentials should be in .env file. See .env.example.",
+    "host": "localhost",
+    "port": 5432,
+    "user": "ancient_map",
+    "password": "",
+    "database": "ancient_map"
+  },
+
+  "rate_limits": {
+    "_comment": "Delay in seconds between API requests",
+    "wikidata": 2.0,
+    "commons": 0.5,
+    "megalithic": 1.0
+  }
+}

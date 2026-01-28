@@ -1,0 +1,113 @@
+{
+  "macedonian": [
+    { "name": "Macedonia", "lat": 40.76, "lng": 22.52, "years": [-359, -168] },
+    { "name": "Thrace", "lat": 42.0, "lng": 25.5, "years": [-340, -168] },
+    { "name": "Egypt", "lat": 30.0, "lng": 31.2, "years": [-332, -30] },
+    { "name": "Syria", "lat": 35.5, "lng": 36.3, "years": [-333, -64] },
+    { "name": "Mesopotamia", "lat": 33.3, "lng": 44.4, "years": [-331, -141] },
+    { "name": "Persis", "lat": 29.9, "lng": 52.9, "years": [-330, -150] },
+    { "name": "Media", "lat": 35.7, "lng": 51.4, "years": [-330, -150] },
+    { "name": "Bactria", "lat": 36.8, "lng": 66.9, "years": [-329, -125] },
+    { "name": "Sogdiana", "lat": 39.7, "lng": 66.9, "years": [-329, -125] },
+    { "name": "Arachosia", "lat": 31.6, "lng": 65.7, "years": [-330, -150] },
+    { "name": "Gedrosia", "lat": 26.0, "lng": 63.0, "years": [-325, -150] }
+  ],
+  "roman": [
+    { "name": "Italia", "lat": 42.5, "lng": 12.5, "years": [-275, 476] },
+    { "name": "Gallia", "lat": 46.6, "lng": 2.5, "years": [-50, 476] },
+    { "name": "Hispania", "lat": 40.4, "lng": -3.7, "years": [-197, 476] },
+    { "name": "Britannia", "lat": 52.5, "lng": -1.5, "years": [43, 410] },
+    { "name": "Germania", "lat": 50.1, "lng": 8.7, "years": [-15, 260] },
+    { "name": "Africa", "lat": 36.8, "lng": 10.2, "years": [-146, 439] },
+    { "name": "Aegyptus", "lat": 30.0, "lng": 31.2, "years": [-30, 395] },
+    { "name": "Syria", "lat": 35.5, "lng": 36.3, "years": [-64, 395] },
+    { "name": "Asia", "lat": 38.4, "lng": 27.1, "years": [-133, 395] },
+    { "name": "Graecia", "lat": 38.0, "lng": 23.7, "years": [-146, 395] },
+    { "name": "Dacia", "lat": 45.9, "lng": 25.0, "years": [106, 271] },
+    { "name": "Mesopotamia", "lat": 33.3, "lng": 44.4, "years": [116, 363] },
+    { "name": "Arabia", "lat": 30.3, "lng": 36.2, "years": [106, 395] }
+  ],
+  "byzantine": [
+    { "name": "Thrace", "lat": 42.0, "lng": 26.5, "years": [395, 1453] },
+    { "name": "Asia Minor", "lat": 39.0, "lng": 32.0, "years": [395, 1071] },
+    { "name": "Syria", "lat": 35.5, "lng": 36.3, "years": [395, 636] },
+    { "name": "Aegyptus", "lat": 30.0, "lng": 31.2, "years": [395, 641] },
+    { "name": "Graecia", "lat": 38.0, "lng": 23.7, "years": [395, 1204] },
+    { "name": "Italia", "lat": 41.0, "lng": 16.0, "years": [535, 751] },
+    { "name": "Africa", "lat": 36.8, "lng": 10.2, "years": [533, 698] }
+  ],
+  "achaemenid": [
+    { "name": "Persis", "lat": 29.9, "lng": 52.9, "years": [-550, -330] },
+    { "name": "Media", "lat": 35.7, "lng": 51.4, "years": [-550, -330] },
+    { "name": "Babylonia", "lat": 32.5, "lng": 44.4, "years": [-539, -330] },
+    { "name": "Egypt", "lat": 30.0, "lng": 31.2, "years": [-525, -332] },
+    { "name": "Lydia", "lat": 38.5, "lng": 28.0, "years": [-546, -330] },
+    { "name": "Bactria", "lat": 36.8, "lng": 66.9, "years": [-540, -330] },
+    { "name": "Sogdiana", "lat": 39.7, "lng": 66.9, "years": [-540, -330] },
+    { "name": "Arachosia", "lat": 31.6, "lng": 65.7, "years": [-540, -330] },
+    { "name": "Parthia", "lat": 36.4, "lng": 54.9, "years": [-550, -330] },
+    { "name": "Armenia", "lat": 40.0, "lng": 45.0, "years": [-550, -330] }
+  ],
+  "mongol": [
+    { "name": "Mongolia", "lat": 47.0, "lng": 103.0, "years": [1206, 1368] },
+    { "name": "China", "lat": 35.0, "lng": 105.0, "years": [1279, 1368] },
+    { "name": "Persia", "lat": 32.0, "lng": 53.0, "years": [1256, 1335] },
+    { "name": "Khorasan", "lat": 36.3, "lng": 59.6, "years": [1220, 1335] },
+    { "name": "Transoxiana", "lat": 39.7, "lng": 66.9, "years": [1220, 1370] },
+    { "name": "Kipchak", "lat": 50.0, "lng": 55.0, "years": [1240, 1502] },
+    { "name": "Rus", "lat": 55.0, "lng": 37.6, "years": [1240, 1480] }
+  ],
+  "ottoman": [
+    { "name": "Anatolia", "lat": 39.0, "lng": 32.0, "years": [1326, 1922] },
+    { "name": "Rumelia", "lat": 42.0, "lng": 25.0, "years": [1362, 1913] },
+    { "name": "Syria", "lat": 35.5, "lng": 36.3, "years": [1516, 1918] },
+    { "name": "Egypt", "lat": 30.0, "lng": 31.2, "years": [1517, 1882] },
+    { "name": "Iraq", "lat": 33.3, "lng": 44.4, "years": [1534, 1918] },
+    { "name": "Hejaz", "lat": 24.5, "lng": 39.6, "years": [1517, 1916] },
+    { "name": "Maghreb", "lat": 34.0, "lng": 9.0, "years": [1551, 1830] },
+    { "name": "Hungary", "lat": 47.5, "lng": 19.0, "years": [1541, 1699] }
+  ],
+  "mughal": [
+    { "name": "Delhi", "lat": 28.7, "lng": 77.1, "years": [1526, 1857] },
+    { "name": "Bengal", "lat": 23.8, "lng": 90.4, "years": [1576, 1757] },
+    { "name": "Gujarat", "lat": 22.3, "lng": 71.2, "years": [1573, 1758] },
+    { "name": "Deccan", "lat": 18.5, "lng": 77.0, "years": [1636, 1724] },
+    { "name": "Punjab", "lat": 31.5, "lng": 74.3, "years": [1526, 1799] },
+    { "name": "Kashmir", "lat": 34.1, "lng": 74.8, "years": [1586, 1752] },
+    { "name": "Kabul", "lat": 34.5, "lng": 69.2, "years": [1504, 1738] }
+  ],
+  "han": [
+    { "name": "Guanzhong", "lat": 34.3, "lng": 108.9, "years": [-206, 220] },
+    { "name": "Shu", "lat": 30.7, "lng": 104.0, "years": [-206, 220] },
+    { "name": "Chu", "lat": 30.6, "lng": 114.3, "years": [-206, 220] },
+    { "name": "Qi", "lat": 36.7, "lng": 117.0, "years": [-206, 220] },
+    { "name": "Yan", "lat": 39.9, "lng": 116.4, "years": [-206, 220] },
+    { "name": "Yue", "lat": 23.1, "lng": 113.3, "years": [-111, 220] }
+  ],
+  "tang": [
+    { "name": "Guannei", "lat": 34.3, "lng": 108.9, "years": [618, 907] },
+    { "name": "Longyou", "lat": 36.1, "lng": 103.8, "years": [618, 755] },
+    { "name": "Henan", "lat": 34.7, "lng": 113.7, "years": [618, 907] },
+    { "name": "Jiangnan", "lat": 31.2, "lng": 121.5, "years": [618, 907] },
+    { "name": "Lingnan", "lat": 23.1, "lng": 113.3, "years": [618, 907] },
+    { "name": "Anxi", "lat": 41.7, "lng": 83.0, "years": [640, 790] }
+  ],
+  "abbasid": [
+    { "name": "Iraq", "lat": 33.3, "lng": 44.4, "years": [750, 1258] },
+    { "name": "Persia", "lat": 32.0, "lng": 53.0, "years": [750, 820] },
+    { "name": "Khorasan", "lat": 36.3, "lng": 59.6, "years": [750, 820] },
+    { "name": "Syria", "lat": 35.5, "lng": 36.3, "years": [750, 877] },
+    { "name": "Egypt", "lat": 30.0, "lng": 31.2, "years": [750, 868] },
+    { "name": "Ifriqiya", "lat": 36.8, "lng": 10.2, "years": [750, 800] }
+  ],
+  "umayyad": [
+    { "name": "Syria", "lat": 33.5, "lng": 36.3, "years": [661, 750] },
+    { "name": "Iraq", "lat": 33.3, "lng": 44.4, "years": [661, 750] },
+    { "name": "Persia", "lat": 32.0, "lng": 53.0, "years": [661, 750] },
+    { "name": "Egypt", "lat": 30.0, "lng": 31.2, "years": [661, 750] },
+    { "name": "Ifriqiya", "lat": 36.8, "lng": 10.2, "years": [670, 750] },
+    { "name": "Al-Andalus", "lat": 37.4, "lng": -6.0, "years": [711, 750] },
+    { "name": "Khorasan", "lat": 36.3, "lng": 59.6, "years": [661, 750] },
+    { "name": "Transoxiana", "lat": 39.7, "lng": 66.9, "years": [710, 750] }
+  ]
+}
