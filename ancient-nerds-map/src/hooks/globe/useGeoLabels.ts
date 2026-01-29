@@ -346,17 +346,17 @@ export function useGeoLabels(options: UseGeoLabelsOptions) {
       })
     }
 
-    // Add layer labels (lakes, rivers) - ALWAYS add if layer is visible
-    for (const { layerKey } of layerLabelMappings) {
+    // Add layer labels (lakes, rivers, plates, glaciers, coral reefs) - if both layer AND label type are enabled
+    for (const { layerKey, labelType } of layerLabelMappings) {
       const layerLabels = layerLabelsRef.current[layerKey]
       if (!layerLabels) continue
 
-      // Lakes/rivers: only check if their vector layer is enabled
+      // Check both the vector layer visibility AND the label type toggle
       const layerVisible = vectorLayersRef.current[layerKey]
-      if (!layerVisible) continue
+      const typeVisible = labelTypesVisibleRef.current[labelType]
+      if (!layerVisible || !typeVisible) continue
 
       for (const item of layerLabels) {
-        // Always add lake/river to candidates (they have highest priority)
         candidates.push({
           name: item.label.name,
           id: `${item.label.name}_${item.label.type}`,
@@ -679,16 +679,24 @@ export function useGeoLabels(options: UseGeoLabelsOptions) {
     if (geoLabelsVisible && labelsLoadedRef.current) updateGeoLabels()
   }, [geoLabelsVisible, updateGeoLabels])
 
-  // ========== Update on zoom/visibility/type changes ==========
+  // ========== Update on zoom changes (throttled) ==========
 
   useEffect(() => {
-    // Throttle updates - only recalculate if zoom changed significantly
+    // Throttle zoom-based updates - only recalculate if zoom changed significantly
     if (Math.abs(zoom - lastCalculatedZoomRef.current) < 1) return
 
     if (geoLabelsVisible && labelsLoadedRef.current) {
       updateGeoLabels()
     }
-  }, [zoom, geoLabelsVisible, labelTypesVisible, vectorLayers, updateGeoLabels, showEmpireLabels, visibleEmpires])
+  }, [zoom, geoLabelsVisible, updateGeoLabels])
+
+  // ========== Update on label type/layer visibility changes (immediate) ==========
+
+  useEffect(() => {
+    if (geoLabelsVisible && labelsLoadedRef.current) {
+      updateGeoLabels()
+    }
+  }, [labelTypesVisible, vectorLayers, showEmpireLabels, visibleEmpires, geoLabelsVisible, updateGeoLabels])
 
   // ========== Add Layer Label Helper ==========
 

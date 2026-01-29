@@ -1971,8 +1971,6 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
         onLabelTypesExpandToggle={labels.toggleLabelTypesExpanded}
         labelTypesVisible={labelTypesVisible}
         onLabelTypeToggle={labels.toggleLabelType}
-        starsVisible={starsVisible}
-        onStarsToggle={labels.toggleStars}
         showMapbox={showMapbox}
         isOffline={contextIsOffline}
         cachedLayerIds={cachedLayerIds}
@@ -1989,6 +1987,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
           replaceCoastlines={replaceCoastlines}
           onReplaceCoastlinesChange={paleo.setReplaceCoastlines}
           empireBordersWindowOpen={empireBordersWindowOpen}
+          hasVisibleEmpires={visibleEmpires.size > 0}
           onEmpireBordersToggle={() => setEmpireBordersWindowOpen(prev => !prev)}
           showMapbox={showMapbox}
         />

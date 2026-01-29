@@ -30,10 +30,6 @@ interface MapLayersPanelProps {
   labelTypesVisible: Record<string, boolean>
   onLabelTypeToggle: (type: string) => void
 
-  // Stars
-  starsVisible: boolean
-  onStarsToggle: () => void
-
   // Mapbox mode
   showMapbox: boolean
 
@@ -57,8 +53,6 @@ export function MapLayersPanel({
   onLabelTypesExpandToggle,
   labelTypesVisible,
   onLabelTypeToggle,
-  starsVisible,
-  onStarsToggle,
   showMapbox,
   isOffline,
   cachedLayerIds
@@ -213,19 +207,6 @@ export function MapLayersPanel({
                 </label>
               )
             })}
-            <label className={`layer-toggle ${showMapbox ? 'mapbox-unavailable' : ''}`} title={showMapbox ? 'Stars not available in Mapbox mode' : ''}>
-              <input
-                type="checkbox"
-                checked={starsVisible}
-                onChange={onStarsToggle}
-                disabled={showMapbox}
-              />
-              <span
-                className="layer-color-indicator"
-                style={{ backgroundColor: '#ffffff' }}
-              />
-              <span className="layer-label">Stars</span>
-            </label>
             {children}
           </>
         )}
