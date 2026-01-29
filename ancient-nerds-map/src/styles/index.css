@@ -1859,13 +1859,13 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   background: rgba(192, 32, 35, 0.15);
 }
 
-/* Sign In Button (disabled) */
-.action-btn.signin-btn.disabled {
+/* Disabled Action Buttons (Sign In, News Feed, etc.) */
+.action-btn.disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.action-btn.signin-btn.disabled:hover {
+.action-btn.disabled:hover {
   color: var(--text-secondary);
   background: transparent;
 }
