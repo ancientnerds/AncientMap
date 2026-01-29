@@ -1,5 +1,0 @@
-[sshd]
-enabled = true
-port = 52891
-bantime = 1w
-maxretry = 3
