@@ -1,0 +1,51 @@
+{
+  "range": {
+    "min": -150,
+    "max": -150
+  },
+  "levels": [
+    -150
+  ],
+  "details": [
+    "110m",
+    "50m",
+    "10m"
+  ],
+  "key_levels": [
+    {
+      "level": -130,
+      "label": "LGM Peak",
+      "description": "Last Glacial Maximum peak (~26,000 years ago)"
+    },
+    {
+      "level": -120,
+      "label": "Late LGM",
+      "description": "Late Last Glacial Maximum (~20,000 years ago)"
+    },
+    {
+      "level": -80,
+      "label": "Meltwater Pulse",
+      "description": "Rapid sea level rise (~14,500 years ago)"
+    },
+    {
+      "level": -60,
+      "label": "Younger Dryas",
+      "description": "Cold period (~12,000 years ago)"
+    },
+    {
+      "level": -40,
+      "label": "Early Holocene",
+      "description": "Early Holocene warming (~10,000 years ago)"
+    },
+    {
+      "level": 0,
+      "label": "Present Day",
+      "description": "Current sea level"
+    }
+  ],
+  "sources": {
+    "data": "GEBCO 2024",
+    "url": "https://www.gebco.net/",
+    "license": "GEBCO is made available under a Creative Commons license"
+  }
+}
