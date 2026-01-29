@@ -84,10 +84,10 @@ export function SocialLinks({
           </svg>
         </button>
 
-        {/* Sign In Button */}
+        {/* Sign In Button - Coming Soon */}
         <button
           className="action-btn signin-btn disabled"
-          title="Sign In"
+          title="Sign In (Coming Soon)"
           disabled
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
