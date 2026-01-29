@@ -12,12 +12,14 @@ import { useEffect } from 'react'
 import * as THREE from 'three'
 import type { GlobeRefs } from './types'
 import type { VectorLayerKey } from '../../config/vectorLayers'
+import type { MapboxGlobeService } from '../../services/MapboxGlobeService'
 
 interface UseSatelliteModeOptions {
   refs: GlobeRefs
   satellite: boolean
   vectorLayers: Record<VectorLayerKey, boolean>
   showMapbox: boolean
+  mapboxServiceRef?: React.MutableRefObject<MapboxGlobeService | null>
 }
 
 export function useSatelliteMode({
@@ -25,11 +27,18 @@ export function useSatelliteMode({
   satellite,
   vectorLayers,
   showMapbox,
+  mapboxServiceRef,
 }: UseSatelliteModeOptions): void {
   // Handle satellite mode toggle (textures already loaded by LOD effect)
   useEffect(() => {
     // Sync ref for useCallback closures
     refs.satelliteMode.current = satellite
+
+    // Sync Mapbox style when satellite mode changes
+    const mapboxService = mapboxServiceRef?.current
+    if (mapboxService?.getIsInitialized()) {
+      mapboxService.setStyle(satellite ? 'satellite' : 'dark')
+    }
 
     // Toggle body class for CSS styling (glass effect adjustments)
     if (satellite) {
@@ -112,8 +121,6 @@ export function useSatelliteMode({
         }
       }
     })
-
-    // Mapbox tile style is handled in the animation loop based on satelliteModeRef
 
     // Update star shader when satellite mode changes
     const starsGroup = refs.stars.current
