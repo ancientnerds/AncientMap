@@ -273,6 +273,7 @@ export function createModeSwitchEffect(
 ): void {
   // Detect if mode actually changed (vs just onSiteClick dependency triggering re-run)
   const modeActuallyChanged = deps.prevShowMapboxRef.current !== deps.showMapbox
+
   deps.prevShowMapboxRef.current = deps.showMapbox
   deps.showMapboxRef.current = deps.showMapbox
 

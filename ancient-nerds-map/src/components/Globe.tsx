@@ -282,7 +282,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   useFlyToAnimation({ refs, flyTo })
 
   // Satellite mode: toggle between gray basemap and satellite imagery
-  useSatelliteMode({ refs, satellite: tileLayers.satellite, vectorLayers, showMapbox })
+  useSatelliteMode({ refs, satellite: tileLayers.satellite, vectorLayers, showMapbox, mapboxServiceRef })
 
   // Contribute picker: map picker mode for adding new sites
   useContributePicker({

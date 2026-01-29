@@ -98,14 +98,12 @@ export function useMapboxSync(options: MapboxSyncOptions) {
   const [showMapboxOfflineWarning, setShowMapboxOfflineWarning] = useState(false)
 
   // Sync showMapbox state with ref and notify callback
+  // NOTE: Do NOT update prevShowMapboxRef here - that's handled by createModeSwitchEffect
+  // to ensure proper mode change detection
   useEffect(() => {
-    const modeActuallyChanged = prevShowMapboxRef.current !== showMapbox
-    prevShowMapboxRef.current = showMapbox
     showMapboxRef.current = showMapbox
-
-    if (modeActuallyChanged) {
-      onModeChange?.(showMapbox)
-    }
+    // Mode change detection happens in createModeSwitchEffect
+    onModeChange?.(showMapbox)
   }, [showMapbox, onModeChange])
 
   // Sync satellite mode state with ref

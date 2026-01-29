@@ -5,7 +5,7 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { SiteData } from '../../../data/sites'
-import { MapboxGlobeService, type MapboxTileType } from '../../../services/MapboxGlobeService'
+import { MapboxGlobeService } from '../../../services/MapboxGlobeService'
 import { FadeManager } from '../../../utils/FadeManager'
 import {
   fadeLabelIn,
@@ -545,13 +545,7 @@ export function runAnimationLoop(ctx: AnimationLoopContext): void {
       }
       // Note: Don't hide entire globe - keep it visible for measurement/proximity overlays
       // Only the dots are hidden (handled in mode switch effect)
-
-      // Update Mapbox style if tile type changed (dark <-> satellite)
-      const tileType: MapboxTileType = ctx.satelliteModeRef.current ? 'satellite' : 'dark'
-      if (ctx.mapboxServiceRef.current!.getStyle() !== tileType) {
-        console.log(`[Mapbox] Switching style: ${ctx.mapboxServiceRef.current!.getStyle()} -> ${tileType}`)
-        ctx.mapboxServiceRef.current!.setStyle(tileType)
-      }
+      // Note: Mapbox style (dark/satellite) is handled by useSatelliteMode hook
       // Note: visibility/opacity handled by CSS via mapbox-primary-mode class
     } else {
       // Show basemap (Mapbox fades out via CSS transition)
