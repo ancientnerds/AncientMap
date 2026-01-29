@@ -1697,9 +1697,10 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       }
 
       // Back layer materials (separate key to avoid conflicts)
+      // Don't show back lines in satellite mode (satellite is opaque)
       if (backLines.length > 0) {
         const backMaterial = backLines[0].material as THREE.Material
-        if (visible) {
+        if (visible && !tileLayers.satellite) {
           backLines.forEach(l => l.visible = true)
           fm.fadeTo(`${layerKey}_back`, [backMaterial], 1)
         } else {
@@ -1709,7 +1710,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
         }
       }
     })
-  }, [vectorLayers])
+  }, [vectorLayers, tileLayers.satellite])
 
   // Auto-switch between Three.js and Mapbox based on zoom level (66% threshold)
   useEffect(() => {
