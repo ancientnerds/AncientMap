@@ -23,31 +23,76 @@ This project aggregates data from 100+ open-source archaeological databases worl
 
 1. **Clone and install dependencies**:
    ```bash
-   cd AncientNerds
+   git clone https://github.com/AncientNerds/AncientMap.git
+   cd AncientMap
    python -m venv .venv
    source .venv/bin/activate  # or .venv\Scripts\activate on Windows
    pip install -r requirements.txt
    ```
 
-2. **Start the database**:
+2. **Configure environment variables**:
    ```bash
-   docker compose up -d db
+   # Copy the example environment file
+   cp .env.example .env
+
+   # Edit .env with your settings (see Configuration section below)
    ```
 
-3. **Initialize the database**:
+   **Required settings in `.env`:**
+   - `POSTGRES_PASSWORD` - Set a secure password for the database
+   - `MAPBOX_ACCESS_TOKEN` - Get a free token from [Mapbox](https://account.mapbox.com/access-tokens/)
+
+   > **Security Note**: Never commit your `.env` file to git. It's already in `.gitignore`.
+
+3. **Start the services** (PostgreSQL, Redis, etc.):
+   ```bash
+   docker compose up -d
+   ```
+
+4. **Initialize the database**:
    ```bash
    python scripts/init_db.py
    ```
 
-4. **Run the first data ingestion (Pleiades)**:
+5. **Start the API server**:
    ```bash
-   python -m pipeline.main ingest pleiades
+   uvicorn api.main:app --reload --port 8000
    ```
 
-5. **Check status**:
+6. **Start the frontend** (in a new terminal):
    ```bash
-   python -m pipeline.main status
+   cd ancient-nerds-map
+   npm install
+   npm run dev
    ```
+
+7. **Open the app**: Visit http://localhost:5173
+
+### Configuration
+
+The `.env` file controls all configuration. Key sections:
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `POSTGRES_PASSWORD` | Database password | ✅ Yes |
+| `DATABASE_URL` | Full PostgreSQL connection string | Auto-generated |
+| `MAPBOX_ACCESS_TOKEN` | For map tiles ([get free token](https://mapbox.com)) | ✅ Yes |
+| `AI_VALID_PINS` | JSON of PINs for AI agent access | Optional |
+| `OLLAMA_MODEL` | LLM model for AI features | Optional |
+
+See `.env.example` for all available options with descriptions.
+
+### Running the Data Pipeline
+
+After setup, you can ingest archaeological data:
+
+```bash
+# Run the first data ingestion (Pleiades)
+python -m pipeline.main ingest pleiades
+
+# Check pipeline status
+python -m pipeline.main status
+```
 
 ## Project Structure
 
@@ -76,7 +121,8 @@ AncientNerds/
 ├── tests/                 # Test suite
 ├── docker-compose.yml     # Docker services
 ├── requirements.txt       # Python dependencies
-└── .env                   # Environment configuration
+├── .env.example           # Environment template (copy to .env)
+└── .env                   # Your local config (not in git)
 ```
 
 ## Data Sources
