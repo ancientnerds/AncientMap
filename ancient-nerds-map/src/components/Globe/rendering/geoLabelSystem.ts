@@ -433,17 +433,17 @@ export function updateGeoLabels(ctx: GeoLabelContext): void {
     })
   }
 
-  // Add layer labels (lakes, rivers) - ALWAYS add if layer is visible
-  for (const { layerKey } of LAYER_LABEL_MAPPINGS) {
+  // Add layer labels (lakes, rivers, plates, glaciers, coral reefs) - if both layer AND label type are enabled
+  for (const { layerKey, labelType } of LAYER_LABEL_MAPPINGS) {
     const layerLabels = ctx.layerLabelsRef.current[layerKey]
     if (!layerLabels) continue
 
-    // Lakes/rivers: only check if their vector layer is enabled
+    // Check both the vector layer visibility AND the label type toggle
     const layerVisible = ctx.vectorLayersRef.current[layerKey]
-    if (!layerVisible) continue
+    const typeVisible = ctx.labelTypesVisibleRef.current[labelType]
+    if (!layerVisible || !typeVisible) continue
 
     for (const item of layerLabels) {
-      // Always add lake/river to candidates (they have highest priority)
       candidates.push({
         name: item.label.name,
         id: `${item.label.name}_${item.label.type}`,

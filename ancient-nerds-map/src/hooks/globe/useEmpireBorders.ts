@@ -3,7 +3,7 @@
  * Manages historical empire border visualization state
  */
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import type * as THREE from 'three'
 import { EMPIRES } from '../../config/empireData'
 import type { GlobeLabelMesh } from '../../utils/LabelRenderer'
@@ -119,6 +119,13 @@ export function useEmpireBorders(options: UseEmpireBordersOptions = {}) {
   empireYearsRef.current = empireYears
   showEmpireLabelsRef.current = showEmpireLabels
   showAncientCitiesRef.current = showAncientCities
+
+  // Auto-open empire borders panel when an empire becomes visible
+  useEffect(() => {
+    if (visibleEmpires.size > 0) {
+      setEmpireBordersWindowOpen(true)
+    }
+  }, [visibleEmpires.size])
 
   // Calculate global timeline range from visible empires
   const globalTimelineRange = (() => {

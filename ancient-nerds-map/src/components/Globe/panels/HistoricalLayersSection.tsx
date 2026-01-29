@@ -17,6 +17,7 @@ interface HistoricalLayersSectionProps {
 
   // Empire Borders toggle
   empireBordersWindowOpen: boolean
+  hasVisibleEmpires: boolean
   onEmpireBordersToggle: () => void
 
   // Mapbox mode (disables 3D layers)
@@ -34,6 +35,7 @@ export function HistoricalLayersSection({
   replaceCoastlines,
   onReplaceCoastlinesChange,
   empireBordersWindowOpen,
+  hasVisibleEmpires,
   onEmpireBordersToggle,
   showMapbox
 }: HistoricalLayersSectionProps) {
@@ -157,7 +159,7 @@ export function HistoricalLayersSection({
       <label className="layer-toggle">
         <input
           type="checkbox"
-          checked={empireBordersWindowOpen}
+          checked={hasVisibleEmpires}
           onChange={onEmpireBordersToggle}
         />
         <span

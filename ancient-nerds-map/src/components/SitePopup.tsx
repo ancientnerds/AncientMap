@@ -209,7 +209,7 @@ export default function SitePopup({ site, onClose, prefetchedImages, onSetProxim
     setSketchfabLoading(true)
     const timer = setTimeout(() => {
       sketchfabFetchedRef.current = siteKey
-      findModelsForSite(displaySite.title)
+      findModelsForSite(displaySite.title, displaySite.location || '')
         .then(setSketchfabModels)
         .catch((err) => {
           console.warn('Failed to load 3D models:', err)
