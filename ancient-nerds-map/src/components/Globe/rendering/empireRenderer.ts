@@ -145,7 +145,10 @@ export function getPolygonFillPositions(
 ): number[] {
   try {
     const outerRing = coordinates[0]
-    if (!outerRing || outerRing.length < 3) return []
+    if (!outerRing || outerRing.length < 3) {
+      console.warn(`[getPolygonFillPositions] Invalid outerRing: ${outerRing ? `length=${outerRing.length}` : 'null/undefined'}`)
+      return []
+    }
 
     // Calculate centroid of outer ring
     let centLng = 0, centLat = 0, count = 0
@@ -363,10 +366,20 @@ export async function loadEmpireBordersForYear(
     const radius = LAYER_CONFIG.countryBorders.radius
     const fillRadius = 1.002
 
-    // STEP 2: Collect ALL fill positions from ALL features into ONE merged array
+    // STEP 2: Deduplicate features - some GeoJSON files have duplicate features with identical coordinates
+    // which would cancel out via stencil XOR (feature1 XOR feature2 = 0 if identical)
+    const seenGeometries = new Set<string>()
+    const uniqueFeatures = data.features.filter((feature: any) => {
+      const coordsKey = JSON.stringify(feature.geometry?.coordinates)
+      if (seenGeometries.has(coordsKey)) return false
+      seenGeometries.add(coordsKey)
+      return true
+    })
+
+    // STEP 3: Collect ALL fill positions from UNIQUE features into ONE merged array
     const allFillPositions: number[] = []
 
-    data.features.forEach((feature: any) => {
+    uniqueFeatures.forEach((feature: any) => {
       const geomType = feature.geometry?.type
       if (!geomType) return
 
@@ -382,10 +395,10 @@ export async function loadEmpireBordersForYear(
       }
     })
 
-    // STEP 3: Remove old geometry AFTER new data is ready (prevents flickering)
+    // STEP 4: Remove old geometry AFTER new data is ready (prevents flickering)
     removeEmpireFromGlobe(empireId, ctx)
 
-    // STEP 4: Create stencil-based fill using two-pass rendering
+    // STEP 5: Create stencil-based fill using two-pass rendering
     if (allFillPositions.length > 0) {
       const geometry = new THREE.BufferGeometry()
       geometry.setAttribute('position', new THREE.Float32BufferAttribute(allFillPositions, 3))
@@ -393,9 +406,14 @@ export async function loadEmpireBordersForYear(
 
       // Pass 1: Stencil write mesh - renders fan triangles to stencil buffer only
       // Uses INVERT operation so odd-numbered overlaps are "inside" (even-odd fill rule)
+      // IMPORTANT: Each empire needs unique renderOrder pair to prevent stencil buffer interference
+      // When multiple empires are visible, they must render stencil+fill consecutively
+      const empireIndex = EMPIRES.findIndex(e => e.id === empireId)
+      const baseRenderOrder = 100 + (empireIndex >= 0 ? empireIndex * 2 : 0)
+
       const stencilMesh = new THREE.Mesh(geometry, stencilMaterial_)
       stencilMesh.userData.empireId = empireId
-      stencilMesh.renderOrder = 7  // Render first to set up stencil
+      stencilMesh.renderOrder = baseRenderOrder  // Unique per empire
       globe.add(stencilMesh)
 
       // Pass 2: Color fill mesh - tests stencil and draws color
@@ -403,7 +421,7 @@ export async function loadEmpireBordersForYear(
       const fillMesh = new THREE.Mesh(geometry, fillMaterial)
       fillMesh.userData.empireId = empireId
       fillMesh.userData.isFillMesh = true  // Mark as fill mesh for hover detection
-      fillMesh.renderOrder = 8  // Render after stencil
+      fillMesh.renderOrder = baseRenderOrder + 1  // Immediately after this empire's stencil
       globe.add(fillMesh)
 
       // Store fill mesh for hover effects
@@ -411,10 +429,12 @@ export async function loadEmpireBordersForYear(
         ctx.empireFillMeshesRef.current[empireId] = []
       }
       ctx.empireFillMeshesRef.current[empireId].push(fillMesh)
+    } else {
+      console.warn(`[Empire Fill] ${empireId}: No fill positions generated`)
     }
 
-    // STEP 5: Create border lines (separate loop for clarity)
-    data.features.forEach((feature: any) => {
+    // STEP 6: Create border lines (use unique features to avoid duplicate borders)
+    uniqueFeatures.forEach((feature: any) => {
       const geomType = feature.geometry?.type
       if (!geomType) return
 
@@ -504,9 +524,13 @@ export function createEmpireLabel(
   const years = yearOptions || ctx.empireYearOptions[empireId]
 
   // Calculate period text: (full range) showing current period
+  // Use actual available years from metadata instead of config years
+  // This ensures we show the actual data range (e.g., 472 instead of 476)
+  const actualStartYear = years && years.length > 0 ? years[0] : startYear
+  const actualEndYear = years && years.length > 0 ? years[years.length - 1] : endYear
   let periodText = ''
-  const fullRange = (startYear !== undefined && endYear !== undefined)
-    ? `(${formatYear(startYear)} - ${formatYear(endYear)})`
+  const fullRange = (actualStartYear !== undefined && actualEndYear !== undefined)
+    ? `(${formatYear(actualStartYear)} - ${formatYear(actualEndYear)})`
     : ''
   if (currentYear !== undefined && years) {
     const currentIndex = years.indexOf(currentYear)
@@ -609,14 +633,19 @@ export function updateEmpireLabelText(
   const fontSize = 57  // 10% bigger
   const periodFontSize = 40  // 40% bigger
 
+  // Use passed yearOptions or fall back to state
+  const yearOpts = yearOptionsParam || ctx.empireYearOptions[empireId]
+
   // Calculate period text: (full range) current period
+  // Use actual available years from metadata instead of config years
+  // This ensures we show the actual data range (e.g., 472 instead of 476)
+  const actualStartYear = yearOpts && yearOpts.length > 0 ? yearOpts[0] : startYear
+  const actualEndYear = yearOpts && yearOpts.length > 0 ? yearOpts[yearOpts.length - 1] : endYear
   let periodText = ''
-  const fullRange = (startYear !== undefined && endYear !== undefined)
-    ? `(${formatYear(startYear)} - ${formatYear(endYear)})`
+  const fullRange = (actualStartYear !== undefined && actualEndYear !== undefined)
+    ? `(${formatYear(actualStartYear)} - ${formatYear(actualEndYear)})`
     : ''
   if (currentYear !== undefined) {
-    // Use passed yearOptions or fall back to state
-    const yearOpts = yearOptionsParam || ctx.empireYearOptions[empireId]
     let currentPeriod = ''
     if (yearOpts) {
       const currentIndex = yearOpts.indexOf(currentYear)
