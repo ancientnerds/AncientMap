@@ -178,7 +178,7 @@ export function createEmpireFillMaterial(color: number, opacity: number = 0.15):
           sunBoost = mix(1.0, 2.0, dayFactor);
         }
 
-        float finalOpacity = min(uOpacity * sunBoost * backsideFade, 0.4);  // Cap at 0.4 to not be too opaque
+        float finalOpacity = min(uOpacity * sunBoost * backsideFade, 0.6);  // Cap at 0.6 to allow hover glow
         gl_FragColor = vec4(uColor, finalOpacity);
       }
     `,
@@ -235,4 +235,102 @@ export function updateEmpireSatelliteMode(materials: THREE.ShaderMaterial[], ena
  */
 export function updateEmpireOpacity(material: THREE.ShaderMaterial, opacity: number): void {
   if (material.uniforms.uOpacity) material.uniforms.uOpacity.value = opacity
+}
+
+// ============= Empire Hover Effects =============
+
+/** Default and hover opacity values for empire fills */
+export const EMPIRE_FILL_OPACITY = {
+  default: 0.15,
+  hover: 0.5
+}
+
+/** Default and hover opacity values for empire borders */
+export const EMPIRE_BORDER_OPACITY = {
+  default: 0.9,
+  hover: 1.0
+}
+
+/**
+ * Set empire hover state - increases fill opacity and border brightness
+ * Call this when mouse enters an empire
+ */
+export function setEmpireHoverState(
+  fillMeshes: THREE.Mesh[],
+  borderLines: THREE.Line[],
+  isHovered: boolean
+): void {
+  const targetFillOpacity = isHovered ? EMPIRE_FILL_OPACITY.hover : EMPIRE_FILL_OPACITY.default
+  const targetBorderOpacity = isHovered ? EMPIRE_BORDER_OPACITY.hover : EMPIRE_BORDER_OPACITY.default
+
+  // Update fill meshes
+  fillMeshes.forEach(mesh => {
+    const material = mesh.material as THREE.ShaderMaterial
+    if (material.uniforms?.uOpacity) {
+      // Smooth transition using animation frame
+      const currentOpacity = material.uniforms.uOpacity.value
+      const diff = targetFillOpacity - currentOpacity
+      if (Math.abs(diff) > 0.001) {
+        // Lerp towards target (fast transition)
+        material.uniforms.uOpacity.value = currentOpacity + diff * 0.3
+      } else {
+        material.uniforms.uOpacity.value = targetFillOpacity
+      }
+    }
+  })
+
+  // Update border lines
+  borderLines.forEach(line => {
+    const material = line.material as THREE.ShaderMaterial
+    if (material.uniforms?.opacity) {
+      material.uniforms.opacity.value = targetBorderOpacity
+    }
+  })
+}
+
+/**
+ * Animate empire hover transition smoothly
+ * Returns true if animation is still in progress
+ */
+export function animateEmpireHover(
+  fillMeshes: THREE.Mesh[],
+  borderLines: THREE.Line[],
+  isHovered: boolean,
+  speed: number = 0.15
+): boolean {
+  const targetFillOpacity = isHovered ? EMPIRE_FILL_OPACITY.hover : EMPIRE_FILL_OPACITY.default
+  const targetBorderOpacity = isHovered ? EMPIRE_BORDER_OPACITY.hover : EMPIRE_BORDER_OPACITY.default
+  let stillAnimating = false
+
+  // Update fill meshes with smooth transition
+  fillMeshes.forEach(mesh => {
+    const material = mesh.material as THREE.ShaderMaterial
+    if (material.uniforms?.uOpacity) {
+      const currentOpacity = material.uniforms.uOpacity.value
+      const diff = targetFillOpacity - currentOpacity
+      if (Math.abs(diff) > 0.005) {
+        material.uniforms.uOpacity.value = currentOpacity + diff * speed
+        stillAnimating = true
+      } else {
+        material.uniforms.uOpacity.value = targetFillOpacity
+      }
+    }
+  })
+
+  // Update border lines
+  borderLines.forEach(line => {
+    const material = line.material as THREE.ShaderMaterial
+    if (material.uniforms?.opacity) {
+      const currentOpacity = material.uniforms.opacity.value
+      const diff = targetBorderOpacity - currentOpacity
+      if (Math.abs(diff) > 0.005) {
+        material.uniforms.opacity.value = currentOpacity + diff * speed
+        stillAnimating = true
+      } else {
+        material.uniforms.opacity.value = targetBorderOpacity
+      }
+    }
+  })
+
+  return stillAnimating
 }

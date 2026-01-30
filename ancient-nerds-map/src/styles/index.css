@@ -3428,6 +3428,7 @@ body.screenshot-mode .screenshot-mode-buttons {
   contain: layout style;
   display: flex;
   flex-direction: column;
+  z-index: 150; /* Above empire borders window (100) but below modals (1000+) */
 }
 
 /* Dragging state */
@@ -4219,6 +4220,16 @@ body.screenshot-mode .screenshot-mode-buttons {
   color: var(--text-secondary);
   max-height: 100px;
   overflow-y: auto;
+}
+
+.popup-description.loading {
+  font-style: italic;
+  color: rgba(136, 136, 136, 0.7);
+}
+
+.popup-description.empty {
+  font-style: italic;
+  color: rgba(136, 136, 136, 0.5);
 }
 
 .popup-description::-webkit-scrollbar {
@@ -6137,6 +6148,35 @@ body.hud-hidden .empire-borders-window {
 
 .empire-toggle.offline-unavailable input[type="checkbox"] {
   cursor: not-allowed;
+}
+
+/* ==========================================================================
+   Empire Minimap (in popup)
+   ========================================================================== */
+
+.empire-minimap-section {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: rgba(0, 15, 20, 0.6);
+}
+
+.empire-minimap-container {
+  flex: 1;
+  min-height: 200px;
+  position: relative;
+  overflow: hidden;
+}
+
+.empire-minimap {
+  width: 100%;
+  height: 100%;
+}
+
+/* Hide Mapbox logo and attribution for cleaner look */
+.empire-minimap-container .mapboxgl-ctrl-logo,
+.empire-minimap-container .mapboxgl-ctrl-attrib {
+  display: none !important;
 }
 
 /* Layer toggle offline unavailable */
@@ -10162,4 +10202,900 @@ body.hud-hidden .empire-borders-window {
 @keyframes shimmer {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
+}
+
+/* =========================================================================
+   EMPIRE SESHAT DATA SECTIONS
+   Rich historical data display for empire popups
+   ========================================================================= */
+
+.empire-seshat-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 12px 0;
+}
+
+/* Hide all scrollbars in empire content */
+.empire-seshat-content *::-webkit-scrollbar {
+  display: none;
+}
+
+.empire-seshat-content * {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Section Base Styles */
+.empire-section {
+  background: rgba(0, 30, 40, 0.4);
+  border: 1px solid rgba(0, 180, 180, 0.15);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.empire-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.empire-section-title svg {
+  color: var(--primary-red);
+  opacity: 0.9;
+}
+
+.empire-subsection-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 14px 0 8px;
+}
+
+/* Stats Section */
+.empire-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
+  gap: 6px;
+}
+
+.empire-stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 6px;
+  background: rgba(0, 50, 60, 0.3);
+  border: 1px solid rgba(0, 180, 180, 0.1);
+  border-radius: 4px;
+  text-align: center;
+}
+
+.empire-stat-icon {
+  color: var(--primary-red);
+  opacity: 0.8;
+}
+
+.empire-stat-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.empire-stat-label {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* Hierarchy Grid */
+.empire-hierarchy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 8px;
+}
+
+.empire-hierarchy-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  background: rgba(0, 50, 60, 0.25);
+  border-radius: 4px;
+}
+
+.empire-hierarchy-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.empire-hierarchy-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary-red);
+}
+
+/* Tags (used across sections) */
+.empire-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.empire-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+
+.empire-tag-infrastructure {
+  background: rgba(0, 150, 136, 0.2);
+  color: rgba(0, 200, 180, 0.9);
+  border: 1px solid rgba(0, 150, 136, 0.3);
+}
+
+.empire-tag-fortification {
+  background: rgba(120, 85, 72, 0.25);
+  color: rgba(200, 170, 150, 0.95);
+  border: 1px solid rgba(120, 85, 72, 0.4);
+}
+
+.empire-tag-weapon {
+  background: rgba(192, 32, 35, 0.15);
+  color: rgba(255, 100, 100, 0.95);
+  border: 1px solid rgba(192, 32, 35, 0.35);
+}
+
+.empire-tag-armor {
+  background: rgba(96, 125, 139, 0.25);
+  color: rgba(176, 190, 197, 0.95);
+  border: 1px solid rgba(96, 125, 139, 0.4);
+}
+
+.empire-tag-animal {
+  background: rgba(139, 69, 19, 0.25);
+  color: rgba(210, 160, 120, 0.95);
+  border: 1px solid rgba(139, 69, 19, 0.4);
+}
+
+.empire-tag-naval {
+  background: rgba(33, 150, 243, 0.2);
+  color: rgba(100, 180, 255, 0.95);
+  border: 1px solid rgba(33, 150, 243, 0.35);
+}
+
+.empire-tag-language {
+  background: rgba(156, 39, 176, 0.2);
+  color: rgba(200, 130, 210, 0.95);
+  border: 1px solid rgba(156, 39, 176, 0.35);
+}
+
+.empire-tag-religion {
+  background: rgba(255, 193, 7, 0.2);
+  color: rgba(255, 215, 100, 0.95);
+  border: 1px solid rgba(255, 193, 7, 0.35);
+}
+
+.empire-tag-info {
+  background: rgba(0, 188, 212, 0.15);
+  color: rgba(100, 220, 230, 0.95);
+  border: 1px solid rgba(0, 188, 212, 0.3);
+}
+
+.empire-tag-monetary {
+  background: rgba(255, 152, 0, 0.2);
+  color: rgba(255, 190, 100, 0.95);
+  border: 1px solid rgba(255, 152, 0, 0.35);
+}
+
+.empire-tag-trade {
+  background: rgba(76, 175, 80, 0.2);
+  color: rgba(130, 210, 140, 0.95);
+  border: 1px solid rgba(76, 175, 80, 0.35);
+}
+
+/* Warfare Section */
+.empire-warfare-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.empire-warfare-category {
+  padding: 10px;
+  background: rgba(0, 40, 50, 0.3);
+  border-radius: 6px;
+}
+
+.empire-warfare-category-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 8px;
+}
+
+.empire-warfare-category-header svg {
+  color: var(--primary-red);
+  opacity: 0.7;
+}
+
+/* Social Section */
+.empire-social-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.empire-social-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.empire-social-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.empire-social-label svg {
+  color: var(--primary-red);
+  opacity: 0.7;
+}
+
+.empire-centralization-badge {
+  display: flex;
+}
+
+.empire-centralization {
+  display: inline-flex;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 4px;
+  background: rgba(0, 50, 60, 0.4);
+  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 180, 180, 0.2);
+}
+
+.empire-centralization-unitary-state {
+  background: rgba(76, 175, 80, 0.2);
+  color: rgba(130, 210, 140, 0.95);
+  border-color: rgba(76, 175, 80, 0.35);
+}
+
+.empire-centralization-loose {
+  background: rgba(255, 193, 7, 0.2);
+  color: rgba(255, 215, 100, 0.95);
+  border-color: rgba(255, 193, 7, 0.35);
+}
+
+.empire-centralization-nominal {
+  background: rgba(255, 152, 0, 0.2);
+  color: rgba(255, 190, 100, 0.95);
+  border-color: rgba(255, 152, 0, 0.35);
+}
+
+.empire-centralization-none {
+  background: rgba(158, 158, 158, 0.2);
+  color: rgba(200, 200, 200, 0.9);
+  border-color: rgba(158, 158, 158, 0.35);
+}
+
+/* Economy Section */
+.empire-economy-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.empire-economy-category {
+  padding: 10px;
+  background: rgba(0, 40, 50, 0.3);
+  border-radius: 6px;
+}
+
+.empire-economy-category-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 8px;
+}
+
+.empire-economy-category-header svg {
+  color: var(--primary-red);
+  opacity: 0.7;
+}
+
+/* Crisis Section */
+.empire-crisis-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.empire-crisis-item {
+  padding: 12px;
+  background: rgba(0, 40, 50, 0.3);
+  border-radius: 6px;
+  border-left: 3px solid rgba(255, 193, 7, 0.5);
+}
+
+.empire-crisis-item.empire-crisis-catastrophic {
+  border-left-color: rgba(244, 67, 54, 0.7);
+}
+
+.empire-crisis-item.empire-crisis-severe {
+  border-left-color: rgba(255, 152, 0, 0.7);
+}
+
+.empire-crisis-item.empire-crisis-moderate {
+  border-left-color: rgba(255, 193, 7, 0.7);
+}
+
+.empire-crisis-item.empire-crisis-minor {
+  border-left-color: rgba(76, 175, 80, 0.5);
+}
+
+.empire-crisis-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.empire-crisis-icon {
+  color: var(--primary-red);
+  opacity: 0.8;
+  display: flex;
+  align-items: center;
+}
+
+.empire-crisis-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+  flex: 1;
+}
+
+.empire-crisis-dates {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+}
+
+.empire-crisis-description {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+.empire-crisis-meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.empire-crisis-type {
+  font-size: 10px;
+  padding: 3px 8px;
+  background: rgba(0, 60, 70, 0.4);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: capitalize;
+}
+
+.empire-crisis-severity {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  text-transform: capitalize;
+  font-weight: 600;
+}
+
+.empire-crisis-severity.empire-crisis-catastrophic {
+  background: rgba(244, 67, 54, 0.2);
+  color: rgba(255, 100, 100, 0.95);
+}
+
+.empire-crisis-severity.empire-crisis-severe {
+  background: rgba(255, 152, 0, 0.2);
+  color: rgba(255, 190, 100, 0.95);
+}
+
+.empire-crisis-severity.empire-crisis-moderate {
+  background: rgba(255, 193, 7, 0.2);
+  color: rgba(255, 215, 100, 0.95);
+}
+
+.empire-crisis-severity.empire-crisis-minor {
+  background: rgba(76, 175, 80, 0.2);
+  color: rgba(130, 210, 140, 0.95);
+}
+
+/* Transitions List */
+.empire-transitions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.empire-transition-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(0, 40, 50, 0.3);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.empire-transition-year {
+  font-weight: 600;
+  color: var(--primary-red);
+  min-width: 80px;
+}
+
+.empire-transition-type {
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: capitalize;
+}
+
+.empire-transition-polities {
+  color: rgba(255, 255, 255, 0.8);
+  flex: 1;
+  text-align: right;
+}
+
+/* Succession Section */
+.empire-succession-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.empire-succession-group {
+  padding: 10px;
+  background: rgba(0, 40, 50, 0.3);
+  border-radius: 6px;
+}
+
+.empire-succession-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 8px;
+}
+
+.empire-succession-label svg {
+  color: var(--primary-red);
+  opacity: 0.7;
+}
+
+.empire-succession-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.empire-succession-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(0, 50, 60, 0.3);
+  border-radius: 4px;
+}
+
+.empire-succession-relation {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: capitalize;
+  min-width: 80px;
+}
+
+.empire-succession-relation svg {
+  color: var(--primary-red);
+  opacity: 0.6;
+}
+
+.empire-succession-name {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.9);
+  flex: 1;
+}
+
+/* Source Attribution */
+.empire-source-attribution {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  margin-top: 4px;
+  background: rgba(0, 30, 40, 0.3);
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.empire-source-label {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.empire-source-link {
+  color: var(--primary-red);
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+
+.empire-source-link:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+.empire-source-separator {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+/* =========================================================================
+   EMPIRE SESHAT TABS
+   Tabbed navigation for Seshat data sections
+   ========================================================================= */
+
+.empire-seshat-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 4px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(0, 180, 180, 0.15);
+}
+
+.empire-seshat-tab {
+  flex: 1;
+  padding: 10px 8px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.empire-seshat-tab:hover {
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(0, 180, 180, 0.05);
+}
+
+.empire-seshat-tab.active {
+  color: var(--primary-red);
+  border-bottom-color: var(--primary-red);
+  background: rgba(192, 32, 35, 0.08);
+}
+
+.empire-seshat-tab-content {
+  min-height: 100px;
+}
+
+/* =========================================================================
+   EMPIRE OVERVIEW TAB
+   Wikipedia description and loading states
+   ========================================================================= */
+
+.empire-overview-content {
+  padding: 4px;
+}
+
+.empire-wiki-description {
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.85);
+  margin: 0 0 12px 0;
+}
+
+.empire-wikipedia-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--primary-red);
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+
+.empire-wikipedia-link:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+.empire-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+}
+
+.empire-loading-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--primary-red);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.empire-no-description {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.empire-no-data {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.empire-no-data-title {
+  font-style: normal;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 11px;
+}
+
+.empire-available-periods {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.empire-period-btn {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(0, 50, 60, 0.4);
+  border: 1px solid rgba(0, 180, 180, 0.2);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.empire-period-btn:hover {
+  background: rgba(0, 80, 90, 0.5);
+  border-color: var(--primary-red);
+}
+
+.empire-period-name {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.empire-period-years {
+  font-style: normal;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* =========================================================================
+   EMPIRE PERIOD SLIDER
+   Time period selector in empire minimap section
+   ========================================================================= */
+
+.empire-period-slider {
+  padding: 12px 16px;
+  background: rgba(0, 20, 30, 0.8);
+  border-top: 1px solid rgba(0, 180, 180, 0.15);
+}
+
+.empire-period-slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.empire-period-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.empire-period-year {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary-red);
+}
+
+.empire-period-slider-track {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.empire-period-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.empire-period-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  background: var(--primary-red);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.empire-period-range::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 8px rgba(192, 32, 35, 0.5);
+}
+
+.empire-period-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: var(--primary-red);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.empire-period-range::-moz-range-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 8px rgba(192, 32, 35, 0.5);
+}
+
+.empire-period-ticks {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* =========================================================================
+   EMPIRE PERIOD TIMELINE
+   Visual timeline with clickable period segments
+   ========================================================================= */
+
+.empire-period-timeline {
+  padding: 10px 12px;
+  background: rgba(0, 20, 30, 0.6);
+  border-top: 1px solid rgba(0, 180, 180, 0.15);
+}
+
+.empire-period-segments {
+  display: flex;
+  gap: 2px;
+}
+
+.empire-period-segment {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 8px 6px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  overflow: hidden;
+  min-width: 0;
+  font-family: inherit;
+}
+
+.empire-period-segment:hover {
+  background: rgba(0, 180, 180, 0.08);
+}
+
+.empire-period-segment.active {
+  background: rgba(192, 32, 35, 0.12);
+  border-bottom-color: var(--primary-red);
+}
+
+.empire-period-segment .segment-name {
+  font-size: 10px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.6);
+  text-align: center;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.empire-period-segment .segment-years {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.empire-period-segment:hover .segment-name {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.empire-period-segment:hover .segment-years {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.empire-period-segment.active .segment-name {
+  color: var(--primary-red);
+}
+
+.empire-period-segment.active .segment-years {
+  color: rgba(255, 255, 255, 0.7);
 }

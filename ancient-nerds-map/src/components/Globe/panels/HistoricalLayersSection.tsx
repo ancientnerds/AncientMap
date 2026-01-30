@@ -34,7 +34,7 @@ export function HistoricalLayersSection({
   onSliderSeaLevelChange,
   replaceCoastlines,
   onReplaceCoastlinesChange,
-  empireBordersWindowOpen,
+  empireBordersWindowOpen: _empireBordersWindowOpen,
   hasVisibleEmpires,
   onEmpireBordersToggle,
   showMapbox

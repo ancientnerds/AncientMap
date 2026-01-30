@@ -83,7 +83,7 @@ function DisclaimerModal({ isOpen, onClose }: DisclaimerModalProps) {
               <div className="license-group">
                 <h4>Creative Commons NonCommercial</h4>
                 <ul>
-                  <li><strong>CC BY-NC-SA 4.0:</strong> <a href="https://topostext.org/" target="_blank" rel="noopener noreferrer">ToposText</a>, <a href="https://seshat-db.com/" target="_blank" rel="noopener noreferrer">Seshat Boundaries</a></li>
+                  <li><strong>CC BY-NC-SA 4.0:</strong> <a href="https://topostext.org/" target="_blank" rel="noopener noreferrer">ToposText</a>, <a href="https://seshat-db.com/" target="_blank" rel="noopener noreferrer">Seshat Global History Databank</a> (empire boundaries, historical data & polity information)</li>
                   <li><strong>CC BY-NC-SA 3.0:</strong> <a href="https://arachne.dainst.org/" target="_blank" rel="noopener noreferrer">Arachne</a>, <a href="https://www.davidrumsey.com/" target="_blank" rel="noopener noreferrer">David Rumsey Maps</a></li>
                 </ul>
               </div>
@@ -92,6 +92,8 @@ function DisclaimerModal({ isOpen, onClose }: DisclaimerModalProps) {
                 <h4>Public Domain & Open Data</h4>
                 <ul>
                   <li><strong>CC0 / Public Domain:</strong> <a href="https://www.wikidata.org/" target="_blank" rel="noopener noreferrer">Wikidata</a>, <a href="https://whc.unesco.org/" target="_blank" rel="noopener noreferrer">UNESCO World Heritage</a>, <a href="http://www.passc.net/EarthImpactDatabase/" target="_blank" rel="noopener noreferrer">Earth Impact Database</a>, <a href="https://www.ncei.noaa.gov/maps/hazards/" target="_blank" rel="noopener noreferrer">NCEI Natural Hazards</a></li>
+                  <li><strong>CC BY-SA 3.0:</strong> <a href="https://en.wikipedia.org/" target="_blank" rel="noopener noreferrer">Wikipedia</a> (empire descriptions via REST API)</li>
+                  <li><strong>Various licenses:</strong> <a href="https://commons.wikimedia.org/" target="_blank" rel="noopener noreferrer">Wikimedia Commons</a> (empire & site images - individual image licenses displayed in lightbox)</li>
                   <li><strong>ODbL:</strong> <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener noreferrer">OpenStreetMap Historic</a></li>
                   <li><strong>Open Government Licence:</strong> <a href="https://historicengland.org.uk/" target="_blank" rel="noopener noreferrer">Historic England</a></li>
                   <li><strong>Open Data:</strong> <a href="https://www.archaeology.ie/" target="_blank" rel="noopener noreferrer">Ireland National Monuments Service</a></li>

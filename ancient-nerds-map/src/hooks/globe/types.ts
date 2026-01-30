@@ -172,6 +172,8 @@ export interface GlobeRefs {
   showEmpireLabels: React.MutableRefObject<boolean>
   showAncientCities: React.MutableRefObject<boolean>
   visibleEmpires: React.MutableRefObject<Set<string>>
+  hoveredEmpire: React.MutableRefObject<string | null>
+  empireFillMeshes: React.MutableRefObject<Record<string, THREE.Mesh[]>>
 
   // ========== Measurement Tool Refs ==========
   measurementObjects: React.MutableRefObject<THREE.Object3D[]>
@@ -287,6 +289,7 @@ export interface GlobeRefs {
   // ========== Callback Refs ==========
   onSiteClick: React.MutableRefObject<((site: SiteData | null) => void) | undefined>
   onSiteSelect: React.MutableRefObject<((siteId: string | null, ctrlKey: boolean) => void) | undefined>
+  onEmpireClick: React.MutableRefObject<((empireId: string) => void) | undefined>
   onMeasurePointAdd: React.MutableRefObject<((coords: [number, number], snapped: boolean) => void) | undefined>
   onMeasurementComplete: React.MutableRefObject<((start: [number, number], end: [number, number]) => void) | undefined>
   onContributeMapConfirm: React.MutableRefObject<(() => void) | undefined>

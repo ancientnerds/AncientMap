@@ -33,4 +33,9 @@ export {
   updateEmpireSunDirection,
   updateEmpireSatelliteMode,
   updateEmpireOpacity,
+  // Empire hover effects
+  EMPIRE_FILL_OPACITY,
+  EMPIRE_BORDER_OPACITY,
+  setEmpireHoverState,
+  animateEmpireHover,
 } from './empireMaterials'

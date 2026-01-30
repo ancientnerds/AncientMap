@@ -94,6 +94,7 @@ interface GlobeProps {
   onSiteClick?: (site: SiteData | null) => void  // Opens popup
   onTooltipClick?: (site: SiteData) => void  // Opens popup or restores minimized popup
   onSiteSelect?: (siteId: string | null, ctrlKey: boolean) => void  // Selects site (shows ring + tooltip), null = deselect all
+  onEmpireClick?: (empireId: string) => void  // Opens empire popup when clicking on empire borders
   flyTo?: [number, number] | null  // [lng, lat] coordinates to fly to
   isLoading?: boolean  // Show loading state (disables clicks)
   splashDone?: boolean  // True when splash screen has closed (triggers warp animation)
@@ -138,12 +139,15 @@ interface GlobeProps {
   onVisibleEmpiresChange?: (empireIds: Set<string>) => void
   onEmpireYearsChange?: (years: Record<string, number>) => void
   onEmpirePolygonsLoaded?: (empireId: string, year: number, features: any[]) => void
+  // External empire year control (from popup)
+  externalEmpireYearRequest?: { empireId: string; year: number } | null
+  onExternalEmpireYearRequestHandled?: () => void
   // Offline mode
   onOfflineClick?: () => void  // Callback when offline button is clicked
   isOffline?: boolean  // Whether currently offline (no network)
 }
 
-export default function Globe({ sites, filterMode, sourceColors, countryColors, highlightedSiteId, isHoveringList, listFrozenSiteIds = [], openPopupIds: _openPopupIds = [], onSiteClick, onTooltipClick, onSiteSelect, flyTo, isLoading, splashDone, proximity, onProximitySet, onProximityHover, initialPosition, onLayersReady, onContributeClick, onAIAgentClick, onDisclaimerClick, isContributeMapPickerActive, onContributeMapHover, onContributeMapConfirm, onContributeMapCancel, canUndoSelection, onUndoSelection, canRedoSelection, onRedoSelection, measureMode, measurements = [], currentMeasurePoints = [], selectedMeasurementId, measureSnapEnabled, measureUnit = 'km', currentMeasurementColor = '#FFCC00', onMeasurePointAdd, onMeasurementComplete, onMeasurementSelect: _onMeasurementSelect, onMeasurementDelete: _onMeasurementDelete, randomModeActive, searchWithinProximity, onAgeRangeSync, onVisibleEmpiresChange, onEmpireYearsChange, onEmpirePolygonsLoaded, onOfflineClick, isOffline }: GlobeProps) {
+export default function Globe({ sites, filterMode, sourceColors, countryColors, highlightedSiteId, isHoveringList, listFrozenSiteIds = [], openPopupIds: _openPopupIds = [], onSiteClick, onTooltipClick, onSiteSelect, onEmpireClick, flyTo, isLoading, splashDone, proximity, onProximitySet, onProximityHover, initialPosition, onLayersReady, onContributeClick, onAIAgentClick, onDisclaimerClick, isContributeMapPickerActive, onContributeMapHover, onContributeMapConfirm, onContributeMapCancel, canUndoSelection, onUndoSelection, canRedoSelection, onRedoSelection, measureMode, measurements = [], currentMeasurePoints = [], selectedMeasurementId, measureSnapEnabled, measureUnit = 'km', currentMeasurementColor = '#FFCC00', onMeasurePointAdd, onMeasurementComplete, onMeasurementSelect: _onMeasurementSelect, onMeasurementDelete: _onMeasurementDelete, randomModeActive, searchWithinProximity, onAgeRangeSync, onVisibleEmpiresChange, onEmpireYearsChange, onEmpirePolygonsLoaded, externalEmpireYearRequest, onExternalEmpireYearRequestHandled, onOfflineClick, isOffline }: GlobeProps) {
   const refs = useGlobeRefs()
 
   // Batch destructure refs
@@ -203,6 +207,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     showAncientCities, setShowAncientCities, showAncientCitiesRef,
     empireBordersWindowOpen, setEmpireBordersWindowOpen, empireBordersHeight, setEmpireBordersHeight,
     empireBorderLinesRef, empireLabelsRef, regionLabelsRef, ancientCitiesRef,
+    empireFillMeshesRef, hoveredEmpireRef,
     regionDataRef, ancientCitiesDataRef, empirePolygonFeaturesRef,
     empireLoadAbortRef, empireYearDebounceRef, globalTimelineThrottleRef
   } = empires
@@ -382,7 +387,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
 
   const {
     isHoveringList: isHoveringListRef, isContributePickerActive: isContributePickerActiveRef,
-    onContributeMapConfirm: onContributeMapConfirmRef, onSiteSelect: onSiteSelectRef,
+    onContributeMapConfirm: onContributeMapConfirmRef, onSiteSelect: onSiteSelectRef, onEmpireClick: onEmpireClickRef,
     frontLineLayers: frontLineLayersRef, backLineLayers: backLineLayersRef,
     paleoshorelineLines: paleoshorelineLinesRef, paleoshorelinePositionsCache: paleoshorelinePositionsCacheRef,
     paleoshorelineLoadId: paleoshorelineLoadIdRef, fadeManager: fadeManagerRef,
@@ -409,6 +414,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   isContributePickerActiveRef.current = isContributeMapPickerActive ?? false
   onContributeMapConfirmRef.current = onContributeMapConfirm
   onSiteSelectRef.current = onSiteSelect
+  onEmpireClickRef.current = onEmpireClick
   geoLabelsVisibleRef.current = geoLabelsVisible
   labelTypesVisibleRef.current = labelTypesVisible
   vectorLayersRef.current = vectorLayers
@@ -591,10 +597,12 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       containerRef, mapboxServiceRef, showMapboxRef, sitesRef,
       lastMousePosRef, lastMoveTimeRef, lastCoordsUpdateRef,
       currentHoveredSiteRef, isFrozenRef, frozenSiteRef, hoveredSiteRef,
-      highlightFrozenRef, cameraAnimationRef, onSiteSelectRef,
+      highlightFrozenRef, cameraAnimationRef, onSiteSelectRef, onEmpireClickRef,
       isContributePickerActiveRef, onContributeMapConfirmRef,
       measureModeRef, onMeasurePointAddRef, measureSnapEnabledRef,
-      measurementsRef, currentMeasurePointsRef, zoomRef
+      measurementsRef, currentMeasurePointsRef, zoomRef,
+      // Empire hover refs
+      hoveredEmpireRef, empireBorderLinesRef, empireFillMeshesRef
     }
 
     const handlerSetters: EventHandlerSetters = {
@@ -1303,6 +1311,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     empireLabelsRef,
     regionLabelsRef,
     ancientCitiesRef,
+    empireFillMeshesRef,
     allLabelMeshesRef,
     labelVisibilityStateRef,
     fadeManagerRef,
@@ -1494,7 +1503,12 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     const empire = EMPIRES.find(e => e.id === empireId)
     if (!empire) return
 
-    setEmpireYears(prev => ({ ...prev, [empireId]: year }))
+    setEmpireYears(prev => {
+      const next = { ...prev, [empireId]: year }
+      // Sync to App.tsx so popup and empire borders window stay in sync
+      onEmpireYearsChange?.(next)
+      return next
+    })
 
     // Load boundaries for the new year
     await loadEmpireBordersForYear(empireId, year, empire.color, false)
@@ -1520,7 +1534,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
 
     // Update region labels for the new year
     loadRegionLabels(empireId, year)
-  }, [empireCentroids, loadEmpireBordersForYear, updateEmpireLabelText, animateEmpireLabelPosition, loadAncientCities, loadRegionLabels])
+  }, [empireCentroids, loadEmpireBordersForYear, updateEmpireLabelText, animateEmpireLabelPosition, loadAncientCities, loadRegionLabels, onEmpireYearsChange])
 
   // Selection button handlers for Empire Borders window
   const handleSelectAllEmpires = () => {
@@ -1604,6 +1618,18 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     })
   }, [visibleEmpires, empireYearOptions, empireYears, changeEmpireYear])
 
+  // Handle external empire year requests (from popup period buttons)
+  useEffect(() => {
+    if (externalEmpireYearRequest) {
+      const { empireId, year } = externalEmpireYearRequest
+      // Only change if it's different from current
+      if (empireYears[empireId] !== year) {
+        changeEmpireYear(empireId, year)
+      }
+      // Clear the request after handling to prevent re-triggering
+      onExternalEmpireYearRequestHandled?.()
+    }
+  }, [externalEmpireYearRequest, empireYears, changeEmpireYear, onExternalEmpireYearRequestHandled])
 
   // Track previous values to detect actual changes
   const prevSeaLevel = refs.prevSeaLevel
@@ -2035,38 +2061,6 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
             const next = new Set(prev)
             next.has(region) ? next.delete(region) : next.add(region)
             return next
-          })
-        }}
-        showEmpireLabels={showEmpireLabels}
-        onToggleEmpireLabels={(show) => {
-          setShowEmpireLabels(show)
-          showEmpireLabelsRef.current = show
-          // Toggle visibility of all empire labels
-          Object.values(empireLabelsRef.current).forEach(label => {
-            label.visible = show && visibleEmpires.has((label.userData as { empireId?: string })?.empireId ?? '')
-          })
-          // Toggle visibility of region labels
-          Object.entries(regionLabelsRef.current).forEach(([empireId, labels]) => {
-            labels.forEach(label => {
-              label.visible = show && visibleEmpires.has(empireId)
-            })
-          })
-          // Toggle visibility of ancient city labels
-          Object.entries(ancientCitiesRef.current).forEach(([empireId, cities]) => {
-            cities.forEach(city => {
-              city.visible = show && visibleEmpires.has(empireId)
-            })
-          })
-        }}
-        showAncientCities={showAncientCities}
-        onToggleAncientCities={(show) => {
-          setShowAncientCities(show)
-          showAncientCitiesRef.current = show
-          // Toggle visibility of all city markers
-          Object.entries(ancientCitiesRef.current).forEach(([empireId, cities]) => {
-            cities.forEach(city => {
-              city.visible = show && visibleEmpires.has(empireId)
-            })
           })
         }}
         globalTimelineEnabled={globalTimelineEnabled}

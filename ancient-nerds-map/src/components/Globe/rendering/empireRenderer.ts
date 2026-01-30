@@ -105,6 +105,9 @@ export interface GlobeRenderContext {
   // Show ancient cities ref (synced from state)
   showAncientCitiesRef: React.MutableRefObject<boolean>
 
+  // Empire fill meshes ref (for hover effects)
+  empireFillMeshesRef: React.MutableRefObject<Record<string, THREE.Mesh[]>>
+
   // latLngTo3D conversion function
   latLngTo3D: (lat: number, lng: number, r: number) => THREE.Vector3
 
@@ -289,6 +292,9 @@ export function removeEmpireFromGlobe(
       }
     }
   })
+
+  // Clear fill meshes ref for this empire
+  delete ctx.empireFillMeshesRef.current[empireId]
 }
 
 /**
@@ -321,7 +327,11 @@ export async function loadEmpireBordersForYear(
     }
 
     // Sync empire years to parent AFTER polygon data loads (prevents flash of all dots)
-    ctx.onEmpireYearsChangeRef.current?.({ ...ctx.empireYearsRef.current, [empireId]: year })
+    // Only sync if the year hasn't been changed by the user during loading (avoids race condition)
+    const currentYearInHook = ctx.empireYearsRef.current[empireId]
+    if (currentYearInHook === undefined || currentYearInHook === year) {
+      ctx.onEmpireYearsChangeRef.current?.({ ...ctx.empireYearsRef.current, [empireId]: year })
+    }
 
     // Store polygon features for spatial label filtering
     ctx.empirePolygonFeaturesRef.current[empireId] = data.features.map((f: any) => ({
@@ -392,8 +402,15 @@ export async function loadEmpireBordersForYear(
       // Uses the same geometry - only pixels where stencil != 0 will be drawn
       const fillMesh = new THREE.Mesh(geometry, fillMaterial)
       fillMesh.userData.empireId = empireId
+      fillMesh.userData.isFillMesh = true  // Mark as fill mesh for hover detection
       fillMesh.renderOrder = 8  // Render after stencil
       globe.add(fillMesh)
+
+      // Store fill mesh for hover effects
+      if (!ctx.empireFillMeshesRef.current[empireId]) {
+        ctx.empireFillMeshesRef.current[empireId] = []
+      }
+      ctx.empireFillMeshesRef.current[empireId].push(fillMesh)
     }
 
     // STEP 5: Create border lines (separate loop for clarity)
