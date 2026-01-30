@@ -2,6 +2,12 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { SiteData } from '../../../data/sites'
 import { MapboxGlobeService } from '../../../services/MapboxGlobeService'
+import {
+  updateEmpireHoverState,
+  clearEmpireHoverState,
+  getHoverCursorStyle,
+  type EmpireHoverRefs
+} from './empireHoverUtils'
 
 /** Refs and state setters needed by event handlers. */
 export interface EventHandlerRefs {
@@ -19,6 +25,7 @@ export interface EventHandlerRefs {
   highlightFrozenRef: React.MutableRefObject<boolean>
   cameraAnimationRef: React.MutableRefObject<number | null>
   onSiteSelectRef: React.MutableRefObject<((siteId: string | null, ctrlKey: boolean) => void) | undefined>
+  onEmpireClickRef: React.MutableRefObject<((empireId: string) => void) | undefined>
   isContributePickerActiveRef: React.MutableRefObject<boolean>
   onContributeMapConfirmRef: React.MutableRefObject<(() => void) | undefined>
   measureModeRef: React.MutableRefObject<boolean | undefined>
@@ -27,6 +34,10 @@ export interface EventHandlerRefs {
   measurementsRef: React.MutableRefObject<Array<{ id: string; points: [[number, number], [number, number]]; snapped: [boolean, boolean]; color: string }>>
   currentMeasurePointsRef: React.MutableRefObject<Array<{ coords: [number, number]; snapped: boolean }>>
   zoomRef: React.MutableRefObject<number>
+  // Empire hover refs
+  hoveredEmpireRef: React.MutableRefObject<string | null>
+  empireBorderLinesRef: React.MutableRefObject<Record<string, THREE.Line[]>>
+  empireFillMeshesRef: React.MutableRefObject<Record<string, THREE.Mesh[]>>
 }
 
 /** State setters needed by event handlers. */
@@ -270,7 +281,9 @@ export function createMouseMoveHandler(
   isFrozenRef: React.MutableRefObject<boolean>,
   setCursorCoords: (coords: { lat: number; lon: number } | null) => void,
   setTooltipPos: (pos: { x: number; y: number }) => void,
-  setHoveredSite: (site: SiteData | null) => void
+  setHoveredSite: (site: SiteData | null) => void,
+  globe?: THREE.Mesh,
+  empireHoverRefs?: EmpireHoverRefs
 ): (e: MouseEvent) => void {
   return (e: MouseEvent) => {
     // In Mapbox primary mode, let Mapbox handle mouse interactions
@@ -383,6 +396,21 @@ export function createMouseMoveHandler(
     } else {
       setHoveredSite(null)
     }
+
+    // Empire hover detection - both site and empire can show hover effects
+    if (globe && empireHoverRefs) {
+      const hoverResult = updateEmpireHoverState(
+        mouseX,
+        mouseY,
+        camera,
+        globe,
+        empireHoverRefs
+      )
+
+      // Update cursor style: site > empire > crosshair
+      const canvas = _renderer.domElement
+      canvas.style.cursor = getHoverCursorStyle(nearestSite, hoverResult.empireId)
+    }
   }
 }
 
@@ -406,6 +434,7 @@ export function createSingleClickHandler(
     measurementsRef: React.MutableRefObject<Array<{ id: string; points: [[number, number], [number, number]]; snapped: [boolean, boolean]; color: string }>>
     currentMeasurePointsRef: React.MutableRefObject<Array<{ coords: [number, number]; snapped: boolean }>>
     onSiteSelectRef: React.MutableRefObject<((siteId: string | null, ctrlKey: boolean) => void) | undefined>
+    onEmpireClickRef: React.MutableRefObject<((empireId: string) => void) | undefined>
   },
   setters: {
     setIsFrozen: (frozen: boolean) => void
@@ -557,29 +586,27 @@ export function createSingleClickHandler(
       }
     }
 
-    // Normal site selection - select site (show ring + tooltip) instead of opening popup
-    if (!refs.onSiteSelectRef.current) return
+    // ========== SITE SELECTION (HIGHEST PRIORITY) ==========
+    // Sites ALWAYS take priority over empires
 
     // IMPORTANT UX: If a tooltip is visible, ALWAYS select that site
     // This ensures the user selects what they're reading, not what's under cursor
-    // (Globe rotation can move cursor over different site than tooltip shows)
     const displayedSite = refs.isFrozenRef.current ? refs.frozenSiteRef.current : refs.hoveredSiteRef.current
-    if (displayedSite) {
+    if (displayedSite && refs.onSiteSelectRef.current) {
       // Freeze tooltip position on click to prevent any position jumping
       if (!refs.isFrozenRef.current) {
         refs.isFrozenRef.current = true
         setters.setIsFrozen(true)
         setters.setFrozenSite(displayedSite)
-        // Position is already set from hover, no need to update
       }
       refs.onSiteSelectRef.current(displayedSite.id, e.ctrlKey || e.metaKey)
       return
     }
 
-    // No tooltip visible - find nearest site within 10px screen radius (front side only)
+    // No tooltip visible - find nearest site within click radius (front side only)
     let nearestSite: SiteData | null = null
     let nearestScreenDist = Infinity
-    const maxScreenDist = 10 // 10px radius
+    const siteClickRadius = 10 // 10px radius for direct site clicks
     const cameraPos = camera.position.clone().normalize()
 
     refs.sitesRef.current.forEach(site => {
@@ -603,18 +630,53 @@ export function createSingleClickHandler(
       const screenY = (-projectedPos.y + 1) / 2 * window.innerHeight
 
       const screenDist = Math.sqrt((clickX - screenX) ** 2 + (clickY - screenY) ** 2)
-      if (screenDist < nearestScreenDist && screenDist < maxScreenDist) {
+      if (screenDist < nearestScreenDist) {
         nearestScreenDist = screenDist
-        nearestSite = site
+        if (screenDist <= siteClickRadius) {
+          nearestSite = site
+        }
       }
     })
 
-    if (nearestSite) {
-      refs.onSiteSelectRef.current?.((nearestSite as SiteData).id, e.ctrlKey || e.metaKey)
-    } else {
-      // Click on empty space (globe or stars) - deselect all
-      // wasCleanClick check at top already filtered out drags
-      refs.onSiteSelectRef.current?.(null, false)
+    // If a site was clicked, select it (sites have priority over empires)
+    if (nearestSite && refs.onSiteSelectRef.current) {
+      refs.onSiteSelectRef.current((nearestSite as SiteData).id, e.ctrlKey || e.metaKey)
+      return
+    }
+
+    // ========== EMPIRE CLICK (SECOND PRIORITY) ==========
+    // Only triggers if no site was clicked
+    if (refs.onEmpireClickRef.current) {
+      const raycasterEmpire = new THREE.Raycaster()
+      raycasterEmpire.setFromCamera(new THREE.Vector2(mouseX, mouseY), camera)
+
+      // Find all empire fill meshes (they have userData.empireId and isFillMesh)
+      const empireMeshes: THREE.Object3D[] = []
+      globe.traverse((child) => {
+        if (child.userData?.empireId && child.userData?.isFillMesh && child instanceof THREE.Mesh) {
+          empireMeshes.push(child)
+        }
+      })
+
+      if (empireMeshes.length > 0) {
+        const empireHits = raycasterEmpire.intersectObjects(empireMeshes)
+        if (empireHits.length > 0) {
+          // Find the first visible hit with an empireId
+          for (const hit of empireHits) {
+            const empireId = hit.object.userData?.empireId
+            if (empireId && hit.object.visible) {
+              refs.onEmpireClickRef.current(empireId)
+              return
+            }
+          }
+        }
+      }
+    }
+
+    // ========== EMPTY SPACE CLICK (DESELECT) ==========
+    // Click on empty space (globe or stars) - deselect all
+    if (refs.onSiteSelectRef.current) {
+      refs.onSiteSelectRef.current(null, false)
     }
   }
 }
@@ -718,11 +780,23 @@ export function createDoubleClickHandler(
 /** Creates the mouseleave handler. */
 export function createMouseLeaveHandler(
   setHoveredSite: (site: SiteData | null) => void,
-  lastMousePosRef: React.MutableRefObject<{ x: number; y: number }>
+  lastMousePosRef: React.MutableRefObject<{ x: number; y: number }>,
+  renderer?: THREE.WebGLRenderer,
+  empireHoverRefs?: EmpireHoverRefs
 ): () => void {
   return () => {
     setHoveredSite(null)
     lastMousePosRef.current = { x: -1000, y: -1000 } // Move off screen
+
+    // Clear empire hover state when leaving canvas
+    if (empireHoverRefs) {
+      clearEmpireHoverState(empireHoverRefs)
+    }
+
+    // Reset cursor to crosshair
+    if (renderer) {
+      renderer.domElement.style.cursor = 'crosshair'
+    }
   }
 }
 
@@ -771,12 +845,18 @@ export function setupEventHandlers(
   const { onMouseDown, mouseState } = createMouseDownHandler(refs.showMapboxRef)
   const onMouseUp = createMouseUpHandler(mouseState)
 
-  // Mouse move (arcball + coordinates + tooltips)
+  // Mouse move (arcball + coordinates + tooltips + empire hover)
   const onMouseMove = createMouseMoveHandler(
     camera, renderer, controls, mouseState, getArcballPoint,
     refs.showMapboxRef, refs.lastMousePosRef, refs.lastMoveTimeRef,
     refs.lastCoordsUpdateRef, refs.currentHoveredSiteRef,
-    refs.isFrozenRef, setters.setCursorCoords, setters.setTooltipPos, setters.setHoveredSite
+    refs.isFrozenRef, setters.setCursorCoords, setters.setTooltipPos, setters.setHoveredSite,
+    globe,
+    {
+      hoveredEmpireRef: refs.hoveredEmpireRef,
+      empireBorderLinesRef: refs.empireBorderLinesRef,
+      empireFillMeshesRef: refs.empireFillMeshesRef,
+    }
   )
 
   // Click handling (single click with delay for double-click discrimination)
@@ -797,6 +877,7 @@ export function setupEventHandlers(
       measurementsRef: refs.measurementsRef,
       currentMeasurePointsRef: refs.currentMeasurePointsRef,
       onSiteSelectRef: refs.onSiteSelectRef,
+      onEmpireClickRef: refs.onEmpireClickRef,
     },
     {
       setIsFrozen: setters.setIsFrozen,
@@ -816,8 +897,17 @@ export function setupEventHandlers(
     refs.cameraAnimationRef, clickState
   )
 
-  // Mouse leave
-  const onMouseLeave = createMouseLeaveHandler(setters.setHoveredSite, refs.lastMousePosRef)
+  // Mouse leave (with empire hover cleanup)
+  const onMouseLeave = createMouseLeaveHandler(
+    setters.setHoveredSite,
+    refs.lastMousePosRef,
+    renderer,
+    {
+      hoveredEmpireRef: refs.hoveredEmpireRef,
+      empireBorderLinesRef: refs.empireBorderLinesRef,
+      empireFillMeshesRef: refs.empireFillMeshesRef,
+    }
+  )
 
   // ----- Attach listeners -----
   renderer.domElement.addEventListener('mousedown', onMouseDown)

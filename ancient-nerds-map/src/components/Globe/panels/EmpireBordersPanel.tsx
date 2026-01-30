@@ -30,12 +30,6 @@ interface EmpireBordersPanelProps {
   expandedRegions: Set<string>
   onToggleRegion: (region: string) => void
 
-  // Labels and cities
-  showEmpireLabels: boolean
-  onToggleEmpireLabels: (show: boolean) => void
-  showAncientCities: boolean
-  onToggleAncientCities: (show: boolean) => void
-
   // Global timeline
   globalTimelineEnabled: boolean
   onToggleGlobalTimeline: (enabled: boolean) => void
@@ -66,10 +60,6 @@ export function EmpireBordersPanel({
   onEmpireYearSliderInput,
   expandedRegions,
   onToggleRegion,
-  showEmpireLabels,
-  onToggleEmpireLabels,
-  showAncientCities,
-  onToggleAncientCities,
   globalTimelineEnabled,
   onToggleGlobalTimeline,
   globalTimelineYear,
@@ -114,24 +104,8 @@ export function EmpireBordersPanel({
         </button>
       </div>
 
-      {/* Options row: Show Labels + Cities + By Period toggles */}
+      {/* Options row: By Period toggle + quick buttons */}
       <div className="empire-options-row">
-        <label className="layer-toggle">
-          <input
-            type="checkbox"
-            checked={showEmpireLabels}
-            onChange={(e) => onToggleEmpireLabels(e.target.checked)}
-          />
-          <span className="layer-label">Labels</span>
-        </label>
-        <label className="layer-toggle">
-          <input
-            type="checkbox"
-            checked={showAncientCities}
-            onChange={(e) => onToggleAncientCities(e.target.checked)}
-          />
-          <span className="layer-label">Cities</span>
-        </label>
         <label className="layer-toggle">
           <input
             type="checkbox"

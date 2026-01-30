@@ -19,3 +19,6 @@ export * from './sitesRenderer'
 export * from './paleoshorelineLoader'
 export * from './measurementRenderer'
 export * from './highlightedSitesRenderer'
+// Site and empire hover utilities
+export * from './siteProximityUtils'
+export * from './empireHoverUtils'

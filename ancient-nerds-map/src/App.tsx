@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } fro
 import Globe from './components/Globe'
 import FilterPanel from './components/FilterPanel'
 import { EmpirePolygonData, computeBoundingBox, isSiteInEmpirePolygons } from './utils/geometry'
-import SitePopup from './components/SitePopup'
+import SitePopup, { EmpirePopupData } from './components/SitePopup'
+import { EMPIRES, EmpireConfig } from './config/empireData'
 // Lazy-load modals for faster initial load
 const ContributeModal = lazy(() => import('./components/ContributeModal'))
 const DisclaimerModal = lazy(() => import('./components/DisclaimerModal'))
@@ -361,6 +362,16 @@ function AppContent() {
     isLoadingImages: boolean
   }
   const [openPopups, setOpenPopups] = useState<Map<string, OpenPopup>>(new Map())
+
+  // Empire popup support: track all open empire popups by empire ID
+  interface OpenEmpirePopup {
+    empire: EmpirePopupData
+    yearOptions: number[]
+    currentYear: number
+    isMinimized: boolean
+  }
+  const [openEmpirePopups, setOpenEmpirePopups] = useState<Map<string, OpenEmpirePopup>>(new Map())
+
   const [highlightedSiteId, setHighlightedSiteId] = useState<string | null>(null) // Site hovered in list
   const [isHoveringList, setIsHoveringList] = useState(false) // Hovering over search/proximity results
   const [listFrozenSiteIds, setListFrozenSiteIds] = useState<string[]>([]) // Sites frozen from click in list (supports multi-select with Ctrl)
@@ -388,6 +399,8 @@ function AppContent() {
   const [empirePolygons, setEmpirePolygons] = useState<Map<string, import('./utils/geometry').EmpirePolygonData>>(new Map())
   const [visibleEmpireIds, setVisibleEmpireIds] = useState<Set<string>>(new Set())
   const [empireSliderYears, setEmpireSliderYears] = useState<Record<string, number>>({})
+  // External empire year request (to sync popup period changes to globe)
+  const [externalEmpireYearRequest, setExternalEmpireYearRequest] = useState<{ empireId: string; year: number } | null>(null)
 
   // Measurement tool state
   const [measureMode, setMeasureMode] = useState(false)
@@ -671,6 +684,110 @@ function AppContent() {
       const popup = next.get(siteId)
       if (popup) {
         next.set(siteId, { ...popup, isMinimized })
+      }
+      return next
+    })
+  }, [])
+
+  // ========== Empire Popup Functions ==========
+
+  // Generate year options for empire slider (every 50 years)
+  const generateEmpireYearOptions = useCallback((config: EmpireConfig): number[] => {
+    const years: number[] = []
+    const step = 50
+    // Ensure startYear is included
+    years.push(config.startYear)
+    // Add intermediate years
+    let year = Math.ceil(config.startYear / step) * step
+    while (year < config.endYear) {
+      if (year > config.startYear) {
+        years.push(year)
+      }
+      year += step
+    }
+    // Ensure endYear is included
+    if (config.endYear > years[years.length - 1]) {
+      years.push(config.endYear)
+    }
+    return years
+  }, [])
+
+  // Open empire popup - takes empire ID and looks up config
+  const openEmpirePopup = useCallback((empireId: string) => {
+    // Don't open if already open
+    if (openEmpirePopups.has(empireId)) return
+
+    // Find empire config
+    const empireConfig = EMPIRES.find(e => e.id === empireId)
+    if (!empireConfig) {
+      console.warn('Empire not found:', empireId)
+      return
+    }
+
+    // Get available years for this empire from the current empireYears state
+    // or generate a default range
+    const currentYear = empireSliderYears[empireId] ?? empireConfig.startYear
+    const yearOptions = generateEmpireYearOptions(empireConfig)
+
+    // Create empire popup data
+    const empireData: EmpirePopupData = {
+      id: empireConfig.id,
+      name: empireConfig.name,
+      region: empireConfig.region,
+      startYear: empireConfig.startYear,
+      endYear: empireConfig.endYear,
+      color: empireConfig.color,
+      // Peak year/area could come from metadata if available
+    }
+
+    setOpenEmpirePopups(prev => {
+      const next = new Map(prev)
+      next.set(empireId, {
+        empire: empireData,
+        yearOptions,
+        currentYear,
+        isMinimized: false
+      })
+      return next
+    })
+  }, [openEmpirePopups, empireSliderYears, generateEmpireYearOptions])
+
+  // Close empire popup
+  const closeEmpirePopup = useCallback((empireId: string) => {
+    setOpenEmpirePopups(prev => {
+      const next = new Map(prev)
+      next.delete(empireId)
+      return next
+    })
+  }, [])
+
+  // Update empire popup year - also updates the globe's empire year
+  const setEmpirePopupYear = useCallback((empireId: string, year: number) => {
+    // Update popup state
+    setOpenEmpirePopups(prev => {
+      const next = new Map(prev)
+      const popup = next.get(empireId)
+      if (popup) {
+        next.set(empireId, { ...popup, currentYear: year })
+      }
+      return next
+    })
+    // Also update the globe's empire year via the slider years state
+    setEmpireSliderYears(prev => ({
+      ...prev,
+      [empireId]: year
+    }))
+    // Tell the globe to update its borders for this year
+    setExternalEmpireYearRequest({ empireId, year })
+  }, [])
+
+  // Update minimized state for empire popup
+  const setEmpirePopupMinimized = useCallback((empireId: string, isMinimized: boolean) => {
+    setOpenEmpirePopups(prev => {
+      const next = new Map(prev)
+      const popup = next.get(empireId)
+      if (popup) {
+        next.set(empireId, { ...popup, isMinimized })
       }
       return next
     })
@@ -1485,9 +1602,23 @@ function AppContent() {
     // but disabled when no empires are visible, so it re-applies when empires are enabled again
   }, [])
 
-  // Handle empire year changes from Globe
+  // Handle empire year changes from Globe - also sync to any open popups
   const handleEmpireYearsChange = useCallback((years: Record<string, number>) => {
-    setEmpireSliderYears(years)
+    // Merge incoming years with existing to preserve any directly-set values
+    setEmpireSliderYears(prev => ({ ...prev, ...years }))
+    // Sync year to any open empire popups
+    setOpenEmpirePopups(prev => {
+      let changed = false
+      const next = new Map(prev)
+      for (const [empireId, popup] of next) {
+        const newYear = years[empireId]
+        if (newYear !== undefined && newYear !== popup.currentYear) {
+          next.set(empireId, { ...popup, currentYear: newYear })
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
   }, [])
 
   // Handle empire polygon data loaded from Globe
@@ -1870,6 +2001,9 @@ function AppContent() {
         onVisibleEmpiresChange={handleVisibleEmpiresChange}
         onEmpireYearsChange={handleEmpireYearsChange}
         onEmpirePolygonsLoaded={handleEmpirePolygonsLoaded}
+        externalEmpireYearRequest={externalEmpireYearRequest}
+        onExternalEmpireYearRequestHandled={() => setExternalEmpireYearRequest(null)}
+        onEmpireClick={openEmpirePopup}
         onOfflineClick={() => setShowDownloadManager(true)}
         isOffline={isOffline}
       />}
@@ -2039,6 +2173,28 @@ function AppContent() {
                 // Refresh from API failed, local state is still updated
               }
             }}
+          />
+        )
+      })}
+      {/* Render all open empire popups */}
+      {Array.from(openEmpirePopups.entries()).map(([empireId, popup]) => {
+        // Calculate stack index for minimized empire popups (after site popups)
+        const minimizedSitePopups = Array.from(openPopups.values()).filter(p => p.isMinimized)
+        const minimizedEmpirePopups = Array.from(openEmpirePopups.values()).filter(p => p.isMinimized)
+        const minimizedIndex = minimizedEmpirePopups.findIndex(p => p.empire.id === empireId)
+        // Stack empire popups after site popups
+        const stackIndex = minimizedIndex >= 0 ? minimizedSitePopups.length + minimizedIndex : -1
+
+        return (
+          <SitePopup
+            key={`empire-${empireId}`}
+            empire={popup.empire}
+            empireYear={popup.currentYear}
+            empireYearOptions={popup.yearOptions}
+            onEmpireYearChange={(year) => setEmpirePopupYear(empireId, year)}
+            onClose={() => closeEmpirePopup(empireId)}
+            onMinimizedChange={(isMin) => setEmpirePopupMinimized(empireId, isMin)}
+            minimizedStackIndex={stackIndex}
           />
         )
       })}

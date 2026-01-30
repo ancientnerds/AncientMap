@@ -5,6 +5,7 @@
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { MAPBOX, rotateMapboxToken, getMapboxToken } from '../config/mapboxConstants'
+import { applyDarkTealTheme as applyTealTheme, setupDarkFog } from '../utils/mapboxTheme'
 
 export type MapboxTileType = 'dark' | 'satellite'
 export type ColorMode = 'category' | 'age' | 'source' | 'country'
@@ -134,13 +135,7 @@ export class MapboxGlobeService {
 
   private setupFog(): void {
     if (!this.map) return
-    this.map.setFog({
-      color: 'rgb(10, 10, 20)',
-      'high-color': 'rgb(20, 20, 40)',
-      'horizon-blend': 0.02,
-      'space-color': 'rgb(5, 5, 10)',
-      'star-intensity': 0.0
-    })
+    setupDarkFog(this.map)
   }
 
   /**
@@ -149,37 +144,7 @@ export class MapboxGlobeService {
    */
   private applyDarkTealTheme(): void {
     if (!this.map || this.currentStyle !== 'dark') return
-
-    // Teal color from Three.js globe: #00E0D0 = rgb(0, 224, 208)
-    // We use darker versions for land to create contrast
-
-    // Land - dark teal/green tint
-    if (this.map.getLayer('land')) {
-      this.map.setPaintProperty('land', 'background-color', 'rgb(8, 32, 28)')
-    }
-
-    // Water - darker teal
-    if (this.map.getLayer('water')) {
-      this.map.setPaintProperty('water', 'fill-color', 'rgb(4, 18, 16)')
-    }
-
-    // Background - very dark
-    if (this.map.getLayer('background')) {
-      this.map.setPaintProperty('background', 'background-color', 'rgb(4, 18, 16)')
-    }
-
-    // Landuse layers - subtle teal tints
-    const landuseColors: Record<string, string> = {
-      'landuse': 'rgb(10, 36, 32)',
-      'landcover': 'rgb(12, 40, 35)',
-    }
-
-    for (const [layerId, color] of Object.entries(landuseColors)) {
-      if (this.map.getLayer(layerId)) {
-        this.map.setPaintProperty(layerId, 'fill-color', color)
-      }
-    }
-
+    applyTealTheme(this.map)
     console.log('[MapboxGlobe] Applied dark teal theme')
   }
 

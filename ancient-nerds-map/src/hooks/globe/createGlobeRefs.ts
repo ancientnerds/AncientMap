@@ -122,6 +122,8 @@ export function useGlobeRefs(): GlobeRefs {
   const showEmpireLabels = useRef<boolean>(true)
   const showAncientCities = useRef<boolean>(true)
   const visibleEmpires = useRef<Set<string>>(new Set())
+  const hoveredEmpire = useRef<string | null>(null)
+  const empireFillMeshes = useRef<Record<string, THREE.Mesh[]>>({})
 
   // ========== Measurement Tool Refs ==========
   const measurementObjects = useRef<THREE.Object3D[]>([])
@@ -245,6 +247,7 @@ export function useGlobeRefs(): GlobeRefs {
   // ========== Callback Refs ==========
   const onSiteClick = useRef<((site: SiteData | null) => void) | undefined>(undefined)
   const onSiteSelect = useRef<((siteId: string | null, ctrlKey: boolean) => void) | undefined>(undefined)
+  const onEmpireClick = useRef<((empireId: string) => void) | undefined>(undefined)
   const onMeasurePointAdd = useRef<((coords: [number, number], snapped: boolean) => void) | undefined>(undefined)
   const onMeasurementComplete = useRef<((start: [number, number], end: [number, number]) => void) | undefined>(undefined)
   const onContributeMapConfirm = useRef<(() => void) | undefined>(undefined)
@@ -367,6 +370,8 @@ export function useGlobeRefs(): GlobeRefs {
     showEmpireLabels,
     showAncientCities,
     visibleEmpires,
+    hoveredEmpire,
+    empireFillMeshes,
 
     // Measurement Tool Refs
     measurementObjects,
@@ -482,6 +487,7 @@ export function useGlobeRefs(): GlobeRefs {
     // Callback Refs
     onSiteClick,
     onSiteSelect,
+    onEmpireClick,
     onMeasurePointAdd,
     onMeasurementComplete,
     onContributeMapConfirm,

@@ -103,6 +103,10 @@ export function useEmpireBorders(options: UseEmpireBordersOptions = {}) {
   const empireLabelsRef = useRef<Record<string, GlobeLabelMesh>>({})
   const regionLabelsRef = useRef<Record<string, GlobeLabelMesh[]>>({})
   const ancientCitiesRef = useRef<Record<string, GlobeLabelMesh[]>>({})
+  const empireFillMeshesRef = useRef<Record<string, THREE.Mesh[]>>({})
+
+  // Empire hover state
+  const hoveredEmpireRef = useRef<string | null>(null)
 
   // Data cache refs
   const regionDataRef = useRef<Record<string, Array<{ name: string; lat: number; lng: number; years: number[] }>> | null>(null)
@@ -316,6 +320,10 @@ export function useEmpireBorders(options: UseEmpireBordersOptions = {}) {
     empireLabelsRef,
     regionLabelsRef,
     ancientCitiesRef,
+    empireFillMeshesRef,
+
+    // Empire hover state
+    hoveredEmpireRef,
 
     // Data cache refs
     regionDataRef,
