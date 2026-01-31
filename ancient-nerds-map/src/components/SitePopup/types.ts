@@ -1,6 +1,7 @@
 import type { GalleryImage } from '../ImageGallery'
 import type { AncientMap } from '../../services/ancientMapsService'
 import type { SketchfabModel } from '../../services/sketchfabService'
+import type { SmithsonianArtifact, SmithsonianText } from '../../services/smithsonianService'
 import type { SiteData } from '../../data/sites'
 import type { SeshatPolityData } from '../../types/seshat'
 
@@ -24,9 +25,9 @@ export interface UnifiedGalleryItem {
   full: string
   title?: string
   date?: string
-  source: 'wikipedia' | 'map' | 'artifact' | 'sketchfab'
+  source: 'wikipedia' | 'map' | 'artifact' | 'sketchfab' | 'smithsonian'
   // Original data for lightbox
-  original: GalleryImage | AncientMap | Artifact | SketchfabModel
+  original: GalleryImage | AncientMap | Artifact | SketchfabModel | SmithsonianArtifact | SmithsonianText
 }
 
 // ============= Popup Data Types (Discriminated Union) =============
@@ -112,6 +113,7 @@ export interface SitePopupProps {
   empire?: EmpirePopupData
   empireYear?: number
   empireYearOptions?: number[]
+  empireDefaultYear?: number
   onEmpireYearChange?: (year: number) => void
 }
 
@@ -169,6 +171,7 @@ export interface MapSectionProps {
   empire?: EmpirePopupData
   empireYear?: number
   empireYearOptions?: number[]
+  empireDefaultYear?: number
   onEmpireYearChange?: (year: number) => void
 
   // Google Maps state
@@ -234,6 +237,8 @@ export interface GalleryTabsProps {
   isLoadingImages?: boolean
   isLoadingMaps?: boolean
   isLoadingModels?: boolean
+  isLoadingArtifacts?: boolean
+  isLoadingTexts?: boolean
   isGalleryExpanded: boolean
   onExpandToggle: () => void
 }
