@@ -6,7 +6,7 @@ export interface LightboxImage {
   title?: string
   photographer?: string
   photographerUrl?: string
-  sourceType?: 'wikimedia' | 'david-rumsey' | 'met-museum'
+  sourceType?: 'wikimedia' | 'david-rumsey' | 'met-museum' | 'smithsonian'
   sourceUrl?: string
   license?: string
 }
@@ -373,6 +373,17 @@ export default function ImageLightbox({
                   <path d="M9 21v-6h6v6"></path>
                 </svg>
                 Met Museum
+              </a>
+            )}
+            {current.sourceUrl && current.sourceType === 'smithsonian' && (
+              <a href={current.sourceUrl} target="_blank" rel="noopener noreferrer" className="lightbox-source-link">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 21h18"></path>
+                  <path d="M9 21V9h6v12"></path>
+                  <path d="M5 21V3h14v18"></path>
+                  <path d="M9 6h6"></path>
+                </svg>
+                Smithsonian
               </a>
             )}
           </div>

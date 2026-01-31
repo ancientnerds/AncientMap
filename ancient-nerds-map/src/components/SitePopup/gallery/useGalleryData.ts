@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import type { GalleryImage } from '../../ImageGallery'
 import { findMapsForLocation, AncientMap } from '../../../services/ancientMapsService'
 import { findModelsForSite, SketchfabModel } from '../../../services/sketchfabService'
+import { findSmithsonianArtifacts, SmithsonianArtifact } from '../../../services/smithsonianService'
 import type { GalleryTab, UnifiedGalleryItem, Artifact } from '../types'
 
 interface UseGalleryDataOptions {
@@ -46,6 +47,7 @@ interface UseGalleryDataReturn {
   ancientMaps: AncientMap[]
   sketchfabModels: SketchfabModel[]
   artifacts: Artifact[]
+  smithsonianArtifacts: SmithsonianArtifact[]
 
   // Hero image
   heroImage: GalleryImage | null
@@ -68,7 +70,10 @@ export function useGalleryData({
   const [ancientMaps, setAncientMaps] = useState<AncientMap[]>([])
   const [ancientMapsLoading, setAncientMapsLoading] = useState(false)
   const [artifacts] = useState<Artifact[]>([])
-  const [artifactsLoading] = useState(false)
+
+  // Smithsonian artifacts - lazy loaded after maps
+  const [smithsonianArtifacts, setSmithsonianArtifacts] = useState<SmithsonianArtifact[]>([])
+  const [smithsonianLoading, setSmithsonianLoading] = useState(false)
 
   // Sketchfab 3D models - lazy loaded after maps
   const [sketchfabModels, setSketchfabModels] = useState<SketchfabModel[]>([])
@@ -77,6 +82,7 @@ export function useGalleryData({
   // Track if we've already fetched for this site (prevents re-fetching loops)
   const mapsFetchedRef = useRef<string | null>(null)
   const sketchfabFetchedRef = useRef<string | null>(null)
+  const smithsonianFetchedRef = useRef<string | null>(null)
 
   // Load priority: hero image -> popup opens -> google map -> wiki -> 3D -> maps
   // Maps load after a delay to prioritize images and 3D
@@ -123,6 +129,30 @@ export function useGalleryData({
     return () => clearTimeout(timer)
   }, [title, location, isOffline])
 
+  // Smithsonian artifacts load after maps (2s delay)
+  useEffect(() => {
+    const siteKey = `${title}-${location || ''}`
+
+    // Skip if already fetched for this site or offline
+    if (smithsonianFetchedRef.current === siteKey || isOffline) return
+
+    setSmithsonianLoading(true)
+    const timer = setTimeout(() => {
+      smithsonianFetchedRef.current = siteKey
+      // Extract culture hint from location (e.g., "Egypt" -> "Egyptian")
+      const cultureHint = location?.split(',').pop()?.trim()
+      findSmithsonianArtifacts(title, cultureHint)
+        .then(setSmithsonianArtifacts)
+        .catch((err) => {
+          console.warn('Failed to load Smithsonian artifacts:', err)
+          setSmithsonianArtifacts([])
+        })
+        .finally(() => setSmithsonianLoading(false))
+    }, 2000) // 2s delay after popup opens (after maps)
+
+    return () => clearTimeout(timer)
+  }, [title, location, isOffline])
+
   // Convert all data to unified gallery items
   const photoItems: UnifiedGalleryItem[] = useMemo(() => {
     const items: UnifiedGalleryItem[] = []
@@ -150,8 +180,9 @@ export function useGalleryData({
       original: m
     })), [ancientMaps])
 
-  const artifactItems: UnifiedGalleryItem[] = useMemo(() =>
-    artifacts.map(a => ({
+  const artifactItems: UnifiedGalleryItem[] = useMemo(() => {
+    // Combine legacy artifacts with Smithsonian artifacts
+    const legacyItems: UnifiedGalleryItem[] = artifacts.map(a => ({
       id: String(a.id),
       thumb: a.thumbnail,
       full: a.fullImage,
@@ -159,7 +190,20 @@ export function useGalleryData({
       date: a.date || undefined,
       source: 'artifact' as const,
       original: a
-    })), [artifacts])
+    }))
+
+    const smithsonianItems: UnifiedGalleryItem[] = smithsonianArtifacts.map(a => ({
+      id: a.id,
+      thumb: a.thumbnail,
+      full: a.fullImage,
+      title: a.title,
+      date: a.date || undefined,
+      source: 'smithsonian' as const,
+      original: a
+    }))
+
+    return [...legacyItems, ...smithsonianItems]
+  }, [artifacts, smithsonianArtifacts])
 
   const sketchfabItems: UnifiedGalleryItem[] = useMemo(() =>
     sketchfabModels.map(m => ({
@@ -184,6 +228,8 @@ export function useGalleryData({
     : activeGalleryTab === 'artworks' ? artworkItems
     : activeGalleryTab === 'texts' ? textItems
     : mythItems
+
+  const artifactsLoading = smithsonianLoading
 
   const isLoading = activeGalleryTab === 'maps' ? ancientMapsLoading
     : activeGalleryTab === '3dmodels' ? sketchfabLoading
@@ -226,6 +272,7 @@ export function useGalleryData({
     ancientMaps,
     sketchfabModels,
     artifacts,
+    smithsonianArtifacts,
 
     // Hero image
     heroImage,

@@ -56,6 +56,7 @@ export default function SitePopup({
   empire,
   empireYear,
   empireYearOptions,
+  empireDefaultYear,
   onEmpireYearChange
 }: SitePopupProps) {
   // Offline mode context
@@ -182,9 +183,10 @@ export default function SitePopup({
     isLoadingImages
   })
 
-  // Empire gallery hook - fetch images from Wikipedia
+  // Empire gallery hook - fetch images from Wikipedia and AWMC maps
   // Tries periodName first (e.g., "Roman Principate"), falls back to empireName (e.g., "Roman Empire")
   const empireGalleryHook = useEmpireGalleryData({
+    empireId: empire?.id,
     empireName: empire?.name || '',
     periodName: currentPeriodName,
     isOffline
@@ -193,19 +195,19 @@ export default function SitePopup({
   // Use the appropriate hook based on mode
   const galleryHook = isEmpireMode ? {
     ...empireGalleryHook,
-    // Empire mode only has photos, map to full gallery structure
-    mapItems: [],
+    // Empire mode has photos, maps, artifacts (Smithsonian), and texts (Smithsonian)
     sketchfabItems: [],
-    artifactItems: [],
+    artifactItems: empireGalleryHook.artifactItems,
     artworkItems: [],
-    textItems: [],
+    textItems: empireGalleryHook.textItems,
     mythItems: [],
-    ancientMapsLoading: false,
+    ancientMapsLoading: empireGalleryHook.isLoadingMaps,
     sketchfabLoading: false,
-    artifactsLoading: false,
-    ancientMaps: [],
+    artifactsLoading: empireGalleryHook.isLoadingArtifacts,
+    ancientMaps: empireGalleryHook.historicalMaps,
     sketchfabModels: [],
     artifacts: [],
+    smithsonianArtifacts: empireGalleryHook.smithsonianArtifacts,
     heroImage: empireGalleryHook.heroImage ? {
       thumb: empireGalleryHook.heroImage.thumb,
       full: empireGalleryHook.heroImage.full,
@@ -373,13 +375,26 @@ export default function SitePopup({
           license: img.license
         }
       } else if (item.source === 'map') {
-        const map = orig as AncientMap
+        const map = orig as AncientMap & { source?: string; license?: string; artist?: string; description?: string }
+        // Check if this is a Wikimedia map (from empire gallery) vs David Rumsey (from site gallery)
+        const isWikimedia = map.source === 'wikimedia'
         return {
           src: map.fullImage,
           title: map.title,
-          photographer: map.date || undefined,
-          sourceType: 'david-rumsey',
-          sourceUrl: map.webUrl
+          photographer: isWikimedia ? (map.artist || 'Wikimedia Commons') : (map.date || undefined),
+          sourceType: isWikimedia ? 'wikimedia' : 'david-rumsey',
+          sourceUrl: map.webUrl,
+          license: isWikimedia ? map.license : undefined
+        }
+      } else if (item.source === 'smithsonian') {
+        const artifact = orig as { fullImage: string; title: string; date?: string; sourceUrl: string; museum?: string; license?: string }
+        return {
+          src: artifact.fullImage,
+          title: artifact.title,
+          photographer: artifact.museum || 'Smithsonian',
+          sourceType: 'smithsonian',
+          sourceUrl: artifact.sourceUrl,
+          license: artifact.license
         }
       } else {
         const artifact = orig as { fullImage: string; title: string; date?: string; sourceUrl: string }
@@ -664,6 +679,7 @@ export default function SitePopup({
             empire={empire}
             empireYear={empireYear}
             empireYearOptions={empireYearOptions}
+            empireDefaultYear={empireDefaultYear}
             onEmpireYearChange={onEmpireYearChange}
             googleMapsLoaded={googleMapsLoaded}
             googleMapsError={googleMapsError}
@@ -750,6 +766,8 @@ export default function SitePopup({
           isLoadingImages={isLoadingImages}
           isLoadingMaps={galleryHook.ancientMapsLoading}
           isLoadingModels={galleryHook.sketchfabLoading}
+          isLoadingArtifacts={galleryHook.artifactsLoading}
+          isLoadingTexts={isEmpireMode ? empireGalleryHook.isLoadingTexts : false}
           isGalleryExpanded={galleryHook.isGalleryExpanded}
           onExpandToggle={() => galleryHook.setIsGalleryExpanded(true)}
         />
