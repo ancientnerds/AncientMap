@@ -204,6 +204,7 @@ export default function SitePopup({
     ancientMapsLoading: empireGalleryHook.isLoadingMaps,
     sketchfabLoading: false,
     artifactsLoading: empireGalleryHook.isLoadingArtifacts,
+    textsLoading: empireGalleryHook.isLoadingTexts,
     ancientMaps: empireGalleryHook.historicalMaps,
     sketchfabModels: [],
     artifacts: [],
@@ -767,7 +768,7 @@ export default function SitePopup({
           isLoadingMaps={galleryHook.ancientMapsLoading}
           isLoadingModels={galleryHook.sketchfabLoading}
           isLoadingArtifacts={galleryHook.artifactsLoading}
-          isLoadingTexts={isEmpireMode ? empireGalleryHook.isLoadingTexts : false}
+          isLoadingTexts={isEmpireMode ? empireGalleryHook.isLoadingTexts : galleryHook.textsLoading}
           isGalleryExpanded={galleryHook.isGalleryExpanded}
           onExpandToggle={() => galleryHook.setIsGalleryExpanded(true)}
         />

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import type { GalleryImage } from '../../ImageGallery'
 import { findMapsForLocation, AncientMap } from '../../../services/ancientMapsService'
 import { findModelsForSite, SketchfabModel } from '../../../services/sketchfabService'
-import { findSmithsonianArtifacts, SmithsonianArtifact } from '../../../services/smithsonianService'
+import { searchSmithsonian, SmithsonianArtifact, SmithsonianText } from '../../../services/smithsonianService'
 import type { GalleryTab, UnifiedGalleryItem, Artifact } from '../types'
 
 interface UseGalleryDataOptions {
@@ -41,6 +41,7 @@ interface UseGalleryDataReturn {
   ancientMapsLoading: boolean
   sketchfabLoading: boolean
   artifactsLoading: boolean
+  textsLoading: boolean
   isLoading: boolean
 
   // Raw data for external use
@@ -71,8 +72,9 @@ export function useGalleryData({
   const [ancientMapsLoading, setAncientMapsLoading] = useState(false)
   const [artifacts] = useState<Artifact[]>([])
 
-  // Smithsonian artifacts - lazy loaded after maps
+  // Smithsonian artifacts & texts - lazy loaded after maps
   const [smithsonianArtifacts, setSmithsonianArtifacts] = useState<SmithsonianArtifact[]>([])
+  const [smithsonianTexts, setSmithsonianTexts] = useState<SmithsonianText[]>([])
   const [smithsonianLoading, setSmithsonianLoading] = useState(false)
 
   // Sketchfab 3D models - lazy loaded after maps
@@ -129,7 +131,7 @@ export function useGalleryData({
     return () => clearTimeout(timer)
   }, [title, location, isOffline])
 
-  // Smithsonian artifacts load after maps (2s delay)
+  // Smithsonian artifacts & texts load after maps (2s delay)
   useEffect(() => {
     const siteKey = `${title}-${location || ''}`
 
@@ -139,13 +141,16 @@ export function useGalleryData({
     setSmithsonianLoading(true)
     const timer = setTimeout(() => {
       smithsonianFetchedRef.current = siteKey
-      // Extract culture hint from location (e.g., "Egypt" -> "Egyptian")
-      const cultureHint = location?.split(',').pop()?.trim()
-      findSmithsonianArtifacts(title, cultureHint)
-        .then(setSmithsonianArtifacts)
+      // Search for site name directly
+      searchSmithsonian(title)
+        .then(({ artifacts, texts }) => {
+          setSmithsonianArtifacts(artifacts)
+          setSmithsonianTexts(texts)
+        })
         .catch((err) => {
-          console.warn('Failed to load Smithsonian artifacts:', err)
+          console.warn('Failed to load Smithsonian data:', err)
           setSmithsonianArtifacts([])
+          setSmithsonianTexts([])
         })
         .finally(() => setSmithsonianLoading(false))
     }, 2000) // 2s delay after popup opens (after maps)
@@ -215,9 +220,20 @@ export function useGalleryData({
       original: m
     })), [sketchfabModels])
 
+  // Text items from Smithsonian Library books
+  const textItems: UnifiedGalleryItem[] = useMemo(() =>
+    smithsonianTexts.map(t => ({
+      id: t.id,
+      thumb: t.coverUrl || '',
+      full: t.coverUrl || '',
+      title: t.title,
+      date: t.date || undefined,
+      source: 'smithsonian' as const,
+      original: t
+    })), [smithsonianTexts])
+
   // Placeholder tabs - empty for now
   const artworkItems: UnifiedGalleryItem[] = []
-  const textItems: UnifiedGalleryItem[] = []
   const mythItems: UnifiedGalleryItem[] = []
 
   // Get current tab items
@@ -230,10 +246,12 @@ export function useGalleryData({
     : mythItems
 
   const artifactsLoading = smithsonianLoading
+  const textsLoading = smithsonianLoading
 
   const isLoading = activeGalleryTab === 'maps' ? ancientMapsLoading
     : activeGalleryTab === '3dmodels' ? sketchfabLoading
     : activeGalleryTab === 'artifacts' ? artifactsLoading
+    : activeGalleryTab === 'texts' ? textsLoading
     : false
 
   // Hero image
@@ -266,6 +284,7 @@ export function useGalleryData({
     ancientMapsLoading,
     sketchfabLoading,
     artifactsLoading,
+    textsLoading,
     isLoading,
 
     // Raw data for external use
