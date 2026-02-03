@@ -14,7 +14,7 @@
     "earcut": "^3.0.2",
     "html2canvas": "^1.4.1",
     "idb": "^8.0.3",
-    "mapbox-gl": "^3.18.0",
+    "mapbox-gl": "^3.18.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "three": "^0.182.0",
@@ -27,7 +27,7 @@
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
-    "puppeteer": "^24.34.0",
+    "puppeteer": "^24.36.1",
     "typescript": "^5.5.3",
     "vite": "^5.4.2"
   }
