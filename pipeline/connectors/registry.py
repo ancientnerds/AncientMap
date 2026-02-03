@@ -11,18 +11,18 @@ Provides:
 import asyncio
 import time
 from datetime import datetime
-from typing import Dict, List, Optional, Type, Set
+
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
 from pipeline.connectors.types import (
-    ContentType,
+    ConnectorStatus,
     ContentItem,
     ContentSearchResult,
-    SourceInfo,
-    ConnectorStatus,
+    ContentType,
     QueryTestResult,
     SampleItem,
+    SourceInfo,
 )
 
 
@@ -45,10 +45,10 @@ class ConnectorRegistry:
     """
 
     # Class-level storage
-    _connector_classes: Dict[str, Type[BaseConnector]] = {}
-    _connector_instances: Dict[str, BaseConnector] = {}
-    _api_keys: Dict[str, str] = {}  # connector_id -> api_key
-    _connector_status: Dict[str, ConnectorStatus] = {}  # cached status
+    _connector_classes: dict[str, type[BaseConnector]] = {}
+    _connector_instances: dict[str, BaseConnector] = {}
+    _api_keys: dict[str, str] = {}  # connector_id -> api_key
+    _connector_status: dict[str, ConnectorStatus] = {}  # cached status
 
     # SPARQL endpoints need longer timeouts (30s instead of 10s)
     SPARQL_CONNECTORS = {
@@ -66,7 +66,7 @@ class ConnectorRegistry:
     ]
 
     @classmethod
-    def register(cls, connector_class: Type[BaseConnector]) -> Type[BaseConnector]:
+    def register(cls, connector_class: type[BaseConnector]) -> type[BaseConnector]:
         """
         Register a connector class with the registry.
 
@@ -92,12 +92,12 @@ class ConnectorRegistry:
         cls._api_keys[connector_id] = api_key
 
     @classmethod
-    def set_api_keys(cls, api_keys: Dict[str, str]) -> None:
+    def set_api_keys(cls, api_keys: dict[str, str]) -> None:
         """Set multiple API keys at once."""
         cls._api_keys.update(api_keys)
 
     @classmethod
-    def get(cls, connector_id: str) -> Optional[BaseConnector]:
+    def get(cls, connector_id: str) -> BaseConnector | None:
         """
         Get a connector instance by ID.
 
@@ -125,7 +125,7 @@ class ConnectorRegistry:
             return None
 
     @classmethod
-    def get_all(cls, include_unavailable: bool = False) -> List[BaseConnector]:
+    def get_all(cls, include_unavailable: bool = False) -> list[BaseConnector]:
         """Get all registered connector instances.
 
         Args:
@@ -143,7 +143,7 @@ class ConnectorRegistry:
     @classmethod
     def get_by_content_type(
         cls, content_type: ContentType, include_unavailable: bool = False
-    ) -> List[BaseConnector]:
+    ) -> list[BaseConnector]:
         """Get all connectors that provide a specific content type."""
         connectors = []
         for connector_id, connector_class in cls._connector_classes.items():
@@ -156,12 +156,12 @@ class ConnectorRegistry:
         return connectors
 
     @classmethod
-    def get_registered_ids(cls) -> List[str]:
+    def get_registered_ids(cls) -> list[str]:
         """Get list of all registered connector IDs."""
         return list(cls._connector_classes.keys())
 
     @classmethod
-    def list_sources(cls) -> List[SourceInfo]:
+    def list_sources(cls) -> list[SourceInfo]:
         """Get info about all registered sources."""
         sources = []
         for connector in cls.get_all(include_unavailable=True):
@@ -172,8 +172,8 @@ class ConnectorRegistry:
     async def search_all(
         cls,
         query: str,
-        content_type: Optional[ContentType] = None,
-        sources: Optional[List[str]] = None,
+        content_type: ContentType | None = None,
+        sources: list[str] | None = None,
         limit_per_source: int = 10,
         timeout: float = 30.0,
     ) -> ContentSearchResult:
@@ -232,15 +232,15 @@ class ConnectorRegistry:
                 asyncio.gather(*tasks, return_exceptions=True),
                 timeout=timeout,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(f"Search timed out after {timeout}s")
             results = []
 
         # Aggregate results
-        all_items: List[ContentItem] = []
-        sources_searched: List[str] = []
-        sources_failed: List[str] = []
-        items_by_source: Dict[str, int] = {}
+        all_items: list[ContentItem] = []
+        sources_searched: list[str] = []
+        sources_failed: list[str] = []
+        items_by_source: dict[str, int] = {}
 
         for result in results:
             if isinstance(result, Exception):
@@ -277,8 +277,8 @@ class ConnectorRegistry:
         lat: float,
         lon: float,
         radius_km: float = 50,
-        content_type: Optional[ContentType] = None,
-        sources: Optional[List[str]] = None,
+        content_type: ContentType | None = None,
+        sources: list[str] | None = None,
         limit_per_source: int = 10,
         timeout: float = 30.0,
     ) -> ContentSearchResult:
@@ -333,14 +333,14 @@ class ConnectorRegistry:
                 asyncio.gather(*tasks, return_exceptions=True),
                 timeout=timeout,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             results = []
 
         # Aggregate
-        all_items: List[ContentItem] = []
-        sources_searched: List[str] = []
-        sources_failed: List[str] = []
-        items_by_source: Dict[str, int] = {}
+        all_items: list[ContentItem] = []
+        sources_searched: list[str] = []
+        sources_failed: list[str] = []
+        items_by_source: dict[str, int] = {}
 
         for result in results:
             if isinstance(result, Exception):
@@ -370,10 +370,10 @@ class ConnectorRegistry:
     async def get_for_site(
         cls,
         site_name: str,
-        location: Optional[str] = None,
-        lat: Optional[float] = None,
-        lon: Optional[float] = None,
-        content_types: Optional[List[ContentType]] = None,
+        location: str | None = None,
+        lat: float | None = None,
+        lon: float | None = None,
+        content_types: list[ContentType] | None = None,
         limit_per_source: int = 10,
         timeout: float = 30.0,
     ) -> ContentSearchResult:
@@ -398,7 +398,7 @@ class ConnectorRegistry:
         connectors = cls.get_all()
 
         if content_types:
-            type_set: Set[ContentType] = set(content_types)
+            type_set: set[ContentType] = set(content_types)
             connectors = [
                 c for c in connectors
                 if any(ct in type_set for ct in c.content_types)
@@ -429,14 +429,14 @@ class ConnectorRegistry:
                 asyncio.gather(*tasks, return_exceptions=True),
                 timeout=timeout,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             results = []
 
         # Aggregate
-        all_items: List[ContentItem] = []
-        sources_searched: List[str] = []
-        sources_failed: List[str] = []
-        items_by_source: Dict[str, int] = {}
+        all_items: list[ContentItem] = []
+        sources_searched: list[str] = []
+        sources_failed: list[str] = []
+        items_by_source: dict[str, int] = {}
 
         for result in results:
             if isinstance(result, Exception):
@@ -466,8 +466,8 @@ class ConnectorRegistry:
     async def get_for_empire(
         cls,
         empire_name: str,
-        period_name: Optional[str] = None,
-        content_types: Optional[List[ContentType]] = None,
+        period_name: str | None = None,
+        content_types: list[ContentType] | None = None,
         limit_per_source: int = 10,
         timeout: float = 30.0,
     ) -> ContentSearchResult:
@@ -489,7 +489,7 @@ class ConnectorRegistry:
         connectors = cls.get_all()
 
         if content_types:
-            type_set: Set[ContentType] = set(content_types)
+            type_set: set[ContentType] = set(content_types)
             connectors = [
                 c for c in connectors
                 if any(ct in type_set for ct in c.content_types)
@@ -517,13 +517,13 @@ class ConnectorRegistry:
                 asyncio.gather(*tasks, return_exceptions=True),
                 timeout=timeout,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             results = []
 
-        all_items: List[ContentItem] = []
-        sources_searched: List[str] = []
-        sources_failed: List[str] = []
-        items_by_source: Dict[str, int] = {}
+        all_items: list[ContentItem] = []
+        sources_searched: list[str] = []
+        sources_failed: list[str] = []
+        items_by_source: dict[str, int] = {}
 
         for result in results:
             if isinstance(result, Exception):
@@ -609,7 +609,7 @@ class ConnectorRegistry:
         return "other"
 
     @classmethod
-    def _get_connector_tabs(cls, connector: BaseConnector) -> List[str]:
+    def _get_connector_tabs(cls, connector: BaseConnector) -> list[str]:
         """Determine which UI tabs a connector populates based on its content types."""
         TAB_MAPPING = {
             'photo': 'Photos',
@@ -732,7 +732,7 @@ class ConnectorRegistry:
             cls._connector_status[connector_id] = connector_status
             return connector_status
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             connector_status = ConnectorStatus(
                 connector_id=connector.connector_id,
                 connector_name=connector.connector_name,
@@ -767,7 +767,7 @@ class ConnectorRegistry:
         cls,
         timeout: float = 10.0,
         include_tests: bool = False,
-    ) -> List[ConnectorStatus]:
+    ) -> list[ConnectorStatus]:
         """
         Check status of all connectors in parallel.
 
@@ -828,7 +828,7 @@ class ConnectorRegistry:
             test_results = await asyncio.gather(*test_tasks, return_exceptions=True)
 
             # Build results map
-            results_map: Dict[str, Dict[str, QueryTestResult]] = {}
+            results_map: dict[str, dict[str, QueryTestResult]] = {}
             for result in test_results:
                 if not isinstance(result, Exception):
                     cid, test_result = result
@@ -850,7 +850,7 @@ class ConnectorRegistry:
         cls,
         connector_id: str,
         timeout: float = 30.0,
-    ) -> Dict[str, QueryTestResult]:
+    ) -> dict[str, QueryTestResult]:
         """
         Run all test queries against a connector.
 
@@ -869,7 +869,7 @@ class ConnectorRegistry:
         if hasattr(connector, 'available') and not connector.available:
             return {}
 
-        results: Dict[str, QueryTestResult] = {}
+        results: dict[str, QueryTestResult] = {}
 
         try:
             async with connector:
@@ -933,7 +933,7 @@ class ConnectorRegistry:
                 sample_items=sample_items,
                 response_time_ms=elapsed,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return QueryTestResult(
                 query_id=query_id,
                 query_name=query_name,
@@ -953,7 +953,7 @@ class ConnectorRegistry:
             )
 
     @classmethod
-    def get_cached_status(cls) -> List[ConnectorStatus]:
+    def get_cached_status(cls) -> list[ConnectorStatus]:
         """
         Get cached status for all connectors without performing health checks.
 

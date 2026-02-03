@@ -11,11 +11,11 @@ API Key: Not required
 """
 
 import json
-from pathlib import Path
-from typing import Iterator, Optional, Dict, Any, List
-from datetime import datetime
 import time
-import urllib.parse
+from collections.abc import Iterator
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 from loguru import logger
 
@@ -174,7 +174,7 @@ class WikidataIngester(BaseIngester):
         logger.info(f"Saved {len(all_results):,} records to {dest_path}")
         return dest_path
 
-    def _execute_sparql(self, query: str) -> List[Dict]:
+    def _execute_sparql(self, query: str) -> list[dict]:
         """
         Execute a SPARQL query against Wikidata.
 
@@ -211,7 +211,7 @@ class WikidataIngester(BaseIngester):
         """
         logger.info(f"Parsing Wikidata data from {raw_data_path}")
 
-        with open(raw_data_path, "r", encoding="utf-8") as f:
+        with open(raw_data_path, encoding="utf-8") as f:
             data = json.load(f)
 
         results = data.get("results", [])
@@ -232,7 +232,7 @@ class WikidataIngester(BaseIngester):
             if site:
                 yield site
 
-    def _parse_result(self, result: Dict[str, Any]) -> Optional[ParsedSite]:
+    def _parse_result(self, result: dict[str, Any]) -> ParsedSite | None:
         """
         Parse a single SPARQL result binding.
 
@@ -323,7 +323,7 @@ class WikidataIngester(BaseIngester):
 
         return "other"
 
-    def _parse_wikidata_date(self, date_str: Optional[str]) -> Optional[int]:
+    def _parse_wikidata_date(self, date_str: str | None) -> int | None:
         """
         Parse Wikidata date string to year.
 

@@ -6,11 +6,10 @@ Classifies user queries into:
 - DATABASE: Questions requiring search through the archaeological database
 """
 
-import re
 import logging
-from enum import Enum
+import re
 from dataclasses import dataclass
-from typing import Optional
+from enum import Enum
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +26,7 @@ class ClassificationResult:
     query_type: QueryType
     confidence: float  # 0.0 to 1.0
     reason: str
-    search_hint: Optional[str] = None  # For DATABASE queries, what to search for
+    search_hint: str | None = None  # For DATABASE queries, what to search for
     is_superlative: bool = False  # True for "oldest", "largest", etc. (highlight only top result)
 
 

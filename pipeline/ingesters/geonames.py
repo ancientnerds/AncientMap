@@ -9,12 +9,9 @@ License: CC-BY 4.0
 API Key: Optional (for web services), not needed for bulk download
 """
 
-import csv
 import zipfile
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, Optional, Dict, Any, Set
-from datetime import datetime
-from io import TextIOWrapper
 
 from loguru import logger
 
@@ -50,7 +47,7 @@ class GeoNamesIngester(BaseIngester):
     # e.g., "https://download.geonames.org/export/dump/IT.zip" for Italy
 
     # Archaeological feature codes to include
-    ARCHAEOLOGICAL_FEATURE_CODES: Set[str] = {
+    ARCHAEOLOGICAL_FEATURE_CODES: set[str] = {
         # Historic/Archaeological
         "ANS",    # ancient site
         "RUIN",   # ruin(s)
@@ -208,7 +205,7 @@ class GeoNamesIngester(BaseIngester):
         count = 0
         matched = 0
 
-        with open(raw_data_path, "r", encoding="utf-8") as f:
+        with open(raw_data_path, encoding="utf-8") as f:
             for line in f:
                 count += 1
                 if count % 1000000 == 0:
@@ -231,7 +228,7 @@ class GeoNamesIngester(BaseIngester):
 
         logger.info(f"Finished: {count:,} total lines, {matched:,} archaeological sites")
 
-    def _parse_line(self, parts: list) -> Optional[ParsedSite]:
+    def _parse_line(self, parts: list) -> ParsedSite | None:
         """
         Parse a single GeoNames TSV line.
 

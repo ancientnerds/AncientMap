@@ -7,16 +7,16 @@ the required abstract methods.
 
 import json
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Iterator, Any, Dict
+from typing import Any
 
 from loguru import logger
 
-from pipeline.config import settings, DATA_SOURCES
+from pipeline.config import DATA_SOURCES, settings
 from pipeline.database import SessionLocal, SourceDatabase, SourceRecord
-from pipeline.utils.http import download_file
 
 
 def atomic_write_bytes(dest_path: Path, content: bytes) -> Path:
@@ -76,7 +76,7 @@ def atomic_write_json(dest_path: Path, data: Any, indent: int = None) -> Path:
             json.dump(data, f, default=str, ensure_ascii=False, indent=indent)
 
         # Verify file is valid JSON
-        with open(temp_path, "r", encoding="utf-8") as f:
+        with open(temp_path, encoding="utf-8") as f:
             json.load(f)
 
         # Atomic rename (overwrites existing)
@@ -107,22 +107,22 @@ class ParsedSite:
     lon: float                  # Longitude (WGS84)
 
     # Optional fields
-    alternative_names: List[str] = field(default_factory=list)
-    description: Optional[str] = None
-    site_type: Optional[str] = None
-    period_start: Optional[int] = None  # Year (negative = BCE)
-    period_end: Optional[int] = None
-    period_name: Optional[str] = None
+    alternative_names: list[str] = field(default_factory=list)
+    description: str | None = None
+    site_type: str | None = None
+    period_start: int | None = None  # Year (negative = BCE)
+    period_end: int | None = None
+    period_name: str | None = None
 
     # Precision metadata
-    precision_meters: Optional[float] = None
-    precision_reason: Optional[str] = None
+    precision_meters: float | None = None
+    precision_reason: str | None = None
 
     # Source URL for direct linking
-    source_url: Optional[str] = None
+    source_url: str | None = None
 
     # Full original record for provenance
-    raw_data: Optional[Dict[str, Any]] = None
+    raw_data: dict[str, Any] | None = None
 
 
 @dataclass
@@ -134,12 +134,12 @@ class IngesterResult:
     records_parsed: int = 0
     records_saved: int = 0
     records_failed: int = 0
-    errors: List[str] = field(default_factory=list)
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    errors: list[str] = field(default_factory=list)
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
     @property
-    def duration_seconds(self) -> Optional[float]:
+    def duration_seconds(self) -> float | None:
         """Calculate duration in seconds."""
         if self.started_at and self.completed_at:
             return (self.completed_at - self.started_at).total_seconds()
@@ -220,7 +220,7 @@ class BaseIngester(ABC):
         """
         pass
 
-    def validate_site(self, site: ParsedSite) -> List[str]:
+    def validate_site(self, site: ParsedSite) -> list[str]:
         """
         Validate a parsed site.
 
@@ -253,7 +253,7 @@ class BaseIngester(ABC):
 
         return errors
 
-    def save_source_record(self, site: ParsedSite) -> Optional[SourceRecord]:
+    def save_source_record(self, site: ParsedSite) -> SourceRecord | None:
         """
         Save a parsed site as a source record.
 

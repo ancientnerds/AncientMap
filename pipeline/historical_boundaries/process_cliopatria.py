@@ -10,6 +10,10 @@ Data source: https://github.com/Seshat-Global-History-Databank/cliopatria
 - Peer-reviewed scholarly data published in Nature Scientific Data
 - CC BY license
 
+Scope: Civilizations that "touch ancient" (startYear before cutoff)
+- Old World (Europe, Asia, Africa, Oceania): startYear <= 500 AD
+- Americas: startYear <= 1500 AD
+
 Usage:
     python -m pipeline.historical_boundaries.process_cliopatria
     python -m pipeline.historical_boundaries.process_cliopatria --list-empires
@@ -18,20 +22,18 @@ Usage:
 
 import argparse
 import json
-import os
-import zipfile
-import urllib.request
-import shutil
 import re
-from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Any
-from collections import defaultdict
+import shutil
 import time
+import urllib.request
+import zipfile
+from collections import defaultdict
+from pathlib import Path
 
 try:
-    from shapely.geometry import shape, mapping, Polygon, MultiPolygon
-    from shapely.ops import unary_union
     import geojson
+    from shapely.geometry import MultiPolygon, Polygon, mapping, shape
+    from shapely.ops import unary_union
 except ImportError as e:
     print(f"Missing dependency: {e}")
     print("\nInstall required packages:")
@@ -53,200 +55,233 @@ CLIOPATRIA_CACHE_DIR = Path('data/raw')
 CLIOPATRIA_ZIP_PATH = CLIOPATRIA_CACHE_DIR / 'cliopatria.geojson.zip'
 CLIOPATRIA_GEOJSON_PATH = CLIOPATRIA_CACHE_DIR / 'cliopatria.geojson'
 
-# Empire mapping: our ID -> list of Cliopatria name patterns (regex)
-# Cliopatria uses various naming conventions, so we match by pattern
-EMPIRE_MAPPINGS = {
-    # Ancient Near East
+# =============================================================================
+# SeshatID-based Matching (Primary Method)
+# =============================================================================
+# Maps our empire IDs to Seshat polity IDs from Cliopatria GeoJSON.
+# This is more reliable than name-based regex matching.
+# SeshatID is the authoritative identifier from the Seshat database.
+
+EMPIRE_SESHAT_IDS = {
+    # Ancient Near East (7 civilizations)
     'egyptian': [
-        r'Ancient Egypt.*',
-        r'Ptolemaic.*',
-        r'New Kingdom.*Egypt',
-        r'Middle Kingdom.*Egypt',
-        r'Old Kingdom.*Egypt',
-        r'Egypt.*Dynasty',
-        r'.*Egyptian.*Empire',
+        'eg_dynasty_1', 'eg_dynasty_2',  # Early Dynastic
+        'eg_old_k_1', 'eg_old_k_2',  # Old Kingdom
+        'eg_middle_k',  # Middle Kingdom
+        'eg_new_k_1', 'eg_new_k_2',  # New Kingdom
+        'eg_thebes_hyksos',  # Second Intermediate
+        'eg_thebes_libyan',  # Third Intermediate
+        'eg_ptolemaic_k_1', 'eg_ptolemaic_k_2',  # Ptolemaic
     ],
-    'akkadian': [r'Akkad.*Empire', r'Akkadian.*'],
+    'akkadian': ['iq_akkad_emp'],
+    'elam': [
+        'ir_elam_proto', 'ir_elam_old', 'ir_elam_middle',  # Early through Middle Elamite
+        'ir_elam_neo',  # Neo-Elamite
+    ],
     'babylonian': [
-        r'.*Babylon.*',
-        r'Neo-Babylon.*',
-        r'Old Babylon.*',
+        'iq_babylonia_1', 'iq_babylonia_2',  # Old Babylonian
+        'iq_bazi_dyn', 'iq_dynasty_e', 'iq_isin_dynasty2',  # Middle periods
+        'iq_neo_babylonian_emp',  # Neo-Babylonian
     ],
     'assyrian': [
-        r'.*Assyria.*',
-        r'Neo-Assyria.*',
-        r'Middle Assyria.*',
+        'iq_middle_assyrian_emp',  # Middle Assyrian
+        'iq_neo_assyrian_emp',  # Neo-Assyrian
     ],
-    'hittite': [r'Hittite.*', r'.*Hatti.*'],
+    'hittite': ['tr_hatti_old_k', 'tr_hatti_new_k'],
+    'mitanni': ['sy_mitanni_k'],
 
-    # Mediterranean
+    # Mediterranean (9 civilizations)
+    'minoan': ['gr_crete_new_palace', 'gr_crete_old_palace'],
+    'mycenaean': [],  # Uses name fallback
+    'phoenician': ['lb_phoenician_emp', 'lb_phoenicia'],
+    'etruscan': [],  # Uses name fallback
+    'greek': ['gr_macedonian_emp'],  # Limited SeshatIDs; uses name fallback
+    'macedonian': ['gr_macedonian_emp', 'gr_antigonid_emp'],
+    'carthaginian': ['tn_carthage_emp'],
     'roman': [
-        r'Roman.*',
-        r'.*Rome.*',
-        r'Imperium Romanum',
-        r'Western Roman.*',
-        r'Roman Republic',
-        r'Roman Principate',
-        r'Roman Dominate',
-    ],
-    'greek': [
-        r'.*Athens.*',
-        r'.*Sparta.*',
-        r'Classical Greece',
-        r'Greek.*',
-        r'Hellenic.*',
-        r'Delian League',
-    ],
-    'macedonian': [
-        r'Macedon.*',
-        r'.*Alexander.*',
-        r'Antigonid.*',
+        'it_roman_rep_1', 'it_roman_rep_2', 'it_roman_rep_3',  # Republic
+        'it_roman_principate',  # Principate
+        'tr_roman_dominate',  # Dominate
+        'it_western_roman_emp',  # Western Empire
     ],
     'byzantine': [
-        r'Byzantine.*',
-        r'Eastern Roman.*',
-        r'.*Constantinople.*',
+        'tr_byzantine_emp_1', 'tr_byzantine_emp_2', 'tr_byzantine_emp_3',
+        'tr_east_roman_emp',
     ],
-    'carthaginian': [r'Carthag.*', r'Punic.*'],
+
+    # Persian/Central Asia (5 civilizations)
+    'achaemenid': ['ir_achaemenid_emp'],
+    'seleucid': ['ir_seleucid_emp'],
+    'parthian': ['ir_parthian_emp_1'],
+    'kushan': ['af_kushan_emp', 'pk_kushan'],
+    'sassanid': ['ir_sassanid_emp_1', 'ir_sassanid_emp_2'],
+
+    # East Asia (4 civilizations)
+    'shang': ['cn_erligang', 'cn_late_shang_dyn'],
+    'zhou': ['cn_western_zhou_dyn', 'cn_eastern_zhou_warring_states'],
+    'qin': ['cn_qin_emp'],
+    'han': ['cn_western_han_dyn', 'cn_eastern_han_dyn'],
+
+    # South Asia (3 civilizations)
+    'indus_valley': [
+        'pk_kachi_ceramic_neolithic', 'pk_kachi_early_bronze',
+        'pk_kachi_mature_harappan', 'pk_kachi_late_harappan',
+        'pk_harappan',
+    ],
+    'maurya': ['in_mauryan_emp'],
+    'gupta': ['in_gupta_emp'],
+
+    # Africa (2 civilizations)
+    'kush': ['sd_kush_k'],
+    'axum': ['et_aksum_emp_1', 'et_aksum_emp_2', 'et_aksum_emp_3', 'et_ethiopian_k'],
+
+    # Americas (6 civilizations)
+    'olmec': [],  # Uses name fallback
+    'zapotec': [
+        'mx_monte_alban_1_early', 'mx_monte_alban_1_late',  # Early Zapotec
+        'mx_monte_alban_2',  # Monte Alban II
+        'mx_monte_alban_3_a', 'mx_monte_alban_3_b_4',  # Classic period
+    ],
+    'teotihuacan': ['mx_basin_of_mexico_7', 'mx_teotihuacan'],
+    'maya': [
+        'gt_tikal_early_classic',  # Classic Maya
+        'gt_tikal_terminal_classic',  # Terminal Classic
+        'gt_tikal_early_postclassic',  # Postclassic
+        'mx_maya_classic',
+    ],
+    'aztec': ['mx_aztec_emp'],
+    'inca': ['pe_inca_emp'],
+
+    # Medieval Europe (1 civilization)
+    'carolingian': ['fr_carolingian_emp_1', 'fr_carolingian_emp_2'],
+}
+
+# =============================================================================
+# Name-based Matching (Fallback)
+# =============================================================================
+# Used when SeshatID is not present in the GeoJSON feature.
+# Some Cliopatria features have empty SeshatID fields.
+
+EMPIRE_NAME_PATTERNS = {
+    # Ancient Near East
+    'egyptian': [
+        r'.*Kingdom.*Egypt',
+        r'.*Dynasty.*Egypt',
+        r'Ptolemaic.*',
+        r'Ancient Egypt.*',
+    ],
+    'akkadian': [r'Akkad.*Empire', r'Akkadian.*'],
+    'elam': [r'Elam.*', r'Elamite.*'],
+    'babylonian': [r'.*Babylon.*', r'Neo-Babylon.*'],
+    'assyrian': [r'.*Assyria.*', r'Neo-Assyria.*'],
+    'hittite': [r'Hittite.*', r'.*Hatti.*'],
+    'mitanni': [r'Mitanni.*', r'Mittani.*'],
+
+    # Mediterranean
+    'minoan': [r'Minoan.*', r'.*Crete.*Palace'],
+    'mycenaean': [r'Mycenae.*', r'Mycenaean.*'],
+    'phoenician': [r'Phoenici.*', r'.*Phoenicia.*'],
+    'etruscan': [r'Etrusc.*', r'Etruria.*'],
+    'greek': [
+        r'.*Athens.*', r'.*Sparta.*', r'Greek.*', r'Hellenic.*',
+        r'Delian League', r'Greek City-States', r'Greek Dark Ages',
+    ],
+    'macedonian': [r'Macedon.*', r'Antigonid.*'],
+    'carthaginian': [r'Carthag.*'],
+    'roman': [r'Roman.*', r'Western Roman.*'],
+    'byzantine': [r'Byzantine.*', r'Eastern Roman.*'],
 
     # Persian/Central Asia
-    'achaemenid': [
-        r'Achaemenid.*',
-        r'Persian Empire.*Achaemenid',
-        r'First Persian Empire',
-    ],
-    'parthian': [r'Parthia.*', r'Arsacid.*'],
-    'sassanid': [r'Sassanid.*', r'Sasanian.*', r'Second Persian Empire'],
+    'achaemenid': [r'Achaemenid.*'],
     'seleucid': [r'Seleucid.*'],
-    'mongol': [
-        r'Mongol.*Empire',
-        r'.*Genghis.*',
-        r'Yuan.*',
-        r'Golden Horde',
-        r'Ilkhanate',
-        r'Chagatai.*',
-    ],
-    'timurid': [r'Timurid.*', r'.*Tamerlane.*'],
+    'parthian': [r'Parthia.*', r'Arsacid.*'],
+    'kushan': [r'Kushan.*'],
+    'sassanid': [r'Sassanid.*', r'Sasanian.*'],
 
     # East Asia
     'shang': [r'Shang.*'],
-    'zhou': [r'.*Zhou.*', r'Western Zhou', r'Eastern Zhou'],
-    'qin': [r'Qin.*Dynasty', r'Qin Empire'],
-    'han': [
-        r'Han.*Dynasty',
-        r'Western Han',
-        r'Eastern Han',
-        r'Han Empire',
-    ],
-    'tang': [r'Tang.*Dynasty', r'Tang Empire'],
-    'song': [r'Song.*Dynasty', r'Northern Song', r'Southern Song'],
-    'ming': [r'Ming.*Dynasty', r'Ming Empire'],
-    'qing': [r'Qing.*Dynasty', r'Qing Empire', r'Manchu.*'],
+    'zhou': [r'.*Zhou.*'],
+    'qin': [r'Qin Dynasty', r'Qin Empire'],  # Careful: not "Qing"
+    'han': [r'Han Dynasty', r'.*Han.*Dynasty'],
 
     # South Asia
-    'maurya': [r'Maurya.*', r'Mauryan.*'],
+    'indus_valley': [r'Harappa.*', r'Indus Valley.*', r'Mohenjo.*'],
+    'maurya': [r'Maurya.*'],
     'gupta': [r'Gupta.*'],
-    'mughal': [r'Mughal.*', r'Moghul.*'],
-    'chola': [r'Chola.*'],
-    'delhi': [r'Delhi Sultanate.*'],
-
-    # Southeast Asia
-    'khmer': [r'Khmer.*', r'Angkor.*', r'Cambodia.*Empire'],
-    'majapahit': [r'Majapahit.*'],
-    'srivijaya': [r'Srivijaya.*'],
 
     # Africa
     'kush': [r'Kush.*', r'Nubia.*', r'Meroe.*'],
-    'axum': [r'Axum.*', r'Aksumite.*'],
-    'mali': [r'Mali.*Empire'],
-    'songhai': [r'Songhai.*', r'Songhay.*'],
-    'ghana': [r'Ghana.*Empire'],
+    'axum': [r'.*Axum.*', r'Aksumite.*', r'Ethiopian Empire'],
 
     # Americas
-    'maya': [r'Maya.*', r'Mayan.*'],
+    'olmec': [r'Olmec.*', r'La Venta.*', r'San Lorenzo.*'],
+    'zapotec': [r'Zapotec.*', r'Monte Alban.*'],
+    'teotihuacan': [r'Teotihuac[aá]n.*'],
+    'maya': [r'Maya.*', r'Mayan.*', r'.*Mayan City-States', r'Itza Maya.*'],
     'aztec': [r'Aztec.*', r'Mexica.*', r'Triple Alliance'],
     'inca': [r'Inca.*', r'Tawantinsuyu'],
 
-    # Islamic
-    'umayyad': [r'Umayyad.*'],
-    'abbasid': [r'Abbasid.*'],
-    'fatimid': [r'Fatimid.*'],
-    'ottoman': [r'Ottoman.*'],
-    'ayyubid': [r'Ayyubid.*'],
-
     # Medieval Europe
-    'carolingian': [r'Carolingian.*', r'Frankish.*', r'.*Charlemagne.*'],
-    'hre': [r'Holy Roman.*', r'HRE'],
+    'carolingian': [r'.*Carolingian.*', r'Kingdom of the Franks', r'\(Kingdom of the Franks\)'],
 }
+
+# Legacy alias for backwards compatibility
+EMPIRE_MAPPINGS = EMPIRE_NAME_PATTERNS
 
 # Empire metadata (for UI display)
 EMPIRE_METADATA = {
-    # Ancient Near East
+    # Ancient Near East (7)
     'egyptian': {'name': 'Egyptian Empire', 'region': 'Ancient Near East', 'startYear': -3100, 'endYear': -30, 'color': 0xFFD700},
-    'akkadian': {'name': 'Akkadian Empire', 'region': 'Ancient Near East', 'startYear': -2334, 'endYear': -2154, 'color': 0xCD853F},
-    'babylonian': {'name': 'Babylonian', 'region': 'Ancient Near East', 'startYear': -1894, 'endYear': -539, 'color': 0x8B4513},
-    'assyrian': {'name': 'Assyrian Empire', 'region': 'Ancient Near East', 'startYear': -2500, 'endYear': -609, 'color': 0x800000},
-    'hittite': {'name': 'Hittite Empire', 'region': 'Ancient Near East', 'startYear': -1600, 'endYear': -1178, 'color': 0xA0522D},
+    'akkadian': {'name': 'Akkadian Empire', 'region': 'Ancient Near East', 'startYear': -2334, 'endYear': -2154, 'color': 0xFFA07A},
+    'elam': {'name': 'Elam', 'region': 'Ancient Near East', 'startYear': -3200, 'endYear': -601, 'color': 0xE6A44C},
+    'babylonian': {'name': 'Babylonian', 'region': 'Ancient Near East', 'startYear': -1894, 'endYear': -539, 'color': 0xFFB347},
+    'assyrian': {'name': 'Assyrian Empire', 'region': 'Ancient Near East', 'startYear': -2500, 'endYear': -609, 'color': 0xFF6B6B},
+    'hittite': {'name': 'Hittite Empire', 'region': 'Ancient Near East', 'startYear': -1600, 'endYear': -1178, 'color': 0xFFAA00},
+    'mitanni': {'name': 'Mitanni', 'region': 'Ancient Near East', 'startYear': -1500, 'endYear': -1241, 'color': 0xD4A574},
 
-    # Mediterranean
-    'roman': {'name': 'Roman Empire', 'region': 'Mediterranean', 'startYear': -509, 'endYear': 476, 'color': 0xC02023},
-    'greek': {'name': 'Greek City-States', 'region': 'Mediterranean', 'startYear': -800, 'endYear': -338, 'color': 0x4169E1},
-    'macedonian': {'name': 'Macedonian Empire', 'region': 'Mediterranean', 'startYear': -338, 'endYear': -168, 'color': 0x9932CC},
-    'byzantine': {'name': 'Byzantine Empire', 'region': 'Mediterranean', 'startYear': 330, 'endYear': 1453, 'color': 0x800080},
-    'carthaginian': {'name': 'Carthaginian Empire', 'region': 'Mediterranean', 'startYear': -814, 'endYear': -146, 'color': 0xDC143C},
+    # Mediterranean (9)
+    'minoan': {'name': 'Minoan Civilization', 'region': 'Mediterranean', 'startYear': -1600, 'endYear': -1401, 'color': 0x20B2AA},
+    'mycenaean': {'name': 'Mycenaean Greece', 'region': 'Mediterranean', 'startYear': -1500, 'endYear': -1101, 'color': 0x48D1CC},
+    'phoenician': {'name': 'Phoenicia', 'region': 'Mediterranean', 'startYear': -700, 'endYear': -616, 'color': 0x9370DB},
+    'etruscan': {'name': 'Etruscan Civilization', 'region': 'Mediterranean', 'startYear': -750, 'endYear': -265, 'color': 0xDB7093},
+    'greek': {'name': 'Greek City-States', 'region': 'Mediterranean', 'startYear': -800, 'endYear': -338, 'color': 0xFFA07A},
+    'macedonian': {'name': 'Macedonian Empire', 'region': 'Mediterranean', 'startYear': -338, 'endYear': -168, 'color': 0xFF8866},
+    'carthaginian': {'name': 'Carthaginian Empire', 'region': 'Mediterranean', 'startYear': -814, 'endYear': -146, 'color': 0xFFAA88},
+    'roman': {'name': 'Roman Empire', 'region': 'Mediterranean', 'startYear': -509, 'endYear': 476, 'color': 0xFF7777},
+    'byzantine': {'name': 'Byzantine Empire', 'region': 'Mediterranean', 'startYear': 330, 'endYear': 1453, 'color': 0xFF99AA},
 
-    # Persian/Central Asia
-    'achaemenid': {'name': 'Achaemenid Persia', 'region': 'Persian/Central Asia', 'startYear': -550, 'endYear': -330, 'color': 0x1E90FF},
-    'parthian': {'name': 'Parthian Empire', 'region': 'Persian/Central Asia', 'startYear': -247, 'endYear': 224, 'color': 0x00CED1},
-    'sassanid': {'name': 'Sassanid Empire', 'region': 'Persian/Central Asia', 'startYear': 224, 'endYear': 651, 'color': 0x20B2AA},
-    'seleucid': {'name': 'Seleucid Empire', 'region': 'Persian/Central Asia', 'startYear': -312, 'endYear': -63, 'color': 0x4682B4},
-    'mongol': {'name': 'Mongol Empire', 'region': 'Persian/Central Asia', 'startYear': 1206, 'endYear': 1368, 'color': 0x2F4F4F},
-    'timurid': {'name': 'Timurid Empire', 'region': 'Persian/Central Asia', 'startYear': 1370, 'endYear': 1507, 'color': 0x556B2F},
+    # Persian/Central Asia (5)
+    'achaemenid': {'name': 'Achaemenid Persia', 'region': 'Persian/Central Asia', 'startYear': -550, 'endYear': -330, 'color': 0x00BFFF},
+    'seleucid': {'name': 'Seleucid Empire', 'region': 'Persian/Central Asia', 'startYear': -312, 'endYear': -63, 'color': 0x00CED1},
+    'parthian': {'name': 'Parthian Empire', 'region': 'Persian/Central Asia', 'startYear': -247, 'endYear': 224, 'color': 0x40E0D0},
+    'kushan': {'name': 'Kushan Empire', 'region': 'Persian/Central Asia', 'startYear': 43, 'endYear': 237, 'color': 0x5F9EA0},
+    'sassanid': {'name': 'Sassanid Empire', 'region': 'Persian/Central Asia', 'startYear': 224, 'endYear': 651, 'color': 0x7FFFD4},
 
-    # East Asia
-    'shang': {'name': 'Shang Dynasty', 'region': 'East Asia', 'startYear': -1600, 'endYear': -1046, 'color': 0xB8860B},
-    'zhou': {'name': 'Zhou Dynasty', 'region': 'East Asia', 'startYear': -1046, 'endYear': -256, 'color': 0xDAA520},
-    'qin': {'name': 'Qin Dynasty', 'region': 'East Asia', 'startYear': -221, 'endYear': -206, 'color': 0x8B0000},
-    'han': {'name': 'Han Dynasty', 'region': 'East Asia', 'startYear': -206, 'endYear': 220, 'color': 0xDC143C},
-    'tang': {'name': 'Tang Dynasty', 'region': 'East Asia', 'startYear': 618, 'endYear': 907, 'color': 0xFF4500},
-    'song': {'name': 'Song Dynasty', 'region': 'East Asia', 'startYear': 960, 'endYear': 1279, 'color': 0xFF6347},
-    'ming': {'name': 'Ming Dynasty', 'region': 'East Asia', 'startYear': 1368, 'endYear': 1644, 'color': 0xFFD700},
-    'qing': {'name': 'Qing Dynasty', 'region': 'East Asia', 'startYear': 1644, 'endYear': 1912, 'color': 0xFFA500},
+    # East Asia (4)
+    'shang': {'name': 'Shang Dynasty', 'region': 'East Asia', 'startYear': -1600, 'endYear': -1046, 'color': 0xFFD700},
+    'zhou': {'name': 'Zhou Dynasty', 'region': 'East Asia', 'startYear': -1046, 'endYear': -256, 'color': 0xFFE135},
+    'qin': {'name': 'Qin Dynasty', 'region': 'East Asia', 'startYear': -221, 'endYear': -206, 'color': 0xFF5733},
+    'han': {'name': 'Han Dynasty', 'region': 'East Asia', 'startYear': -206, 'endYear': 220, 'color': 0xFF6347},
 
-    # South Asia
-    'maurya': {'name': 'Maurya Empire', 'region': 'South Asia', 'startYear': -322, 'endYear': -185, 'color': 0x32CD32},
-    'gupta': {'name': 'Gupta Empire', 'region': 'South Asia', 'startYear': 320, 'endYear': 550, 'color': 0x228B22},
-    'mughal': {'name': 'Mughal Empire', 'region': 'South Asia', 'startYear': 1526, 'endYear': 1857, 'color': 0x006400},
-    'chola': {'name': 'Chola Dynasty', 'region': 'South Asia', 'startYear': -300, 'endYear': 1279, 'color': 0x3CB371},
-    'delhi': {'name': 'Delhi Sultanate', 'region': 'South Asia', 'startYear': 1206, 'endYear': 1526, 'color': 0x2E8B57},
+    # South Asia (3)
+    'indus_valley': {'name': 'Indus Valley (Harappan)', 'region': 'South Asia', 'startYear': -3000, 'endYear': -1701, 'color': 0x66CDAA},
+    'maurya': {'name': 'Maurya Empire', 'region': 'South Asia', 'startYear': -322, 'endYear': -185, 'color': 0x7FFF00},
+    'gupta': {'name': 'Gupta Empire', 'region': 'South Asia', 'startYear': 320, 'endYear': 550, 'color': 0x00FF7F},
 
-    # Southeast Asia
-    'khmer': {'name': 'Khmer Empire', 'region': 'Southeast Asia', 'startYear': 802, 'endYear': 1431, 'color': 0x8FBC8F},
-    'majapahit': {'name': 'Majapahit Empire', 'region': 'Southeast Asia', 'startYear': 1293, 'endYear': 1527, 'color': 0x90EE90},
-    'srivijaya': {'name': 'Srivijaya', 'region': 'Southeast Asia', 'startYear': 650, 'endYear': 1377, 'color': 0x98FB98},
-
-    # Africa
-    'kush': {'name': 'Kingdom of Kush', 'region': 'Africa', 'startYear': -1070, 'endYear': 350, 'color': 0xD2691E},
+    # Africa (2)
+    'kush': {'name': 'Kingdom of Kush', 'region': 'Africa', 'startYear': -1070, 'endYear': 350, 'color': 0xFF8C00},
     'axum': {'name': 'Aksumite Empire', 'region': 'Africa', 'startYear': 100, 'endYear': 940, 'color': 0xCD853F},
-    'mali': {'name': 'Mali Empire', 'region': 'Africa', 'startYear': 1235, 'endYear': 1600, 'color': 0xDEB887},
-    'songhai': {'name': 'Songhai Empire', 'region': 'Africa', 'startYear': 1464, 'endYear': 1591, 'color': 0xF4A460},
-    'ghana': {'name': 'Ghana Empire', 'region': 'Africa', 'startYear': 300, 'endYear': 1200, 'color': 0xD2B48C},
 
-    # Americas
+    # Americas (6)
+    'olmec': {'name': 'Olmec Civilization', 'region': 'Americas', 'startYear': -650, 'endYear': -351, 'color': 0x228B22},
+    'zapotec': {'name': 'Zapotec Civilization', 'region': 'Americas', 'startYear': -500, 'endYear': 900, 'color': 0x3CB371},
+    'teotihuacan': {'name': 'Teotihuacan', 'region': 'Americas', 'startYear': -50, 'endYear': 704, 'color': 0x2E8B57},
     'maya': {'name': 'Maya Civilization', 'region': 'Americas', 'startYear': -2000, 'endYear': 1500, 'color': 0x00FF7F},
     'aztec': {'name': 'Aztec Empire', 'region': 'Americas', 'startYear': 1428, 'endYear': 1521, 'color': 0x7CFC00},
     'inca': {'name': 'Inca Empire', 'region': 'Americas', 'startYear': 1438, 'endYear': 1533, 'color': 0x7FFF00},
 
-    # Islamic
-    'umayyad': {'name': 'Umayyad Caliphate', 'region': 'Islamic', 'startYear': 661, 'endYear': 750, 'color': 0x00FA9A},
-    'abbasid': {'name': 'Abbasid Caliphate', 'region': 'Islamic', 'startYear': 750, 'endYear': 1258, 'color': 0x00FF00},
-    'fatimid': {'name': 'Fatimid Caliphate', 'region': 'Islamic', 'startYear': 909, 'endYear': 1171, 'color': 0x32CD32},
-    'ottoman': {'name': 'Ottoman Empire', 'region': 'Islamic', 'startYear': 1299, 'endYear': 1922, 'color': 0x228B22},
-    'ayyubid': {'name': 'Ayyubid Dynasty', 'region': 'Islamic', 'startYear': 1171, 'endYear': 1341, 'color': 0x006400},
-
-    # Medieval Europe
-    'carolingian': {'name': 'Carolingian Empire', 'region': 'Medieval Europe', 'startYear': 751, 'endYear': 888, 'color': 0x4682B4},
-    'hre': {'name': 'Holy Roman Empire', 'region': 'Medieval Europe', 'startYear': 800, 'endYear': 1806, 'color': 0x6495ED},
+    # Medieval Europe (1)
+    'carolingian': {'name': 'Carolingian Empire', 'region': 'Medieval Europe', 'startYear': 751, 'endYear': 888, 'color': 0x6495ED},
 }
 
 
@@ -262,7 +297,7 @@ def download_cliopatria() -> Path:
 
     CLIOPATRIA_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-    logger.info(f"Downloading Cliopatria dataset...")
+    logger.info("Downloading Cliopatria dataset...")
     logger.info(f"URL: {CLIOPATRIA_ZIP_URL}")
 
     def progress_hook(count, block_size, total_size):
@@ -277,7 +312,7 @@ def download_cliopatria() -> Path:
         print()  # New line
         logger.info(f"Downloaded to {CLIOPATRIA_ZIP_PATH}")
 
-        logger.info(f"Extracting GeoJSON...")
+        logger.info("Extracting GeoJSON...")
         with zipfile.ZipFile(CLIOPATRIA_ZIP_PATH, 'r') as zf:
             for name in zf.namelist():
                 if name.endswith('.geojson'):
@@ -308,7 +343,7 @@ def load_cliopatria(path: Path = CLIOPATRIA_GEOJSON_PATH) -> dict:
         download_cliopatria()
 
     logger.info(f"Loading Cliopatria data from {path}...")
-    with open(path, 'r', encoding='utf-8') as f:
+    with open(path, encoding='utf-8') as f:
         data = json.load(f)
 
     logger.info(f"Loaded {len(data.get('features', []))} features")
@@ -319,16 +354,51 @@ def load_cliopatria(path: Path = CLIOPATRIA_GEOJSON_PATH) -> dict:
 # Processing
 # =============================================================================
 
-def match_empire(name: str, empire_id: str) -> bool:
-    """Check if a polity name matches an empire's patterns."""
-    patterns = EMPIRE_MAPPINGS.get(empire_id, [])
+def match_empire_by_seshat_id(seshat_id: str, empire_id: str) -> bool:
+    """Check if a SeshatID matches an empire's configured IDs (primary matching method)."""
+    if not seshat_id:
+        return False
+    empire_seshat_ids = EMPIRE_SESHAT_IDS.get(empire_id, [])
+    # Check exact match or if the seshat_id starts with one of our configured IDs
+    for configured_id in empire_seshat_ids:
+        if seshat_id == configured_id or seshat_id.startswith(configured_id + ';'):
+            return True
+    return False
+
+
+def match_empire_by_name(name: str, empire_id: str) -> bool:
+    """Check if a polity name matches an empire's patterns (fallback method)."""
+    patterns = EMPIRE_NAME_PATTERNS.get(empire_id, [])
     for pattern in patterns:
         if re.match(pattern, name, re.IGNORECASE):
             return True
     return False
 
 
-def calculate_centroid(geometry: dict) -> Tuple[float, float]:
+def match_empire(feature: dict, empire_id: str) -> bool:
+    """
+    Check if a feature matches an empire using SeshatID (primary) or name (fallback).
+
+    Priority:
+    1. SeshatID-based matching (authoritative, reliable)
+    2. Name-based pattern matching (fallback for features without SeshatID)
+    """
+    props = feature.get('properties', {})
+    seshat_id = props.get('SeshatID', '')
+    name = props.get('Name', '')
+
+    # Primary: SeshatID matching
+    if match_empire_by_seshat_id(seshat_id, empire_id):
+        return True
+
+    # Fallback: Name pattern matching (only if no SeshatID or not matched)
+    if match_empire_by_name(name, empire_id):
+        return True
+
+    return False
+
+
+def calculate_centroid(geometry: dict) -> tuple[float, float]:
     """Calculate centroid of a geometry. Returns (lat, lng)."""
     try:
         geom = shape(geometry)
@@ -354,20 +424,31 @@ def calculate_centroid(geometry: dict) -> Tuple[float, float]:
         return (0, 0)
 
 
-def extract_empire_features(data: dict, empire_id: str) -> Dict[int, List[dict]]:
+def extract_empire_features(data: dict, empire_id: str) -> dict[int, list[dict]]:
     """
     Extract all features for an empire, grouped by year.
+
+    Uses SeshatID matching as primary method, with name pattern fallback.
 
     Returns: {year: [features]}
     """
     features_by_year = defaultdict(list)
+    matched_by_seshat = 0
+    matched_by_name = 0
 
     for feature in data.get('features', []):
         props = feature.get('properties', {})
-        name = props.get('Name', '')
+        seshat_id = props.get('SeshatID', '')
 
-        if not match_empire(name, empire_id):
+        # Use new matching that checks SeshatID first, then name patterns
+        if not match_empire(feature, empire_id):
             continue
+
+        # Track matching method for debugging
+        if match_empire_by_seshat_id(seshat_id, empire_id):
+            matched_by_seshat += 1
+        else:
+            matched_by_name += 1
 
         # Get temporal range
         from_year = props.get('FromYear')
@@ -384,10 +465,13 @@ def extract_empire_features(data: dict, empire_id: str) -> Dict[int, List[dict]]
 
         features_by_year[year].append(feature)
 
+    if features_by_year:
+        logger.debug(f"  Matched {matched_by_seshat} by SeshatID, {matched_by_name} by name pattern")
+
     return dict(features_by_year)
 
 
-def merge_features_to_geojson(features: List[dict], empire_id: str, year: int) -> dict:
+def merge_features_to_geojson(features: list[dict], empire_id: str, year: int) -> dict:
     """
     Merge multiple features into a single GeoJSON FeatureCollection.
     """
@@ -432,7 +516,7 @@ def merge_features_to_geojson(features: List[dict], empire_id: str, year: int) -
     }
 
 
-def process_empire(data: dict, empire_id: str, output_dir: Path) -> Optional[dict]:
+def process_empire(data: dict, empire_id: str, output_dir: Path) -> dict | None:
     """
     Process a single empire, extracting all temporal snapshots.
 
@@ -514,7 +598,7 @@ def process_empire(data: dict, empire_id: str, output_dir: Path) -> Optional[dic
     return metadata
 
 
-def list_unique_polities(data: dict) -> List[str]:
+def list_unique_polities(data: dict) -> list[str]:
     """List all unique polity names in the dataset."""
     names = set()
     for feature in data.get('features', []):
@@ -524,7 +608,7 @@ def list_unique_polities(data: dict) -> List[str]:
     return sorted(names)
 
 
-def create_combined_metadata(all_metadata: List[dict], output_dir: Path):
+def create_combined_metadata(all_metadata: list[dict], output_dir: Path):
     """Create a combined metadata.json file for all empires."""
     # Group by region
     by_region = defaultdict(list)
@@ -540,9 +624,9 @@ def create_combined_metadata(all_metadata: List[dict], output_dir: Path):
         })
 
     combined = {
-        'empires': {region: empires for region, empires in sorted(by_region.items())},
+        'empires': dict(sorted(by_region.items())),
         'totalEmpires': len(all_metadata),
-        'regions': list(sorted(by_region.keys())),
+        'regions': sorted(by_region.keys()),
     }
 
     output_path = output_dir / 'metadata.json'
@@ -636,7 +720,7 @@ def main():
 
     elapsed = time.time() - start_time
     logger.info(f"\n{'='*60}")
-    logger.info(f"COMPLETE!")
+    logger.info("COMPLETE!")
     logger.info(f"  Empires processed: {len(all_metadata)}")
     logger.info(f"  Time elapsed:      {elapsed:.1f} seconds")
     logger.info(f"  Output directory:  {args.output}")

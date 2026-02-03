@@ -11,11 +11,11 @@ Each source has its own collection to preserve data quality hierarchy:
 - FEATURE: volcanic_holvol, earth_impacts (for cross-reference queries)
 """
 
-import os
 import logging
-from typing import Optional, List, Dict, Any
-from dataclasses import dataclass
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
+from typing import Any
 
 from pipeline.config import get_ai_thread_limit
 
@@ -47,7 +47,7 @@ def _get_qdrant():
         except ImportError:
             raise ImportError(
                 "qdrant-client not installed. Run: pip install qdrant-client"
-            )
+            ) from None
     return _qdrant_client
 
 
@@ -70,7 +70,7 @@ def _get_embedder():
         except ImportError:
             raise ImportError(
                 "sentence-transformers not installed. Run: pip install sentence-transformers"
-            )
+            ) from None
     return _sentence_transformer
 
 
@@ -81,14 +81,14 @@ class SearchResult:
     score: float
     source: str
     name: str
-    site_type: Optional[str]
-    period_name: Optional[str]
-    country: Optional[str]
-    description: Optional[str]
-    lat: Optional[float]
-    lon: Optional[float]
-    near_feature: Optional[str] = None
-    feature_type: Optional[str] = None
+    site_type: str | None
+    period_name: str | None
+    country: str | None
+    description: str | None
+    lat: float | None
+    lon: float | None
+    near_feature: str | None = None
+    feature_type: str | None = None
 
 
 class VectorStore:
@@ -168,11 +168,11 @@ class VectorStore:
             self._embedder = _get_embedder()
         return self._embedder
 
-    def embed_text(self, text: str) -> List[float]:
+    def embed_text(self, text: str) -> list[float]:
         """Generate embedding for a text string."""
         return self.embedder.encode(text, convert_to_numpy=True).tolist()
 
-    def get_all_collections(self) -> List[str]:
+    def get_all_collections(self) -> list[str]:
         """Get list of all available collections."""
         try:
             collections = self.client.get_collections().collections
@@ -196,7 +196,7 @@ class VectorStore:
         except Exception:
             return 0
 
-    def _resolve_sources(self, sources: Optional[List[str]]) -> List[str]:
+    def _resolve_sources(self, sources: list[str] | None) -> list[str]:
         """Resolve source list to collection names."""
         all_collections = self.get_all_collections()
 
@@ -207,7 +207,7 @@ class VectorStore:
         # Return only requested collections that exist
         return [s for s in sources if s in all_collections]
 
-    def _build_filter(self, filters: Optional[Dict[str, Any]]) -> Optional[Any]:
+    def _build_filter(self, filters: dict[str, Any] | None) -> Any | None:
         """Build Qdrant filter from filter dict.
 
         Accepts both VectorStore format and QueryParser format:
@@ -220,7 +220,15 @@ class VectorStore:
 
         logger.debug(f"Building filter from: {filters}")
 
-        from qdrant_client.models import Filter, FieldCondition, MatchValue, MatchAny, Range, GeoBoundingBox, GeoPoint
+        from qdrant_client.models import (
+            FieldCondition,
+            Filter,
+            GeoBoundingBox,
+            GeoPoint,
+            MatchAny,
+            MatchValue,
+            Range,
+        )
 
         must_conditions = []
 
@@ -312,10 +320,10 @@ class VectorStore:
     def search(
         self,
         query: str,
-        sources: Optional[List[str]] = None,
-        filters: Optional[Dict[str, Any]] = None,
+        sources: list[str] | None = None,
+        filters: dict[str, Any] | None = None,
         limit: int = 50,
-    ) -> List[SearchResult]:
+    ) -> list[SearchResult]:
         """
         Search across one or multiple collections.
 
@@ -344,7 +352,7 @@ class VectorStore:
         # Search all collections in parallel
         all_results = []
 
-        def search_collection(coll: str) -> List[Dict]:
+        def search_collection(coll: str) -> list[dict]:
             try:
                 # Use query_points (qdrant-client >= 1.7)
                 response = self.client.query_points(
@@ -406,10 +414,10 @@ class VectorStore:
     def search_near_feature(
         self,
         feature_type: str,
-        sources: Optional[List[str]] = None,
+        sources: list[str] | None = None,
         radius_km: float = 50,
         limit: int = 50,
-    ) -> List[SearchResult]:
+    ) -> list[SearchResult]:
         """
         Find sites near geographic features (volcanos, impact craters, etc.).
 
@@ -422,7 +430,7 @@ class VectorStore:
         Returns:
             List of SearchResult objects with near_feature populated
         """
-        from qdrant_client.models import Filter, FieldCondition, GeoRadius, GeoPoint
+        from qdrant_client.models import FieldCondition, Filter, GeoPoint, GeoRadius
 
         # Get feature collection
         feature_coll = self.FEATURE_TYPE_MAP.get(feature_type.lower())
@@ -514,16 +522,17 @@ class VectorStore:
     def _database_fallback_search(
         self,
         query: str,
-        filters: Optional[Dict[str, Any]] = None,
+        filters: dict[str, Any] | None = None,
         limit: int = 50,
-        source_ids: Optional[List[str]] = None
-    ) -> List[SearchResult]:
+        source_ids: list[str] | None = None
+    ) -> list[SearchResult]:
         """
         Fallback search directly from PostgreSQL when vector store is empty.
         """
         try:
-            from pipeline.database import get_session
             from sqlalchemy import text
+
+            from pipeline.database import get_session
 
             conditions = ["1=1"]
             params = {"limit": limit}
@@ -626,7 +635,7 @@ class VectorStore:
             logger.error(f"Database fallback error: {e}")
             return []
 
-    def health_check(self) -> Dict[str, Any]:
+    def health_check(self) -> dict[str, Any]:
         """Check vector store health."""
         try:
             collections = self.get_all_collections()
@@ -645,7 +654,7 @@ class VectorStore:
 
 
 # Singleton instance
-_vector_store_instance: Optional[VectorStore] = None
+_vector_store_instance: VectorStore | None = None
 
 
 def get_vector_store() -> VectorStore:

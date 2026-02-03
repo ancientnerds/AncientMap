@@ -11,11 +11,10 @@ API Key: Not required
 """
 
 import json
-from pathlib import Path
-from typing import Iterator, Optional, Dict, Any, List
-from datetime import datetime
 import time
-import urllib.parse
+from collections.abc import Iterator
+from datetime import datetime
+from pathlib import Path
 
 from loguru import logger
 
@@ -242,7 +241,7 @@ LIMIT 5000
         logger.info(f"Saved {total:,} records to {dest_path}")
         return dest_path
 
-    def _parse_mint(self, result: Dict) -> Optional[Dict]:
+    def _parse_mint(self, result: dict) -> dict | None:
         """Parse a mint result from SPARQL."""
         uri = result.get("mint", {}).get("value", "")
         if not uri:
@@ -266,7 +265,7 @@ LIMIT 5000
             "type": "mint",
         }
 
-    def _parse_hoard(self, result: Dict) -> Optional[Dict]:
+    def _parse_hoard(self, result: dict) -> dict | None:
         """Parse a hoard result from SPARQL."""
         uri = result.get("hoard", {}).get("value", "")
         if not uri:
@@ -290,7 +289,7 @@ LIMIT 5000
             "type": "hoard",
         }
 
-    def _parse_find(self, result: Dict) -> Optional[Dict]:
+    def _parse_find(self, result: dict) -> dict | None:
         """Parse a find result from SPARQL."""
         uri = result.get("find", {}).get("value", "")
         if not uri:
@@ -319,7 +318,7 @@ LIMIT 5000
             "type": "find",
         }
 
-    def _parse_ruler(self, result: Dict) -> Optional[Dict]:
+    def _parse_ruler(self, result: dict) -> dict | None:
         """Parse a ruler result from SPARQL."""
         uri = result.get("ruler", {}).get("value", "")
         if not uri:
@@ -339,7 +338,7 @@ LIMIT 5000
             "type": "ruler",
         }
 
-    def _parse_coord(self, value: Optional[str]) -> Optional[float]:
+    def _parse_coord(self, value: str | None) -> float | None:
         """Parse a coordinate value."""
         if value is None:
             return None
@@ -348,7 +347,7 @@ LIMIT 5000
         except (ValueError, TypeError):
             return None
 
-    def _parse_date(self, value: Optional[str]) -> Optional[int]:
+    def _parse_date(self, value: str | None) -> int | None:
         """Parse a date string to year integer."""
         if not value:
             return None
@@ -370,7 +369,7 @@ LIMIT 5000
         """Parse Nomisma data into ParsedSite objects."""
         logger.info(f"Parsing Nomisma data from {raw_data_path}")
 
-        with open(raw_data_path, "r", encoding="utf-8") as f:
+        with open(raw_data_path, encoding="utf-8") as f:
             data = json.load(f)
 
         # Parse mints as sites
@@ -397,7 +396,7 @@ LIMIT 5000
             if site:
                 yield site
 
-    def _mint_to_site(self, mint: Dict) -> Optional[ParsedSite]:
+    def _mint_to_site(self, mint: dict) -> ParsedSite | None:
         """Convert a mint to a ParsedSite."""
         lat = mint.get("lat")
         lon = mint.get("lon")
@@ -431,7 +430,7 @@ LIMIT 5000
             raw_data=mint,
         )
 
-    def _hoard_to_site(self, hoard: Dict) -> Optional[ParsedSite]:
+    def _hoard_to_site(self, hoard: dict) -> ParsedSite | None:
         """Convert a hoard to a ParsedSite."""
         lat = hoard.get("lat")
         lon = hoard.get("lon")
@@ -467,7 +466,7 @@ LIMIT 5000
             raw_data=hoard,
         )
 
-    def _find_to_site(self, find: Dict) -> Optional[ParsedSite]:
+    def _find_to_site(self, find: dict) -> ParsedSite | None:
         """Convert a find to a ParsedSite."""
         lat = find.get("lat")
         lon = find.get("lon")

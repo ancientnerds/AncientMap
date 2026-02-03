@@ -10,14 +10,14 @@ import io
 import json
 import logging
 import os
-import httpx
 from pathlib import Path
-from typing import Optional
-from fastapi import APIRouter, Depends, Response, Request
+
+import httpx
+from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import HTMLResponse
+from PIL import Image, ImageDraw, ImageFont
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from PIL import Image, ImageDraw, ImageFont
 
 from pipeline.database import get_db
 
@@ -39,7 +39,7 @@ TEXT_COLOR = (255, 255, 255)
 BRAND_COLOR = (255, 215, 0)  # Gold
 
 
-async def fetch_wikipedia_image(site_name: str) -> Optional[Image.Image]:
+async def fetch_wikipedia_image(site_name: str) -> Image.Image | None:
     """Fetch hero image from Wikipedia for the site."""
     search_url = "https://en.wikipedia.org/w/api.php"
     params = {
@@ -77,7 +77,7 @@ async def fetch_wikipedia_image(site_name: str) -> Optional[Image.Image]:
         logger.error(f"Wikipedia HTTP error for {site_name}: {e}")
     except json.JSONDecodeError:
         logger.error(f"Wikipedia returned invalid JSON for: {site_name}")
-    except IOError as e:
+    except OSError as e:
         logger.error(f"Failed to open image for {site_name}: {e}")
 
     return None
@@ -119,7 +119,7 @@ def get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
     for font_path in orbitron_paths:
         try:
             return ImageFont.truetype(str(font_path), size)
-        except (OSError, IOError):
+        except OSError:
             continue
 
     # Fallback to system fonts (cross-platform)
@@ -162,7 +162,7 @@ def get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
     for font_path in font_paths:
         try:
             return ImageFont.truetype(str(font_path), size)
-        except (OSError, IOError):
+        except OSError:
             continue
 
     logger.warning("No suitable font found, using default")
@@ -188,8 +188,8 @@ def draw_text_with_shadow(
 
 def generate_og_image(
     title: str,
-    country: Optional[str],
-    hero_image: Optional[Image.Image] = None,
+    country: str | None,
+    hero_image: Image.Image | None = None,
 ) -> bytes:
     """Generate OG image with title and country only."""
 
@@ -287,14 +287,14 @@ def generate_og_image(
     if country:
         bbox = draw.textbbox((0, 0), country, font=country_font)
         country_width = bbox[2] - bbox[0]
-        country_height = bbox[3] - bbox[1]
+        bbox[3] - bbox[1]
 
         while country_width > country_max_width and country_size > 16:
             country_size -= 2
             country_font = get_font(country_size)
             bbox = draw.textbbox((0, 0), country, font=country_font)
             country_width = bbox[2] - bbox[0]
-            country_height = bbox[3] - bbox[1]
+            bbox[3] - bbox[1]
 
     # Country (bottom)
     if country:

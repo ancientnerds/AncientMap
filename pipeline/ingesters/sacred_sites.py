@@ -10,16 +10,14 @@ API Key: Not required
 """
 
 import json
-import re
-from pathlib import Path
-from typing import Iterator, Optional, Dict, Any, List
+from collections.abc import Iterator
 from datetime import datetime
-import time
+from pathlib import Path
+from typing import Any
 
 from loguru import logger
 
 from pipeline.ingesters.base import BaseIngester, ParsedSite, atomic_write_json
-from pipeline.utils.http import fetch_with_retry
 
 
 class SacredSitesIngester(BaseIngester):
@@ -187,7 +185,7 @@ class SacredSitesIngester(BaseIngester):
         """
         logger.info(f"Parsing Sacred Sites data from {raw_data_path}")
 
-        with open(raw_data_path, "r", encoding="utf-8") as f:
+        with open(raw_data_path, encoding="utf-8") as f:
             data = json.load(f)
 
         features = data.get("features", [])
@@ -198,7 +196,7 @@ class SacredSitesIngester(BaseIngester):
             if site:
                 yield site
 
-    def _parse_feature(self, feature: Dict[str, Any]) -> Optional[ParsedSite]:
+    def _parse_feature(self, feature: dict[str, Any]) -> ParsedSite | None:
         """
         Parse a single feature.
 

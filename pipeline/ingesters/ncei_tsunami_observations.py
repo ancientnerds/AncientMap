@@ -11,9 +11,9 @@ API Key: Not required
 """
 
 import json
-from pathlib import Path
-from typing import Iterator, Optional, Dict, Any, List
+from collections.abc import Iterator
 from datetime import datetime
+from pathlib import Path
 
 from loguru import logger
 
@@ -108,7 +108,7 @@ class NCEITsunamiObservationsIngester(BaseIngester):
         logger.info(f"Saved {len(all_observations):,} observations to {dest_path}")
         return dest_path
 
-    def _parse_observation(self, obs: Dict) -> Optional[Dict]:
+    def _parse_observation(self, obs: dict) -> dict | None:
         """Parse a single tsunami observation record from the API."""
         # Extract coordinates (observation location)
         lat = self._parse_float(obs.get("latitude"))
@@ -175,7 +175,7 @@ class NCEITsunamiObservationsIngester(BaseIngester):
             "tsunami_event_id": tsunami_event_id,
         }
 
-    def _parse_float(self, value) -> Optional[float]:
+    def _parse_float(self, value) -> float | None:
         """Parse a float value."""
         if value is None or value == "":
             return None
@@ -184,7 +184,7 @@ class NCEITsunamiObservationsIngester(BaseIngester):
         except (ValueError, TypeError):
             return None
 
-    def _parse_int(self, value) -> Optional[int]:
+    def _parse_int(self, value) -> int | None:
         """Parse an integer value."""
         if value is None or value == "":
             return None
@@ -197,7 +197,7 @@ class NCEITsunamiObservationsIngester(BaseIngester):
         """Parse NCEI tsunami observation data into ParsedSite objects."""
         logger.info(f"Parsing NCEI tsunami observation data from {raw_data_path}")
 
-        with open(raw_data_path, "r", encoding="utf-8") as f:
+        with open(raw_data_path, encoding="utf-8") as f:
             data = json.load(f)
 
         observations = data.get("observations", [])
@@ -208,7 +208,7 @@ class NCEITsunamiObservationsIngester(BaseIngester):
             if site:
                 yield site
 
-    def _observation_to_site(self, obs: Dict) -> Optional[ParsedSite]:
+    def _observation_to_site(self, obs: dict) -> ParsedSite | None:
         """Convert an observation record to a ParsedSite."""
         lat = obs.get("lat")
         lon = obs.get("lon")

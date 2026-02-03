@@ -15,14 +15,14 @@ import os
 import secrets
 import time
 from pathlib import Path
-from typing import Optional, List
-from fastapi import APIRouter, Query, Depends, HTTPException, Header
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from api.cache import cache_delete_pattern, cache_get, cache_set
 from pipeline.database import get_db
-from api.cache import cache_get, cache_set, cache_delete_pattern
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -48,7 +48,7 @@ def _load_static_sites():
 
     logger.info(f"Loading static sites from {STATIC_SITES_PATH}")
     try:
-        with open(STATIC_SITES_PATH, 'r', encoding='utf-8') as f:
+        with open(STATIC_SITES_PATH, encoding='utf-8') as f:
             data = json.load(f)
 
         sites = data.get("sites", [])
@@ -112,15 +112,15 @@ def _convert_static_site(site):
 class SiteUpdateRequest(BaseModel):
     """Request model for updating a site."""
     title: str
-    location: Optional[str] = None
+    location: str | None = None
     category: str
     period: str
-    description: Optional[str] = None
-    sourceUrl: Optional[str] = None
-    coordinates: List[float]  # [lng, lat]
+    description: str | None = None
+    sourceUrl: str | None = None
+    coordinates: list[float]  # [lng, lat]
 
 
-def _period_to_year(period: str) -> Optional[int]:
+def _period_to_year(period: str) -> int | None:
     """Convert period name to approximate year for dot coloring."""
     period_years = {
         '< 4500 BC': -5000,
@@ -145,7 +145,7 @@ def _update_single_json_file(file_path: Path, site_id: str, site_update: 'SiteUp
 
     try:
         # Load the JSON file
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, encoding='utf-8') as f:
             data = json.load(f)
 
         sites = data.get("sites", [])
@@ -206,9 +206,9 @@ def _update_static_json(site_id: str, site_update: 'SiteUpdateRequest'):
 @router.get("/all")
 async def get_all_sites(
     db: Session = Depends(get_db),
-    source: Optional[List[str]] = Query(None, description="Filter by source IDs"),
-    site_type: Optional[str] = Query(None, description="Filter by site type"),
-    period_max: Optional[int] = Query(None, description="Max period year"),
+    source: list[str] | None = Query(None, description="Filter by source IDs"),
+    site_type: str | None = Query(None, description="Filter by site type"),
+    period_max: int | None = Query(None, description="Max period year"),
     skip: int = Query(0, ge=0, description="Number of records to skip (pagination)"),
     limit: int = Query(50000, ge=1, le=1000000, description="Max results (capped at 1M)"),
 ):
@@ -220,7 +220,7 @@ async def get_all_sites(
 
     Falls back to static JSON if database is empty.
     """
-    request_start = time.time()
+    time.time()
 
     # Build cache key from parameters
     source_key = ",".join(sorted(source)) if source else "all"
@@ -273,7 +273,7 @@ async def get_all_sites(
 
         query_start = time.time()
         result = db.execute(query, params)
-        query_time = (time.time() - query_start) * 1000
+        (time.time() - query_start) * 1000
 
         # Return as compact array of arrays for minimal JSON size
         serialize_start = time.time()
@@ -302,7 +302,7 @@ async def get_all_sites(
             if row.source_url:
                 site["u"] = row.source_url
             sites.append(site)
-        serialize_time = (time.time() - serialize_start) * 1000
+        (time.time() - serialize_start) * 1000
 
         if sites:
             response = {
@@ -344,7 +344,7 @@ async def get_sites_in_viewport(
     max_lat: float = Query(..., ge=-90, le=90),
     min_lon: float = Query(..., ge=-180, le=180),
     max_lon: float = Query(..., ge=-180, le=180),
-    source: Optional[List[str]] = Query(None),
+    source: list[str] | None = Query(None),
     limit: int = Query(10000, le=50000),
     db: Session = Depends(get_db),
 ):
@@ -409,7 +409,7 @@ async def get_sites_in_viewport(
 @router.get("/clustered")
 async def get_clustered_sites(
     resolution: int = Query(3, ge=0, le=7, description="H3 resolution (0=global, 7=fine)"),
-    source: Optional[List[str]] = Query(None),
+    source: list[str] | None = Query(None),
     db: Session = Depends(get_db),
 ):
     """

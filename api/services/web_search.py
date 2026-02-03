@@ -8,10 +8,10 @@ Configuration:
     SEARXNG_URL: SearXNG server URL (default: http://localhost:8888)
 """
 
-import os
 import logging
+import os
+
 import httpx
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -210,7 +210,7 @@ class WebSearchService:
 
 
 # Singleton
-_instance: Optional[WebSearchService] = None
+_instance: WebSearchService | None = None
 
 
 def get_web_search_service() -> WebSearchService:

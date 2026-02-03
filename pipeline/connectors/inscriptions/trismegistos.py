@@ -10,13 +10,13 @@ Priority: P2
 URL: https://www.trismegistos.org/
 """
 
-from typing import List, Optional
+
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
-from pipeline.connectors.types import ContentType, ContentItem, AuthType, ProtocolType
-from pipeline.connectors.registry import ConnectorRegistry
 from pipeline.connectors.protocols.rest import RestProtocol
+from pipeline.connectors.registry import ConnectorRegistry
+from pipeline.connectors.types import AuthType, ContentItem, ContentType, ProtocolType
 
 
 @ConnectorRegistry.register
@@ -38,25 +38,22 @@ class TrismegistosConnector(BaseConnector):
     license = "CC-BY-SA 4.0"
     attribution = "Trismegistos (KU Leuven)"
 
-    def __init__(self, api_key: Optional[str] = None, **kwargs):
+    def __init__(self, api_key: str | None = None, **kwargs):
         super().__init__(api_key=api_key, **kwargs)
         self.rest = RestProtocol(base_url=self.base_url, rate_limit=self.rate_limit)
 
     async def search(
         self,
         query: str,
-        content_type: Optional[ContentType] = None,
+        content_type: ContentType | None = None,
         limit: int = 20,
         offset: int = 0,
         **kwargs,
-    ) -> List[ContentItem]:
+    ) -> list[ContentItem]:
         """Search Trismegistos texts."""
         try:
             # Trismegistos has limited API - primarily uses web interface
             # and CSV exports
-            params = {
-                "q": query,
-            }
 
             # Note: May need web scraping or CSV processing
             logger.warning("Trismegistos connector not fully implemented - uses web interface/CSV exports")
@@ -66,7 +63,7 @@ class TrismegistosConnector(BaseConnector):
             logger.error(f"Trismegistos search failed: {e}")
             return []
 
-    async def get_item(self, item_id: str) -> Optional[ContentItem]:
+    async def get_item(self, item_id: str) -> ContentItem | None:
         """Get specific text by TM number."""
         try:
             if item_id.startswith("trismegistos:"):

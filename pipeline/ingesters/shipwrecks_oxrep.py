@@ -12,15 +12,14 @@ API Key: Not required
 
 import json
 import re
-from pathlib import Path
-from typing import Iterator, Optional, Dict, Any, List
+from collections.abc import Iterator
 from datetime import datetime
-import time
+from pathlib import Path
 
 from loguru import logger
 
 from pipeline.ingesters.base import BaseIngester, ParsedSite, atomic_write_json
-from pipeline.utils.http import fetch_with_retry, download_file
+from pipeline.utils.http import download_file
 
 
 class OXREPShipwrecksIngester(BaseIngester):
@@ -82,9 +81,6 @@ class OXREPShipwrecksIngester(BaseIngester):
             logger.info(f"Downloading OXREP Excel from {self.EXCEL_URL}")
 
             try:
-                headers = {
-                    "User-Agent": "AncientNerds/1.0 (Research Platform; academic research)",
-                }
                 download_file(self.EXCEL_URL, excel_path, force=True, decompress_gzip=False)
                 logger.info(f"Downloaded to {excel_path}")
             except Exception as e:
@@ -130,7 +126,7 @@ class OXREPShipwrecksIngester(BaseIngester):
         logger.info(f"Saved {len(all_wrecks):,} shipwrecks to {dest_path}")
         return dest_path
 
-    def _parse_excel(self, excel_path: Path) -> List[Dict]:
+    def _parse_excel(self, excel_path: Path) -> list[dict]:
         """Parse the OXREP Excel file."""
         try:
             import openpyxl
@@ -165,7 +161,7 @@ class OXREPShipwrecksIngester(BaseIngester):
             # Note: Order matters - check more specific patterns first
             col_map = {}
             for i, h in enumerate(headers):
-                h_clean = h.replace(" ", "_").replace("-", "_")
+                h.replace(" ", "_").replace("-", "_")
                 # Check for date columns FIRST (to avoid 'latest' matching 'lat')
                 if any(x in h for x in ['earliest', 'date_start', 'date_from', 'min_date']):
                     col_map['date_start'] = i
@@ -256,7 +252,7 @@ class OXREPShipwrecksIngester(BaseIngester):
 
         return all_wrecks
 
-    def _extract_table_data(self, html: str) -> List[Dict]:
+    def _extract_table_data(self, html: str) -> list[dict]:
         """Extract data from HTML tables."""
         data = []
 
@@ -275,13 +271,13 @@ class OXREPShipwrecksIngester(BaseIngester):
             if i == 0 and any(h.lower() in ['name', 'location', 'date', 'cargo', 'wreck'] for h in cells):
                 headers = [h.lower().replace(' ', '_') for h in cells]
             elif headers and cells:
-                row_data = dict(zip(headers, cells))
+                row_data = dict(zip(headers, cells, strict=False))
                 if row_data:
                     data.append(row_data)
 
         return data
 
-    def _parse_wreck_item(self, item: Dict) -> Optional[Dict]:
+    def _parse_wreck_item(self, item: dict) -> dict | None:
         """Parse a shipwreck item from various formats."""
         if not item or not isinstance(item, dict):
             return None
@@ -345,7 +341,7 @@ class OXREPShipwrecksIngester(BaseIngester):
             "notes": item.get("notes", item.get("description", "")),
         }
 
-    def _parse_geojson_feature(self, feature: Dict) -> Optional[Dict]:
+    def _parse_geojson_feature(self, feature: dict) -> dict | None:
         """Parse a GeoJSON feature."""
         if not feature or feature.get("type") != "Feature":
             return None
@@ -365,14 +361,14 @@ class OXREPShipwrecksIngester(BaseIngester):
 
         return self._parse_wreck_item(props)
 
-    def _parse_table_row(self, row: Dict) -> Optional[Dict]:
+    def _parse_table_row(self, row: dict) -> dict | None:
         """Parse a table row."""
         if not row:
             return None
 
         return self._parse_wreck_item(row)
 
-    def _parse_year(self, value) -> Optional[int]:
+    def _parse_year(self, value) -> int | None:
         """Parse a year value."""
         if value is None:
             return None
@@ -382,7 +378,7 @@ class OXREPShipwrecksIngester(BaseIngester):
         except (ValueError, TypeError):
             return None
 
-    def _parse_float(self, value) -> Optional[float]:
+    def _parse_float(self, value) -> float | None:
         """Parse a float value."""
         if value is None:
             return None
@@ -422,7 +418,7 @@ class OXREPShipwrecksIngester(BaseIngester):
         """Parse OXREP shipwreck data into ParsedSite objects."""
         logger.info(f"Parsing OXREP shipwreck data from {raw_data_path}")
 
-        with open(raw_data_path, "r", encoding="utf-8") as f:
+        with open(raw_data_path, encoding="utf-8") as f:
             data = json.load(f)
 
         wrecks = data.get("shipwrecks", [])
@@ -436,7 +432,7 @@ class OXREPShipwrecksIngester(BaseIngester):
             if site:
                 yield site
 
-    def _wreck_to_site(self, wreck: Dict) -> Optional[ParsedSite]:
+    def _wreck_to_site(self, wreck: dict) -> ParsedSite | None:
         """Convert a shipwreck to a ParsedSite."""
         lat = wreck.get("lat")
         lon = wreck.get("lon")

@@ -11,13 +11,13 @@ URL: https://www.cyark.org/
 WARNING: CyArk content is for non-commercial use only per their Data Use Policy.
 """
 
-from typing import List, Optional
+
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
-from pipeline.connectors.types import ContentType, ContentItem, AuthType, ProtocolType
-from pipeline.connectors.registry import ConnectorRegistry
 from pipeline.connectors.protocols.rest import RestProtocol
+from pipeline.connectors.registry import ConnectorRegistry
+from pipeline.connectors.types import AuthType, ContentItem, ContentType, ProtocolType
 
 
 @ConnectorRegistry.register
@@ -39,18 +39,18 @@ class CyArkConnector(BaseConnector):
     license = "CC-BY-NC 4.0"  # Non-commercial use only
     attribution = "CyArk (https://www.cyark.org)"
 
-    def __init__(self, api_key: Optional[str] = None, **kwargs):
+    def __init__(self, api_key: str | None = None, **kwargs):
         super().__init__(api_key=api_key, **kwargs)
         self.rest = RestProtocol(base_url=self.base_url, rate_limit=self.rate_limit)
 
     async def search(
         self,
         query: str,
-        content_type: Optional[ContentType] = None,
+        content_type: ContentType | None = None,
         limit: int = 20,
         offset: int = 0,
         **kwargs,
-    ) -> List[ContentItem]:
+    ) -> list[ContentItem]:
         """Search CyArk projects.
 
         Note: CyArk uses Sketchfab for 3D model hosting.
@@ -60,7 +60,7 @@ class CyArkConnector(BaseConnector):
         logger.warning("CyArk connector not fully implemented - uses Sketchfab for models")
         return []
 
-    async def get_item(self, item_id: str) -> Optional[ContentItem]:
+    async def get_item(self, item_id: str) -> ContentItem | None:
         """Get specific project by ID."""
         # TODO: Implement item retrieval
         return None

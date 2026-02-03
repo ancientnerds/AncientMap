@@ -10,10 +10,10 @@ API Key: Not required
 """
 
 import json
-from pathlib import Path
-from typing import Iterator, Optional, Dict, Any, List
+from collections.abc import Iterator
 from datetime import datetime
-import time
+from pathlib import Path
+from typing import Any
 
 from loguru import logger
 
@@ -142,7 +142,7 @@ class DAREIngester(BaseIngester):
         """
         logger.info(f"Parsing DARE data from {raw_data_path}")
 
-        with open(raw_data_path, "r", encoding="utf-8") as f:
+        with open(raw_data_path, encoding="utf-8") as f:
             data = json.load(f)
 
         features = data.get("features", [])
@@ -153,7 +153,7 @@ class DAREIngester(BaseIngester):
             if site:
                 yield site
 
-    def _parse_feature(self, feature: Dict[str, Any]) -> Optional[ParsedSite]:
+    def _parse_feature(self, feature: dict[str, Any]) -> ParsedSite | None:
         """
         Parse a single GeoJSON feature.
 

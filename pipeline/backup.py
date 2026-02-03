@@ -4,20 +4,20 @@ Automatically creates backups before destructive operations.
 """
 import os
 import subprocess
-import json
-from pathlib import Path
-from datetime import datetime
 from dataclasses import dataclass
-from typing import Optional, List, Tuple, Dict
+from datetime import datetime
+from pathlib import Path
+
 from loguru import logger
+
 
 @dataclass
 class BackupResult:
     success: bool
     backup_id: str
-    database_path: Optional[Path] = None
-    contributions_path: Optional[Path] = None
-    error: Optional[str] = None
+    database_path: Path | None = None
+    contributions_path: Path | None = None
+    error: str | None = None
 
 # VPS paths
 BACKUP_DIR = Path("/var/www/ancientnerds/backups")
@@ -81,7 +81,7 @@ def create_backup(include_db: bool = True, include_contributions: bool = True) -
     return result
 
 
-def list_backups() -> List[Tuple[str, Dict[str, Path]]]:
+def list_backups() -> list[tuple[str, dict[str, Path]]]:
     """List available backups.
 
     Returns:
@@ -90,7 +90,7 @@ def list_backups() -> List[Tuple[str, Dict[str, Path]]]:
     if not BACKUP_DIR.exists():
         return []
 
-    backups: Dict[str, Dict[str, Path]] = {}
+    backups: dict[str, dict[str, Path]] = {}
 
     # Find database backups
     for f in BACKUP_DIR.glob("database_*.dump"):

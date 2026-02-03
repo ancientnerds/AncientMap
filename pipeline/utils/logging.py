@@ -6,7 +6,6 @@ Uses loguru for beautiful, structured logging.
 
 import sys
 from pathlib import Path
-from typing import Optional
 
 from loguru import logger
 
@@ -14,8 +13,8 @@ from pipeline.config import settings
 
 
 def setup_logging(
-    level: Optional[str] = None,
-    log_file: Optional[Path] = None,
+    level: str | None = None,
+    log_file: Path | None = None,
     rotation: str = "10 MB",
     retention: str = "1 week",
 ) -> None:
@@ -60,5 +59,6 @@ def setup_logging(
 
 # Only configure logging if not explicitly disabled
 import os
+
 if os.environ.get("DISABLE_LOGGING") != "1":
     setup_logging()

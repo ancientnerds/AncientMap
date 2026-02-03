@@ -16,7 +16,7 @@ Each source defines:
 - priority: Display priority (lower = higher priority, optional)
 """
 
-from typing import TypedDict, Optional
+from typing import TypedDict
 
 
 class SourceConfigType(TypedDict, total=False):

@@ -50,7 +50,7 @@ jobs:
           pip install ruff mypy
 
       - name: Lint with ruff
-        run: ruff check api/ pipeline/ --ignore E501,F401
+        run: ruff check api/ pipeline/
 
       - name: Type check with mypy
         run: mypy api/ --ignore-missing-imports --no-error-summary || true

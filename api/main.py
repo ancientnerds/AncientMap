@@ -8,16 +8,19 @@ Updated: BitNet LLM optimized for faster responses
 """
 
 import logging
+
 from dotenv import load_dotenv
+
 load_dotenv()
+
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from contextlib import asynccontextmanager
 
-from api.routes import sites, sources, og, contributions, ai, sitemap, streetview
-from api.cache import get_redis_client, cache_get, cache_set
+from api.cache import cache_get, cache_set, get_redis_client
+from api.routes import ai, content, contributions, og, sitemap, sites, sources, streetview
 from pipeline.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -39,8 +42,9 @@ async def lifespan(app: FastAPI):
             logger.info("[STARTUP] Pre-warming sites cache...")
             start = time.time()
 
-            from pipeline.database import get_session
             from sqlalchemy import text
+
+            from pipeline.database import get_session
 
             with get_session() as session:
                 query = text("""
@@ -104,6 +108,7 @@ app.include_router(contributions.router, prefix="/api/contributions", tags=["con
 app.include_router(ai.router, prefix="/api/ai", tags=["ai"])
 app.include_router(sitemap.router, prefix="/api/sitemap", tags=["sitemap"])
 app.include_router(streetview.router, prefix="/api/streetview", tags=["streetview"])
+app.include_router(content.router, prefix="/api/content", tags=["content"])
 
 
 @app.get("/")
@@ -121,8 +126,9 @@ async def stats():
     if cached:
         return cached
 
-    from pipeline.database import get_session
     from sqlalchemy import text
+
+    from pipeline.database import get_session
 
     with get_session() as session:
         # Total sites

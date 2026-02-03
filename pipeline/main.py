@@ -13,37 +13,35 @@ Usage:
 
 import sys
 from pathlib import Path
-from datetime import datetime
 
 import click
 from loguru import logger
 from rich.console import Console
-from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.table import Table
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from pipeline.config import settings, DATA_SOURCES
-from pipeline.database import SessionLocal, SourceDatabase, SourceRecord, Site
+from pipeline.config import DATA_SOURCES
+from pipeline.database import SessionLocal, Site, SourceDatabase, SourceRecord
 from pipeline.ingesters import (
-    PleiadesIngester,
-    UNESCOIngester,
+    ArachneIngester,
+    DINAAIngester,
+    EAMENAIngester,
     GeoNamesIngester,
-    OpenContextIngester,
-    WikidataIngester,
     HistoricEnglandIngester,
     IrelandNMSIngester,
-    ArachneIngester,
-    EAMENAIngester,
-    DINAAIngester,
     # NCEI Hazards
     NCEIEarthquakesIngester,
-    NCEITsunamisIngester,
     NCEITsunamiObservationsIngester,
+    NCEITsunamisIngester,
     NCEIVolcanoesIngester,
+    OpenContextIngester,
+    PleiadesIngester,
+    UNESCOIngester,
+    WikidataIngester,
 )
-
 
 console = Console()
 
@@ -90,7 +88,7 @@ def ingest(source: str, skip_fetch: bool, batch_size: int):
 
     SOURCE can be a specific source name (e.g., 'pleiades') or 'all' to run all ingesters.
     """
-    console.print(f"\n[bold blue]ANCIENT NERDS - Data Ingestion[/bold blue]")
+    console.print("\n[bold blue]ANCIENT NERDS - Data Ingestion[/bold blue]")
     console.print(f"Source: {source}")
     console.print(f"Skip fetch: {skip_fetch}")
     console.print(f"Batch size: {batch_size}\n")
@@ -298,7 +296,7 @@ def backup_restore(timestamp: str, db: bool, contributions: bool):
     if success:
         console.print(f"[green]Restore complete from backup: {timestamp}[/green]")
     else:
-        console.print(f"[red]Restore failed[/red]")
+        console.print("[red]Restore failed[/red]")
 
 
 @cli.command()

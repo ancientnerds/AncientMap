@@ -10,10 +10,10 @@ API Key: Not required
 """
 
 import json
-from pathlib import Path
-from typing import Iterator, Optional, Dict
-from datetime import datetime
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+from pathlib import Path
 
 from loguru import logger
 
@@ -117,7 +117,7 @@ class NCEIVolcanoesIngester(BaseIngester):
         with ThreadPoolExecutor(max_workers=10) as executor:
             futures = {executor.submit(fetch_detail, e): e for e in all_eruptions}
             completed = 0
-            for future in as_completed(futures):
+            for _future in as_completed(futures):
                 completed += 1
                 if completed % 100 == 0:
                     logger.info(f"Fetched details for {completed}/{len(all_eruptions)} eruptions")
@@ -150,7 +150,7 @@ class NCEIVolcanoesIngester(BaseIngester):
         logger.info(f"Saved {len(parsed_eruptions):,} eruptions to {dest_path}")
         return dest_path
 
-    def _parse_eruption(self, eruption: Dict) -> Optional[Dict]:
+    def _parse_eruption(self, eruption: dict) -> dict | None:
         """Parse a single eruption from the API response."""
         lat = eruption.get("latitude")
         lon = eruption.get("longitude")
@@ -194,7 +194,7 @@ class NCEIVolcanoesIngester(BaseIngester):
         """Parse NCEI volcano data into ParsedSite objects."""
         logger.info(f"Parsing NCEI volcanic eruption data from {raw_data_path}")
 
-        with open(raw_data_path, "r", encoding="utf-8") as f:
+        with open(raw_data_path, encoding="utf-8") as f:
             data = json.load(f)
 
         eruptions = data.get("volcanoes", [])
@@ -205,7 +205,7 @@ class NCEIVolcanoesIngester(BaseIngester):
             if site:
                 yield site
 
-    def _eruption_to_site(self, eruption: Dict) -> Optional[ParsedSite]:
+    def _eruption_to_site(self, eruption: dict) -> ParsedSite | None:
         """Convert an eruption record to a ParsedSite."""
         lat = eruption.get("lat")
         lon = eruption.get("lon")

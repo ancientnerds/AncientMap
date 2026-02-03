@@ -11,12 +11,9 @@ API Key: Not required
 """
 
 import json
-from pathlib import Path
-from typing import Iterator, Optional, Dict, Any, List
+from collections.abc import Iterator
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import time
-import re
+from pathlib import Path
 
 import httpx
 from loguru import logger
@@ -126,7 +123,7 @@ class ToposTextIngester(BaseIngester):
         """Parse ToposText places into sites."""
         logger.info(f"Parsing ToposText data from {raw_data_path}")
 
-        with open(raw_data_path, "r", encoding="utf-8") as f:
+        with open(raw_data_path, encoding="utf-8") as f:
             data = json.load(f)
 
         places = data.get("places", [])
@@ -137,7 +134,7 @@ class ToposTextIngester(BaseIngester):
             if site:
                 yield site
 
-    def _parse_place(self, place: Dict) -> Optional[ParsedSite]:
+    def _parse_place(self, place: dict) -> ParsedSite | None:
         """Parse a single ToposText place."""
         # Get ID
         place_id = place.get("id") or place.get("pleiades_id") or place.get("topostext_id")
@@ -228,7 +225,7 @@ class ToposTextIngester(BaseIngester):
             },
         )
 
-    def _get_period_from_texts(self, texts: List) -> tuple:
+    def _get_period_from_texts(self, texts: list) -> tuple:
         """Estimate period based on text references."""
         earliest_start = None
         latest_end = None

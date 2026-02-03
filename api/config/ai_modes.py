@@ -5,7 +5,6 @@ Defines available modes, their models, and UI content.
 Single source of truth - no hardcoding elsewhere.
 """
 
-from typing import Optional
 
 AI_MODES = {
     "chat": {

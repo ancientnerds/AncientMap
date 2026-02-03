@@ -6,9 +6,8 @@ Falls back to a simple lat/lon bounding box approach when shapely is not availab
 """
 
 import json
-from pathlib import Path
-from typing import Optional, Dict, List, Tuple
 from functools import lru_cache
+from pathlib import Path
 
 from loguru import logger
 
@@ -37,7 +36,7 @@ class CountryLookup:
     """
 
     def __init__(self):
-        self._countries: List[Dict] = []
+        self._countries: list[dict] = []
         self._spatial_index = None
         self._geometries = []
         self._loaded = False
@@ -54,7 +53,7 @@ class CountryLookup:
             return
 
         try:
-            with open(COUNTRIES_FILE, "r", encoding="utf-8") as f:
+            with open(COUNTRIES_FILE, encoding="utf-8") as f:
                 data = json.load(f)
 
             features = data.get("features", [])
@@ -105,7 +104,7 @@ class CountryLookup:
 
         self._loaded = True
 
-    def _compute_bbox(self, geometry: Dict) -> Optional[Tuple[float, float, float, float]]:
+    def _compute_bbox(self, geometry: dict) -> tuple[float, float, float, float] | None:
         """Compute bounding box from GeoJSON geometry."""
         coords = self._extract_all_coords(geometry)
         if not coords:
@@ -115,7 +114,7 @@ class CountryLookup:
         lats = [c[1] for c in coords]
         return (min(lons), min(lats), max(lons), max(lats))
 
-    def _extract_all_coords(self, geometry: Dict) -> List[Tuple[float, float]]:
+    def _extract_all_coords(self, geometry: dict) -> list[tuple[float, float]]:
         """Extract all coordinates from a GeoJSON geometry."""
         geom_type = geometry.get("type", "")
         coords = geometry.get("coordinates", [])
@@ -142,7 +141,7 @@ class CountryLookup:
 
         return result
 
-    def _point_in_polygon(self, lon: float, lat: float, geometry: Dict) -> bool:
+    def _point_in_polygon(self, lon: float, lat: float, geometry: dict) -> bool:
         """Simple ray casting algorithm for point-in-polygon test."""
         coords = geometry.get("coordinates", [])
         geom_type = geometry.get("type", "")
@@ -155,7 +154,7 @@ class CountryLookup:
                     return True
         return False
 
-    def _point_in_polygon_rings(self, lon: float, lat: float, rings: List) -> bool:
+    def _point_in_polygon_rings(self, lon: float, lat: float, rings: list) -> bool:
         """Check if point is in polygon defined by rings (exterior + holes)."""
         if not rings:
             return False
@@ -172,7 +171,7 @@ class CountryLookup:
 
         return True
 
-    def _point_in_ring(self, lon: float, lat: float, ring: List) -> bool:
+    def _point_in_ring(self, lon: float, lat: float, ring: list) -> bool:
         """Ray casting algorithm for point in ring."""
         n = len(ring)
         inside = False
@@ -188,7 +187,7 @@ class CountryLookup:
 
         return inside
 
-    def get_country(self, lat: float, lon: float) -> Optional[str]:
+    def get_country(self, lat: float, lon: float) -> str | None:
         """
         Get country name for given coordinates.
 
@@ -228,7 +227,7 @@ class CountryLookup:
 
         return None
 
-    def get_country_iso(self, lat: float, lon: float) -> Optional[str]:
+    def get_country_iso(self, lat: float, lon: float) -> str | None:
         """Get ISO country code for given coordinates."""
         self._load_data()
 
@@ -257,7 +256,7 @@ class CountryLookup:
 
 
 # Global singleton instance
-_lookup_instance: Optional[CountryLookup] = None
+_lookup_instance: CountryLookup | None = None
 
 
 def get_country_lookup() -> CountryLookup:
@@ -269,7 +268,7 @@ def get_country_lookup() -> CountryLookup:
 
 
 @lru_cache(maxsize=10000)
-def lookup_country(lat: float, lon: float) -> Optional[str]:
+def lookup_country(lat: float, lon: float) -> str | None:
     """
     Lookup country name from coordinates (cached).
 
@@ -285,9 +284,9 @@ def lookup_country(lat: float, lon: float) -> Optional[str]:
 
 def download_country_boundaries():
     """Download Natural Earth country boundaries."""
+    import io
     import urllib.request
     import zipfile
-    import io
 
     # Natural Earth 110m cultural vectors (countries)
     # Small file (~800KB) good enough for most lookups
@@ -295,7 +294,7 @@ def download_country_boundaries():
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    logger.info(f"Downloading country boundaries from Natural Earth...")
+    logger.info("Downloading country boundaries from Natural Earth...")
     logger.info(f"URL: {url}")
 
     try:

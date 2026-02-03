@@ -10,11 +10,11 @@ Configuration:
     OLLAMA_TIMEOUT: Request timeout in seconds (default: 120)
 """
 
-import os
 import logging
-import asyncio
+import os
+from collections.abc import AsyncGenerator
+
 import httpx
-from typing import Optional, AsyncGenerator
 
 from pipeline.config import get_ai_thread_limit
 
@@ -41,7 +41,7 @@ class LLMService:
         - gemma2:2b, gemma2:9b
     """
 
-    def __init__(self, model: Optional[str] = None, host: Optional[str] = None):
+    def __init__(self, model: str | None = None, host: str | None = None):
         """
         Initialize LLM service.
 
@@ -52,7 +52,7 @@ class LLMService:
         self.host = host or OLLAMA_HOST
         self.model = model or OLLAMA_MODEL
         self.timeout = OLLAMA_TIMEOUT
-        self._is_available: Optional[bool] = None
+        self._is_available: bool | None = None
 
         logger.info(f"LLM Service initialized: model={self.model}, host={self.host}")
 
@@ -105,7 +105,7 @@ class LLMService:
     def generate(
         self,
         prompt: str,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         max_tokens: int = 200,
         temperature: float = 0.3
     ) -> str:
@@ -128,7 +128,7 @@ class LLMService:
         self,
         client: httpx.Client,
         prompt: str,
-        system_prompt: Optional[str],
+        system_prompt: str | None,
         max_tokens: int,
         temperature: float
     ) -> str:
@@ -161,10 +161,10 @@ class LLMService:
 
         except httpx.TimeoutException:
             logger.error(f"LLM request timed out after {self.timeout}s")
-            raise RuntimeError("LLM inference timed out")
+            raise RuntimeError("LLM inference timed out") from None
         except httpx.HTTPStatusError as e:
             logger.error(f"Ollama error: {e.response.status_code} - {e.response.text}")
-            raise RuntimeError(f"LLM inference failed: {e.response.status_code}")
+            raise RuntimeError(f"LLM inference failed: {e.response.status_code}") from e
         except Exception as e:
             logger.error(f"LLM error: {e}")
             raise
@@ -172,7 +172,7 @@ class LLMService:
     async def generate_async(
         self,
         prompt: str,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         max_tokens: int = 200,
         temperature: float = 0.3
     ) -> str:
@@ -216,10 +216,10 @@ class LLMService:
 
             except httpx.TimeoutException:
                 logger.error(f"LLM request timed out after {self.timeout}s")
-                raise RuntimeError("LLM inference timed out")
+                raise RuntimeError("LLM inference timed out") from None
             except httpx.HTTPStatusError as e:
                 logger.error(f"Ollama error: {e.response.status_code}")
-                raise RuntimeError(f"LLM inference failed: {e.response.status_code}")
+                raise RuntimeError(f"LLM inference failed: {e.response.status_code}") from e
             except Exception as e:
                 logger.error(f"LLM error: {e}")
                 raise
@@ -227,7 +227,7 @@ class LLMService:
     async def generate_stream_async(
         self,
         prompt: str,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         max_tokens: int = 200,
         temperature: float = 0.3
     ) -> AsyncGenerator[str, None]:
@@ -272,7 +272,7 @@ class LLMService:
 
             except httpx.TimeoutException:
                 logger.error(f"LLM stream timed out after {self.timeout}s")
-                raise RuntimeError("LLM inference timed out")
+                raise RuntimeError("LLM inference timed out") from None
             except Exception as e:
                 logger.error(f"LLM stream error: {e}")
                 raise
@@ -288,7 +288,7 @@ class LLMService:
             logger.error(f"Error listing models: {e}")
             return []
 
-    def pull_model(self, model_name: Optional[str] = None) -> bool:
+    def pull_model(self, model_name: str | None = None) -> bool:
         """
         Pull a model from Ollama registry.
 
@@ -361,7 +361,7 @@ class LLMService:
 
 
 # Singleton instance
-_llm_service_instance: Optional[LLMService] = None
+_llm_service_instance: LLMService | None = None
 
 
 def get_llm_service() -> LLMService:

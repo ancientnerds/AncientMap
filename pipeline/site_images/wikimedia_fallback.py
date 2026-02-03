@@ -17,16 +17,16 @@ Usage:
 import argparse
 import time
 import urllib.parse
-from typing import Optional, Dict, List, Tuple, Iterator
+from collections.abc import Iterator
 from dataclasses import dataclass
 
 from loguru import logger
 from sqlalchemy import text, update
 from sqlalchemy.orm import Session
 
-from pipeline.database import get_session, UnifiedSite
-from pipeline.utils.http import fetch_with_retry, RateLimitError
+from pipeline.database import UnifiedSite, get_session
 from pipeline.utils import parse_wkt_point as _parse_wkt_point
+from pipeline.utils.http import RateLimitError, fetch_with_retry
 
 # =============================================================================
 # Configuration
@@ -154,7 +154,7 @@ LIMIT {limit}
 # Wikidata Functions
 # =============================================================================
 
-def parse_wkt_point(wkt: str) -> Tuple[float, float]:
+def parse_wkt_point(wkt: str) -> tuple[float, float]:
     """Parse WKT Point to (lat, lon). Uses shared utility."""
     lon, lat = _parse_wkt_point(wkt)
     if lon is not None and lat is not None:
@@ -162,7 +162,7 @@ def parse_wkt_point(wkt: str) -> Tuple[float, float]:
     return 0.0, 0.0
 
 
-def query_wikidata_sparql(query: str) -> List[Dict]:
+def query_wikidata_sparql(query: str) -> list[dict]:
     """Execute Wikidata SPARQL query."""
     headers = {
         "Accept": "application/sparql-results+json",
@@ -276,7 +276,7 @@ def get_commons_thumb_url(filename: str, width: int = 300) -> str:
     )
 
 
-def search_commons_images(query: str, limit: int = 5) -> List[Dict]:
+def search_commons_images(query: str, limit: int = 5) -> list[dict]:
     """
     Search Wikimedia Commons for images matching a query.
 
@@ -343,7 +343,7 @@ def search_commons_images(query: str, limit: int = 5) -> List[Dict]:
         return []
 
 
-def search_commons_for_site(site_name: str) -> Optional[str]:
+def search_commons_for_site(site_name: str) -> str | None:
     """
     Search Commons for an image of a specific site.
 
@@ -374,7 +374,7 @@ def search_commons_for_site(site_name: str) -> Optional[str]:
 # Database Matching & Updates
 # =============================================================================
 
-def get_sites_without_images(session: Session, limit: int = None) -> List[Tuple]:
+def get_sites_without_images(session: Session, limit: int = None) -> list[tuple]:
     """Get sites that don't have thumbnail_url set."""
     query = text("""
         SELECT id, name, lat, lon
@@ -390,9 +390,9 @@ def get_sites_without_images(session: Session, limit: int = None) -> List[Tuple]
 
 def match_wikidata_to_sites(
     session: Session,
-    wikidata_results: List[WikidataResult],
+    wikidata_results: list[WikidataResult],
     coord_threshold: float = COORD_THRESHOLD,
-) -> List[SiteMatch]:
+) -> list[SiteMatch]:
     """
     Match Wikidata results to existing sites by coordinates.
 
@@ -448,7 +448,7 @@ def match_wikidata_to_sites(
     return matches
 
 
-def update_site_thumbnails(session: Session, matches: List[SiteMatch]) -> int:
+def update_site_thumbnails(session: Session, matches: list[SiteMatch]) -> int:
     """Update thumbnail_url for matched sites."""
     updated = 0
 
@@ -491,7 +491,7 @@ def search_commons_fallback(
 
     updated = 0
 
-    for i, (site_id, site_name, lat, lon) in enumerate(sites):
+    for i, (site_id, site_name, _lat, _lon) in enumerate(sites):
         if i % 100 == 0:
             logger.info(f"  Progress: {i}/{len(sites)} ({updated} found)")
 
@@ -523,7 +523,7 @@ def search_commons_fallback(
 # Statistics
 # =============================================================================
 
-def get_image_stats(session: Session) -> Dict:
+def get_image_stats(session: Session) -> dict:
     """Get statistics about image coverage."""
     result = session.execute(text("""
         SELECT
@@ -559,7 +559,7 @@ def get_image_stats(session: Session) -> Dict:
     }
 
 
-def print_stats(stats: Dict):
+def print_stats(stats: dict):
     """Print image coverage statistics."""
     print("\n" + "=" * 60)
     print("IMAGE COVERAGE STATISTICS")

@@ -8,9 +8,9 @@ Data source: https://github.com/matt-cavana/ancient-map
 """
 
 import json
-import re
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, Optional, Dict, Any
+from typing import Any
 
 from loguru import logger
 
@@ -99,7 +99,7 @@ class AncientNerdsOriginalIngester(BaseIngester):
         """
         logger.info(f"Parsing Ancient Nerds GeoJSON from {raw_data_path}")
 
-        with open(raw_data_path, "r", encoding="utf-8") as f:
+        with open(raw_data_path, encoding="utf-8") as f:
             data = json.load(f)
 
         features = data.get("features", [])
@@ -110,7 +110,7 @@ class AncientNerdsOriginalIngester(BaseIngester):
             if site:
                 yield site
 
-    def _parse_feature(self, feature: Dict[str, Any], index: int) -> Optional[ParsedSite]:
+    def _parse_feature(self, feature: dict[str, Any], index: int) -> ParsedSite | None:
         """
         Parse a single GeoJSON feature into a ParsedSite.
 

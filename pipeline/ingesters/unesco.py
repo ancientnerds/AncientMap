@@ -8,9 +8,9 @@ License: Open with attribution
 """
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, Optional, Dict, Any
-from datetime import datetime
+from typing import Any
 
 from loguru import logger
 
@@ -72,7 +72,7 @@ class UNESCOIngester(BaseIngester):
         """
         logger.info(f"Parsing UNESCO GeoJSON from {raw_data_path}")
 
-        with open(raw_data_path, "r", encoding="utf-8") as f:
+        with open(raw_data_path, encoding="utf-8") as f:
             data = json.load(f)
 
         features = data.get("features", [])
@@ -83,7 +83,7 @@ class UNESCOIngester(BaseIngester):
             if site:
                 yield site
 
-    def _parse_feature(self, feature: Dict[str, Any]) -> Optional[ParsedSite]:
+    def _parse_feature(self, feature: dict[str, Any]) -> ParsedSite | None:
         """
         Parse a single GeoJSON feature into a ParsedSite.
 

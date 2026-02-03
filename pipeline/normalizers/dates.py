@@ -2,7 +2,6 @@
 Date parsing and normalization utilities.
 """
 
-from typing import Dict, Optional
 
 # Global date cutoffs - defines the project scope: Ancient History
 # Americas: Pre-Columbian (up to 1500 AD)
@@ -15,7 +14,7 @@ AMERICAS_LON_MIN = -170  # Western Alaska/Aleutians
 AMERICAS_LON_MAX = -30   # Eastern Brazil
 
 
-def parse_year(value) -> Optional[int]:
+def parse_year(value) -> int | None:
     """Parse a year value from various formats."""
     if value is None:
         return None
@@ -36,7 +35,7 @@ def parse_year(value) -> Optional[int]:
     return None
 
 
-def passes_date_cutoff(record: Dict) -> bool:
+def passes_date_cutoff(record: dict) -> bool:
     """
     Check if record passes the GLOBAL regional date cutoff.
 
@@ -69,7 +68,7 @@ def passes_date_cutoff(record: Dict) -> bool:
     return date <= cutoff
 
 
-def parse_iso_date(date_str: str) -> Optional[int]:
+def parse_iso_date(date_str: str) -> int | None:
     """Parse ISO date string and extract year."""
     if not date_str:
         return None
@@ -80,7 +79,7 @@ def parse_iso_date(date_str: str) -> Optional[int]:
         return None
 
 
-def parse_epoch_timestamp(ts: int) -> Optional[int]:
+def parse_epoch_timestamp(ts: int) -> int | None:
     """Parse Unix epoch timestamp and extract year."""
     if ts is None:
         return None

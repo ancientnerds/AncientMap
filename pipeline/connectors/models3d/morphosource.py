@@ -11,13 +11,13 @@ API: https://www.morphosource.org/catalog/media.json
 Documentation: https://morphosource.stoplight.io/docs/morphosource-api/
 """
 
-from typing import List, Optional
+
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
-from pipeline.connectors.types import ContentType, ContentItem, AuthType, ProtocolType
-from pipeline.connectors.registry import ConnectorRegistry
 from pipeline.connectors.protocols.rest import RestProtocol
+from pipeline.connectors.registry import ConnectorRegistry
+from pipeline.connectors.types import AuthType, ContentItem, ContentType, ProtocolType
 
 
 @ConnectorRegistry.register
@@ -47,18 +47,18 @@ class MorphoSourceConnector(BaseConnector):
     license = "Varies"
     attribution = "MorphoSource"
 
-    def __init__(self, api_key: Optional[str] = None, **kwargs):
+    def __init__(self, api_key: str | None = None, **kwargs):
         super().__init__(api_key=api_key, **kwargs)
         self.rest = RestProtocol(base_url=self.base_url, rate_limit=self.rate_limit)
 
     async def search(
         self,
         query: str,
-        content_type: Optional[ContentType] = None,
+        content_type: ContentType | None = None,
         limit: int = 20,
         offset: int = 0,
         **kwargs,
-    ) -> List[ContentItem]:
+    ) -> list[ContentItem]:
         """Search MorphoSource media catalog.
 
         Uses the catalog/media endpoint which returns a response with
@@ -108,7 +108,7 @@ class MorphoSourceConnector(BaseConnector):
             logger.error(f"MorphoSource search failed: {e}")
             return []
 
-    def _parse_media_item(self, media: dict) -> Optional[ContentItem]:
+    def _parse_media_item(self, media: dict) -> ContentItem | None:
         """Parse a MorphoSource media record.
 
         Media records have fields as arrays (e.g., "id": ["000812487"]).
@@ -177,7 +177,7 @@ class MorphoSourceConnector(BaseConnector):
             logger.debug(f"Error parsing MorphoSource media: {e}")
             return None
 
-    async def get_item(self, item_id: str) -> Optional[ContentItem]:
+    async def get_item(self, item_id: str) -> ContentItem | None:
         """Get specific media by ID."""
         try:
             if item_id.startswith("morphosource:"):

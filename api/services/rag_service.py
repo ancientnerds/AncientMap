@@ -10,15 +10,14 @@ Orchestrates the full RAG pipeline:
 6. Parse response to extract site IDs for highlighting
 """
 
-import os
-import re
 import logging
+import re
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
-from typing import Optional, AsyncGenerator
 
-from .query_parser import QueryParser, QueryIntent
+from .query_classifier import QueryType, classify_query
+from .query_parser import QueryIntent, QueryParser
 from .vector_store import VectorStore, get_vector_store
-from .query_classifier import classify_query, QueryType, ClassificationResult
 from .web_search import WebSearchService, get_web_search_service
 
 # LLM is optional - we can work without it
@@ -38,8 +37,8 @@ class SiteHighlight:
     name: str
     lat: float
     lon: float
-    site_type: Optional[str] = None
-    period_name: Optional[str] = None
+    site_type: str | None = None
+    period_name: str | None = None
 
 
 @dataclass
@@ -86,7 +85,7 @@ class RAGService:
 
     def __init__(
         self,
-        vector_store: Optional[VectorStore] = None,
+        vector_store: VectorStore | None = None,
         llm_service = None
     ):
         self.query_parser = QueryParser()
@@ -180,7 +179,7 @@ class RAGService:
 
         # Add highlights
         response += "Notable sites:\n"
-        for i, site in enumerate(sites[:5], 1):
+        for _i, site in enumerate(sites[:5], 1):
             period_info = f" ({site.get('period_name')})" if site.get('period_name') and site.get('period_name') != 'Unknown period' else ""
             country_info = f" in {site.get('country')}" if site.get('country') and site.get('country') != 'Unknown' else ""
             response += f"\n• **{site['name']}** - {site.get('site_type', 'site')}{period_info}{country_info}"
@@ -247,7 +246,7 @@ class RAGService:
         context = self._build_simple_context(site_details, max_tokens=2500)
 
         # Log what we're sending
-        logger.info(f"=== PROCESS_QUERY DEBUG ===")
+        logger.info("=== PROCESS_QUERY DEBUG ===")
         logger.info(f"Query: {query}")
         logger.info(f"Sites found: {len(site_details)}")
         logger.info(f"First 3: {[s.get('name') for s in site_details[:3]]}")
@@ -313,9 +312,9 @@ USER QUESTION: {query}"""
         self,
         query: str,
         max_sites: int = 50,
-        source_ids: Optional[list[str]] = None,
-        conversation_history: Optional[list[dict]] = None,
-        model_override: Optional[str] = None,
+        source_ids: list[str] | None = None,
+        conversation_history: list[dict] | None = None,
+        model_override: str | None = None,
         max_tokens: int = 200
     ) -> AsyncGenerator[dict, None]:
         """
@@ -525,7 +524,7 @@ Provide a concise, factual answer. If citing information, mention the source."""
         context = self._build_simple_context(sites)  # Pass ALL sites, not [:10]
 
         # Log what we're sending to LLM for debugging
-        logger.info(f"=== LLM CONTEXT DEBUG ===")
+        logger.info("=== LLM CONTEXT DEBUG ===")
         logger.info(f"Query: {query}")
         logger.info(f"Sites passed: {len(sites)}")
         logger.info(f"First 3 sites: {[s.get('name', 'Unknown') for s in sites[:3]]}")
@@ -629,9 +628,9 @@ USER QUESTION: {query}"""
     async def _augment_query_with_context(
         self,
         query: str,
-        conversation_history: Optional[list[dict]],
+        conversation_history: list[dict] | None,
         max_history: int = 10
-    ) -> tuple[str, Optional[str]]:
+    ) -> tuple[str, str | None]:
         """
         Use LLM to determine if query references conversation context.
 
@@ -679,7 +678,7 @@ USER QUESTION: {query}"""
             role = "User" if msg.get("role") == "user" else "Assistant"
             content = msg.get("content", "")[:400]  # Truncate for speed
             context_lines.append(f"{role}: {content}")
-        context_text = "\n".join(context_lines)
+        "\n".join(context_lines)
 
         # Quick LLM call to determine if query needs context
         # Extract last assistant message for context
@@ -761,8 +760,9 @@ Site name:"""
             return []
 
         try:
-            from pipeline.database import get_session
             from sqlalchemy import text
+
+            from pipeline.database import get_session
 
             with get_session() as session:
                 # Fetch sites
@@ -874,7 +874,7 @@ Site name:"""
 
 
 # Singleton instance
-_rag_service_instance: Optional[RAGService] = None
+_rag_service_instance: RAGService | None = None
 
 
 def get_rag_service() -> RAGService:

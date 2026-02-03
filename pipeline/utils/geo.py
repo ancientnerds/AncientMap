@@ -1,7 +1,6 @@
 """Geographic utility functions for the data pipeline."""
 
 import math
-from typing import Dict, Optional, Tuple
 
 
 def is_valid_coordinates(lat: float, lon: float) -> bool:
@@ -43,7 +42,7 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     return R * c
 
 
-def parse_wkt_point(wkt: str) -> Tuple[Optional[float], Optional[float]]:
+def parse_wkt_point(wkt: str) -> tuple[float | None, float | None]:
     """Parse a WKT POINT string into lon, lat coordinates.
 
     Args:
@@ -76,7 +75,7 @@ def parse_wkt_point(wkt: str) -> Tuple[Optional[float], Optional[float]]:
     return None, None
 
 
-def get_centroid(geometry: Dict) -> Tuple[Optional[float], Optional[float]]:
+def get_centroid(geometry: dict) -> tuple[float | None, float | None]:
     """Extract centroid coordinates from a GeoJSON geometry object.
 
     Handles Point, Polygon, MultiPolygon, and other geometry types.
@@ -139,9 +138,9 @@ def get_centroid(geometry: Dict) -> Tuple[Optional[float], Optional[float]]:
 
 
 def normalize_coordinates(
-    lat: Optional[float],
-    lon: Optional[float]
-) -> Tuple[Optional[float], Optional[float]]:
+    lat: float | None,
+    lon: float | None
+) -> tuple[float | None, float | None]:
     """Normalize and validate coordinate values.
 
     Args:

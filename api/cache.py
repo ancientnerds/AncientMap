@@ -9,8 +9,9 @@ import json
 import logging
 import os
 import time
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, Optional, Dict, Tuple
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ _redis_available = False
 
 # In-memory fallback cache when Redis is unavailable
 # Format: {key: (value, expiry_timestamp)}
-_memory_cache: Dict[str, Tuple[Any, float]] = {}
+_memory_cache: dict[str, tuple[Any, float]] = {}
 _MEMORY_CACHE_MAX_ENTRIES = 50  # Limit memory usage
 
 
@@ -57,7 +58,7 @@ def get_redis_client():
         return None
 
 
-def cache_get(key: str) -> Optional[Any]:
+def cache_get(key: str) -> Any | None:
     """Get value from cache (Redis with in-memory fallback)."""
     # Try Redis first
     client = get_redis_client()

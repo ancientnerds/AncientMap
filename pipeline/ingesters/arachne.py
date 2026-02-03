@@ -11,15 +11,16 @@ API Key: Not required
 """
 
 import json
-from pathlib import Path
-from typing import Iterator, Optional, Dict, Any, List
-from datetime import datetime
 import time
+from collections.abc import Iterator
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 from loguru import logger
 
 from pipeline.ingesters.base import BaseIngester, ParsedSite, atomic_write_json
-from pipeline.utils.http import fetch_with_retry, RateLimitError
+from pipeline.utils.http import RateLimitError, fetch_with_retry
 
 
 class ArachneIngester(BaseIngester):
@@ -221,7 +222,7 @@ class ArachneIngester(BaseIngester):
         """
         logger.info(f"Parsing Arachne data from {raw_data_path}")
 
-        with open(raw_data_path, "r", encoding="utf-8") as f:
+        with open(raw_data_path, encoding="utf-8") as f:
             data = json.load(f)
 
         results = data.get("results", [])
@@ -232,7 +233,7 @@ class ArachneIngester(BaseIngester):
             if site:
                 yield site
 
-    def _parse_result(self, result: Dict[str, Any]) -> Optional[ParsedSite]:
+    def _parse_result(self, result: dict[str, Any]) -> ParsedSite | None:
         """
         Parse a single Arachne result.
 

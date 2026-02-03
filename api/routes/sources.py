@@ -8,12 +8,13 @@ Falls back to static JSON files if database is empty.
 import json
 import logging
 from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from pipeline.database import get_db
 from api.cache import cache_get, cache_set
+from pipeline.database import get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -66,7 +67,7 @@ def _load_static_sources():
         logger.warning(f"Static sources file not found: {STATIC_SOURCES_PATH}")
         return None
 
-    with open(STATIC_SOURCES_PATH, 'r') as f:
+    with open(STATIC_SOURCES_PATH) as f:
         data = json.load(f)
 
     sources = []

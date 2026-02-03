@@ -10,13 +10,12 @@ License: CC BY 4.0
 API Key: Not required
 """
 
-import json
 import csv
 import io
-from pathlib import Path
-from typing import Iterator, Optional, Dict, Any, List
+import json
+from collections.abc import Iterator
 from datetime import datetime
-import time
+from pathlib import Path
 
 from loguru import logger
 
@@ -147,7 +146,7 @@ class HolVolIngester(BaseIngester):
         logger.info(f"Saved {len(all_eruptions):,} eruptions to {dest_path}")
         return dest_path
 
-    def _parse_csv(self, content: str) -> List[Dict]:
+    def _parse_csv(self, content: str) -> list[dict]:
         """Parse HolVol CSV content."""
         eruptions = []
 
@@ -167,7 +166,7 @@ class HolVolIngester(BaseIngester):
 
         return eruptions
 
-    def _parse_csv_row(self, row: Dict, index: int) -> Optional[Dict]:
+    def _parse_csv_row(self, row: dict, index: int) -> dict | None:
         """Parse a single CSV row."""
         # Get year - might be in different columns
         year = None
@@ -235,7 +234,7 @@ class HolVolIngester(BaseIngester):
             "uncertainty_years": self._parse_int(row.get("Uncertainty", row.get("Error", ""))),
         }
 
-    def _fetch_gvp_data(self, headers: Dict) -> List[Dict]:
+    def _fetch_gvp_data(self, headers: dict) -> list[dict]:
         """Fetch data from Smithsonian Global Volcanism Program."""
         eruptions = []
 
@@ -271,7 +270,7 @@ class HolVolIngester(BaseIngester):
 
         return eruptions
 
-    def _parse_gvp_feature(self, feature: Dict) -> Optional[Dict]:
+    def _parse_gvp_feature(self, feature: dict) -> dict | None:
         """Parse a GVP volcano feature."""
         if not feature:
             return None
@@ -306,7 +305,7 @@ class HolVolIngester(BaseIngester):
             "elevation_m": self._parse_int(props.get("Elevation", "")),
         }
 
-    def _get_known_eruptions(self) -> List[Dict]:
+    def _get_known_eruptions(self) -> list[dict]:
         """Return known major volcanic eruptions with climate impact."""
         return [
             {"id": "holvol_tambora_1815", "year": 1815, "volcano_name": "Tambora", "lat": -8.25, "lon": 118.00, "vei": 7, "sulfur_tg": 60, "hemisphere": "SH"},
@@ -331,7 +330,7 @@ class HolVolIngester(BaseIngester):
             {"id": "holvol_etna_44bce", "year": -44, "volcano_name": "Etna", "lat": 37.75, "lon": 15.00, "vei": 4, "sulfur_tg": 2, "hemisphere": "NH"},
         ]
 
-    def _parse_float(self, value) -> Optional[float]:
+    def _parse_float(self, value) -> float | None:
         """Parse a float value."""
         if value is None or value == "":
             return None
@@ -340,7 +339,7 @@ class HolVolIngester(BaseIngester):
         except (ValueError, TypeError):
             return None
 
-    def _parse_int(self, value) -> Optional[int]:
+    def _parse_int(self, value) -> int | None:
         """Parse an integer value."""
         if value is None or value == "":
             return None
@@ -353,7 +352,7 @@ class HolVolIngester(BaseIngester):
         """Parse HolVol data into ParsedSite objects."""
         logger.info(f"Parsing HolVol data from {raw_data_path}")
 
-        with open(raw_data_path, "r", encoding="utf-8") as f:
+        with open(raw_data_path, encoding="utf-8") as f:
             data = json.load(f)
 
         eruptions = data.get("eruptions", [])
@@ -364,7 +363,7 @@ class HolVolIngester(BaseIngester):
             if site:
                 yield site
 
-    def _eruption_to_site(self, eruption: Dict) -> Optional[ParsedSite]:
+    def _eruption_to_site(self, eruption: dict) -> ParsedSite | None:
         """Convert an eruption to a ParsedSite."""
         lat = eruption.get("lat")
         lon = eruption.get("lon")

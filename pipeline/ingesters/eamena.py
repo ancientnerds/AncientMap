@@ -10,15 +10,16 @@ API Key: Required for bulk access (apply through EAMENA)
 """
 
 import json
-from pathlib import Path
-from typing import Iterator, Optional, Dict, Any, List
-from datetime import datetime
 import time
+from collections.abc import Iterator
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 from loguru import logger
 
 from pipeline.ingesters.base import BaseIngester, ParsedSite, atomic_write_json
-from pipeline.utils.http import fetch_with_retry, RateLimitError
+from pipeline.utils.http import fetch_with_retry
 
 
 class EAMENAIngester(BaseIngester):
@@ -192,7 +193,7 @@ class EAMENAIngester(BaseIngester):
         """
         logger.info(f"Parsing EAMENA data from {raw_data_path}")
 
-        with open(raw_data_path, "r", encoding="utf-8") as f:
+        with open(raw_data_path, encoding="utf-8") as f:
             data = json.load(f)
 
         results = data.get("results", [])
@@ -203,7 +204,7 @@ class EAMENAIngester(BaseIngester):
             if site:
                 yield site
 
-    def _parse_result(self, result: Dict[str, Any]) -> Optional[ParsedSite]:
+    def _parse_result(self, result: dict[str, Any]) -> ParsedSite | None:
         """
         Parse a single EAMENA v5 resource.
 
@@ -276,7 +277,7 @@ class EAMENAIngester(BaseIngester):
 
         # Extract other fields
         description = result.get("displaydescription", "")
-        assessment = resource.get("Assessment Summary", {})
+        resource.get("Assessment Summary", {})
         condition = self._extract_resource_value(resource, "Overall Condition")
 
         # Build description
@@ -314,7 +315,7 @@ class EAMENAIngester(BaseIngester):
             },
         )
 
-    def _extract_resource_value(self, resource: Dict, key: str) -> Optional[str]:
+    def _extract_resource_value(self, resource: dict, key: str) -> str | None:
         """
         Extract a value from EAMENA v5 resource structure.
 
@@ -349,7 +350,7 @@ class EAMENAIngester(BaseIngester):
 
         return search_dict(resource, key)
 
-    def _map_type(self, site_function: Optional[str]) -> str:
+    def _map_type(self, site_function: str | None) -> str:
         """Map EAMENA site function to our site type."""
         if not site_function:
             return "other"

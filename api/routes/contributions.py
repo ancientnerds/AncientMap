@@ -5,20 +5,20 @@ All contributions are saved to a JSON file for easy review and editing.
 Later, approved contributions can be integrated into the main database.
 """
 
-import os
 import json
-import httpx
 import logging
+import os
 import re
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy.orm import Session
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
 from pipeline.database import get_db
 
@@ -105,9 +105,9 @@ def load_contributions() -> list[dict]:
     if not CONTRIBUTIONS_FILE.exists():
         return []
     try:
-        with open(CONTRIBUTIONS_FILE, "r", encoding="utf-8") as f:
+        with open(CONTRIBUTIONS_FILE, encoding="utf-8") as f:
             return json.load(f)
-    except (json.JSONDecodeError, IOError):
+    except (OSError, json.JSONDecodeError):
         return []
 
 
@@ -127,17 +127,17 @@ def save_contribution(contribution: dict) -> None:
 class ContributionCreate(BaseModel):
     """Pydantic model for contribution submission."""
     name: str = Field(..., min_length=1, max_length=500, description="Site name (required)")
-    lat: Optional[float] = Field(None, ge=-90, le=90, description="Latitude")
-    lon: Optional[float] = Field(None, ge=-180, le=180, description="Longitude")
-    description: Optional[str] = Field(None, max_length=5000, description="Site description")
-    country: Optional[str] = Field(None, max_length=100, description="Country")
-    site_type: Optional[str] = Field(None, max_length=100, description="Site type/category")
-    source_url: Optional[str] = Field(None, max_length=2000, description="Source URL")
+    lat: float | None = Field(None, ge=-90, le=90, description="Latitude")
+    lon: float | None = Field(None, ge=-180, le=180, description="Longitude")
+    description: str | None = Field(None, max_length=5000, description="Site description")
+    country: str | None = Field(None, max_length=100, description="Country")
+    site_type: str | None = Field(None, max_length=100, description="Site type/category")
+    source_url: str | None = Field(None, max_length=2000, description="Source URL")
     turnstile_token: str = Field(..., description="Cloudflare Turnstile token")
 
     @field_validator('source_url')
     @classmethod
-    def validate_url(cls, v: Optional[str]) -> Optional[str]:
+    def validate_url(cls, v: str | None) -> str | None:
         """Validate that source_url is a proper HTTP/HTTPS URL."""
         if v is None or v.strip() == '':
             return None
@@ -157,7 +157,7 @@ class ContributionCreate(BaseModel):
 
     @field_validator('country')
     @classmethod
-    def validate_country(cls, v: Optional[str]) -> Optional[str]:
+    def validate_country(cls, v: str | None) -> str | None:
         """Validate country contains only allowed characters."""
         if v is None or v.strip() == '':
             return None

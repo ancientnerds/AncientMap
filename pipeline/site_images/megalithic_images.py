@@ -14,17 +14,16 @@ Usage:
 """
 
 import argparse
-import time
 import re
+import time
 import xml.etree.ElementTree as ET
-from typing import Optional, List, Dict, Tuple
 
 from loguru import logger
 from sqlalchemy import text, update
 from sqlalchemy.orm import Session
 
-from pipeline.database import get_session, UnifiedSite
-from pipeline.utils.http import fetch_with_retry, RateLimitError
+from pipeline.database import UnifiedSite, get_session
+from pipeline.utils.http import RateLimitError, fetch_with_retry
 
 # =============================================================================
 # Configuration
@@ -46,7 +45,7 @@ DB_UPDATE_BATCH_SIZE = 100
 # GeoRSS Parsing
 # =============================================================================
 
-def fetch_georss(lat: float, lon: float) -> Optional[str]:
+def fetch_georss(lat: float, lon: float) -> str | None:
     """
     Fetch GeoRSS feed for a location.
 
@@ -90,7 +89,7 @@ def fetch_georss(lat: float, lon: float) -> Optional[str]:
         return None
 
 
-def parse_georss(xml_content: str) -> List[Dict]:
+def parse_georss(xml_content: str) -> list[dict]:
     """
     Parse GeoRSS XML and extract site info including images.
 
@@ -186,7 +185,7 @@ def parse_georss(xml_content: str) -> List[Dict]:
 # Database Operations
 # =============================================================================
 
-def get_megalithic_sites_without_images(session: Session, limit: int = None) -> List[Tuple]:
+def get_megalithic_sites_without_images(session: Session, limit: int = None) -> list[tuple]:
     """Get Megalithic Portal sites without thumbnail_url."""
     query = text("""
         SELECT id, source_record_id, name, lat, lon
@@ -242,7 +241,7 @@ def fetch_images_for_megalithic_sites(
     updated = 0
     failed = 0
 
-    for i, (site_id, source_record_id, name, lat, lon) in enumerate(sites):
+    for i, (site_id, source_record_id, _name, lat, lon) in enumerate(sites):
         if i % 50 == 0:
             logger.info(f"Progress: {i}/{len(sites)} ({updated} images found)")
 
@@ -288,7 +287,7 @@ def fetch_images_for_megalithic_sites(
     return updated
 
 
-def get_stats(session: Session) -> Dict:
+def get_stats(session: Session) -> dict:
     """Get image statistics for Megalithic Portal sites."""
     result = session.execute(text("""
         SELECT
@@ -310,7 +309,7 @@ def get_stats(session: Session) -> Dict:
     }
 
 
-def print_stats(stats: Dict):
+def print_stats(stats: dict):
     """Print statistics."""
     print("\n" + "=" * 60)
     print("MEGALITHIC PORTAL IMAGE COVERAGE")

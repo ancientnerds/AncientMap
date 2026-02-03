@@ -10,12 +10,13 @@ API Key: Not required for KMZ
 """
 
 import json
-import zipfile
-import xml.etree.ElementTree as ET
-from pathlib import Path
-from typing import Iterator, Optional, Dict, Any, List
-from datetime import datetime
 import re
+import xml.etree.ElementTree as ET
+import zipfile
+from collections.abc import Iterator
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 from loguru import logger
 
@@ -145,7 +146,7 @@ class MegalithicPortalIngester(BaseIngester):
         logger.info(f"Saved {len(sites):,} sites to {json_path}")
         return json_path
 
-    def _parse_kmz(self, kmz_path: Path) -> List[Dict]:
+    def _parse_kmz(self, kmz_path: Path) -> list[dict]:
         """
         Parse KMZ file and extract site data.
 
@@ -171,7 +172,7 @@ class MegalithicPortalIngester(BaseIngester):
 
         return sites
 
-    def _parse_kml(self, kml_content: bytes) -> List[Dict]:
+    def _parse_kml(self, kml_content: bytes) -> list[dict]:
         """
         Parse KML content and extract placemarks.
 
@@ -198,7 +199,7 @@ class MegalithicPortalIngester(BaseIngester):
 
         return sites
 
-    def _parse_placemark(self, placemark: ET.Element, ns: Dict) -> Optional[Dict]:
+    def _parse_placemark(self, placemark: ET.Element, ns: dict) -> dict | None:
         """
         Parse a single KML Placemark element.
 
@@ -238,7 +239,6 @@ class MegalithicPortalIngester(BaseIngester):
             return None
 
         # Extract site type from name or description
-        site_type = "megalith"  # Default for this source
         name_lower = name.lower()
 
         # Try to extract ID from description (usually contains link)
@@ -271,7 +271,7 @@ class MegalithicPortalIngester(BaseIngester):
         """
         logger.info(f"Parsing Megalithic Portal data from {raw_data_path}")
 
-        with open(raw_data_path, "r", encoding="utf-8") as f:
+        with open(raw_data_path, encoding="utf-8") as f:
             data = json.load(f)
 
         sites = data.get("sites", [])
@@ -282,7 +282,7 @@ class MegalithicPortalIngester(BaseIngester):
             if parsed:
                 yield parsed
 
-    def _parse_site(self, site: Dict[str, Any]) -> Optional[ParsedSite]:
+    def _parse_site(self, site: dict[str, Any]) -> ParsedSite | None:
         """
         Parse a single site dictionary.
 
