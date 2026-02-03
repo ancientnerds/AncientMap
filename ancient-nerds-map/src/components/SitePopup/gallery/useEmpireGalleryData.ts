@@ -1,266 +1,164 @@
-import { useState, useEffect, useMemo } from 'react'
-import { getEmpireImages, WikidataImage } from '../../../services/wikipediaService'
-import { searchHistoricalMaps, WikimediaMap } from '../../../services/wikimediaMapsService'
-import { searchSmithsonian, SmithsonianArtifact, SmithsonianText } from '../../../services/smithsonianService'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import type { GalleryTab, UnifiedGalleryItem } from '../types'
-
-// Module-level cache: periodName -> images
-const imageCache = new Map<string, WikidataImage[]>()
+import { contentService, type ContentTier } from '../../../services/connectors'
+import { fetchSiteImages, type ImageResult } from '../../../services/imageService'
+import { useTieredFetch } from './useTieredFetch'
+import { dedupePhotos, selectCurrentItems } from './galleryUtils'
+import type { GalleryHookReturn, HeroImage, SketchfabModelCompat } from './galleryTypes'
 
 interface UseEmpireGalleryDataOptions {
-  empireId?: string       // Empire ID (e.g., "roman") - kept for potential future use
-  empireName: string      // Empire name (e.g., "Roman Empire")
-  periodName?: string | null  // Period-specific name (e.g., "Roman Principate")
+  empireId?: string
+  empireName: string
+  periodName?: string | null
+  wikiThumbnail?: string | null
   isOffline: boolean
 }
 
-interface UseEmpireGalleryDataReturn {
-  activeGalleryTab: GalleryTab
-  setActiveGalleryTab: (tab: GalleryTab) => void
-  isGalleryExpanded: boolean
-  setIsGalleryExpanded: (expanded: boolean) => void
-  photoItems: UnifiedGalleryItem[]
-  mapItems: UnifiedGalleryItem[]
-  artifactItems: UnifiedGalleryItem[]
-  textItems: UnifiedGalleryItem[]
-  currentItems: UnifiedGalleryItem[]
-  isLoadingImages: boolean
-  isLoadingMaps: boolean
-  isLoadingArtifacts: boolean
-  isLoadingTexts: boolean
-  isLoading: boolean
-  heroImage: WikidataImage | null
-  heroImageSrc: string | undefined
-  rawImages: WikidataImage[]
-  historicalMaps: WikimediaMap[]
-  smithsonianArtifacts: SmithsonianArtifact[]
-  smithsonianTexts: SmithsonianText[]
-}
-
 export function useEmpireGalleryData({
+  empireId,
   empireName,
   periodName,
+  wikiThumbnail,
   isOffline
-}: UseEmpireGalleryDataOptions): UseEmpireGalleryDataReturn {
+}: UseEmpireGalleryDataOptions): GalleryHookReturn {
   const [activeGalleryTab, setActiveGalleryTab] = useState<GalleryTab>('photos')
   const [isGalleryExpanded, setIsGalleryExpanded] = useState(false)
-  const [images, setImages] = useState<WikidataImage[]>([])
-  const [isLoadingImages, setIsLoadingImages] = useState(false)
 
-  // Historical maps state
-  const [historicalMaps, setHistoricalMaps] = useState<WikimediaMap[]>([])
-  const [isLoadingMaps, setIsLoadingMaps] = useState(false)
+  // Wikipedia article images (fetched via fast REST API)
+  const [wikiImages, setWikiImages] = useState<ImageResult[]>([])
+  const [wikiLoading, setWikiLoading] = useState(false)
+  const wikiFetchedRef = useRef<string | null>(null)
 
-  // Smithsonian state
-  const [smithsonianArtifacts, setSmithsonianArtifacts] = useState<SmithsonianArtifact[]>([])
-  const [smithsonianTexts, setSmithsonianTexts] = useState<SmithsonianText[]>([])
-  const [isLoadingSmithsonian, setIsLoadingSmithsonian] = useState(false)
-
-  // The name to search for (period name or fall back to empire name)
-  const searchName = periodName || empireName
-  const cacheKey = searchName
-
-  // Fetch images for the current period/empire
+  // Wikipedia images - fetch immediately via REST API (~400ms)
   useEffect(() => {
-    if (!searchName || isOffline) return
+    if (!empireName || isOffline) { setWikiImages([]); return }
 
-    // Check cache first
-    const cached = imageCache.get(cacheKey)
-    if (cached) {
-      setImages(cached)
-      return
-    }
+    const wikiKey = empireName
+    if (wikiFetchedRef.current === wikiKey) return
+    wikiFetchedRef.current = wikiKey
+    setWikiLoading(true)
 
-    setIsLoadingImages(true)
-
-    // Fetch images: try periodName first, fall back to empireName
-    getEmpireImages(searchName, empireName)
-      .then((fetchedImages) => {
-        imageCache.set(cacheKey, fetchedImages)
-        setImages(fetchedImages)
+    fetchSiteImages(empireName)
+      .then(result => {
+        if (result.wikipedia.length > 0) {
+          setWikiImages(result.wikipedia)
+          return null
+        }
+        if (periodName && periodName !== empireName) {
+          return fetchSiteImages(periodName)
+        }
+        return null
       })
-      .catch((err) => {
-        console.warn(`Failed to fetch images for "${searchName}":`, err)
-        setImages([])
+      .then(fallback => {
+        if (fallback?.wikipedia?.length) setWikiImages(fallback.wikipedia)
       })
-      .finally(() => setIsLoadingImages(false))
-  }, [searchName, empireName, cacheKey, isOffline])
+      .catch(() => setWikiImages([]))
+      .finally(() => setWikiLoading(false))
+  }, [empireName, periodName, isOffline])
 
-  // Search for historical maps dynamically
-  useEffect(() => {
-    if (!empireName || isOffline) {
-      setHistoricalMaps([])
-      return
-    }
+  // Backend connectors - all tiers in parallel via shared hook
+  const searchKey = `${empireId}-${periodName || empireName}`
 
-    setIsLoadingMaps(true)
+  const fetchFn = useCallback(
+    (tier: ContentTier) => contentService.getContentForEmpireTier({
+      empireId: empireId!, empireName, periodName: periodName || undefined, limit: 100,
+    }, tier),
+    [empireId, empireName, periodName]
+  )
 
-    // Search with period name for specificity, empire name as fallback context
-    const searchPeriod = periodName || empireName
-    searchHistoricalMaps(searchPeriod, empireName, 15)
-      .then((maps) => {
-        setHistoricalMaps(maps)
-      })
-      .catch((err) => {
-        console.warn(`Failed to search maps for "${searchPeriod}":`, err)
-        setHistoricalMaps([])
-      })
-      .finally(() => setIsLoadingMaps(false))
-  }, [periodName, empireName, isOffline])
+  const tiered = useTieredFetch(fetchFn, searchKey, !!empireId && !!empireName && !isOffline)
 
-  // Search Smithsonian for artifacts and texts
-  useEffect(() => {
-    if (!empireName || isOffline) {
-      setSmithsonianArtifacts([])
-      setSmithsonianTexts([])
-      return
-    }
-
-    setIsLoadingSmithsonian(true)
-
-    // Use empire name for searching (e.g., "Roman", "Egyptian", "Chinese")
-    // Extract base empire name without "Empire" suffix for better results
-    const searchTerm = empireName.replace(/\s*(Empire|Kingdom|Dynasty|Civilization)$/i, '').trim()
-
-    searchSmithsonian(searchTerm, 15)
-      .then(({ artifacts, texts }) => {
-        setSmithsonianArtifacts(artifacts)
-        setSmithsonianTexts(texts)
-      })
-      .catch((err) => {
-        console.warn(`Failed to search Smithsonian for "${searchTerm}":`, err)
-        setSmithsonianArtifacts([])
-        setSmithsonianTexts([])
-      })
-      .finally(() => setIsLoadingSmithsonian(false))
-  }, [empireName, isOffline])
-
-  // Convert photos to gallery items
-  const photoItems: UnifiedGalleryItem[] = useMemo(() => {
-    return images.map((img, i) => ({
-      id: img.id || `empire-img-${i}`,
+  // Wikipedia images as UnifiedGalleryItems
+  const wikiGallery: UnifiedGalleryItem[] = useMemo(() =>
+    wikiImages.map((img, i) => ({
+      id: `wiki-${i}`,
       thumb: img.thumb,
       full: img.full,
       title: img.title,
       source: 'wikipedia' as const,
-      original: {
-        thumb: img.thumb,
-        full: img.full,
-        title: img.title,
-        photographer: img.photographer,
-        photographerUrl: img.photographerUrl,
-        wikimediaUrl: img.wikimediaUrl,
-        license: img.license,
-        source: 'wikipedia' as const
+      original: { photographer: img.author, wikimediaUrl: img.sourceUrl, license: img.license }
+    })),
+    [wikiImages]
+  )
+
+  const photoItems = useMemo(
+    () => dedupePhotos(wikiGallery, tiered.grouped.photos),
+    [wikiGallery, tiered.grouped.photos]
+  )
+
+  const mapItems = tiered.grouped.maps
+  const sketchfabItems = tiered.grouped['3dmodels']
+  const artifactItems = tiered.grouped.artifacts
+  const artworkItems = tiered.grouped.artworks
+  const bookItems = tiered.grouped.books
+  const paperItems = tiered.grouped.papers
+  const mythItems = tiered.grouped.myths
+
+  const allItems = { ...tiered.grouped, photos: photoItems }
+  const currentItems = useMemo(
+    () => selectCurrentItems(activeGalleryTab, allItems),
+    [activeGalleryTab, photoItems, mapItems, sketchfabItems, artifactItems, artworkItems, bookItems, paperItems, mythItems]
+  )
+
+  const isLoading = wikiLoading || tiered.isLoading
+
+  // Hero: wikiImages → wikiThumbnail → connector photo
+  const heroImage: HeroImage | null = useMemo(() => {
+    if (wikiImages.length > 0) {
+      const first = wikiImages[0]
+      return {
+        id: 'wiki-0', thumb: first.thumb, full: first.full,
+        title: first.title || '', photographer: first.author,
+        wikimediaUrl: first.sourceUrl, license: first.license
       }
-    }))
-  }, [images])
-
-  // Convert historical maps to gallery items
-  const mapItems: UnifiedGalleryItem[] = useMemo(() => {
-    return historicalMaps.map((map) => ({
-      id: map.id,
-      thumb: map.thumb,
-      full: map.full,
-      title: map.displayTitle,
-      source: 'map' as const,
-      original: {
-        id: map.id,
-        title: map.displayTitle,
-        date: null,
-        thumbnail: map.thumb,
-        fullImage: map.full,
-        webUrl: map.wikimediaUrl,
-        // Extended fields for lightbox attribution
-        description: map.description,
-        license: map.license,
-        artist: map.artist,
-        source: 'wikimedia' as const
-      }
-    }))
-  }, [historicalMaps])
-
-  // Convert Smithsonian artifacts to gallery items
-  const artifactItems: UnifiedGalleryItem[] = useMemo(() => {
-    return smithsonianArtifacts.map((artifact) => ({
-      id: artifact.id,
-      thumb: artifact.thumbnail,
-      full: artifact.fullImage,
-      title: artifact.title,
-      date: artifact.date,
-      source: 'smithsonian' as const,
-      original: artifact
-    }))
-  }, [smithsonianArtifacts])
-
-  // Convert Smithsonian texts to gallery items (for text tab)
-  const textItems: UnifiedGalleryItem[] = useMemo(() => {
-    return smithsonianTexts.map((text) => ({
-      id: text.id,
-      thumb: '', // Texts don't have thumbnails
-      full: '',
-      title: text.title,
-      date: text.date,
-      source: 'smithsonian' as const,
-      original: text
-    }))
-  }, [smithsonianTexts])
-
-  // Get current items based on active tab
-  const currentItems = useMemo(() => {
-    switch (activeGalleryTab) {
-      case 'photos':
-        return photoItems
-      case 'maps':
-        return mapItems
-      case 'artifacts':
-        return artifactItems
-      case 'texts':
-        return textItems
-      default:
-        return []
     }
-  }, [activeGalleryTab, photoItems, mapItems, artifactItems, textItems])
-
-  // Loading state based on active tab
-  const isLoading = useMemo(() => {
-    switch (activeGalleryTab) {
-      case 'photos':
-        return isLoadingImages
-      case 'maps':
-        return isLoadingMaps
-      case 'artifacts':
-      case 'texts':
-        return isLoadingSmithsonian
-      default:
-        return false
+    if (wikiThumbnail) {
+      return { id: 'wiki-summary', thumb: wikiThumbnail, full: wikiThumbnail, title: empireName }
     }
-  }, [activeGalleryTab, isLoadingImages, isLoadingMaps, isLoadingSmithsonian])
+    if (photoItems.length === 0) return null
+    const first = photoItems[0]
+    const orig = first.original as Record<string, unknown>
+    return {
+      id: first.id, thumb: first.thumb, full: first.full, title: first.title || '',
+      photographer: (orig?.creator as string) || (orig?.photographer as string),
+      wikimediaUrl: (orig?.url as string) || (orig?.wikimediaUrl as string),
+      license: orig?.license as string
+    }
+  }, [wikiImages, wikiThumbnail, empireName, photoItems])
 
-  // Hero image is the first image (in document order from Wikipedia)
-  const heroImage = images.length > 0 ? images[0] : null
   const heroImageSrc = heroImage?.full
 
+  // ModelViewer compat (empires rarely have 3D models but keep the interface consistent)
+  const sketchfabModels: SketchfabModelCompat[] = useMemo(() =>
+    sketchfabItems.map(item => {
+      const orig = item.original as Record<string, unknown>
+      return {
+        uid: item.id,
+        name: item.title || '',
+        thumbnail: item.thumb,
+        embedUrl: (orig?.embed_url as string) || (orig?.embedUrl as string) || `https://sketchfab.com/models/${item.id}/embed`
+      }
+    }),
+    [sketchfabItems]
+  )
+
   return {
-    activeGalleryTab,
-    setActiveGalleryTab,
-    isGalleryExpanded,
-    setIsGalleryExpanded,
-    photoItems,
-    mapItems,
-    artifactItems,
-    textItems,
+    activeGalleryTab, setActiveGalleryTab,
+    isGalleryExpanded, setIsGalleryExpanded,
+    photoItems, mapItems, sketchfabItems, artifactItems, artworkItems, bookItems, paperItems, mythItems,
     currentItems,
-    isLoadingImages,
-    isLoadingMaps,
-    isLoadingArtifacts: isLoadingSmithsonian,
-    isLoadingTexts: isLoadingSmithsonian,
+    isLoadingImages: wikiLoading || tiered.tier1Loading,
+    isLoadingMaps: tiered.tier3Loading,
+    isLoadingModels: tiered.tier2Loading,
+    isLoadingArtifacts: tiered.tier3Loading,
+    isLoadingBooks: tiered.tier4Loading,
+    isLoadingPapers: tiered.tier4Loading,
     isLoading,
-    heroImage,
-    heroImageSrc,
-    rawImages: images,
-    historicalMaps,
-    smithsonianArtifacts,
-    smithsonianTexts
+    heroImage, heroImageSrc,
+    sketchfabModels,
+    sourcesSearched: tiered.sourcesSearched,
+    sourcesFailed: tiered.sourcesFailed,
+    itemsBySource: tiered.itemsBySource,
+    searchTimeMs: tiered.searchTimeMs,
   }
 }

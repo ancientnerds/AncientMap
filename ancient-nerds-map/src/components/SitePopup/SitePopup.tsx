@@ -1,14 +1,58 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { SiteData, PERIOD_COLORS, getSourceColor, getCategoryColor, getSourceInfo } from '../../data/sites'
-import type { GalleryImage } from '../ImageGallery'
 import { config } from '../../config'
 import { useOffline } from '../../contexts/OfflineContext'
 import { hasMetadataFields } from '../../config/sourceFields'
-import type { AncientMap } from '../../services/ancientMapsService'
 
-// Wikipedia service for description
-import { getEmpireWikipediaSummary, WikipediaSummary } from '../../services/wikipediaService'
+// Unified content service for gallery items
+import { toLightboxImages } from '../../services/connectors'
+
+// Wikipedia summary type and fetcher (inline to avoid dependency on old service)
+interface WikipediaSummary {
+  extract: string
+  url: string
+  thumbnail?: string
+}
+
+async function getEmpireWikipediaSummary(empireName: string): Promise<WikipediaSummary | null> {
+  try {
+    const normalizedTitle = empireName.replace(/ /g, '_')
+    const response = await fetch(
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(normalizedTitle)}`,
+      { headers: { 'Accept': 'application/json' } }
+    )
+    if (!response.ok) {
+      // Try with "Empire" suffix
+      if (!empireName.toLowerCase().includes('empire')) {
+        const fallbackResponse = await fetch(
+          `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(empireName + '_Empire')}`,
+          { headers: { 'Accept': 'application/json' } }
+        )
+        if (fallbackResponse.ok) {
+          const data = await fallbackResponse.json()
+          if (data.extract) {
+            return {
+              extract: data.extract,
+              thumbnail: data.thumbnail?.source,
+              url: data.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${empireName}_Empire`
+            }
+          }
+        }
+      }
+      return null
+    }
+    const data = await response.json()
+    if (!data.extract || data.type === 'disambiguation') return null
+    return {
+      extract: data.extract,
+      thumbnail: data.thumbnail?.source,
+      url: data.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${normalizedTitle}`
+    }
+  } catch {
+    return null
+  }
+}
 
 // Seshat data service
 import { getSeshatDataForEmpire, getWikipediaUrl, getSeshatPolityName } from '../../services/seshatService'
@@ -22,7 +66,7 @@ import PinAuthModal from '../PinAuthModal'
 
 // Extracted components
 import { usePopupWindow, WindowControls, ResizeHandles, MinimizedBar } from './window'
-import { useGalleryData, useEmpireGalleryData, GalleryTabs, GalleryContent } from './gallery'
+import { useGalleryData, useEmpireGalleryData, GalleryTabs, GalleryContent, ConnectorStatus } from './gallery'
 import { useAdminMode, AdminEditPanel } from './admin'
 import {
   HeroHeader,
@@ -189,35 +233,12 @@ export default function SitePopup({
     empireId: empire?.id,
     empireName: empire?.name || '',
     periodName: currentPeriodName,
+    wikiThumbnail: wikiSummary?.thumbnail,
     isOffline
   })
 
-  // Use the appropriate hook based on mode
-  const galleryHook = isEmpireMode ? {
-    ...empireGalleryHook,
-    // Empire mode has photos, maps, artifacts (Smithsonian), and texts (Smithsonian)
-    sketchfabItems: [],
-    artifactItems: empireGalleryHook.artifactItems,
-    artworkItems: [],
-    textItems: empireGalleryHook.textItems,
-    mythItems: [],
-    ancientMapsLoading: empireGalleryHook.isLoadingMaps,
-    sketchfabLoading: false,
-    artifactsLoading: empireGalleryHook.isLoadingArtifacts,
-    textsLoading: empireGalleryHook.isLoadingTexts,
-    ancientMaps: empireGalleryHook.historicalMaps,
-    sketchfabModels: [],
-    artifacts: [],
-    smithsonianArtifacts: empireGalleryHook.smithsonianArtifacts,
-    heroImage: empireGalleryHook.heroImage ? {
-      thumb: empireGalleryHook.heroImage.thumb,
-      full: empireGalleryHook.heroImage.full,
-      title: empireGalleryHook.heroImage.title,
-      photographer: empireGalleryHook.heroImage.photographer,
-      wikimediaUrl: empireGalleryHook.heroImage.wikimediaUrl,
-      license: empireGalleryHook.heroImage.license
-    } : null
-  } : siteGalleryHook
+  // Both hooks return GalleryHookReturn - direct switch, no merge needed
+  const galleryHook = isEmpireMode ? empireGalleryHook : siteGalleryHook
 
   // UI state
   const [shareSuccess, setShareSuccess] = useState(false)
@@ -362,52 +383,8 @@ export default function SitePopup({
       return
     }
 
-    const lightboxImages: LightboxImage[] = items.map(item => {
-      const orig = item.original
-      if (item.source === 'wikipedia') {
-        const img = orig as GalleryImage
-        return {
-          src: img.full,
-          title: img.title,
-          photographer: img.photographer,
-          photographerUrl: img.photographerUrl,
-          sourceType: 'wikimedia',
-          sourceUrl: img.wikimediaUrl,
-          license: img.license
-        }
-      } else if (item.source === 'map') {
-        const map = orig as AncientMap & { source?: string; license?: string; artist?: string; description?: string }
-        // Check if this is a Wikimedia map (from empire gallery) vs David Rumsey (from site gallery)
-        const isWikimedia = map.source === 'wikimedia'
-        return {
-          src: map.fullImage,
-          title: map.title,
-          photographer: isWikimedia ? (map.artist || 'Wikimedia Commons') : (map.date || undefined),
-          sourceType: isWikimedia ? 'wikimedia' : 'david-rumsey',
-          sourceUrl: map.webUrl,
-          license: isWikimedia ? map.license : undefined
-        }
-      } else if (item.source === 'smithsonian') {
-        const artifact = orig as { fullImage: string; title: string; date?: string; sourceUrl: string; museum?: string; license?: string }
-        return {
-          src: artifact.fullImage,
-          title: artifact.title,
-          photographer: artifact.museum || 'Smithsonian',
-          sourceType: 'smithsonian',
-          sourceUrl: artifact.sourceUrl,
-          license: artifact.license
-        }
-      } else {
-        const artifact = orig as { fullImage: string; title: string; date?: string; sourceUrl: string }
-        return {
-          src: artifact.fullImage,
-          title: artifact.title,
-          photographer: artifact.date || undefined,
-          sourceType: 'met-museum',
-          sourceUrl: artifact.sourceUrl
-        }
-      }
-    })
+    // Use the unified adapter to convert items to lightbox format
+    const lightboxImages = toLightboxImages(items)
     setLightboxItems(lightboxImages)
     setLightboxIndex(index)
   }
@@ -475,7 +452,7 @@ export default function SitePopup({
           <HeroHeader
             title={displaySite.title}
             heroImageSrc={galleryHook.heroImageSrc}
-            isLoadingImages={isEmpireMode ? empireGalleryHook.isLoadingImages : isLoadingImages}
+            isLoadingImages={galleryHook.isLoadingImages}
             sourceInfo={sourceInfo}
             sourceName={sourceName}
             sourceColor={sourceColor}
@@ -762,13 +739,15 @@ export default function SitePopup({
           modelCount={galleryHook.sketchfabItems.length}
           artifactCount={galleryHook.artifactItems.length}
           artworkCount={galleryHook.artworkItems.length}
-          textCount={galleryHook.textItems.length}
+          bookCount={galleryHook.bookItems.length}
+          paperCount={galleryHook.paperItems.length}
           mythCount={galleryHook.mythItems.length}
-          isLoadingImages={isLoadingImages}
-          isLoadingMaps={galleryHook.ancientMapsLoading}
-          isLoadingModels={galleryHook.sketchfabLoading}
-          isLoadingArtifacts={galleryHook.artifactsLoading}
-          isLoadingTexts={isEmpireMode ? empireGalleryHook.isLoadingTexts : galleryHook.textsLoading}
+          isLoadingImages={galleryHook.isLoadingImages}
+          isLoadingMaps={galleryHook.isLoadingMaps}
+          isLoadingModels={galleryHook.isLoadingModels}
+          isLoadingArtifacts={galleryHook.isLoadingArtifacts}
+          isLoadingBooks={galleryHook.isLoadingBooks}
+          isLoadingPapers={galleryHook.isLoadingPapers}
           isGalleryExpanded={galleryHook.isGalleryExpanded}
           onExpandToggle={() => galleryHook.setIsGalleryExpanded(true)}
         />
@@ -781,6 +760,25 @@ export default function SitePopup({
           isOffline={isOffline}
           onItemClick={handleItemClick}
         />
+
+        {/* Gallery Footer: Connector Status + Dev Warning */}
+        <div className="gallery-footer">
+          <ConnectorStatus
+            sourcesSearched={galleryHook.sourcesSearched}
+            sourcesFailed={galleryHook.sourcesFailed}
+            itemsBySource={galleryHook.itemsBySource}
+            searchTimeMs={galleryHook.searchTimeMs}
+            isLoading={galleryHook.isLoading}
+          />
+          <div className="gallery-dev-warning">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            <span>Beta - may show false positives</span>
+          </div>
+        </div>
       </div>
     </div>
   )
