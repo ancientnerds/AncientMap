@@ -1,0 +1,3258 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2025-01-30",
+  "sources": {
+    "cliopatria": "https://github.com/Seshat-Global-History-Databank/cliopatria (v0.1.3, Jan 2025)",
+    "equinox": "https://github.com/datasets/seshat (Equinox June 2022)"
+  },
+  "polities": {
+    "eg_new_kingdom": {
+      "seshatId": "eg_new_kingdom",
+      "name": "New Kingdom Egypt",
+      "alternateNames": ["Egyptian Empire", "18th-20th Dynasty Egypt"],
+      "startYear": -1550,
+      "endYear": -1070,
+      "peakYear": -1279,
+      "territory": 1000000,
+      "peakTerritory": 1200000,
+      "population": 3000000,
+      "capitalPopulation": 80000,
+      "largestSettlement": "Thebes",
+      "largestSettlementPopulation": 80000,
+      "administrativeLevels": 5,
+      "settlementHierarchy": 4,
+      "militaryLevels": 5,
+      "religiousLevels": 5,
+      "centralization": "unitary state",
+      "languages": ["Egyptian"],
+      "religions": ["Ancient Egyptian Religion"],
+      "capital": "Thebes",
+      "precedingPolities": [
+        { "id": "eg_second_intermediate", "name": "Second Intermediate Period", "relation": "succession" }
+      ],
+      "succeedingPolities": [
+        { "id": "eg_third_intermediate", "name": "Third Intermediate Period", "relation": "succession" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "stoneWallsMortared": true,
+          "moats": true,
+          "complexFortifications": true
+        },
+        "metals": ["bronze", "copper"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "javelins": true,
+          "slings": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true,
+          "battleAxes": true,
+          "daggers": true
+        },
+        "warfareAnimals": {
+          "horses": true
+        },
+        "armor": {
+          "leatherShields": true,
+          "scaledArmor": true,
+          "helmets": true,
+          "leatherClothArmor": true
+        },
+        "naval": {
+          "smallVessels": true,
+          "merchantShips": true,
+          "warships": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Hieroglyphics", "Hieratic"],
+        "coinage": false,
+        "storedWealth": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["maritime", "overland"],
+        "roads": true,
+        "irrigationSystems": true,
+        "markets": true,
+        "foodStorageSites": true
+      },
+      "crisis": {
+        "crisisEvents": [
+          {
+            "name": "Sea Peoples Invasions",
+            "startYear": -1200,
+            "endYear": -1150,
+            "type": "invasion",
+            "severity": "severe",
+            "description": "Massive migrations and attacks by Sea Peoples confederation"
+          }
+        ]
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/EgNewK",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/New_Kingdom_of_Egypt"
+    },
+    "eg_old_kingdom": {
+      "seshatId": "eg_old_kingdom",
+      "name": "Old Kingdom Egypt",
+      "alternateNames": ["Age of the Pyramids"],
+      "startYear": -2686,
+      "endYear": -2181,
+      "peakYear": -2500,
+      "territory": 250000,
+      "population": 1500000,
+      "capitalPopulation": 30000,
+      "largestSettlement": "Memphis",
+      "largestSettlementPopulation": 30000,
+      "administrativeLevels": 4,
+      "settlementHierarchy": 3,
+      "militaryLevels": 3,
+      "religiousLevels": 4,
+      "centralization": "unitary state",
+      "languages": ["Egyptian"],
+      "religions": ["Ancient Egyptian Religion"],
+      "capital": "Memphis",
+      "warfare": {
+        "fortifications": {
+          "stoneWallsNonMortared": true
+        },
+        "metals": ["copper"],
+        "projectileWeapons": {
+          "selfBows": true,
+          "javelins": true,
+          "slings": true
+        },
+        "handheldWeapons": {
+          "spears": true,
+          "battleAxes": true,
+          "daggers": true
+        },
+        "armor": {
+          "leatherShields": true,
+          "leatherClothArmor": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Hieroglyphics"],
+        "storedWealth": true,
+        "irrigationSystems": true,
+        "foodStorageSites": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/EgOldK",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Old_Kingdom_of_Egypt"
+    },
+    "iq_akkadian_empire": {
+      "seshatId": "iq_akkadian_empire",
+      "name": "Akkadian Empire",
+      "alternateNames": ["Empire of Akkad"],
+      "startYear": -2334,
+      "endYear": -2154,
+      "peakYear": -2250,
+      "territory": 800000,
+      "peakTerritory": 800000,
+      "population": 1000000,
+      "capitalPopulation": 40000,
+      "largestSettlement": "Akkad",
+      "largestSettlementPopulation": 40000,
+      "administrativeLevels": 4,
+      "settlementHierarchy": 4,
+      "militaryLevels": 4,
+      "religiousLevels": 3,
+      "centralization": "unitary state",
+      "languages": ["Akkadian", "Sumerian"],
+      "religions": ["Mesopotamian Religion"],
+      "capital": "Akkad",
+      "succeedingPolities": [
+        { "id": "iq_ur_iii", "name": "Third Dynasty of Ur", "relation": "conquest" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "stoneWallsNonMortared": true,
+          "earthRamparts": true
+        },
+        "metals": ["bronze", "copper"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "javelins": true,
+          "slings": true
+        },
+        "handheldWeapons": {
+          "spears": true,
+          "battleAxes": true,
+          "daggers": true
+        },
+        "warfareAnimals": {
+          "donkeys": true
+        },
+        "armor": {
+          "leatherShields": true,
+          "helmets": true,
+          "leatherClothArmor": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Cuneiform"],
+        "storedWealth": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["overland", "riverine"],
+        "irrigationSystems": true,
+        "markets": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/IqAkkad",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Akkadian_Empire"
+    },
+    "iq_neo_babylonian": {
+      "seshatId": "iq_neo_babylonian",
+      "name": "Neo-Babylonian Empire",
+      "alternateNames": ["Chaldean Empire", "Second Babylonian Empire"],
+      "startYear": -626,
+      "endYear": -539,
+      "peakYear": -580,
+      "territory": 1500000,
+      "population": 3000000,
+      "capitalPopulation": 200000,
+      "largestSettlement": "Babylon",
+      "largestSettlementPopulation": 200000,
+      "administrativeLevels": 5,
+      "settlementHierarchy": 5,
+      "militaryLevels": 5,
+      "religiousLevels": 4,
+      "centralization": "unitary state",
+      "languages": ["Akkadian", "Aramaic"],
+      "religions": ["Mesopotamian Religion"],
+      "capital": "Babylon",
+      "precedingPolities": [
+        { "id": "iq_neo_assyrian", "name": "Neo-Assyrian Empire", "relation": "conquest" }
+      ],
+      "succeedingPolities": [
+        { "id": "ir_achaemenid", "name": "Achaemenid Empire", "relation": "conquest" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "stoneWallsMortared": true,
+          "moats": true,
+          "complexFortifications": true,
+          "longWalls": true
+        },
+        "metals": ["iron", "bronze"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "javelins": true,
+          "tensionSiegeEngines": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true,
+          "battleAxes": true
+        },
+        "warfareAnimals": {
+          "horses": true,
+          "camels": true
+        },
+        "armor": {
+          "metalShields": true,
+          "scaledArmor": true,
+          "helmets": true
+        },
+        "naval": {
+          "smallVessels": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Cuneiform"],
+        "storedWealth": true,
+        "debtInstruments": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["overland", "maritime", "riverine"],
+        "roads": true,
+        "irrigationSystems": true,
+        "markets": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/IqNeoBab",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Neo-Babylonian_Empire"
+    },
+    "iq_neo_assyrian": {
+      "seshatId": "iq_neo_assyrian",
+      "name": "Neo-Assyrian Empire",
+      "alternateNames": ["Assyrian Empire"],
+      "startYear": -911,
+      "endYear": -609,
+      "peakYear": -670,
+      "territory": 1400000,
+      "peakTerritory": 1400000,
+      "population": 4000000,
+      "capitalPopulation": 120000,
+      "largestSettlement": "Nineveh",
+      "largestSettlementPopulation": 120000,
+      "administrativeLevels": 6,
+      "settlementHierarchy": 5,
+      "militaryLevels": 6,
+      "religiousLevels": 4,
+      "centralization": "unitary state",
+      "languages": ["Akkadian", "Aramaic"],
+      "religions": ["Mesopotamian Religion"],
+      "capital": "Nineveh",
+      "precedingPolities": [
+        { "id": "iq_middle_assyrian", "name": "Middle Assyrian Empire", "relation": "continuation" }
+      ],
+      "succeedingPolities": [
+        { "id": "iq_neo_babylonian", "name": "Neo-Babylonian Empire", "relation": "conquest" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "stoneWallsMortared": true,
+          "moats": true,
+          "complexFortifications": true
+        },
+        "metals": ["iron", "bronze"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "crossbows": false,
+          "tensionSiegeEngines": true,
+          "slingshotSiegeEngines": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true,
+          "polearms": true,
+          "battleAxes": true
+        },
+        "warfareAnimals": {
+          "horses": true,
+          "camels": true
+        },
+        "armor": {
+          "metalShields": true,
+          "chainmail": true,
+          "scaledArmor": true,
+          "helmets": true,
+          "lamellarArmor": true
+        },
+        "naval": {
+          "smallVessels": true,
+          "warships": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Cuneiform"],
+        "storedWealth": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["overland", "riverine"],
+        "roads": true,
+        "irrigationSystems": true,
+        "markets": true
+      },
+      "crisis": {
+        "crisisEvents": [
+          {
+            "name": "Fall of Nineveh",
+            "startYear": -612,
+            "endYear": -609,
+            "type": "invasion",
+            "severity": "catastrophic",
+            "description": "Coalition of Babylonians, Medes, and Scythians destroyed the empire"
+          }
+        ]
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/IqNeoAssyr",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Neo-Assyrian_Empire"
+    },
+    "tr_hittite_empire": {
+      "seshatId": "tr_hittite_empire",
+      "name": "Hittite Empire",
+      "alternateNames": ["Hatti"],
+      "startYear": -1600,
+      "endYear": -1178,
+      "peakYear": -1350,
+      "territory": 500000,
+      "population": 2000000,
+      "capitalPopulation": 50000,
+      "largestSettlement": "Hattusa",
+      "largestSettlementPopulation": 50000,
+      "administrativeLevels": 4,
+      "settlementHierarchy": 4,
+      "militaryLevels": 4,
+      "religiousLevels": 4,
+      "centralization": "loose",
+      "languages": ["Hittite", "Luwian"],
+      "religions": ["Hittite Religion"],
+      "capital": "Hattusa",
+      "warfare": {
+        "fortifications": {
+          "stoneWallsMortared": true,
+          "complexFortifications": true
+        },
+        "metals": ["iron", "bronze"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "javelins": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true,
+          "battleAxes": true
+        },
+        "warfareAnimals": {
+          "horses": true
+        },
+        "armor": {
+          "metalShields": true,
+          "scaledArmor": true,
+          "helmets": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Cuneiform", "Hittite Hieroglyphics"],
+        "storedWealth": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["overland"],
+        "roads": true,
+        "irrigationSystems": true
+      },
+      "crisis": {
+        "crisisEvents": [
+          {
+            "name": "Bronze Age Collapse",
+            "startYear": -1200,
+            "endYear": -1150,
+            "type": "invasion",
+            "severity": "catastrophic",
+            "description": "Collapse during Bronze Age crisis, Sea Peoples involvement"
+          }
+        ]
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/TrHittite",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Hittites"
+    },
+    "it_roman_principate": {
+      "seshatId": "it_roman_principate",
+      "name": "Roman Empire - Principate",
+      "alternateNames": ["Roman Empire", "Early Roman Empire"],
+      "startYear": -27,
+      "endYear": 284,
+      "peakYear": 117,
+      "territory": 5000000,
+      "peakTerritory": 5000000,
+      "population": 70000000,
+      "capitalPopulation": 1000000,
+      "largestSettlement": "Rome",
+      "largestSettlementPopulation": 1000000,
+      "administrativeLevels": 6,
+      "settlementHierarchy": 6,
+      "militaryLevels": 6,
+      "religiousLevels": 5,
+      "centralization": "unitary state",
+      "languages": ["Latin", "Greek"],
+      "religions": ["Roman Paganism", "Christianity"],
+      "capital": "Rome",
+      "precedingPolities": [
+        { "id": "it_roman_republic", "name": "Roman Republic", "relation": "succession" }
+      ],
+      "succeedingPolities": [
+        { "id": "it_roman_dominate", "name": "Roman Dominate", "relation": "continuation" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "stoneWallsMortared": true,
+          "moats": true,
+          "complexFortifications": true,
+          "longWalls": true
+        },
+        "metals": ["iron", "steel", "bronze"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "javelins": true,
+          "tensionSiegeEngines": true,
+          "slingshotSiegeEngines": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true,
+          "polearms": true,
+          "daggers": true
+        },
+        "warfareAnimals": {
+          "horses": true
+        },
+        "armor": {
+          "metalShields": true,
+          "chainmail": true,
+          "scaledArmor": true,
+          "plateArmor": true,
+          "limb": true,
+          "helmets": true,
+          "lamellarArmor": true
+        },
+        "naval": {
+          "smallVessels": true,
+          "merchantShips": true,
+          "warships": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Latin", "Greek"],
+        "coinage": true,
+        "indigenousCoins": true,
+        "storedWealth": true,
+        "debtInstruments": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["maritime", "overland"],
+        "roads": true,
+        "bridges": true,
+        "ports": true,
+        "markets": true,
+        "foodStorageSites": true,
+        "drinkingWaterSupply": true
+      },
+      "crisis": {
+        "crisisEvents": [
+          {
+            "name": "Crisis of the Third Century",
+            "startYear": 235,
+            "endYear": 284,
+            "type": "political crisis",
+            "severity": "severe",
+            "description": "Military anarchy, civil wars, barbarian invasions, economic collapse"
+          }
+        ]
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/ItRomPrin",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Roman_Empire"
+    },
+    "it_roman_dominate": {
+      "seshatId": "it_roman_dominate",
+      "name": "Roman Empire - Dominate",
+      "alternateNames": ["Late Roman Empire"],
+      "startYear": 284,
+      "endYear": 395,
+      "peakYear": 305,
+      "territory": 4500000,
+      "population": 55000000,
+      "capitalPopulation": 500000,
+      "largestSettlement": "Constantinople",
+      "administrativeLevels": 7,
+      "settlementHierarchy": 6,
+      "militaryLevels": 6,
+      "religiousLevels": 6,
+      "centralization": "unitary state",
+      "languages": ["Latin", "Greek"],
+      "religions": ["Christianity", "Roman Paganism"],
+      "capital": "Constantinople",
+      "precedingPolities": [
+        { "id": "it_roman_principate", "name": "Roman Principate", "relation": "continuation" }
+      ],
+      "succeedingPolities": [
+        { "id": "it_western_roman", "name": "Western Roman Empire", "relation": "division" },
+        { "id": "tr_byzantine_empire", "name": "Byzantine Empire", "relation": "division" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "stoneWallsMortared": true,
+          "moats": true,
+          "complexFortifications": true,
+          "longWalls": true
+        },
+        "metals": ["iron", "steel", "bronze"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "javelins": true,
+          "tensionSiegeEngines": true,
+          "slingshotSiegeEngines": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true,
+          "polearms": true,
+          "daggers": true
+        },
+        "warfareAnimals": {
+          "horses": true
+        },
+        "armor": {
+          "metalShields": true,
+          "chainmail": true,
+          "scaledArmor": true,
+          "plateArmor": true,
+          "limb": true,
+          "helmets": true,
+          "lamellarArmor": true
+        },
+        "naval": {
+          "smallVessels": true,
+          "merchantShips": true,
+          "warships": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Latin", "Greek"],
+        "coinage": true,
+        "indigenousCoins": true,
+        "storedWealth": true,
+        "debtInstruments": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["maritime", "overland"],
+        "roads": true,
+        "bridges": true,
+        "ports": true,
+        "markets": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/ItRomDom",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Dominate"
+    },
+    "gr_classical_athens": {
+      "seshatId": "gr_classical_athens",
+      "name": "Classical Athens",
+      "alternateNames": ["Athenian Empire", "Delian League"],
+      "startYear": -508,
+      "endYear": -322,
+      "peakYear": -440,
+      "territory": 5000,
+      "peakTerritory": 20000,
+      "population": 300000,
+      "capitalPopulation": 150000,
+      "largestSettlement": "Athens",
+      "largestSettlementPopulation": 150000,
+      "administrativeLevels": 4,
+      "settlementHierarchy": 3,
+      "militaryLevels": 4,
+      "religiousLevels": 3,
+      "centralization": "nominal",
+      "languages": ["Greek"],
+      "religions": ["Greek Religion"],
+      "capital": "Athens",
+      "warfare": {
+        "fortifications": {
+          "stoneWallsMortared": true,
+          "longWalls": true
+        },
+        "metals": ["iron", "bronze"],
+        "projectileWeapons": {
+          "javelins": true,
+          "slings": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true
+        },
+        "armor": {
+          "metalShields": true,
+          "helmets": true,
+          "leatherClothArmor": true
+        },
+        "naval": {
+          "warships": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Greek"],
+        "coinage": true,
+        "indigenousCoins": true,
+        "storedWealth": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["maritime"],
+        "ports": true,
+        "markets": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/GrClassAth",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Classical_Athens"
+    },
+    "gr_macedon_argead": {
+      "seshatId": "gr_macedon_argead",
+      "name": "Macedonian Empire",
+      "alternateNames": ["Empire of Alexander the Great", "Argead Dynasty"],
+      "startYear": -359,
+      "endYear": -323,
+      "peakYear": -323,
+      "territory": 5200000,
+      "peakTerritory": 5200000,
+      "population": 50000000,
+      "capitalPopulation": 100000,
+      "largestSettlement": "Babylon",
+      "largestSettlementPopulation": 200000,
+      "administrativeLevels": 5,
+      "settlementHierarchy": 5,
+      "militaryLevels": 5,
+      "religiousLevels": 4,
+      "centralization": "loose",
+      "languages": ["Greek", "Macedonian"],
+      "religions": ["Greek Religion"],
+      "capital": "Pella",
+      "succeedingPolities": [
+        { "id": "ir_seleucid_empire", "name": "Seleucid Empire", "relation": "division" },
+        { "id": "eg_ptolemaic", "name": "Ptolemaic Kingdom", "relation": "division" },
+        { "id": "gr_antigonid", "name": "Antigonid Macedonia", "relation": "division" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "stoneWallsMortared": true,
+          "complexFortifications": true
+        },
+        "metals": ["iron", "bronze"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "javelins": true,
+          "tensionSiegeEngines": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true,
+          "polearms": true
+        },
+        "warfareAnimals": {
+          "horses": true,
+          "elephants": true
+        },
+        "armor": {
+          "metalShields": true,
+          "helmets": true,
+          "leatherClothArmor": true
+        },
+        "naval": {
+          "warships": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Greek"],
+        "coinage": true,
+        "indigenousCoins": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["overland", "maritime"],
+        "roads": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/GrMacedon",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Macedonian_Empire"
+    },
+    "tr_byzantine_empire": {
+      "seshatId": "tr_byzantine_empire",
+      "name": "Byzantine Empire",
+      "alternateNames": ["Eastern Roman Empire", "Roman Empire"],
+      "startYear": 395,
+      "endYear": 1453,
+      "peakYear": 565,
+      "territory": 3500000,
+      "peakTerritory": 3500000,
+      "population": 26000000,
+      "capitalPopulation": 500000,
+      "largestSettlement": "Constantinople",
+      "largestSettlementPopulation": 500000,
+      "administrativeLevels": 7,
+      "settlementHierarchy": 6,
+      "militaryLevels": 6,
+      "religiousLevels": 6,
+      "centralization": "unitary state",
+      "languages": ["Greek", "Latin"],
+      "religions": ["Eastern Orthodox Christianity"],
+      "capital": "Constantinople",
+      "precedingPolities": [
+        { "id": "it_roman_dominate", "name": "Roman Dominate", "relation": "continuation" }
+      ],
+      "succeedingPolities": [
+        { "id": "tr_ottoman_empire", "name": "Ottoman Empire", "relation": "conquest" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "stoneWallsMortared": true,
+          "moats": true,
+          "complexFortifications": true,
+          "longWalls": true
+        },
+        "metals": ["iron", "steel"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "crossbows": true,
+          "tensionSiegeEngines": true,
+          "slingshotSiegeEngines": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true,
+          "polearms": true
+        },
+        "warfareAnimals": {
+          "horses": true
+        },
+        "armor": {
+          "metalShields": true,
+          "chainmail": true,
+          "scaledArmor": true,
+          "helmets": true,
+          "lamellarArmor": true
+        },
+        "naval": {
+          "warships": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Greek"],
+        "coinage": true,
+        "indigenousCoins": true,
+        "storedWealth": true,
+        "debtInstruments": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["maritime", "overland"],
+        "roads": true,
+        "bridges": true,
+        "ports": true,
+        "markets": true
+      },
+      "crisis": {
+        "crisisEvents": [
+          {
+            "name": "Fourth Crusade",
+            "startYear": 1202,
+            "endYear": 1204,
+            "type": "invasion",
+            "severity": "catastrophic",
+            "description": "Crusaders sacked Constantinople, fragmenting the empire"
+          },
+          {
+            "name": "Fall of Constantinople",
+            "startYear": 1453,
+            "endYear": 1453,
+            "type": "invasion",
+            "severity": "catastrophic",
+            "description": "Ottoman conquest ended the Byzantine Empire"
+          }
+        ]
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/TrByzantine",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Byzantine_Empire"
+    },
+    "tn_carthage": {
+      "seshatId": "tn_carthage",
+      "name": "Carthaginian Empire",
+      "alternateNames": ["Carthage", "Punic Empire"],
+      "startYear": -814,
+      "endYear": -146,
+      "peakYear": -300,
+      "territory": 300000,
+      "population": 3000000,
+      "capitalPopulation": 400000,
+      "largestSettlement": "Carthage",
+      "largestSettlementPopulation": 400000,
+      "administrativeLevels": 4,
+      "settlementHierarchy": 4,
+      "militaryLevels": 5,
+      "religiousLevels": 4,
+      "centralization": "loose",
+      "languages": ["Punic"],
+      "religions": ["Phoenician Religion"],
+      "capital": "Carthage",
+      "succeedingPolities": [
+        { "id": "it_roman_republic", "name": "Roman Republic", "relation": "conquest" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "stoneWallsMortared": true,
+          "moats": true,
+          "complexFortifications": true
+        },
+        "metals": ["iron", "bronze"],
+        "projectileWeapons": {
+          "javelins": true,
+          "slings": true,
+          "tensionSiegeEngines": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true
+        },
+        "warfareAnimals": {
+          "horses": true,
+          "elephants": true
+        },
+        "armor": {
+          "metalShields": true,
+          "chainmail": true,
+          "helmets": true
+        },
+        "naval": {
+          "warships": true,
+          "merchantShips": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Punic"],
+        "coinage": true,
+        "indigenousCoins": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["maritime"],
+        "ports": true,
+        "markets": true
+      },
+      "crisis": {
+        "crisisEvents": [
+          {
+            "name": "Third Punic War",
+            "startYear": -149,
+            "endYear": -146,
+            "type": "invasion",
+            "severity": "catastrophic",
+            "description": "Rome destroyed Carthage, ending the Punic civilization"
+          }
+        ]
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/TnCarthage",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Carthage"
+    },
+    "ir_achaemenid_empire": {
+      "seshatId": "ir_achaemenid_empire",
+      "name": "Achaemenid Persian Empire",
+      "alternateNames": ["First Persian Empire"],
+      "startYear": -550,
+      "endYear": -330,
+      "peakYear": -480,
+      "territory": 5500000,
+      "peakTerritory": 5500000,
+      "population": 35000000,
+      "capitalPopulation": 200000,
+      "largestSettlement": "Persepolis",
+      "largestSettlementPopulation": 200000,
+      "administrativeLevels": 5,
+      "settlementHierarchy": 5,
+      "militaryLevels": 5,
+      "religiousLevels": 4,
+      "centralization": "loose",
+      "languages": ["Old Persian", "Aramaic", "Elamite"],
+      "religions": ["Zoroastrianism"],
+      "capital": "Persepolis",
+      "precedingPolities": [
+        { "id": "ir_median_empire", "name": "Median Empire", "relation": "conquest" }
+      ],
+      "succeedingPolities": [
+        { "id": "gr_macedon_argead", "name": "Macedonian Empire", "relation": "conquest" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "stoneWallsMortared": true,
+          "complexFortifications": true
+        },
+        "metals": ["iron", "bronze"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "javelins": true,
+          "slings": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true,
+          "battleAxes": true
+        },
+        "warfareAnimals": {
+          "horses": true,
+          "camels": true
+        },
+        "armor": {
+          "metalShields": true,
+          "scaledArmor": true,
+          "helmets": true
+        },
+        "naval": {
+          "warships": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Old Persian Cuneiform", "Aramaic"],
+        "coinage": true,
+        "indigenousCoins": true,
+        "storedWealth": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["overland", "maritime"],
+        "roads": true,
+        "bridges": true,
+        "irrigationSystems": true,
+        "markets": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/IrAchaemenid",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Achaemenid_Empire"
+    },
+    "ir_parthian_empire": {
+      "seshatId": "ir_parthian_empire",
+      "name": "Parthian Empire",
+      "alternateNames": ["Arsacid Empire"],
+      "startYear": -247,
+      "endYear": 224,
+      "peakYear": -50,
+      "territory": 2800000,
+      "population": 10000000,
+      "capitalPopulation": 100000,
+      "largestSettlement": "Ctesiphon",
+      "largestSettlementPopulation": 200000,
+      "administrativeLevels": 4,
+      "settlementHierarchy": 5,
+      "militaryLevels": 5,
+      "religiousLevels": 4,
+      "centralization": "loose",
+      "languages": ["Parthian", "Greek", "Aramaic"],
+      "religions": ["Zoroastrianism", "Greek Religion"],
+      "capital": "Ctesiphon",
+      "precedingPolities": [
+        { "id": "ir_seleucid_empire", "name": "Seleucid Empire", "relation": "conquest" }
+      ],
+      "succeedingPolities": [
+        { "id": "ir_sasanian_empire", "name": "Sasanian Empire", "relation": "conquest" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "stoneWallsMortared": true,
+          "moats": true
+        },
+        "metals": ["iron", "steel"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "javelins": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true
+        },
+        "warfareAnimals": {
+          "horses": true,
+          "camels": true
+        },
+        "armor": {
+          "metalShields": true,
+          "chainmail": true,
+          "scaledArmor": true,
+          "helmets": true
+        },
+        "naval": {
+          "smallVessels": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Parthian", "Greek"],
+        "coinage": true,
+        "indigenousCoins": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["overland"],
+        "roads": true,
+        "markets": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/IrParthian",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Parthian_Empire"
+    },
+    "ir_sasanian_empire": {
+      "seshatId": "ir_sasanian_empire",
+      "name": "Sasanian Empire",
+      "alternateNames": ["Second Persian Empire", "Neo-Persian Empire"],
+      "startYear": 224,
+      "endYear": 651,
+      "peakYear": 550,
+      "territory": 3500000,
+      "peakTerritory": 3500000,
+      "population": 20000000,
+      "capitalPopulation": 500000,
+      "largestSettlement": "Ctesiphon",
+      "largestSettlementPopulation": 500000,
+      "administrativeLevels": 5,
+      "settlementHierarchy": 5,
+      "militaryLevels": 6,
+      "religiousLevels": 5,
+      "centralization": "unitary state",
+      "languages": ["Middle Persian"],
+      "religions": ["Zoroastrianism"],
+      "capital": "Ctesiphon",
+      "precedingPolities": [
+        { "id": "ir_parthian_empire", "name": "Parthian Empire", "relation": "conquest" }
+      ],
+      "succeedingPolities": [
+        { "id": "ir_rashidun_caliphate", "name": "Rashidun Caliphate", "relation": "conquest" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "stoneWallsMortared": true,
+          "moats": true,
+          "complexFortifications": true
+        },
+        "metals": ["iron", "steel"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "crossbows": true,
+          "tensionSiegeEngines": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true,
+          "polearms": true
+        },
+        "warfareAnimals": {
+          "horses": true,
+          "elephants": true,
+          "camels": true
+        },
+        "armor": {
+          "metalShields": true,
+          "chainmail": true,
+          "plateArmor": true,
+          "helmets": true,
+          "lamellarArmor": true
+        },
+        "naval": {
+          "warships": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Pahlavi"],
+        "coinage": true,
+        "indigenousCoins": true,
+        "storedWealth": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["overland", "maritime"],
+        "roads": true,
+        "bridges": true,
+        "irrigationSystems": true,
+        "markets": true
+      },
+      "crisis": {
+        "crisisEvents": [
+          {
+            "name": "Arab Conquest",
+            "startYear": 633,
+            "endYear": 651,
+            "type": "invasion",
+            "severity": "catastrophic",
+            "description": "Muslim Arab conquest ended the Sasanian Empire"
+          }
+        ]
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/IrSasanian",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Sasanian_Empire"
+    },
+    "ir_seleucid_empire": {
+      "seshatId": "ir_seleucid_empire",
+      "name": "Seleucid Empire",
+      "alternateNames": ["Seleucid Kingdom"],
+      "startYear": -312,
+      "endYear": -63,
+      "peakYear": -280,
+      "territory": 3900000,
+      "population": 30000000,
+      "capitalPopulation": 300000,
+      "largestSettlement": "Seleucia",
+      "largestSettlementPopulation": 600000,
+      "administrativeLevels": 5,
+      "settlementHierarchy": 5,
+      "militaryLevels": 5,
+      "religiousLevels": 4,
+      "centralization": "loose",
+      "languages": ["Greek", "Aramaic"],
+      "religions": ["Greek Religion", "Zoroastrianism"],
+      "capital": "Antioch",
+      "precedingPolities": [
+        { "id": "gr_macedon_argead", "name": "Macedonian Empire", "relation": "division" }
+      ],
+      "succeedingPolities": [
+        { "id": "ir_parthian_empire", "name": "Parthian Empire", "relation": "conquest" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "stoneWallsMortared": true,
+          "complexFortifications": true
+        },
+        "metals": ["iron", "bronze"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "javelins": true,
+          "tensionSiegeEngines": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true,
+          "polearms": true
+        },
+        "warfareAnimals": {
+          "horses": true,
+          "elephants": true
+        },
+        "armor": {
+          "metalShields": true,
+          "chainmail": true,
+          "helmets": true
+        },
+        "naval": {
+          "warships": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Greek", "Aramaic"],
+        "coinage": true,
+        "indigenousCoins": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["overland", "maritime"],
+        "roads": true,
+        "markets": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/IrSeleucid",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Seleucid_Empire"
+    },
+    "mn_mongol_empire": {
+      "seshatId": "mn_mongol_empire",
+      "name": "Mongol Empire",
+      "alternateNames": ["Great Mongol Empire"],
+      "startYear": 1206,
+      "endYear": 1368,
+      "peakYear": 1279,
+      "territory": 24000000,
+      "peakTerritory": 24000000,
+      "population": 110000000,
+      "capitalPopulation": 50000,
+      "largestSettlement": "Karakorum",
+      "largestSettlementPopulation": 50000,
+      "administrativeLevels": 5,
+      "settlementHierarchy": 4,
+      "militaryLevels": 6,
+      "religiousLevels": 3,
+      "centralization": "loose",
+      "languages": ["Mongolian", "Chinese", "Persian", "Turkic"],
+      "religions": ["Tengrism", "Buddhism", "Islam", "Christianity"],
+      "capital": "Karakorum",
+      "succeedingPolities": [
+        { "id": "cn_yuan_dynasty", "name": "Yuan Dynasty", "relation": "division" },
+        { "id": "ru_golden_horde", "name": "Golden Horde", "relation": "division" },
+        { "id": "ir_ilkhanate", "name": "Ilkhanate", "relation": "division" },
+        { "id": "kz_chagatai", "name": "Chagatai Khanate", "relation": "division" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "earthRamparts": true,
+          "woodenPalisade": true
+        },
+        "metals": ["iron", "steel"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "crossbows": true,
+          "tensionSiegeEngines": true,
+          "gunpowderSiegeArtillery": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true,
+          "battleAxes": true
+        },
+        "warfareAnimals": {
+          "horses": true,
+          "camels": true
+        },
+        "armor": {
+          "leatherShields": true,
+          "chainmail": true,
+          "scaledArmor": true,
+          "helmets": true,
+          "lamellarArmor": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Mongolian Script", "Chinese", "Arabic"],
+        "coinage": true,
+        "foreignCoins": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["overland"],
+        "roads": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/MnMongol",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Mongol_Empire"
+    },
+    "ir_timurid_empire": {
+      "seshatId": "ir_timurid_empire",
+      "name": "Timurid Empire",
+      "alternateNames": ["Timurid Dynasty"],
+      "startYear": 1370,
+      "endYear": 1507,
+      "peakYear": 1405,
+      "territory": 4400000,
+      "population": 20000000,
+      "capitalPopulation": 150000,
+      "largestSettlement": "Samarkand",
+      "largestSettlementPopulation": 150000,
+      "administrativeLevels": 5,
+      "settlementHierarchy": 5,
+      "militaryLevels": 5,
+      "religiousLevels": 4,
+      "centralization": "loose",
+      "languages": ["Persian", "Chagatai Turkic"],
+      "religions": ["Islam"],
+      "capital": "Samarkand",
+      "succeedingPolities": [
+        { "id": "in_mughal_empire", "name": "Mughal Empire", "relation": "continuation" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "stoneWallsMortared": true,
+          "moats": true
+        },
+        "metals": ["iron", "steel"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "crossbows": true,
+          "gunpowderSiegeArtillery": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true,
+          "battleAxes": true
+        },
+        "warfareAnimals": {
+          "horses": true,
+          "elephants": true,
+          "camels": true
+        },
+        "armor": {
+          "metalShields": true,
+          "chainmail": true,
+          "helmets": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Persian", "Arabic"],
+        "coinage": true,
+        "indigenousCoins": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["overland"],
+        "roads": true,
+        "irrigationSystems": true,
+        "markets": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/IrTimurid",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Timurid_Empire"
+    },
+    "cn_shang_dynasty": {
+      "seshatId": "cn_shang_dynasty",
+      "name": "Shang Dynasty",
+      "alternateNames": ["Yin Dynasty"],
+      "startYear": -1600,
+      "endYear": -1046,
+      "peakYear": -1200,
+      "territory": 300000,
+      "population": 5000000,
+      "capitalPopulation": 100000,
+      "largestSettlement": "Yin",
+      "largestSettlementPopulation": 100000,
+      "administrativeLevels": 4,
+      "settlementHierarchy": 4,
+      "militaryLevels": 4,
+      "religiousLevels": 4,
+      "centralization": "loose",
+      "languages": ["Old Chinese"],
+      "religions": ["Chinese Folk Religion", "Ancestor Worship"],
+      "capital": "Yin",
+      "succeedingPolities": [
+        { "id": "cn_zhou_dynasty", "name": "Zhou Dynasty", "relation": "conquest" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "earthRamparts": true,
+          "stoneWallsNonMortared": true
+        },
+        "metals": ["bronze"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "javelins": true
+        },
+        "handheldWeapons": {
+          "spears": true,
+          "battleAxes": true,
+          "daggers": true
+        },
+        "warfareAnimals": {
+          "horses": true
+        },
+        "armor": {
+          "leatherShields": true,
+          "helmets": true,
+          "leatherClothArmor": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Oracle Bone Script"],
+        "storedWealth": true,
+        "irrigationSystems": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/CnShang",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Shang_dynasty"
+    },
+    "cn_zhou_dynasty": {
+      "seshatId": "cn_zhou_dynasty",
+      "name": "Zhou Dynasty",
+      "alternateNames": ["Western Zhou", "Eastern Zhou"],
+      "startYear": -1046,
+      "endYear": -256,
+      "peakYear": -900,
+      "territory": 500000,
+      "population": 20000000,
+      "capitalPopulation": 150000,
+      "largestSettlement": "Luoyang",
+      "largestSettlementPopulation": 200000,
+      "administrativeLevels": 4,
+      "settlementHierarchy": 4,
+      "militaryLevels": 5,
+      "religiousLevels": 4,
+      "centralization": "loose",
+      "languages": ["Old Chinese"],
+      "religions": ["Chinese Folk Religion", "Confucianism"],
+      "capital": "Haojing",
+      "precedingPolities": [
+        { "id": "cn_shang_dynasty", "name": "Shang Dynasty", "relation": "conquest" }
+      ],
+      "succeedingPolities": [
+        { "id": "cn_qin_dynasty", "name": "Qin Dynasty", "relation": "conquest" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "earthRamparts": true,
+          "stoneWallsNonMortared": true
+        },
+        "metals": ["bronze", "iron"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "crossbows": true,
+          "javelins": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true,
+          "polearms": true,
+          "battleAxes": true
+        },
+        "warfareAnimals": {
+          "horses": true
+        },
+        "armor": {
+          "leatherShields": true,
+          "scaledArmor": true,
+          "helmets": true,
+          "lamellarArmor": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Bronze Script", "Seal Script"],
+        "coinage": true,
+        "storedWealth": true,
+        "irrigationSystems": true,
+        "markets": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/CnZhou",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Zhou_dynasty"
+    },
+    "cn_qin_dynasty": {
+      "seshatId": "cn_qin_dynasty",
+      "name": "Qin Dynasty",
+      "alternateNames": ["First Chinese Empire"],
+      "startYear": -221,
+      "endYear": -206,
+      "peakYear": -210,
+      "territory": 2000000,
+      "population": 20000000,
+      "capitalPopulation": 500000,
+      "largestSettlement": "Xianyang",
+      "largestSettlementPopulation": 500000,
+      "administrativeLevels": 5,
+      "settlementHierarchy": 5,
+      "militaryLevels": 6,
+      "religiousLevels": 3,
+      "centralization": "unitary state",
+      "languages": ["Old Chinese"],
+      "religions": ["Chinese Folk Religion", "Legalism"],
+      "capital": "Xianyang",
+      "precedingPolities": [
+        { "id": "cn_zhou_dynasty", "name": "Zhou Dynasty", "relation": "conquest" }
+      ],
+      "succeedingPolities": [
+        { "id": "cn_han_dynasty", "name": "Han Dynasty", "relation": "succession" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "earthRamparts": true,
+          "stoneWallsMortared": true,
+          "longWalls": true
+        },
+        "metals": ["iron", "bronze"],
+        "projectileWeapons": {
+          "crossbows": true,
+          "javelins": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true,
+          "polearms": true
+        },
+        "warfareAnimals": {
+          "horses": true
+        },
+        "armor": {
+          "metalShields": true,
+          "scaledArmor": true,
+          "helmets": true,
+          "lamellarArmor": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Small Seal Script"],
+        "coinage": true,
+        "indigenousCoins": true,
+        "storedWealth": true,
+        "roads": true,
+        "canals": true,
+        "irrigationSystems": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/CnQin",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Qin_dynasty"
+    },
+    "cn_han_dynasty": {
+      "seshatId": "cn_han_dynasty",
+      "name": "Han Dynasty",
+      "alternateNames": ["Han Empire"],
+      "startYear": -206,
+      "endYear": 220,
+      "peakYear": 100,
+      "territory": 6000000,
+      "peakTerritory": 6000000,
+      "population": 60000000,
+      "capitalPopulation": 400000,
+      "largestSettlement": "Chang'an",
+      "largestSettlementPopulation": 400000,
+      "administrativeLevels": 6,
+      "settlementHierarchy": 6,
+      "militaryLevels": 6,
+      "religiousLevels": 4,
+      "centralization": "unitary state",
+      "languages": ["Old Chinese"],
+      "religions": ["Chinese Folk Religion", "Confucianism", "Taoism"],
+      "capital": "Chang'an",
+      "precedingPolities": [
+        { "id": "cn_qin_dynasty", "name": "Qin Dynasty", "relation": "succession" }
+      ],
+      "succeedingPolities": [
+        { "id": "cn_three_kingdoms", "name": "Three Kingdoms", "relation": "division" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "earthRamparts": true,
+          "stoneWallsMortared": true,
+          "moats": true,
+          "longWalls": true
+        },
+        "metals": ["iron", "steel"],
+        "projectileWeapons": {
+          "crossbows": true,
+          "javelins": true,
+          "tensionSiegeEngines": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true,
+          "polearms": true
+        },
+        "warfareAnimals": {
+          "horses": true
+        },
+        "armor": {
+          "metalShields": true,
+          "chainmail": true,
+          "scaledArmor": true,
+          "helmets": true,
+          "lamellarArmor": true
+        },
+        "naval": {
+          "warships": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Clerical Script"],
+        "coinage": true,
+        "indigenousCoins": true,
+        "storedWealth": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["overland"],
+        "roads": true,
+        "canals": true,
+        "irrigationSystems": true,
+        "markets": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/CnHan",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Han_dynasty"
+    },
+    "cn_tang_dynasty": {
+      "seshatId": "cn_tang_dynasty",
+      "name": "Tang Dynasty",
+      "alternateNames": ["Tang Empire"],
+      "startYear": 618,
+      "endYear": 907,
+      "peakYear": 750,
+      "territory": 5400000,
+      "peakTerritory": 5400000,
+      "population": 80000000,
+      "capitalPopulation": 1000000,
+      "largestSettlement": "Chang'an",
+      "largestSettlementPopulation": 1000000,
+      "administrativeLevels": 6,
+      "settlementHierarchy": 6,
+      "militaryLevels": 6,
+      "religiousLevels": 5,
+      "centralization": "unitary state",
+      "languages": ["Middle Chinese"],
+      "religions": ["Buddhism", "Taoism", "Confucianism"],
+      "capital": "Chang'an",
+      "warfare": {
+        "fortifications": {
+          "stoneWallsMortared": true,
+          "moats": true,
+          "complexFortifications": true
+        },
+        "metals": ["iron", "steel"],
+        "projectileWeapons": {
+          "crossbows": true,
+          "compositeBows": true,
+          "tensionSiegeEngines": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true,
+          "polearms": true
+        },
+        "warfareAnimals": {
+          "horses": true,
+          "camels": true
+        },
+        "armor": {
+          "metalShields": true,
+          "chainmail": true,
+          "scaledArmor": true,
+          "helmets": true,
+          "lamellarArmor": true
+        },
+        "naval": {
+          "warships": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Regular Script"],
+        "coinage": true,
+        "indigenousCoins": true,
+        "storedWealth": true,
+        "debtInstruments": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["overland", "maritime"],
+        "roads": true,
+        "canals": true,
+        "ports": true,
+        "markets": true
+      },
+      "crisis": {
+        "crisisEvents": [
+          {
+            "name": "An Lushan Rebellion",
+            "startYear": 755,
+            "endYear": 763,
+            "type": "civil war",
+            "severity": "catastrophic",
+            "description": "Massive rebellion that killed millions and weakened Tang power"
+          }
+        ]
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/CnTang",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Tang_dynasty"
+    },
+    "cn_song_dynasty": {
+      "seshatId": "cn_song_dynasty",
+      "name": "Song Dynasty",
+      "alternateNames": ["Song Empire"],
+      "startYear": 960,
+      "endYear": 1279,
+      "peakYear": 1100,
+      "territory": 2800000,
+      "population": 100000000,
+      "capitalPopulation": 1000000,
+      "largestSettlement": "Kaifeng",
+      "largestSettlementPopulation": 1000000,
+      "administrativeLevels": 6,
+      "settlementHierarchy": 6,
+      "militaryLevels": 5,
+      "religiousLevels": 5,
+      "centralization": "unitary state",
+      "languages": ["Middle Chinese"],
+      "religions": ["Neo-Confucianism", "Buddhism", "Taoism"],
+      "capital": "Kaifeng",
+      "warfare": {
+        "fortifications": {
+          "stoneWallsMortared": true,
+          "moats": true,
+          "complexFortifications": true
+        },
+        "metals": ["iron", "steel"],
+        "projectileWeapons": {
+          "crossbows": true,
+          "compositeBows": true,
+          "tensionSiegeEngines": true,
+          "slingshotSiegeEngines": true,
+          "gunpowderSiegeArtillery": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true,
+          "polearms": true
+        },
+        "warfareAnimals": {
+          "horses": true
+        },
+        "armor": {
+          "metalShields": true,
+          "chainmail": true,
+          "scaledArmor": true,
+          "helmets": true,
+          "lamellarArmor": true
+        },
+        "naval": {
+          "warships": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Regular Script"],
+        "coinage": true,
+        "indigenousCoins": true,
+        "debtInstruments": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["maritime", "overland"],
+        "roads": true,
+        "canals": true,
+        "ports": true,
+        "markets": true
+      },
+      "crisis": {
+        "crisisEvents": [
+          {
+            "name": "Jin Conquest of Northern China",
+            "startYear": 1125,
+            "endYear": 1127,
+            "type": "invasion",
+            "severity": "severe",
+            "description": "Jurchen Jin dynasty conquered northern China, forcing Song south"
+          },
+          {
+            "name": "Mongol Conquest",
+            "startYear": 1235,
+            "endYear": 1279,
+            "type": "invasion",
+            "severity": "catastrophic",
+            "description": "Mongol conquest ended the Song dynasty"
+          }
+        ]
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/CnSong",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Song_dynasty"
+    },
+    "cn_ming_dynasty": {
+      "seshatId": "cn_ming_dynasty",
+      "name": "Ming Dynasty",
+      "alternateNames": ["Ming Empire", "Great Ming"],
+      "startYear": 1368,
+      "endYear": 1644,
+      "peakYear": 1450,
+      "territory": 6500000,
+      "population": 160000000,
+      "capitalPopulation": 1000000,
+      "largestSettlement": "Beijing",
+      "largestSettlementPopulation": 1000000,
+      "administrativeLevels": 6,
+      "settlementHierarchy": 6,
+      "militaryLevels": 6,
+      "religiousLevels": 5,
+      "centralization": "unitary state",
+      "languages": ["Middle Chinese", "Mandarin"],
+      "religions": ["Neo-Confucianism", "Buddhism", "Taoism"],
+      "capital": "Beijing",
+      "precedingPolities": [
+        { "id": "cn_yuan_dynasty", "name": "Yuan Dynasty", "relation": "conquest" }
+      ],
+      "succeedingPolities": [
+        { "id": "cn_qing_dynasty", "name": "Qing Dynasty", "relation": "conquest" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "stoneWallsMortared": true,
+          "moats": true,
+          "complexFortifications": true,
+          "longWalls": true
+        },
+        "metals": ["iron", "steel"],
+        "projectileWeapons": {
+          "crossbows": true,
+          "compositeBows": true,
+          "gunpowderSiegeArtillery": true,
+          "handHeldFirearms": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true,
+          "polearms": true
+        },
+        "warfareAnimals": {
+          "horses": true
+        },
+        "armor": {
+          "metalShields": true,
+          "chainmail": true,
+          "plateArmor": true,
+          "helmets": true,
+          "lamellarArmor": true
+        },
+        "naval": {
+          "warships": true,
+          "merchantShips": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Regular Script"],
+        "coinage": true,
+        "indigenousCoins": true,
+        "debtInstruments": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["maritime", "overland"],
+        "roads": true,
+        "canals": true,
+        "ports": true,
+        "markets": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/CnMing",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Ming_dynasty"
+    },
+    "cn_qing_dynasty": {
+      "seshatId": "cn_qing_dynasty",
+      "name": "Qing Dynasty",
+      "alternateNames": ["Qing Empire", "Great Qing", "Manchu Dynasty"],
+      "startYear": 1644,
+      "endYear": 1912,
+      "peakYear": 1790,
+      "territory": 13100000,
+      "peakTerritory": 13100000,
+      "population": 400000000,
+      "capitalPopulation": 1000000,
+      "largestSettlement": "Beijing",
+      "largestSettlementPopulation": 1000000,
+      "administrativeLevels": 7,
+      "settlementHierarchy": 6,
+      "militaryLevels": 6,
+      "religiousLevels": 5,
+      "centralization": "unitary state",
+      "languages": ["Mandarin", "Manchu"],
+      "religions": ["Neo-Confucianism", "Buddhism", "Taoism"],
+      "capital": "Beijing",
+      "precedingPolities": [
+        { "id": "cn_ming_dynasty", "name": "Ming Dynasty", "relation": "conquest" }
+      ],
+      "succeedingPolities": [
+        { "id": "cn_republic", "name": "Republic of China", "relation": "succession" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "stoneWallsMortared": true,
+          "moats": true,
+          "complexFortifications": true,
+          "modernFortifications": true
+        },
+        "metals": ["iron", "steel"],
+        "projectileWeapons": {
+          "crossbows": true,
+          "compositeBows": true,
+          "gunpowderSiegeArtillery": true,
+          "handHeldFirearms": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true,
+          "polearms": true
+        },
+        "warfareAnimals": {
+          "horses": true
+        },
+        "armor": {
+          "metalShields": true,
+          "chainmail": true,
+          "plateArmor": true,
+          "helmets": true
+        },
+        "naval": {
+          "warships": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Regular Script"],
+        "coinage": true,
+        "indigenousCoins": true,
+        "debtInstruments": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["maritime", "overland"],
+        "roads": true,
+        "canals": true,
+        "ports": true,
+        "markets": true
+      },
+      "crisis": {
+        "crisisEvents": [
+          {
+            "name": "Taiping Rebellion",
+            "startYear": 1850,
+            "endYear": 1864,
+            "type": "civil war",
+            "severity": "catastrophic",
+            "description": "Deadliest civil war in history, killed 20-30 million people"
+          },
+          {
+            "name": "Opium Wars",
+            "startYear": 1839,
+            "endYear": 1860,
+            "type": "invasion",
+            "severity": "severe",
+            "description": "British and French forced China to open to Western trade"
+          }
+        ]
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/CnQing",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Qing_dynasty"
+    },
+    "in_maurya_empire": {
+      "seshatId": "in_maurya_empire",
+      "name": "Maurya Empire",
+      "alternateNames": ["Mauryan Empire"],
+      "startYear": -322,
+      "endYear": -185,
+      "peakYear": -260,
+      "territory": 5000000,
+      "peakTerritory": 5000000,
+      "population": 50000000,
+      "capitalPopulation": 400000,
+      "largestSettlement": "Pataliputra",
+      "largestSettlementPopulation": 400000,
+      "administrativeLevels": 5,
+      "settlementHierarchy": 5,
+      "militaryLevels": 6,
+      "religiousLevels": 4,
+      "centralization": "unitary state",
+      "languages": ["Prakrit", "Sanskrit"],
+      "religions": ["Buddhism", "Hinduism", "Jainism"],
+      "capital": "Pataliputra",
+      "warfare": {
+        "fortifications": {
+          "earthRamparts": true,
+          "woodenPalisade": true,
+          "moats": true
+        },
+        "metals": ["iron"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "javelins": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true
+        },
+        "warfareAnimals": {
+          "horses": true,
+          "elephants": true
+        },
+        "armor": {
+          "leatherShields": true,
+          "helmets": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Brahmi"],
+        "coinage": true,
+        "indigenousCoins": true,
+        "storedWealth": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["overland"],
+        "roads": true,
+        "irrigationSystems": true,
+        "markets": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/InMaurya",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Maurya_Empire"
+    },
+    "in_gupta_empire": {
+      "seshatId": "in_gupta_empire",
+      "name": "Gupta Empire",
+      "alternateNames": ["Golden Age of India"],
+      "startYear": 320,
+      "endYear": 550,
+      "peakYear": 400,
+      "territory": 3500000,
+      "population": 40000000,
+      "capitalPopulation": 300000,
+      "largestSettlement": "Pataliputra",
+      "largestSettlementPopulation": 300000,
+      "administrativeLevels": 4,
+      "settlementHierarchy": 5,
+      "militaryLevels": 5,
+      "religiousLevels": 5,
+      "centralization": "loose",
+      "languages": ["Sanskrit", "Prakrit"],
+      "religions": ["Hinduism", "Buddhism"],
+      "capital": "Pataliputra",
+      "warfare": {
+        "fortifications": {
+          "earthRamparts": true,
+          "moats": true
+        },
+        "metals": ["iron", "steel"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "javelins": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true
+        },
+        "warfareAnimals": {
+          "horses": true,
+          "elephants": true
+        },
+        "armor": {
+          "metalShields": true,
+          "chainmail": true,
+          "helmets": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Sanskrit", "Gupta Script"],
+        "coinage": true,
+        "indigenousCoins": true,
+        "storedWealth": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["maritime", "overland"],
+        "roads": true,
+        "irrigationSystems": true,
+        "markets": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/InGupta",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Gupta_Empire"
+    },
+    "in_chola_empire": {
+      "seshatId": "in_chola_empire",
+      "name": "Chola Empire",
+      "alternateNames": ["Chola Dynasty"],
+      "startYear": 848,
+      "endYear": 1279,
+      "peakYear": 1030,
+      "territory": 3600000,
+      "population": 20000000,
+      "capitalPopulation": 100000,
+      "largestSettlement": "Thanjavur",
+      "largestSettlementPopulation": 100000,
+      "administrativeLevels": 5,
+      "settlementHierarchy": 5,
+      "militaryLevels": 5,
+      "religiousLevels": 5,
+      "centralization": "unitary state",
+      "languages": ["Tamil", "Sanskrit"],
+      "religions": ["Hinduism"],
+      "capital": "Thanjavur",
+      "warfare": {
+        "fortifications": {
+          "stoneWallsMortared": true,
+          "moats": true
+        },
+        "metals": ["iron", "steel"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "javelins": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true
+        },
+        "warfareAnimals": {
+          "horses": true,
+          "elephants": true
+        },
+        "armor": {
+          "metalShields": true,
+          "chainmail": true,
+          "helmets": true
+        },
+        "naval": {
+          "warships": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Tamil"],
+        "coinage": true,
+        "indigenousCoins": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["maritime"],
+        "ports": true,
+        "irrigationSystems": true,
+        "markets": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/InChola",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Chola_dynasty"
+    },
+    "in_mughal_empire": {
+      "seshatId": "in_mughal_empire",
+      "name": "Mughal Empire",
+      "alternateNames": ["Mughal Dynasty", "Moghul Empire"],
+      "startYear": 1526,
+      "endYear": 1857,
+      "peakYear": 1700,
+      "territory": 4000000,
+      "peakTerritory": 4000000,
+      "population": 150000000,
+      "capitalPopulation": 400000,
+      "largestSettlement": "Delhi",
+      "largestSettlementPopulation": 400000,
+      "administrativeLevels": 6,
+      "settlementHierarchy": 6,
+      "militaryLevels": 6,
+      "religiousLevels": 5,
+      "centralization": "unitary state",
+      "languages": ["Persian", "Urdu"],
+      "religions": ["Islam"],
+      "capital": "Delhi",
+      "precedingPolities": [
+        { "id": "in_delhi_sultanate", "name": "Delhi Sultanate", "relation": "conquest" }
+      ],
+      "succeedingPolities": [
+        { "id": "in_british_raj", "name": "British Raj", "relation": "conquest" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "stoneWallsMortared": true,
+          "moats": true,
+          "complexFortifications": true
+        },
+        "metals": ["iron", "steel"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "gunpowderSiegeArtillery": true,
+          "handHeldFirearms": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true
+        },
+        "warfareAnimals": {
+          "horses": true,
+          "elephants": true,
+          "camels": true
+        },
+        "armor": {
+          "metalShields": true,
+          "chainmail": true,
+          "plateArmor": true,
+          "helmets": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Persian", "Arabic"],
+        "coinage": true,
+        "indigenousCoins": true,
+        "storedWealth": true,
+        "debtInstruments": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["overland", "maritime"],
+        "roads": true,
+        "irrigationSystems": true,
+        "markets": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/InMughal",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Mughal_Empire"
+    },
+    "kh_khmer_empire": {
+      "seshatId": "kh_khmer_empire",
+      "name": "Khmer Empire",
+      "alternateNames": ["Angkorian Empire"],
+      "startYear": 802,
+      "endYear": 1431,
+      "peakYear": 1150,
+      "territory": 1000000,
+      "population": 1000000,
+      "capitalPopulation": 100000,
+      "largestSettlement": "Angkor",
+      "largestSettlementPopulation": 100000,
+      "administrativeLevels": 4,
+      "settlementHierarchy": 4,
+      "militaryLevels": 4,
+      "religiousLevels": 5,
+      "centralization": "unitary state",
+      "languages": ["Khmer", "Sanskrit"],
+      "religions": ["Hinduism", "Buddhism"],
+      "capital": "Angkor",
+      "warfare": {
+        "fortifications": {
+          "earthRamparts": true,
+          "moats": true
+        },
+        "metals": ["iron"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "javelins": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true
+        },
+        "warfareAnimals": {
+          "horses": true,
+          "elephants": true
+        },
+        "armor": {
+          "leatherShields": true,
+          "helmets": true
+        },
+        "naval": {
+          "smallVessels": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Khmer", "Sanskrit"],
+        "storedWealth": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["riverine"],
+        "roads": true,
+        "irrigationSystems": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/KhKhmer",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Khmer_Empire"
+    },
+    "id_majapahit": {
+      "seshatId": "id_majapahit",
+      "name": "Majapahit Empire",
+      "alternateNames": ["Majapahit Kingdom"],
+      "startYear": 1293,
+      "endYear": 1527,
+      "peakYear": 1350,
+      "territory": 1500000,
+      "population": 5000000,
+      "capitalPopulation": 50000,
+      "largestSettlement": "Majapahit",
+      "largestSettlementPopulation": 50000,
+      "administrativeLevels": 4,
+      "settlementHierarchy": 4,
+      "militaryLevels": 4,
+      "religiousLevels": 4,
+      "centralization": "loose",
+      "languages": ["Javanese", "Sanskrit"],
+      "religions": ["Hinduism", "Buddhism"],
+      "capital": "Majapahit",
+      "warfare": {
+        "fortifications": {
+          "earthRamparts": true
+        },
+        "metals": ["iron"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "javelins": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true,
+          "daggers": true
+        },
+        "warfareAnimals": {
+          "horses": true,
+          "elephants": true
+        },
+        "armor": {
+          "leatherShields": true
+        },
+        "naval": {
+          "warships": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Javanese"],
+        "coinage": true,
+        "foreignCoins": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["maritime"],
+        "ports": true,
+        "irrigationSystems": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/IdMajapahit",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Majapahit"
+    },
+    "id_srivijaya": {
+      "seshatId": "id_srivijaya",
+      "name": "Srivijaya Empire",
+      "alternateNames": ["Srivijayan Empire"],
+      "startYear": 650,
+      "endYear": 1377,
+      "peakYear": 900,
+      "territory": 500000,
+      "population": 2000000,
+      "capitalPopulation": 30000,
+      "largestSettlement": "Palembang",
+      "largestSettlementPopulation": 30000,
+      "administrativeLevels": 3,
+      "settlementHierarchy": 3,
+      "militaryLevels": 4,
+      "religiousLevels": 4,
+      "centralization": "loose",
+      "languages": ["Malay", "Sanskrit"],
+      "religions": ["Buddhism", "Hinduism"],
+      "capital": "Palembang",
+      "warfare": {
+        "metals": ["iron"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "javelins": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true,
+          "daggers": true
+        },
+        "naval": {
+          "warships": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Pallava", "Sanskrit"],
+        "coinage": true,
+        "foreignCoins": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["maritime"],
+        "ports": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/IdSrivijaya",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Srivijaya"
+    },
+    "sd_kingdom_kush": {
+      "seshatId": "sd_kingdom_kush",
+      "name": "Kingdom of Kush",
+      "alternateNames": ["Nubia"],
+      "startYear": -1070,
+      "endYear": 350,
+      "peakYear": -700,
+      "territory": 400000,
+      "population": 1000000,
+      "capitalPopulation": 30000,
+      "largestSettlement": "Meroe",
+      "largestSettlementPopulation": 30000,
+      "administrativeLevels": 4,
+      "settlementHierarchy": 4,
+      "militaryLevels": 4,
+      "religiousLevels": 4,
+      "centralization": "unitary state",
+      "languages": ["Meroitic", "Egyptian"],
+      "religions": ["Egyptian Religion", "Indigenous Beliefs"],
+      "capital": "Meroe",
+      "warfare": {
+        "fortifications": {
+          "stoneWallsNonMortared": true
+        },
+        "metals": ["iron"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "javelins": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true
+        },
+        "warfareAnimals": {
+          "horses": true,
+          "elephants": true
+        },
+        "armor": {
+          "leatherShields": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Meroitic"],
+        "storedWealth": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["riverine", "overland"],
+        "irrigationSystems": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/SdKush",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Kingdom_of_Kush"
+    },
+    "ml_ghana_empire": {
+      "seshatId": "ml_ghana_empire",
+      "name": "Ghana Empire",
+      "alternateNames": ["Wagadou"],
+      "startYear": 300,
+      "endYear": 1240,
+      "peakYear": 1000,
+      "territory": 800000,
+      "population": 1000000,
+      "capitalPopulation": 30000,
+      "largestSettlement": "Koumbi Saleh",
+      "largestSettlementPopulation": 30000,
+      "administrativeLevels": 3,
+      "settlementHierarchy": 3,
+      "militaryLevels": 4,
+      "religiousLevels": 3,
+      "centralization": "loose",
+      "languages": ["Soninke"],
+      "religions": ["Indigenous Beliefs", "Islam"],
+      "capital": "Koumbi Saleh",
+      "succeedingPolities": [
+        { "id": "ml_mali_empire", "name": "Mali Empire", "relation": "conquest" }
+      ],
+      "warfare": {
+        "metals": ["iron"],
+        "projectileWeapons": {
+          "javelins": true,
+          "slings": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true
+        },
+        "warfareAnimals": {
+          "horses": true
+        },
+        "armor": {
+          "leatherShields": true
+        }
+      },
+      "economy": {
+        "storedWealth": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["overland"],
+        "markets": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/MlGhana",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Ghana_Empire"
+    },
+    "ml_mali_empire": {
+      "seshatId": "ml_mali_empire",
+      "name": "Mali Empire",
+      "alternateNames": ["Manding Empire"],
+      "startYear": 1235,
+      "endYear": 1600,
+      "peakYear": 1350,
+      "territory": 1240000,
+      "peakTerritory": 1240000,
+      "population": 2500000,
+      "capitalPopulation": 50000,
+      "largestSettlement": "Niani",
+      "largestSettlementPopulation": 50000,
+      "administrativeLevels": 4,
+      "settlementHierarchy": 4,
+      "militaryLevels": 4,
+      "religiousLevels": 4,
+      "centralization": "loose",
+      "languages": ["Mandinka"],
+      "religions": ["Islam"],
+      "capital": "Niani",
+      "precedingPolities": [
+        { "id": "ml_ghana_empire", "name": "Ghana Empire", "relation": "conquest" }
+      ],
+      "succeedingPolities": [
+        { "id": "ml_songhai_empire", "name": "Songhai Empire", "relation": "conquest" }
+      ],
+      "warfare": {
+        "metals": ["iron"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "javelins": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true
+        },
+        "warfareAnimals": {
+          "horses": true,
+          "camels": true
+        },
+        "armor": {
+          "leatherShields": true,
+          "chainmail": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Arabic"],
+        "coinage": true,
+        "foreignCoins": true,
+        "storedWealth": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["overland"],
+        "markets": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/MlMali",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Mali_Empire"
+    },
+    "ml_songhai_empire": {
+      "seshatId": "ml_songhai_empire",
+      "name": "Songhai Empire",
+      "alternateNames": ["Songhay Empire"],
+      "startYear": 1464,
+      "endYear": 1591,
+      "peakYear": 1500,
+      "territory": 1400000,
+      "population": 5000000,
+      "capitalPopulation": 100000,
+      "largestSettlement": "Gao",
+      "largestSettlementPopulation": 100000,
+      "administrativeLevels": 4,
+      "settlementHierarchy": 4,
+      "militaryLevels": 5,
+      "religiousLevels": 4,
+      "centralization": "unitary state",
+      "languages": ["Songhai"],
+      "religions": ["Islam"],
+      "capital": "Gao",
+      "precedingPolities": [
+        { "id": "ml_mali_empire", "name": "Mali Empire", "relation": "conquest" }
+      ],
+      "warfare": {
+        "metals": ["iron"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "javelins": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true
+        },
+        "warfareAnimals": {
+          "horses": true,
+          "camels": true
+        },
+        "armor": {
+          "leatherShields": true,
+          "chainmail": true,
+          "helmets": true
+        },
+        "naval": {
+          "smallVessels": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Arabic"],
+        "coinage": true,
+        "foreignCoins": true,
+        "storedWealth": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["overland", "riverine"],
+        "markets": true
+      },
+      "crisis": {
+        "crisisEvents": [
+          {
+            "name": "Moroccan Invasion",
+            "startYear": 1591,
+            "endYear": 1591,
+            "type": "invasion",
+            "severity": "catastrophic",
+            "description": "Moroccan army with firearms destroyed the Songhai Empire"
+          }
+        ]
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/MlSonghai",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Songhai_Empire"
+    },
+    "mx_maya_classic": {
+      "seshatId": "mx_maya_classic",
+      "name": "Classic Maya Civilization",
+      "alternateNames": ["Maya City-States"],
+      "startYear": 250,
+      "endYear": 900,
+      "peakYear": 700,
+      "territory": 250000,
+      "population": 2000000,
+      "capitalPopulation": 60000,
+      "largestSettlement": "Tikal",
+      "largestSettlementPopulation": 60000,
+      "administrativeLevels": 4,
+      "settlementHierarchy": 4,
+      "militaryLevels": 4,
+      "religiousLevels": 5,
+      "centralization": "none",
+      "languages": ["Mayan"],
+      "religions": ["Maya Religion"],
+      "capital": "Tikal",
+      "warfare": {
+        "fortifications": {
+          "earthRamparts": true,
+          "woodenPalisade": true
+        },
+        "projectileWeapons": {
+          "atlatl": true,
+          "javelins": true
+        },
+        "handheldWeapons": {
+          "spears": true,
+          "warClubs": true
+        },
+        "armor": {
+          "woodFabricShields": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Maya Hieroglyphics"],
+        "storedWealth": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["overland", "riverine"],
+        "irrigationSystems": true,
+        "markets": true
+      },
+      "crisis": {
+        "crisisEvents": [
+          {
+            "name": "Classic Maya Collapse",
+            "startYear": 800,
+            "endYear": 900,
+            "type": "social crisis",
+            "severity": "catastrophic",
+            "description": "Major cities abandoned, civilization declined in southern lowlands"
+          }
+        ]
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/MxMaya",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Maya_civilization"
+    },
+    "mx_aztec_empire": {
+      "seshatId": "mx_aztec_empire",
+      "name": "Aztec Empire",
+      "alternateNames": ["Triple Alliance", "Mexica Empire"],
+      "startYear": 1428,
+      "endYear": 1521,
+      "peakYear": 1519,
+      "territory": 220000,
+      "population": 6000000,
+      "capitalPopulation": 200000,
+      "largestSettlement": "Tenochtitlan",
+      "largestSettlementPopulation": 200000,
+      "administrativeLevels": 4,
+      "settlementHierarchy": 5,
+      "militaryLevels": 5,
+      "religiousLevels": 5,
+      "centralization": "loose",
+      "languages": ["Nahuatl"],
+      "religions": ["Aztec Religion"],
+      "capital": "Tenochtitlan",
+      "succeedingPolities": [
+        { "id": "mx_new_spain", "name": "New Spain", "relation": "conquest" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "earthRamparts": true
+        },
+        "metals": ["copper"],
+        "projectileWeapons": {
+          "atlatl": true,
+          "slings": true
+        },
+        "handheldWeapons": {
+          "spears": true,
+          "warClubs": true
+        },
+        "armor": {
+          "woodFabricShields": true,
+          "leatherClothArmor": true
+        },
+        "naval": {
+          "smallVessels": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Aztec Pictographs"],
+        "storedWealth": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["overland"],
+        "roads": true,
+        "canals": true,
+        "irrigationSystems": true,
+        "markets": true
+      },
+      "crisis": {
+        "crisisEvents": [
+          {
+            "name": "Spanish Conquest",
+            "startYear": 1519,
+            "endYear": 1521,
+            "type": "invasion",
+            "severity": "catastrophic",
+            "description": "Spanish conquistadors destroyed the Aztec Empire"
+          }
+        ]
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/MxAztec",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Aztec_Empire"
+    },
+    "pe_inca_empire": {
+      "seshatId": "pe_inca_empire",
+      "name": "Inca Empire",
+      "alternateNames": ["Tawantinsuyu"],
+      "startYear": 1438,
+      "endYear": 1533,
+      "peakYear": 1527,
+      "territory": 2000000,
+      "population": 12000000,
+      "capitalPopulation": 100000,
+      "largestSettlement": "Cusco",
+      "largestSettlementPopulation": 100000,
+      "administrativeLevels": 5,
+      "settlementHierarchy": 5,
+      "militaryLevels": 5,
+      "religiousLevels": 5,
+      "centralization": "unitary state",
+      "languages": ["Quechua"],
+      "religions": ["Inca Religion"],
+      "capital": "Cusco",
+      "succeedingPolities": [
+        { "id": "pe_viceroyalty_peru", "name": "Viceroyalty of Peru", "relation": "conquest" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "stoneWallsNonMortared": true,
+          "complexFortifications": true
+        },
+        "metals": ["bronze", "copper"],
+        "projectileWeapons": {
+          "slings": true,
+          "javelins": true
+        },
+        "handheldWeapons": {
+          "spears": true,
+          "battleAxes": true,
+          "warClubs": true
+        },
+        "armor": {
+          "woodFabricShields": true,
+          "helmets": true,
+          "leatherClothArmor": true
+        }
+      },
+      "economy": {
+        "mnemonicDevices": true,
+        "storedWealth": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["overland"],
+        "roads": true,
+        "bridges": true,
+        "irrigationSystems": true,
+        "foodStorageSites": true
+      },
+      "crisis": {
+        "crisisEvents": [
+          {
+            "name": "Inca Civil War",
+            "startYear": 1529,
+            "endYear": 1532,
+            "type": "civil war",
+            "severity": "severe",
+            "description": "War of succession between Huascar and Atahualpa"
+          },
+          {
+            "name": "Spanish Conquest",
+            "startYear": 1532,
+            "endYear": 1533,
+            "type": "invasion",
+            "severity": "catastrophic",
+            "description": "Spanish conquistadors destroyed the Inca Empire"
+          }
+        ]
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/PeInca",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Inca_Empire"
+    },
+    "de_holy_roman_empire": {
+      "seshatId": "de_holy_roman_empire",
+      "name": "Holy Roman Empire",
+      "alternateNames": ["HRE", "First Reich"],
+      "startYear": 962,
+      "endYear": 1806,
+      "peakYear": 1200,
+      "territory": 950000,
+      "population": 16000000,
+      "capitalPopulation": 50000,
+      "largestSettlement": "Prague",
+      "largestSettlementPopulation": 100000,
+      "administrativeLevels": 4,
+      "settlementHierarchy": 5,
+      "militaryLevels": 4,
+      "religiousLevels": 5,
+      "centralization": "nominal",
+      "languages": ["German", "Latin"],
+      "religions": ["Roman Catholicism", "Protestantism"],
+      "capital": "Vienna",
+      "warfare": {
+        "fortifications": {
+          "stoneWallsMortared": true,
+          "moats": true,
+          "complexFortifications": true
+        },
+        "metals": ["iron", "steel"],
+        "projectileWeapons": {
+          "crossbows": true,
+          "gunpowderSiegeArtillery": true,
+          "handHeldFirearms": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true,
+          "polearms": true
+        },
+        "warfareAnimals": {
+          "horses": true
+        },
+        "armor": {
+          "metalShields": true,
+          "chainmail": true,
+          "plateArmor": true,
+          "helmets": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Latin", "German"],
+        "coinage": true,
+        "indigenousCoins": true,
+        "storedWealth": true,
+        "debtInstruments": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["overland"],
+        "roads": true,
+        "bridges": true,
+        "markets": true
+      },
+      "crisis": {
+        "crisisEvents": [
+          {
+            "name": "Thirty Years War",
+            "startYear": 1618,
+            "endYear": 1648,
+            "type": "civil war",
+            "severity": "catastrophic",
+            "description": "Religious conflict devastated Central Europe"
+          }
+        ]
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/DeHRE",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Holy_Roman_Empire"
+    },
+    "sy_umayyad_caliphate": {
+      "seshatId": "sy_umayyad_caliphate",
+      "name": "Umayyad Caliphate",
+      "alternateNames": ["First Caliphate"],
+      "startYear": 661,
+      "endYear": 750,
+      "peakYear": 720,
+      "territory": 11100000,
+      "peakTerritory": 11100000,
+      "population": 60000000,
+      "capitalPopulation": 350000,
+      "largestSettlement": "Damascus",
+      "largestSettlementPopulation": 350000,
+      "administrativeLevels": 5,
+      "settlementHierarchy": 5,
+      "militaryLevels": 5,
+      "religiousLevels": 5,
+      "centralization": "unitary state",
+      "languages": ["Arabic"],
+      "religions": ["Islam"],
+      "capital": "Damascus",
+      "precedingPolities": [
+        { "id": "ir_rashidun", "name": "Rashidun Caliphate", "relation": "succession" }
+      ],
+      "succeedingPolities": [
+        { "id": "iq_abbasid", "name": "Abbasid Caliphate", "relation": "conquest" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "stoneWallsMortared": true,
+          "moats": true
+        },
+        "metals": ["iron", "steel"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "javelins": true,
+          "tensionSiegeEngines": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true
+        },
+        "warfareAnimals": {
+          "horses": true,
+          "camels": true
+        },
+        "armor": {
+          "metalShields": true,
+          "chainmail": true,
+          "helmets": true,
+          "lamellarArmor": true
+        },
+        "naval": {
+          "warships": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Arabic"],
+        "coinage": true,
+        "indigenousCoins": true,
+        "storedWealth": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["overland", "maritime"],
+        "roads": true,
+        "irrigationSystems": true,
+        "markets": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/SyUmayyad",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Umayyad_Caliphate"
+    },
+    "iq_abbasid_caliphate": {
+      "seshatId": "iq_abbasid_caliphate",
+      "name": "Abbasid Caliphate",
+      "alternateNames": ["Baghdad Caliphate"],
+      "startYear": 750,
+      "endYear": 1258,
+      "peakYear": 850,
+      "territory": 10000000,
+      "population": 50000000,
+      "capitalPopulation": 1000000,
+      "largestSettlement": "Baghdad",
+      "largestSettlementPopulation": 1000000,
+      "administrativeLevels": 6,
+      "settlementHierarchy": 6,
+      "militaryLevels": 5,
+      "religiousLevels": 6,
+      "centralization": "loose",
+      "languages": ["Arabic"],
+      "religions": ["Islam"],
+      "capital": "Baghdad",
+      "precedingPolities": [
+        { "id": "sy_umayyad", "name": "Umayyad Caliphate", "relation": "conquest" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "stoneWallsMortared": true,
+          "moats": true,
+          "complexFortifications": true
+        },
+        "metals": ["iron", "steel"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "crossbows": true,
+          "tensionSiegeEngines": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true,
+          "polearms": true
+        },
+        "warfareAnimals": {
+          "horses": true,
+          "camels": true,
+          "elephants": true
+        },
+        "armor": {
+          "metalShields": true,
+          "chainmail": true,
+          "helmets": true,
+          "lamellarArmor": true
+        },
+        "naval": {
+          "warships": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Arabic"],
+        "coinage": true,
+        "indigenousCoins": true,
+        "storedWealth": true,
+        "debtInstruments": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["overland", "maritime"],
+        "roads": true,
+        "irrigationSystems": true,
+        "markets": true
+      },
+      "crisis": {
+        "crisisEvents": [
+          {
+            "name": "Mongol Siege of Baghdad",
+            "startYear": 1258,
+            "endYear": 1258,
+            "type": "invasion",
+            "severity": "catastrophic",
+            "description": "Mongols destroyed Baghdad, killed the Caliph, ended the Caliphate"
+          }
+        ]
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/IqAbbasid",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Abbasid_Caliphate"
+    },
+    "eg_fatimid_caliphate": {
+      "seshatId": "eg_fatimid_caliphate",
+      "name": "Fatimid Caliphate",
+      "alternateNames": ["Fatimid Dynasty"],
+      "startYear": 909,
+      "endYear": 1171,
+      "peakYear": 1000,
+      "territory": 4100000,
+      "population": 15000000,
+      "capitalPopulation": 500000,
+      "largestSettlement": "Cairo",
+      "largestSettlementPopulation": 500000,
+      "administrativeLevels": 5,
+      "settlementHierarchy": 5,
+      "militaryLevels": 5,
+      "religiousLevels": 6,
+      "centralization": "unitary state",
+      "languages": ["Arabic"],
+      "religions": ["Ismaili Islam"],
+      "capital": "Cairo",
+      "succeedingPolities": [
+        { "id": "eg_ayyubid", "name": "Ayyubid Dynasty", "relation": "conquest" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "stoneWallsMortared": true,
+          "moats": true
+        },
+        "metals": ["iron", "steel"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "tensionSiegeEngines": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true
+        },
+        "warfareAnimals": {
+          "horses": true,
+          "camels": true
+        },
+        "armor": {
+          "metalShields": true,
+          "chainmail": true,
+          "helmets": true
+        },
+        "naval": {
+          "warships": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Arabic"],
+        "coinage": true,
+        "indigenousCoins": true,
+        "storedWealth": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["maritime", "overland"],
+        "roads": true,
+        "irrigationSystems": true,
+        "ports": true,
+        "markets": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/EgFatimid",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Fatimid_Caliphate"
+    },
+    "eg_ayyubid_dynasty": {
+      "seshatId": "eg_ayyubid_dynasty",
+      "name": "Ayyubid Dynasty",
+      "alternateNames": ["Ayyubid Sultanate"],
+      "startYear": 1171,
+      "endYear": 1260,
+      "peakYear": 1190,
+      "territory": 2000000,
+      "population": 10000000,
+      "capitalPopulation": 300000,
+      "largestSettlement": "Cairo",
+      "largestSettlementPopulation": 300000,
+      "administrativeLevels": 4,
+      "settlementHierarchy": 5,
+      "militaryLevels": 5,
+      "religiousLevels": 5,
+      "centralization": "loose",
+      "languages": ["Arabic", "Kurdish"],
+      "religions": ["Sunni Islam"],
+      "capital": "Cairo",
+      "precedingPolities": [
+        { "id": "eg_fatimid", "name": "Fatimid Caliphate", "relation": "conquest" }
+      ],
+      "succeedingPolities": [
+        { "id": "eg_mamluk", "name": "Mamluk Sultanate", "relation": "succession" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "stoneWallsMortared": true,
+          "moats": true,
+          "complexFortifications": true
+        },
+        "metals": ["iron", "steel"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "crossbows": true,
+          "tensionSiegeEngines": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true
+        },
+        "warfareAnimals": {
+          "horses": true,
+          "camels": true
+        },
+        "armor": {
+          "metalShields": true,
+          "chainmail": true,
+          "helmets": true,
+          "lamellarArmor": true
+        },
+        "naval": {
+          "warships": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Arabic"],
+        "coinage": true,
+        "indigenousCoins": true,
+        "storedWealth": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["maritime", "overland"],
+        "irrigationSystems": true,
+        "markets": true
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/EgAyyubid",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Ayyubid_dynasty"
+    },
+    "tr_ottoman_empire": {
+      "seshatId": "tr_ottoman_empire",
+      "name": "Ottoman Empire",
+      "alternateNames": ["Ottoman State", "Turkish Empire"],
+      "startYear": 1299,
+      "endYear": 1922,
+      "peakYear": 1683,
+      "territory": 5200000,
+      "peakTerritory": 5200000,
+      "population": 35000000,
+      "capitalPopulation": 700000,
+      "largestSettlement": "Constantinople",
+      "largestSettlementPopulation": 700000,
+      "administrativeLevels": 6,
+      "settlementHierarchy": 6,
+      "militaryLevels": 6,
+      "religiousLevels": 6,
+      "centralization": "unitary state",
+      "languages": ["Ottoman Turkish", "Arabic", "Persian"],
+      "religions": ["Sunni Islam"],
+      "capital": "Constantinople",
+      "precedingPolities": [
+        { "id": "tr_byzantine_empire", "name": "Byzantine Empire", "relation": "conquest" }
+      ],
+      "succeedingPolities": [
+        { "id": "tr_turkey", "name": "Republic of Turkey", "relation": "succession" }
+      ],
+      "warfare": {
+        "fortifications": {
+          "stoneWallsMortared": true,
+          "moats": true,
+          "complexFortifications": true,
+          "modernFortifications": true
+        },
+        "metals": ["iron", "steel"],
+        "projectileWeapons": {
+          "compositeBows": true,
+          "crossbows": true,
+          "tensionSiegeEngines": true,
+          "gunpowderSiegeArtillery": true,
+          "handHeldFirearms": true
+        },
+        "handheldWeapons": {
+          "swords": true,
+          "spears": true,
+          "polearms": true
+        },
+        "warfareAnimals": {
+          "horses": true,
+          "camels": true
+        },
+        "armor": {
+          "metalShields": true,
+          "chainmail": true,
+          "plateArmor": true,
+          "helmets": true
+        },
+        "naval": {
+          "warships": true,
+          "merchantShips": true
+        }
+      },
+      "economy": {
+        "writingSystem": true,
+        "scripts": ["Ottoman Turkish", "Arabic"],
+        "coinage": true,
+        "indigenousCoins": true,
+        "storedWealth": true,
+        "debtInstruments": true,
+        "longDistanceTrade": true,
+        "tradeRoutes": ["overland", "maritime"],
+        "roads": true,
+        "bridges": true,
+        "ports": true,
+        "irrigationSystems": true,
+        "markets": true
+      },
+      "crisis": {
+        "crisisEvents": [
+          {
+            "name": "Siege of Vienna (1683)",
+            "startYear": 1683,
+            "endYear": 1683,
+            "type": "invasion",
+            "severity": "moderate",
+            "description": "Failed siege marked the end of Ottoman expansion in Europe"
+          },
+          {
+            "name": "World War I",
+            "startYear": 1914,
+            "endYear": 1918,
+            "type": "invasion",
+            "severity": "catastrophic",
+            "description": "Defeat in WWI led to empire's dissolution"
+          }
+        ]
+      },
+      "seshatUrl": "https://seshat-db.com/browser/politys/TrOttoman",
+      "wikipediaUrl": "https://en.wikipedia.org/wiki/Ottoman_Empire"
+    }
+  }
+}
