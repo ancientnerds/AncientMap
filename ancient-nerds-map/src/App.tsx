@@ -368,6 +368,7 @@ function AppContent() {
     empire: EmpirePopupData
     yearOptions: number[]
     currentYear: number
+    defaultYear?: number
     isMinimized: boolean
   }
   const [openEmpirePopups, setOpenEmpirePopups] = useState<Map<string, OpenEmpirePopup>>(new Map())
@@ -561,6 +562,7 @@ function AppContent() {
   }, [])
 
   // Async image loader - runs in background after popup opens
+  // Uses fast REST API (~400ms) to fetch all Wikipedia article images
   const loadImagesForPopup = useCallback(async (siteData: SiteData) => {
     const wikipediaUrl = siteData.sourceUrl && isWikipediaUrl(siteData.sourceUrl)
       ? siteData.sourceUrl : undefined
@@ -577,7 +579,6 @@ function AppContent() {
         imagesResult = await fetchSiteImages(siteData.title, {
           wikipediaUrl,
           location: siteData.location,
-          limit: 12,
         })
       }
       images = convertToGalleryImages(imagesResult)
@@ -585,20 +586,7 @@ function AppContent() {
       console.warn('Failed to load images:', err)
     }
 
-    // Preload hero image
-    const heroUrl = images.wiki[0]?.full
-    if (heroUrl) {
-      try {
-        const cachedUrl = await ImageCache.preloadAndCache(heroUrl)
-        if (images.wiki[0]) {
-          images.wiki[0] = { ...images.wiki[0], full: cachedUrl }
-        }
-      } catch (err) {
-        console.warn('Failed to cache hero image:', err)
-      }
-    }
-
-    // Update popup with images (if still open)
+    // Update popup with full image set
     setOpenPopups(prev => {
       const next = new Map(prev)
       const existing = next.get(siteData.id)
@@ -713,7 +701,7 @@ function AppContent() {
   }, [])
 
   // Open empire popup - takes empire ID and looks up config
-  const openEmpirePopup = useCallback((empireId: string) => {
+  const openEmpirePopup = useCallback((empireId: string, defaultYear?: number, realYearOptions?: number[]) => {
     // Don't open if already open
     if (openEmpirePopups.has(empireId)) return
 
@@ -724,10 +712,12 @@ function AppContent() {
       return
     }
 
-    // Get available years for this empire from the current empireYears state
-    // or generate a default range
+    // Get available years for this empire - prefer real data years from Globe
     const currentYear = empireSliderYears[empireId] ?? empireConfig.startYear
-    const yearOptions = generateEmpireYearOptions(empireConfig)
+    // Use real year options from Globe metadata if available, otherwise generate
+    const yearOptions = realYearOptions && realYearOptions.length > 0
+      ? realYearOptions
+      : generateEmpireYearOptions(empireConfig)
 
     // Create empire popup data
     const empireData: EmpirePopupData = {
@@ -746,6 +736,7 @@ function AppContent() {
         empire: empireData,
         yearOptions,
         currentYear,
+        defaultYear,
         isMinimized: false
       })
       return next
@@ -761,23 +752,11 @@ function AppContent() {
     })
   }, [])
 
-  // Update empire popup year - also updates the globe's empire year
+  // Update empire popup year - tells globe to update, which syncs back via onEmpireYearsChange
   const setEmpirePopupYear = useCallback((empireId: string, year: number) => {
-    // Update popup state
-    setOpenEmpirePopups(prev => {
-      const next = new Map(prev)
-      const popup = next.get(empireId)
-      if (popup) {
-        next.set(empireId, { ...popup, currentYear: year })
-      }
-      return next
-    })
-    // Also update the globe's empire year via the slider years state
-    setEmpireSliderYears(prev => ({
-      ...prev,
-      [empireId]: year
-    }))
     // Tell the globe to update its borders for this year
+    // Globe will find closest available year and sync back via onEmpireYearsChange
+    // which updates empireSliderYears - this keeps slider in sync with actual data
     setExternalEmpireYearRequest({ empireId, year })
   }, [])
 
@@ -2189,8 +2168,9 @@ function AppContent() {
           <SitePopup
             key={`empire-${empireId}`}
             empire={popup.empire}
-            empireYear={popup.currentYear}
+            empireYear={empireSliderYears[empireId] ?? popup.currentYear}
             empireYearOptions={popup.yearOptions}
+            empireDefaultYear={popup.defaultYear}
             onEmpireYearChange={(year) => setEmpirePopupYear(empireId, year)}
             onClose={() => closeEmpirePopup(empireId)}
             onMinimizedChange={(isMin) => setEmpirePopupMinimized(empireId, isMin)}
