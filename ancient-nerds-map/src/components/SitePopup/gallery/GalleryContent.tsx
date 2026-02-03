@@ -1,6 +1,19 @@
 import { GalleryGrid } from './GalleryGrid'
+import { SourceFavicon } from './galleryUtils'
 import type { GalleryContentProps } from '../types'
-import type { SmithsonianText } from '../../../services/smithsonianService'
+
+// Text item structure (from unified connectors or legacy)
+interface TextItem {
+  sourceUrl?: string
+  url?: string
+  title: string
+  author?: string
+  creator?: string
+  date?: string
+  museum?: string
+  coverUrl?: string
+  thumbnail_url?: string
+}
 
 export function GalleryContent({
   activeTab,
@@ -10,8 +23,10 @@ export function GalleryContent({
   onItemClick
 }: GalleryContentProps) {
 
-  // Texts tab - display as a list (books don't have images)
-  if (activeTab === 'texts') {
+  // Books and Papers tabs - display as a list (these items may not have images)
+  if (activeTab === 'books' || activeTab === 'papers') {
+    const tabLabel = activeTab === 'books' ? 'Books' : 'Papers'
+
     if (isOffline) {
       return (
         <div className="gallery-grid-container">
@@ -21,14 +36,14 @@ export function GalleryContent({
               <polyline points="14 2 14 8 20 8"></polyline>
               <line x1="2" y1="2" x2="22" y2="22" strokeWidth="2"/>
             </svg>
-            <span>Texts require internet</span>
-            <span className="gallery-subtext">Smithsonian Libraries is online-only</span>
+            <span>{tabLabel} require internet</span>
+            <span className="gallery-subtext">Library sources are online-only</span>
           </div>
         </div>
       )
     }
 
-    if (isLoading) {
+    if (isLoading && items.length === 0) {
       return (
         <div className="gallery-grid-container">
           <div className="gallery-loading">
@@ -38,7 +53,7 @@ export function GalleryContent({
       )
     }
 
-    if (items.length === 0) {
+    if (!isLoading && items.length === 0) {
       return (
         <div className="gallery-grid-container">
           <div className="gallery-empty">
@@ -46,29 +61,32 @@ export function GalleryContent({
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
               <polyline points="14 2 14 8 20 8"></polyline>
             </svg>
-            <span>No texts found</span>
+            <span>No {tabLabel.toLowerCase()} found</span>
           </div>
         </div>
       )
     }
 
-    // Display texts as a list with optional book covers
+    // Display as a list with optional covers
     return (
       <div className="gallery-grid-container">
         <div className="gallery-text-list">
-          {items.map((item) => {
-            const text = item.original as SmithsonianText
+          {items.map((item, index) => {
+            const text = item.original as TextItem
+            const sourceUrl = text.sourceUrl || text.url || ''
+            const coverUrl = text.coverUrl || text.thumbnail_url
+            const author = text.author || text.creator
             return (
               <a
-                key={item.id}
-                href={text.sourceUrl}
+                key={`${item.id}-${index}`}
+                href={sourceUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="gallery-text-item"
               >
-                {text.coverUrl ? (
+                {coverUrl ? (
                   <div className="gallery-text-cover">
-                    <img src={text.coverUrl} alt="" loading="lazy" />
+                    <img src={coverUrl} alt="" loading="lazy" />
                   </div>
                 ) : (
                   <div className="gallery-text-icon">
@@ -82,9 +100,16 @@ export function GalleryContent({
                 )}
                 <div className="gallery-text-content">
                   <div className="gallery-text-title">{text.title}</div>
-                  {text.author && <div className="gallery-text-author">{text.author}</div>}
+                  {author && <div className="gallery-text-author">{author}</div>}
                   {text.date && <div className="gallery-text-date">{text.date}</div>}
-                  <div className="gallery-text-source">{text.museum}</div>
+                  <div className="gallery-text-source">
+                    <SourceFavicon
+                      source={item.source}
+                      original={item.original as Record<string, unknown>}
+                      className="gallery-text-favicon"
+                    />
+                    {text.museum}
+                  </div>
                 </div>
                 <svg className="gallery-text-link" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
@@ -152,7 +177,7 @@ export function GalleryContent({
     )
   }
 
-  if (isLoading) {
+  if (isLoading && items.length === 0) {
     return (
       <div className="gallery-grid-container">
         <div className="gallery-loading">
@@ -162,7 +187,7 @@ export function GalleryContent({
     )
   }
 
-  if (items.length === 0) {
+  if (!isLoading && items.length === 0) {
     return (
       <div className="gallery-grid-container">
         <div className="gallery-empty">
