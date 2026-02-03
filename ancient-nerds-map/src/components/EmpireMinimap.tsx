@@ -1,7 +1,8 @@
 /**
  * EmpireMinimap - Interactive Mapbox map showing empire boundaries
- * Uses outdoors style with dark teal theme to match the main globe
+ * Uses dark style to match the main globe Mapbox mode
  * Empire boundaries match the same color/style as the 3D globe
+ * Map zooms to fit empire bounds with 10% buffer
  */
 
 import { useEffect, useRef, useCallback } from 'react'
@@ -93,7 +94,7 @@ export default function EmpireMinimap({ empireId, year, empireColor }: EmpireMin
   }, [empireColor])
 
   /**
-   * Calculate bounding box from GeoJSON and fit map to it
+   * Calculate bounding box from GeoJSON and fit map to it with 10% buffer
    */
   const fitMapToBounds = (map: mapboxgl.Map, geojson: any) => {
     if (!geojson.features || geojson.features.length === 0) return
@@ -124,9 +125,19 @@ export default function EmpireMinimap({ empireId, year, empireColor }: EmpireMin
     }
 
     if (minLng !== Infinity) {
+      // Add 10% buffer to bounds
+      const lngSpan = maxLng - minLng
+      const latSpan = maxLat - minLat
+      const buffer = 0.10 // 10% buffer
+
+      const bufferedMinLng = minLng - lngSpan * buffer
+      const bufferedMaxLng = maxLng + lngSpan * buffer
+      const bufferedMinLat = Math.max(-85, minLat - latSpan * buffer) // Clamp to valid lat
+      const bufferedMaxLat = Math.min(85, maxLat + latSpan * buffer)  // Clamp to valid lat
+
       map.fitBounds(
-        [[minLng, minLat], [maxLng, maxLat]],
-        { padding: 20, duration: 300, maxZoom: 6 }
+        [[bufferedMinLng, bufferedMinLat], [bufferedMaxLng, bufferedMaxLat]],
+        { duration: 300, maxZoom: 8 }
       )
     }
   }
@@ -139,12 +150,13 @@ export default function EmpireMinimap({ empireId, year, empireColor }: EmpireMin
 
     const map = new mapboxgl.Map({
       container: containerRef.current,
-      style: 'mapbox://styles/mapbox/outdoors-v12',
+      style: 'mapbox://styles/mapbox/dark-v11',
       projection: 'globe',
       zoom: 2,
       center: [20, 35], // Default to Mediterranean area
       interactive: true,
-      attributionControl: false,
+      // NOTE: Attribution must be visible per Mapbox ToS - do not disable
+      attributionControl: true,
       logoPosition: 'bottom-right'
     })
 
@@ -161,12 +173,21 @@ export default function EmpireMinimap({ empireId, year, empireColor }: EmpireMin
       }
     })
 
-    // Disable scroll zoom (let parent scroll the popup)
-    map.scrollZoom.disable()
+    // Enable scroll zoom for user interaction
+    map.scrollZoom.enable()
     // Enable drag to pan
     map.dragPan.enable()
+    // Enable double-click to zoom
+    map.doubleClickZoom.enable()
+
+    // Watch for container resize and update map dimensions
+    const resizeObserver = new ResizeObserver(() => {
+      map.resize()
+    })
+    resizeObserver.observe(containerRef.current)
 
     return () => {
+      resizeObserver.disconnect()
       mapRef.current = null
       map.remove()
     }

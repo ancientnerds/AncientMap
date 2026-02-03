@@ -182,9 +182,10 @@ attribution to the original data sources as specified below.
 
 ### Ancient World Mapping Center (AWMC)
 - **Website**: https://awmc.unc.edu/
-- **License**: CC-BY 4.0
+- **License**: CC-BY 4.0 / ODC ODbL (Open Database License)
 - **Citation**: Ancient World Mapping Center, UNC Chapel Hill
 - **Data**: Ancient coastlines, rivers, roads, boundaries
+- **Historical Maps**: Classroom maps, wall maps, and "Romans from Village to Empire" series hosted on Wikimedia Commons
 
 ### David Rumsey Map Collection
 - **Website**: https://www.davidrumsey.com/
@@ -204,10 +205,19 @@ attribution to the original data sources as specified below.
 
 ## Boundary Data
 
+### Cliopatria Historical Boundaries Dataset
+- **Website**: https://github.com/Seshat-Global-History-Databank/cliopatria
+- **License**: CC BY (Creative Commons Attribution)
+- **Citation**: Cliopatria Dataset, Seshat Global History Databank
+- **Publication**: Peer-reviewed data published in Nature Scientific Data
+- **Data**: Historical polity boundary GeoJSON (1,800+ political entities, 15,000+ records, 3400 BCE - 2024 CE)
+- **Note**: Empire boundaries are matched using SeshatID field from the dataset for reliable linking
+
 ### SESHAT Global History Databank
 - **Website**: http://seshatdatabank.info/
-- **License**: Contact for terms
-- **Data**: Historical polity boundaries
+- **License**: CC BY-NC-SA 4.0 (Creative Commons Attribution-NonCommercial-ShareAlike)
+- **Citation**: Turchin, P., et al. (2018). Quantitative historical analysis uncovers a single dimension of complexity that structures global variation in human social organization. PNAS.
+- **Data**: Historical polity data including social complexity variables, warfare technology, and economy data
 
 ### Natural Earth
 - **Website**: https://www.naturalearthdata.com/
@@ -224,21 +234,67 @@ This project uses open source software. Key dependencies include:
 - FastAPI (MIT)
 - SQLAlchemy (MIT)
 - Pydantic (MIT)
-- httpx (BSD)
-- python-Levenshtein (GPL-2.0+) - *Note: Consider rapidfuzz (MIT) as alternative*
+- httpx (BSD-3-Clause)
+- rapidfuzz (MIT) - *Replaced python-Levenshtein (GPL-2.0)*
+- anyascii (ISC) - *Replaced unidecode (GPL-2.0)*
 
 ### Frontend (JavaScript/TypeScript)
 - React (MIT)
 - Vite (MIT)
-- Mapbox GL JS (Proprietary - see Mapbox ToS)
-- Cesium (Apache 2.0)
+- Mapbox GL JS (Proprietary - requires Mapbox account and ToS compliance)
 - Three.js (MIT)
 
-### Databases
-- PostgreSQL (PostgreSQL License)
-- PostGIS (GPL-2.0)
-- Redis (BSD-3-Clause)
+### Databases & Infrastructure
+- PostgreSQL (PostgreSQL License - BSD-like)
+- PostGIS (GPL-2.0 - usage as database backend permitted)
+- Redis 7.2.4 (BSD-3-Clause) - *Pinned version; 7.4+ uses RSALv2/SSPLv1*
 - Qdrant (Apache 2.0)
+- SearXNG (AGPL-3.0 - self-hosted)
+
+---
+
+## AI/ML Components
+
+### Language Models (via Ollama)
+- **Mistral 7B** (Apache 2.0) - Default chat model, commercial use permitted
+- **Llama 3.1** (Meta Community License) - Research mode, requires attribution
+- **Phi-3** (MIT) - Alternative option, fully permissive
+
+**Note:** Qwen models require commercial license from Alibaba Cloud for business use.
+
+### Embedding Models
+- **BAAI/bge-small-en-v1.5** (MIT) - Recommended for commercial use
+- *all-MiniLM-L6-v2 has training data restrictions (MS MARCO non-commercial)*
+
+### AI Frameworks
+- Ollama (MIT)
+- PyTorch (BSD-3-Clause)
+- Sentence-Transformers (Apache 2.0)
+- Hugging Face Transformers (Apache 2.0)
+- Qdrant Vector Database (Apache 2.0)
+
+### Required Attribution (Llama 3.1)
+```
+Llama 3.1 is licensed under the Llama 3.1 Community License,
+Copyright (c) Meta Platforms, Inc. All Rights Reserved.
+```
+
+---
+
+## Map Services
+
+### Mapbox GL JS
+- **License**: Proprietary (Mapbox Terms of Service)
+- **Requirements**: Active Mapbox account, visible attribution
+- **Attribution**: © Mapbox, © OpenStreetMap contributors
+
+### OpenStreetMap
+- **License**: ODbL (Open Database License)
+- **Attribution**: © OpenStreetMap contributors
+
+### Natural Earth
+- **License**: Public Domain
+- No attribution required
 
 ---
 
@@ -262,4 +318,29 @@ please open an issue on our GitHub repository or contact us directly.
 
 ---
 
-*Last updated: January 2026*
+---
+
+## Licensing Compliance Notes
+
+### Non-Commercial Data Sources
+The following sources have **non-commercial use restrictions**:
+
+| Source | License | Restriction |
+|--------|---------|-------------|
+| Seshat Global History Databank | CC-BY-NC-SA 4.0 | Non-commercial only |
+| CyArk | CC-BY-NC 4.0 | Non-commercial only |
+| MorphoSource | Varies (mostly CC-BY-NC) | Check per item |
+| Packard Humanities Institute | Personal/Fair Use | Academic use only |
+
+### Commercial Deployment Checklist
+For commercial use of this platform:
+- [ ] Replace Qwen models with Mistral/Phi-3 (done in defaults)
+- [ ] Use BAAI/bge-small-en-v1.5 embedding model (done in defaults)
+- [ ] Maintain active Mapbox account
+- [ ] Ensure Mapbox attribution is visible
+- [ ] Exclude or obtain licenses for NC-restricted data sources
+- [ ] Verify Sketchfab model licenses before display
+
+---
+
+*Last updated: February 2026*
