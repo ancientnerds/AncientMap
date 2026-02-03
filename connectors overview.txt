@@ -1,0 +1,205 @@
+I'll organize all the sources by category with their connection technologies. This will serve as your connector architecture blueprint.
+
+## Content Category Matrix with Connection Technologies
+
+### 1. ARTIFACTS & MUSEUM OBJECTS
+
+**Primary Sources:**
+- **Metropolitan Museum of Art** - REST API (no auth) - `collectionapi.metmuseum.org`
+- **British Museum** - SPARQL endpoint + REST - `collection.britishmuseum.org/sparql`
+- **Louvre** - JSON via URL modification - `collections.louvre.fr/{id}.json`
+- **Getty Museum** - Direct download (88K images CC0) - No API, bulk download
+- **Europeana** - Multiple APIs (Search, Record, IIIF) - Requires API key - `api.europeana.eu`
+
+**Connection Technologies:**
+- REST APIs: HTTP requests with JSON responses
+- SPARQL: Semantic queries over RDF data
+- Bulk downloads: CSV/JSON files from GitHub/direct URLs
+- IIIF: Image API standard for high-res images
+
+---
+
+### 2. ARCHAEOLOGICAL SITE DATA (with coordinates)
+
+**Primary Sources:**
+- **Pleiades** - REST API + bulk downloads - `pleiades.stoa.org/downloads`
+- **Open Context** - REST API + GeoJSON - `opencontext.org/about/services`
+- **ARIADNE Portal** - REST API + SPARQL - `portal.ariadne-infrastructure.eu`
+- **EAMENA** - Arches platform API - `database.eamena.org`
+- **Historic England NHLE** - ArcGIS Feature Service - `historicengland.org.uk/listing/the-list/data-downloads`
+- **Ireland SMR** - ArcGIS REST API - `webgis.archaeology.ie`
+- **tDAR** - REST API (requires login) - `core.tdar.org/api`
+
+**Connection Technologies:**
+- REST APIs with GeoJSON output for direct mapping
+- ArcGIS Feature Services (ESRI REST API)
+- Arches platform API (Django REST framework)
+- Bulk GeoJSON/Shapefile downloads
+
+---
+
+### 3. ACADEMIC PAPERS & SCHOLARLY PUBLICATIONS
+
+**Primary Sources:**
+- **CORE** - REST API - Requires API key - `core.ac.uk/api-keys/register`
+- **JSTOR/Constellate** - Data for Research API - Institutional access required
+- **Internet Archaeology** - No API, web scraping + RSS - `intarch.ac.uk`
+- **arXiv** - REST API + OAI-PMH - `arxiv.org/help/api`
+- **Europe PMC** - REST API - `europepmc.org/RestfulWebService`
+
+**Connection Technologies:**
+- REST APIs with metadata/full-text access
+- OAI-PMH for metadata harvesting
+- RSS feeds for updates
+- Web scraping (last resort)
+
+---
+
+### 4. HISTORICAL BOOKS & MANUSCRIPTS
+
+**Primary Sources:**
+- **HathiTrust** - Bibliographic API + Data API - `www.hathitrust.org/data`
+- **Internet Archive** - Metadata API + read/write - `archive.org/services/docs/api`
+- **Perseus Digital Library** - CTS API - `www.perseus.tufts.edu/hopper/CTS`
+- **Chinese Text Project** - JSON API - `ctext.org/tools/api`
+- **Google Books** - Books API - Requires API key - `developers.google.com/books`
+
+**Connection Technologies:**
+- REST APIs with TEI XML for classical texts
+- CTS (Canonical Text Services) protocol
+- JSON APIs for Asian texts
+- Metadata APIs with links to full text
+
+---
+
+### 5. HIGH-QUALITY IMAGERY & PHOTOGRAPHS
+
+**Primary Sources:**
+- **Wikimedia Commons** - MediaWiki API - `commons.wikimedia.org/w/api.php`
+- **Library of Congress** - JSON API - `www.loc.gov/pictures/api`
+- **U.S. National Archives** - REST API - `catalog.archives.gov/api/v2`
+- **Europeana** - Thumbnail API - Part of main API suite
+- **IIIF Consortium Members** - IIIF Image API - Standardized protocol
+
+**Connection Technologies:**
+- MediaWiki API (complex but comprehensive)
+- REST APIs with image URLs
+- IIIF Image API for progressive loading
+- Direct CDN URLs for thumbnails
+
+---
+
+### 6. 3D MODELS & RECONSTRUCTIONS
+
+**Primary Sources:**
+- **Sketchfab** - Data API (limited) - Requires OAuth - `sketchfab.com/developers`
+- **Smithsonian 3D** - Bulk download - `3d.si.edu`
+- **CyArk** - No public API - Manual download from Sketchfab
+- **Open Heritage** - Manual download - `openheritage3d.org`
+- **MorphoSource** - REST API - `www.morphosource.org/api`
+
+**Connection Technologies:**
+- OAuth authentication for Sketchfab
+- Bulk file downloads (OBJ, GLB, USDZ formats)
+- Web scraping where APIs unavailable
+- File storage/CDN for models
+
+---
+
+### 7. HISTORICAL MAPS & CARTOGRAPHY
+
+**Primary Sources:**
+- **David Rumsey Collection** - No API - Web scraping + direct downloads
+- **Library of Congress Maps** - Same API as photos - `www.loc.gov/maps/api`
+- **NYPL Map Warper** - REST API - `maps.nypl.org/warper/api`
+- **Old Maps Online** - No API - Aggregator interface only
+- **Pleiades GIS exports** - Direct download - `atlantides.org/downloads/pleiades/gis`
+
+**Connection Technologies:**
+- File downloads (GeoTIFF, KML, JPEG2000)
+- REST APIs where available
+- IIIF for high-res access
+- Web scraping for aggregators
+
+---
+
+### 8. INSCRIPTIONS & TEXTS
+
+**Primary Sources:**
+- **Epigraphic Database Heidelberg** - REST API - `edh-www.adw.uni-heidelberg.de/data/api`
+- **CDLI (Cuneiform)** - REST API + SPARQL - `cdli.mpiwg-berlin.mpg.de/api`
+- **Trismegistos** - No API - Database queries + CSV export
+- **Packard Humanities Institute** - No API - Direct downloads
+
+**Connection Technologies:**
+- REST APIs with EpiDoc XML
+- SPARQL for Linked Data
+- CSV bulk downloads
+- Database scraping
+
+---
+
+### 9. NUMISMATICS
+
+**Primary Sources:**
+- **Nomisma.org** - SPARQL + REST - `nomisma.org/documentation/apis`
+- **American Numismatic Society** - No public API - SPARQL experiments
+- **British Museum Coins** - Part of main SPARQL endpoint
+- **Portable Antiquities Scheme** - REST API - `finds.org.uk/database/help/api`
+
+**Connection Technologies:**
+- SPARQL endpoints
+- REST APIs with RDF output
+- OpenRefine reconciliation services
+
+---
+
+### 10. CONTROLLED VOCABULARIES & ONTOLOGIES
+
+**Primary Sources:**
+- **Getty AAT** - SPARQL + web services - `vocab.getty.edu/sparql`
+- **Getty TGN** - Same endpoint
+- **Getty ULAN** - Same endpoint
+- **PeriodO** - JSON-LD API - `perio.do/en`
+- **GeoNames** - REST API - Requires username - `www.geonames.org/export/web-services.html`
+
+**Connection Technologies:**
+- SPARQL for complex queries
+- REST APIs for lookups
+- JSON-LD for Linked Data
+- OpenRefine reconciliation
+
+---
+
+## Future-Proof Connector Architecture
+
+### Recommended Technology Stack:
+
+**Core Components:**
+```
+1. Connector Interface Layer (Python abstract base class)
+2. Protocol Handlers (REST, SPARQL, OAI-PMH, IIIF, ArcGIS)
+3. Authentication Manager (API keys, OAuth, Basic Auth)
+4. Rate Limiter (per-source configurations)
+5. Cache Layer (Redis/database)
+6. Data Normalizer (converts to unified schema)
+7. Error Handler & Retry Logic
+```
+
+**Protocol Support Needed:**
+- **REST APIs** (90% of sources) - `requests` or `httpx` library
+- **SPARQL endpoints** (RDF triple stores) - `SPARQLWrapper` library
+- **OAI-PMH** (metadata harvesting) - `Sickle` library
+- **ArcGIS REST** (ESRI services) - `arcgis` Python API
+- **GraphQL** (some modern APIs) - `gql` library
+- **IIIF** (images) - `iiif` library
+- **MediaWiki** (Wikimedia) - `pywikibot` or `mwclient`
+
+**File Download Support:**
+- Direct HTTP downloads
+- Bulk CSV/JSON ingestion
+- XML parsing (TEI, EpiDoc, METS)
+- GeoJSON/Shapefile processing
+- 3D model formats (OBJ, GLB, USDZ)
+
+Would you like me to design the actual connector module architecture with code structure?

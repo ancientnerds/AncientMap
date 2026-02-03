@@ -1,0 +1,15 @@
+[
+  {
+    "id": "b25f7f5f-3e02-4334-ab6f-970049296ab0",
+    "name": "test",
+    "lat": null,
+    "lon": null,
+    "description": null,
+    "country": null,
+    "site_type": null,
+    "source_url": null,
+    "status": "pending",
+    "submitted_at": "2026-01-29T23:39:59.514679Z",
+    "submitter_ip": "127.0.0.1"
+  }
+]
