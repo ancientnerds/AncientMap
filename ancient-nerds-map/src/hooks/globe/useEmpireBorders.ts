@@ -54,7 +54,9 @@ export function useEmpireBorders(options: UseEmpireBordersOptions = {}) {
   const [empireYears, setEmpireYears] = useState<Record<string, number>>({})
   const empireYearsRef = useRef<Record<string, number>>({})
   const [empireYearOptions, setEmpireYearOptions] = useState<Record<string, number[]>>({})
+  const empireYearOptionsRef = useRef<Record<string, number[]>>({})
   const [empireDefaultYears, setEmpireDefaultYears] = useState<Record<string, number>>({})
+  const empireDefaultYearsRef = useRef<Record<string, number>>({})
   const [empireCentroids, setEmpireCentroids] = useState<Record<string, Record<string, [number, number]>>>({})
 
   // Global timeline
@@ -121,6 +123,8 @@ export function useEmpireBorders(options: UseEmpireBordersOptions = {}) {
   // Sync refs with state
   visibleEmpiresRef.current = visibleEmpires
   empireYearsRef.current = empireYears
+  empireYearOptionsRef.current = empireYearOptions
+  empireDefaultYearsRef.current = empireDefaultYears
   showEmpireLabelsRef.current = showEmpireLabels
   showAncientCitiesRef.current = showAncientCities
 
@@ -279,8 +283,10 @@ export function useEmpireBorders(options: UseEmpireBordersOptions = {}) {
     empireYearsRef,
     empireYearOptions,
     setEmpireYearOptions,
+    empireYearOptionsRef,
     empireDefaultYears,
     setEmpireDefaultYears,
+    empireDefaultYearsRef,
     empireCentroids,
     setEmpireCentroids,
     changeEmpireYear,

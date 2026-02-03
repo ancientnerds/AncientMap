@@ -16,13 +16,15 @@ export function GalleryTabs({
   modelCount,
   artifactCount,
   artworkCount,
-  textCount,
+  bookCount,
+  paperCount,
   mythCount,
   isLoadingImages = false,
   isLoadingMaps = false,
   isLoadingModels = false,
   isLoadingArtifacts = false,
-  isLoadingTexts = false,
+  isLoadingBooks = false,
+  isLoadingPapers = false,
   isGalleryExpanded,
   onExpandToggle
 }: GalleryTabsProps) {
@@ -92,7 +94,7 @@ export function GalleryTabs({
       count: artworkCount
     },
     {
-      id: 'texts',
+      id: 'books',
       label: 'Books',
       icon: (
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -100,8 +102,22 @@ export function GalleryTabs({
           <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
         </svg>
       ),
-      count: textCount,
-      isLoading: isLoadingTexts
+      count: bookCount,
+      isLoading: isLoadingBooks
+    },
+    {
+      id: 'papers',
+      label: 'Papers',
+      icon: (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+        </svg>
+      ),
+      count: paperCount,
+      isLoading: isLoadingPapers
     },
     {
       id: 'myths',

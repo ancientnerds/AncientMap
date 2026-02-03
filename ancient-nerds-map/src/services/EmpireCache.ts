@@ -1,6 +1,10 @@
 /**
  * EmpireCache - Handles caching of historical empire boundary GeoJSON files
  * Uses Service Worker cache for GeoJSON data
+ *
+ * Scope: Civilizations that "touch ancient" (startYear before cutoff)
+ * - Old World (Europe, Asia, Africa, Oceania): startYear <= 500 AD
+ * - Americas: startYear <= 1500 AD
  */
 
 import { OfflineStorage } from './OfflineStorage'
@@ -16,71 +20,60 @@ export interface EmpireInfo {
   estimatedSize: number  // Actual size in bytes
 }
 
-// Empire definitions matching Globe.tsx EMPIRES constant with accurate file counts/sizes
+// Empire definitions matching empireData.ts with accurate file counts/sizes
 const EMPIRE_INFO: EmpireInfo[] = [
-  // Ancient Near East
-  { id: 'egyptian', name: 'Egyptian Empire', region: 'Ancient Near East', startYear: -2401, endYear: -29, color: '#FFD700', fileCount: 44, estimatedSize: 480 * 1024 },
-  { id: 'akkadian', name: 'Akkadian Empire', region: 'Ancient Near East', startYear: -2276, endYear: -2151, color: '#FFA07A', fileCount: 4, estimatedSize: 32 * 1024 },
-  { id: 'babylonian', name: 'Babylonian', region: 'Ancient Near East', startYear: -1781, endYear: -536, color: '#FFB347', fileCount: 19, estimatedSize: 96 * 1024 },
-  { id: 'assyrian', name: 'Assyrian Empire', region: 'Ancient Near East', startYear: -1781, endYear: -608, color: '#FF6B6B', fileCount: 21, estimatedSize: 160 * 1024 },
-  { id: 'hittite', name: 'Hittite Empire', region: 'Ancient Near East', startYear: -1551, endYear: -1176, color: '#FFAA00', fileCount: 8, estimatedSize: 52 * 1024 },
+  // Ancient Near East (7)
+  { id: 'egyptian', name: 'Egyptian Empire', region: 'Ancient Near East', startYear: -2401, endYear: -29, color: '#FFD700', fileCount: 61, estimatedSize: 480 * 1024 },
+  { id: 'akkadian', name: 'Akkadian Empire', region: 'Ancient Near East', startYear: -2276, endYear: -2151, color: '#FFA07A', fileCount: 3, estimatedSize: 32 * 1024 },
+  { id: 'elam', name: 'Elam', region: 'Ancient Near East', startYear: -3200, endYear: -601, color: '#E6A44C', fileCount: 16, estimatedSize: 96 * 1024 },
+  { id: 'babylonian', name: 'Babylonian', region: 'Ancient Near East', startYear: -1781, endYear: -536, color: '#FFB347', fileCount: 18, estimatedSize: 96 * 1024 },
+  { id: 'assyrian', name: 'Assyrian Empire', region: 'Ancient Near East', startYear: -1781, endYear: -608, color: '#FF6B6B', fileCount: 20, estimatedSize: 160 * 1024 },
+  { id: 'hittite', name: 'Hittite Empire', region: 'Ancient Near East', startYear: -1551, endYear: -1176, color: '#FFAA00', fileCount: 7, estimatedSize: 52 * 1024 },
+  { id: 'mitanni', name: 'Mitanni', region: 'Ancient Near East', startYear: -1500, endYear: -1241, color: '#D4A574', fileCount: 3, estimatedSize: 24 * 1024 },
 
-  // Mediterranean
-  { id: 'roman', name: 'Roman Empire', region: 'Mediterranean', startYear: -419, endYear: 476, color: '#FF7777', fileCount: 123, estimatedSize: 4.6 * 1024 * 1024 },
-  { id: 'greek', name: 'Greek City-States', region: 'Mediterranean', startYear: -1051, endYear: -168, color: '#FFA07A', fileCount: 71, estimatedSize: 1017 * 1024 },
-  { id: 'macedonian', name: 'Macedonian Empire', region: 'Mediterranean', startYear: -613, endYear: -168, color: '#FF8866', fileCount: 40, estimatedSize: 436 * 1024 },
-  { id: 'byzantine', name: 'Byzantine Empire', region: 'Mediterranean', startYear: 395, endYear: 1471, color: '#FF99AA', fileCount: 132, estimatedSize: 3.7 * 1024 * 1024 },
-  { id: 'carthaginian', name: 'Carthaginian', region: 'Mediterranean', startYear: -641, endYear: -155, color: '#FFAA88', fileCount: 29, estimatedSize: 336 * 1024 },
+  // Mediterranean (9)
+  { id: 'minoan', name: 'Minoan Civilization', region: 'Mediterranean', startYear: -1600, endYear: -1401, color: '#20B2AA', fileCount: 2, estimatedSize: 16 * 1024 },
+  { id: 'mycenaean', name: 'Mycenaean Greece', region: 'Mediterranean', startYear: -1500, endYear: -1101, color: '#48D1CC', fileCount: 7, estimatedSize: 48 * 1024 },
+  { id: 'phoenician', name: 'Phoenicia', region: 'Mediterranean', startYear: -700, endYear: -616, color: '#9370DB', fileCount: 13, estimatedSize: 64 * 1024 },
+  { id: 'etruscan', name: 'Etruscan Civilization', region: 'Mediterranean', startYear: -750, endYear: -265, color: '#DB7093', fileCount: 13, estimatedSize: 72 * 1024 },
+  { id: 'greek', name: 'Greek City-States', region: 'Mediterranean', startYear: -1051, endYear: -168, color: '#FFA07A', fileCount: 76, estimatedSize: 1017 * 1024 },
+  { id: 'macedonian', name: 'Macedonian Empire', region: 'Mediterranean', startYear: -613, endYear: -168, color: '#FF8866', fileCount: 39, estimatedSize: 436 * 1024 },
+  { id: 'carthaginian', name: 'Carthaginian', region: 'Mediterranean', startYear: -641, endYear: -155, color: '#FFAA88', fileCount: 28, estimatedSize: 336 * 1024 },
+  { id: 'roman', name: 'Roman Empire', region: 'Mediterranean', startYear: -419, endYear: 476, color: '#FF7777', fileCount: 125, estimatedSize: 4.6 * 1024 * 1024 },
+  { id: 'byzantine', name: 'Byzantine Empire', region: 'Mediterranean', startYear: 395, endYear: 1471, color: '#FF99AA', fileCount: 135, estimatedSize: 3.7 * 1024 * 1024 },
 
-  // Persian/Central Asia
-  { id: 'achaemenid', name: 'Achaemenid Persia', region: 'Persian/Central Asia', startYear: -546, endYear: -329, color: '#00BFFF', fileCount: 14, estimatedSize: 280 * 1024 },
-  { id: 'parthian', name: 'Parthian Empire', region: 'Persian/Central Asia', startYear: -202, endYear: 230, color: '#40E0D0', fileCount: 27, estimatedSize: 420 * 1024 },
-  { id: 'sassanid', name: 'Sassanid Empire', region: 'Persian/Central Asia', startYear: 219, endYear: 642, color: '#7FFFD4', fileCount: 47, estimatedSize: 816 * 1024 },
-  { id: 'seleucid', name: 'Seleucid Empire', region: 'Persian/Central Asia', startYear: -317, endYear: -65, color: '#00CED1', fileCount: 33, estimatedSize: 404 * 1024 },
-  { id: 'mongol', name: 'Mongol Empire', region: 'Persian/Central Asia', startYear: 1207, endYear: 1693, color: '#F0E68C', fileCount: 53, estimatedSize: 1.2 * 1024 * 1024 },
-  { id: 'timurid', name: 'Timurid Empire', region: 'Persian/Central Asia', startYear: 1379, endYear: 1504, color: '#DDA0DD', fileCount: 18, estimatedSize: 232 * 1024 },
+  // Persian/Central Asia (5)
+  { id: 'achaemenid', name: 'Achaemenid Persia', region: 'Persian/Central Asia', startYear: -546, endYear: -329, color: '#00BFFF', fileCount: 13, estimatedSize: 280 * 1024 },
+  { id: 'seleucid', name: 'Seleucid Empire', region: 'Persian/Central Asia', startYear: -317, endYear: -65, color: '#00CED1', fileCount: 32, estimatedSize: 404 * 1024 },
+  { id: 'parthian', name: 'Parthian Empire', region: 'Persian/Central Asia', startYear: -202, endYear: 230, color: '#40E0D0', fileCount: 26, estimatedSize: 420 * 1024 },
+  { id: 'kushan', name: 'Kushan Empire', region: 'Persian/Central Asia', startYear: 43, endYear: 237, color: '#5F9EA0', fileCount: 11, estimatedSize: 120 * 1024 },
+  { id: 'sassanid', name: 'Sassanid Empire', region: 'Persian/Central Asia', startYear: 219, endYear: 642, color: '#7FFFD4', fileCount: 46, estimatedSize: 816 * 1024 },
 
-  // East Asia
-  { id: 'shang', name: 'Shang Dynasty', region: 'East Asia', startYear: -1421, endYear: -1051, color: '#FFD700', fileCount: 4, estimatedSize: 20 * 1024 },
-  { id: 'zhou', name: 'Zhou Dynasty', region: 'East Asia', startYear: -901, endYear: -256, color: '#FFE135', fileCount: 18, estimatedSize: 94 * 1024 },
-  { id: 'qin', name: 'Qin Dynasty', region: 'East Asia', startYear: -216, endYear: -206, color: '#FF5733', fileCount: 4, estimatedSize: 72 * 1024 },
-  { id: 'han', name: 'Han Dynasty', region: 'East Asia', startYear: -200, endYear: 230, color: '#FF6347', fileCount: 28, estimatedSize: 548 * 1024 },
-  { id: 'tang', name: 'Tang Dynasty', region: 'East Asia', startYear: 624, endYear: 905, color: '#FF7F50', fileCount: 33, estimatedSize: 680 * 1024 },
-  { id: 'song', name: 'Song Dynasty', region: 'East Asia', startYear: 961, endYear: 1275, color: '#FFA500', fileCount: 16, estimatedSize: 208 * 1024 },
-  { id: 'ming', name: 'Ming Dynasty', region: 'East Asia', startYear: 1379, endYear: 1643, color: '#FFD700', fileCount: 27, estimatedSize: 544 * 1024 },
-  { id: 'qing', name: 'Qing Dynasty', region: 'East Asia', startYear: 1646, endYear: 1911, color: '#FFB90F', fileCount: 68, estimatedSize: 2.2 * 1024 * 1024 },
+  // East Asia (4)
+  { id: 'shang', name: 'Shang Dynasty', region: 'East Asia', startYear: -1421, endYear: -1051, color: '#FFD700', fileCount: 3, estimatedSize: 20 * 1024 },
+  { id: 'zhou', name: 'Zhou Dynasty', region: 'East Asia', startYear: -901, endYear: -256, color: '#FFE135', fileCount: 17, estimatedSize: 94 * 1024 },
+  { id: 'qin', name: 'Qin Dynasty', region: 'East Asia', startYear: -216, endYear: -206, color: '#FF5733', fileCount: 3, estimatedSize: 72 * 1024 },
+  { id: 'han', name: 'Han Dynasty', region: 'East Asia', startYear: -200, endYear: 230, color: '#FF6347', fileCount: 52, estimatedSize: 548 * 1024 },
 
-  // South Asia
-  { id: 'maurya', name: 'Maurya Empire', region: 'South Asia', startYear: -317, endYear: -180, color: '#7FFF00', fileCount: 8, estimatedSize: 84 * 1024 },
-  { id: 'gupta', name: 'Gupta Empire', region: 'South Asia', startYear: 335, endYear: 550, color: '#00FF7F', fileCount: 14, estimatedSize: 144 * 1024 },
-  { id: 'chola', name: 'Chola Dynasty', region: 'South Asia', startYear: 867, endYear: 1254, color: '#7CFC00', fileCount: 29, estimatedSize: 148 * 1024 },
-  { id: 'mughal', name: 'Mughal Empire', region: 'South Asia', startYear: 1465, endYear: 1857, color: '#ADFF2F', fileCount: 70, estimatedSize: 700 * 1024 },
+  // South Asia (3)
+  { id: 'indus_valley', name: 'Indus Valley (Harappan)', region: 'South Asia', startYear: -3000, endYear: -1701, color: '#66CDAA', fileCount: 8, estimatedSize: 64 * 1024 },
+  { id: 'maurya', name: 'Maurya Empire', region: 'South Asia', startYear: -317, endYear: -180, color: '#7FFF00', fileCount: 7, estimatedSize: 84 * 1024 },
+  { id: 'gupta', name: 'Gupta Empire', region: 'South Asia', startYear: 335, endYear: 550, color: '#00FF7F', fileCount: 13, estimatedSize: 144 * 1024 },
 
-  // Southeast Asia
-  { id: 'khmer', name: 'Khmer Empire', region: 'Southeast Asia', startYear: 802, endYear: 1431, color: '#98FB98', fileCount: 16, estimatedSize: 124 * 1024 },
-  { id: 'majapahit', name: 'Majapahit Empire', region: 'Southeast Asia', startYear: 1318, endYear: 1517, color: '#90EE90', fileCount: 11, estimatedSize: 136 * 1024 },
-  { id: 'srivijaya', name: 'Srivijaya', region: 'Southeast Asia', startYear: 677, endYear: 1289, color: '#00FA9A', fileCount: 9, estimatedSize: 72 * 1024 },
+  // Africa (2)
+  { id: 'kush', name: 'Kingdom of Kush', region: 'Africa', startYear: 46, endYear: 230, color: '#FF8C00', fileCount: 13, estimatedSize: 108 * 1024 },
+  { id: 'axum', name: 'Aksumite Empire', region: 'Africa', startYear: 93, endYear: 1933, color: '#CD853F', fileCount: 28, estimatedSize: 180 * 1024 },
 
-  // Africa
-  { id: 'kush', name: 'Kingdom of Kush', region: 'Africa', startYear: 46, endYear: 230, color: '#FF8C00', fileCount: 12, estimatedSize: 108 * 1024 },
-  { id: 'ghana', name: 'Ghana Empire', region: 'Africa', startYear: 938, endYear: 1231, color: '#F0E68C', fileCount: 4, estimatedSize: 20 * 1024 },
-  { id: 'mali', name: 'Mali Empire', region: 'Africa', startYear: 1238, endYear: 1610, color: '#FFDAB9', fileCount: 10, estimatedSize: 64 * 1024 },
-  { id: 'songhai', name: 'Songhai Empire', region: 'Africa', startYear: 1465, endYear: 1605, color: '#FFA07A', fileCount: 9, estimatedSize: 38 * 1024 },
+  // Americas (6)
+  { id: 'olmec', name: 'Olmec Civilization', region: 'Americas', startYear: -650, endYear: -351, color: '#228B22', fileCount: 2, estimatedSize: 16 * 1024 },
+  { id: 'zapotec', name: 'Zapotec Civilization', region: 'Americas', startYear: -500, endYear: 895, color: '#3CB371', fileCount: 7, estimatedSize: 28 * 1024 },
+  { id: 'teotihuacan', name: 'Teotihuacan', region: 'Americas', startYear: -50, endYear: 704, color: '#2E8B57', fileCount: 4, estimatedSize: 24 * 1024 },
+  { id: 'maya', name: 'Maya Civilization', region: 'Americas', startYear: 6, endYear: 1697, color: '#00FF7F', fileCount: 22, estimatedSize: 48 * 1024 },
+  { id: 'aztec', name: 'Aztec Empire', region: 'Americas', startYear: 1434, endYear: 1521, color: '#7CFC00', fileCount: 17, estimatedSize: 60 * 1024 },
+  { id: 'inca', name: 'Inca Empire', region: 'Americas', startYear: 1444, endYear: 1567, color: '#7FFF00', fileCount: 8, estimatedSize: 64 * 1024 },
 
-  // Americas
-  { id: 'maya', name: 'Maya Civilization', region: 'Americas', startYear: 6, endYear: 844, color: '#00FF7F', fileCount: 6, estimatedSize: 28 * 1024 },
-  { id: 'aztec', name: 'Aztec Empire', region: 'Americas', startYear: 1434, endYear: 1521, color: '#7CFC00', fileCount: 13, estimatedSize: 60 * 1024 },
-  { id: 'inca', name: 'Inca Empire', region: 'Americas', startYear: 1444, endYear: 1567, color: '#7FFF00', fileCount: 9, estimatedSize: 64 * 1024 },
-
-  // Medieval Europe
-  { id: 'hre', name: 'Holy Roman Empire', region: 'Medieval Europe', startYear: 965, endYear: 1806, color: '#87CEFA', fileCount: 132, estimatedSize: 2.8 * 1024 * 1024 },
-
-  // Islamic
-  { id: 'umayyad', name: 'Umayyad Caliphate', region: 'Islamic', startYear: 658, endYear: 755, color: '#00FF7F', fileCount: 16, estimatedSize: 400 * 1024 },
-  { id: 'abbasid', name: 'Abbasid Caliphate', region: 'Islamic', startYear: 750, endYear: 1254, color: '#7CFC00', fileCount: 41, estimatedSize: 852 * 1024 },
-  { id: 'fatimid', name: 'Fatimid Caliphate', region: 'Islamic', startYear: 916, endYear: 1172, color: '#00FF00', fileCount: 20, estimatedSize: 260 * 1024 },
-  { id: 'ayyubid', name: 'Ayyubid Dynasty', region: 'Islamic', startYear: 1182, endYear: 1245, color: '#32CD32', fileCount: 9, estimatedSize: 128 * 1024 },
-  { id: 'ottoman', name: 'Ottoman Empire', region: 'Islamic', startYear: 1315, endYear: 1922, color: '#00FA9A', fileCount: 139, estimatedSize: 4.1 * 1024 * 1024 },
+  // Medieval Europe (1)
+  { id: 'carolingian', name: 'Carolingian Empire', region: 'Medieval Europe', startYear: 465, endYear: 984, color: '#6495ED', fileCount: 80, estimatedSize: 640 * 1024 },
 ]
 
 const CACHE_NAME = 'historical-data'

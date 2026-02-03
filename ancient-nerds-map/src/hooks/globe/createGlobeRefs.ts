@@ -247,7 +247,7 @@ export function useGlobeRefs(): GlobeRefs {
   // ========== Callback Refs ==========
   const onSiteClick = useRef<((site: SiteData | null) => void) | undefined>(undefined)
   const onSiteSelect = useRef<((siteId: string | null, ctrlKey: boolean) => void) | undefined>(undefined)
-  const onEmpireClick = useRef<((empireId: string) => void) | undefined>(undefined)
+  const onEmpireClick = useRef<((empireId: string, defaultYear?: number, yearOptions?: number[]) => void) | undefined>(undefined)
   const onMeasurePointAdd = useRef<((coords: [number, number], snapped: boolean) => void) | undefined>(undefined)
   const onMeasurementComplete = useRef<((start: [number, number], end: [number, number]) => void) | undefined>(undefined)
   const onContributeMapConfirm = useRef<(() => void) | undefined>(undefined)

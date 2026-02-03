@@ -6,7 +6,9 @@ export interface LightboxImage {
   title?: string
   photographer?: string
   photographerUrl?: string
+  // Source type can be any connector ID from the backend
   sourceType?: 'wikimedia' | 'david-rumsey' | 'met-museum' | 'smithsonian'
+             | 'europeana' | 'loc' | 'british-museum' | 'sketchfab' | string
   sourceUrl?: string
   license?: string
 }

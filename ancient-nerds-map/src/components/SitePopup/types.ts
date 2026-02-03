@@ -1,7 +1,4 @@
 import type { GalleryImage } from '../ImageGallery'
-import type { AncientMap } from '../../services/ancientMapsService'
-import type { SketchfabModel } from '../../services/sketchfabService'
-import type { SmithsonianArtifact, SmithsonianText } from '../../services/smithsonianService'
 import type { SiteData } from '../../data/sites'
 import type { SeshatPolityData } from '../../types/seshat'
 
@@ -16,7 +13,7 @@ export interface Artifact {
 }
 
 // Gallery tab options
-export type GalleryTab = 'photos' | 'maps' | '3dmodels' | 'artifacts' | 'artworks' | 'texts' | 'myths'
+export type GalleryTab = 'photos' | 'maps' | '3dmodels' | 'artifacts' | 'artworks' | 'books' | 'papers' | 'myths'
 
 // Unified gallery item type for all tabs
 export interface UnifiedGalleryItem {
@@ -25,9 +22,12 @@ export interface UnifiedGalleryItem {
   full: string
   title?: string
   date?: string
+  // Source can be any connector ID from the backend
   source: 'wikipedia' | 'map' | 'artifact' | 'sketchfab' | 'smithsonian'
-  // Original data for lightbox
-  original: GalleryImage | AncientMap | Artifact | SketchfabModel | SmithsonianArtifact | SmithsonianText
+        | 'met_museum' | 'europeana' | 'british_museum' | 'loc'
+        | 'david_rumsey' | 'wikimedia' | 'wikimedia_commons' | string
+  // Original data for lightbox - can be ContentItem or legacy types
+  original: GalleryImage | Record<string, unknown>
 }
 
 // ============= Popup Data Types (Discriminated Union) =============
@@ -232,13 +232,15 @@ export interface GalleryTabsProps {
   modelCount: number
   artifactCount: number
   artworkCount: number
-  textCount: number
+  bookCount: number
+  paperCount: number
   mythCount: number
   isLoadingImages?: boolean
   isLoadingMaps?: boolean
   isLoadingModels?: boolean
   isLoadingArtifacts?: boolean
-  isLoadingTexts?: boolean
+  isLoadingBooks?: boolean
+  isLoadingPapers?: boolean
   isGalleryExpanded: boolean
   onExpandToggle: () => void
 }

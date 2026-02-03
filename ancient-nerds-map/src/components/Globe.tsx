@@ -12,6 +12,8 @@ import { CoordinateDisplay, ScaleBar, ContributePickerHint, HardwareWarning, Too
 import { ZoomControls, SocialLinks, OptionsPanel, MapLayersPanel, HistoricalLayersSection, EmpireBordersPanel } from './Globe/panels'
 import { ScreenshotControls } from './Globe/controls'
 import { useUIState, useLabelVisibility, usePaleoshoreline, useEmpireBorders, useMapboxSync, useGlobeRefs, useGlobeZoom, useSiteTooltips, useHighlightedSites, useFlyToAnimation, useSatelliteMode, useContributePicker, useScreenshot, useRotationControl, useFullscreen, useCursorMode, useStarsVisibility, useTextureLoading, useLayersReady, useTooltipHandlers } from '../hooks/globe'
+import { useConnectorStatus } from '../hooks/useConnectorStatus'
+import ConnectorStatusModal from './ConnectorStatusModal'
 import {
   loadEmpireBorders as loadEmpireBordersImpl,
   removeEmpireFromGlobe as removeEmpireFromGlobeImpl,
@@ -94,7 +96,7 @@ interface GlobeProps {
   onSiteClick?: (site: SiteData | null) => void  // Opens popup
   onTooltipClick?: (site: SiteData) => void  // Opens popup or restores minimized popup
   onSiteSelect?: (siteId: string | null, ctrlKey: boolean) => void  // Selects site (shows ring + tooltip), null = deselect all
-  onEmpireClick?: (empireId: string) => void  // Opens empire popup when clicking on empire borders
+  onEmpireClick?: (empireId: string, defaultYear?: number, yearOptions?: number[]) => void  // Opens empire popup when clicking on empire borders
   flyTo?: [number, number] | null  // [lng, lat] coordinates to fly to
   isLoading?: boolean  // Show loading state (disables clicks)
   splashDone?: boolean  // True when splash screen has closed (triggers warp animation)
@@ -200,11 +202,11 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     empiresWithAgeSync, setEmpiresWithAgeSync,
     loadingEmpires, setLoadingEmpires, loadedEmpires, setLoadedEmpires,
     expandedRegions, setExpandedRegions,
-    empireYears, setEmpireYears, empireYearsRef, empireYearOptions, setEmpireYearOptions,
-    empireDefaultYears, setEmpireDefaultYears, empireCentroids, setEmpireCentroids,
+    empireYears, setEmpireYears, empireYearsRef, empireYearOptions, setEmpireYearOptions, empireYearOptionsRef,
+    empireDefaultYears, setEmpireDefaultYears, empireDefaultYearsRef, empireCentroids, setEmpireCentroids,
     globalTimelineEnabled, setGlobalTimelineEnabled, globalTimelineYear, setGlobalTimelineYear,
-    showEmpireLabels, setShowEmpireLabels, showEmpireLabelsRef,
-    showAncientCities, setShowAncientCities, showAncientCitiesRef,
+    showEmpireLabels, setShowEmpireLabels: _setShowEmpireLabels, showEmpireLabelsRef,
+    showAncientCities, setShowAncientCities: _setShowAncientCities, showAncientCitiesRef,
     empireBordersWindowOpen, setEmpireBordersWindowOpen, empireBordersHeight, setEmpireBordersHeight,
     empireBorderLinesRef, empireLabelsRef, regionLabelsRef, ancientCitiesRef,
     empireFillMeshesRef, hoveredEmpireRef,
@@ -342,6 +344,10 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     lastCoordsUpdate: lastCoordsUpdateRef, lastScaleUpdate: lastScaleUpdateRef, lastHoverCheck: lastHoverCheckRef,
   } = refs
   const [dataSourceIndicator, setDataSourceIndicator] = useState<'postgres' | 'json' | 'offline' | 'error' | ''>('')
+
+  // Connector status - auto-refresh every 5 minutes
+  const { summary: connectorsStatus } = useConnectorStatus(300000)
+  const [showConnectorsModal, setShowConnectorsModal] = useState(false)
 
   // Update data source indicator when sites load
   useEffect(() => {
@@ -602,7 +608,8 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       measureModeRef, onMeasurePointAddRef, measureSnapEnabledRef,
       measurementsRef, currentMeasurePointsRef, zoomRef,
       // Empire hover refs
-      hoveredEmpireRef, empireBorderLinesRef, empireFillMeshesRef
+      hoveredEmpireRef, empireBorderLinesRef, empireFillMeshesRef,
+      empireDefaultYearsRef, empireYearOptionsRef
     }
 
     const handlerSetters: EventHandlerSetters = {
@@ -1622,14 +1629,30 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   useEffect(() => {
     if (externalEmpireYearRequest) {
       const { empireId, year } = externalEmpireYearRequest
-      // Only change if it's different from current
-      if (empireYears[empireId] !== year) {
-        changeEmpireYear(empireId, year)
+
+      // Find the closest available year from metadata
+      // This ensures we show actual data (e.g., 472 instead of 476 for Roman Empire)
+      const options = empireYearOptions[empireId] || []
+      let targetYear = year
+      if (options.length > 0) {
+        targetYear = options.reduce((prev, curr) =>
+          Math.abs(curr - year) < Math.abs(prev - year) ? curr : prev
+        , options[0])
+      }
+
+      // Always sync the year back to App.tsx for the popup slider
+      // Even if globe already has this year, the popup might not know about it yet
+      if (empireYears[empireId] !== targetYear) {
+        // Year is different - update globe and sync back
+        changeEmpireYear(empireId, targetYear)
+      } else {
+        // Year is the same but still sync back to ensure popup slider updates
+        onEmpireYearsChange?.({ ...empireYears, [empireId]: targetYear })
       }
       // Clear the request after handling to prevent re-triggering
       onExternalEmpireYearRequestHandled?.()
     }
-  }, [externalEmpireYearRequest, empireYears, changeEmpireYear, onExternalEmpireYearRequestHandled])
+  }, [externalEmpireYearRequest, empireYears, empireYearOptions, changeEmpireYear, onExternalEmpireYearRequestHandled, onEmpireYearsChange])
 
   // Track previous values to detect actual changes
   const prevSeaLevel = refs.prevSeaLevel
@@ -1968,6 +1991,14 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
         gpuName={gpuName}
         lowFps={lowFps}
         lowFpsReady={lowFpsReady}
+        connectorsStatus={connectorsStatus}
+        onConnectorsClick={() => setShowConnectorsModal(true)}
+      />
+
+      {/* Connector Status Modal */}
+      <ConnectorStatusModal
+        isOpen={showConnectorsModal}
+        onClose={() => setShowConnectorsModal(false)}
       />
 
       {/* Vertical zoom slider */}
