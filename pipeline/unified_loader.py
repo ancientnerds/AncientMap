@@ -14,10 +14,9 @@ import csv
 import html
 import json
 import re
-from datetime import datetime
-from pathlib import Path
-from typing import Iterator, Dict, Any, Optional, List, Tuple
 import uuid
+from collections.abc import Iterator
+from pathlib import Path
 
 
 def strip_html(text: str) -> str:
@@ -36,15 +35,17 @@ from loguru import logger
 from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert
 
-from pipeline.database import get_session, UnifiedSite, SourceMeta
+from pipeline.database import SourceMeta, UnifiedSite, get_session
 from pipeline.utils import (
-    normalize_name,
-    is_valid_coordinates,
-    parse_wkt_point as _parse_wkt_point,
     get_centroid as _get_centroid,
 )
+from pipeline.utils import (
+    normalize_name,
+)
+from pipeline.utils import (
+    parse_wkt_point as _parse_wkt_point,
+)
 from pipeline.utils.country_lookup import lookup_country
-
 
 # =============================================================================
 # GLOBAL DATE CUTOFFS - Applied to ALL sources
@@ -61,7 +62,7 @@ AMERICAS_LON_MIN = -170  # Western Alaska/Aleutians
 AMERICAS_LON_MAX = -30   # Eastern Brazil
 
 
-def passes_date_cutoff(record: Dict) -> bool:
+def passes_date_cutoff(record: dict) -> bool:
     """
     Check if record passes the GLOBAL regional date cutoff.
 
@@ -528,7 +529,7 @@ ANCIENT_SITE_TYPES = {
 }
 
 
-def parse_wkt_point(wkt: str) -> Tuple[Optional[float], Optional[float]]:
+def parse_wkt_point(wkt: str) -> tuple[float | None, float | None]:
     """Parse WKT Point string like 'Point(lon lat)' -> (lat, lon).
 
     Uses shared utility but swaps order to return (lat, lon) for compatibility.
@@ -546,7 +547,7 @@ def extract_id_from_uri(uri: str) -> str:
     return uri.rstrip("/").split("/")[-1]
 
 
-def parse_year(value) -> Optional[int]:
+def parse_year(value) -> int | None:
     """Parse year value, handling various formats."""
     if value is None or value == "":
         return None
@@ -560,7 +561,7 @@ def parse_year(value) -> Optional[int]:
     return None
 
 
-def get_centroid(geometry: Dict) -> Tuple[Optional[float], Optional[float]]:
+def get_centroid(geometry: dict) -> tuple[float | None, float | None]:
     """Get centroid from GeoJSON geometry -> (lat, lon).
 
     Uses shared utility but swaps order to return (lat, lon) for compatibility.
@@ -571,7 +572,7 @@ def get_centroid(geometry: Dict) -> Tuple[Optional[float], Optional[float]]:
     return None, None
 
 
-def normalize_site_type(site_type: Optional[str]) -> str:
+def normalize_site_type(site_type: str | None) -> str:
     """Normalize site type to lowercase for consistent filtering.
 
     Args:
@@ -585,7 +586,7 @@ def normalize_site_type(site_type: Optional[str]) -> str:
     return site_type.lower().strip()
 
 
-def enrich_country(record: Dict) -> Dict:
+def enrich_country(record: dict) -> dict:
     """Add country field if missing, using coordinates for reverse geocoding.
 
     Args:
@@ -626,7 +627,7 @@ class UnifiedLoader:
         self.stats = {}
         self.skip_backup = skip_backup
 
-    def load_all(self, source_filter: Optional[str] = None, batch_size: int = 5000, skip_loaded: bool = False):
+    def load_all(self, source_filter: str | None = None, batch_size: int = 5000, skip_loaded: bool = False):
         """Load all sources or a specific source."""
         # Create backup before any destructive operations
         if not self.skip_backup:
@@ -724,7 +725,7 @@ class UnifiedLoader:
             session.execute(stmt)
         session.commit()
 
-    def _load_source(self, session, source_id: str, config: Dict, batch_size: int) -> int:
+    def _load_source(self, session, source_id: str, config: dict, batch_size: int) -> int:
         """Load a single source into unified_sites."""
         source_dir = self.raw_dir / source_id
         if not source_dir.exists():
@@ -802,7 +803,7 @@ class UnifiedLoader:
         session.commit()
         return total
 
-    def _insert_batch(self, session, records: List[Dict]):
+    def _insert_batch(self, session, records: list[dict]):
         """Insert a batch of records using bulk insert."""
         if not records:
             return
@@ -829,12 +830,12 @@ class UnifiedLoader:
 
     # ===== PARSERS FOR EACH FORMAT =====
 
-    def _parse_csv(self, path: Path, source_id: str, config: Dict) -> Iterator[Dict]:
+    def _parse_csv(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
         """Parse Pleiades CSV format."""
         # Period cutoff: include ancient + pre-Columbian (up to 1500 AD)
         PERIOD_CUTOFF = 1500
 
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 lat = parse_year(row.get("reprLat"))  # Actually float, not year
@@ -881,9 +882,9 @@ class UnifiedLoader:
                     },
                 }
 
-    def _parse_geojson(self, path: Path, source_id: str, config: Dict) -> Iterator[Dict]:
+    def _parse_geojson(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
         """Parse GeoJSON FeatureCollection."""
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
 
         features = data.get("features", [])
@@ -943,9 +944,9 @@ class UnifiedLoader:
                 "raw_data": {k: v for k, v in props.items() if k not in ("name", "description")},
             }
 
-    def _parse_geojson_impacts(self, path: Path, source_id: str, config: Dict) -> Iterator[Dict]:
+    def _parse_geojson_impacts(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
         """Parse Earth Impact Database GeoJSON format."""
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
 
         features = data.get("features", [])
@@ -1010,7 +1011,7 @@ class UnifiedLoader:
                 },
             }
 
-    def _parse_geojson_ancient_nerds(self, path: Path, source_id: str, config: Dict) -> Iterator[Dict]:
+    def _parse_geojson_ancient_nerds(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
         """Parse Ancient Nerds original GeoJSON format with rich descriptions."""
         # Period mapping from text to numeric years
         PERIOD_MAPPING = {
@@ -1024,7 +1025,7 @@ class UnifiedLoader:
             "1000 - 1500 AD": (1000, 1500),
         }
 
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
 
         features = data.get("features", [])
@@ -1097,9 +1098,9 @@ class UnifiedLoader:
                 },
             }
 
-    def _parse_wikidata(self, path: Path, source_id: str, config: Dict) -> Iterator[Dict]:
+    def _parse_wikidata(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
         """Parse Wikidata SPARQL results."""
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
 
         results = data.get("results", [])
@@ -1145,9 +1146,9 @@ class UnifiedLoader:
                 "raw_data": {"wikidata_id": record_id},
             }
 
-    def _parse_osm(self, path: Path, source_id: str, config: Dict) -> Iterator[Dict]:
+    def _parse_osm(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
         """Parse OpenStreetMap historic elements."""
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
 
         elements = data.get("elements", [])
@@ -1199,9 +1200,9 @@ class UnifiedLoader:
                 },
             }
 
-    def _parse_json_places(self, path: Path, source_id: str, config: Dict) -> Iterator[Dict]:
+    def _parse_json_places(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
         """Parse ToposText places JSON."""
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
 
         places = data.get("places", [])
@@ -1255,9 +1256,9 @@ class UnifiedLoader:
                 },
             }
 
-    def _parse_json_sites(self, path: Path, source_id: str, config: Dict) -> Iterator[Dict]:
+    def _parse_json_sites(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
         """Parse generic JSON sites format."""
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
 
         # Find the array of sites (could be under different keys)
@@ -1358,9 +1359,9 @@ class UnifiedLoader:
                 "raw_data": {k: v for k, v in site.items() if k not in ("name", "lat", "lon", "description")},
             }
 
-    def _parse_arachne(self, path: Path, source_id: str, config: Dict) -> Iterator[Dict]:
+    def _parse_arachne(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
         """Parse Arachne results."""
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
 
         results = data.get("results", [])
@@ -1412,11 +1413,11 @@ class UnifiedLoader:
                 },
             }
 
-    def _parse_eamena(self, path: Path, source_id: str, config: Dict) -> Iterator[Dict]:
+    def _parse_eamena(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
         """Parse EAMENA (Endangered Archaeology of MENA) data with nested geometry."""
         import ast
 
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
 
         results = data.get("results", [])
@@ -1474,9 +1475,9 @@ class UnifiedLoader:
                 "raw_data": {"eamena_id": name},
             }
 
-    def _parse_nomisma(self, path: Path, source_id: str, config: Dict) -> Iterator[Dict]:
+    def _parse_nomisma(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
         """Parse Nomisma coin data (mints and finds)."""
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
 
         # Process mints (ancient coin minting locations)
@@ -1558,12 +1559,12 @@ class UnifiedLoader:
                 },
             }
 
-    def _parse_edh(self, path: Path, source_id: str, config: Dict) -> Iterator[Dict]:
+    def _parse_edh(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
         """Parse Epigraphic Database Heidelberg inscriptions."""
         # Period cutoff: include ancient + pre-Columbian (up to 1500 AD)
         PERIOD_CUTOFF = 1500
 
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
 
         inscriptions = data.get("inscriptions", [])
@@ -1615,13 +1616,13 @@ class UnifiedLoader:
                 },
             }
 
-    def _parse_geonames_tsv(self, path: Path, source_id: str, config: Dict) -> Iterator[Dict]:
+    def _parse_geonames_tsv(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
         """Parse GeoNames TSV format."""
         # GeoNames columns: geonameid, name, asciiname, alternatenames, latitude, longitude,
         # feature class, feature code, country code, cc2, admin1, admin2, admin3, admin4,
         # population, elevation, dem, timezone, modification date
 
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             for line in f:
                 parts = line.strip().split("\t")
                 if len(parts) < 8:
@@ -1665,7 +1666,7 @@ class UnifiedLoader:
                     },
                 }
 
-    def _parse_maps(self, path: Path, source_id: str, config: Dict) -> Iterator[Dict]:
+    def _parse_maps(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
         """Parse David Rumsey historical maps (content source - skip for sites)."""
         # Historical maps don't represent sites - they're content to link TO sites
         # Return empty iterator; maps will be used in content_linker.py
@@ -1708,7 +1709,7 @@ class UnifiedLoader:
 
         return class_map.get(feature_class, "place")
 
-    def _extract_thumbnail(self, site: Dict) -> Optional[str]:
+    def _extract_thumbnail(self, site: dict) -> str | None:
         """
         Extract thumbnail URL from site dict, checking multiple locations.
 
@@ -1879,7 +1880,7 @@ class UnifiedLoader:
 
         return "site"
 
-    def _build_description(self, site: Dict) -> Optional[str]:
+    def _build_description(self, site: dict) -> str | None:
         """Build description from various possible fields in the site data."""
         # Primary description fields
         desc = site.get("description") or site.get("comments")
@@ -1907,7 +1908,7 @@ class UnifiedLoader:
 
         return None
 
-    def _derive_period_start(self, source_id: str, site: Dict) -> Optional[int]:
+    def _derive_period_start(self, source_id: str, site: dict) -> int | None:
         """Derive period_start from site data, with special handling for certain sources."""
         # First try standard date fields
         period = parse_year(site.get("date_start", site.get("period_start", site.get("year_start", site.get("year")))))

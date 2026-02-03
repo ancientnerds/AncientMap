@@ -8,12 +8,11 @@ Manages concurrent user connections and inference queue for Lyra AI.
 """
 
 import json
-import time
 import logging
-from collections import deque
-from typing import Optional
-import threading
 import os
+import threading
+import time
+from collections import deque
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +43,7 @@ class AccessControlService:
         self._connected_users: dict[str, dict] = {}  # token → {pin, last_activity}
         self._pins_in_use: dict[str, str] = {}  # pin → token
         self._inference_queue: deque[str] = deque()   # tokens waiting
-        self._current_inference: Optional[str] = None
+        self._current_inference: str | None = None
         self._lock = threading.Lock()
 
     def is_valid_pin(self, pin: str) -> bool:
@@ -174,7 +173,7 @@ class AccessControlService:
             position = len(self._inference_queue)
             return {"position": position, "status": "waiting"}
 
-    def finish_inference(self, token: str) -> Optional[str]:
+    def finish_inference(self, token: str) -> str | None:
         """
         Called when inference completes.
 
@@ -250,7 +249,7 @@ class AccessControlService:
 
 
 # Singleton instance
-_access_control: Optional[AccessControlService] = None
+_access_control: AccessControlService | None = None
 
 
 def get_access_control() -> AccessControlService:

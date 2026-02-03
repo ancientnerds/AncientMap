@@ -9,11 +9,10 @@ License: CC-BY-NC (non-commercial use)
 API Key: Not required
 """
 
-import json
-from pathlib import Path
-from typing import Iterator, Optional, Dict, Any, List
-from datetime import datetime
 import time
+from collections.abc import Iterator
+from datetime import datetime
+from pathlib import Path
 
 from loguru import logger
 

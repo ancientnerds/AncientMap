@@ -5,8 +5,9 @@ Uses Google's Street View metadata API to check if coverage exists
 at given coordinates. Results are cached to minimize API calls.
 """
 
-import os
 import logging
+import os
+
 import httpx
 from fastapi import APIRouter, Query
 

@@ -10,9 +10,9 @@ API Key: Not required
 """
 
 import json
-from pathlib import Path
-from typing import Iterator, Optional, Dict
+from collections.abc import Iterator
 from datetime import datetime
+from pathlib import Path
 
 from loguru import logger
 
@@ -119,7 +119,7 @@ class NCEIEarthquakesIngester(BaseIngester):
         logger.info(f"Saved {len(all_earthquakes):,} earthquakes to {dest_path}")
         return dest_path
 
-    def _parse_earthquake(self, feature: Dict) -> Optional[Dict]:
+    def _parse_earthquake(self, feature: dict) -> dict | None:
         """Parse a single earthquake feature from the ArcGIS response."""
         attrs = feature.get("attributes", {})
 
@@ -167,7 +167,7 @@ class NCEIEarthquakesIngester(BaseIngester):
         """Parse NCEI earthquake data into ParsedSite objects."""
         logger.info(f"Parsing NCEI earthquake data from {raw_data_path}")
 
-        with open(raw_data_path, "r", encoding="utf-8") as f:
+        with open(raw_data_path, encoding="utf-8") as f:
             data = json.load(f)
 
         earthquakes = data.get("earthquakes", [])
@@ -178,7 +178,7 @@ class NCEIEarthquakesIngester(BaseIngester):
             if site:
                 yield site
 
-    def _earthquake_to_site(self, eq: Dict) -> Optional[ParsedSite]:
+    def _earthquake_to_site(self, eq: dict) -> ParsedSite | None:
         """Convert an earthquake record to a ParsedSite."""
         lat = eq.get("lat")
         lon = eq.get("lon")

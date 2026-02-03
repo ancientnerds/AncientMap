@@ -14,17 +14,16 @@ Usage:
 """
 
 import json
+import math
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Iterator
-from datetime import datetime
 
 from loguru import logger
 from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert
 
-from pipeline.database import get_session, SiteContentLink
+from pipeline.database import SiteContentLink, get_session
 from pipeline.utils import haversine_distance, normalize_name
-
 
 # Content source configurations
 CONTENT_SOURCES = {
@@ -72,7 +71,6 @@ DISTANCE_THRESHOLDS = {
 
 def normalize_for_matching(name: str) -> str:
     """Normalize name for fuzzy matching with prefix removal."""
-    import re
 
     # Use shared normalize_name utility
     normalized = normalize_name(name)
@@ -109,7 +107,7 @@ def name_similarity(name1: str, name2: str) -> float:
 
     # Simple character-based similarity (Jaccard on character trigrams)
     def trigrams(s):
-        return set(s[i:i+3] for i in range(len(s)-2)) if len(s) >= 3 else {s}
+        return {s[i:i+3] for i in range(len(s)-2)} if len(s) >= 3 else {s}
 
     t1, t2 = trigrams(n1), trigrams(n2)
     if not t1 or not t2:
@@ -127,7 +125,7 @@ class ContentLinker:
     def __init__(self):
         self.stats = {}
 
-    def link_all(self, content_type: Optional[str] = None):
+    def link_all(self, content_type: str | None = None):
         """Link all content types or a specific type."""
         sources_to_link = []
 
@@ -156,7 +154,7 @@ class ContentLinker:
 
         self._print_summary()
 
-    def _link_source(self, session, source_id: str, config: Dict) -> int:
+    def _link_source(self, session, source_id: str, config: dict) -> int:
         """Link a single content source to sites."""
         file_path = Path(config["file"])
         if not file_path.exists():
@@ -164,7 +162,7 @@ class ContentLinker:
             return 0
 
         # Load content data
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             data = json.load(f)
 
         content_items = data.get(config["data_key"], [])
@@ -215,7 +213,7 @@ class ContentLinker:
         session.commit()
         return links_created
 
-    def _insert_links(self, session, links: List[Dict]):
+    def _insert_links(self, session, links: list[dict]):
         """Bulk insert links."""
         if not links:
             return
@@ -226,7 +224,7 @@ class ContentLinker:
         )
         session.execute(stmt)
 
-    def _link_text(self, session, source_id: str, item: Dict, content_type: str) -> Iterator[Dict]:
+    def _link_text(self, session, source_id: str, item: dict, content_type: str) -> Iterator[dict]:
         """Link ToposText places to sites."""
         # Get item location
         lat = item.get("lat")
@@ -308,7 +306,7 @@ class ContentLinker:
                 },
             }
 
-    def _link_inscription(self, session, source_id: str, item: Dict, content_type: str) -> Iterator[Dict]:
+    def _link_inscription(self, session, source_id: str, item: dict, content_type: str) -> Iterator[dict]:
         """Link EDH inscriptions to sites."""
         lat = item.get("lat")
         lon = item.get("lon")
@@ -378,7 +376,7 @@ class ContentLinker:
                 },
             }
 
-    def _link_map(self, session, source_id: str, item: Dict, content_type: str) -> Iterator[Dict]:
+    def _link_map(self, session, source_id: str, item: dict, content_type: str) -> Iterator[dict]:
         """Link David Rumsey historical maps to sites.
 
         Maps are linked based on:
@@ -483,7 +481,7 @@ class ContentLinker:
                 },
             }
 
-    def _link_model(self, session, source_id: str, item: Dict, content_type: str) -> Iterator[Dict]:
+    def _link_model(self, session, source_id: str, item: dict, content_type: str) -> Iterator[dict]:
         """Link Sketchfab 3D models to sites."""
         lat = item.get("lat")
         lon = item.get("lon")
@@ -588,7 +586,7 @@ class ContentLinker:
                 },
             }
 
-    def _link_artwork(self, session, source_id: str, item: Dict, content_type: str) -> Iterator[Dict]:
+    def _link_artwork(self, session, source_id: str, item: dict, content_type: str) -> Iterator[dict]:
         """Link Europeana artworks to sites."""
         lat = item.get("lat")
         lon = item.get("lon")
@@ -695,7 +693,7 @@ class ContentLinker:
                 "metadata": {},
             }
 
-    def _link_generic(self, session, source_id: str, item: Dict, content_type: str) -> Iterator[Dict]:
+    def _link_generic(self, session, source_id: str, item: dict, content_type: str) -> Iterator[dict]:
         """Generic linker for unknown content types."""
         lat = item.get("lat")
         lon = item.get("lon")

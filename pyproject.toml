@@ -95,9 +95,22 @@ select = [
 ]
 ignore = [
     "E501",   # Line too long (handled by formatter)
+    "E402",   # Module level import not at top (needed for load_dotenv pattern)
+    "E722",   # Bare except (used intentionally in connector error handling)
+    "E741",   # Ambiguous variable name
+    "F401",   # Unused imports (managed manually)
     "S101",   # Assert usage (OK in tests)
     "S104",   # Binding to all interfaces
+    "S110",   # try-except-pass (intentional in connectors)
+    "S112",   # try-except-continue (intentional in connectors)
+    "S310",   # Suspicious URL open (we fetch URLs by design)
+    "S314",   # Suspicious XML element tree (we parse XML feeds)
+    "S324",   # Insecure hash MD5 (used for checksums, not security)
+    "S603",   # Subprocess without shell=true
+    "S607",   # Start process with partial path
+    "S608",   # Hardcoded SQL (intentional in data pipeline)
     "B008",   # Function call in default argument (OK for FastAPI Depends)
+    "B023",   # Function uses loop variable (intentional closures)
 ]
 
 [tool.ruff.lint.per-file-ignores]

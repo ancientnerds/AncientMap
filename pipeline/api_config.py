@@ -7,9 +7,8 @@ Falls back to environment variables if config.json is missing or incomplete.
 
 import json
 import os
-from pathlib import Path
-from typing import Optional
 from functools import lru_cache
+from pathlib import Path
 
 from dotenv import load_dotenv
 from loguru import logger
@@ -22,19 +21,19 @@ load_dotenv(PROJECT_ROOT / ".env")
 CONFIG_FILE = PROJECT_ROOT / "config.json"
 
 
-@lru_cache()
+@lru_cache
 def load_config() -> dict:
     """Load configuration from config.json."""
     if CONFIG_FILE.exists():
         try:
-            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            with open(CONFIG_FILE, encoding="utf-8") as f:
                 return json.load(f)
         except json.JSONDecodeError as e:
             logger.warning(f"Invalid config.json: {e}")
     return {}
 
 
-def get_api_key(service: str, key_name: str = "api_key") -> Optional[str]:
+def get_api_key(service: str, key_name: str = "api_key") -> str | None:
     """
     Get API key for a service.
 
@@ -97,7 +96,7 @@ def get_database_config() -> dict:
     }
 
 
-def get_mapbox_token() -> Optional[str]:
+def get_mapbox_token() -> str | None:
     """Get Mapbox access token."""
     return get_api_key("mapbox", "access_token")
 

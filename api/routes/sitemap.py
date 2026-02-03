@@ -5,6 +5,7 @@ Generates XML sitemaps for search engine indexing.
 """
 
 from datetime import datetime
+
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy import text
 from sqlalchemy.orm import Session

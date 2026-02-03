@@ -9,11 +9,11 @@ License: ODbL (Open Database License)
 """
 
 import json
-import asyncio
-from pathlib import Path
-from typing import Iterator, Optional, Dict, Any, List, Tuple
-from datetime import datetime
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 import httpx
 from loguru import logger
@@ -203,7 +203,7 @@ class OSMHistoricIngester(BaseIngester):
 
         return dest_path
 
-    def _query_overpass_sync(self, tag: str, bbox: tuple, endpoint_idx: int = 0) -> List[Dict]:
+    def _query_overpass_sync(self, tag: str, bbox: tuple, endpoint_idx: int = 0) -> list[dict]:
         """Query Overpass API synchronously (for thread pool)."""
         south, west, north, east = bbox
 
@@ -242,7 +242,7 @@ out center;"""
         """Parse OSM historic sites data."""
         logger.info(f"Parsing OSM historic data from {raw_data_path}")
 
-        with open(raw_data_path, "r", encoding="utf-8") as f:
+        with open(raw_data_path, encoding="utf-8") as f:
             data = json.load(f)
 
         elements = data.get("elements", [])
@@ -253,7 +253,7 @@ out center;"""
             if site:
                 yield site
 
-    def _parse_element(self, element: Dict[str, Any]) -> Optional[ParsedSite]:
+    def _parse_element(self, element: dict[str, Any]) -> ParsedSite | None:
         """Parse a single OSM element."""
         elem_type = element.get("type", "")
         elem_id = element.get("id", "")
@@ -332,7 +332,7 @@ out center;"""
             },
         )
 
-    def _parse_date(self, date_str: str) -> Optional[int]:
+    def _parse_date(self, date_str: str) -> int | None:
         """Parse OSM date string to year."""
         if not date_str:
             return None

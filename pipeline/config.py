@@ -4,9 +4,8 @@ Configuration management for the ANCIENT NERDS - Research Platform data pipeline
 Uses pydantic-settings for type-safe configuration with environment variable support.
 """
 
-from pathlib import Path
 from functools import lru_cache
-from typing import Optional
+from pathlib import Path
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -148,11 +147,11 @@ class Settings(BaseSettings):
     rate_limit: RateLimitSettings = Field(default_factory=RateLimitSettings)
 
     # External API keys (optional)
-    europeana_api_key: Optional[str] = None
-    mapbox_access_token: Optional[str] = None
+    europeana_api_key: str | None = None
+    mapbox_access_token: str | None = None
 
 
-@lru_cache()
+@lru_cache
 def get_settings() -> Settings:
     """
     Get cached settings instance.

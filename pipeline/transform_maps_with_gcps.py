@@ -10,12 +10,13 @@ The affine transformation allows precise conversion from geographic coordinates
 Output: ancient_maps.json with transformation coefficients for precise marker placement.
 """
 
-import pandas as pd
-import numpy as np
-import json
 import ast
+import json
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
+
+import numpy as np
+import pandas as pd
 
 
 def compute_affine_transform(gcps: list) -> tuple:
@@ -166,7 +167,7 @@ def process_maps():
             'src': 'David Rumsey Collection',
             'n': len(maps_data),
             'withTransform': with_transform,
-            'generated': datetime.now(timezone.utc).isoformat()
+            'generated': datetime.now(UTC).isoformat()
         }
     }
 
@@ -180,7 +181,7 @@ def process_maps():
 
     # Show sample
     if maps_data:
-        print(f"\nSample map:")
+        print("\nSample map:")
         sample = maps_data[0]
         print(f"  Title: {sample['t']}")
         print(f"  Date: {sample['d']}")

@@ -10,21 +10,16 @@ Usage:
 """
 
 import argparse
-import json
 import re
 import time
-from datetime import datetime
-from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
 
 from loguru import logger
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from pipeline.database import get_session
 from pipeline.api_config import get_sketchfab_api_key
+from pipeline.database import get_session
 from pipeline.utils.http import fetch_with_retry
-
 
 # =============================================================================
 # Sketchfab API Configuration
@@ -115,7 +110,7 @@ def normalize_name(name: str) -> str:
     return name
 
 
-def extract_location_names(text: str) -> Set[str]:
+def extract_location_names(text: str) -> set[str]:
     """Extract potential location names from text."""
     names = set()
     if not text:
@@ -136,7 +131,7 @@ def extract_location_names(text: str) -> Set[str]:
     return names
 
 
-def calculate_match_score(model: Dict, site_name: str, site_alt_names: List[str] = None) -> float:
+def calculate_match_score(model: dict, site_name: str, site_alt_names: list[str] = None) -> float:
     """
     Calculate how well a model matches a site.
 
@@ -199,7 +194,7 @@ def calculate_match_score(model: Dict, site_name: str, site_alt_names: List[str]
 # Sketchfab API Functions
 # =============================================================================
 
-def fetch_models_for_query(query: str, api_key: str = None, max_results: int = MAX_RESULTS_PER_QUERY) -> List[Dict]:
+def fetch_models_for_query(query: str, api_key: str = None, max_results: int = MAX_RESULTS_PER_QUERY) -> list[dict]:
     """Fetch 3D models matching a search query."""
     models = []
 
@@ -259,7 +254,7 @@ def fetch_models_for_query(query: str, api_key: str = None, max_results: int = M
     return models
 
 
-def fetch_user_models(username: str, api_key: str = None) -> List[Dict]:
+def fetch_user_models(username: str, api_key: str = None) -> list[dict]:
     """Fetch all models from a specific user."""
     models = []
 
@@ -318,7 +313,7 @@ def fetch_user_models(username: str, api_key: str = None) -> List[Dict]:
     return models
 
 
-def parse_model(item: Dict) -> Optional[Dict]:
+def parse_model(item: dict) -> dict | None:
     """Parse a Sketchfab API model response."""
     if not item:
         return None
@@ -357,7 +352,7 @@ def parse_model(item: Dict) -> Optional[Dict]:
 # Database Functions
 # =============================================================================
 
-def get_sites_without_images(session: Session, limit: int = None) -> List[Dict]:
+def get_sites_without_images(session: Session, limit: int = None) -> list[dict]:
     """Get sites that don't have thumbnail images yet."""
     query = """
         SELECT id, name, source_id, site_type
@@ -410,7 +405,7 @@ def update_site_thumbnail(session: Session, site_id: str, thumbnail_url: str, sk
         return False
 
 
-def get_stats(session: Session) -> Dict:
+def get_stats(session: Session) -> dict:
     """Get Sketchfab image statistics."""
     result = session.execute(text("""
         SELECT
@@ -431,7 +426,7 @@ def get_stats(session: Session) -> Dict:
 # Main Matching Logic
 # =============================================================================
 
-def match_sketchfab_to_sites(limit: int = 10000, min_score: float = 50.0) -> Dict:
+def match_sketchfab_to_sites(limit: int = 10000, min_score: float = 50.0) -> dict:
     """
     Fetch Sketchfab models and match them to database sites.
 

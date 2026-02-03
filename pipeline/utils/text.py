@@ -2,7 +2,6 @@
 
 import re
 import unicodedata
-from typing import Optional
 
 
 def normalize_name(name: str, remove_parentheses: bool = True, remove_brackets: bool = True) -> str:
@@ -74,7 +73,7 @@ def normalize_for_search(text: str) -> str:
     return text.lower().strip()
 
 
-def clean_description(description: Optional[str], max_length: int = 1000) -> Optional[str]:
+def clean_description(description: str | None, max_length: int = 1000) -> str | None:
     """Clean and truncate a description string.
 
     Args:
@@ -100,7 +99,7 @@ def clean_description(description: Optional[str], max_length: int = 1000) -> Opt
     return text if text else None
 
 
-def extract_period_from_text(text: str) -> Optional[int]:
+def extract_period_from_text(text: str) -> int | None:
     """Try to extract a year from text.
 
     Looks for patterns like:

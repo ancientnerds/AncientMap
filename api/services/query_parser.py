@@ -11,7 +11,6 @@ Parses user queries to extract:
 
 import re
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 @dataclass
@@ -22,10 +21,10 @@ class QueryIntent:
     filters: dict = field(default_factory=dict)
     wants_highlight: bool = False
     site_types: list[str] = field(default_factory=list)
-    period_name: Optional[str] = None
-    region_name: Optional[str] = None
-    source_ids: Optional[list[str]] = None  # Specific source collections to search
-    feature_type: Optional[str] = None       # Geographic feature for proximity search
+    period_name: str | None = None
+    region_name: str | None = None
+    source_ids: list[str] | None = None  # Specific source collections to search
+    feature_type: str | None = None       # Geographic feature for proximity search
     feature_radius_km: float = 50.0          # Radius for proximity search
 
 

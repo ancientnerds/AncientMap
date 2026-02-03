@@ -10,10 +10,11 @@ API Key: Not required
 """
 
 import json
-from pathlib import Path
-from typing import Iterator, Optional, Dict, Any, List
-from datetime import datetime
 import time
+from collections.abc import Iterator
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 from loguru import logger
 
@@ -132,7 +133,7 @@ class HistoricEnglandIngester(BaseIngester):
         logger.info(f"Saved {len(all_features):,} records to {dest_path}")
         return dest_path
 
-    def _fetch_arcgis_layer(self, base_url: str, layer_name: str) -> List[Dict]:
+    def _fetch_arcgis_layer(self, base_url: str, layer_name: str) -> list[dict]:
         """
         Fetch all features from an ArcGIS layer with pagination.
 
@@ -189,7 +190,7 @@ class HistoricEnglandIngester(BaseIngester):
         """
         logger.info(f"Parsing Historic England data from {raw_data_path}")
 
-        with open(raw_data_path, "r", encoding="utf-8") as f:
+        with open(raw_data_path, encoding="utf-8") as f:
             data = json.load(f)
 
         features = data.get("features", [])
@@ -200,7 +201,7 @@ class HistoricEnglandIngester(BaseIngester):
             if site:
                 yield site
 
-    def _parse_feature(self, feature: Dict[str, Any]) -> Optional[ParsedSite]:
+    def _parse_feature(self, feature: dict[str, Any]) -> ParsedSite | None:
         """
         Parse a single GeoJSON feature.
 

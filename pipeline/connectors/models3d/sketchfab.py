@@ -11,14 +11,13 @@ Features:
 - Human-created models only (excludes AI-generated)
 """
 
-from typing import List, Optional
+
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
-from pipeline.connectors.types import ContentType, ContentItem, AuthType, ProtocolType
-from pipeline.connectors.registry import ConnectorRegistry
 from pipeline.connectors.protocols.rest import RestProtocol
-
+from pipeline.connectors.registry import ConnectorRegistry
+from pipeline.connectors.types import AuthType, ContentItem, ContentType, ProtocolType
 
 # Minimum relevance score to include a model (0-100)
 # Lowered to 10 since Sketchfab already filters by cultural-heritage-history category
@@ -49,6 +48,7 @@ class SketchfabConnector(BaseConnector):
     content_types = [ContentType.MODEL_3D]
 
     base_url = "https://api.sketchfab.com/v3"
+    website_url = "https://sketchfab.com"
     protocol = ProtocolType.REST
     rate_limit = 2.0  # Sketchfab can rate limit
     requires_auth = False  # Public API, OAuth only for uploads
@@ -57,7 +57,7 @@ class SketchfabConnector(BaseConnector):
     license = "Varies by model"
     attribution = "3D models from Sketchfab"
 
-    def __init__(self, api_key: Optional[str] = None, **kwargs):
+    def __init__(self, api_key: str | None = None, **kwargs):
         super().__init__(api_key=api_key, **kwargs)
         self.rest = RestProtocol(
             base_url=self.base_url,
@@ -67,11 +67,11 @@ class SketchfabConnector(BaseConnector):
     async def search(
         self,
         query: str,
-        content_type: Optional[ContentType] = None,
+        content_type: ContentType | None = None,
         limit: int = 20,
         offset: int = 0,
         **kwargs,
-    ) -> List[ContentItem]:
+    ) -> list[ContentItem]:
         """
         Search for 3D models matching query.
 
@@ -144,7 +144,7 @@ class SketchfabConnector(BaseConnector):
             logger.error(f"Sketchfab search error: {e}")
             return []
 
-    async def get_item(self, item_id: str) -> Optional[ContentItem]:
+    async def get_item(self, item_id: str) -> ContentItem | None:
         """Get a specific 3D model by its UID."""
         try:
             async with self.rest:
@@ -159,13 +159,13 @@ class SketchfabConnector(BaseConnector):
     async def get_by_site(
         self,
         site_name: str,
-        location: Optional[str] = None,
-        lat: Optional[float] = None,
-        lon: Optional[float] = None,
-        content_type: Optional[ContentType] = None,
+        location: str | None = None,
+        lat: float | None = None,
+        lon: float | None = None,
+        content_type: ContentType | None = None,
         limit: int = 20,
         **kwargs,
-    ) -> List[ContentItem]:
+    ) -> list[ContentItem]:
         """Get 3D models for an archaeological site."""
         return await self.search(
             query=site_name,
@@ -180,7 +180,7 @@ class SketchfabConnector(BaseConnector):
         original_query: str,
         primary_name: str,
         country: str,
-    ) -> Optional[ContentItem]:
+    ) -> ContentItem | None:
         """Parse Sketchfab API result into ContentItem."""
         if not result or not isinstance(result, dict):
             return None
@@ -238,7 +238,7 @@ class SketchfabConnector(BaseConnector):
             raw_data=result,
         )
 
-    def _select_thumbnail(self, thumbnails: list) -> Optional[str]:
+    def _select_thumbnail(self, thumbnails: list) -> str | None:
         """Select best thumbnail from available options."""
         if not thumbnails:
             return None

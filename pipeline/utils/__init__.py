@@ -1,19 +1,19 @@
 """Utility modules for the data pipeline."""
 
-from pipeline.utils.http import fetch_with_retry, download_file
-from pipeline.utils.logging import setup_logging
 from pipeline.utils.geo import (
-    is_valid_coordinates,
-    haversine_distance,
-    parse_wkt_point,
     get_centroid,
+    haversine_distance,
+    is_valid_coordinates,
     normalize_coordinates,
+    parse_wkt_point,
 )
+from pipeline.utils.http import download_file, fetch_with_retry
+from pipeline.utils.logging import setup_logging
 from pipeline.utils.text import (
-    normalize_name,
-    normalize_for_search,
     clean_description,
     extract_period_from_text,
+    normalize_for_search,
+    normalize_name,
     sanitize_filename,
 )
 

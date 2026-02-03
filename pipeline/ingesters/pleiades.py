@@ -9,11 +9,9 @@ License: CC-BY 3.0
 """
 
 import csv
-import gzip
-import json
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, Optional, List, Dict, Any
-from datetime import datetime
+from typing import Any
 
 from loguru import logger
 
@@ -163,7 +161,7 @@ class PleiadesIngester(BaseIngester):
         """
         logger.info(f"Parsing Pleiades CSV from {raw_data_path}")
 
-        with open(raw_data_path, "r", encoding="utf-8") as f:
+        with open(raw_data_path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
 
             for row in reader:
@@ -171,7 +169,7 @@ class PleiadesIngester(BaseIngester):
                 if site:
                     yield site
 
-    def _parse_row(self, row: Dict[str, Any]) -> Optional[ParsedSite]:
+    def _parse_row(self, row: dict[str, Any]) -> ParsedSite | None:
         """
         Parse a single CSV row into a ParsedSite.
 
@@ -249,7 +247,7 @@ class PleiadesIngester(BaseIngester):
             },
         )
 
-    def _parse_periods(self, periods: List[str]) -> tuple:
+    def _parse_periods(self, periods: list[str]) -> tuple:
         """
         Parse Pleiades time periods into start/end years.
 
@@ -281,7 +279,7 @@ class PleiadesIngester(BaseIngester):
 
         return min(starts), max(ends), ", ".join(names)
 
-    def _map_site_type(self, types: List[str]) -> Optional[str]:
+    def _map_site_type(self, types: list[str]) -> str | None:
         """
         Map Pleiades place types to our standard site types.
 

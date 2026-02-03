@@ -7,20 +7,19 @@ Provides endpoints for:
 - Server-Sent Events streaming
 """
 
-import os
-import secrets
-import logging
-from datetime import datetime, timedelta
-from typing import Optional
-
-from fastapi import APIRouter, HTTPException, Query, Request, Header
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
 import asyncio
 import json
-import httpx
+import logging
+import os
+import secrets
+from datetime import datetime, timedelta
 
-from api.config.ai_modes import get_mode_config, get_all_modes, DEFAULT_MODE
+import httpx
+from fastapi import APIRouter, Header, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
+
+from api.config.ai_modes import DEFAULT_MODE, get_all_modes, get_mode_config
 from api.services.access_control import get_access_control
 
 logger = logging.getLogger(__name__)
@@ -56,10 +55,10 @@ class PinVerifyRequest(BaseModel):
 class PinVerifyResponse(BaseModel):
     """Response from PIN verification."""
     verified: bool
-    session_token: Optional[str] = None
-    expires_in: Optional[int] = None
-    error: Optional[str] = None
-    message: Optional[str] = None
+    session_token: str | None = None
+    expires_in: int | None = None
+    error: str | None = None
+    message: str | None = None
     connected: bool = False
     users_connected: int = 0
 
@@ -77,8 +76,8 @@ class SiteHighlightResponse(BaseModel):
     name: str
     lat: float
     lon: float
-    site_type: Optional[str] = None
-    period_name: Optional[str] = None
+    site_type: str | None = None
+    period_name: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -467,7 +466,7 @@ async def chat(request: ChatRequest):
         raise HTTPException(
             status_code=500,
             detail="An error occurred while processing your query. Please try again."
-        )
+        ) from e
 
 
 @router.get("/stream")

@@ -10,11 +10,10 @@ API Key: Not required
 """
 
 import json
-from pathlib import Path
-from typing import Iterator, Optional, Dict, Any, List
-from datetime import datetime
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import time
+from datetime import datetime
+from pathlib import Path
 
 import httpx
 from loguru import logger
@@ -145,7 +144,7 @@ class MetMuseumIngester(BaseIngester):
             }
 
             for future in as_completed(future_to_id):
-                obj_id = future_to_id[future]
+                future_to_id[future]
                 completed += 1
 
                 try:
@@ -186,7 +185,7 @@ class MetMuseumIngester(BaseIngester):
 
         return dest_path
 
-    def _fetch_object(self, object_id: int) -> Optional[Dict]:
+    def _fetch_object(self, object_id: int) -> dict | None:
         """Fetch a single object's details."""
         try:
             url = f"{self.OBJECT_ENDPOINT}/{object_id}"
@@ -198,7 +197,7 @@ class MetMuseumIngester(BaseIngester):
             pass
         return None
 
-    def _has_location(self, obj: Dict) -> bool:
+    def _has_location(self, obj: dict) -> bool:
         """Check if object has usable location data."""
         # Check for geographic location fields
         location_fields = [
@@ -214,7 +213,7 @@ class MetMuseumIngester(BaseIngester):
         """Parse Met Museum objects into sites."""
         logger.info(f"Parsing Met Museum data from {raw_data_path}")
 
-        with open(raw_data_path, "r", encoding="utf-8") as f:
+        with open(raw_data_path, encoding="utf-8") as f:
             data = json.load(f)
 
         objects = data.get("objects", [])
@@ -225,7 +224,7 @@ class MetMuseumIngester(BaseIngester):
             if site:
                 yield site
 
-    def _parse_object(self, obj: Dict) -> Optional[ParsedSite]:
+    def _parse_object(self, obj: dict) -> ParsedSite | None:
         """Parse a single Met object."""
         object_id = obj.get("objectID")
         if not object_id:
@@ -298,7 +297,7 @@ class MetMuseumIngester(BaseIngester):
             },
         )
 
-    def _geocode_location(self, obj: Dict) -> tuple:
+    def _geocode_location(self, obj: dict) -> tuple:
         """Try to geocode object location based on known places."""
         country = obj.get("country", "").lower()
         region = obj.get("region", "").lower()
@@ -385,7 +384,7 @@ class MetMuseumIngester(BaseIngester):
 
         return "artifact"
 
-    def _parse_year(self, value) -> Optional[int]:
+    def _parse_year(self, value) -> int | None:
         """Parse year value."""
         if value is None:
             return None

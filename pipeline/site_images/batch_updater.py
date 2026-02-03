@@ -15,7 +15,6 @@ Usage:
 """
 
 import argparse
-from typing import Dict, List, Optional
 from datetime import datetime
 
 from loguru import logger
@@ -23,7 +22,6 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from pipeline.database import get_session
-
 
 # =============================================================================
 # Image Source Priority
@@ -58,7 +56,7 @@ IMAGE_SOURCES = [
 # Statistics Functions
 # =============================================================================
 
-def get_comprehensive_stats(session: Session) -> Dict:
+def get_comprehensive_stats(session: Session) -> dict:
     """Get comprehensive image coverage statistics."""
 
     # Overall stats
@@ -151,7 +149,7 @@ def get_comprehensive_stats(session: Session) -> Dict:
     }
 
 
-def print_stats(stats: Dict):
+def print_stats(stats: dict):
     """Print comprehensive statistics."""
     print("\n" + "=" * 70)
     print("SITE IMAGE COVERAGE STATISTICS")
@@ -159,7 +157,7 @@ def print_stats(stats: Dict):
     print("=" * 70)
 
     o = stats['overall']
-    print(f"\nOVERALL:")
+    print("\nOVERALL:")
     print(f"  Total sites:    {o['total']:>10,}")
     print(f"  With image:     {o['with_image']:>10,}")
     print(f"  Without image:  {o['without_image']:>10,}")
@@ -245,7 +243,7 @@ def run_megalithic(session: Session, limit: int = None) -> int:
 # =============================================================================
 
 def run_all_sources(
-    sources: List[str] = None,
+    sources: list[str] = None,
     limit: int = None,
     skip_existing: bool = True,
 ):
@@ -308,7 +306,7 @@ def run_all_sources(
 # Sample Sites for Quick Testing
 # =============================================================================
 
-def get_sample_sites(session: Session, count: int = 10) -> List[Dict]:
+def get_sample_sites(session: Session, count: int = 10) -> list[dict]:
     """Get sample sites without images for testing."""
     result = session.execute(text("""
         SELECT id, name, source_id, lat, lon

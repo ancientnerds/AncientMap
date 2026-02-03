@@ -14,11 +14,10 @@ API Key: Not required
 import csv
 import io
 import json
-from pathlib import Path
-from typing import Iterator, Optional, Dict, Any, List
-from datetime import datetime
-import time
 import re
+from collections.abc import Iterator
+from datetime import datetime
+from pathlib import Path
 
 from loguru import logger
 
@@ -212,7 +211,7 @@ class EDHInscriptionsIngester(BaseIngester):
         logger.info(f"Saved {len(all_inscriptions):,} inscriptions to {dest_path}")
         return dest_path
 
-    def _parse_geojson_feature(self, feature: Dict) -> Optional[Dict]:
+    def _parse_geojson_feature(self, feature: dict) -> dict | None:
         """Parse a GeoJSON feature from EDH."""
         if not feature or feature.get("type") != "Feature":
             return None
@@ -261,7 +260,7 @@ class EDHInscriptionsIngester(BaseIngester):
             "source_url": f"https://edh.ub.uni-heidelberg.de/edh/inschrift/{edh_id}",
         }
 
-    def _parse_inscription(self, item: Dict) -> Optional[Dict]:
+    def _parse_inscription(self, item: dict) -> dict | None:
         """Parse an inscription from the search API."""
         if not item:
             return None
@@ -320,7 +319,7 @@ class EDHInscriptionsIngester(BaseIngester):
             "source_url": f"https://edh.ub.uni-heidelberg.de/edh/inschrift/{edh_id}",
         }
 
-    def _parse_year(self, value) -> Optional[int]:
+    def _parse_year(self, value) -> int | None:
         """Parse a year value, handling BCE dates."""
         if not value or value in ["", "?"]:
             return None
@@ -334,7 +333,7 @@ class EDHInscriptionsIngester(BaseIngester):
         except (ValueError, TypeError):
             return None
 
-    def _parse_float(self, value) -> Optional[float]:
+    def _parse_float(self, value) -> float | None:
         """Parse a float value."""
         if not value or value in ["", "?"]:
             return None
@@ -349,7 +348,7 @@ class EDHInscriptionsIngester(BaseIngester):
         """Parse EDH inscription data into ParsedSite objects."""
         logger.info(f"Parsing EDH data from {raw_data_path}")
 
-        with open(raw_data_path, "r", encoding="utf-8") as f:
+        with open(raw_data_path, encoding="utf-8") as f:
             data = json.load(f)
 
         inscriptions = data.get("inscriptions", [])
@@ -360,7 +359,7 @@ class EDHInscriptionsIngester(BaseIngester):
             if site:
                 yield site
 
-    def _inscription_to_site(self, insc: Dict) -> Optional[ParsedSite]:
+    def _inscription_to_site(self, insc: dict) -> ParsedSite | None:
         """Convert an inscription to a ParsedSite."""
         lat = insc.get("lat")
         lon = insc.get("lon")

@@ -14,23 +14,21 @@ The script will automatically download GEBCO 2024 (~4GB compressed) if not found
 
 import argparse
 import json
-import os
-import zipfile
-import urllib.request
 import shutil
-from pathlib import Path
-from typing import List, Tuple
 import time
+import urllib.request
+import zipfile
+from pathlib import Path
 
 import numpy as np
 
 try:
+    import geojson
     import xarray as xr
-    from skimage import measure
     from shapely.geometry import LineString, MultiLineString
     from shapely.ops import linemerge
-    import geojson
     from simplification.cutil import simplify_coords
+    from skimage import measure
 except ImportError as e:
     print(f"Missing dependency: {e}")
     print("\nInstall required packages:")
@@ -82,9 +80,9 @@ def download_gebco(output_path: Path = GEBCO_PATH) -> Path:
     zip_path = output_path.with_suffix('.zip')
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    logger.info(f"Downloading GEBCO 2024 (~4GB compressed)...")
+    logger.info("Downloading GEBCO 2024 (~4GB compressed)...")
     logger.info(f"URL: {GEBCO_DOWNLOAD_URL}")
-    logger.info(f"This may take 10-30 minutes depending on your connection...")
+    logger.info("This may take 10-30 minutes depending on your connection...")
 
     def progress_hook(count, block_size, total_size):
         percent = count * block_size * 100 / total_size
@@ -97,7 +95,7 @@ def download_gebco(output_path: Path = GEBCO_PATH) -> Path:
         print()  # New line after progress
         logger.info(f"Downloaded to {zip_path}")
 
-        logger.info(f"Extracting GEBCO NetCDF file...")
+        logger.info("Extracting GEBCO NetCDF file...")
         with zipfile.ZipFile(zip_path, 'r') as zf:
             for name in zf.namelist():
                 if name.endswith('.nc'):
@@ -163,7 +161,7 @@ def extract_contour(elevation: np.ndarray, level: float, lats: np.ndarray, lons:
         lon_coords = np.interp(contour[:, 1], range(len(lons)), lons)
 
         if len(lat_coords) >= 2:
-            coords = list(zip(lon_coords, lat_coords))
+            coords = list(zip(lon_coords, lat_coords, strict=False))
             lines.append(LineString(coords))
 
     if lines:
@@ -252,7 +250,7 @@ def export_geojson(geom, output_path: Path, sea_level: int):
 # Processing
 # =============================================================================
 
-def process_level(level: int, elevation_data: Tuple[np.ndarray, np.ndarray, np.ndarray], output_dir: Path = OUTPUT_DIR) -> dict:
+def process_level(level: int, elevation_data: tuple[np.ndarray, np.ndarray, np.ndarray], output_dir: Path = OUTPUT_DIR) -> dict:
     """Process a single sea level."""
     elevation, lats, lons = elevation_data
 
@@ -299,7 +297,7 @@ def process_level(level: int, elevation_data: Tuple[np.ndarray, np.ndarray, np.n
     return stats
 
 
-def generate_metadata(levels: List[int], output_dir: Path = OUTPUT_DIR):
+def generate_metadata(levels: list[int], output_dir: Path = OUTPUT_DIR):
     """Generate metadata.json with level information."""
     metadata = {
         'range': {'min': min(levels), 'max': max(levels)},
@@ -326,7 +324,7 @@ def generate_metadata(levels: List[int], output_dir: Path = OUTPUT_DIR):
     with open(output_path, 'w') as f:
         json.dump(metadata, f, indent=2)
 
-    logger.info(f"Generated metadata.json")
+    logger.info("Generated metadata.json")
 
 
 # =============================================================================
@@ -403,7 +401,7 @@ def main():
     )
 
     logger.info(f"\n{'='*60}")
-    logger.info(f"COMPLETE!")
+    logger.info("COMPLETE!")
     logger.info(f"  Levels processed: {len(levels)}")
     logger.info(f"  Files generated:  {total_files}")
     logger.info(f"  Total size:       {total_size_kb/1024:.1f} MB")

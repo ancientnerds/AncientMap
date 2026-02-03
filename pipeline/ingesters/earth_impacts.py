@@ -9,8 +9,8 @@ License: Public data for research
 """
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, Optional
 
 from loguru import logger
 
@@ -48,7 +48,7 @@ class EarthImpactsIngester(BaseIngester):
         """Parse Earth Impact Craters GeoJSON into ParsedSite objects."""
         logger.info(f"Parsing earth impacts from {raw_data_path}")
 
-        with open(raw_data_path, "r", encoding="utf-8") as f:
+        with open(raw_data_path, encoding="utf-8") as f:
             data = json.load(f)
 
         features = data.get("features", [])
@@ -59,7 +59,7 @@ class EarthImpactsIngester(BaseIngester):
             if site:
                 yield site
 
-    def _feature_to_site(self, feature: dict, index: int) -> Optional[ParsedSite]:
+    def _feature_to_site(self, feature: dict, index: int) -> ParsedSite | None:
         """Convert a GeoJSON feature to a ParsedSite."""
         props = feature.get("properties", {})
         geom = feature.get("geometry", {})
@@ -130,7 +130,7 @@ class EarthImpactsIngester(BaseIngester):
             raw_data=props,
         )
 
-    def _parse_age(self, age_str: str) -> Optional[int]:
+    def _parse_age(self, age_str: str) -> int | None:
         """
         Parse age string (in millions of years ago) to a year.
         Returns negative year for ancient dates.
@@ -165,7 +165,7 @@ class EarthImpactsIngester(BaseIngester):
         except (ValueError, TypeError):
             return None
 
-    def _get_period_name(self, year: Optional[int]) -> Optional[str]:
+    def _get_period_name(self, year: int | None) -> str | None:
         """Get geological period name from year."""
         if year is None:
             return None

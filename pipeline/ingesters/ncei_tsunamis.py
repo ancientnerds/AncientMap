@@ -10,9 +10,9 @@ API Key: Not required
 """
 
 import json
-from pathlib import Path
-from typing import Iterator, Optional, Dict
+from collections.abc import Iterator
 from datetime import datetime
+from pathlib import Path
 
 from loguru import logger
 
@@ -119,7 +119,7 @@ class NCEITsunamisIngester(BaseIngester):
         logger.info(f"Saved {len(all_tsunamis):,} tsunamis to {dest_path}")
         return dest_path
 
-    def _parse_tsunami(self, feature: Dict) -> Optional[Dict]:
+    def _parse_tsunami(self, feature: dict) -> dict | None:
         """Parse a single tsunami feature from the ArcGIS response."""
         attrs = feature.get("attributes", {})
 
@@ -173,7 +173,7 @@ class NCEITsunamisIngester(BaseIngester):
         """Parse NCEI tsunami data into ParsedSite objects."""
         logger.info(f"Parsing NCEI tsunami data from {raw_data_path}")
 
-        with open(raw_data_path, "r", encoding="utf-8") as f:
+        with open(raw_data_path, encoding="utf-8") as f:
             data = json.load(f)
 
         tsunamis = data.get("tsunamis", [])
@@ -184,7 +184,7 @@ class NCEITsunamisIngester(BaseIngester):
             if site:
                 yield site
 
-    def _tsunami_to_site(self, ts: Dict) -> Optional[ParsedSite]:
+    def _tsunami_to_site(self, ts: dict) -> ParsedSite | None:
         """Convert a tsunami record to a ParsedSite."""
         lat = ts.get("lat")
         lon = ts.get("lon")

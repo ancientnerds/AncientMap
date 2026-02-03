@@ -11,18 +11,16 @@ API Key: Required (free registration)
 """
 
 import json
-import os
-from pathlib import Path
-from typing import Iterator, Optional, Dict, Any, List
-from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
+from collections.abc import Iterator
+from datetime import datetime
+from pathlib import Path
 
 import httpx
 from loguru import logger
 
-from pipeline.ingesters.base import BaseIngester, ParsedSite, atomic_write_json
 from pipeline.config import get_ai_thread_limit
+from pipeline.ingesters.base import BaseIngester, ParsedSite, atomic_write_json
 
 
 class EuropeanaIngester(BaseIngester):
@@ -159,7 +157,7 @@ class EuropeanaIngester(BaseIngester):
 
         return dest_path
 
-    def _search_query(self, query: str, seen_ids: set) -> List[Dict]:
+    def _search_query(self, query: str, seen_ids: set) -> list[dict]:
         """Search for items matching a query."""
         items = []
         cursor = "*"
@@ -220,7 +218,7 @@ class EuropeanaIngester(BaseIngester):
 
         return items
 
-    def _has_location(self, item: Dict) -> bool:
+    def _has_location(self, item: dict) -> bool:
         """Check if item has usable location data."""
         # Check for WGS84 coordinates
         if item.get("edmPlaceLatitude") and item.get("edmPlaceLongitude"):
@@ -237,7 +235,7 @@ class EuropeanaIngester(BaseIngester):
         """Parse Europeana items into sites."""
         logger.info(f"Parsing Europeana data from {raw_data_path}")
 
-        with open(raw_data_path, "r", encoding="utf-8") as f:
+        with open(raw_data_path, encoding="utf-8") as f:
             data = json.load(f)
 
         items = data.get("items", [])
@@ -248,7 +246,7 @@ class EuropeanaIngester(BaseIngester):
             if site:
                 yield site
 
-    def _parse_item(self, item: Dict) -> Optional[ParsedSite]:
+    def _parse_item(self, item: dict) -> ParsedSite | None:
         """Parse a single Europeana item."""
         item_id = item.get("id")
         if not item_id:
@@ -321,7 +319,7 @@ class EuropeanaIngester(BaseIngester):
             },
         )
 
-    def _get_first(self, value) -> Optional[str]:
+    def _get_first(self, value) -> str | None:
         """Get first value from list or return value if string."""
         if isinstance(value, list):
             return value[0] if value else None

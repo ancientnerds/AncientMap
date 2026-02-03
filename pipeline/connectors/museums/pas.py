@@ -10,13 +10,13 @@ Priority: P2
 API: https://finds.org.uk/database/api
 """
 
-from typing import List, Optional
+
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
-from pipeline.connectors.types import ContentType, ContentItem, AuthType, ProtocolType
-from pipeline.connectors.registry import ConnectorRegistry
 from pipeline.connectors.protocols.rest import RestProtocol
+from pipeline.connectors.registry import ConnectorRegistry
+from pipeline.connectors.types import AuthType, ContentItem, ContentType, ProtocolType
 
 
 @ConnectorRegistry.register
@@ -30,6 +30,7 @@ class PASConnector(BaseConnector):
     content_types = [ContentType.ARTIFACT, ContentType.COIN]
 
     base_url = "https://finds.org.uk/database"
+    website_url = "https://finds.org.uk"
     protocol = ProtocolType.REST
     rate_limit = 2.0
     requires_auth = False
@@ -38,18 +39,18 @@ class PASConnector(BaseConnector):
     license = "CC-BY 2.0"  # Corrected: PAS uses CC-BY 2.0, not NC-SA
     attribution = "The Portable Antiquities Scheme"
 
-    def __init__(self, api_key: Optional[str] = None, **kwargs):
+    def __init__(self, api_key: str | None = None, **kwargs):
         super().__init__(api_key=api_key, **kwargs)
         self.rest = RestProtocol(base_url=self.base_url, rate_limit=self.rate_limit)
 
     async def search(
         self,
         query: str,
-        content_type: Optional[ContentType] = None,
+        content_type: ContentType | None = None,
         limit: int = 20,
         offset: int = 0,
         **kwargs,
-    ) -> List[ContentItem]:
+    ) -> list[ContentItem]:
         """Search PAS database."""
         try:
             params = {
@@ -83,7 +84,7 @@ class PASConnector(BaseConnector):
             logger.error(f"PAS search failed: {e}")
             return []
 
-    def _parse_record(self, record: dict) -> Optional[ContentItem]:
+    def _parse_record(self, record: dict) -> ContentItem | None:
         """Parse PAS record to ContentItem."""
         record_id = record.get("id", "")
         object_type = record.get("objectType", "")
@@ -115,7 +116,7 @@ class PASConnector(BaseConnector):
             raw_data=record,
         )
 
-    async def get_item(self, item_id: str) -> Optional[ContentItem]:
+    async def get_item(self, item_id: str) -> ContentItem | None:
         """Get specific find by ID."""
         try:
             if item_id.startswith("pas:"):
@@ -139,9 +140,9 @@ class PASConnector(BaseConnector):
         lat: float,
         lon: float,
         radius_km: float = 50,
-        content_type: Optional[ContentType] = None,
+        content_type: ContentType | None = None,
         limit: int = 20,
-    ) -> List[ContentItem]:
+    ) -> list[ContentItem]:
         """Get finds near a location."""
         try:
             params = {

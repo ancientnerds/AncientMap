@@ -10,12 +10,10 @@ License: Varies per model (CC licenses common)
 API Key: Required for full access
 """
 
-import json
-import os
-from pathlib import Path
-from typing import Iterator, Optional, Dict, Any, List
-from datetime import datetime
 import time
+from collections.abc import Iterator
+from datetime import datetime
+from pathlib import Path
 
 from loguru import logger
 
@@ -229,7 +227,7 @@ class SketchfabIngester(BaseIngester):
         logger.info(f"Saved {len(all_models):,} models to {dest_path}")
         return dest_path
 
-    def _parse_model(self, item: Dict) -> Optional[Dict]:
+    def _parse_model(self, item: dict) -> dict | None:
         """Parse a Sketchfab model."""
         if not item:
             return None

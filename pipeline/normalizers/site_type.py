@@ -2,8 +2,6 @@
 Site type normalization utilities.
 """
 
-from typing import Optional
-
 
 # Mapping from various raw site types to normalized categories
 SITE_TYPE_MAPPING = {
@@ -95,7 +93,7 @@ SITE_TYPE_MAPPING = {
 }
 
 
-def normalize_site_type(site_type: Optional[str]) -> str:
+def normalize_site_type(site_type: str | None) -> str:
     """Normalize site type to a canonical category.
 
     Args:

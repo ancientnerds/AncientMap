@@ -12,13 +12,11 @@ License: CC BY-NC-SA 4.0
 API Key: Not required
 """
 
-import json
 import csv
 import io
-from pathlib import Path
-from typing import Iterator, Optional, Dict, Any, List
+from collections.abc import Iterator
 from datetime import datetime
-import time
+from pathlib import Path
 
 from loguru import logger
 
@@ -193,7 +191,7 @@ class SeshatIngester(BaseIngester):
         logger.info(f"Saved {len(all_polities):,} polities to {dest_path}")
         return dest_path
 
-    def _parse_csv(self, content: str, data_type: str) -> List[Dict]:
+    def _parse_csv(self, content: str, data_type: str) -> list[dict]:
         """Parse CSV content."""
         items = []
 
@@ -221,7 +219,7 @@ class SeshatIngester(BaseIngester):
 
         return items
 
-    def _parse_polity_row(self, row: Dict) -> Optional[Dict]:
+    def _parse_polity_row(self, row: dict) -> dict | None:
         """Parse a polity row from CSV."""
         # Get polity ID/name
         polity_id = row.get("PolID", row.get("polity_id", row.get("Polity", "")))
@@ -257,7 +255,7 @@ class SeshatIngester(BaseIngester):
             "predecessor": row.get("Predecessor", ""),
         }
 
-    def _parse_nga_row(self, row: Dict) -> Optional[Dict]:
+    def _parse_nga_row(self, row: dict) -> dict | None:
         """Parse an NGA (Natural Geographic Area) row."""
         nga_name = row.get("NGA", row.get("nga_name", row.get("Name", "")))
         if not nga_name:
@@ -275,7 +273,7 @@ class SeshatIngester(BaseIngester):
             "description": row.get("Description", ""),
         }
 
-    def _enrich_polities(self, polities: List[Dict], general_csv: str) -> None:
+    def _enrich_polities(self, polities: list[dict], general_csv: str) -> None:
         """Enrich polities with data from general variables CSV."""
         # Create lookup by polity ID
         polity_lookup = {p["name"]: p for p in polities}
@@ -295,7 +293,7 @@ class SeshatIngester(BaseIngester):
                 if not p.get("population") and row.get("Population"):
                     p["population"] = self._parse_int(row["Population"])
 
-    def _get_known_polities(self) -> List[Dict]:
+    def _get_known_polities(self) -> list[dict]:
         """Return known major Seshat polities."""
         return [
             # Ancient Near East
@@ -335,7 +333,7 @@ class SeshatIngester(BaseIngester):
             {"id": "seshat_inca", "name": "Inca Empire", "nga": "Cuzco", "start_year": 1438, "end_year": 1533, "polity_type": "empire", "capital": "Cusco"},
         ]
 
-    def _parse_year(self, value) -> Optional[int]:
+    def _parse_year(self, value) -> int | None:
         """Parse a year value."""
         if not value or value in ["", "?"]:
             return None
@@ -344,7 +342,7 @@ class SeshatIngester(BaseIngester):
         except (ValueError, TypeError):
             return None
 
-    def _parse_float(self, value) -> Optional[float]:
+    def _parse_float(self, value) -> float | None:
         """Parse a float value."""
         if not value or value in ["", "?"]:
             return None
@@ -353,7 +351,7 @@ class SeshatIngester(BaseIngester):
         except (ValueError, TypeError):
             return None
 
-    def _parse_int(self, value) -> Optional[int]:
+    def _parse_int(self, value) -> int | None:
         """Parse an integer value."""
         if not value or value in ["", "?"]:
             return None

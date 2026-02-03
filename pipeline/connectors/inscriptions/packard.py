@@ -14,13 +14,13 @@ Commercial use and redistribution are NOT permitted without explicit permission.
 This connector should only be used for reference links, not data copying.
 """
 
-from typing import List, Optional
+
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
-from pipeline.connectors.types import ContentType, ContentItem, AuthType, ProtocolType
-from pipeline.connectors.registry import ConnectorRegistry
 from pipeline.connectors.protocols.rest import RestProtocol
+from pipeline.connectors.registry import ConnectorRegistry
+from pipeline.connectors.types import AuthType, ContentItem, ContentType, ProtocolType
 
 
 @ConnectorRegistry.register
@@ -43,18 +43,18 @@ class PackardConnector(BaseConnector):
     attribution = "Packard Humanities Institute"
     # WARNING: This connector should only provide reference links, not copy data
 
-    def __init__(self, api_key: Optional[str] = None, **kwargs):
+    def __init__(self, api_key: str | None = None, **kwargs):
         super().__init__(api_key=api_key, **kwargs)
         self.rest = RestProtocol(base_url=self.base_url, rate_limit=self.rate_limit)
 
     async def search(
         self,
         query: str,
-        content_type: Optional[ContentType] = None,
+        content_type: ContentType | None = None,
         limit: int = 20,
         offset: int = 0,
         **kwargs,
-    ) -> List[ContentItem]:
+    ) -> list[ContentItem]:
         """Search PHI Greek inscriptions.
 
         Note: PHI primarily provides bulk data access.
@@ -64,7 +64,7 @@ class PackardConnector(BaseConnector):
         logger.warning("Packard Humanities Institute connector not fully implemented")
         return []
 
-    async def get_item(self, item_id: str) -> Optional[ContentItem]:
+    async def get_item(self, item_id: str) -> ContentItem | None:
         """Get specific inscription by ID."""
         try:
             if item_id.startswith("packard:"):

@@ -16,19 +16,18 @@ Usage:
     python -m pipeline.static_exporter --sites-only
 """
 
-import json
 import gzip
+import json
 import shutil
-from pathlib import Path
-from datetime import datetime
-from typing import Dict, List, Optional, Any
 from collections import defaultdict
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 from loguru import logger
 from sqlalchemy import text
 
 from pipeline.database import get_session
-
 
 # Output configuration
 OUTPUT_DIR = Path("public/data")
@@ -397,7 +396,7 @@ class StaticExporter:
             logger.info(f"Total gzipped size: {total_gz_size / 1024 / 1024:.2f} MB")
 
 
-def build_static(output_dir: Optional[str] = None, sites_only: bool = False):
+def build_static(output_dir: str | None = None, sites_only: bool = False):
     """Build static files for deployment."""
     exporter = StaticExporter(Path(output_dir) if output_dir else OUTPUT_DIR)
     exporter.export_all(sites_only=sites_only)

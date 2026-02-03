@@ -8,19 +8,17 @@ and proper error handling.
 import gzip
 import hashlib
 from pathlib import Path
-from typing import Optional
 
 import httpx
+from loguru import logger
 from tenacity import (
     retry,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
 )
-from loguru import logger
 
 from pipeline.config import settings
-
 
 # Default headers for requests
 DEFAULT_HEADERS = {
@@ -52,11 +50,11 @@ class RateLimitError(HTTPError):
 def fetch_with_retry(
     url: str,
     method: str = "GET",
-    headers: Optional[dict] = None,
-    params: Optional[dict] = None,
-    json_data: Optional[dict] = None,
-    data: Optional[dict] = None,
-    timeout: Optional[int] = None,
+    headers: dict | None = None,
+    params: dict | None = None,
+    json_data: dict | None = None,
+    data: dict | None = None,
+    timeout: int | None = None,
 ) -> httpx.Response:
     """
     Fetch URL with automatic retry on transient failures.
