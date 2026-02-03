@@ -1,15 +1,28 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
 import { getStreetViewEmbedUrl } from '../../../services/streetViewService'
 import EmpireMinimap from '../../EmpireMinimap'
 import { getAvailablePeriodsForEmpire } from '../../../config/seshatMapping'
 import type { MapSectionProps } from '../types'
 
-// Format year for display (handles BCE/CE)
+// Format year for display (handles BC/AD)
 function formatYearDisplay(year: number): string {
   if (year < 0) {
-    return `${Math.abs(year)} BCE`
+    return `${Math.abs(year)} BC`
   }
-  return `${year} CE`
+  return `${year} AD`
+}
+
+// Format year range - only show era on start if different from end
+function formatYearRange(startYear: number, endYear: number): string {
+  const startEra = startYear < 0 ? 'BC' : 'AD'
+  const endEra = endYear < 0 ? 'BC' : 'AD'
+  const startNum = Math.abs(startYear)
+  const endNum = Math.abs(endYear)
+
+  if (startEra === endEra) {
+    return `${startNum}–${endNum} ${endEra}`
+  }
+  return `${startNum} ${startEra}–${endNum} ${endEra}`
 }
 
 export function MapSection({
@@ -20,6 +33,7 @@ export function MapSection({
   empire,
   empireYear,
   empireYearOptions,
+  empireDefaultYear,
   onEmpireYearChange,
   googleMapsLoaded,
   googleMapsError,
@@ -55,13 +69,78 @@ export function MapSection({
   const currentYear = empireYear || empire?.peakYear || empire?.startYear || 0
   const activePeriodIndex = useMemo(() => {
     if (!periods.length) return -1
-    for (let i = 0; i < periods.length; i++) {
+    // Search from end so later periods take priority at boundaries
+    // (e.g., -664 is both end of Third Intermediate and start of Late Period)
+    for (let i = periods.length - 1; i >= 0; i--) {
       if (currentYear >= periods[i].yearStart && currentYear <= periods[i].yearEnd) {
         return i
       }
     }
     return -1
   }, [periods, currentYear])
+
+  // Animated slider position state (for empire mode)
+  const [animatedSliderValue, setAnimatedSliderValue] = useState(0)
+  const animationRef = useRef<number | null>(null)
+  const isUserDragging = useRef(false)
+  const skipNextAnimation = useRef(false)
+  const lastMouseDownTime = useRef(0)
+  const ignoreInputUntil = useRef(0)
+
+  // Calculate target year index for empire slider (computed outside conditional for hooks)
+  const yearOptions = empireYearOptions || []
+  const targetYearIndex = useMemo(() => {
+    if (!isEmpireMode || !empire || yearOptions.length === 0) return 0
+    return yearOptions.reduce((closestIdx, year, idx) => {
+      const closestDiff = Math.abs(yearOptions[closestIdx] - currentYear)
+      const currentDiff = Math.abs(year - currentYear)
+      return currentDiff < closestDiff ? idx : closestIdx
+    }, 0)
+  }, [isEmpireMode, empire, yearOptions, currentYear])
+
+  // Animate slider to target position with ease-out
+  useEffect(() => {
+    if (!isEmpireMode || !empire) return
+    if (isUserDragging.current) return // Don't animate while user is dragging
+
+    // Skip animation if flagged (e.g., during double-click jump)
+    if (skipNextAnimation.current) {
+      skipNextAnimation.current = false
+      setAnimatedSliderValue(targetYearIndex)
+      return
+    }
+
+    const startValue = animatedSliderValue
+    const endValue = targetYearIndex
+    if (Math.abs(startValue - endValue) < 0.01) return
+
+    const duration = 300 // ms
+    const startTime = performance.now()
+
+    // Ease-out cubic function
+    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
+
+    const animate = (currentTime: number) => {
+      const elapsed = currentTime - startTime
+      const progress = Math.min(elapsed / duration, 1)
+      const easedProgress = easeOutCubic(progress)
+
+      const newValue = startValue + (endValue - startValue) * easedProgress
+      setAnimatedSliderValue(newValue)
+
+      if (progress < 1) {
+        animationRef.current = requestAnimationFrame(animate)
+      }
+    }
+
+    animationRef.current = requestAnimationFrame(animate)
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current)
+      }
+    }
+  }, [targetYearIndex, isEmpireMode, empire])
 
   if (isEmpireMode && empire) {
     // Empire mode: Interactive minimap with empire boundaries and period timeline
@@ -73,34 +152,114 @@ export function MapSection({
           empireColor={empire.color}
         />
 
-        {/* Period Timeline */}
-        {periods.length > 0 && onEmpireYearChange ? (
+        {/* Period Timeline with Slider */}
+        {onEmpireYearChange ? (
           <div className="empire-period-timeline">
-            {/* Timeline segments */}
-            <div className="empire-period-segments">
-              {periods.map((period, index) => {
-                const isActive = index === activePeriodIndex
+            {/* Year Slider */}
+            {yearOptions.length > 1 && (
+              <div
+                className="empire-year-slider-row"
+                title={`Double-click to jump to default year (${empireDefaultYear ? formatYearDisplay(empireDefaultYear) : 'start year'})`}
+              >
+                <input
+                  type="range"
+                  className="empire-popup-year-slider"
+                  min={0}
+                  max={yearOptions.length - 1}
+                  value={Math.round(animatedSliderValue)}
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseDown={() => {
+                    const now = Date.now()
+                    // Detect double-click early (second mousedown within 300ms)
+                    if (now - lastMouseDownTime.current < 300) {
+                      // This is a double-click - block input events and jump to default year
+                      ignoreInputUntil.current = now + 300
 
-                return (
-                  <button
-                    key={period.seshatId}
-                    className={`empire-period-segment ${isActive ? 'active' : ''}`}
-                    onClick={() => {
-                      // Jump to the end of this period (shows maximum extent)
-                      onEmpireYearChange(period.yearEnd)
-                    }}
-                    title={`${period.seshatName}\n${formatYearDisplay(period.yearStart)} - ${formatYearDisplay(period.yearEnd)}`}
-                  >
-                    <span className="segment-name">{period.seshatName}</span>
-                    <span className="segment-years">
-                      {formatYearDisplay(period.yearStart).replace(' BCE', '').replace(' CE', '')}
-                      –
-                      {formatYearDisplay(period.yearEnd)}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
+                      const defaultYear = empireDefaultYear ?? empire.startYear
+                      if (defaultYear !== undefined && yearOptions.length > 0) {
+                        // Cancel any running animation
+                        if (animationRef.current) {
+                          cancelAnimationFrame(animationRef.current)
+                          animationRef.current = null
+                        }
+
+                        // Find the index for default year
+                        const defaultIndex = yearOptions.reduce((closestIdx, year, idx) => {
+                          const closestDiff = Math.abs(yearOptions[closestIdx] - defaultYear)
+                          const currentDiff = Math.abs(year - defaultYear)
+                          return currentDiff < closestDiff ? idx : closestIdx
+                        }, 0)
+
+                        // Skip animation and directly jump
+                        skipNextAnimation.current = true
+                        setAnimatedSliderValue(defaultIndex)
+                        onEmpireYearChange(defaultYear)
+                      }
+                      lastMouseDownTime.current = 0
+                      return
+                    }
+                    lastMouseDownTime.current = now
+                    isUserDragging.current = true
+                  }}
+                  onMouseUp={() => { isUserDragging.current = false }}
+                  onTouchStart={() => { isUserDragging.current = true }}
+                  onTouchEnd={() => { isUserDragging.current = false }}
+                  onInput={(e) => {
+                    // Ignore input during double-click handling
+                    if (Date.now() < ignoreInputUntil.current) return
+                    const idx = parseInt((e.target as HTMLInputElement).value)
+                    setAnimatedSliderValue(idx)
+                  }}
+                  onChange={(e) => {
+                    // Ignore change during double-click handling
+                    if (Date.now() < ignoreInputUntil.current) return
+                    const idx = parseInt(e.target.value)
+                    const year = yearOptions[idx]
+                    if (year !== undefined) {
+                      onEmpireYearChange(year)
+                    }
+                  }}
+                />
+                <span className="empire-year-display">{formatYearDisplay(currentYear)}</span>
+              </div>
+            )}
+
+            {/* Period Buttons - only show periods that have data */}
+            {periods.length > 0 && (
+              <div className="empire-period-segments">
+                {periods.map((period, index) => {
+                  const isActive = index === activePeriodIndex
+                  // Check if we have any data for this period
+                  const hasData = yearOptions.some(
+                    y => y >= period.yearStart && y <= period.yearEnd
+                  )
+                  // Skip periods without data
+                  if (!hasData) return null
+
+                  return (
+                    <button
+                      key={period.seshatId}
+                      className={`empire-period-segment ${isActive ? 'active' : ''}`}
+                      onClick={() => {
+                        // Find last year in this period (shows maximum extent)
+                        const yearsInPeriod = yearOptions.filter(
+                          y => y >= period.yearStart && y <= period.yearEnd
+                        )
+                        if (yearsInPeriod.length > 0) {
+                          onEmpireYearChange(yearsInPeriod[yearsInPeriod.length - 1])
+                        }
+                      }}
+                      title={`${period.seshatName}\n${formatYearDisplay(period.yearStart)} - ${formatYearDisplay(period.yearEnd)}`}
+                    >
+                      <span className="segment-name">{period.seshatName}</span>
+                      <span className="segment-years">
+                        {formatYearRange(period.yearStart, period.yearEnd)}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
 
           </div>
         ) : null}

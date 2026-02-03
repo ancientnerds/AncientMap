@@ -37,7 +37,7 @@ export function applyDarkTealTheme(map: MapboxMap): void {
     }
   }
 
-  // For outdoors style - style terrain/hillshade layers with teal tint
+  // For outdoors style (if used) - style terrain/hillshade layers with teal tint
   if (map.getLayer('contour')) {
     map.setPaintProperty('contour', 'line-color', 'rgba(0, 224, 208, 0.15)')
   }

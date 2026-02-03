@@ -25,7 +25,7 @@ export interface EventHandlerRefs {
   highlightFrozenRef: React.MutableRefObject<boolean>
   cameraAnimationRef: React.MutableRefObject<number | null>
   onSiteSelectRef: React.MutableRefObject<((siteId: string | null, ctrlKey: boolean) => void) | undefined>
-  onEmpireClickRef: React.MutableRefObject<((empireId: string) => void) | undefined>
+  onEmpireClickRef: React.MutableRefObject<((empireId: string, defaultYear?: number, yearOptions?: number[]) => void) | undefined>
   isContributePickerActiveRef: React.MutableRefObject<boolean>
   onContributeMapConfirmRef: React.MutableRefObject<(() => void) | undefined>
   measureModeRef: React.MutableRefObject<boolean | undefined>
@@ -38,6 +38,8 @@ export interface EventHandlerRefs {
   hoveredEmpireRef: React.MutableRefObject<string | null>
   empireBorderLinesRef: React.MutableRefObject<Record<string, THREE.Line[]>>
   empireFillMeshesRef: React.MutableRefObject<Record<string, THREE.Mesh[]>>
+  empireDefaultYearsRef: React.MutableRefObject<Record<string, number>>
+  empireYearOptionsRef: React.MutableRefObject<Record<string, number[]>>
 }
 
 /** State setters needed by event handlers. */
@@ -434,7 +436,9 @@ export function createSingleClickHandler(
     measurementsRef: React.MutableRefObject<Array<{ id: string; points: [[number, number], [number, number]]; snapped: [boolean, boolean]; color: string }>>
     currentMeasurePointsRef: React.MutableRefObject<Array<{ coords: [number, number]; snapped: boolean }>>
     onSiteSelectRef: React.MutableRefObject<((siteId: string | null, ctrlKey: boolean) => void) | undefined>
-    onEmpireClickRef: React.MutableRefObject<((empireId: string) => void) | undefined>
+    onEmpireClickRef: React.MutableRefObject<((empireId: string, defaultYear?: number, yearOptions?: number[]) => void) | undefined>
+    empireDefaultYearsRef: React.MutableRefObject<Record<string, number>>
+    empireYearOptionsRef: React.MutableRefObject<Record<string, number[]>>
   },
   setters: {
     setIsFrozen: (frozen: boolean) => void
@@ -665,7 +669,9 @@ export function createSingleClickHandler(
           for (const hit of empireHits) {
             const empireId = hit.object.userData?.empireId
             if (empireId && hit.object.visible) {
-              refs.onEmpireClickRef.current(empireId)
+              const defaultYear = refs.empireDefaultYearsRef.current[empireId]
+              const yearOptions = refs.empireYearOptionsRef.current[empireId]
+              refs.onEmpireClickRef.current(empireId, defaultYear, yearOptions)
               return
             }
           }
@@ -878,6 +884,8 @@ export function setupEventHandlers(
       currentMeasurePointsRef: refs.currentMeasurePointsRef,
       onSiteSelectRef: refs.onSiteSelectRef,
       onEmpireClickRef: refs.onEmpireClickRef,
+      empireDefaultYearsRef: refs.empireDefaultYearsRef,
+      empireYearOptionsRef: refs.empireYearOptionsRef,
     },
     {
       setIsFrozen: setters.setIsFrozen,

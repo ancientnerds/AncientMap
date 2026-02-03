@@ -1,19 +1,12 @@
 /**
- * Unified image service for fetching site images from multiple sources.
+ * Fast Wikipedia image fetching via REST API.
  *
- * This module provides:
- * - Shared types (ImageResult) used across all image sources
- * - Unified fetch function for Wikipedia images
+ * Uses /api/rest_v1/page/media-list/{title} - returns ALL article images
+ * in a single fast API call (~200-500ms), replacing three slow Action API calls.
  */
 
-import { offlineFetch } from './OfflineFetch'
-
-// User-Agent for Wikipedia API requests per their ToS
-// https://www.mediawiki.org/wiki/API:Etiquette
-const WIKIPEDIA_USER_AGENT = 'AncientNerdsMap/1.0 (https://github.com/AncientNerds/AncientMap; contact@ancientnerds.com)'
-
 // =============================================================================
-// Shared Types
+// Types
 // =============================================================================
 
 export interface ImageResult {
@@ -23,20 +16,10 @@ export interface ImageResult {
   title?: string
   author?: string
   authorUrl?: string
-  sourceUrl?: string  // Link to original page (Wikimedia Commons, Europeana)
+  sourceUrl?: string
   license?: string
   source: 'wikipedia' | 'europeana' | 'local'
-}
-
-// =============================================================================
-// Unified Image Fetching
-// =============================================================================
-
-export interface FetchSiteImagesOptions {
-  wikipediaUrl?: string
-  europeanaApiKey?: string
-  location?: string
-  limit?: number
+  isLeadImage?: boolean
 }
 
 export interface FetchSiteImagesResult {
@@ -44,280 +27,229 @@ export interface FetchSiteImagesResult {
   europeana: ImageResult[]
 }
 
+// =============================================================================
+// Excluded patterns (icons, logos, UI elements)
+// =============================================================================
+
+const EXCLUDED = /icon|logo|symbol|diagram|chart|graph|flag|wikimedia|commons-logo|edit-|question-mark|disambig|stub|padlock|pp-|protection|wikidata|wiktionary|wikinews|wikiquote|wikisource|wikiversity|wikivoyage|wikispecies|wikibooks|mediawiki|signature|coat.of.arms|escudo|blason|coa_|seal_of|emblem/i
+const EXCLUDED_EXT = /\.svg$/i
+
+// =============================================================================
+// Public API
+// =============================================================================
+
 /**
- * Fetch images for a site from all available sources.
+ * Fetch images from a Wikipedia article about this site/empire.
+ * If a Wikipedia URL is provided, uses that article directly.
+ * Otherwise searches Wikipedia by name first.
  *
- * @param siteName - Name of the archaeological site
- * @param options - Fetch options including API keys and source URLs
- * @returns Object with arrays of images from each source
+ * Total time: ~200-700ms (1-2 API calls via REST API).
  */
 export async function fetchSiteImages(
-  siteName: string,
-  options: FetchSiteImagesOptions = {}
+  name: string,
+  options: { wikipediaUrl?: string; location?: string; limit?: number } = {}
 ): Promise<FetchSiteImagesResult> {
-  const { wikipediaUrl } = options
+  try {
+    let images: ImageResult[]
 
-  // Fetch from Wikipedia
-  const wikipediaImages = wikipediaUrl
-    ? await fetchWikipediaImagesInternal(wikipediaUrl)
-    : await searchWikipediaByName(siteName)
+    if (options.wikipediaUrl) {
+      const title = extractTitleFromUrl(options.wikipediaUrl)
+      images = title ? await fetchArticleImages(title) : []
+    } else {
+      images = await searchAndFetchImages(name)
+    }
 
-  return {
-    wikipedia: wikipediaImages,
-    europeana: [],
+    // Lead image first, then the rest
+    images.sort((a, b) => (b.isLeadImage ? 1 : 0) - (a.isLeadImage ? 1 : 0))
+
+    return { wikipedia: images, europeana: [] }
+  } catch (err) {
+    console.warn('[imageService] Failed:', err)
+    return { wikipedia: [], europeana: [] }
   }
 }
 
+/** Alias for callers that imported the progressive version */
+export const fetchSiteImagesProgressive = fetchSiteImages
+
 /**
- * Search Wikipedia by site name and fetch images from the best matching article
+ * Fetch metadata (author, license) for a specific image on demand.
+ * Uses extmetadata which is slow - only call when user opens lightbox.
  */
-async function searchWikipediaByName(siteName: string): Promise<ImageResult[]> {
+export async function fetchWikipediaImageMetadata(
+  imageTitle: string
+): Promise<{ author?: string; license?: string }> {
+  const normalized = imageTitle.startsWith('File:') ? imageTitle : `File:${imageTitle}`
+
   try {
-    // Search Wikipedia for the site name
-    const searchUrl = `https://en.wikipedia.org/w/api.php?${new URLSearchParams({
+    const response = await fetch(
+      `https://en.wikipedia.org/w/api.php?${new URLSearchParams({
+        action: 'query',
+        titles: normalized,
+        prop: 'imageinfo',
+        iiprop: 'extmetadata',
+        format: 'json',
+        origin: '*'
+      })}`
+    )
+    if (!response.ok) return {}
+
+    const data = await response.json()
+    const page = Object.values(data.query?.pages || {})[0] as {
+      imageinfo?: Array<{ extmetadata?: Record<string, { value: string }> }>
+    }
+    const ext = page?.imageinfo?.[0]?.extmetadata
+
+    let author = ext?.Artist?.value || ext?.Author?.value || ext?.Credit?.value
+    if (author) {
+      author = author.replace(/<[^>]*>/g, '').trim()
+      if (author.length > 100) author = author.substring(0, 100) + '...'
+    }
+
+    return {
+      author,
+      license: ext?.LicenseShortName?.value || ext?.License?.value
+    }
+  } catch {
+    return {}
+  }
+}
+
+export function isWikipediaUrl(url: string): boolean {
+  if (!url) return false
+  try {
+    return /\.wikipedia\.org$/i.test(new URL(url).hostname)
+  } catch {
+    return false
+  }
+}
+
+// =============================================================================
+// Internal: REST API media-list fetch
+// =============================================================================
+
+interface MediaListItem {
+  title: string
+  type: string
+  leadImage?: boolean
+  showInGallery?: boolean
+  srcset?: Array<{ src: string; scale: string }>
+}
+
+/**
+ * Fetch all images from a Wikipedia article via REST API.
+ * Single API call, ~200-500ms.
+ */
+async function fetchArticleImages(articleTitle: string, lang = 'en'): Promise<ImageResult[]> {
+  const encoded = encodeURIComponent(articleTitle.replace(/ /g, '_'))
+
+  const response = await fetch(
+    `https://${lang}.wikipedia.org/api/rest_v1/page/media-list/${encoded}`,
+    { headers: { 'Accept': 'application/json', 'User-Agent': 'AncientNerdsMap/1.0' } }
+  )
+
+  if (!response.ok) return []
+
+  const data = await response.json()
+  if (!data.items) return []
+
+  const images: ImageResult[] = []
+
+  for (const item of data.items as MediaListItem[]) {
+    if (item.type !== 'image') continue
+    if (item.showInGallery === false) continue
+    if (!item.srcset?.length) continue
+    if (EXCLUDED.test(item.title) || EXCLUDED_EXT.test(item.title)) continue
+
+    // Get largest thumbnail from srcset (2x > 1.5x > 1x)
+    const sorted = [...item.srcset].sort((a, b) =>
+      (parseFloat(b.scale) || 1) - (parseFloat(a.scale) || 1)
+    )
+
+    const thumbSrc = sorted[0].src
+    const thumbUrl = thumbSrc.startsWith('//') ? 'https:' + thumbSrc : thumbSrc
+    const fullUrl = thumbToOriginal(thumbUrl)
+
+    const title = item.title
+      .replace(/^File:/, '')
+      .replace(/\.[^.]+$/, '')
+
+    images.push({
+      id: `wiki-${images.length}`,
+      thumb: thumbUrl,
+      full: fullUrl,
+      title,
+      sourceUrl: `https://commons.wikimedia.org/wiki/${encodeURIComponent(item.title)}`,
+      source: 'wikipedia',
+      isLeadImage: item.leadImage === true
+    })
+  }
+
+  return images
+}
+
+/**
+ * Search Wikipedia by name, then fetch images from the matching article.
+ * OpenSearch (~200ms) + media-list (~200ms) = ~400ms total.
+ */
+async function searchAndFetchImages(name: string): Promise<ImageResult[]> {
+  const response = await fetch(
+    `https://en.wikipedia.org/w/api.php?${new URLSearchParams({
       action: 'opensearch',
-      search: siteName,
+      search: name,
       limit: '1',
       namespace: '0',
       format: 'json',
       origin: '*'
     })}`
+  )
 
-    const response = await offlineFetch(searchUrl, {
-      headers: { 'Api-User-Agent': WIKIPEDIA_USER_AGENT }
-    })
-    if (!response.ok) return []
+  if (!response.ok) return []
+  const data = await response.json()
 
-    const data = await response.json()
-    // OpenSearch returns: [query, [titles], [descriptions], [urls]]
-    const urls = data[3] as string[]
-    if (!urls || urls.length === 0) return []
+  // OpenSearch returns: [query, [titles], [descriptions], [urls]]
+  const titles = data[1] as string[]
+  if (!titles?.length) return []
 
-    // Fetch images from the first matching Wikipedia article
-    return fetchWikipediaImagesInternal(urls[0])
-  } catch (error) {
-    console.warn('Failed to search Wikipedia by name:', error)
-    return []
-  }
+  return fetchArticleImages(titles[0])
 }
 
 // =============================================================================
-// Wikipedia Implementation
-// =============================================================================
-
-interface WikipediaImageInfo {
-  title: string
-  url: string
-  thumbUrl: string
-  descriptionUrl: string
-  author?: string
-  license?: string
-  width: number
-  height: number
-}
-
-const EXCLUDED_PATTERNS = /icon|logo|symbol|diagram|map|chart|graph|flag|wikimedia|commons-logo|edit-|question-mark|disambig|stub|padlock|pp-|protection|wikidata|wiktionary|wikinews|wikiquote|wikisource|wikiversity|wikivoyage|wikispecies|wikibooks|mediawiki|signature|coat.of.arms|escudo|blason|coa_|seal_of|emblem/i
-const EXCLUDED_EXTENSIONS = /\.svg$/i
-const MIN_WIDTH = 500
-const MIN_HEIGHT = 500
-
-function extractPageTitle(sourceUrl: string): { title: string; lang: string } | null {
-  if (!sourceUrl) return null
-
-  try {
-    const url = new URL(sourceUrl)
-    const match = url.hostname.match(/^(\w+)\.wikipedia\.org$/)
-    if (!match) return null
-
-    const lang = match[1]
-    const wikiMatch = url.pathname.match(/^\/wiki\/(.+)$/)
-    if (wikiMatch) {
-      return { title: decodeURIComponent(wikiMatch[1]), lang }
-    }
-
-    const titleParam = url.searchParams.get('title')
-    if (titleParam) {
-      return { title: decodeURIComponent(titleParam), lang }
-    }
-
-    return null
-  } catch {
-    return null
-  }
-}
-
-function shouldExcludeFile(filename: string): boolean {
-  return EXCLUDED_PATTERNS.test(filename) || EXCLUDED_EXTENSIONS.test(filename)
-}
-
-async function fetchImageList(pageTitle: string, lang: string): Promise<string[]> {
-  const apiUrl = `https://${lang}.wikipedia.org/w/api.php`
-  const params = new URLSearchParams({
-    action: 'query',
-    titles: pageTitle,
-    prop: 'images',
-    imlimit: '50',
-    format: 'json',
-    origin: '*'
-  })
-
-  try {
-    const response = await offlineFetch(`${apiUrl}?${params}`, {
-      headers: { 'Api-User-Agent': WIKIPEDIA_USER_AGENT }
-    })
-    if (!response.ok) return []
-
-    const data = await response.json()
-    const pages = data.query?.pages
-    if (!pages) return []
-
-    const page = Object.values(pages)[0] as { images?: { title: string }[] }
-    if (!page.images) return []
-
-    return page.images
-      .map(img => img.title)
-      .filter(title => !shouldExcludeFile(title))
-  } catch (error) {
-    console.warn('Failed to fetch Wikipedia image list:', error)
-    return []
-  }
-}
-
-function parseWikipediaLicense(extmetadata: Record<string, { value: string }> | undefined): string {
-  if (!extmetadata) return 'Unknown'
-  return extmetadata.LicenseShortName?.value ||
-         extmetadata.License?.value ||
-         'Unknown'
-}
-
-function parseWikipediaAuthor(extmetadata: Record<string, { value: string }> | undefined): string {
-  if (!extmetadata) return 'Unknown'
-
-  let author = extmetadata.Artist?.value ||
-               extmetadata.Author?.value ||
-               extmetadata.Credit?.value ||
-               'Unknown'
-
-  author = author.replace(/<[^>]*>/g, '').trim()
-
-  if (author.length > 100) {
-    author = author.substring(0, 100) + '...'
-  }
-
-  return author
-}
-
-async function fetchImageInfo(titles: string[], lang: string): Promise<WikipediaImageInfo[]> {
-  if (titles.length === 0) return []
-
-  const apiUrl = `https://${lang}.wikipedia.org/w/api.php`
-  const params = new URLSearchParams({
-    action: 'query',
-    titles: titles.join('|'),
-    prop: 'imageinfo',
-    iiprop: 'url|size|extmetadata',
-    iiurlwidth: '400',
-    format: 'json',
-    origin: '*'
-  })
-
-  try {
-    const response = await offlineFetch(`${apiUrl}?${params}`, {
-      headers: { 'Api-User-Agent': WIKIPEDIA_USER_AGENT }
-    })
-    if (!response.ok) return []
-
-    const data = await response.json()
-    const pages = data.query?.pages
-    if (!pages) return []
-
-    const images: WikipediaImageInfo[] = []
-
-    for (const page of Object.values(pages) as Array<{
-      title: string
-      imageinfo?: Array<{
-        url: string
-        thumburl: string
-        descriptionurl: string
-        width: number
-        height: number
-        extmetadata?: Record<string, { value: string }>
-      }>
-    }>) {
-      if (!page.imageinfo?.[0]) continue
-
-      const info = page.imageinfo[0]
-
-      if (info.width < MIN_WIDTH || info.height < MIN_HEIGHT) continue
-
-      images.push({
-        title: page.title,
-        url: info.url,
-        thumbUrl: info.thumburl || info.url,
-        descriptionUrl: info.descriptionurl,
-        author: parseWikipediaAuthor(info.extmetadata),
-        license: parseWikipediaLicense(info.extmetadata),
-        width: info.width,
-        height: info.height
-      })
-    }
-
-    return images
-  } catch (error) {
-    console.warn('Failed to fetch Wikipedia image info:', error)
-    return []
-  }
-}
-
-async function fetchWikipediaImagesInternal(sourceUrl: string): Promise<ImageResult[]> {
-  const parsed = extractPageTitle(sourceUrl)
-  if (!parsed) return []
-
-  const { title, lang } = parsed
-
-  const imageTitles = await fetchImageList(title, lang)
-  if (imageTitles.length === 0) return []
-
-  const batchSize = 50
-  const allImages: WikipediaImageInfo[] = []
-
-  for (let i = 0; i < imageTitles.length; i += batchSize) {
-    const batch = imageTitles.slice(i, i + batchSize)
-    const images = await fetchImageInfo(batch, lang)
-    allImages.push(...images)
-
-    if (i + batchSize < imageTitles.length) {
-      await new Promise(resolve => setTimeout(resolve, 100))
-    }
-  }
-
-  allImages.sort((a, b) => (b.width * b.height) - (a.width * a.height))
-
-  return allImages.slice(0, 20).map((img, index) => ({
-    id: `wiki-${index}`,
-    thumb: img.thumbUrl,
-    full: img.url,
-    title: img.title.replace(/^File:/, '').replace(/\.[^.]+$/, ''),
-    author: img.author,
-    sourceUrl: img.descriptionUrl,
-    license: img.license,
-    source: 'wikipedia' as const,
-  }))
-}
-
-// =============================================================================
-// Utility Exports
+// URL helpers
 // =============================================================================
 
 /**
- * Check if a URL is a Wikipedia URL
+ * Convert a Wikimedia thumbnail URL to the original full-resolution URL.
+ *
+ * Input:  //upload.wikimedia.org/wikipedia/commons/thumb/d/d4/File.jpg/500px-File.jpg
+ * Output: https://upload.wikimedia.org/wikipedia/commons/d/d4/File.jpg
  */
-export function isWikipediaUrl(url: string): boolean {
-  if (!url) return false
+function thumbToOriginal(thumbUrl: string): string {
+  let url = thumbUrl
+  if (url.startsWith('//')) url = 'https:' + url
+
+  if (url.includes('/thumb/')) {
+    url = url.replace('/thumb/', '/')
+    const lastSlash = url.lastIndexOf('/')
+    if (lastSlash > 0) url = url.substring(0, lastSlash)
+  }
+
+  return url
+}
+
+function extractTitleFromUrl(wikipediaUrl: string): string | null {
   try {
-    const parsed = new URL(url)
-    return /\.wikipedia\.org$/i.test(parsed.hostname)
+    const url = new URL(wikipediaUrl)
+    if (!/\.wikipedia\.org$/i.test(url.hostname)) return null
+
+    const wikiMatch = url.pathname.match(/^\/wiki\/(.+)$/)
+    if (wikiMatch) return decodeURIComponent(wikiMatch[1])
+
+    const titleParam = url.searchParams.get('title')
+    if (titleParam) return decodeURIComponent(titleParam)
+
+    return null
   } catch {
-    return false
+    return null
   }
 }

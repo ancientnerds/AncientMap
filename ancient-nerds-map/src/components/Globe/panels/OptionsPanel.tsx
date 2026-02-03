@@ -5,6 +5,7 @@
 
 import { forwardRef } from 'react'
 import { FpsDisplay } from './FpsDisplay'
+import type { StatusSummary } from '../../../types/connectors'
 
 interface OptionsPanelProps {
   // Display toggles
@@ -52,6 +53,10 @@ interface OptionsPanelProps {
   gpuName: string | null
   lowFps: boolean
   lowFpsReady: boolean
+
+  // Connectors status
+  connectorsStatus?: StatusSummary
+  onConnectorsClick?: () => void
 }
 
 export const OptionsPanel = forwardRef<HTMLDivElement, OptionsPanelProps>(({
@@ -82,8 +87,19 @@ export const OptionsPanel = forwardRef<HTMLDivElement, OptionsPanelProps>(({
   onDisclaimerClick,
   gpuName,
   lowFps,
-  lowFpsReady
+  lowFpsReady,
+  connectorsStatus,
+  onConnectorsClick
 }, fpsRef) => {
+  // Determine LED class for connectors
+  const getConnectorsLedClass = () => {
+    if (!connectorsStatus || connectorsStatus.total === 0) return 'unknown'
+    if (connectorsStatus.error === connectorsStatus.total) return 'error'
+    if (connectorsStatus.ok === connectorsStatus.total) return 'connected'
+    if (connectorsStatus.error > 0 || connectorsStatus.warning > 0) return 'warning'
+    if (connectorsStatus.unknown === connectorsStatus.total) return 'unknown'
+    return 'connected'
+  }
   return (
     <div className="info-panel-top-right">
       <FpsDisplay
@@ -236,6 +252,18 @@ export const OptionsPanel = forwardRef<HTMLDivElement, OptionsPanelProps>(({
               dataSourceIndicator === 'error' ? 'Offline' :
               'Static'
             }</span>
+          </div>
+        )}
+
+        {/* Connectors Status Indicator */}
+        {connectorsStatus && onConnectorsClick && (
+          <div
+            className="connectors-status-indicator"
+            onClick={onConnectorsClick}
+            title={`Connectors: ${connectorsStatus.ok}/${connectorsStatus.total} online. Click for details.`}
+          >
+            <span className={`connectors-led ${getConnectorsLedClass()}`} />
+            <span>Connectors</span>
           </div>
         )}
 
