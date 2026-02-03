@@ -1,8 +1,6 @@
 # ANCIENT NERDS - Research Platform - Docker Compose Configuration
 # PostgreSQL + PostGIS for geospatial data storage
 
-version: '3.8'
-
 services:
   # ==========================================================================
   # PostgreSQL Database with PostGIS Extension
@@ -13,7 +11,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-ancient_map}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env file}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-ancient_map}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
