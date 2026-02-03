@@ -8,6 +8,10 @@
 
 import { offlineFetch } from './OfflineFetch'
 
+// User-Agent for Wikipedia API requests per their ToS
+// https://www.mediawiki.org/wiki/API:Etiquette
+const WIKIPEDIA_USER_AGENT = 'AncientNerdsMap/1.0 (https://github.com/AncientNerds/AncientMap; contact@ancientnerds.com)'
+
 // =============================================================================
 // Shared Types
 // =============================================================================
@@ -79,7 +83,9 @@ async function searchWikipediaByName(siteName: string): Promise<ImageResult[]> {
       origin: '*'
     })}`
 
-    const response = await offlineFetch(searchUrl)
+    const response = await offlineFetch(searchUrl, {
+      headers: { 'Api-User-Agent': WIKIPEDIA_USER_AGENT }
+    })
     if (!response.ok) return []
 
     const data = await response.json()
@@ -156,7 +162,9 @@ async function fetchImageList(pageTitle: string, lang: string): Promise<string[]
   })
 
   try {
-    const response = await offlineFetch(`${apiUrl}?${params}`)
+    const response = await offlineFetch(`${apiUrl}?${params}`, {
+      headers: { 'Api-User-Agent': WIKIPEDIA_USER_AGENT }
+    })
     if (!response.ok) return []
 
     const data = await response.json()
@@ -214,7 +222,9 @@ async function fetchImageInfo(titles: string[], lang: string): Promise<Wikipedia
   })
 
   try {
-    const response = await offlineFetch(`${apiUrl}?${params}`)
+    const response = await offlineFetch(`${apiUrl}?${params}`, {
+      headers: { 'Api-User-Agent': WIKIPEDIA_USER_AGENT }
+    })
     if (!response.ok) return []
 
     const data = await response.json()

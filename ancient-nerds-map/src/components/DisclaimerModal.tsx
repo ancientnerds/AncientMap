@@ -118,6 +118,8 @@ function DisclaimerModal({ isOpen, onClose }: DisclaimerModalProps) {
                 <h4>3D Models</h4>
                 <ul>
                   <li><a href="https://sketchfab.com/" target="_blank" rel="noopener noreferrer">Sketchfab</a> - 3D models are displayed via embed with individual licensing per model. Models are filtered to Cultural Heritage & History category, human-created only.</li>
+                  <li><strong>CC BY-NC 4.0:</strong> <a href="https://www.cyark.org/" target="_blank" rel="noopener noreferrer">CyArk</a> (non-commercial use only)</li>
+                  <li><strong>Various (mostly CC BY-NC):</strong> <a href="https://www.morphosource.org/" target="_blank" rel="noopener noreferrer">MorphoSource</a> (check per-item license)</li>
                 </ul>
               </div>
 
@@ -126,7 +128,7 @@ function DisclaimerModal({ isOpen, onClose }: DisclaimerModalProps) {
                 <ul>
                   <li><strong>Satellite Imagery:</strong> <a href="https://shadedrelief.com/ne-draft/" target="_blank" rel="noopener noreferrer">Shaded Relief / Natural Earth</a></li>
                   <li><strong>Vector Layers:</strong> <a href="https://github.com/nvkelso/natural-earth-vector" target="_blank" rel="noopener noreferrer">World-Base-Map-Shapefiles / Natural Earth</a></li>
-                  <li><strong>Map Tiles:</strong> <a href="https://www.mapbox.com/" target="_blank" rel="noopener noreferrer">Mapbox</a> (satellite imagery and street maps)</li>
+                  <li><strong>Map Tiles:</strong> <a href="https://www.mapbox.com/" target="_blank" rel="noopener noreferrer">Mapbox</a> (satellite imagery and street maps, proprietary - requires Mapbox ToS compliance)</li>
                   <li><strong>Site Maps & Street View:</strong> <a href="https://www.google.com/maps" target="_blank" rel="noopener noreferrer">Google Maps</a> (embedded satellite view and Street View panoramas)</li>
                   <li><strong>Tectonic Plates:</strong> <a href="https://github.com/fraxen/tectonicplates" target="_blank" rel="noopener noreferrer">fraxen/tectonicplates</a> (based on Peter Bird's PB2002 model)</li>
                   <li><strong>Glaciers:</strong> <a href="https://www.glims.org/" target="_blank" rel="noopener noreferrer">GLIMS</a> (Global Land Ice Measurements from Space)</li>
@@ -198,14 +200,15 @@ function DisclaimerModal({ isOpen, onClose }: DisclaimerModalProps) {
             <ul>
               <li>Data displayed on this platform is subject to the <strong>original source licenses</strong> listed above.</li>
               <li>Many sources require <strong>attribution</strong> when reusing their data.</li>
-              <li>Some sources have <strong>non-commercial restrictions</strong> (ToposText, Arachne, David Rumsey Maps).</li>
+              <li>Some sources have <strong>non-commercial restrictions</strong>: Seshat, ToposText, CyArk, MorphoSource, Arachne, David Rumsey Maps.</li>
               <li>When in doubt, consult the original source's licensing terms.</li>
             </ul>
 
             <h4>Platform License</h4>
             <ul>
-              <li>The Ancient Nerds Research Platform interface and original content are provided under <strong>CC BY-SA 4.0</strong>.</li>
-              <li>You are free to share and adapt for any purpose with appropriate attribution.</li>
+              <li>The Ancient Nerds Research Platform source code is provided under <strong>GPL-3.0</strong>.</li>
+              <li>Original content and documentation are provided under <strong>CC BY-SA 4.0</strong>.</li>
+              <li>See <a href="https://github.com/AncientNerds/AncientMap" target="_blank" rel="noopener noreferrer">GitHub</a> for full license details.</li>
             </ul>
           </Section>
 
@@ -224,7 +227,7 @@ function DisclaimerModal({ isOpen, onClose }: DisclaimerModalProps) {
           </Section>
 
           <div className="disclaimer-footer">
-            <p>Last updated: January 2026</p>
+            <p>Last updated: February 2026</p>
           </div>
         </div>
       </div>

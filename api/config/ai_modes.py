@@ -9,7 +9,7 @@ from typing import Optional
 
 AI_MODES = {
     "chat": {
-        "model": "qwen2.5:3b",
+        "model": "mistral:7b",  # Apache 2.0 license - commercial use permitted
         "display_name": "Chat",
         "description": "Quick answers and site lookups",
         "icon": "chat",
