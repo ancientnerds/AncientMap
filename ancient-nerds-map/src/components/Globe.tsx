@@ -109,6 +109,9 @@ interface GlobeProps {
   onContributeClick?: () => void  // Callback when contribute button is clicked
   // AI Agent feature
   onAIAgentClick?: () => void  // Callback when AI agent button is clicked
+  // News Feed
+  onNewsFeedClick?: () => void
+  isNewsFeedOpen?: boolean
   onDisclaimerClick?: () => void  // Callback when disclaimer link is clicked
   isContributeMapPickerActive?: boolean  // True when map picker mode is active
   onContributeMapHover?: (coords: [number, number] | null) => void  // Callback on hover (like proximity)
@@ -149,7 +152,7 @@ interface GlobeProps {
   isOffline?: boolean  // Whether currently offline (no network)
 }
 
-export default function Globe({ sites, filterMode, sourceColors, countryColors, highlightedSiteId, isHoveringList, listFrozenSiteIds = [], openPopupIds: _openPopupIds = [], onSiteClick, onTooltipClick, onSiteSelect, onEmpireClick, flyTo, isLoading, splashDone, proximity, onProximitySet, onProximityHover, initialPosition, onLayersReady, onContributeClick, onAIAgentClick, onDisclaimerClick, isContributeMapPickerActive, onContributeMapHover, onContributeMapConfirm, onContributeMapCancel, canUndoSelection, onUndoSelection, canRedoSelection, onRedoSelection, measureMode, measurements = [], currentMeasurePoints = [], selectedMeasurementId, measureSnapEnabled, measureUnit = 'km', currentMeasurementColor = '#FFCC00', onMeasurePointAdd, onMeasurementComplete, onMeasurementSelect: _onMeasurementSelect, onMeasurementDelete: _onMeasurementDelete, randomModeActive, searchWithinProximity, onAgeRangeSync, onVisibleEmpiresChange, onEmpireYearsChange, onEmpirePolygonsLoaded, externalEmpireYearRequest, onExternalEmpireYearRequestHandled, onOfflineClick, isOffline }: GlobeProps) {
+export default function Globe({ sites, filterMode, sourceColors, countryColors, highlightedSiteId, isHoveringList, listFrozenSiteIds = [], openPopupIds: _openPopupIds = [], onSiteClick, onTooltipClick, onSiteSelect, onEmpireClick, flyTo, isLoading, splashDone, proximity, onProximitySet, onProximityHover, initialPosition, onLayersReady, onContributeClick, onAIAgentClick, onDisclaimerClick, isContributeMapPickerActive, onContributeMapHover, onContributeMapConfirm, onContributeMapCancel, canUndoSelection, onUndoSelection, canRedoSelection, onRedoSelection, measureMode, measurements = [], currentMeasurePoints = [], selectedMeasurementId, measureSnapEnabled, measureUnit = 'km', currentMeasurementColor = '#FFCC00', onMeasurePointAdd, onMeasurementComplete, onMeasurementSelect: _onMeasurementSelect, onMeasurementDelete: _onMeasurementDelete, randomModeActive, searchWithinProximity, onAgeRangeSync, onVisibleEmpiresChange, onEmpireYearsChange, onEmpirePolygonsLoaded, externalEmpireYearRequest, onExternalEmpireYearRequestHandled, onOfflineClick, isOffline, onNewsFeedClick, isNewsFeedOpen }: GlobeProps) {
   const refs = useGlobeRefs()
 
   // Batch destructure refs
@@ -1958,6 +1961,8 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
         onContributeClick={onContributeClick}
         isContributeMapPickerActive={isContributeMapPickerActive}
         onAIAgentClick={onAIAgentClick}
+        onNewsFeedClick={onNewsFeedClick}
+        isNewsFeedOpen={isNewsFeedOpen}
       />
 
       {/* FPS and options panel */}

@@ -1,18 +1,22 @@
 /**
  * SocialLinks - Social media and action buttons displayed in top right
- * Includes YouTube, X/Twitter, Discord links plus Contribute, AI Agent and Sign In buttons
+ * Includes YouTube, Discord links plus Contribute, AI Agent and Sign In buttons
  */
 
 interface SocialLinksProps {
   onContributeClick?: () => void
   isContributeMapPickerActive?: boolean
   onAIAgentClick?: () => void
+  onNewsFeedClick?: () => void
+  isNewsFeedOpen?: boolean
 }
 
 export function SocialLinks({
   onContributeClick,
   isContributeMapPickerActive,
   onAIAgentClick,
+  onNewsFeedClick,
+  isNewsFeedOpen,
 }: SocialLinksProps) {
   return (
     <div className="social-contribute-wrapper">
@@ -69,20 +73,22 @@ export function SocialLinks({
           </button>
         )}
 
-        {/* News Feed Button - Coming Soon */}
-        <button
-          className="action-btn news-btn disabled"
-          title="News Feed (Coming Soon)"
-          disabled
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1"></path>
-            <path d="M18 14v4h4"></path>
-            <circle cx="18" cy="18" r="4"></circle>
-            <line x1="6" y1="10" x2="10" y2="10"></line>
-            <line x1="6" y1="14" x2="10" y2="14"></line>
-          </svg>
-        </button>
+        {/* News Feed Button */}
+        {onNewsFeedClick && (
+          <button
+            className={`action-btn news-btn${isNewsFeedOpen ? ' active' : ''}`}
+            onClick={onNewsFeedClick}
+            title="News Feed"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1"></path>
+              <path d="M18 14v4h4"></path>
+              <circle cx="18" cy="18" r="4"></circle>
+              <line x1="6" y1="10" x2="10" y2="10"></line>
+              <line x1="6" y1="14" x2="10" y2="14"></line>
+            </svg>
+          </button>
+        )}
 
         {/* Sign In Button - Coming Soon */}
         <button

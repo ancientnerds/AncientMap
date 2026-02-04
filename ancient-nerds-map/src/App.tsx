@@ -10,6 +10,7 @@ const DisclaimerModal = lazy(() => import('./components/DisclaimerModal'))
 const PinAuthModal = lazy(() => import('./components/PinAuthModal'))
 const AIAgentChatModal = lazy(() => import('./components/AIAgentChatModal'))
 const DownloadManager = lazy(() => import('./components/DownloadManager'))
+const NewsFeedPanel = lazy(() => import('./components/NewsFeedPanel'))
 import { SiteData, fetchSites, getCurrentSites, addSourceSites, SOURCE_COLORS, getDefaultEnabledSourceIds, getSourceColor, getCategoryColor, getPeriodColor, setDataSourceError } from './data/sites'
 import { DataStore } from './data/DataStore'
 import { SourceLoader } from './services/SourceLoader'
@@ -485,6 +486,13 @@ function AppContent() {
 
   // Download manager modal state
   const [showDownloadManager, setShowDownloadManager] = useState(false)
+  const [showNewsFeed, setShowNewsFeed] = useState(false)
+
+  // Toggle body class when news feed is open so right-side UI shifts left
+  useEffect(() => {
+    document.body.classList.toggle('news-feed-open', showNewsFeed)
+    return () => { document.body.classList.remove('news-feed-open') }
+  }, [showNewsFeed])
 
   // Additional sources loading - track which sources have been loaded
   const [loadedSourceIds, setLoadedSourceIds] = useState<Set<string>>(new Set())
@@ -1985,6 +1993,8 @@ function AppContent() {
         onEmpireClick={openEmpirePopup}
         onOfflineClick={() => setShowDownloadManager(true)}
         isOffline={isOffline}
+        onNewsFeedClick={() => setShowNewsFeed(prev => !prev)}
+        isNewsFeedOpen={showNewsFeed}
       />}
       <FilterPanel
         categories={categoriesFromActiveSources}
@@ -2178,6 +2188,13 @@ function AppContent() {
           />
         )
       })}
+
+      {/* News Feed Panel - slides in from right */}
+      <Suspense fallback={null}>
+        {showNewsFeed && (
+          <NewsFeedPanel onClose={() => setShowNewsFeed(false)} />
+        )}
+      </Suspense>
 
       {/* Lazy-loaded modals wrapped in Suspense for faster initial load */}
       <Suspense fallback={null}>

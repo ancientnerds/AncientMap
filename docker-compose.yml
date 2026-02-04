@@ -97,6 +97,7 @@ services:
       REDIS_HOST: redis
       QDRANT_HOST: qdrant
       SEARXNG_URL: http://searxng:8080
+      BUILD_HASH: ${BUILD_HASH:-}
     volumes:
       - ./public/data:/app/public/data
     depends_on:

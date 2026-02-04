@@ -8,6 +8,8 @@ Updated: BitNet LLM optimized for faster responses
 """
 
 import logging
+import os
+import subprocess
 
 from dotenv import load_dotenv
 
@@ -111,10 +113,27 @@ app.include_router(streetview.router, prefix="/api/streetview", tags=["streetvie
 app.include_router(content.router, prefix="/api/content", tags=["content"])
 
 
+def _get_build_hash() -> str:
+    """Get build hash from env var or git."""
+    env_hash = os.environ.get("BUILD_HASH")
+    if env_hash:
+        return env_hash
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            stderr=subprocess.DEVNULL,
+        ).decode().strip()
+    except Exception:
+        return "unknown"
+
+
+BUILD_HASH = _get_build_hash()
+
+
 @app.get("/")
 async def root():
     """Health check endpoint."""
-    return {"status": "ok", "service": "Ancient Nerds Map API"}
+    return {"status": "ok", "version": "1.0.0", "commit": BUILD_HASH, "service": "Ancient Nerds Map API"}
 
 
 @app.get("/api/stats")

@@ -1,0 +1,19 @@
+Based on the following collection of archaeological and historical content summaries, create:
+1. An engaging, curiosity-sparking headline that captures the most interesting discoveries
+2. A 2-3 sentence TLDR summary
+3. Engaging subheadings for each paragraph
+
+Use this format:
+[HEADLINE]
+Your headline here
+
+[TLDR]
+Your TLDR here without TLDR headline, the summary only.
+
+[SUBHEADS]
+1. First subhead
+2. Second subhead
+(etc.)
+
+Content to analyze:
+{content}
