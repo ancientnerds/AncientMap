@@ -1,0 +1,24 @@
+You are an expert fact-checker for historical and archaeological content.
+Review the following paragraph and provide a verified version.
+
+REQUIRED FORMAT - You must structure your response exactly like this, including all markers:
+
+[START_VERIFIED]
+<write the complete verified paragraph here>
+[END_VERIFIED]
+
+[START_CHANGES]
+<list any substantive changes, numbered starting at 1.>
+[END_CHANGES]
+
+Rules for verification:
+1. Keep all verifiable historical and archaeological claims with their original level of detail
+2. Remove or correct any unverified claims about cultures, sites, or artifacts
+3. Ensure dates and chronology are accurate
+4. Maintain the original paragraph structure
+5. Do not add new information not supported by the original text
+
+Paragraph to verify:
+{paragraph}
+
+Remember: Your response must use the exact [START_X] and [END_X] markers shown above.

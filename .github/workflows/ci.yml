@@ -167,12 +167,11 @@ jobs:
             # Only rebuild API if backend files changed
             if echo "$CHANGED" | grep -qE "^(api/|pipeline/|requirements|Dockerfile|docker-compose)"; then
               echo "==> Rebuilding API..."
-              docker compose up -d --build api
+              BUILD_HASH=$(git rev-parse --short HEAD) docker compose up -d --build api
             else
               echo "==> Backend unchanged, restarting API..."
-              docker compose restart api
+              BUILD_HASH=$(git rev-parse --short HEAD) docker compose restart api
             fi
-
             sleep 5
             curl -sf http://localhost:8000/ || echo "WARNING: Health check failed"
             echo "==> Deploy complete!"'
