@@ -1,9 +1,26 @@
 import { defineConfig } from 'vite'
+import { resolve } from 'path'
+import { execSync } from 'child_process'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
+const commitHash = execSync('git rev-parse --short HEAD').toString().trim()
+const buildTime = new Date().toISOString()
+
 export default defineConfig({
   envDir: '..',
+  define: {
+    __BUILD_HASH__: JSON.stringify(commitHash),
+    __BUILD_TIME__: JSON.stringify(buildTime),
+  },
+  build: {
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        news: resolve(__dirname, 'news.html'),
+      },
+    },
+  },
   server: {
     proxy: {
       '/api': {

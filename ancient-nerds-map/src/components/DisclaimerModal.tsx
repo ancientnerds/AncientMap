@@ -227,7 +227,17 @@ function DisclaimerModal({ isOpen, onClose }: DisclaimerModalProps) {
           </Section>
 
           <div className="disclaimer-footer">
-            <p>Last updated: February 2026</p>
+            <p>
+              <a
+                href={`https://github.com/AncientNerds/AncientMap/commit/${__BUILD_HASH__}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ fontFamily: 'monospace', color: 'inherit', textDecoration: 'none', opacity: 0.7 }}
+              >
+                v1.0.0-{__BUILD_HASH__}
+              </a>
+              {' '}· Built {new Date(__BUILD_TIME__).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+            </p>
           </div>
         </div>
       </div>
