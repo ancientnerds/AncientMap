@@ -122,6 +122,7 @@ jobs:
             cd /var/www/ancientnerds
             echo "==> Pulling latest..."
             git pull origin main
+            git lfs pull
             echo "==> Building frontend..."
             cd ancient-nerds-map && npm ci && npm run build && cd ..
             echo "==> Rebuilding API..."
