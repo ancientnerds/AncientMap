@@ -7,11 +7,11 @@ plus enums for content types and authentication methods.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class ContentType(str, Enum):
+class ContentType(StrEnum):
     """Types of content that connectors can provide."""
 
     # Visual content
@@ -44,7 +44,7 @@ class ContentType(str, Enum):
     PERIOD = "period"
 
 
-class AuthType(str, Enum):
+class AuthType(StrEnum):
     """Authentication types for connectors."""
 
     NONE = "none"
@@ -54,7 +54,7 @@ class AuthType(str, Enum):
     BEARER = "bearer"
 
 
-class ProtocolType(str, Enum):
+class ProtocolType(StrEnum):
     """Protocol types for data retrieval."""
 
     REST = "rest"
