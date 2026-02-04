@@ -128,7 +128,7 @@ jobs:
             echo "==> Building frontend..."
             cd ancient-nerds-map && npm ci && npm run build && cd ..
             echo "==> Rebuilding API..."
-            docker compose up -d --build api
+            BUILD_HASH=$(git rev-parse --short HEAD) docker compose up -d --build api
             sleep 5
             curl -sf http://localhost:8000/ || echo "WARNING: Health check failed"
             echo "==> Deploy complete!"
