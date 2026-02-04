@@ -1,0 +1,9 @@
+Based on the following video summary, generate a single engaging paragraph that captures
+the main points and key findings. Keep the tone informative but accessible.
+Only include facts that are explicitly stated in the summary - do not make inferences or add information.
+Be especially careful with claims about historical dates, civilizations, and technological capabilities.
+
+Summary:
+{content}
+
+Write a single paragraph summary:

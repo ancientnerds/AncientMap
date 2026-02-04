@@ -1,0 +1,32 @@
+Verify this tweet against a specific segment of the transcript.
+
+Tweet to verify:
+{tweet_content}
+
+Relevant transcript segment (roughly from {timestamp}):
+{transcript_segment}
+
+Verify:
+1. The tweet accurately represents the content from this timestamp range
+2. All claims are supported by the transcript segment
+3. No critical context is missing or misrepresented
+4. Quotes, if used, are exact matches
+5. Double fact check especially names, dates and numbers
+
+Please find the exact second that best matches where the claim is discussed,
+and return that single timestamp (MM:SS). Do not return a range.
+
+Return your response in this exact JSON format:
+{{
+  "verification_level": "VERIFY_AS_IS" or "MODIFY" or "REJECT",
+  "timestamp": "MM:SS",
+  "core_claim": {{
+    "text": "The main claim from the tweet",
+    "supported": true or false,
+    "evidence": "Relevant transcript quote"
+  }},
+  "suggested_modification": null or {{
+    "modified_text": "Modified tweet text (MAX 220 chars!)",
+    "changes_explained": "Short explanation of changes"
+  }}
+}}

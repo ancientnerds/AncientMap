@@ -1,0 +1,31 @@
+Carefully analyze this entire transcript from an archaeological perspective.
+Create a comprehensive summary in strict JSON format with exact timestamp ranges.
+Select the {topic_limit} most significant archaeological discoveries, findings, or discussions.
+
+```json
+{{
+    "main_category": "A one-line description of the content type",
+    "key_topics": [
+        {{
+            "timestamp_range": "MM:SS-MM:SS",
+            "facts": [
+                "Specific archaeological finding or discovery",
+                "Dating or time period information",
+                "Location or site details",
+                "Research methodology or techniques used"
+            ]
+        }}
+    ]
+}}
+```
+
+Requirements:
+- Extract EXACTLY {topic_limit} key topics
+- Prioritize: discoveries, dates, site details, methodologies, context, artifact descriptions
+- Use exact timestamps [MM:SS] format
+- Ensure JSON valid and well-formatted
+- Double fact check especially names, dates and numbers
+
+Exclude: Personal anecdotes, off-topic, technical difficulties, channel promotions, audience interactions
+
+Transcript: {content}
