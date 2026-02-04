@@ -79,6 +79,31 @@ services:
       retries: 3
 
   # ==========================================================================
+  # API Service (FastAPI + Uvicorn)
+  # ==========================================================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ancient_nerds_api
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8000}:8000"
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 5s
+      retries: 3
+
+  # ==========================================================================
   # pgAdmin for database management (optional, for development)
   # ==========================================================================
   pgadmin:
