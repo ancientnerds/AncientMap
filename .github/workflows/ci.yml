@@ -87,8 +87,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check for Docker-related changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            docker:
+              - 'Dockerfile'
+              - 'requirements*.txt'
+              - 'api/**'
+              - 'pipeline/**'
+              - 'docker-compose.yml'
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        if: steps.filter.outputs.docker == 'true'
 
       - name: Build API image
         uses: docker/build-push-action@v5
@@ -99,7 +112,7 @@ jobs:
           tags: ancient-nerds-api:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
-        if: hashFiles('Dockerfile') != ''
+        if: steps.filter.outputs.docker == 'true'
 
       - name: Validate docker-compose
         run: docker compose config
