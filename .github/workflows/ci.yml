@@ -127,5 +127,5 @@ jobs:
             echo "==> Rebuilding API..."
             docker compose up -d --build api
             sleep 5
-            curl -sf http://localhost:8000/health || echo "WARNING: Health check failed"
+            curl -sf http://localhost:8000/ || echo "WARNING: Health check failed"
             echo "==> Deploy complete!"
