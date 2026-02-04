@@ -114,6 +114,17 @@ jobs:
           cache-to: type=gha,mode=max
         if: steps.filter.outputs.docker == 'true'
 
+      - name: Build Lyra image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.lyra
+          push: false
+          tags: ancient-nerds-lyra:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+        if: hashFiles('Dockerfile.lyra') != ''
+
       - name: Validate docker-compose
         run: docker compose config
 
@@ -124,14 +135,13 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_PORT }}
-          script: |
-            set -e
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$VPS_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key -p ${{ secrets.VPS_PORT }} ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'set -e
             cd /var/www/ancientnerds
             echo "==> Discarding local changes..."
             git checkout -- .
@@ -140,8 +150,9 @@ jobs:
             git lfs pull
             echo "==> Building frontend..."
             cd ancient-nerds-map && npm ci && npm run build && cd ..
-            echo "==> Rebuilding API..."
-            docker compose up -d --build api
+            echo "==> Rebuilding API and Lyra..."
+            docker compose up -d --build api lyra
             sleep 5
             curl -sf http://localhost:8000/ || echo "WARNING: Health check failed"
-            echo "==> Deploy complete!"
+            echo "==> Deploy complete!"'
+          rm -f ~/.ssh/deploy_key
