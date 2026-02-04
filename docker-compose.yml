@@ -90,7 +90,8 @@ services:
     ports:
       - "${API_PORT:-8000}:8000"
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       POSTGRES_HOST: db
       REDIS_HOST: redis
