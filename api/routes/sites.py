@@ -42,13 +42,18 @@ def _load_static_sites():
     if _static_sites_cache is not None:
         return _static_sites_cache
 
-    if not STATIC_SITES_PATH.exists():
-        logger.warning(f"Static sites file not found: {STATIC_SITES_PATH}")
+    # Try dist path first (local dev), then public path (Docker / fallback)
+    if STATIC_SITES_PATH.exists():
+        path = STATIC_SITES_PATH
+    elif PUBLIC_SITES_PATH.exists():
+        path = PUBLIC_SITES_PATH
+    else:
+        logger.warning(f"Static sites file not found at {STATIC_SITES_PATH} or {PUBLIC_SITES_PATH}")
         return None
 
-    logger.info(f"Loading static sites from {STATIC_SITES_PATH}")
+    logger.info(f"Loading static sites from {path}")
     try:
-        with open(STATIC_SITES_PATH, encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             data = json.load(f)
 
         sites = data.get("sites", [])

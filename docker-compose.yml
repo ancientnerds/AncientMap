@@ -96,6 +96,8 @@ services:
       REDIS_HOST: redis
       QDRANT_HOST: qdrant
       SEARXNG_URL: http://searxng:8080
+    volumes:
+      - ./public/data:/app/public/data
     depends_on:
       db:
         condition: service_healthy

@@ -1,3 +1,4 @@
 *.geojson filter=lfs diff=lfs merge=lfs -text
 public/data/sites/index.json filter=lfs diff=lfs merge=lfs -text
+public/data/sites/details/*.json filter=lfs diff=lfs merge=lfs -text
 ancient-nerds-map/public/data/sites/index.json filter=lfs diff=lfs merge=lfs -text

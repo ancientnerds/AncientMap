@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Path to static sources.json (relative to project root)
-STATIC_SOURCES_PATH = Path(__file__).parent.parent.parent / "ancient-nerds-map" / "dist" / "data" / "sources.json"
+STATIC_SOURCES_PATH = Path(__file__).parent.parent.parent / "public" / "data" / "sources.json"
 
 # Default source colors (matches pipeline SOURCE_CONFIG)
 DEFAULT_SOURCE_COLORS = {
