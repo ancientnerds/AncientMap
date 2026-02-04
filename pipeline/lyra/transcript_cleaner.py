@@ -2,7 +2,6 @@
 
 import re
 
-
 # Filler words and phrases to remove
 REMOVE_WORDS = {
     # Basic filler words

@@ -32,11 +32,11 @@ def setup_logging() -> None:
 
 def run_pipeline(settings: LyraSettings) -> None:
     """Run one full pipeline cycle: fetch -> transcribe -> summarize -> posts -> verify -> dedup."""
-    from pipeline.lyra.transcript_fetcher import fetch_new_videos
     from pipeline.lyra.summarizer import summarize_pending_videos
+    from pipeline.lyra.transcript_fetcher import fetch_new_videos
+    from pipeline.lyra.tweet_deduplicator import deduplicate_posts
     from pipeline.lyra.tweet_generator import generate_pending_posts
     from pipeline.lyra.tweet_verifier import verify_pending_posts
-    from pipeline.lyra.tweet_deduplicator import deduplicate_posts
 
     logger.info("=== Starting pipeline cycle ===")
 
