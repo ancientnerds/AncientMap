@@ -120,6 +120,8 @@ jobs:
           script: |
             set -e
             cd /var/www/ancientnerds
+            echo "==> Discarding local changes..."
+            git checkout -- .
             echo "==> Pulling latest..."
             git pull origin main
             git lfs pull
