@@ -3,7 +3,7 @@
 import logging
 import re
 import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 
 import requests
 from youtube_transcript_api import YouTubeTranscriptApi
@@ -39,7 +39,7 @@ def get_recent_videos(channel: NewsChannel, lookup_days: int) -> list[dict]:
         logger.warning(f"Failed to parse RSS XML for {channel.name}: {e}")
         return []
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=lookup_days)
+    cutoff = datetime.now(UTC) - timedelta(days=lookup_days)
     videos = []
 
     for entry in root.findall("atom:entry", ATOM_NS):

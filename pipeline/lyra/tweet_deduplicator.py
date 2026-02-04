@@ -24,10 +24,7 @@ def _extract_features(text: str) -> dict:
     numbers = set(re.findall(r"\b[\d,]+\.?\d*\b", text))
 
     # Extract significant words (>3 chars, lowered)
-    words = set(
-        w.lower()
-        for w in re.findall(r"\b[a-zA-Z]{4,}\b", clean)
-    )
+    words = {w.lower() for w in re.findall(r"\b[a-zA-Z]{4,}\b", clean)}
 
     # Extract URLs
     urls = set(re.findall(r"https?://\S+", text))
