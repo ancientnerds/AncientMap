@@ -114,7 +114,7 @@ class StaticExporter:
                     sm.color,
                     sm.icon,
                     sm.category,
-                    sm.enabled,
+                    sm.enabled_by_default,
                     sm.license,
                     sm.attribution,
                     COALESCE(sm.record_count, 0) as record_count
@@ -135,7 +135,7 @@ class StaticExporter:
                     "cnt": row.record_count,
                     "lic": row.license,
                     "att": row.attribution,
-                    "on": row.enabled,
+                    "on": row.enabled_by_default,
                 }
                 total_count += row.record_count
 
