@@ -143,15 +143,36 @@ jobs:
         run: |
           ssh -o StrictHostKeyChecking=no -p ${{ secrets.VPS_PORT }} ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'set -e
             cd /var/www/ancientnerds
+            BEFORE=$(git rev-parse HEAD)
             echo "==> Discarding local changes..."
             git checkout -- .
             echo "==> Pulling latest..."
             git pull origin main
             git lfs pull
-            echo "==> Building frontend..."
-            cd ancient-nerds-map && npm ci && npm run build && cd ..
-            echo "==> Rebuilding API and Lyra..."
-            docker compose up -d --build api lyra
+            AFTER=$(git rev-parse HEAD)
+            CHANGED=$(git diff --name-only $BEFORE $AFTER)
+
+            # Only rebuild frontend if frontend files changed
+            if echo "$CHANGED" | grep -q "^ancient-nerds-map/"; then
+              echo "==> Building frontend..."
+              if echo "$CHANGED" | grep -q "package-lock.json"; then
+                cd ancient-nerds-map && npm ci && npm run build && cd ..
+              else
+                cd ancient-nerds-map && npm run build && cd ..
+              fi
+            else
+              echo "==> Frontend unchanged, skipping build"
+            fi
+
+            # Only rebuild API if backend files changed
+            if echo "$CHANGED" | grep -qE "^(api/|pipeline/|requirements|Dockerfile|docker-compose)"; then
+              echo "==> Rebuilding API..."
+              docker compose up -d --build api
+            else
+              echo "==> Backend unchanged, restarting API..."
+              docker compose restart api
+            fi
+
             sleep 5
             curl -sf http://localhost:8000/ || echo "WARNING: Health check failed"
             echo "==> Deploy complete!"'
