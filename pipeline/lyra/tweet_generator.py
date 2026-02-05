@@ -87,14 +87,10 @@ def generate_posts_for_video(video: NewsVideo, settings: LyraSettings) -> int:
     if not isinstance(posts_data, list):
         return 0
 
-    # Get channel info for attribution
     with get_session() as session:
         db_video = session.get(NewsVideo, video.id)
         if not db_video:
             return 0
-
-        channel = db_video.channel
-        channel_name = channel.name if channel else "Unknown"
 
         # Match posts to existing news items
         items = session.query(NewsItem).filter(
