@@ -36,7 +36,7 @@ def _extract_frame(video_id: str, timestamp: int, output_path: Path, proxy_url: 
     # Step 1: Download a tiny clip around the timestamp via yt-dlp
     cmd_clip = [
         "yt-dlp",
-        "-f", "worst[ext=mp4]/worst",
+        "-f", "bestvideo[height<=480]/worst",
         "--download-sections", f"*{timestamp}-{timestamp + 3}",
         "--force-keyframes-at-cuts",
         "-o", str(clip_path),
@@ -65,7 +65,6 @@ def _extract_frame(video_id: str, timestamp: int, output_path: Path, proxy_url: 
         "ffmpeg",
         "-i", str(clip_path),
         "-frames:v", "1",
-        "-vf", "scale=512:-2",
         "-c:v", "libwebp",
         "-q:v", "75",
         "-y",
