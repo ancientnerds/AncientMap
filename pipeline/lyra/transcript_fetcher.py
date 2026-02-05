@@ -175,6 +175,15 @@ def fetch_new_videos(settings: LyraSettings) -> int:
                 # Skip short videos (Shorts and other non-full-length content)
                 if duration is not None and duration < settings.min_video_minutes:
                     logger.info(f"  -> skipped ({duration:.1f} min < {settings.min_video_minutes} min minimum)")
+                    session.add(NewsVideo(
+                        id=video_info["id"],
+                        channel_id=channel.id,
+                        title=video_info["title"],
+                        published_at=video_info["published_at"],
+                        duration_minutes=duration,
+                        thumbnail_url=video_info.get("thumbnail_url"),
+                        status="skipped",
+                    ))
                     continue
 
                 status = "transcribed" if transcript_text else "failed"

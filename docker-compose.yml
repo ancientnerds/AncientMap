@@ -9,6 +9,11 @@ services:
     image: postgis/postgis:16-3.4
     container_name: ancient_nerds_db
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-ancient_map}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
@@ -32,6 +37,11 @@ services:
     image: redis:7.2.4-alpine
     container_name: ancient_nerds_redis
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
@@ -49,6 +59,11 @@ services:
     image: qdrant/qdrant:latest
     container_name: ancient_nerds_qdrant
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "${QDRANT_PORT:-6333}:6333"
     volumes:
@@ -66,6 +81,11 @@ services:
     image: searxng/searxng:latest
     container_name: ancient_nerds_searxng
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "${SEARXNG_PORT:-8888}:8080"
     environment:
@@ -87,6 +107,11 @@ services:
       dockerfile: Dockerfile
     container_name: ancient_nerds_api
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "${API_PORT:-8000}:8000"
     env_file:
@@ -121,6 +146,11 @@ services:
       dockerfile: Dockerfile.lyra
     container_name: ancient_nerds_lyra
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     env_file:
       - path: .env
         required: false
