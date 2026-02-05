@@ -6,24 +6,24 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { config } from '../config'
 
 const WATCHED_CHANNELS = [
-  { name: 'Ancient Architects', url: 'https://www.youtube.com/@AncientArchitects' },
-  { name: 'Bright Insight', url: 'https://www.youtube.com/@BrightInsight' },
-  { name: 'UnchartedX', url: 'https://www.youtube.com/@UnchartedX' },
-  { name: 'Matthew LaCroix', url: 'https://www.youtube.com/@MatthewLaCroix' },
-  { name: 'History for GRANITE', url: 'https://www.youtube.com/@HistoryforGRANITE' },
-  { name: 'Luke Caverns', url: 'https://www.youtube.com/@LukeCaverns' },
-  { name: 'MegalithomaniaUK', url: 'https://www.youtube.com/@MegalithomaniaUK' },
-  { name: 'Universe Inside You', url: 'https://www.youtube.com/@UniverseInsideYou' },
-  { name: 'Funny Olde World', url: 'https://www.youtube.com/@FunnyOldeWorld' },
-  { name: 'History with Kayleigh', url: 'https://www.youtube.com/@HistorywithKayleigh' },
-  { name: 'Curious Being', url: 'https://www.youtube.com/@CuriousBeing' },
-  { name: 'DeDunking', url: 'https://www.youtube.com/@DeDunking' },
-  { name: 'Wandering Wolf', url: 'https://www.youtube.com/@WanderingWolf' },
-  { name: 'Dark5 Ancient Mysteries', url: 'https://www.youtube.com/@Dark5' },
-  { name: 'History, Myths & Legends', url: 'https://www.youtube.com/@HistoryMythsLegends' },
-  { name: 'Nikkiana Jones', url: 'https://www.youtube.com/@NikkianaJones' },
-  { name: 'Inst. for Natural Philosophy', url: 'https://www.youtube.com/@InstituteNaturalPhilosophy' },
-  { name: 'One-eyed giant', url: 'https://www.youtube.com/@Oneeyedgiantbuildingwalls' },
+  { name: 'Ancient Architects', id: 'UCscI4NOggNSN-Si5QgErNCw' },
+  { name: 'Bright Insight', id: 'UCsIlJ9eYylZQcyfMOPNUz9w' },
+  { name: 'UnchartedX', id: 'UC2Stn8atEra7SMdPWyQoSLA' },
+  { name: 'Matthew LaCroix', id: 'UC65XXzhHyH3BKZ72Q1eKF8Q' },
+  { name: 'History for GRANITE', id: 'UCDWboBDVnIsGdYSK3KUO0hQ' },
+  { name: 'Luke Caverns', id: 'UCFestibN7lYXvEj_BMEh29w' },
+  { name: 'MegalithomaniaUK', id: 'UCqMVaZM-USi0G54pu5318dQ' },
+  { name: 'Universe Inside You', id: 'UCOnnmKlDZltHAqJLz-XIpGA' },
+  { name: 'Funny Olde World', id: 'UCN2Z_nuG5XtVnE998unA3PA' },
+  { name: 'History with Kayleigh', id: 'UCMwDeEoupy8QQpKKc8pzU_Q' },
+  { name: 'Curious Being', id: 'UCxq9PsBVarBK9BpG9SYQF7w' },
+  { name: 'DeDunking', id: 'UCodgvia5IT5wiV0II9swBLw' },
+  { name: 'Wandering Wolf', id: 'UCmhg8Hd2vOHwH3Pi3_9fYag' },
+  { name: 'Dark5 Ancient Mysteries', id: 'UC8QWOIcinxsrvMGlWox7bXg' },
+  { name: 'History, Myths & Legends', id: 'UCgMfHNvlc4Zvr8FJHopDnvA' },
+  { name: 'Nikkiana Jones', id: 'UC9qJWqnmPhDLnZNllSQ8uQA' },
+  { name: 'Inst. for Natural Philosophy', id: 'UC452QHC05BAbQZZlYDUaoAA' },
+  { name: 'One-eyed giant', id: 'UCLclaVGVpaNIbdQaRs1wC5Q' },
 ]
 
 const NFT_URL = 'https://opensea.io/item/ethereum/0xe2bddad5584a0c1929a793161829714ce21dac0d/1'
@@ -234,7 +234,7 @@ export default function LyraProfileModal({ onClose }: Props) {
           <div className="lyra-poster-section-title">Surveilled Channels</div>
           <div className="lyra-poster-channel-list">
             {WATCHED_CHANNELS.map(ch => (
-              <a key={ch.name} className="lyra-poster-channel" href={ch.url} target="_blank" rel="noopener noreferrer">
+              <a key={ch.name} className="lyra-poster-channel" href={`https://www.youtube.com/channel/${ch.id}`} target="_blank" rel="noopener noreferrer">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" className="lyra-poster-yt-icon">
                   <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
                 </svg>
