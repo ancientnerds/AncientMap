@@ -9,6 +9,16 @@ import {
   type EmpireHoverRefs
 } from './empireHoverUtils'
 
+/** Convert viewport mouse coordinates to normalized device coordinates (-1 to 1).
+ *  Uses canvas bounding rect to account for CSS transforms (e.g. news feed shift). */
+function canvasNDC(clientX: number, clientY: number, canvas: HTMLCanvasElement): { x: number; y: number } {
+  const rect = canvas.getBoundingClientRect()
+  return {
+    x: ((clientX - rect.left) / rect.width) * 2 - 1,
+    y: -((clientY - rect.top) / rect.height) * 2 + 1,
+  }
+}
+
 /** Refs and state setters needed by event handlers. */
 export interface EventHandlerRefs {
   containerRef: React.RefObject<HTMLDivElement | null>
@@ -144,12 +154,12 @@ export function createWheelHandler(
 
     if (newDist === currentDist) return
 
-    // Get cursor position on globe
-    const mouseX = (e.clientX / window.innerWidth) * 2 - 1
-    const mouseY = -(e.clientY / window.innerHeight) * 2 + 1
+    // Get cursor position on globe (accounts for CSS transform offset)
+    const canvas = e.currentTarget as HTMLCanvasElement
+    const ndc = canvasNDC(e.clientX, e.clientY, canvas)
 
     const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), camera)
+    raycaster.setFromCamera(new THREE.Vector2(ndc.x, ndc.y), camera)
     const intersects = raycaster.intersectObject(globe, false)
 
     if (intersects.length > 0) {
@@ -200,7 +210,7 @@ export function createPreventBrowserZoomHandler(
 }
 
 /** Creates the arcball point calculation function using ray-sphere intersection. */
-export function createArcballSystem(camera: THREE.PerspectiveCamera): {
+export function createArcballSystem(camera: THREE.PerspectiveCamera, renderer: THREE.WebGLRenderer): {
   getArcballPoint: (clientX: number, clientY: number) => THREE.Vector3 | null
 } {
   // Reusable objects for raycasting (created once, not per frame)
@@ -211,8 +221,9 @@ export function createArcballSystem(camera: THREE.PerspectiveCamera): {
   // Get point on unit sphere from screen coords using ray-sphere intersection
   // Returns null when cursor is outside the globe
   const getArcballPoint = (clientX: number, clientY: number): THREE.Vector3 | null => {
-    arcballMouse.x = (clientX / window.innerWidth) * 2 - 1
-    arcballMouse.y = -(clientY / window.innerHeight) * 2 + 1
+    const ndc = canvasNDC(clientX, clientY, renderer.domElement)
+    arcballMouse.x = ndc.x
+    arcballMouse.y = ndc.y
     arcballRaycaster.setFromCamera(arcballMouse, camera)
 
     const ray = arcballRaycaster.ray
@@ -355,12 +366,9 @@ export function createMouseMoveHandler(
     lastMoveTimeRef.current = Date.now()
 
     // Raycast to get geographic coordinates on globe
-    const mouse = new THREE.Vector2(
-      (mouseX / window.innerWidth) * 2 - 1,
-      -(mouseY / window.innerHeight) * 2 + 1
-    )
+    const ndc = canvasNDC(mouseX, mouseY, _renderer.domElement)
     const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(mouse, camera)
+    raycaster.setFromCamera(new THREE.Vector2(ndc.x, ndc.y), camera)
 
     // Find intersection with globe (radius 1)
     const globeGeometry = new THREE.SphereGeometry(1, 32, 32)
@@ -401,16 +409,17 @@ export function createMouseMoveHandler(
 
     // Empire hover detection - both site and empire can show hover effects
     if (globe && empireHoverRefs) {
+      const canvas = _renderer.domElement
       const hoverResult = updateEmpireHoverState(
         mouseX,
         mouseY,
         camera,
         globe,
-        empireHoverRefs
+        empireHoverRefs,
+        canvas
       )
 
       // Update cursor style: site > empire > crosshair
-      const canvas = _renderer.domElement
       canvas.style.cursor = getHoverCursorStyle(nearestSite, hoverResult.empireId)
     }
   }
@@ -474,11 +483,10 @@ export function createSingleClickHandler(
     // Check if we're in "set on globe" mode for proximity
     // We need to access the current proximity state through a closure-safe way
     // The proximity prop is accessed from the outer scope
-    const mouseX = (clickX / window.innerWidth) * 2 - 1
-    const mouseY = -(clickY / window.innerHeight) * 2 + 1
+    const ndc = canvasNDC(clickX, clickY, renderer.domElement)
 
     const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), camera)
+    raycaster.setFromCamera(new THREE.Vector2(ndc.x, ndc.y), camera)
     const hits = raycaster.intersectObject(globe, false)
 
     if (hits.length > 0) {
@@ -627,11 +635,12 @@ export function createSingleClickHandler(
       // Only detect front-side sites
       if (sitePos.clone().normalize().dot(cameraPos) <= 0) return
 
-      // Project to screen coordinates
+      // Project to screen coordinates (account for CSS transform offset)
       const projectedPos = sitePos.clone()
       projectedPos.project(camera)
-      const screenX = (projectedPos.x + 1) / 2 * window.innerWidth
-      const screenY = (-projectedPos.y + 1) / 2 * window.innerHeight
+      const canvasRect = renderer.domElement.getBoundingClientRect()
+      const screenX = (projectedPos.x + 1) / 2 * canvasRect.width + canvasRect.left
+      const screenY = (-projectedPos.y + 1) / 2 * canvasRect.height + canvasRect.top
 
       const screenDist = Math.sqrt((clickX - screenX) ** 2 + (clickY - screenY) ** 2)
       if (screenDist < nearestScreenDist) {
@@ -652,7 +661,7 @@ export function createSingleClickHandler(
     // Only triggers if no site was clicked
     if (refs.onEmpireClickRef.current) {
       const raycasterEmpire = new THREE.Raycaster()
-      raycasterEmpire.setFromCamera(new THREE.Vector2(mouseX, mouseY), camera)
+      raycasterEmpire.setFromCamera(new THREE.Vector2(ndc.x, ndc.y), camera)
 
       // Find all empire fill meshes (they have userData.empireId and isFillMesh)
       const empireMeshes: THREE.Object3D[] = []
@@ -721,6 +730,7 @@ export function createDoubleClickHandler(
   camera: THREE.PerspectiveCamera,
   controls: OrbitControls,
   globe: THREE.Mesh,
+  renderer: THREE.WebGLRenderer,
   minDist: number,
   maxDist: number,
   cameraAnimationRef: React.MutableRefObject<number | null>,
@@ -734,10 +744,9 @@ export function createDoubleClickHandler(
     }
     clickState.pendingClickEvent = null
 
-    const mouseX = (e.clientX / window.innerWidth) * 2 - 1
-    const mouseY = -(e.clientY / window.innerHeight) * 2 + 1
+    const ndcDbl = canvasNDC(e.clientX, e.clientY, renderer.domElement)
     const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), camera)
+    raycaster.setFromCamera(new THREE.Vector2(ndcDbl.x, ndcDbl.y), camera)
 
     const hits = raycaster.intersectObject(globe, false)
     if (hits.length > 0) {
@@ -845,7 +854,7 @@ export function setupEventHandlers(
 
   // ----- 3.3: Mouse Event Handlers -----
   // Arcball rotation
-  const { getArcballPoint } = createArcballSystem(camera)
+  const { getArcballPoint } = createArcballSystem(camera, renderer)
 
   // Mouse down/up
   const { onMouseDown, mouseState } = createMouseDownHandler(refs.showMapboxRef)
@@ -901,7 +910,7 @@ export function setupEventHandlers(
 
   // Double-click zoom
   const onDoubleClick = createDoubleClickHandler(
-    camera, controls, globe, minDist, maxDist,
+    camera, controls, globe, renderer, minDist, maxDist,
     refs.cameraAnimationRef, clickState
   )
 
