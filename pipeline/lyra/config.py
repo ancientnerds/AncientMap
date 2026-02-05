@@ -21,7 +21,7 @@ class LyraSettings(BaseSettings):
     model_article: str = "claude-sonnet-4-5-20250929"
 
     # Pipeline settings
-    lookup_days: int = 1
+    lookup_days: int = 3
     min_video_minutes: float = 5.0  # Skip videos shorter than this (filters out Shorts)
     transcript_trim_start: int = 120  # Skip first 2 minutes of videos
 
