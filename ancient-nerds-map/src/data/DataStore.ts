@@ -198,7 +198,7 @@ class DataStoreClass {
     return Array.from(this.sources.keys()).filter(id => !defaultIds.includes(id))
   }
 
-  private _parseSitesData(sites: Array<{ id: string; n: string; la: number; lo: number; s: string; t: string | null; p: number | null; pn?: string; d?: string; i?: string; c?: string; u?: string }>): Site[] {
+  private _parseSitesData(sites: Array<{ id: string; n: string; la: number; lo: number; s: string; t: string | null; p: number | null; pn?: string; d?: string; i?: string; c?: string; u?: string; an?: string[] }>): Site[] {
     return sites.map(s => ({
       id: s.id,
       name: s.n,
@@ -213,6 +213,7 @@ class DataStoreClass {
       image: s.i || null,
       location: s.c || undefined,
       sourceUrl: s.u || undefined,
+      altNames: s.an || undefined,
     }))
   }
 

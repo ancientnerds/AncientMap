@@ -111,6 +111,8 @@ def _convert_static_site(site):
         result["c"] = site.get("c")
     if site.get("u"):
         result["u"] = site.get("u")
+    if site.get("an"):
+        result["an"] = site.get("an")
     return result
 
 

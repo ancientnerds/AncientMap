@@ -7,9 +7,9 @@ from sqlalchemy.orm import Session
 
 from pipeline.database import (
     NewsItem,
-    SiteName,
     SourceMeta,
     UnifiedSite,
+    UnifiedSiteName,
     UserContribution,
     get_session,
 )
@@ -37,10 +37,11 @@ def _find_site_by_name(
 
     Strategy:
     1. Exact match on unified_sites.name_normalized
-    2. Exact match on site_names.name_normalized (alternate names)
+    1.5. Spaceless match on unified_sites.name_normalized
+    2. Exact match on unified_site_names.name_normalized (alternate names)
+    2.5. Spaceless match on unified_site_names.name_normalized
     3. LIKE match on unified_sites.name_normalized (only for longer names)
-    4. If multiple results, prefer curated sources
-    5. Return None if ambiguous (0 or 2+ equally-ranked matches)
+    If multiple results, prefer curated sources (lowest priority number).
     """
     normalized = normalize_name(extracted_name)
     if not normalized or len(normalized) < 3:
@@ -72,26 +73,41 @@ def _find_site_by_name(
     if len(matches) > 1:
         return _pick_best_match(matches, source_priority)
 
-    # 2. Exact match on site_names table (alternate names)
-    site_name_matches = session.query(SiteName).filter(
-        SiteName.name_normalized == normalized
+    # 2. Exact match on unified_site_names table (alternate names)
+    alt_matches = session.query(UnifiedSiteName).filter(
+        UnifiedSiteName.name_normalized == normalized
     ).all()
 
-    if site_name_matches:
-        # Get the corresponding unified_sites via the Site -> UnifiedSite path
-        # site_names links to sites table, but we need unified_sites
-        # Try matching the site name's site.canonical_name against unified_sites
-        site_ids = {sn.site_id for sn in site_name_matches}
+    if alt_matches:
+        site_ids = {m.site_id for m in alt_matches}
         if len(site_ids) == 1:
-            # All alternate names point to the same site - look it up in unified_sites
-            from pipeline.database import Site
-            site = session.get(Site, site_ids.pop())
-            if site:
-                unified = session.query(UnifiedSite).filter(
-                    UnifiedSite.name_normalized == normalize_name(site.canonical_name)
-                ).first()
-                if unified:
-                    return unified
+            site = session.get(UnifiedSite, site_ids.pop())
+            if site and site.source_id in matchable_sources:
+                return site
+        else:
+            candidates = session.query(UnifiedSite).filter(
+                UnifiedSite.id.in_(site_ids), source_filter
+            ).all()
+            if candidates:
+                return _pick_best_match(candidates, source_priority)
+
+    # 2.5. Spaceless match on unified_site_names
+    alt_spaceless = session.query(UnifiedSiteName).filter(
+        func.replace(UnifiedSiteName.name_normalized, ' ', '') == spaceless
+    ).all()
+
+    if alt_spaceless:
+        site_ids = {m.site_id for m in alt_spaceless}
+        if len(site_ids) == 1:
+            site = session.get(UnifiedSite, site_ids.pop())
+            if site and site.source_id in matchable_sources:
+                return site
+        else:
+            candidates = session.query(UnifiedSite).filter(
+                UnifiedSite.id.in_(site_ids), source_filter
+            ).all()
+            if candidates:
+                return _pick_best_match(candidates, source_priority)
 
     # 3. LIKE match (only for names long enough to avoid false positives)
     if len(normalized) >= MIN_NAME_LENGTH_FOR_LIKE:

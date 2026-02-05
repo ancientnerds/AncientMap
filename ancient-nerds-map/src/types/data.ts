@@ -67,6 +67,7 @@ export interface SiteCompact {
   p?: string      // period name (optional)
   u?: string      // source URL (optional)
   im?: string     // image URL (optional)
+  an?: string[]   // alternate names (optional, Latin-script only)
 }
 
 /** Expanded site for internal use */
@@ -85,6 +86,7 @@ export interface Site {
   periodStart?: number | null
   periodEnd?: number | null
   image?: string | null  // thumbnail URL from API
+  altNames?: string[]    // alternate names for search
 }
 
 /** sites/index.json file format */
@@ -204,6 +206,7 @@ export function expandSite(compact: SiteCompact): Site {
     period: compact.p,
     sourceUrl: compact.u,
     imageUrl: compact.im,
+    altNames: compact.an,
   }
 }
 

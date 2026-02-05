@@ -455,6 +455,28 @@ class UnifiedSite(Base):
         return f"<UnifiedSite {self.source_id}:{self.source_record_id} - {self.name}>"
 
 
+class UnifiedSiteName(Base):
+    """Alternate names for unified sites — powers site matching and search."""
+    __tablename__ = "unified_site_names"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    site_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("unified_sites.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(500), nullable=False)
+    name_normalized: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
+    language_code: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    name_type: Mapped[str | None] = mapped_column(String(50), nullable=True)  # label, alias
+
+    __table_args__ = (
+        Index("idx_usn_site", "site_id"),
+        UniqueConstraint("site_id", "name_normalized", name="uq_usn"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<UnifiedSiteName {self.name} for site {self.site_id}>"
+
+
 class SiteContentLink(Base):
     """
     Pre-computed links between sites and related content.

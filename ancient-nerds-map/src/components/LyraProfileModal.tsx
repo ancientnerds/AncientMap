@@ -40,6 +40,7 @@ interface Props {
 export default function LyraProfileModal({ onClose }: Props) {
   const panelRef = useRef<HTMLDivElement>(null)
   const [stats, setStats] = useState<{ total_items: number; total_videos: number; total_channels: number; latest_item_date: string | null } | null>(null)
+  const [lyraStatus, setLyraStatus] = useState<'online' | 'offline' | 'error'>('offline')
   const [pos, setPos] = useState({ x: 0, y: 0 })
   const [size, setSize] = useState({ w: DEFAULT_W, h: DEFAULT_H })
   const [ready, setReady] = useState(false)
@@ -65,6 +66,10 @@ export default function LyraProfileModal({ onClose }: Props) {
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setStats(d) })
       .catch(() => {})
+    fetch(`${config.api.baseUrl}/news/lyra-status`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setLyraStatus(d.status) })
+      .catch(() => setLyraStatus('offline'))
   }, [])
 
   useEffect(() => {
@@ -165,9 +170,9 @@ export default function LyraProfileModal({ onClose }: Props) {
             View NFT #001
           </a>
           <div className="lyra-poster-status">
-            <div className="lyra-poster-status-online">
+            <div className={`lyra-poster-status-online${lyraStatus !== 'online' ? ' lyra-poster-status-offline' : ''}`}>
               <span className="lyra-poster-status-dot" />
-              ONLINE
+              {lyraStatus === 'online' ? 'ONLINE' : 'OFFLINE'}
             </div>
             <div className="lyra-poster-status-stats">
               <div className="lyra-poster-status-row">

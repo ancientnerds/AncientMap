@@ -148,6 +148,33 @@ class StaticExporter:
             save_json(self.output_dir / "sources.json", output)
             self.stats["sources"] = len(sources)
 
+    def _load_alt_names(self, session) -> dict[str, list[str]]:
+        """Load Latin-script alternate names grouped by site_id.
+
+        Only includes names that differ from the primary name after normalization,
+        and only Latin-script names (useful for search, not Arabic/Chinese/etc).
+        """
+        result = session.execute(text("""
+            SELECT usn.site_id, usn.name
+            FROM unified_site_names usn
+            JOIN unified_sites us ON us.id = usn.site_id
+            WHERE usn.name_normalized != us.name_normalized
+            AND usn.name ~ '^[a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]'
+        """))
+
+        alt_names: dict[str, list[str]] = defaultdict(list)
+        seen: dict[str, set[str]] = defaultdict(set)
+        for row in result:
+            site_id = str(row.site_id)
+            name = row.name.strip()
+            # Deduplicate by lowercase
+            name_lower = name.lower()
+            if name_lower not in seen[site_id]:
+                seen[site_id].add(name_lower)
+                alt_names[site_id].append(name)
+
+        return dict(alt_names)
+
     def _export_site_index(self):
         """Export compact site index for rendering markers."""
         logger.info("\nExporting sites/index.json...")
@@ -156,6 +183,10 @@ class StaticExporter:
         sites_dir.mkdir(parents=True, exist_ok=True)
 
         with get_session() as session:
+            # Load alternate names for search
+            alt_names_map = self._load_alt_names(session)
+            logger.info(f"  Loaded alt names for {len(alt_names_map):,} sites")
+
             # Get all sites with minimal data for markers
             result = session.execute(text("""
                 SELECT
@@ -204,6 +235,11 @@ class StaticExporter:
                     site["im"] = row.thumbnail_url  # image
                 if row.source_url:
                     site["u"] = row.source_url  # source URL
+
+                # Alternate names for search (Latin-script only, max 10)
+                site_alt = alt_names_map.get(str(row.id))
+                if site_alt:
+                    site["an"] = site_alt[:10]
 
                 sites.append(site)
                 source_counts[row.source_id] += 1
