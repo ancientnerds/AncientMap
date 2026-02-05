@@ -7,16 +7,21 @@ Relevant transcript segment (roughly from {timestamp}):
 {transcript_segment}
 
 Verify:
-1. The tweet accurately represents the content from this timestamp range
-2. All claims are supported by the transcript segment
-3. No critical context is missing or misrepresented
-4. Quotes, if used, are exact matches
-5. Double fact check especially names, dates and numbers
+1. All claims are supported by the transcript segment
+2. Names, dates and numbers are correct
+3. Quotes, if used, are exact matches
 
-Please find the exact second that best matches where the claim is discussed,
-and return that single timestamp (MM:SS). Do not return a range.
+Rules:
+- Prefer VERIFY_AS_IS. Only MODIFY for genuinely wrong facts (wrong dates, wrong names, wrong claims).
+- modified_text MUST be a standalone tweet under 220 characters. If you cannot fix it that concisely, REJECT instead.
+- NEVER reference "the transcript", "the audio", "the speaker", or "the segment" in modified_text.
+- Keep the original tweet style — short, punchy, no hedging or caveats.
+- If a name sounds garbled in the transcript but the tweet's interpretation is reasonable, VERIFY_AS_IS.
+- Prefer REJECT over a MODIFY that adds hedging language or destroys the tweet format.
 
-Return your response in this exact JSON format:
+Find the exact second where the claim is discussed and return a single timestamp (MM:SS).
+
+Return JSON only:
 {{
   "verification_level": "VERIFY_AS_IS" or "MODIFY" or "REJECT",
   "timestamp": "MM:SS",

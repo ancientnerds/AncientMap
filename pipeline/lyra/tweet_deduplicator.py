@@ -99,11 +99,11 @@ def deduplicate_posts() -> int:
 
             checked.append(item.id)
 
-        # Clear duplicate posts
+        # Delete duplicate items
         if to_clear:
             for item in items:
                 if item.id in to_clear:
-                    item.post_text = None
+                    session.delete(item)
 
-        logger.info(f"Deduplication: removed {len(to_clear)} duplicates from {len(items)} items")
+        logger.info(f"Deduplication: deleted {len(to_clear)} duplicates from {len(items)} items")
         return len(to_clear)

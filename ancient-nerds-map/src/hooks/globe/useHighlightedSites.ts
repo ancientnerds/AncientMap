@@ -100,7 +100,7 @@ export function useHighlightedSites({
         validSitesRef: refs.validSites,
         listHighlightedPositionsRef: refs.listHighlightedPositions,
       }
-      result = renderHighlightedSitesThreeJS(ctx, options)
+      result = renderHighlightedSitesThreeJS(ctx, options, sites)
     } else {
       setListHighlightedSites([])
       return

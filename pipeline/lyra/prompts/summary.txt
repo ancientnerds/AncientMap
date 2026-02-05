@@ -13,7 +13,12 @@ Select the {topic_limit} most significant archaeological discoveries, findings, 
                 "Dating or time period information",
                 "Location or site details",
                 "Research methodology or techniques used"
-            ]
+            ],
+            "primary_site": {{
+                "name": "Exact name of the archaeological site",
+                "country": "Modern country name",
+                "confidence": "high"
+            }}
         }}
     ]
 }}
@@ -25,6 +30,13 @@ Requirements:
 - Use exact timestamps [MM:SS] format
 - Ensure JSON valid and well-formatted
 - Double fact check especially names, dates and numbers
+
+primary_site rules:
+- Only fill primary_site if the topic is PRIMARILY ABOUT a specific named archaeological site
+- "confidence": "high" if the topic centers on this site, "medium" if mentioned significantly but not the main focus
+- Set primary_site to null if: the topic is about a technique/method, a general region/empire, multiple sites equally, or no specific site is discussed
+- Use the site's most common English name (e.g. "Pompeii" not "Pompei", "Gobekli Tepe" not "Gobeklitepe")
+- Do NOT fill for vague references like "somewhere in Egypt" or "a site in Turkey"
 
 Exclude: Personal anecdotes, off-topic, technical difficulties, channel promotions, audience interactions
 

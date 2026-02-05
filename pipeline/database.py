@@ -666,6 +666,11 @@ class UserContribution(Base):
     submitter_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
     turnstile_token: Mapped[str | None] = mapped_column(String(2048), nullable=True)
 
+    # Source: 'user' (manual submission) or 'lyra' (pipeline-extracted)
+    source: Mapped[str] = mapped_column(String(20), default="user", nullable=False, index=True)
+    # How many videos mention this site (incremented by pipeline, always 1 for user contributions)
+    mention_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+
     # Review status: pending, approved, rejected
     status: Mapped[str] = mapped_column(String(50), default="pending")
     reviewed_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -682,6 +687,98 @@ class UserContribution(Base):
 
     def __repr__(self) -> str:
         return f"<UserContribution {self.name} ({self.status})>"
+
+
+# =============================================================================
+# Lyra News Pipeline Models
+# =============================================================================
+
+
+class NewsChannel(Base):
+    """YouTube channel tracked by the Lyra news pipeline."""
+    __tablename__ = "news_channels"
+
+    id: Mapped[str] = mapped_column(String(50), primary_key=True)  # YouTube channel ID
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    videos: Mapped[list["NewsVideo"]] = relationship("NewsVideo", back_populates="channel")
+
+    def __repr__(self) -> str:
+        return f"<NewsChannel {self.name}>"
+
+
+class NewsVideo(Base):
+    """YouTube video processed by the Lyra pipeline."""
+    __tablename__ = "news_videos"
+
+    id: Mapped[str] = mapped_column(String(20), primary_key=True)  # YouTube video ID
+    channel_id: Mapped[str] = mapped_column(
+        String(50), ForeignKey("news_channels.id"), nullable=False, index=True
+    )
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    duration_minutes: Mapped[float | None] = mapped_column(Float, nullable=True)
+    thumbnail_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    transcript_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    summary_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+
+    channel: Mapped["NewsChannel"] = relationship("NewsChannel", back_populates="videos")
+    items: Mapped[list["NewsItem"]] = relationship("NewsItem", back_populates="video")
+
+    def __repr__(self) -> str:
+        return f"<NewsVideo {self.id}: {self.title[:40]}>"
+
+
+class NewsItem(Base):
+    """Individual news item (one key topic extracted from a video)."""
+    __tablename__ = "news_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    video_id: Mapped[str] = mapped_column(
+        String(20), ForeignKey("news_videos.id"), nullable=False, index=True
+    )
+    headline: Mapped[str] = mapped_column(String(500), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    facts: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    timestamp_range: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    timestamp_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    post_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    screenshot_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
+
+    # Link to archaeological site on the globe
+    site_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("unified_sites.id"), nullable=True, index=True
+    )
+    site_name_extracted: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    video: Mapped["NewsVideo"] = relationship("NewsVideo", back_populates="items")
+    site: Mapped[Optional["UnifiedSite"]] = relationship("UnifiedSite", lazy="joined")
+
+    def __repr__(self) -> str:
+        return f"<NewsItem {self.id}: {self.headline[:40]}>"
+
+
+class NewsArticle(Base):
+    """Weekly digest article generated from video summaries."""
+    __tablename__ = "news_articles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    week_start: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    week_end: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    video_ids: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    def __repr__(self) -> str:
+        return f"<NewsArticle {self.id}: {self.title[:40]}>"
 
 
 # =============================================================================
