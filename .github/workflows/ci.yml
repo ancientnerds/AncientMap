@@ -188,7 +188,11 @@ jobs:
 
             echo "==> Restarting log streaming..."
             chmod +x scripts/follow_logs.sh
-            pkill -f follow_logs.sh || true
-            sleep 1
-            nohup ./scripts/follow_logs.sh > /dev/null 2>&1 &
+            mkdir -p logs
+            if [ -f logs/.follow_logs.pid ]; then
+              kill "$(cat logs/.follow_logs.pid)" 2>/dev/null || true
+              sleep 1
+            fi
+            nohup ./scripts/follow_logs.sh </dev/null >/dev/null 2>&1 &
+            echo $! > logs/.follow_logs.pid
             echo "==> Deploy complete!"'
