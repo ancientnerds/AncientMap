@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import func, text
+from sqlalchemy import distinct, func, text
 from sqlalchemy.orm import Session, joinedload
 
 from api.cache import cache_get, cache_set
@@ -396,7 +396,7 @@ async def get_news_stats(db: Session = Depends(get_db)):
 
     try:
         total_items = db.query(func.count(NewsItem.id)).scalar() or 0
-        total_videos = db.query(func.count(NewsVideo.id)).scalar() or 0
+        total_videos = db.query(func.count(distinct(NewsItem.video_id))).scalar() or 0
         total_channels = db.query(func.count(NewsChannel.id)).filter(
             NewsChannel.enabled.is_(True)
         ).scalar() or 0
