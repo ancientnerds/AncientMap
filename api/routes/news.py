@@ -5,8 +5,7 @@ Serves Lyra pipeline news items, channels, articles, and stats.
 """
 
 import logging
-
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
@@ -449,7 +448,7 @@ async def get_lyra_status(db: Session = Depends(get_db)):
     else:
         last_hb = row[0]
         cycle_status = row[1]
-        age_seconds = (datetime.now(timezone.utc) - last_hb).total_seconds()
+        age_seconds = (datetime.now(UTC) - last_hb).total_seconds()
         # Online if heartbeat within 2 hours (pipeline runs hourly)
         is_online = age_seconds < 7200
         result = LyraStatusResponse(
