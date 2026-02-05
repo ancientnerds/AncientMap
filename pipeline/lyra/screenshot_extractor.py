@@ -26,56 +26,62 @@ def _get_proxy_url(settings: LyraSettings) -> str | None:
 def _extract_frame(video_id: str, timestamp: int, output_path: Path, proxy_url: str | None) -> bool:
     """Extract a single frame from a YouTube video at the given timestamp.
 
-    Uses yt-dlp to get the direct stream URL (through proxy), then ffmpeg to grab
-    one frame (also through proxy). Both must use the same proxy because YouTube's
-    stream URLs are IP-locked.
+    Step 1: yt-dlp --download-sections downloads just a 3-second clip around the
+    timestamp (DASH-aware, only fetches the needed segments — minimal bandwidth).
+    Step 2: ffmpeg extracts one frame from the local clip (no network needed).
     """
     yt_url = f"https://www.youtube.com/watch?v={video_id}"
+    clip_path = output_path.with_suffix(".clip.mp4")
 
-    # Step 1: Get direct video stream URL via yt-dlp
-    cmd_url = [
+    # Step 1: Download a tiny clip around the timestamp via yt-dlp
+    cmd_clip = [
         "yt-dlp",
         "-f", "worst[ext=mp4]/worst",
-        "-g",
+        "--download-sections", f"*{timestamp}-{timestamp + 3}",
+        "--force-keyframes-at-cuts",
+        "-o", str(clip_path),
+        "--no-warnings",
         yt_url,
     ]
     if proxy_url:
-        cmd_url.insert(1, "--proxy")
-        cmd_url.insert(2, proxy_url)
+        cmd_clip.insert(1, "--proxy")
+        cmd_clip.insert(2, proxy_url)
 
     try:
-        result = subprocess.run(cmd_url, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(cmd_clip, capture_output=True, text=True, timeout=60)
         if result.returncode != 0:
             logger.warning(f"yt-dlp failed for {video_id}: {result.stderr.strip()[-200:]}")
             return False
-        direct_url = result.stdout.strip().split("\n")[0]
     except subprocess.TimeoutExpired:
-        logger.warning(f"yt-dlp timed out for {video_id}")
+        logger.warning(f"yt-dlp timed out for {video_id}@{timestamp}s")
         return False
 
-    # Step 2: Extract frame with ffmpeg (use same proxy so IP matches the signed URL)
+    if not clip_path.exists() or clip_path.stat().st_size == 0:
+        logger.warning(f"yt-dlp produced no clip for {video_id}@{timestamp}s")
+        return False
+
+    # Step 2: Extract first frame from local clip (no network, instant)
     cmd_ffmpeg = [
         "ffmpeg",
-        "-ss", str(timestamp),
-    ]
-    if proxy_url:
-        cmd_ffmpeg += ["-http_proxy", proxy_url]
-    cmd_ffmpeg += [
-        "-i", direct_url,
+        "-i", str(clip_path),
         "-frames:v", "1",
-        "-q:v", "5",
+        "-vf", "scale=512:-2",
+        "-c:v", "libwebp",
+        "-q:v", "75",
         "-y",
         str(output_path),
     ]
 
     try:
-        result = subprocess.run(cmd_ffmpeg, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(cmd_ffmpeg, capture_output=True, text=True, timeout=15)
         if result.returncode != 0:
             logger.warning(f"ffmpeg failed for {video_id}@{timestamp}s: {result.stderr[-200:]}")
             return False
     except subprocess.TimeoutExpired:
         logger.warning(f"ffmpeg timed out for {video_id}@{timestamp}s")
         return False
+    finally:
+        clip_path.unlink(missing_ok=True)
 
     return output_path.exists() and output_path.stat().st_size > 0
 
@@ -110,7 +116,7 @@ def extract_screenshots(settings: LyraSettings) -> int:
         # Group by video to avoid re-fetching the same video URL
         for item in items:
             timestamp = item.timestamp_seconds + SCREENSHOT_OFFSET
-            filename = f"{item.video_id}_{timestamp}.jpg"
+            filename = f"{item.video_id}_{timestamp}.webp"
             output_path = SCREENSHOTS_DIR / filename
 
             # Skip if file already exists from a previous partial run
