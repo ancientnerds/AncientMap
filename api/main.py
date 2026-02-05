@@ -16,7 +16,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from contextlib import asynccontextmanager
-
 from pathlib import Path
 
 from fastapi import FastAPI
