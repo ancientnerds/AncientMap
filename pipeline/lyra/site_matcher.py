@@ -5,7 +5,14 @@ import logging
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from pipeline.database import NewsItem, SiteName, SourceMeta, UnifiedSite, UserContribution, get_session
+from pipeline.database import (
+    NewsItem,
+    SiteName,
+    SourceMeta,
+    UnifiedSite,
+    UserContribution,
+    get_session,
+)
 from pipeline.utils.text import normalize_name
 
 logger = logging.getLogger(__name__)
@@ -16,7 +23,7 @@ MIN_NAME_LENGTH_FOR_LIKE = 6
 
 def _load_source_priority(session: Session) -> dict[str, int]:
     """Load source priorities from source_meta. Lower priority = better source."""
-    rows = session.query(SourceMeta.id, SourceMeta.priority).filter(SourceMeta.enabled == True).all()
+    rows = session.query(SourceMeta.id, SourceMeta.priority).filter(SourceMeta.enabled.is_(True)).all()
     return {row.id: row.priority for row in rows}
 
 
