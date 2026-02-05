@@ -42,7 +42,8 @@ export function detectEmpireUnderCursor(
   screenX: number,
   screenY: number,
   camera: THREE.PerspectiveCamera,
-  globe: THREE.Mesh
+  globe: THREE.Mesh,
+  canvas?: HTMLCanvasElement
 ): string | null {
   // Find all empire fill meshes
   const empireMeshes: THREE.Mesh[] = []
@@ -56,12 +57,18 @@ export function detectEmpireUnderCursor(
     return null
   }
 
-  // Raycast to find empire under cursor
+  // Raycast to find empire under cursor (account for CSS transform offset)
   const raycaster = new THREE.Raycaster()
-  const mouse = new THREE.Vector2(
-    (screenX / window.innerWidth) * 2 - 1,
-    -(screenY / window.innerHeight) * 2 + 1
-  )
+  let ndcX: number, ndcY: number
+  if (canvas) {
+    const rect = canvas.getBoundingClientRect()
+    ndcX = ((screenX - rect.left) / rect.width) * 2 - 1
+    ndcY = -((screenY - rect.top) / rect.height) * 2 + 1
+  } else {
+    ndcX = (screenX / window.innerWidth) * 2 - 1
+    ndcY = -(screenY / window.innerHeight) * 2 + 1
+  }
+  const mouse = new THREE.Vector2(ndcX, ndcY)
   raycaster.setFromCamera(mouse, camera)
   const hits = raycaster.intersectObjects(empireMeshes)
 
@@ -90,7 +97,8 @@ export function updateEmpireHoverState(
   screenY: number,
   camera: THREE.PerspectiveCamera,
   globe: THREE.Mesh,
-  refs: EmpireHoverRefs
+  refs: EmpireHoverRefs,
+  canvas?: HTMLCanvasElement
 ): EmpireHoverResult {
   const { hoveredEmpireRef, empireBorderLinesRef, empireFillMeshesRef } = refs
 
@@ -99,7 +107,8 @@ export function updateEmpireHoverState(
     screenX,
     screenY,
     camera,
-    globe
+    globe,
+    canvas
   )
 
   const prevHoveredEmpire = hoveredEmpireRef.current

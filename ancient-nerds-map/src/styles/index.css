@@ -12247,6 +12247,10 @@ body.news-feed-open .historical-borders-panel {
   right: calc(360px + 72px * var(--hud-scale, 1) + 192px);
 }
 
+body.news-feed-open .empire-borders-window {
+  right: calc(360px + 264px * var(--hud-scale, 1));
+}
+
 /* Tooltip offset is applied via globeOffsetX prop in JS to avoid jump during transition */
 
 .news-feed-header {
