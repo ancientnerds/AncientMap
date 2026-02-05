@@ -26,54 +26,58 @@ def _get_proxy_url(settings: LyraSettings) -> str | None:
 def _extract_frame(video_id: str, timestamp: int, output_path: Path, proxy_url: str | None) -> bool:
     """Extract a single frame from a YouTube video at the given timestamp.
 
-    Uses yt-dlp -g to get the direct URL, then ffmpeg to seek and grab one frame.
+    Downloads a short clip via yt-dlp (which handles proxy), then extracts a frame with ffmpeg.
+    This avoids the issue where yt-dlp gets a stream URL for the proxy IP but ffmpeg
+    connects directly from the VPS IP, causing 403 errors.
     """
     yt_url = f"https://www.youtube.com/watch?v={video_id}"
+    temp_clip = output_path.with_suffix(".tmp.mp4")
 
-    # Step 1: Get direct video stream URL via yt-dlp
-    cmd_url = [
+    # Step 1: Download a short clip around the timestamp via yt-dlp
+    cmd_dl = [
         "yt-dlp",
         "-f", "worst[ext=mp4]/worst",
-        "-g",  # Print URL only, don't download
+        "--download-sections", f"*{timestamp}-{timestamp + 3}",
+        "-o", str(temp_clip),
+        "--force-overwrites",
+        "--no-warnings",
         yt_url,
     ]
     if proxy_url:
-        cmd_url.insert(1, "--proxy")
-        cmd_url.insert(2, proxy_url)
+        cmd_dl.insert(1, "--proxy")
+        cmd_dl.insert(2, proxy_url)
 
     try:
-        result = subprocess.run(
-            cmd_url, capture_output=True, text=True, timeout=30,
-        )
-        if result.returncode != 0:
-            logger.warning(f"yt-dlp failed for {video_id}: {result.stderr.strip()}")
+        result = subprocess.run(cmd_dl, capture_output=True, text=True, timeout=60)
+        if result.returncode != 0 or not temp_clip.exists():
+            logger.warning(f"yt-dlp download failed for {video_id}@{timestamp}s: {result.stderr.strip()[-200:]}")
+            temp_clip.unlink(missing_ok=True)
             return False
-        direct_url = result.stdout.strip().split("\n")[0]
     except subprocess.TimeoutExpired:
-        logger.warning(f"yt-dlp timed out for {video_id}")
+        logger.warning(f"yt-dlp timed out for {video_id}@{timestamp}s")
+        temp_clip.unlink(missing_ok=True)
         return False
 
-    # Step 2: Extract frame with ffmpeg (HTTP seek to timestamp)
+    # Step 2: Extract first frame from the local clip
     cmd_ffmpeg = [
         "ffmpeg",
-        "-ss", str(timestamp),
-        "-i", direct_url,
+        "-i", str(temp_clip),
         "-frames:v", "1",
         "-q:v", "5",
-        "-y",  # Overwrite
+        "-y",
         str(output_path),
     ]
 
     try:
-        result = subprocess.run(
-            cmd_ffmpeg, capture_output=True, text=True, timeout=30,
-        )
+        result = subprocess.run(cmd_ffmpeg, capture_output=True, text=True, timeout=15)
         if result.returncode != 0:
             logger.warning(f"ffmpeg failed for {video_id}@{timestamp}s: {result.stderr[-200:]}")
             return False
     except subprocess.TimeoutExpired:
         logger.warning(f"ffmpeg timed out for {video_id}@{timestamp}s")
         return False
+    finally:
+        temp_clip.unlink(missing_ok=True)
 
     return output_path.exists() and output_path.stat().st_size > 0
 
