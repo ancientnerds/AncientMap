@@ -385,7 +385,7 @@ class StaticExporter:
                     title,
                     thumbnail_url,
                     content_url,
-                    metadata
+                    link_metadata
                 FROM site_content_links
             """))
 
@@ -399,7 +399,7 @@ class StaticExporter:
                     "t": row.title[:200] if row.title else "",
                     "thumb": row.thumbnail_url,
                     "url": row.content_url,
-                    "meta": row.metadata if row.metadata else {},
+                    "meta": row.link_metadata if row.link_metadata else {},
                 }
 
             # Save each content type to separate file
