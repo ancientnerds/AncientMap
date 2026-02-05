@@ -139,6 +139,14 @@ def summarize_video(video: NewsVideo, settings: LyraSettings) -> bool:
 
             summary_text = "\n".join(f"- {f}" for f in facts)
 
+            # Extract primary site name if LLM provided one with high confidence
+            site_name = None
+            primary_site = topic.get("primary_site")
+            if primary_site and isinstance(primary_site, dict):
+                confidence = primary_site.get("confidence", "")
+                if confidence == "high" and primary_site.get("name"):
+                    site_name = primary_site["name"][:500]
+
             item = NewsItem(
                 video_id=video.id,
                 headline=headline,
@@ -146,6 +154,7 @@ def summarize_video(video: NewsVideo, settings: LyraSettings) -> bool:
                 facts=facts,
                 timestamp_range=ts_range,
                 timestamp_seconds=ts_seconds,
+                site_name_extracted=site_name,
             )
             session.add(item)
 

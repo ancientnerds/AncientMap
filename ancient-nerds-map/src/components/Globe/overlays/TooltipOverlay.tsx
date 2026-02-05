@@ -24,6 +24,9 @@ interface TooltipOverlayProps {
   // List-highlighted tooltips (from search/proximity results)
   listHighlightedSites: SiteData[]
   listHighlightedPositions: Map<string, { x: number; y: number }>
+
+  // Horizontal offset to apply to tooltip positions (e.g. when globe is shifted for news feed)
+  globeOffsetX?: number
 }
 
 export function TooltipOverlay({
@@ -40,7 +43,8 @@ export function TooltipOverlay({
   onTooltipClick,
   onSiteClick,
   listHighlightedSites,
-  listHighlightedPositions
+  listHighlightedPositions,
+  globeOffsetX = 0,
 }: TooltipOverlayProps) {
   // Determine which site to display (frozen or hovered)
   const displaySite = isFrozen ? frozenSite : hoveredSite
@@ -62,7 +66,7 @@ export function TooltipOverlay({
           <div
             className="site-hover-tooltip"
             style={{
-              left: Math.min(tooltipPos.x + 15, window.innerWidth - 200),
+              left: Math.min(tooltipPos.x + globeOffsetX + 15, window.innerWidth - 200),
               top: tooltipPos.y + 10,
               cursor: 'pointer'
             }}
@@ -131,7 +135,7 @@ export function TooltipOverlay({
             key={site.id}
             className="site-hover-tooltip selected-site-label"
             style={{
-              left: Math.min(pos.x + 15, window.innerWidth - 200),
+              left: Math.min(pos.x + globeOffsetX + 15, window.innerWidth - 200),
               top: pos.y + 10,
               pointerEvents: 'auto',
               cursor: 'pointer'

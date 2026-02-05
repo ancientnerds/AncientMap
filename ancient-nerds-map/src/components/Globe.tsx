@@ -1945,6 +1945,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
         onSiteClick={onSiteClick}
         listHighlightedSites={listHighlightedSites}
         listHighlightedPositions={listHighlightedPositions}
+        globeOffsetX={isNewsFeedOpen ? -170 : 0}
       />
 
       {/* Coordinates display - fixed position top center */}

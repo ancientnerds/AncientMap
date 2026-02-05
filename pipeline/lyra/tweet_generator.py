@@ -110,20 +110,9 @@ def generate_posts_for_video(video: NewsVideo, settings: LyraSettings) -> int:
             if not post_text:
                 continue
 
-            # Parse timestamp for attribution
-            ts_display = None
-            if ts_range:
-                parts = ts_range.split("-")
-                if parts:
-                    ts_display = parts[0].strip()
-
-            # Add attribution
-            attribution = _format_attribution(video.id, channel_name, ts_display)
-            full_post = post_text + attribution
-
             # Match to a news item if possible
             if i < len(items):
-                items[i].post_text = full_post
+                items[i].post_text = post_text
                 if ts_range:
                     items[i].timestamp_range = ts_range
                 count += 1

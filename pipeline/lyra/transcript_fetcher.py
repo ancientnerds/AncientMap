@@ -7,12 +7,24 @@ from datetime import UTC, datetime, timedelta, timezone
 
 import requests
 from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api.proxies import WebshareProxyConfig
 
 from pipeline.database import NewsChannel, NewsVideo, get_session
 from pipeline.lyra.config import LyraSettings
 from pipeline.lyra.transcript_cleaner import clean_segments
 
 logger = logging.getLogger(__name__)
+
+
+def _build_ytt_api(settings: LyraSettings) -> YouTubeTranscriptApi:
+    """Build a YouTubeTranscriptApi instance, optionally with Webshare proxy."""
+    if settings.webshare_username and settings.webshare_password:
+        proxy_config = WebshareProxyConfig(
+            proxy_username=settings.webshare_username,
+            proxy_password=settings.webshare_password,
+        )
+        return YouTubeTranscriptApi(proxy_config=proxy_config)
+    return YouTubeTranscriptApi()
 
 YOUTUBE_RSS_URL = "https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
 ATOM_NS = {"atom": "http://www.w3.org/2005/Atom", "yt": "http://www.youtube.com/xml/schemas/2015", "media": "http://search.yahoo.com/mrss/"}
@@ -85,26 +97,29 @@ def get_recent_videos(channel: NewsChannel, lookup_days: int) -> list[dict]:
     return videos
 
 
-def fetch_transcript(video_id: str, trim_start: int = 120) -> tuple[str | None, float | None]:
+def fetch_transcript(video_id: str, settings: LyraSettings) -> tuple[str | None, float | None]:
     """Fetch and clean a YouTube transcript. Returns (transcript_text, duration_minutes)."""
+    ytt_api = _build_ytt_api(settings)
     try:
-        transcript_list = YouTubeTranscriptApi.get_transcript(
-            video_id, languages=["en", "en-US", "en-GB"]
-        )
+        transcript = ytt_api.fetch(video_id, languages=["en", "en-US", "en-GB"])
     except Exception as e:
         logger.warning(f"No transcript for {video_id}: {e}")
         return None, None
+
+    # v1.x returns snippet objects with .text/.start/.duration attributes — convert to dicts
+    transcript_list = [{"text": s.text, "start": s.start, "duration": s.duration} for s in transcript]
 
     if not transcript_list:
         return None, None
 
     # Calculate duration from last segment
     last_seg = transcript_list[-1]
-    duration_seconds = last_seg.get("start", 0) + last_seg.get("duration", 0)
+    duration_seconds = last_seg["start"] + last_seg["duration"]
     duration_minutes = duration_seconds / 60.0
 
     # Trim intro segments
-    trimmed = [seg for seg in transcript_list if seg.get("start", 0) >= trim_start]
+    trim_start = settings.transcript_trim_start
+    trimmed = [seg for seg in transcript_list if seg["start"] >= trim_start]
     if not trimmed:
         trimmed = transcript_list  # Don't trim if nothing would remain
 
@@ -154,8 +169,13 @@ def fetch_new_videos(settings: LyraSettings) -> int:
 
                 logger.info(f"Fetching transcript for: {video_info['title']}")
                 transcript_text, duration = fetch_transcript(
-                    video_info["id"], settings.transcript_trim_start
+                    video_info["id"], settings
                 )
+
+                # Skip short videos (Shorts and other non-full-length content)
+                if duration is not None and duration < settings.min_video_minutes:
+                    logger.info(f"  -> skipped ({duration:.1f} min < {settings.min_video_minutes} min minimum)")
+                    continue
 
                 status = "transcribed" if transcript_text else "failed"
 

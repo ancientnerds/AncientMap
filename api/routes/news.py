@@ -12,10 +12,44 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from api.cache import cache_get, cache_set
-from pipeline.database import NewsArticle, NewsChannel, NewsItem, NewsVideo, get_db
+from pipeline.database import NewsArticle, NewsChannel, NewsItem, NewsVideo, UnifiedSite, get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+# =============================================================================
+# Period Bucketing (mirrors frontend categorizePeriod in src/data/sites.ts)
+# =============================================================================
+
+_PERIOD_BUCKETS = [
+    ("< 4500 BC", -999999, -4500),
+    ("4500 - 3000 BC", -4500, -3000),
+    ("3000 - 1500 BC", -3000, -1500),
+    ("1500 - 500 BC", -1500, -500),
+    ("500 BC - 1 AD", -500, 1),
+    ("1 - 500 AD", 1, 500),
+    ("500 - 1000 AD", 500, 1000),
+    ("1000 - 1500 AD", 1000, 1500),
+    ("1500+ AD", 1500, 999999),
+]
+_PERIOD_ORDER = {label: i for i, (label, _, _) in enumerate(_PERIOD_BUCKETS)}
+
+
+def _categorize_period(start: int | None) -> str:
+    if start is None:
+        return "Unknown"
+    for label, lo, hi in _PERIOD_BUCKETS:
+        if lo <= start < hi:
+            return label
+    return "Unknown"
+
+
+def _period_label_to_range(label: str) -> tuple[int, int] | None:
+    for bucket_label, lo, hi in _PERIOD_BUCKETS:
+        if bucket_label == label:
+            return (lo, hi)
+    return None
 
 
 # =============================================================================
@@ -42,13 +76,24 @@ class NewsItemResponse(BaseModel):
     id: int
     headline: str
     summary: str
+    post_text: str | None = None
     facts: list[str] | None = None
     timestamp_range: str | None = None
     timestamp_seconds: int | None = None
+    screenshot_url: str | None = None
     youtube_url: str | None = None
     youtube_deep_url: str | None = None
     video: NewsVideoInfo
     created_at: str
+    site_id: str | None = None
+    site_name: str | None = None
+    site_lat: float | None = None
+    site_lon: float | None = None
+    site_type: str | None = None
+    site_period_name: str | None = None
+    site_period_start: int | None = None
+    site_country: str | None = None
+    site_name_extracted: str | None = None
 
 
 class NewsFeedResponse(BaseModel):
@@ -76,6 +121,19 @@ class NewsStatsResponse(BaseModel):
     latest_item_date: str | None = None
 
 
+class NewsFilterSiteOption(BaseModel):
+    id: str
+    name: str
+
+
+class NewsFiltersResponse(BaseModel):
+    channels: list[NewsChannelResponse]
+    sites: list[NewsFilterSiteOption]
+    categories: list[str]
+    periods: list[str]
+    countries: list[str]
+
+
 # =============================================================================
 # Endpoints
 # =============================================================================
@@ -86,30 +144,63 @@ async def get_news_feed(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     channel_id: str | None = None,
+    site_id: str | None = None,
+    category: str | None = None,
+    period: str | None = None,
+    country: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Get paginated news feed items, newest first."""
-    cache_key = f"news:feed:{page}:{page_size}:{channel_id or 'all'}"
+    cache_key = f"news:feed:{page}:{page_size}:{channel_id or 'all'}:{site_id or 'all'}:{category or 'all'}:{period or 'all'}:{country or 'all'}"
     cached = cache_get(cache_key)
     if cached:
         return cached
 
     query = db.query(NewsItem).join(NewsVideo).options(
-        joinedload(NewsItem.video).joinedload(NewsVideo.channel)
-    )
+        joinedload(NewsItem.video).joinedload(NewsVideo.channel),
+        joinedload(NewsItem.site),
+    ).filter(NewsItem.post_text.isnot(None))
 
     if channel_id:
         query = query.filter(NewsVideo.channel_id == channel_id)
 
+    # Site/category/period/country filters require UnifiedSite join
+    site_joined = False
+
+    if site_id:
+        query = query.filter(NewsItem.site_id == site_id)
+
+    if category:
+        if not site_joined:
+            query = query.join(UnifiedSite, NewsItem.site_id == UnifiedSite.id)
+            site_joined = True
+        query = query.filter(UnifiedSite.site_type == category)
+
+    if country:
+        if not site_joined:
+            query = query.join(UnifiedSite, NewsItem.site_id == UnifiedSite.id)
+            site_joined = True
+        query = query.filter(UnifiedSite.country == country)
+
+    if period:
+        period_range = _period_label_to_range(period)
+        if period_range:
+            if not site_joined:
+                query = query.join(UnifiedSite, NewsItem.site_id == UnifiedSite.id)
+                site_joined = True
+            lo, hi = period_range
+            query = query.filter(UnifiedSite.period_start >= lo, UnifiedSite.period_start < hi)
+
     total_count = query.count()
     offset = (page - 1) * page_size
 
-    items = query.order_by(NewsItem.created_at.desc()).offset(offset).limit(page_size).all()
+    items = query.order_by(NewsVideo.published_at.desc(), NewsItem.created_at.desc()).offset(offset).limit(page_size).all()
 
     result_items = []
     for item in items:
         video = item.video
         channel = video.channel if video else None
+        site = item.site
 
         youtube_url = f"https://www.youtube.com/watch?v={video.id}" if video else None
         youtube_deep_url = None
@@ -120,9 +211,11 @@ async def get_news_feed(
             id=item.id,
             headline=item.headline,
             summary=item.summary,
+            post_text=item.post_text,
             facts=item.facts,
             timestamp_range=item.timestamp_range,
             timestamp_seconds=item.timestamp_seconds,
+            screenshot_url=item.screenshot_url,
             youtube_url=youtube_url,
             youtube_deep_url=youtube_deep_url,
             video=NewsVideoInfo(
@@ -135,6 +228,15 @@ async def get_news_feed(
                 duration_minutes=video.duration_minutes,
             ),
             created_at=item.created_at.isoformat() if item.created_at else "",
+            site_id=str(site.id) if site else None,
+            site_name=site.name if site else None,
+            site_lat=site.lat if site else None,
+            site_lon=site.lon if site else None,
+            site_type=site.site_type if site else None,
+            site_period_name=site.period_name if site else None,
+            site_period_start=site.period_start if site else None,
+            site_country=site.country if site else None,
+            site_name_extracted=item.site_name_extracted if not site else None,
         ))
 
     response = NewsFeedResponse(
@@ -146,6 +248,86 @@ async def get_news_feed(
 
     cache_set(cache_key, response.model_dump(), ttl=300)  # 5 min cache
     return response
+
+
+@router.get("/filters", response_model=NewsFiltersResponse)
+async def get_news_filters(db: Session = Depends(get_db)):
+    """Get available filter options based on existing news data."""
+    cache_key = "news:filters"
+    cached = cache_get(cache_key)
+    if cached:
+        return cached
+
+    # Channels: distinct enabled channels that have news items with post_text
+    channel_ids_q = (
+        db.query(NewsVideo.channel_id)
+        .join(NewsItem, NewsItem.video_id == NewsVideo.id)
+        .filter(NewsItem.post_text.isnot(None))
+        .distinct()
+    )
+    channel_ids = [row[0] for row in channel_ids_q.all()]
+    channels_list = (
+        db.query(NewsChannel)
+        .filter(NewsChannel.enabled.is_(True), NewsChannel.id.in_(channel_ids))
+        .order_by(NewsChannel.name)
+        .all()
+    )
+    channels = [NewsChannelResponse(id=ch.id, name=ch.name) for ch in channels_list]
+
+    # Sites: distinct sites linked from news items
+    site_rows = (
+        db.query(UnifiedSite.id, UnifiedSite.name)
+        .join(NewsItem, NewsItem.site_id == UnifiedSite.id)
+        .filter(NewsItem.post_text.isnot(None))
+        .distinct()
+        .order_by(UnifiedSite.name)
+        .all()
+    )
+    sites = [NewsFilterSiteOption(id=str(row[0]), name=row[1]) for row in site_rows]
+
+    # Categories: distinct site_type values
+    cat_rows = (
+        db.query(UnifiedSite.site_type)
+        .join(NewsItem, NewsItem.site_id == UnifiedSite.id)
+        .filter(NewsItem.post_text.isnot(None), UnifiedSite.site_type.isnot(None))
+        .distinct()
+        .all()
+    )
+    categories = sorted([row[0] for row in cat_rows])
+
+    # Periods: distinct period_start → bucket → deduplicate → sort
+    period_rows = (
+        db.query(UnifiedSite.period_start)
+        .join(NewsItem, NewsItem.site_id == UnifiedSite.id)
+        .filter(NewsItem.post_text.isnot(None), UnifiedSite.period_start.isnot(None))
+        .distinct()
+        .all()
+    )
+    period_labels = sorted(
+        {_categorize_period(row[0]) for row in period_rows} - {"Unknown"},
+        key=lambda p: _PERIOD_ORDER.get(p, 999),
+    )
+
+    # Countries: distinct country values
+    country_rows = (
+        db.query(UnifiedSite.country)
+        .join(NewsItem, NewsItem.site_id == UnifiedSite.id)
+        .filter(NewsItem.post_text.isnot(None), UnifiedSite.country.isnot(None))
+        .distinct()
+        .all()
+    )
+    countries = sorted([row[0] for row in country_rows])
+
+    result = NewsFiltersResponse(
+        channels=channels,
+        sites=sites,
+        categories=categories,
+        periods=period_labels,
+        countries=countries,
+    )
+
+    cache_set(cache_key, result.model_dump(), ttl=600)  # 10 min cache
+    return result
 
 
 @router.get("/channels", response_model=list[NewsChannelResponse])

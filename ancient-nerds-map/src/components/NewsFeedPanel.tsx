@@ -1,11 +1,13 @@
 /**
- * NewsFeedPanel - Collapsible glass panel showing Lyra news feed items
- * Can be docked on the right side or detached as a free-floating draggable window.
+ * NewsFeedPanel - Collapsible glass panel showing Lyra news feed items.
+ * Docked on the right side of the globe view.
  */
 
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { config } from '../config'
+import { getCategoryColor, getPeriodColor, categorizePeriod } from '../data/sites'
+import { getCountryFlatFlagUrl } from '../utils/countryFlags'
 
 const LyraProfileModal = lazy(() => import('./LyraProfileModal'))
 
@@ -23,13 +25,24 @@ interface NewsItemData {
   id: number
   headline: string
   summary: string
+  post_text: string | null
   facts: string[] | null
   timestamp_range: string | null
   timestamp_seconds: number | null
+  screenshot_url: string | null
   youtube_url: string | null
   youtube_deep_url: string | null
   video: NewsVideoInfo
   created_at: string
+  site_id: string | null
+  site_name: string | null
+  site_lat: number | null
+  site_lon: number | null
+  site_type: string | null
+  site_period_name: string | null
+  site_period_start: number | null
+  site_country: string | null
+  site_name_extracted: string | null
 }
 
 interface NewsFeedResponse {
@@ -41,6 +54,8 @@ interface NewsFeedResponse {
 
 interface Props {
   onClose: () => void
+  onSiteHover?: (siteId: string | null) => void
+  onSiteClick?: (siteName: string, lat: number, lon: number) => void
 }
 
 function formatRelativeDate(isoDate: string): string {
@@ -56,7 +71,7 @@ function formatRelativeDate(isoDate: string): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-export default function NewsFeedPanel({ onClose }: Props) {
+export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick }: Props) {
   const [items, setItems] = useState<NewsItemData[]>([])
   const [totalCount, setTotalCount] = useState(0)
   const [page, setPage] = useState(1)
@@ -66,15 +81,6 @@ export default function NewsFeedPanel({ onClose }: Props) {
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [showLyraProfile, setShowLyraProfile] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
-
-  // Detach / drag state
-  const [detached, setDetached] = useState(false)
-  const [position, setPosition] = useState({ x: 0, y: 0 })
-  const [size, setSize] = useState<{ w: number; h: number } | null>(null)
-  const [isDragging, setIsDragging] = useState(false)
-  const dragStartRef = useRef({ x: 0, y: 0, posX: 0, posY: 0 })
-  const savedDetachRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
 
   const fetchFeed = useCallback(async (pageNum: number, append: boolean = false) => {
     try {
@@ -98,81 +104,10 @@ export default function NewsFeedPanel({ onClose }: Props) {
     fetchFeed(1)
   }, [fetchFeed])
 
-  // Remove body class when detached so right-side UI shifts back
   useEffect(() => {
-    if (detached) {
-      document.body.classList.remove('news-feed-open')
-    } else {
-      document.body.classList.add('news-feed-open')
-    }
-  }, [detached])
-
-  // Drag handlers
-  const handleTitleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (!detached) return
-    e.preventDefault()
-    setIsDragging(true)
-    dragStartRef.current = {
-      x: e.clientX, y: e.clientY,
-      posX: position.x, posY: position.y,
-    }
-  }, [detached, position])
-
-  useEffect(() => {
-    if (!isDragging) return
-    const onMove = (e: MouseEvent) => {
-      const dx = e.clientX - dragStartRef.current.x
-      const dy = e.clientY - dragStartRef.current.y
-      let newX = dragStartRef.current.posX + dx
-      let newY = dragStartRef.current.posY + dy
-      // Keep within viewport
-      const w = panelRef.current?.offsetWidth ?? 340
-      const h = panelRef.current?.offsetHeight ?? 500
-      newX = Math.max(0, Math.min(window.innerWidth - w, newX))
-      newY = Math.max(0, Math.min(window.innerHeight - h, newY))
-      setPosition({ x: newX, y: newY })
-    }
-    const onUp = () => setIsDragging(false)
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-    return () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-    }
-  }, [isDragging])
-
-  const handleDetach = () => {
-    if (savedDetachRef.current) {
-      // Restore previous detached position and size
-      const s = savedDetachRef.current
-      setPosition({ x: s.x, y: s.y })
-      setSize({ w: s.w, h: s.h })
-    } else {
-      // First detach: position where the docked panel is
-      const rect = panelRef.current?.getBoundingClientRect()
-      setPosition({
-        x: rect ? rect.left : window.innerWidth - 360,
-        y: rect ? rect.top : 40,
-      })
-      setSize(null)
-    }
-    setDetached(true)
-  }
-
-  const handleDock = () => {
-    // Save current detached position + size before docking
-    const el = panelRef.current
-    if (el) {
-      savedDetachRef.current = {
-        x: position.x,
-        y: position.y,
-        w: el.offsetWidth,
-        h: el.offsetHeight,
-      }
-    }
-    setSize(null)
-    setDetached(false)
-  }
+    document.body.classList.add('news-feed-open')
+    return () => { document.body.classList.remove('news-feed-open') }
+  }, [])
 
   const loadMore = () => {
     if (hasMore && !loading) {
@@ -184,26 +119,9 @@ export default function NewsFeedPanel({ onClose }: Props) {
     setExpandedId(prev => prev === id ? null : id)
   }
 
-  const panelClass = detached
-    ? `news-feed-panel news-feed-detached${isDragging ? ' news-feed-dragging' : ''}`
-    : 'news-feed-panel'
-
-  const panelStyle: React.CSSProperties = detached
-    ? {
-        left: position.x,
-        top: position.y,
-        ...(size ? { width: size.w, height: size.h } : {}),
-      }
-    : {}
-
   return (
-    <div className={panelClass} style={panelStyle} ref={panelRef}>
-      {/* Header - draggable when detached */}
-      <div
-        className="news-feed-header"
-        onMouseDown={handleTitleMouseDown}
-        style={detached ? { cursor: 'grab' } : undefined}
-      >
+    <div className="news-feed-panel">
+      <div className="news-feed-header">
         <div className="news-feed-title">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1"></path>
@@ -214,23 +132,6 @@ export default function NewsFeedPanel({ onClose }: Props) {
           {totalCount > 0 && <span className="news-feed-badge">{totalCount}</span>}
         </div>
         <div className="news-feed-actions">
-          {/* Detach / Dock toggle */}
-          {detached ? (
-            <button className="news-feed-btn" onClick={handleDock} title="Dock to side">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="3" width="18" height="18" rx="2"></rect>
-                <line x1="15" y1="3" x2="15" y2="21"></line>
-              </svg>
-            </button>
-          ) : (
-            <button className="news-feed-btn" onClick={handleDetach} title="Detach window">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="2" y="2" width="16" height="16" rx="2"></rect>
-                <path d="M14 8h6v6"></path>
-                <path d="M14 14L22 6"></path>
-              </svg>
-            </button>
-          )}
           <button className="news-feed-btn" onClick={onClose} title="Close">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -281,38 +182,85 @@ export default function NewsFeedPanel({ onClose }: Props) {
           <div className="news-feed-empty">No news items yet</div>
         )}
 
-        {items.map(item => (
+        {items.map(item => {
+          const screenshotSrc = item.screenshot_url
+            ? `${config.api.baseUrl}${item.screenshot_url.replace('/api', '')}`
+            : item.video.thumbnail_url
+          const deepLink = item.youtube_deep_url || item.youtube_url || '#'
+
+          return (
           <div
             key={item.id}
-            className={`news-feed-item${expandedId === item.id ? ' expanded' : ''}`}
+            className={`news-feed-item${expandedId === item.id ? ' expanded' : ''}${item.site_id ? ' has-site' : ''}`}
             onClick={() => toggleExpand(item.id)}
+            onMouseEnter={() => item.site_id && onSiteHover?.(item.site_id)}
+            onMouseLeave={() => item.site_id && onSiteHover?.(null)}
           >
-            <div className="news-feed-item-header">
-              {item.video.thumbnail_url && (
-                <a
-                  className="news-feed-thumbnail"
-                  href={item.youtube_deep_url || item.youtube_url || '#'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={e => e.stopPropagation()}
-                >
-                  <img src={item.video.thumbnail_url} alt="" loading="lazy" />
-                  <svg className="news-feed-play-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                  </svg>
-                </a>
-              )}
-              <div className="news-feed-headline">{item.headline}</div>
-              <div className="news-feed-meta">
-                <span className="news-feed-channel">{item.video.channel_name}</span>
-                <span className="news-feed-date">{formatRelativeDate(item.created_at)}</span>
-              </div>
+            <div className="news-feed-meta">
+              <span className="news-feed-channel">{item.video.channel_name}</span>
+              <span className="news-feed-date">{formatRelativeDate(item.video.published_at)}</span>
             </div>
+            <div className="news-feed-post-text">{item.post_text || item.headline}</div>
+
+            {item.site_id && (() => {
+              const period = item.site_period_name || (item.site_period_start != null ? categorizePeriod(item.site_period_start) : null)
+              const isGenericType = !item.site_type || ['site', 'unknown'].includes(item.site_type.toLowerCase())
+              const categoryColor = !isGenericType ? getCategoryColor(item.site_type!) : null
+              const periodColor = period && period !== 'Unknown' ? getPeriodColor(period) : null
+              const flagUrl = item.site_country ? getCountryFlatFlagUrl(item.site_country) : null
+              return (
+                <div className="news-feed-site-block">
+                  <div className="news-feed-site-row">
+                    <button
+                      className="news-feed-map-link"
+                      onClick={(e) => { e.stopPropagation(); onSiteClick?.(item.site_name!, item.site_lat!, item.site_lon!) }}
+                      title={`Show ${item.site_name || 'site'} on map`}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                        <circle cx="12" cy="10" r="3"></circle>
+                      </svg>
+                      {item.site_name || 'Show on Map'}
+                    </button>
+                    {flagUrl && <img className="news-feed-site-flag" src={flagUrl} alt={item.site_country || ''} />}
+                  </div>
+                  {(categoryColor || periodColor) && (
+                    <div className="news-feed-site-badges">
+                      {categoryColor && <span className="news-feed-site-badge" style={{ borderColor: categoryColor, color: categoryColor }}>{item.site_type}</span>}
+                      {periodColor && <span className="news-feed-site-badge" style={{ borderColor: periodColor, color: periodColor }}>{period}</span>}
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
+            {!item.site_id && item.site_name_extracted && (
+              <div className="news-feed-site-row news-feed-site-unmatched">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.4">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                  <circle cx="12" cy="10" r="3"></circle>
+                </svg>
+                <span className="news-feed-site-unmatched-name">{item.site_name_extracted}</span>
+              </div>
+            )}
+
+            {screenshotSrc && (
+              <a
+                className="news-feed-screenshot"
+                href={deepLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+              >
+                <img src={screenshotSrc} alt="" loading="lazy" />
+                <svg className="news-feed-play-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                </svg>
+              </a>
+            )}
 
             {expandedId === item.id && (
               <div className="news-feed-expanded">
-                <div className="news-feed-summary">{item.summary}</div>
-
                 {item.facts && item.facts.length > 0 && (
                   <ul className="news-feed-facts">
                     {item.facts.map((fact, i) => (
@@ -324,7 +272,7 @@ export default function NewsFeedPanel({ onClose }: Props) {
                 {(item.youtube_deep_url || item.youtube_url) && (
                   <a
                     className="news-feed-watch-btn"
-                    href={item.youtube_deep_url || item.youtube_url || '#'}
+                    href={deepLink}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={e => e.stopPropagation()}
@@ -341,7 +289,8 @@ export default function NewsFeedPanel({ onClose }: Props) {
               </div>
             )}
           </div>
-        ))}
+          )
+        })}
 
         {loading && (
           <div className="news-feed-loading">Loading...</div>

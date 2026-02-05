@@ -113,6 +113,26 @@ services:
       retries: 3
 
   # ==========================================================================
+  # Lyra News Pipeline (YouTube monitoring + AI summarization)
+  # ==========================================================================
+  lyra:
+    build:
+      context: .
+      dockerfile: Dockerfile.lyra
+    container_name: ancient_nerds_lyra
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      POSTGRES_HOST: db
+    volumes:
+      - ./public/data/news:/app/public/data/news
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ==========================================================================
   # pgAdmin for database management (optional, for development)
   # ==========================================================================
   pgadmin:

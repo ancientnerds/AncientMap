@@ -31,7 +31,9 @@ def setup_logging() -> None:
 
 
 def run_pipeline(settings: LyraSettings) -> None:
-    """Run one full pipeline cycle: fetch -> transcribe -> summarize -> posts -> verify -> dedup."""
+    """Run one full pipeline cycle: fetch -> summarize -> match sites -> posts -> verify -> dedup -> screenshots."""
+    from pipeline.lyra.screenshot_extractor import extract_screenshots
+    from pipeline.lyra.site_matcher import match_sites_for_pending_items
     from pipeline.lyra.summarizer import summarize_pending_videos
     from pipeline.lyra.transcript_fetcher import fetch_new_videos
     from pipeline.lyra.tweet_deduplicator import deduplicate_posts
@@ -48,17 +50,25 @@ def run_pipeline(settings: LyraSettings) -> None:
     summarized = summarize_pending_videos(settings)
     logger.info(f"Step 2: Summarized {summarized} videos")
 
-    # Step 3: Generate posts
+    # Step 3: Match extracted site names to globe sites
+    matched = match_sites_for_pending_items()
+    logger.info(f"Step 3: Matched {matched} news items to sites")
+
+    # Step 4: Generate posts
     posts = generate_pending_posts(settings)
-    logger.info(f"Step 3: Generated {posts} posts")
+    logger.info(f"Step 4: Generated {posts} posts")
 
-    # Step 4: Verify posts
+    # Step 5: Verify posts
     verified = verify_pending_posts(settings)
-    logger.info(f"Step 4: Verified {verified} posts")
+    logger.info(f"Step 5: Verified {verified} posts")
 
-    # Step 5: Deduplicate
+    # Step 6: Deduplicate
     deduped = deduplicate_posts()
-    logger.info(f"Step 5: Removed {deduped} duplicates")
+    logger.info(f"Step 6: Removed {deduped} duplicates")
+
+    # Step 7: Extract timestamp screenshots
+    screenshots = extract_screenshots(settings)
+    logger.info(f"Step 7: Extracted {screenshots} screenshots")
 
     logger.info("=== Pipeline cycle complete ===")
 

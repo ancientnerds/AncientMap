@@ -42,7 +42,7 @@ export const ANCIENT_PERIODS = Object.keys(PERIOD_COLORS).filter(p => p !== 'Unk
 /**
  * Categorize period based on year.
  */
-function categorizePeriod(start: number | null | undefined): string {
+export function categorizePeriod(start: number | null | undefined): string {
   if (start === null || start === undefined) return 'Unknown'
   if (start < -4500) return '< 4500 BC'
   if (start < -3000) return '4500 - 3000 BC'

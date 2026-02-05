@@ -104,15 +104,16 @@ def verify_video_posts(video: NewsVideo, settings: LyraSettings) -> int:
             level = result.get("verification_level", "")
 
             if level == "REJECT":
-                # Clear rejected post
-                item.post_text = None
-                logger.info(f"Rejected post for item {item.id}")
+                session.delete(item)
+                logger.info(f"Rejected and deleted item {item.id}")
             elif level == "MODIFY":
-                # Apply modification
                 mod = result.get("suggested_modification", {})
-                if mod and mod.get("modified_text"):
-                    item.post_text = mod["modified_text"]
+                modified = mod.get("modified_text", "") if mod else ""
+                if modified and len(modified) <= 280:
+                    item.post_text = modified
                     logger.info(f"Modified post for item {item.id}: {mod.get('changes_explained', '')}")
+                elif modified:
+                    logger.warning(f"Discarded modification for item {item.id}: {len(modified)} chars exceeds 280 limit")
 
             # Update timestamp if verification found a more precise one
             ts = result.get("timestamp")

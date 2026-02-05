@@ -11,7 +11,7 @@ const PinAuthModal = lazy(() => import('./components/PinAuthModal'))
 const AIAgentChatModal = lazy(() => import('./components/AIAgentChatModal'))
 const DownloadManager = lazy(() => import('./components/DownloadManager'))
 const NewsFeedPanel = lazy(() => import('./components/NewsFeedPanel'))
-import { SiteData, fetchSites, getCurrentSites, addSourceSites, SOURCE_COLORS, getDefaultEnabledSourceIds, getSourceColor, getCategoryColor, getPeriodColor, setDataSourceError } from './data/sites'
+import { SiteData, fetchSites, getCurrentSites, addSourceSites, SOURCE_COLORS, getDefaultEnabledSourceIds, getSourceColor, getCategoryColor, getPeriodColor, setDataSourceError, categorizePeriod } from './data/sites'
 import { DataStore } from './data/DataStore'
 import { SourceLoader } from './services/SourceLoader'
 import { ImageCache } from './services/ImageCache'
@@ -122,20 +122,6 @@ interface ApiSiteDetail {
   sourceUrl?: string
 }
 
-// Categorize period based on year (matches sites.ts logic)
-function categorizePeriodFromYear(start: number | null | undefined): string {
-  if (start === null || start === undefined) return 'Unknown'
-  if (start < -4500) return '< 4500 BC'
-  if (start < -3000) return '4500 - 3000 BC'
-  if (start < -1500) return '3000 - 1500 BC'
-  if (start < -500) return '1500 - 500 BC'
-  if (start < 1) return '500 BC - 1 AD'
-  if (start < 500) return '1 - 500 AD'
-  if (start < 1000) return '500 - 1000 AD'
-  if (start < 1500) return '1000 - 1500 AD'
-  return '1500+ AD'
-}
-
 // Convert API detail response to SiteData - SINGLE SOURCE OF TRUTH
 function apiDetailToSiteData(detail: ApiSiteDetail): SiteData {
   // Validate coordinates - null/undefined/NaN should not default to 0,0 (Atlantic Ocean)
@@ -152,7 +138,7 @@ function apiDetailToSiteData(detail: ApiSiteDetail): SiteData {
     title: detail.name || 'Unknown Site',
     coordinates: [lon, lat],
     category: detail.type || 'Unknown',
-    period: detail.periodName || categorizePeriodFromYear(detail.periodStart),
+    period: detail.periodName || categorizePeriod(detail.periodStart),
     periodStart: detail.periodStart,
     location: detail.country || '',
     description: detail.description || '',
@@ -1833,12 +1819,27 @@ function AppContent() {
           <div className="mobile-hint">
             For the best experience, please visit on a computer with a larger screen.
           </div>
-          <button
-            className="mobile-continue-btn"
-            onClick={() => setMobileWarningDismissed(true)}
-          >
-            Continue Anyway
-          </button>
+          <div className="mobile-actions">
+            <a className="mobile-action-btn" href="/news.html">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1"></path>
+                <path d="M18 14v4h4"></path>
+                <circle cx="18" cy="18" r="4"></circle>
+              </svg>
+              News Feed
+            </a>
+            <button
+              className="mobile-action-btn"
+              onClick={() => setMobileWarningDismissed(true)}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M2 12h20"></path>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+              </svg>
+              3D Globe
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -2192,7 +2193,24 @@ function AppContent() {
       {/* News Feed Panel - slides in from right */}
       <Suspense fallback={null}>
         {showNewsFeed && (
-          <NewsFeedPanel onClose={() => setShowNewsFeed(false)} />
+          <NewsFeedPanel
+            onClose={() => setShowNewsFeed(false)}
+            onSiteHover={setHighlightedSiteId}
+            onSiteClick={(siteName, lat, lon) => {
+              setSearchQuery(siteName)
+              setDebouncedSearchQuery(siteName)
+              setFlyToCoords(null)
+              setTimeout(() => setFlyToCoords([lon, lat]), 10)
+              const query = normalizeForSearch(siteName)
+              const match = sites.find(s =>
+                selectedSources.includes(s.sourceId) &&
+                normalizeForSearch(s.title).includes(query)
+              ) || sites.find(s => normalizeForSearch(s.title).includes(query))
+              if (match) {
+                updateSelection([match.id])
+              }
+            }}
+          />
         )}
       </Suspense>
 

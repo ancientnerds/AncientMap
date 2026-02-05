@@ -22,6 +22,7 @@ class LyraSettings(BaseSettings):
 
     # Pipeline settings
     lookup_days: int = 1
+    min_video_minutes: float = 5.0  # Skip videos shorter than this (filters out Shorts)
     transcript_trim_start: int = 120  # Skip first 2 minutes of videos
 
     # Post generation (short-form news feed posts)
@@ -32,6 +33,10 @@ class LyraSettings(BaseSettings):
     post_threshold_short: int = 15   # minutes
     post_threshold_medium: int = 30
     post_threshold_long: int = 60
+
+    # Webshare proxy (for YouTube transcript fetching from VPS)
+    webshare_username: str = ""
+    webshare_password: str = ""
 
     # Queue management
     post_queue_soft_cap: int = 32

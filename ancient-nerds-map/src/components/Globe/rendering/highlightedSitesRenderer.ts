@@ -165,7 +165,8 @@ export function renderHighlightedSitesMapbox(
  */
 export function renderHighlightedSitesThreeJS(
   ctx: HighlightedSitesContext,
-  options: HighlightedSitesOptions
+  options: HighlightedSitesOptions,
+  allSites?: SiteData[],
 ): HighlightedSitesResult {
   const { globe, camera, highlightGlowsRef, validSitesRef, listHighlightedPositionsRef } = ctx
   const { highlightedSiteId, listFrozenSiteIds } = options
@@ -189,6 +190,7 @@ export function renderHighlightedSitesThreeJS(
 
   for (const siteId of activeSiteIds) {
     const site = validSitesRef.current.find(s => s.id === siteId)
+      || allSites?.find(s => s.id === siteId)
     if (!site) continue
 
     const [lng, lat] = site.coordinates
