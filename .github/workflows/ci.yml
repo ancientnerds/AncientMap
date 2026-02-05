@@ -94,6 +94,7 @@ jobs:
           filters: |
             docker:
               - 'Dockerfile'
+              - 'Dockerfile.lyra'
               - 'requirements*.txt'
               - 'api/**'
               - 'pipeline/**'
@@ -123,7 +124,7 @@ jobs:
           tags: ancient-nerds-lyra:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
-        if: hashFiles('Dockerfile.lyra') != ''
+        if: steps.filter.outputs.docker == 'true'
 
       - name: Validate docker-compose
         run: docker compose config
