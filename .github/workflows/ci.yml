@@ -164,19 +164,13 @@ jobs:
               echo "==> Frontend unchanged, skipping build"
             fi
 
-            # Only rebuild API if backend files changed
+            # Rebuild all custom Docker images if any backend/infra files changed
             if echo "$CHANGED" | grep -qE "^(api/|pipeline/|requirements|Dockerfile|docker-compose)"; then
-              echo "==> Rebuilding API..."
-              BUILD_HASH=$(git rev-parse --short HEAD) docker compose up -d --build api
+              echo "==> Rebuilding Docker services..."
+              BUILD_HASH=$(git rev-parse --short HEAD) docker compose up -d --build
             else
               echo "==> Backend unchanged, restarting API..."
               BUILD_HASH=$(git rev-parse --short HEAD) docker compose restart api
-            fi
-
-            # Rebuild Lyra if pipeline or Lyra-specific files changed
-            if echo "$CHANGED" | grep -qE "^(pipeline/|Dockerfile\.lyra|requirements\.lyra)"; then
-              echo "==> Rebuilding Lyra..."
-              docker compose up -d --build lyra
             fi
             sleep 5
             curl -sf http://localhost:8000/ || echo "WARNING: Health check failed"
