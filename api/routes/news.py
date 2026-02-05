@@ -6,9 +6,11 @@ Serves Lyra pipeline news items, channels, articles, and stats.
 
 import logging
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session, joinedload
 
 from api.cache import cache_get, cache_set
@@ -118,7 +120,14 @@ class NewsStatsResponse(BaseModel):
     total_videos: int
     total_channels: int
     total_articles: int
+    total_duration_hours: float = 0
     latest_item_date: str | None = None
+
+
+class LyraStatusResponse(BaseModel):
+    status: str  # "online", "offline", "error"
+    last_heartbeat: str | None = None
+    last_cycle_ok: bool = False
 
 
 class NewsFilterSiteOption(BaseModel):
@@ -393,6 +402,8 @@ async def get_news_stats(db: Session = Depends(get_db)):
             NewsChannel.enabled.is_(True)
         ).scalar() or 0
         total_articles = db.query(func.count(NewsArticle.id)).scalar() or 0
+        total_mins = db.query(func.sum(NewsVideo.duration_minutes)).scalar() or 0
+        total_duration_hours = round(total_mins / 60, 1) if total_mins else 0
         latest = db.query(func.max(NewsItem.created_at)).scalar()
         latest_str = latest.isoformat() if latest else None
     except Exception:
@@ -401,6 +412,7 @@ async def get_news_stats(db: Session = Depends(get_db)):
         total_videos = 0
         total_channels = 0
         total_articles = 0
+        total_duration_hours = 0
         latest_str = None
 
     result = NewsStatsResponse(
@@ -408,8 +420,43 @@ async def get_news_stats(db: Session = Depends(get_db)):
         total_videos=total_videos,
         total_channels=total_channels,
         total_articles=total_articles,
+        total_duration_hours=total_duration_hours,
         latest_item_date=latest_str,
     )
 
     cache_set(cache_key, result.model_dump(), ttl=300)  # 5 min cache
+    return result
+
+
+@router.get("/lyra-status", response_model=LyraStatusResponse)
+async def get_lyra_status(db: Session = Depends(get_db)):
+    """Check if the Lyra pipeline is alive based on its heartbeat."""
+    cache_key = "news:lyra-status"
+    cached = cache_get(cache_key)
+    if cached:
+        return cached
+
+    try:
+        row = db.execute(
+            text("SELECT last_heartbeat, status, last_error FROM pipeline_heartbeats WHERE pipeline_name = 'lyra'")
+        ).fetchone()
+    except Exception:
+        db.rollback()
+        row = None
+
+    if not row:
+        result = LyraStatusResponse(status="offline", last_heartbeat=None, last_cycle_ok=False)
+    else:
+        last_hb = row[0]
+        cycle_status = row[1]
+        age_seconds = (datetime.now(timezone.utc) - last_hb).total_seconds()
+        # Online if heartbeat within 2 hours (pipeline runs hourly)
+        is_online = age_seconds < 7200
+        result = LyraStatusResponse(
+            status="online" if is_online else "offline",
+            last_heartbeat=last_hb.isoformat(),
+            last_cycle_ok=(cycle_status == "ok"),
+        )
+
+    cache_set(cache_key, result.model_dump(), ttl=60)  # 1 min cache
     return result

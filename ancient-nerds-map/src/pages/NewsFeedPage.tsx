@@ -6,101 +6,15 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import { config } from '../config'
 import { getCategoryColor, getPeriodColor, categorizePeriod } from '../data/sites'
+import type { NewsItemData, NewsFeedResponse, NewsStats, NewsFilters, ActiveFilters } from '../types/news'
+import { formatDuration, formatRelativeDate } from '../utils/formatters'
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
 
 const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
 
-interface NewsVideoInfo {
-  id: string
-  title: string
-  channel_name: string
-  channel_id: string
-  published_at: string
-  thumbnail_url: string | null
-  duration_minutes: number | null
-}
-
-interface NewsItemData {
-  id: number
-  headline: string
-  summary: string
-  post_text: string | null
-  facts: string[] | null
-  timestamp_range: string | null
-  timestamp_seconds: number | null
-  screenshot_url: string | null
-  youtube_url: string | null
-  youtube_deep_url: string | null
-  video: NewsVideoInfo
-  created_at: string
-  site_id: string | null
-  site_name: string | null
-  site_lat: number | null
-  site_lon: number | null
-  site_type: string | null
-  site_period_name: string | null
-  site_period_start: number | null
-  site_country: string | null
-  site_name_extracted: string | null
-}
-
-interface NewsFeedResponse {
-  items: NewsItemData[]
-  total_count: number
-  page: number
-  has_more: boolean
-}
-
-interface NewsStats {
-  total_items: number
-  total_videos: number
-  total_channels: number
-  total_articles: number
-  latest_item_date: string | null
-}
-
-interface NewsChannel {
-  id: string
-  name: string
-}
-
-interface NewsFilterSiteOption {
-  id: string
-  name: string
-}
-
-interface NewsFilters {
-  channels: NewsChannel[]
-  sites: NewsFilterSiteOption[]
-  categories: string[]
-  periods: string[]
-  countries: string[]
-}
-
-interface ActiveFilters {
-  channel: string | null
-  site: string | null
-  category: string | null
-  period: string | null
-  country: string | null
-}
-
-function formatRelativeDate(isoDate: string): string {
-  const date = new Date(isoDate)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-
-  if (diffHours < 1) return 'Just now'
-  if (diffHours < 24) return `${diffHours}h ago`
-  if (diffDays < 7) return `${diffDays}d ago`
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
-
 export default function NewsFeedPage() {
   const [items, setItems] = useState<NewsItemData[]>([])
-  const [totalCount, setTotalCount] = useState(0)
+  const [, setTotalCount] = useState(0)
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -108,6 +22,32 @@ export default function NewsFeedPage() {
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [showLyraProfile, setShowLyraProfile] = useState(false)
   const sentinelRef = useRef<HTMLDivElement>(null)
+  const gridRef = useRef<HTMLDivElement>(null)
+  const pageRef = useRef<HTMLDivElement>(null)
+  const [columnCount, setColumnCount] = useState(3)
+
+  // Pull-to-refresh — single enum prevents conflicting states
+  const [pullY, setPullY] = useState(0)
+  const [pullPhase, setPullPhase] = useState<'idle' | 'refreshing' | 'done'>('idle')
+  const refreshingRef = useRef(false)
+  const doneTimer = useRef(0)
+
+  // Live updates
+  const [online, setOnline] = useState(true)
+  const [newItemIds, setNewItemIds] = useState<Set<number>>(new Set())
+  const itemsRef = useRef<NewsItemData[]>([])
+
+  useEffect(() => {
+    const el = gridRef.current
+    if (!el) return
+    const ro = new ResizeObserver(([entry]) => {
+      const w = entry.contentRect.width
+      const cols = Math.max(1, Math.floor(w / 300))
+      setColumnCount(cols)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   // Stats bar state
   const [stats, setStats] = useState<NewsStats | null>(null)
@@ -145,6 +85,30 @@ export default function NewsFeedPage() {
     }
   }, [activeFilters])
 
+  const PULL_THRESHOLD = 70
+
+  const doRefresh = useCallback(async () => {
+    window.clearTimeout(doneTimer.current)
+    setPullPhase('refreshing')
+    refreshingRef.current = true
+    const t0 = Date.now()
+    await fetchFeed(1, false, activeFilters)
+    fetch(`${config.api.baseUrl}/news/stats`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setStats(d) })
+      .catch(() => {})
+    const elapsed = Date.now() - t0
+    if (elapsed < 600) await new Promise(r => setTimeout(r, 600 - elapsed))
+    setPullPhase('done')
+    doneTimer.current = window.setTimeout(() => {
+      setPullPhase('idle')
+      refreshingRef.current = false   // unlock AFTER done phase ends
+    }, 900)
+  }, [fetchFeed, activeFilters])
+
+  const doRefreshRef = useRef(doRefresh)
+  doRefreshRef.current = doRefresh
+
   // Initial feed load
   useEffect(() => {
     fetchFeed(1)
@@ -156,6 +120,19 @@ export default function NewsFeedPage() {
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data) setStats(data) })
       .catch(() => {})
+  }, [])
+
+  // Lyra heartbeat — drives the LIVE/OFFLINE LED
+  useEffect(() => {
+    const check = () => {
+      fetch(`${config.api.baseUrl}/news/lyra-status`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => setOnline(d ? d.status === 'online' : false))
+        .catch(() => setOnline(false))
+    }
+    check()
+    const id = setInterval(check, 60_000)
+    return () => clearInterval(id)
   }, [])
 
   // Fetch filter options on mount
@@ -182,6 +159,122 @@ export default function NewsFeedPage() {
     return () => observer.disconnect()
   }, [hasMore, loading, page, fetchFeed, activeFilters])
 
+  // Keep itemsRef in sync for polling
+  useEffect(() => { itemsRef.current = items }, [items])
+
+  // Live polling — check for new items every 30s
+  useEffect(() => {
+    const poll = async () => {
+      try {
+        const resp = await fetch(`${config.api.baseUrl}/news/feed?page=1&page_size=5`)
+        if (!resp.ok) return
+        const data: NewsFeedResponse = await resp.json()
+        const existingIds = new Set(itemsRef.current.map(i => i.id))
+        const fresh = data.items.filter(i => !existingIds.has(i.id))
+        if (fresh.length > 0) {
+          setNewItemIds(prev => new Set([...prev, ...fresh.map(i => i.id)]))
+          setItems(prev => [...fresh, ...prev])
+          setTotalCount(data.total_count)
+        }
+      } catch { /* ignore — lyra-status drives the LED */ }
+    }
+    const id = setInterval(poll, 30_000)
+    return () => clearInterval(id)
+  }, [])
+
+  // Pull-to-refresh: touch (mobile) + wheel/trackpad (desktop)
+  useEffect(() => {
+    const el = pageRef.current
+    if (!el) return
+
+    // --- Touch (mobile) ---
+    let startY = 0
+    let pulling = false
+    let currentPull = 0
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (el.scrollTop <= 0 && !refreshingRef.current) {
+        startY = e.touches[0].clientY
+      }
+    }
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!startY || refreshingRef.current) return
+      if (el.scrollTop > 0) {
+        startY = 0
+        currentPull = 0
+        setPullY(0)
+        return
+      }
+      const dy = e.touches[0].clientY - startY
+      if (dy > 10) {
+        pulling = true
+        e.preventDefault()
+        currentPull = Math.min(dy * 0.4, 100)
+        setPullY(currentPull)
+      }
+    }
+
+    const onTouchEnd = () => {
+      if (pulling && currentPull >= PULL_THRESHOLD) {
+        doRefreshRef.current()
+      }
+      setPullY(0)
+      startY = 0
+      pulling = false
+      currentPull = 0
+    }
+
+    // --- Wheel / trackpad (desktop) ---
+    let wheelPull = 0
+    let wheelTimer = 0
+
+    const onWheel = (e: WheelEvent) => {
+      if (refreshingRef.current) return
+      if (el.scrollTop > 0 || e.deltaY >= 0) {
+        if (wheelPull > 0) {
+          wheelPull = 0
+          setPullY(0)
+          window.clearTimeout(wheelTimer)
+        }
+        return
+      }
+      // At top, scrolling up (deltaY < 0)
+      e.preventDefault()
+      wheelPull = Math.min(wheelPull + Math.abs(e.deltaY) * 0.15, 100)
+      setPullY(wheelPull)
+
+      // Trigger immediately when threshold reached
+      if (wheelPull >= PULL_THRESHOLD) {
+        window.clearTimeout(wheelTimer)
+        wheelPull = 0
+        setPullY(0)
+        doRefreshRef.current()
+        return
+      }
+
+      // Didn't reach threshold — reset after user stops scrolling
+      window.clearTimeout(wheelTimer)
+      wheelTimer = window.setTimeout(() => {
+        wheelPull = 0
+        setPullY(0)
+      }, 400)
+    }
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
+    el.addEventListener('touchend', onTouchEnd)
+    el.addEventListener('wheel', onWheel, { passive: false })
+
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
+      el.removeEventListener('touchend', onTouchEnd)
+      el.removeEventListener('wheel', onWheel)
+      window.clearTimeout(wheelTimer)
+    }
+  }, [])
+
   const toggleExpand = (id: number) => {
     setExpandedId(prev => prev === id ? null : id)
   }
@@ -199,7 +292,7 @@ export default function NewsFeedPage() {
   const activeFilterCount = Object.values(activeFilters).filter(Boolean).length
 
   return (
-    <div className="news-page">
+    <div className="news-page" ref={pageRef}>
       {/* Sticky header: brand + Lyra in one line */}
       <header className="news-page-header">
         <a href="/" className="news-page-brand">
@@ -215,18 +308,19 @@ export default function NewsFeedPage() {
         />
         <div className="news-page-lyra-label">
           <span className="news-page-lyra-name" style={{ cursor: 'pointer' }} onClick={() => setShowLyraProfile(true)}>Lyra Wiskerbyte</span>
-          <span className="news-page-lyra-badge" title="AI agent monitoring archaeology channels 24/7">Archaeological Agent</span>
+          {stats && (
+            <div className="news-page-stats">
+              <span className="news-page-stats-item"><strong>{stats.total_videos}</strong> videos processed</span>
+              <span className="news-page-stats-sep">→</span>
+              <span className="news-page-stats-item"><strong>{stats.total_items}</strong> stories</span>
+              <span className="news-page-stats-sep">·</span>
+              <span className="news-page-stats-item"><strong>{stats.total_channels}</strong> channels</span>
+            </div>
+          )}
         </div>
-        <div className="news-page-count">
-          {stats ? (
-            <>
-              <span className="news-page-stat-number">{stats.total_items}</span> stories from{' '}
-              <span className="news-page-stat-number">{stats.total_videos}</span> videos across{' '}
-              <span className="news-page-stat-number">{stats.total_channels}</span> channels
-            </>
-          ) : totalCount > 0 ? (
-            <>{totalCount} stories</>
-          ) : null}
+        <div className={`news-page-live${online ? '' : ' offline'}`}>
+          <span className="news-page-live-dot" />
+          <span className="news-page-live-text">{online ? 'LIVE' : 'OFFLINE'}</span>
         </div>
       </header>
 
@@ -362,6 +456,43 @@ export default function NewsFeedPage() {
         </div>
       )}
 
+      {/* Pull-to-refresh zone */}
+      <div
+        className="news-page-pull-zone"
+        style={{ height: pullPhase !== 'idle' ? 52 : pullY > 0 ? Math.min(pullY * 0.7, 52) : 0 }}
+      >
+        {pullPhase === 'done' ? (
+          <div key="done" className="news-page-pull-spinner done">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+            <span className="news-page-pull-text">Updated</span>
+          </div>
+        ) : pullPhase === 'refreshing' ? (
+          <div key="refreshing" className="news-page-pull-spinner spinning">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <polyline points="23 4 23 10 17 10" />
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+            </svg>
+            <span className="news-page-pull-text">Refreshing</span>
+          </div>
+        ) : (
+          <div key="pull" className={`news-page-pull-spinner${pullY >= PULL_THRESHOLD ? ' ready' : ''}`}>
+            <svg
+              width="18" height="18" viewBox="0 0 24 24"
+              fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+              style={{ transform: `rotate(${Math.min(pullY / PULL_THRESHOLD, 1) * 540}deg)` }}
+            >
+              <polyline points="23 4 23 10 17 10" />
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+            </svg>
+            <span className="news-page-pull-text">
+              {pullY >= PULL_THRESHOLD ? 'Release' : 'Pull to refresh'}
+            </span>
+          </div>
+        )}
+      </div>
+
       {/* Error state */}
       {error && (
         <div className="news-page-error">
@@ -376,25 +507,28 @@ export default function NewsFeedPage() {
       )}
 
       {/* Grid */}
-      <div className="news-page-grid">
-        {items.map(item => {
-          const screenshotSrc = item.screenshot_url
-            ? `${config.api.baseUrl}${item.screenshot_url.replace('/api', '')}`
-            : item.video.thumbnail_url
-          const deepLink = item.youtube_deep_url || item.youtube_url || '#'
+      <div className="news-page-grid" ref={gridRef}>
+        {Array.from({ length: columnCount }, (_, colIdx) => (
+          <div key={colIdx} className="news-page-column">
+            {items.filter((_, i) => i % columnCount === colIdx).map(item => {
+              const screenshotSrc = item.screenshot_url
+                ? `${config.api.baseUrl}${item.screenshot_url.replace('/api', '')}`
+                : item.video.thumbnail_url
+              const deepLink = item.youtube_deep_url || item.youtube_url || '#'
 
-          return (
-          <div
-            key={item.id}
-            className={`news-page-card${expandedId === item.id ? ' expanded' : ''}`}
-            onClick={() => toggleExpand(item.id)}
-          >
+              return (
+              <div
+                key={item.id}
+                className={`news-page-card${expandedId === item.id ? ' expanded' : ''}${newItemIds.has(item.id) ? ' new-item' : ''}`}
+                onClick={() => toggleExpand(item.id)}
+                onAnimationEnd={() => setNewItemIds(prev => { const next = new Set(prev); next.delete(item.id); return next })}
+              >
             <div className="news-page-card-body">
-              <div className="news-page-card-meta">
-                <span className="news-page-card-channel">{item.video.channel_name}</span>
-                <span className="news-page-card-date">{formatRelativeDate(item.video.published_at)}</span>
+              <div className="news-card-meta">
+                <span className="news-card-channel">{item.video.channel_name}</span>
+                <span>{formatRelativeDate(item.video.published_at)}</span>
               </div>
-              <div className="news-page-card-post-text">{item.post_text || item.headline}</div>
+              <div className="news-card-post-text">{item.post_text || item.headline}</div>
 
               {item.site_id && (() => {
                 const period = item.site_period_name || (item.site_period_start != null ? categorizePeriod(item.site_period_start) : null)
@@ -436,23 +570,33 @@ export default function NewsFeedPage() {
 
               {screenshotSrc && (
                 <a
-                  className="news-page-card-thumb"
+                  className="news-card-thumb"
                   href={deepLink}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={e => e.stopPropagation()}
                 >
                   <img src={screenshotSrc} alt="" loading="lazy" />
-                  <svg className="news-page-card-play" width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                  <svg className="news-card-play" width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
                   </svg>
+                  {item.video.duration_minutes != null && (
+                    <span className="news-card-duration">
+                      {formatDuration(item.video.duration_minutes)}
+                    </span>
+                  )}
+                  {item.timestamp_seconds != null && (
+                    <span className="news-card-timestamp">
+                      ▶ {formatDuration(item.timestamp_seconds / 60)}
+                    </span>
+                  )}
                 </a>
               )}
 
               {expandedId === item.id && (
-                <div className="news-page-card-expanded">
+                <div className="news-card-expanded">
                   {item.facts && item.facts.length > 0 && (
-                    <ul className="news-page-card-facts">
+                    <ul className="news-card-facts">
                       {item.facts.map((fact, i) => (
                         <li key={i}>{fact}</li>
                       ))}
@@ -461,7 +605,7 @@ export default function NewsFeedPage() {
 
                   {(item.youtube_deep_url || item.youtube_url) && (
                     <a
-                      className="news-page-card-watch"
+                      className="news-card-watch"
                       href={deepLink}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -471,21 +615,23 @@ export default function NewsFeedPage() {
                         <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
                       </svg>
                       Watch on YouTube
-                      {item.timestamp_range && <span className="news-page-card-ts"> ({item.timestamp_range})</span>}
+                      {item.timestamp_range && <span className="news-card-ts"> ({item.timestamp_range})</span>}
                     </a>
                   )}
 
-                  <div className="news-page-card-video-title">{item.video.title}</div>
+                  <div className="news-card-video-title">{item.video.title}</div>
                 </div>
               )}
             </div>
           </div>
-          )
-        })}
+              )
+            })}
+          </div>
+        ))}
       </div>
 
       {/* Loading / infinite scroll sentinel */}
-      {loading && (
+      {loading && pullPhase !== 'refreshing' && (
         <div className="news-page-loading">Loading...</div>
       )}
       <div ref={sentinelRef} style={{ height: 1 }} />

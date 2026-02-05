@@ -1152,6 +1152,7 @@ function AppContent() {
     const matchingSites = sitesToSearch
       .filter(site =>
         normalizeForSearch(site.title).includes(query) ||
+        (site.altNames && site.altNames.some(an => normalizeForSearch(an).includes(query))) ||
         (site.location && normalizeForSearch(site.location).includes(query)) ||
         (site.description && normalizeForSearch(site.description).includes(query))
       )
@@ -1165,6 +1166,8 @@ function AppContent() {
           score = 80 // Title starts with query
         } else if (titleNorm.includes(query)) {
           score = 60 // Title contains query
+        } else if (site.altNames && site.altNames.some(an => normalizeForSearch(an).includes(query))) {
+          score = 50 // Alternate name match
         } else if (site.location && normalizeForSearch(site.location).includes(query)) {
           score = 40 // Location contains query
         } else {
@@ -1727,6 +1730,7 @@ function AppContent() {
       const query = normalizeForSearch(debouncedSearchQuery)
       result = result.filter(site =>
         normalizeForSearch(site.title).includes(query) ||
+        (site.altNames && site.altNames.some(an => normalizeForSearch(an).includes(query))) ||
         normalizeForSearch(site.location).includes(query) ||
         (site.description && normalizeForSearch(site.description).includes(query))
       )

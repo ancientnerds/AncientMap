@@ -7,68 +7,16 @@ import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { config } from '../config'
 import { getCategoryColor, getPeriodColor, categorizePeriod } from '../data/sites'
+import type { NewsItemData, NewsFeedResponse } from '../types/news'
+import { formatDuration, formatRelativeDate } from '../utils/formatters'
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
 
 const LyraProfileModal = lazy(() => import('./LyraProfileModal'))
-
-interface NewsVideoInfo {
-  id: string
-  title: string
-  channel_name: string
-  channel_id: string
-  published_at: string
-  thumbnail_url: string | null
-  duration_minutes: number | null
-}
-
-interface NewsItemData {
-  id: number
-  headline: string
-  summary: string
-  post_text: string | null
-  facts: string[] | null
-  timestamp_range: string | null
-  timestamp_seconds: number | null
-  screenshot_url: string | null
-  youtube_url: string | null
-  youtube_deep_url: string | null
-  video: NewsVideoInfo
-  created_at: string
-  site_id: string | null
-  site_name: string | null
-  site_lat: number | null
-  site_lon: number | null
-  site_type: string | null
-  site_period_name: string | null
-  site_period_start: number | null
-  site_country: string | null
-  site_name_extracted: string | null
-}
-
-interface NewsFeedResponse {
-  items: NewsItemData[]
-  total_count: number
-  page: number
-  has_more: boolean
-}
 
 interface Props {
   onClose: () => void
   onSiteHover?: (siteId: string | null) => void
   onSiteClick?: (siteName: string, lat: number, lon: number) => void
-}
-
-function formatRelativeDate(isoDate: string): string {
-  const date = new Date(isoDate)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-
-  if (diffHours < 1) return 'Just now'
-  if (diffHours < 24) return `${diffHours}h ago`
-  if (diffDays < 7) return `${diffDays}d ago`
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick }: Props) {
@@ -80,6 +28,7 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick }: Pro
   const [error, setError] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [showLyraProfile, setShowLyraProfile] = useState(false)
+  const [online, setOnline] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const fetchFeed = useCallback(async (pageNum: number, append: boolean = false) => {
@@ -109,6 +58,18 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick }: Pro
     return () => { document.body.classList.remove('news-feed-open') }
   }, [])
 
+  useEffect(() => {
+    const check = () => {
+      fetch(`${config.api.baseUrl}/news/lyra-status`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => setOnline(d ? d.status === 'online' : false))
+        .catch(() => setOnline(false))
+    }
+    check()
+    const id = setInterval(check, 60_000)
+    return () => clearInterval(id)
+  }, [])
+
   const loadMore = () => {
     if (hasMore && !loading) {
       fetchFeed(page + 1, true)
@@ -130,6 +91,10 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick }: Pro
           </svg>
           <span>News Feed</span>
           {totalCount > 0 && <span className="news-feed-badge">{totalCount}</span>}
+        </div>
+        <div className={`news-feed-live${online ? '' : ' offline'}`}>
+          <span className="news-feed-live-dot" />
+          <span className="news-feed-live-text">{online ? 'LIVE' : 'OFFLINE'}</span>
         </div>
         <div className="news-feed-actions">
           <button className="news-feed-btn" onClick={onClose} title="Close">
@@ -196,11 +161,11 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick }: Pro
             onMouseEnter={() => item.site_id && onSiteHover?.(item.site_id)}
             onMouseLeave={() => item.site_id && onSiteHover?.(null)}
           >
-            <div className="news-feed-meta">
-              <span className="news-feed-channel">{item.video.channel_name}</span>
+            <div className="news-card-meta">
+              <span className="news-card-channel">{item.video.channel_name}</span>
               <span className="news-feed-date">{formatRelativeDate(item.video.published_at)}</span>
             </div>
-            <div className="news-feed-post-text">{item.post_text || item.headline}</div>
+            <div className="news-card-post-text">{item.post_text || item.headline}</div>
 
             {item.site_id && (() => {
               const period = item.site_period_name || (item.site_period_start != null ? categorizePeriod(item.site_period_start) : null)
@@ -246,23 +211,29 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick }: Pro
 
             {screenshotSrc && (
               <a
-                className="news-feed-screenshot"
+                className="news-card-thumb"
                 href={deepLink}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={e => e.stopPropagation()}
               >
                 <img src={screenshotSrc} alt="" loading="lazy" />
-                <svg className="news-feed-play-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <svg className="news-card-play" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
                 </svg>
+                {item.video.duration_minutes != null && (
+                  <span className="news-card-duration">{formatDuration(item.video.duration_minutes)}</span>
+                )}
+                {item.timestamp_seconds != null && (
+                  <span className="news-card-timestamp">▶ {formatDuration(item.timestamp_seconds / 60)}</span>
+                )}
               </a>
             )}
 
             {expandedId === item.id && (
-              <div className="news-feed-expanded">
+              <div className="news-card-expanded">
                 {item.facts && item.facts.length > 0 && (
-                  <ul className="news-feed-facts">
+                  <ul className="news-card-facts">
                     {item.facts.map((fact, i) => (
                       <li key={i}>{fact}</li>
                     ))}
@@ -271,7 +242,7 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick }: Pro
 
                 {(item.youtube_deep_url || item.youtube_url) && (
                   <a
-                    className="news-feed-watch-btn"
+                    className="news-card-watch"
                     href={deepLink}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -281,11 +252,11 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick }: Pro
                       <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
                     </svg>
                     Watch on YouTube
-                    {item.timestamp_range && <span className="news-feed-timestamp"> ({item.timestamp_range})</span>}
+                    {item.timestamp_range && <span className="news-card-ts"> ({item.timestamp_range})</span>}
                   </a>
                 )}
 
-                <div className="news-feed-video-title">{item.video.title}</div>
+                <div className="news-card-video-title">{item.video.title}</div>
               </div>
             )}
           </div>

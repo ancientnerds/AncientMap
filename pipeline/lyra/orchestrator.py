@@ -89,6 +89,39 @@ def main() -> None:
         conn.execute(text(
             "ALTER TABLE news_items ADD COLUMN IF NOT EXISTS site_match_tried BOOLEAN DEFAULT FALSE"
         ))
+        # Create unified_site_names table if it doesn't exist (for alt-name matching)
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS unified_site_names (
+                id SERIAL PRIMARY KEY,
+                site_id UUID NOT NULL REFERENCES unified_sites(id) ON DELETE CASCADE,
+                name VARCHAR(500) NOT NULL,
+                name_normalized VARCHAR(500) NOT NULL,
+                language_code VARCHAR(10),
+                name_type VARCHAR(50)
+            )
+        """))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_usn_name_normalized ON unified_site_names (name_normalized)"
+        ))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_usn_site ON unified_site_names (site_id)"
+        ))
+        conn.execute(text("""
+            DO $$ BEGIN
+                ALTER TABLE unified_site_names
+                    ADD CONSTRAINT uq_usn UNIQUE (site_id, name_normalized);
+            EXCEPTION WHEN duplicate_table THEN NULL;
+            END $$
+        """))
+        # Pipeline heartbeat table (for LIVE status on frontend)
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS pipeline_heartbeats (
+                pipeline_name VARCHAR(50) PRIMARY KEY,
+                last_heartbeat TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                status VARCHAR(20) NOT NULL DEFAULT 'ok',
+                last_error TEXT
+            )
+        """))
         conn.commit()
 
     # Seed channels
@@ -105,11 +138,30 @@ def main() -> None:
 
         # Run pipeline every hour
         if now - last_pipeline_run >= CYCLE_INTERVAL:
+            cycle_status = "ok"
+            cycle_error = None
             try:
                 run_pipeline(settings)
-            except Exception:
+            except Exception as exc:
                 logger.exception("Pipeline cycle failed")
+                cycle_status = "error"
+                cycle_error = str(exc)
             last_pipeline_run = now
+
+            # Write heartbeat so the API can report LIVE/OFFLINE
+            try:
+                with engine.connect() as conn:
+                    conn.execute(text("""
+                        INSERT INTO pipeline_heartbeats (pipeline_name, last_heartbeat, status, last_error)
+                        VALUES ('lyra', NOW(), :status, :error)
+                        ON CONFLICT (pipeline_name) DO UPDATE SET
+                            last_heartbeat = NOW(),
+                            status = EXCLUDED.status,
+                            last_error = EXCLUDED.last_error
+                    """), {"status": cycle_status, "error": cycle_error})
+                    conn.commit()
+            except Exception:
+                logger.exception("Failed to write heartbeat")
 
         # Weekly article generation
         if should_generate_article():

@@ -323,6 +323,54 @@ class WikidataIngester(BaseIngester):
 
         return "other"
 
+    def fetch_labels(self, qids: list[str], batch_size: int = 50) -> dict[str, dict]:
+        """
+        Fetch labels and aliases for a list of Wikidata QIDs using wbgetentities API.
+
+        Uses the MediaWiki API (not SPARQL) for efficient bulk fetches.
+        Returns {qid: {"labels": {lang: name, ...}, "aliases": {lang: [name, ...], ...}}}
+        """
+        results = {}
+        total = len(qids)
+
+        for i in range(0, total, batch_size):
+            batch = qids[i:i + batch_size]
+            ids_param = "|".join(batch)
+
+            url = "https://www.wikidata.org/w/api.php"
+            params = {
+                "action": "wbgetentities",
+                "ids": ids_param,
+                "props": "labels|aliases",
+                "format": "json",
+            }
+            headers = {
+                "User-Agent": "AncientNerds/1.0 (Research Platform; https://ancientnerds.com; contact@ancientnerds.com) Python/httpx",
+            }
+
+            response = fetch_with_retry(url, params=params, headers=headers, timeout=60)
+            data = response.json()
+
+            entities = data.get("entities", {})
+            for qid, entity in entities.items():
+                if "missing" in entity:
+                    continue
+
+                labels = {}
+                for lang, label_obj in entity.get("labels", {}).items():
+                    labels[lang] = label_obj["value"]
+
+                aliases = {}
+                for lang, alias_list in entity.get("aliases", {}).items():
+                    aliases[lang] = [a["value"] for a in alias_list]
+
+                results[qid] = {"labels": labels, "aliases": aliases}
+
+            logger.debug(f"  Fetched labels for {min(i + batch_size, total)}/{total} QIDs")
+            time.sleep(self.REQUEST_DELAY)
+
+        return results
+
     def _parse_wikidata_date(self, date_str: str | None) -> int | None:
         """
         Parse Wikidata date string to year.

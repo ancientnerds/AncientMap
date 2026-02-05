@@ -34,6 +34,7 @@ export interface SiteData {
   sourceUrl?: string
   sourceId: string
   coordinates: [number, number]
+  altNames?: string[]
 }
 
 // Period list derived from centralized PERIOD_COLORS
@@ -73,7 +74,8 @@ export async function fetchSites(): Promise<SiteData[]> {
     image: site.imageUrl || site.image || undefined,
     sourceUrl: site.sourceUrl,
     sourceId: site.sourceId,
-    coordinates: [site.lon, site.lat] as [number, number]
+    coordinates: [site.lon, site.lat] as [number, number],
+    altNames: site.altNames,
   }))
 }
 
@@ -122,7 +124,8 @@ export function getCurrentSites(): SiteData[] {
     image: site.imageUrl || site.image || undefined,
     sourceUrl: site.sourceUrl,
     sourceId: site.sourceId,
-    coordinates: [site.lon, site.lat] as [number, number]
+    coordinates: [site.lon, site.lat] as [number, number],
+    altNames: site.altNames,
   }))
 }
 
