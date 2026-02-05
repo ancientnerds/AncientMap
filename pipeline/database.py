@@ -755,6 +755,7 @@ class NewsItem(Base):
         UUID(as_uuid=True), ForeignKey("unified_sites.id"), nullable=True, index=True
     )
     site_name_extracted: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    site_match_tried: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
     video: Mapped["NewsVideo"] = relationship("NewsVideo", back_populates="items")
     site: Mapped[Optional["UnifiedSite"]] = relationship("UnifiedSite", lazy="joined")

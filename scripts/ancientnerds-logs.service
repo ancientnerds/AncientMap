@@ -1,0 +1,13 @@
+[Unit]
+Description=Ancient Nerds - Stream Docker container logs to files
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+ExecStart=/var/www/ancientnerds/scripts/follow_logs.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

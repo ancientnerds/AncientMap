@@ -125,11 +125,11 @@ def match_sites_for_pending_items() -> int:
     with get_session() as session:
         source_priority = _load_source_priority(session)
         matchable_sources = list(source_priority.keys())
-        logger.info(f"Matchable sources from source_meta: {matchable_sources}")
 
         items = session.query(NewsItem).filter(
             NewsItem.site_name_extracted.isnot(None),
             NewsItem.site_id.is_(None),
+            NewsItem.site_match_tried.is_(False),
         ).all()
 
         if not items:
@@ -149,6 +149,7 @@ def match_sites_for_pending_items() -> int:
             else:
                 logger.debug(f"No match for item {item.id} '{item.site_name_extracted}'")
                 _upsert_lyra_suggestion(session, item)
+            item.site_match_tried = True
 
     logger.info(f"Site matching complete: {matched}/{len(items)} items matched")
     return matched

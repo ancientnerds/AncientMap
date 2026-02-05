@@ -185,4 +185,14 @@ jobs:
             fi
             sleep 5
             curl -sf http://localhost:8000/ || echo "WARNING: Health check failed"
+
+            echo "==> Setting up log streaming..."
+            chmod +x scripts/follow_logs.sh
+            if [ ! -f /etc/systemd/system/ancientnerds-logs.service ]; then
+              cp scripts/ancientnerds-logs.service /etc/systemd/system/
+              cp scripts/ancientnerds-logs.logrotate /etc/logrotate.d/ancientnerds-logs
+              systemctl daemon-reload
+              systemctl enable ancientnerds-logs
+            fi
+            systemctl restart ancientnerds-logs
             echo "==> Deploy complete!"'

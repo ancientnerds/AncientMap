@@ -109,11 +109,9 @@ def verify_video_posts(video: NewsVideo, settings: LyraSettings) -> int:
             elif level == "MODIFY":
                 mod = result.get("suggested_modification", {})
                 modified = mod.get("modified_text", "") if mod else ""
-                if modified and len(modified) <= 280:
+                if modified:
                     item.post_text = modified
                     logger.info(f"Modified post for item {item.id}: {mod.get('changes_explained', '')}")
-                elif modified:
-                    logger.warning(f"Discarded modification for item {item.id}: {len(modified)} chars exceeds 280 limit")
 
             # Update timestamp if verification found a more precise one
             ts = result.get("timestamp")
@@ -123,6 +121,11 @@ def verify_video_posts(video: NewsVideo, settings: LyraSettings) -> int:
                     item.timestamp_seconds = secs
 
             verified += 1
+
+        # Transition video so it won't be re-verified next cycle
+        v = session.get(NewsVideo, video.id)
+        if v:
+            v.status = "verified"
 
     logger.info(f"Verified {verified} posts for video {video.id}")
     return verified
