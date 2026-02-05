@@ -172,6 +172,12 @@ jobs:
               echo "==> Backend unchanged, restarting API..."
               BUILD_HASH=$(git rev-parse --short HEAD) docker compose restart api
             fi
+
+            # Rebuild Lyra if pipeline or Lyra-specific files changed
+            if echo "$CHANGED" | grep -qE "^(pipeline/|Dockerfile\.lyra|requirements\.lyra)"; then
+              echo "==> Rebuilding Lyra..."
+              docker compose up -d --build lyra
+            fi
             sleep 5
             curl -sf http://localhost:8000/ || echo "WARNING: Health check failed"
             echo "==> Deploy complete!"'
