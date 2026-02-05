@@ -80,9 +80,16 @@ def main() -> None:
 
     settings = LyraSettings()
 
-    # Create tables if they don't exist
-    from pipeline.database import create_all_tables
+    # Create tables if they don't exist, then run migrations
+    from pipeline.database import create_all_tables, engine
     create_all_tables()
+
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        conn.execute(text(
+            "ALTER TABLE news_items ADD COLUMN IF NOT EXISTS site_match_tried BOOLEAN DEFAULT FALSE"
+        ))
+        conn.commit()
 
     # Seed channels
     from pipeline.lyra.channels import seed_channels
