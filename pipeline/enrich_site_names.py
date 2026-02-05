@@ -100,7 +100,10 @@ def _insert_name(session, site_id: str, name: str, lang: str | None, name_type: 
 
 
 def load_wikidata_labels(labels_path: Path = LABELS_FILE) -> int:
-    """Load Wikidata labels from JSON file into unified_site_names."""
+    """Load Wikidata labels from JSON file into unified_site_names.
+
+    Commits every 5000 sites to avoid statement timeout on production.
+    """
     if not labels_path.exists():
         logger.warning(f"Labels file not found: {labels_path}. Run with --fetch-wikidata first.")
         return 0
@@ -110,6 +113,8 @@ def load_wikidata_labels(labels_path: Path = LABELS_FILE) -> int:
 
     logger.info(f"Loading labels for {len(data):,} Wikidata sites...")
     inserted = 0
+    batch_count = 0
+    commit_every = 5000
 
     with get_session() as session:
         for site_id, info in data.items():
@@ -123,6 +128,11 @@ def load_wikidata_labels(labels_path: Path = LABELS_FILE) -> int:
                 for alias in alias_list:
                     if _insert_name(session, site_id, alias, lang, "alias"):
                         inserted += 1
+
+            batch_count += 1
+            if batch_count % commit_every == 0:
+                session.commit()
+                logger.info(f"  Committed {batch_count:,}/{len(data):,} sites ({inserted:,} names)")
 
         session.commit()
 
@@ -235,22 +245,40 @@ def insert_primary_names() -> int:
 
     This ensures every site has at least its primary name in the table,
     so the site matcher can use a single lookup path.
+    Batched to avoid statement timeout on production.
     """
     logger.info("Inserting primary names from unified_sites...")
+    total = 0
+    batch_size = 50000
 
     with get_session() as session:
-        result = session.execute(text("""
-            INSERT INTO unified_site_names (site_id, name, name_normalized, name_type)
-            SELECT id, name, name_normalized, 'primary'
-            FROM unified_sites
-            WHERE name_normalized IS NOT NULL
-            ON CONFLICT ON CONSTRAINT uq_usn DO NOTHING
-        """))
-        session.commit()
-        count = result.rowcount
+        # Get total count for progress
+        site_count = session.execute(text(
+            "SELECT count(*) FROM unified_sites WHERE name_normalized IS NOT NULL"
+        )).scalar()
+        logger.info(f"  {site_count:,} sites to process in batches of {batch_size:,}")
 
-    logger.info(f"Inserted {count:,} primary names")
-    return count
+        offset = 0
+        while offset < site_count:
+            result = session.execute(text("""
+                INSERT INTO unified_site_names (site_id, name, name_normalized, name_type)
+                SELECT id, name, name_normalized, 'primary'
+                FROM (
+                    SELECT id, name, name_normalized
+                    FROM unified_sites
+                    WHERE name_normalized IS NOT NULL
+                    ORDER BY id
+                    OFFSET :offset LIMIT :batch_size
+                ) sub
+                ON CONFLICT ON CONSTRAINT uq_usn DO NOTHING
+            """), {"offset": offset, "batch_size": batch_size})
+            session.commit()
+            total += result.rowcount
+            offset += batch_size
+            logger.info(f"  Inserted batch: {min(offset, site_count):,}/{site_count:,} ({total:,} new)")
+
+    logger.info(f"Inserted {total:,} primary names")
+    return total
 
 
 def main():
