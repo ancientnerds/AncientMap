@@ -8,3 +8,6 @@ anthropic>=0.40.0
 youtube-transcript-api>=1.0.0
 yt-dlp>=2024.0.0
 requests>=2.31.0
+httpx>=0.26.0
+tenacity>=8.2.0
+loguru>=0.7.0
