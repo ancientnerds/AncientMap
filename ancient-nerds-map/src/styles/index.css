@@ -10100,8 +10100,15 @@ body.hud-hidden .empire-borders-window {
 
 .mobile-actions {
   display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 12px;
   margin-top: 24px;
+}
+
+.mobile-actions-row {
+  display: flex;
+  gap: 12px;
 }
 
 .mobile-action-btn {

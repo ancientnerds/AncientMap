@@ -1824,21 +1824,23 @@ function AppContent() {
             For the best experience, please visit on a computer with a larger screen.
           </div>
           <div className="mobile-actions">
-            <a className="mobile-action-btn" href="/news.html">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1"></path>
-                <path d="M18 14v4h4"></path>
-                <circle cx="18" cy="18" r="4"></circle>
-              </svg>
-              News Feed
-            </a>
-            <a className="mobile-action-btn" href="/discoveries.html">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="11" cy="11" r="8"></circle>
-                <path d="M21 21l-4.35-4.35"></path>
-              </svg>
-              Discoveries
-            </a>
+            <div className="mobile-actions-row">
+              <a className="mobile-action-btn" href="/news.html">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1"></path>
+                  <path d="M18 14v4h4"></path>
+                  <circle cx="18" cy="18" r="4"></circle>
+                </svg>
+                News Feed
+              </a>
+              <a className="mobile-action-btn" href="/discoveries.html">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <path d="M21 21l-4.35-4.35"></path>
+                </svg>
+                Discoveries
+              </a>
+            </div>
             <button
               className="mobile-action-btn"
               onClick={() => setMobileWarningDismissed(true)}
