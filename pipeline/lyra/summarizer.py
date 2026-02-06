@@ -76,9 +76,18 @@ def summarize_video(video: NewsVideo, settings: LyraSettings) -> bool:
 
     topic_limit = _calculate_topic_limit(video.duration_minutes, queue_size, settings)
 
+    # Build video context from title and description
+    context_parts = [f"Video title: {video.title}"]
+    if video.description:
+        # Truncate description to avoid using too many tokens
+        desc = video.description[:1000]
+        context_parts.append(f"Video description: {desc}")
+    video_context = "\n".join(context_parts)
+
     prompt_template = _load_prompt()
     prompt = prompt_template.format(
         topic_limit=topic_limit,
+        video_context=video_context,
         content=video.transcript_text,
     )
 

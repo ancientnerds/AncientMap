@@ -699,12 +699,28 @@ class UserContribution(Base):
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Lyra enrichment fields
+    enrichment_status: Mapped[str | None] = mapped_column(String(20), default="pending", nullable=True)
+    wikidata_id: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    wikipedia_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    thumbnail_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    period_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    period_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    period_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    score: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_facts_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    enrichment_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    promoted_site_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("unified_sites.id"), nullable=True
+    )
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     __table_args__ = (
         Index("idx_contributions_status", "status"),
         Index("idx_contributions_created", "created_at"),
+        Index("idx_contributions_enrichment", "source", "enrichment_status"),
     )
 
     def __repr__(self) -> str:
@@ -740,6 +756,7 @@ class NewsVideo(Base):
         String(50), ForeignKey("news_channels.id"), nullable=False, index=True
     )
     title: Mapped[str] = mapped_column(String(500), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     duration_minutes: Mapped[float | None] = mapped_column(Float, nullable=True)
     thumbnail_url: Mapped[str | None] = mapped_column(Text, nullable=True)

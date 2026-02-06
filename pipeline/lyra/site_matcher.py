@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from pipeline.database import (
     NewsItem,
+    NewsVideo,
     SourceMeta,
     UnifiedSite,
     UnifiedSiteName,
@@ -171,11 +172,34 @@ def match_sites_for_pending_items() -> int:
     return matched
 
 
+def _extract_topic_metadata(session: Session, item: NewsItem) -> dict:
+    """Extract country, site_type, period from summary_json for the matching topic."""
+    video = session.get(NewsVideo, item.video_id)
+    if not video or not video.summary_json:
+        return {}
+
+    topics = video.summary_json.get("key_topics", [])
+    for topic in topics:
+        primary_site = topic.get("primary_site")
+        if not primary_site or not isinstance(primary_site, dict):
+            continue
+        # Match by site name
+        if primary_site.get("name") and normalize_name(primary_site["name"]) == normalize_name(item.site_name_extracted):
+            return {
+                "country": primary_site.get("country"),
+                "site_type": primary_site.get("site_type"),
+                "period_name": primary_site.get("approximate_period"),
+            }
+    return {}
+
+
 def _upsert_lyra_suggestion(session: Session, item: NewsItem) -> None:
     """Upsert unmatched site name into user_contributions for curation."""
     normalized = normalize_name(item.site_name_extracted)
     if not normalized or len(normalized) < 3:
         return
+
+    metadata = _extract_topic_metadata(session, item)
 
     existing = session.query(UserContribution).filter(
         UserContribution.source == "lyra",
@@ -184,11 +208,21 @@ def _upsert_lyra_suggestion(session: Session, item: NewsItem) -> None:
 
     if existing:
         existing.mention_count += 1
+        # Update metadata if we have better data now
+        if metadata.get("country") and not existing.country:
+            existing.country = metadata["country"]
+        if metadata.get("site_type") and not existing.site_type:
+            existing.site_type = metadata["site_type"]
+        if metadata.get("period_name") and not existing.period_name:
+            existing.period_name = metadata["period_name"]
     else:
         session.add(UserContribution(
             name=item.site_name_extracted,
             source="lyra",
             mention_count=1,
             description=item.headline,
+            country=metadata.get("country"),
+            site_type=metadata.get("site_type"),
+            period_name=metadata.get("period_name"),
             source_url=f"https://www.youtube.com/watch?v={item.video_id}" if item.video_id else None,
         ))

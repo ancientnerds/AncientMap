@@ -10,6 +10,8 @@ Verify:
 1. All claims are supported by the transcript segment
 2. Names, dates and numbers are correct
 3. Quotes, if used, are exact matches
+4. If a site name is mentioned, verify the spelling matches the transcript
+5. If a time period is claimed, verify it against the transcript context
 
 Rules:
 - Prefer VERIFY_AS_IS. Only MODIFY for genuinely wrong facts (wrong dates, wrong names, wrong claims).
@@ -33,5 +35,6 @@ Return JSON only:
   "suggested_modification": null or {{
     "modified_text": "Modified tweet text (MAX 220 chars!)",
     "changes_explained": "Short explanation of changes"
-  }}
+  }},
+  "site_name_correction": null
 }}
