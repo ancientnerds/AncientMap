@@ -978,8 +978,8 @@ function AppContent() {
     // Include ALL sources from metadata that have sites (cnt > 0)
     // Use meta.cnt (total count from sources.json) for display and sorting
     for (const [sourceId, meta] of Object.entries(sourcesMeta)) {
-      // Skip sources with no sites (placeholder entries)
-      if (!meta?.cnt || meta.cnt === 0) continue
+      // Skip sources with no sites (placeholder entries) — but always show primary sources
+      if ((!meta?.cnt || meta.cnt === 0) && !meta?.primary) continue
 
       result.push({
         id: sourceId,
@@ -990,9 +990,11 @@ function AppContent() {
     }
 
     return result.sort((a, b) => {
-      // Always put ancient_nerds (primary source) at the top
-      if (a.id === 'ancient_nerds') return -1
-      if (b.id === 'ancient_nerds') return 1
+      // Primary sources at the top: ancient_nerds first, then lyra
+      const PRIMARY_ORDER: Record<string, number> = { 'ancient_nerds': 0, 'lyra': 1 }
+      const aOrder = PRIMARY_ORDER[a.id] ?? 99
+      const bOrder = PRIMARY_ORDER[b.id] ?? 99
+      if (aOrder !== bOrder) return aOrder - bOrder
       // Then sort by count (descending)
       return b.count - a.count
     })

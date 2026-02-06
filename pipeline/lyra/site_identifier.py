@@ -50,13 +50,13 @@ def seed_lyra_source() -> None:
             return
         session.add(SourceMeta(
             id="lyra",
-            name="Lyra Discoveries",
+            name="ANCIENT NERDS Discoveries",
             color="#8b5cf6",
-            category="global",
-            priority=5,
+            category="Primary",
+            priority=1,
             enabled=True,
             enabled_by_default=False,
-            is_primary=False,
+            is_primary=True,
             record_count=0,
         ))
     logger.info("Seeded 'lyra' source_meta row")

@@ -158,6 +158,17 @@ def main() -> None:
         # Functional index for site_identifier queries on news_items
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_news_items_site_name_lower ON news_items (lower(site_name_extracted))"))
 
+        # Rename sources for branding
+        conn.execute(text("""
+            UPDATE source_meta SET name = 'ANCIENT NERDS Originals'
+            WHERE id = 'ancient_nerds' AND name != 'ANCIENT NERDS Originals'
+        """))
+        conn.execute(text("""
+            UPDATE source_meta SET name = 'ANCIENT NERDS Discoveries',
+                category = 'Primary', priority = 1, is_primary = true
+            WHERE id = 'lyra'
+        """))
+
         conn.commit()
 
     # Seed channels

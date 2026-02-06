@@ -216,8 +216,9 @@ export function expandSite(compact: SiteCompact): Site {
 
 /** Default source colors for visualization - NO GREENS (coastlines are teal) */
 export const DEFAULT_SOURCE_COLORS: Record<string, string> = {
-  // PRIMARY SOURCE - Ancient Nerds Original (manually curated)
+  // PRIMARY SOURCES
   ancient_nerds: '#FFD700',    // Gold - primary source (manually curated)
+  lyra: '#8b5cf6',             // Purple - Lyra auto-discoveries
 
   // Core ancient world
   pleiades: '#e74c3c',         // Red - ancient places

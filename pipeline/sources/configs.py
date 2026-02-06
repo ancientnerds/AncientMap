@@ -37,7 +37,7 @@ class SourceConfigType(TypedDict, total=False):
 SOURCE_CONFIG: dict[str, SourceConfigType] = {
     # Priority 0: PRIMARY SOURCE - Ancient Nerds Original (manually curated)
     "ancient_nerds": {
-        "name": "Ancient Nerds (Original)",
+        "name": "ANCIENT NERDS Originals",
         "description": "Manually researched and curated archaeological sites",
         "color": "#FFD700",  # Gold - primary source
         "icon": "star",

@@ -254,7 +254,7 @@ function FilterPanel({
 
   // Helper: check if a source needs to be loaded (not default, not loaded, not loading)
   const sourceNeedsLoading = (sourceId: string) =>
-    sourceId !== 'ancient_nerds' &&
+    sourceId !== 'ancient_nerds' && sourceId !== 'lyra' &&
     !loadedSourceIds.has(sourceId) &&
     !loadingSources?.has(sourceId)
 
@@ -975,7 +975,8 @@ function FilterPanel({
         const isCategoryFilterActive = selectedCategories.length > 0 && selectedCategories.length < categories.length
         const isCountryFilterActive = selectedCountries.length > 0 && selectedCountries.length < countries.length
         // Source default is "ancient_nerds" only - any other selection is an active filter
-        const isSourceFilterActive = !(selectedSources.length === 1 && selectedSources[0] === 'ancient_nerds')
+        const defaultSources = new Set(['ancient_nerds'])
+        const isSourceFilterActive = !(selectedSources.length === 1 && defaultSources.has(selectedSources[0]))
         const hasAnyActiveFilter = isAgeFilterActive || isCategoryFilterActive || isCountryFilterActive || isSourceFilterActive
 
         return (
@@ -1060,9 +1061,10 @@ function FilterPanel({
 
             {/* Source Legend - Interactive */}
         {filterMode === 'source' && sources.length > 0 && (() => {
-          // Split into primary (ancient_nerds) and secondary sources
-          const primarySources = sources.filter(s => s.id === 'ancient_nerds')
-          const secondarySources = sources.filter(s => s.id !== 'ancient_nerds')
+          // Split into primary (ancient_nerds + lyra) and secondary sources
+          const PRIMARY_IDS = new Set(['ancient_nerds', 'lyra'])
+          const primarySources = sources.filter(s => PRIMARY_IDS.has(s.id))
+          const secondarySources = sources.filter(s => !PRIMARY_IDS.has(s.id))
 
           return (
             <div className="source-legend-interactive">
