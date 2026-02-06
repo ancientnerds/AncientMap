@@ -207,8 +207,9 @@ def main() -> None:
         conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS promoted_site_id UUID REFERENCES unified_sites(id) ON DELETE SET NULL"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_contributions_enrichment ON user_contributions (source, enrichment_status)"))
 
-        # New column on news_videos for RSS description
+        # New columns on news_videos
         conn.execute(text("ALTER TABLE news_videos ADD COLUMN IF NOT EXISTS description TEXT"))
+        conn.execute(text("ALTER TABLE news_videos ADD COLUMN IF NOT EXISTS tags JSONB"))
 
         # Functional index for site_identifier queries on news_items
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_news_items_site_name_lower ON news_items (lower(site_name_extracted))"))
