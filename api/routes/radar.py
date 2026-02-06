@@ -1,9 +1,8 @@
 """
-Lyra Discoveries API - All Lyra-extracted sites as a curation overview.
+Lyra Radar API - Sites Lyra found in YouTube videos that aren't in our DB yet.
 
-Shows every site Lyra extracts from YouTube videos that is NOT in the
-manually-curated `ancient_nerds` source. Includes matched (to pleiades,
-dare, wikidata, etc.), enriched, and pending items.
+Shows candidates for addition: enriched, pending, promoted ("added"), and
+rejected items. Matched items (already in DB) and not_a_site are excluded.
 """
 
 import logging
@@ -146,30 +145,25 @@ def _flatten_facts(all_facts: list | None) -> list[str]:
 
 
 @router.get("/list")
-async def get_discoveries(
+async def get_radar(
     page: int = Query(1, ge=1),
     page_size: int = Query(24, ge=1, le=100),
     min_mentions: int = Query(1, ge=1),
     sort_by: str = Query("score", regex="^(score|mentions|recency)$"),
-    status: str = Query("all", regex="^(all|matched|enriched|pending|rejected)$"),
+    status: str = Query("all", regex="^(all|enriched|pending|added|rejected)$"),
     db: Session = Depends(get_db),
 ):
     """
-    Get all Lyra discoveries: any site extracted from YouTube videos that
-    is NOT in the ancient_nerds source.
+    Get Lyra radar items: sites found in YouTube videos that aren't in our DB.
 
-    Sources:
-    1. user_contributions WHERE source='lyra' (primary)
-    2. Direct site_matcher matches (news_items with site_id set, no contribution)
+    Excludes matched (already in DB), not_a_site, and failed items.
     """
-    cache_key = f"discoveries:list:{page}:{page_size}:{min_mentions}:{sort_by}:{status}"
+    cache_key = f"radar:list:{page}:{page_size}:{min_mentions}:{sort_by}:{status}"
     cached = cache_get(cache_key)
     if cached:
         return cached
 
-    # ── Part 1: Lyra user_contributions ─────────────────────────────
-    # For each contribution, get matched site info (if any) from enrichment_data,
-    # and aggregate video references from news_items.
+    # Query user_contributions, excluding matched/not_a_site/failed
     contributions_query = text("""
         WITH contrib AS (
             SELECT
@@ -191,29 +185,8 @@ async def get_discoveries(
                 uc.wikidata_id
             FROM user_contributions uc
             WHERE uc.source = 'lyra'
-              AND COALESCE(uc.enrichment_status, 'pending') NOT IN ('failed', 'not_a_site')
+              AND COALESCE(uc.enrichment_status, 'pending') NOT IN ('failed', 'not_a_site', 'matched')
               AND uc.mention_count >= :min_mentions
-        ),
-        -- Get matched site info by extracting match_id from enrichment_data
-        matched_info AS (
-            SELECT
-                c.id AS contrib_id,
-                us.id AS matched_site_id,
-                us.name AS matched_site_name,
-                us.source_id AS matched_source,
-                us.thumbnail_url AS matched_thumbnail,
-                us.country AS matched_country,
-                us.site_type AS matched_site_type,
-                us.period_name AS matched_period_name,
-                us.lat AS matched_lat,
-                us.lon AS matched_lon,
-                us.description AS matched_description,
-                us.source_url AS matched_source_url
-            FROM contrib c
-            JOIN unified_sites us
-                ON us.id = (c.enrichment_data #>> '{identification,match_id}')::uuid
-            WHERE c.enrichment_data #>> '{identification,match_type}' IN ('db_match', 'wikidata_match')
-              AND c.enrichment_data #>> '{identification,match_id}' IS NOT NULL
         ),
         -- Aggregate video references per contribution
         video_agg AS (
@@ -239,18 +212,14 @@ async def get_discoveries(
             c.name AS display_name,
             COALESCE(c.enrichment_status, 'pending') AS enrichment_status,
             c.score AS enrichment_score,
-            mi.matched_site_id::text,
-            mi.matched_site_name,
-            mi.matched_source,
-            -- Prefer matched site metadata, fall back to contribution
-            COALESCE(mi.matched_country, c.country) AS country,
-            COALESCE(mi.matched_site_type, c.site_type) AS site_type,
-            COALESCE(mi.matched_period_name, c.period_name) AS period_name,
-            COALESCE(mi.matched_thumbnail, c.thumbnail_url) AS thumbnail_url,
-            COALESCE(c.wikipedia_url, mi.matched_source_url) AS wikipedia_url,
-            COALESCE(mi.matched_lat, c.lat) AS lat,
-            COALESCE(mi.matched_lon, c.lon) AS lon,
-            COALESCE(mi.matched_description, c.description) AS description,
+            c.country,
+            c.site_type,
+            c.period_name,
+            c.thumbnail_url,
+            c.wikipedia_url,
+            c.lat,
+            c.lon,
+            c.description,
             c.wikidata_id,
             COALESCE(va.unique_videos, 0) AS unique_videos,
             COALESCE(va.unique_channels, 0) AS unique_channels,
@@ -259,33 +228,24 @@ async def get_discoveries(
             va.videos,
             va.all_facts
         FROM contrib c
-        LEFT JOIN matched_info mi ON mi.contrib_id = c.id
         LEFT JOIN video_agg va ON va.contrib_id = c.id
-        -- Exclude items matched to ancient_nerds
-        WHERE mi.matched_source IS DISTINCT FROM 'ancient_nerds'
     """)
 
     contrib_rows = db.execute(contributions_query, {
         "min_mentions": min_mentions,
     }).fetchall()
 
-    # Track contribution names AND matched site IDs so we skip them in Part 2
-    contrib_names_lower = set()
-    contrib_matched_site_ids = set()
     items = []
 
     for row in contrib_rows:
-        contrib_names_lower.add(row.display_name.lower().strip())
-        if row.matched_site_id:
-            contrib_matched_site_ids.add(row.matched_site_id)
-
         enrichment_status = row.enrichment_status
+
         # Apply status filter
-        if status == "matched" and enrichment_status != "matched":
-            continue
-        if status == "enriched" and enrichment_status not in ("enriched", "promoted"):
+        if status == "enriched" and enrichment_status != "enriched":
             continue
         if status == "pending" and enrichment_status not in ("pending", "enriching"):
+            continue
+        if status == "added" and enrichment_status != "promoted":
             continue
         if status == "rejected" and enrichment_status != "rejected":
             continue
@@ -295,9 +255,6 @@ async def get_discoveries(
             "display_name": row.display_name,
             "enrichment_status": enrichment_status,
             "enrichment_score": 0,
-            "matched_site_id": row.matched_site_id,
-            "matched_site_name": row.matched_site_name,
-            "matched_source": row.matched_source,
             "country": row.country,
             "site_type": row.site_type,
             "period_name": row.period_name,
@@ -319,94 +276,6 @@ async def get_discoveries(
         item["enrichment_score"] = _compute_display_score(item)
         items.append(item)
 
-    # ── Part 2: Direct matches without user_contribution ────────────
-    # news_items with site_id set, joined to unified_sites where source_id != 'ancient_nerds',
-    # that don't already have a user_contribution.
-    if status in ("all", "matched"):
-        direct_query = text("""
-            WITH direct AS (
-                SELECT
-                    us.id AS site_id,
-                    us.name AS site_name,
-                    us.source_id,
-                    us.thumbnail_url,
-                    us.country,
-                    us.site_type,
-                    us.period_name,
-                    us.source_url,
-                    us.lat,
-                    us.lon,
-                    us.description,
-                    COUNT(*) AS mention_count,
-                    COUNT(DISTINCT ni.video_id) AS unique_videos,
-                    COUNT(DISTINCT nv.channel_id) AS unique_channels,
-                    MAX(ni.created_at) AS last_mentioned,
-                    jsonb_agg(DISTINCT jsonb_build_object(
-                        'video_id', ni.video_id,
-                        'channel_name', nc.name,
-                        'timestamp_seconds', ni.timestamp_seconds
-                    )) AS videos,
-                    jsonb_agg(ni.facts) FILTER (WHERE ni.facts IS NOT NULL) AS all_facts
-                FROM news_items ni
-                JOIN unified_sites us ON us.id = ni.site_id
-                JOIN news_videos nv ON nv.id = ni.video_id
-                JOIN news_channels nc ON nc.id = nv.channel_id
-                WHERE ni.site_id IS NOT NULL
-                  AND ni.site_match_tried = true
-                  AND us.source_id != 'ancient_nerds'
-                GROUP BY us.id, us.name, us.source_id, us.thumbnail_url,
-                         us.country, us.site_type, us.period_name, us.source_url,
-                         us.lat, us.lon, us.description
-                HAVING COUNT(*) >= :min_mentions
-            )
-            SELECT * FROM direct
-        """)
-
-        direct_rows = db.execute(direct_query, {
-            "min_mentions": min_mentions,
-        }).fetchall()
-
-        for row in direct_rows:
-            # Skip if already covered by a Part 1 contribution (by name or matched site ID)
-            site_id_str = str(row.site_id)
-            if row.site_name.lower().strip() in contrib_names_lower:
-                continue
-            if site_id_str in contrib_matched_site_ids:
-                continue
-
-            wikipedia_url = None
-            if row.source_id == "wikidata" and row.source_url:
-                wikipedia_url = row.source_url
-
-            item = {
-                "id": str(row.site_id),
-                "display_name": row.site_name,
-                "enrichment_status": "matched",
-                "enrichment_score": 0,
-                "matched_site_id": str(row.site_id),
-                "matched_site_name": row.site_name,
-                "matched_source": row.source_id,
-                "country": row.country,
-                "site_type": row.site_type,
-                "period_name": row.period_name,
-                "thumbnail_url": row.thumbnail_url,
-                "wikipedia_url": wikipedia_url,
-                "lat": row.lat,
-                "lon": row.lon,
-                "description": row.description,
-                "wikidata_id": None,
-                "mention_count": row.mention_count,
-                "facts": _flatten_facts(row.all_facts),
-                "videos": _build_video_refs(row.videos),
-                "unique_videos": row.unique_videos,
-                "unique_channels": row.unique_channels,
-                "last_mentioned": row.last_mentioned.isoformat() if row.last_mentioned else None,
-                "suggestions": [],
-                "best_match": None,
-            }
-            item["enrichment_score"] = _compute_display_score(item)
-            items.append(item)
-
     # ── Sort ────────────────────────────────────────────────────────
     if sort_by == "score":
         items.sort(key=lambda x: x["enrichment_score"], reverse=True)
@@ -424,13 +293,13 @@ async def get_discoveries(
     pending_names = [
         normalize_name(item["display_name"])
         for item in page_items
-        if item["enrichment_status"] in ("pending", "enriching") and not item["matched_site_id"]
+        if item["enrichment_status"] in ("pending", "enriching")
     ]
     if pending_names:
         all_suggestions = find_similar_sites_batch(db, pending_names, limit_per_name=5)
         name_idx = 0
         for item in page_items:
-            if item["enrichment_status"] in ("pending", "enriching") and not item["matched_site_id"]:
+            if item["enrichment_status"] in ("pending", "enriching"):
                 qname = pending_names[name_idx]
                 name_idx += 1
                 suggestions = all_suggestions.get(qname, [])
@@ -451,11 +320,11 @@ async def get_discoveries(
 
 
 @router.get("/stats")
-async def get_discovery_stats(db: Session = Depends(get_db)):
+async def get_radar_stats(db: Session = Depends(get_db)):
     """
-    Get summary stats for the discoveries page header.
+    Get summary stats for the radar page header.
     """
-    cache_key = "discoveries:stats"
+    cache_key = "radar:stats"
     cached = cache_get(cache_key)
     if cached:
         return cached
@@ -463,17 +332,17 @@ async def get_discovery_stats(db: Session = Depends(get_db)):
     stats_query = text("""
         SELECT
             COUNT(*) FILTER (
-                WHERE COALESCE(enrichment_status, 'pending') NOT IN ('failed', 'not_a_site')
-            ) AS total_discoveries,
-            COUNT(*) FILTER (
-                WHERE enrichment_status = 'matched'
-            ) AS matched_count,
+                WHERE COALESCE(enrichment_status, 'pending') NOT IN ('failed', 'not_a_site', 'matched')
+            ) AS total_radar,
             COUNT(*) FILTER (
                 WHERE enrichment_status IN ('enriched', 'promoted')
             ) AS enriched_count,
             COUNT(*) FILTER (
                 WHERE COALESCE(enrichment_status, 'pending') IN ('pending', 'enriching')
-            ) AS pending_count
+            ) AS pending_count,
+            COUNT(*) FILTER (
+                WHERE enrichment_status = 'promoted'
+            ) AS added_count
         FROM user_contributions
         WHERE source = 'lyra'
     """)
@@ -483,10 +352,10 @@ async def get_discovery_stats(db: Session = Depends(get_db)):
     sites_known = db.execute(text("SELECT COUNT(*) FROM unified_sites")).scalar() or 0
 
     response = {
-        "total_discoveries": row.total_discoveries or 0,
-        "matched_count": row.matched_count or 0,
+        "total_radar": row.total_radar or 0,
         "enriched_count": row.enriched_count or 0,
         "pending_count": row.pending_count or 0,
+        "added_count": row.added_count or 0,
         "total_sites_known": sites_known,
     }
 

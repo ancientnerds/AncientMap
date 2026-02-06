@@ -1,8 +1,9 @@
-"""AI-powered site identification and enrichment for Lyra discoveries.
+"""AI-powered site identification and enrichment for Lyra radar.
 
 Takes unmatched site names from user_contributions (source='lyra'),
-identifies them via Claude Haiku + Wikidata, enriches with Wikipedia data,
-scores completeness, and promotes high-scoring sites to unified_sites.
+identifies them via Claude Haiku, matches against DB/Wikidata in code,
+enriches with Wikipedia data, scores completeness, and promotes
+high-scoring sites to unified_sites.
 """
 
 import hashlib
@@ -44,14 +45,14 @@ WIKIPEDIA_SUMMARY_URL = "https://en.wikipedia.org/api/rest_v1/page/summary/{titl
 
 
 def seed_lyra_source() -> None:
-    """Seed the 'lyra' source_meta row for Lyra Discoveries."""
+    """Seed the 'lyra' source_meta row for Lyra Radar."""
     with get_session() as session:
         existing = session.get(SourceMeta, "lyra")
         if existing:
             return
         session.add(SourceMeta(
             id="lyra",
-            name="ANCIENT NERDS Discoveries",
+            name="ANCIENT NERDS Radar",
             color="#8b5cf6",
             category="Primary",
             priority=1,
@@ -66,8 +67,9 @@ def seed_lyra_source() -> None:
 def identify_and_enrich_sites(settings: LyraSettings) -> int:
     """Main orchestrator for site identification and enrichment.
 
-    Processes pending Lyra discoveries: identifies via Claude Haiku + Wikidata,
-    enriches from Wikipedia, scores completeness, and promotes high-scoring sites.
+    Processes pending Lyra candidates: identifies via Claude Haiku,
+    matches against DB/Wikidata in code, enriches from Wikipedia,
+    scores completeness, and promotes high-scoring sites.
 
     Returns number of sites processed.
     """
@@ -80,7 +82,7 @@ def identify_and_enrich_sites(settings: LyraSettings) -> int:
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
     with get_session() as session:
-        # Get pending discoveries ordered by mention count (best data first)
+        # Get pending candidates ordered by mention count (best data first)
         contributions = session.query(UserContribution).filter(
             UserContribution.source == "lyra",
             UserContribution.enrichment_status.in_(["pending", "enriched", "enriching", "rejected"]),
@@ -92,10 +94,10 @@ def identify_and_enrich_sites(settings: LyraSettings) -> int:
         ).all()
 
         if not contributions:
-            logger.info("No pending discoveries to identify")
+            logger.info("No pending candidates to identify")
             return 0
 
-        logger.info(f"Processing {len(contributions)} discoveries for identification")
+        logger.info(f"Processing {len(contributions)} candidates for identification")
 
         for contribution in contributions:
             logger.info(
@@ -132,7 +134,13 @@ def _process_single(
     prompt_template: str,
     settings: LyraSettings,
 ) -> bool:
-    """Process a single discovery through identification + enrichment.
+    """Process a single candidate through identification + enrichment.
+
+    Pipeline:
+    1. AI identifies the site (name, country, type, period)
+    2. Code searches DB for match (pg_trgm fuzzy)
+    3. If DB match → link news items, status=matched (hidden from Radar)
+    4. If no DB match → search Wikidata for enrichment → Radar candidate
 
     Returns True if the contribution was meaningfully updated.
     """
@@ -165,132 +173,97 @@ def _process_single(
     contribution.enrichment_status = "enriching"
     contribution.last_facts_hash = facts_hash
 
-    # Get DB candidates via pg_trgm fuzzy matching
-    db_candidates = _fetch_db_candidates(session, contribution.name, threshold=settings.pg_trgm_threshold)
-    if db_candidates:
-        top3 = ", ".join(f"{c['name']}({c['similarity']})" for c in db_candidates[:3])
-        logger.info(f"  [{contribution.name}] DB candidates: {len(db_candidates)} (top: {top3})")
-    else:
-        logger.info(f"  [{contribution.name}] DB candidates: 0")
+    # Step 1: AI identifies the site
+    prompt = _build_prompt(prompt_template, contribution, facts, video_contexts)
 
-    # Get Wikidata candidates
-    wikidata_candidates = _search_wikidata(contribution.name)
-    if wikidata_candidates:
-        top3 = ", ".join(c['label'] for c in wikidata_candidates[:3])
-        logger.info(f"  [{contribution.name}] Wikidata candidates: {len(wikidata_candidates)} (top: {top3})")
-    else:
-        logger.info(f"  [{contribution.name}] Wikidata candidates: 0")
-
-    # Build and send prompt to Claude Haiku
-    prompt = _build_prompt(
-        prompt_template, contribution, facts, video_contexts,
-        db_candidates, wikidata_candidates
-    )
-
-    try:
-        response = client.messages.create(
-            model=settings.model_identify,
-            max_tokens=1024,
-            temperature=0.0,
-            messages=[{"role": "user", "content": prompt}],
-        )
-    except anthropic.APIError as e:
-        logger.error(f"Anthropic API error for {contribution.name}: {e}")
-        contribution.enrichment_status = "failed"
-        return False
-
-    if not response.content or not hasattr(response.content[0], "text"):
-        logger.warning(f"Empty or non-text response for {contribution.name}")
-        contribution.enrichment_status = "failed"
-        return False
-
-    response_text = response.content[0].text
-    identification = _parse_identification(response_text)
+    identification = _call_ai(client, settings.model_identify, prompt)
     if not identification:
-        logger.warning(f"Failed to parse identification for {contribution.name}")
         contribution.enrichment_status = "failed"
         return False
 
     # Escalate low/medium confidence to Sonnet for review
     confidence = identification.get("confidence", "unknown")
     if confidence in ("low", "medium"):
-        sonnet_result = _escalate_to_sonnet(client, settings, prompt, response_text, identification)
+        sonnet_result = _escalate_to_sonnet(client, settings, prompt, json.dumps(identification), identification)
         if sonnet_result:
             identification = sonnet_result
 
-    match_type = identification.get("match_type")
+    # Handle not-a-site
+    if not identification.get("is_site", True):
+        contribution.enrichment_status = "not_a_site"
+        contribution.enrichment_data = {"identification": identification}
+        logger.info(f"  [{contribution.name}] Not a site: {identification.get('reasoning', '')}")
+        return True
+
     corrected_name = identification.get("site_name", "")
     confidence = identification.get("confidence", "unknown")
     logger.info(
-        f"Identified '{contribution.name}' as {match_type} "
-        f"(confidence: {confidence}, "
-        f"corrected: '{corrected_name}')"
+        f"  [{contribution.name}] Identified as '{corrected_name}' "
+        f"(confidence: {confidence})"
     )
 
-    # Post-processing: re-search with corrected name and validate new_site claims.
-    # Claude often corrects garbled names (e.g. "Seab Birch" → "Sayburç") but can't
-    # search our DB itself, so we re-search with the corrected spelling.
-    if match_type not in ("db_match", "not_a_site") and corrected_name:
-        corrected_lower = corrected_name.lower().strip()
-        original_lower = contribution.name.lower().strip()
-        if corrected_lower != original_lower:
-            logger.info(f"Re-searching with corrected name '{corrected_name}'")
-            # Try DB first (strongly preferred — avoids duplicate dots)
-            corrected_candidates = _fetch_db_candidates(session, corrected_name, threshold=settings.pg_trgm_threshold)
-            if corrected_candidates:
-                best = corrected_candidates[0]
-                logger.info(
-                    f"Found DB match via corrected name: {best['name']} "
-                    f"(similarity: {best['similarity']})"
-                )
-                identification["match_type"] = "db_match"
-                identification["match_id"] = best["site_id"]
-                match_type = "db_match"
-            else:
-                # Try Wikidata with corrected name
-                corrected_wd = _search_wikidata(corrected_name)
-                if corrected_wd:
-                    logger.info(f"Found Wikidata match via corrected name: {corrected_wd[0]['label']}")
-                    identification["match_type"] = "wikidata_match"
-                    identification["match_id"] = corrected_wd[0]["qid"]
-                    match_type = "wikidata_match"
+    # Update contribution metadata from AI
+    if identification.get("country"):
+        contribution.country = identification["country"]
+    if identification.get("site_type"):
+        contribution.site_type = normalize_site_type(identification["site_type"])
+    if identification.get("period_estimate"):
+        contribution.period_name = identification["period_estimate"]
+        period_start = extract_period_from_text(identification["period_estimate"])
+        if period_start is not None:
+            contribution.period_start = period_start
 
-    # For new_site: extra validation — search Wikidata with the site name one more time.
-    # With 50k+ DB sites and all of Wikidata, truly unknown sites are very rare.
-    if match_type == "new_site" and corrected_name:
-        wd_retry = _search_wikidata(corrected_name)
-        if wd_retry:
-            # Check if any candidate looks archaeological/historical
-            for candidate in wd_retry:
-                desc = candidate.get("description", "").lower()
-                if any(kw in desc for kw in [
-                    "archaeolog", "ancient", "historic", "ruin", "settlement",
-                    "temple", "tomb", "fort", "monument", "castle", "church",
-                    "mosque", "palace", "site", "mound", "city", "town",
-                ]):
-                    logger.info(f"new_site override: Wikidata match '{candidate['label']}' ({candidate['qid']})")
-                    identification["match_type"] = "wikidata_match"
-                    identification["match_id"] = candidate["qid"]
-                    match_type = "wikidata_match"
-                    break
+    # Step 2: Code searches DB with corrected name
+    search_name = corrected_name or contribution.name
+    db_candidates = _fetch_db_candidates(session, search_name, threshold=settings.pg_trgm_threshold)
+    if db_candidates:
+        top3 = ", ".join(f"{c['name']}({c['similarity']})" for c in db_candidates[:3])
+        logger.info(f"  [{contribution.name}] DB candidates for '{search_name}': {len(db_candidates)} (top: {top3})")
 
-    if match_type == "not_a_site":
-        contribution.enrichment_status = "matched"
-        contribution.enrichment_data = {"identification": identification}
-        return True
+        best = db_candidates[0]
+        if best["similarity"] >= settings.pg_trgm_threshold:
+            return _handle_db_match(session, contribution, best, identification, settings)
 
-    if match_type == "db_match":
-        return _handle_db_match(session, contribution, identification, client, settings)
+    # Also try with original name if different
+    if corrected_name and corrected_name.lower().strip() != contribution.name.lower().strip():
+        orig_candidates = _fetch_db_candidates(session, contribution.name, threshold=settings.pg_trgm_threshold)
+        if orig_candidates and orig_candidates[0]["similarity"] >= settings.pg_trgm_threshold:
+            logger.info(f"  [{contribution.name}] DB match via original name: {orig_candidates[0]['name']}")
+            return _handle_db_match(session, contribution, orig_candidates[0], identification, settings)
 
-    if match_type in ("wikidata_match", "new_site"):
-        return _handle_wikidata_or_new(session, contribution, identification, settings)
+    # Step 3: Code searches Wikidata for enrichment
+    wikidata_candidates = _search_wikidata(search_name)
+    if wikidata_candidates:
+        top3 = ", ".join(c['label'] for c in wikidata_candidates[:3])
+        logger.info(f"  [{contribution.name}] Wikidata candidates: {len(wikidata_candidates)} (top: {top3})")
+        return _handle_wikidata_match(session, contribution, identification, wikidata_candidates, client, settings)
 
-    contribution.enrichment_status = "failed"
-    return False
+    # Step 4: Neither DB nor Wikidata → new site
+    return _handle_new_site(session, contribution, identification, settings)
+
+
+def _call_ai(client: anthropic.Anthropic, model: str, prompt: str) -> dict | None:
+    """Call Claude and parse the JSON identification response."""
+    try:
+        response = client.messages.create(
+            model=model,
+            max_tokens=1024,
+            temperature=0.0,
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except anthropic.APIError as e:
+        logger.error(f"Anthropic API error: {e}")
+        return None
+
+    if not response.content or not hasattr(response.content[0], "text"):
+        logger.warning("Empty or non-text response from AI")
+        return None
+
+    return _parse_identification(response.content[0].text)
 
 
 def _aggregate_facts(session: Session, contribution: UserContribution) -> tuple[list[str], list[dict]]:
-    """Aggregate facts and video context for a discovery from all related NewsItems.
+    """Aggregate facts and video context for a candidate from all related NewsItems.
 
     Uses func.lower() for matching — same approach as site_matcher._upsert_lyra_suggestion
     which stores names via func.lower(UserContribution.name). Do NOT use normalize_name()
@@ -655,8 +628,6 @@ def _build_prompt(
     contribution: UserContribution,
     facts: list[str],
     video_contexts: list[dict],
-    db_candidates: list[dict],
-    wikidata_candidates: list[dict],
 ) -> str:
     """Build the identification prompt for Claude Haiku."""
     # Format facts
@@ -673,23 +644,6 @@ def _build_prompt(
         video_text_parts.append(part)
     video_text = "\n".join(video_text_parts) if video_text_parts else "(no video context)"
 
-    # Format DB candidates (include site_id so Haiku can return it as match_id)
-    db_text_parts = []
-    for c in db_candidates[:10]:
-        db_text_parts.append(
-            f"  - site_id={c['site_id']}: {c['name']} (country: {c.get('country', 'unknown')}, "
-            f"source: {c['source']}, similarity: {c['similarity']})"
-        )
-    db_text = "\n".join(db_text_parts) if db_text_parts else "(no database matches found)"
-
-    # Format Wikidata candidates
-    wd_text_parts = []
-    for c in wikidata_candidates[:5]:
-        wd_text_parts.append(
-            f"  - {c['qid']}: {c['label']} — {c.get('description', '')}"
-        )
-    wd_text = "\n".join(wd_text_parts) if wd_text_parts else "(no Wikidata matches found)"
-
     return template.format(
         site_name=contribution.name,
         mention_count=contribution.mention_count,
@@ -698,8 +652,6 @@ def _build_prompt(
         existing_period=contribution.period_name or "unknown",
         facts=facts_text,
         video_contexts=video_text,
-        db_candidates=db_text,
-        wikidata_candidates=wd_text,
     )
 
 
@@ -749,17 +701,17 @@ A junior model (Haiku) was asked to identify an archaeological site from YouTube
 </haiku_response>
 
 ## Your Task
-1. Check if Haiku's country cross-check reasoning is sound — did it verify the candidate's country matches the video facts?
-2. Check if the match_type makes sense given the evidence
-3. Check if the confidence should be higher or lower
-4. If you disagree with Haiku, provide a corrected JSON response
-
-CRITICAL: Geographic mismatches are HARD DISQUALIFIERS. If Haiku matched a site in country X but the video facts clearly indicate country Y, you MUST override to not_a_site or new_site.
+1. Is this actually a specific archaeological site, or a region/person/method?
+2. Is the site name correct (not a caption garbling)?
+3. Is the country plausible given the facts?
+4. Should confidence be higher or lower?
 
 If you agree with Haiku's answer, return the exact same JSON.
-If you disagree, return a corrected JSON with the same schema.
+If you disagree, return a corrected JSON with the same schema:
+- For a real site: {{"is_site": true, "site_name": "...", "country": "...", "site_type": "...", "period_estimate": "...", "confidence": "...", "reasoning": "..."}}
+- For not a site: {{"is_site": false, "reasoning": "..."}}
 
-Return ONLY valid JSON (same schema as Haiku's response).
+Return ONLY valid JSON.
 """
 
 
@@ -800,17 +752,17 @@ def _escalate_to_sonnet(
         logger.warning("Failed to parse Sonnet escalation response")
         return None
 
-    sonnet_match = result.get("match_type")
+    sonnet_is_site = result.get("is_site", True)
+    haiku_is_site = haiku_identification.get("is_site", True)
     sonnet_confidence = result.get("confidence")
-    haiku_match = haiku_identification.get("match_type")
 
-    if sonnet_match != haiku_match:
+    if sonnet_is_site != haiku_is_site:
         logger.info(
-            f"Sonnet overrode Haiku: {haiku_match} -> {sonnet_match} "
+            f"Sonnet overrode Haiku: is_site={haiku_is_site} -> {sonnet_is_site} "
             f"(confidence: {sonnet_confidence})"
         )
     else:
-        logger.info(f"Sonnet confirmed Haiku's {haiku_match} (confidence: {sonnet_confidence})")
+        logger.info(f"Sonnet confirmed Haiku's answer (confidence: {sonnet_confidence})")
 
     return result
 
@@ -818,18 +770,17 @@ def _escalate_to_sonnet(
 def _handle_db_match(
     session: Session,
     contribution: UserContribution,
+    db_candidate: dict,
     identification: dict,
-    client: anthropic.Anthropic,
     settings: LyraSettings,
 ) -> bool:
-    """Handle a db_match result: link NewsItems to the matched site."""
-    match_id = identification.get("match_id")
-    if not match_id:
-        contribution.enrichment_status = "failed"
-        return False
+    """Handle a DB match: link NewsItems to the matched site.
 
+    db_match = already in our database = NOT a Radar item.
+    """
+    site_id_str = db_candidate["site_id"]
     try:
-        site_uuid = uuid.UUID(match_id)
+        site_uuid = uuid.UUID(site_id_str)
     except (ValueError, TypeError):
         contribution.enrichment_status = "failed"
         return False
@@ -870,57 +821,6 @@ def _handle_db_match(
         contribution.site_type = site.site_type
     if not contribution.period_name and site.period_name:
         contribution.period_name = site.period_name
-
-    # Enrich via Wikidata: search with corrected name or matched site name
-    search_name = identification.get("site_name") or site.name
-    wikidata_candidates = _search_wikidata(search_name)
-    best_qid = None
-    if wikidata_candidates:
-        # Batch-check which candidates have English Wikipedia pages
-        qids = [c["qid"] for c in wikidata_candidates]
-        sitelinks = _check_enwiki_sitelinks(qids)
-        for c in wikidata_candidates:
-            c["has_wikipedia"] = sitelinks.get(c["qid"], False)
-
-        best_qid = _pick_wikidata_entity(
-            client, settings.model_identify,
-            search_name, contribution.country or site.country,
-            contribution.site_type or site.site_type,
-            wikidata_candidates,
-        )
-
-    if best_qid:
-        enrichment = _enrich_from_wikidata(best_qid)
-        if enrichment:
-            contribution.wikidata_id = best_qid
-
-            if enrichment.get("lat") and enrichment.get("lon"):
-                contribution.lat = enrichment["lat"]
-                contribution.lon = enrichment["lon"]
-            if enrichment.get("thumbnail_url"):
-                contribution.thumbnail_url = enrichment["thumbnail_url"]
-            if enrichment.get("wikipedia_url"):
-                contribution.wikipedia_url = enrichment["wikipedia_url"]
-
-            # Fetch Wikipedia summary for description + better thumbnail
-            wiki_title = enrichment.get("wikipedia_title")
-            if wiki_title:
-                wiki_data = _fetch_wikipedia_summary(wiki_title)
-                if wiki_data.get("description"):
-                    contribution.description = clean_description(wiki_data["description"])
-                if wiki_data.get("thumbnail_url"):
-                    contribution.thumbnail_url = wiki_data["thumbnail_url"]
-                if wiki_data.get("lat") and wiki_data.get("lon") and not contribution.lat:
-                    contribution.lat = wiki_data["lat"]
-                    contribution.lon = wiki_data["lon"]
-
-            logger.info(
-                f"  [{contribution.name}] Wikidata enrichment: {best_qid}, "
-                f"wiki={contribution.wikipedia_url is not None}, "
-                f"coords=({contribution.lat}, {contribution.lon})"
-            )
-
-    # Fill remaining gaps from the matched site itself
     if not contribution.lat and site.lat:
         contribution.lat = site.lat
     if not contribution.lon and site.lon:
@@ -945,51 +845,42 @@ def _handle_db_match(
     )
 
     contribution.enrichment_status = "matched"
-    contribution.enrichment_data = {"identification": identification}
+    contribution.enrichment_data = {"identification": identification, "db_match": db_candidate}
     contribution.score = _compute_score(contribution)
     logger.info(f"DB match: '{contribution.name}' -> '{site.name}' ({updated} items linked)")
-
-    # Promote to lyra source so it appears on the globe under Discoveries
-    if (
-        contribution.score >= settings.min_score_for_promotion
-        and contribution.lat is not None
-        and contribution.lon is not None
-    ):
-        record = {
-            "period_start": contribution.period_start,
-            "period_end": contribution.period_end,
-            "lon": contribution.lon,
-        }
-        if passes_date_cutoff(record):
-            site_name = identification.get("site_name") or site.name
-            promoted_id = _promote_to_unified_sites(session, contribution, site_name)
-            if promoted_id:
-                contribution.promoted_site_id = promoted_id
-                contribution.enrichment_status = "promoted"
-                logger.info(f"Promoted db_match '{contribution.name}' to Discoveries ({promoted_id})")
 
     return True
 
 
-def _handle_wikidata_or_new(
+def _handle_wikidata_match(
     session: Session,
     contribution: UserContribution,
     identification: dict,
+    wikidata_candidates: list[dict],
+    client: anthropic.Anthropic,
     settings: LyraSettings,
 ) -> bool:
-    """Handle wikidata_match or new_site: enrich and possibly promote."""
-    # Use corrected name from Claude if provided
+    """Handle Wikidata match: enrich from Wikidata/Wikipedia, possibly promote."""
     site_name = identification.get("site_name", contribution.name)
 
-    # Enrich from Wikidata if we have a QID
-    wikidata_qid = identification.get("match_id")
+    # Filter candidates with Wikipedia pages, pick best
+    qids = [c["qid"] for c in wikidata_candidates]
+    sitelinks = _check_enwiki_sitelinks(qids)
+    for c in wikidata_candidates:
+        c["has_wikipedia"] = sitelinks.get(c["qid"], False)
+
+    best_qid = _pick_wikidata_entity(
+        client, settings.model_identify,
+        site_name, contribution.country,
+        contribution.site_type,
+        wikidata_candidates,
+    )
+
     enrichment = {}
+    if best_qid:
+        contribution.wikidata_id = best_qid
+        enrichment = _enrich_from_wikidata(best_qid)
 
-    if wikidata_qid and wikidata_qid.startswith("Q"):
-        enrichment = _enrich_from_wikidata(wikidata_qid)
-        contribution.wikidata_id = wikidata_qid
-
-        # Enrich from Wikipedia if we have a title
         wiki_title = enrichment.get("wikipedia_title")
         if wiki_title:
             wiki_data = _fetch_wikipedia_summary(wiki_title)
@@ -1006,22 +897,9 @@ def _handle_wikidata_or_new(
         contribution.lat = enrichment["lat"]
         contribution.lon = enrichment["lon"]
 
-    # Apply country — prefer Wikidata coordinates lookup, fall back to identification
+    # Apply country from coords or identification
     if contribution.lat and contribution.lon and not contribution.country:
         contribution.country = lookup_country(contribution.lat, contribution.lon)
-    if not contribution.country and identification.get("country"):
-        contribution.country = identification["country"]
-
-    # Apply site type
-    if identification.get("site_type"):
-        contribution.site_type = normalize_site_type(identification["site_type"])
-
-    # Apply period
-    if identification.get("period_estimate"):
-        contribution.period_name = identification["period_estimate"]
-        period_start = extract_period_from_text(identification["period_estimate"])
-        if period_start is not None:
-            contribution.period_start = period_start
 
     # Apply thumbnail
     if enrichment.get("thumbnail_url"):
@@ -1033,7 +911,6 @@ def _handle_wikidata_or_new(
         "wikidata": enrichment,
     }
 
-    # Compute score
     contribution.score = _compute_score(contribution)
     contribution.enrichment_status = "enriched"
 
@@ -1043,12 +920,51 @@ def _handle_wikidata_or_new(
     )
 
     # Promote if score is high enough and has coordinates
+    _maybe_promote(session, contribution, site_name, settings)
+
+    return True
+
+
+def _handle_new_site(
+    session: Session,
+    contribution: UserContribution,
+    identification: dict,
+    settings: LyraSettings,
+) -> bool:
+    """Handle a site with no DB or Wikidata match: store what we have."""
+    site_name = identification.get("site_name", contribution.name)
+
+    # Apply country from identification if not set
+    if not contribution.country and identification.get("country"):
+        contribution.country = identification["country"]
+
+    contribution.enrichment_data = {"identification": identification}
+    contribution.score = _compute_score(contribution)
+    contribution.enrichment_status = "enriched"
+
+    logger.info(
+        f"New site '{contribution.name}' (corrected: '{site_name}'): "
+        f"score={contribution.score}, coords=({contribution.lat}, {contribution.lon})"
+    )
+
+    # Promote if score is high enough and has coordinates
+    _maybe_promote(session, contribution, site_name, settings)
+
+    return True
+
+
+def _maybe_promote(
+    session: Session,
+    contribution: UserContribution,
+    site_name: str,
+    settings: LyraSettings,
+) -> None:
+    """Promote a contribution to unified_sites if it meets the threshold."""
     if (
         contribution.score >= settings.min_score_for_promotion
         and contribution.lat is not None
         and contribution.lon is not None
     ):
-        # Check date cutoff before promoting
         record = {
             "period_start": contribution.period_start,
             "period_end": contribution.period_end,
@@ -1062,8 +978,6 @@ def _handle_wikidata_or_new(
                 logger.info(f"Promoted '{contribution.name}' to unified_sites ({site_id})")
         else:
             logger.info(f"Skipping promotion for '{contribution.name}' — outside date cutoff")
-
-    return True
 
 
 def _compute_score(contribution: UserContribution) -> int:

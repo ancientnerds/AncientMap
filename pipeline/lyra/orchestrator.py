@@ -220,7 +220,7 @@ def main() -> None:
             WHERE id = 'ancient_nerds' AND name != 'ANCIENT NERDS Originals'
         """))
         conn.execute(text("""
-            UPDATE source_meta SET name = 'ANCIENT NERDS Discoveries',
+            UPDATE source_meta SET name = 'ANCIENT NERDS Radar',
                 category = 'Primary', priority = 1, is_primary = true
             WHERE id = 'lyra'
         """))
@@ -327,6 +327,23 @@ def main() -> None:
             WHERE source = 'lyra'
               AND promoted_site_id IS NULL
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v7_reset'))
+        """))
+
+        # v8: full rescan — new pipeline (AI identifies, code matches DB/Wikidata)
+        # Reset ALL non-promoted items so they run through the rewritten prompt
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET enrichment_status = 'pending', last_facts_hash = NULL
+            WHERE source = 'lyra'
+              AND promoted_site_id IS NULL
+              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v8_reset'))
+        """))
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v8_reset": true}'::jsonb
+            WHERE source = 'lyra'
+              AND promoted_site_id IS NULL
+              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v8_reset'))
         """))
 
         conn.commit()

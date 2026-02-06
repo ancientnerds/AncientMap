@@ -18,7 +18,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         news: resolve(__dirname, 'news.html'),
-        discoveries: resolve(__dirname, 'discoveries.html'),
+        radar: resolve(__dirname, 'radar.html'),
       },
     },
   },

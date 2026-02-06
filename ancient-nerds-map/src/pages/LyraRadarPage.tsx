@@ -1,9 +1,9 @@
 /**
- * LyraDiscoveriesPage - Full curation overview of all Lyra-extracted sites.
- * Accessed via /discoveries.html (separate Vite entry point).
+ * LyraRadarPage - Sites Lyra found in YouTube videos that aren't in our DB yet.
+ * Accessed via /radar.html (separate Vite entry point).
  *
- * Shows every site Lyra extracts from YouTube videos that is NOT in the
- * manually-curated ancient_nerds source — matched, enriched, and pending.
+ * Shows candidates for addition: enriched, pending, added (promoted),
+ * and rejected items. Matched items are excluded (already in DB).
  */
 
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
@@ -28,14 +28,11 @@ interface SuggestionMatch {
   country: string | null
 }
 
-interface AggregatedDiscovery {
+interface RadarItem {
   id: string
   display_name: string
   enrichment_status: string
   enrichment_score: number
-  matched_site_id: string | null
-  matched_site_name: string | null
-  matched_source: string | null
   country: string | null
   site_type: string | null
   period_name: string | null
@@ -55,23 +52,23 @@ interface AggregatedDiscovery {
   best_match: SuggestionMatch | null
 }
 
-interface DiscoveryResponse {
-  items: AggregatedDiscovery[]
+interface RadarResponse {
+  items: RadarItem[]
   total_count: number
   page: number
   page_size: number
   has_more: boolean
 }
 
-interface LyraStats {
-  total_discoveries: number
-  matched_count: number
+interface RadarStats {
+  total_radar: number
   enriched_count: number
   pending_count: number
+  added_count: number
   total_sites_known: number
 }
 
-type StatusFilter = 'all' | 'matched' | 'enriched' | 'pending' | 'rejected'
+type StatusFilter = 'all' | 'enriched' | 'pending' | 'added' | 'rejected'
 
 function formatTimestamp(seconds: number): string {
   if (!seconds || seconds <= 0) return ''
@@ -84,12 +81,11 @@ function StatusPill({ status }: { status: string }) {
   let label: string
   let cls: string
   switch (status) {
-    case 'matched':
-      label = 'Matched'
-      cls = 'lyra-status-matched'
+    case 'promoted':
+      label = 'Added'
+      cls = 'lyra-status-added'
       break
     case 'enriched':
-    case 'promoted':
       label = 'Enriched'
       cls = 'lyra-status-enriched'
       break
@@ -106,14 +102,14 @@ function StatusPill({ status }: { status: string }) {
 
 const SCORE_WEIGHTS = [
   { key: 'name', label: 'Name', points: 25, check: () => true },
-  { key: 'coords', label: 'Coords', points: 20, check: (d: AggregatedDiscovery) => d.lat != null && d.lon != null },
-  { key: 'country', label: 'Country', points: 10, check: (d: AggregatedDiscovery) => !!d.country },
-  { key: 'category', label: 'Category', points: 10, check: (d: AggregatedDiscovery) => !!d.site_type },
-  { key: 'period', label: 'Period', points: 10, check: (d: AggregatedDiscovery) => !!d.period_name },
-  { key: 'desc', label: 'Desc', points: 10, check: (d: AggregatedDiscovery) => !!d.description && d.description.length >= 50 },
-  { key: 'wiki', label: 'Wiki URL', points: 5, check: (d: AggregatedDiscovery) => !!d.wikipedia_url },
-  { key: 'thumb', label: 'Thumb', points: 5, check: (d: AggregatedDiscovery) => !!d.thumbnail_url },
-  { key: 'wikidata', label: 'Wikidata', points: 5, check: (d: AggregatedDiscovery) => !!d.wikidata_id },
+  { key: 'coords', label: 'Coords', points: 20, check: (d: RadarItem) => d.lat != null && d.lon != null },
+  { key: 'country', label: 'Country', points: 10, check: (d: RadarItem) => !!d.country },
+  { key: 'category', label: 'Category', points: 10, check: (d: RadarItem) => !!d.site_type },
+  { key: 'period', label: 'Period', points: 10, check: (d: RadarItem) => !!d.period_name },
+  { key: 'desc', label: 'Desc', points: 10, check: (d: RadarItem) => !!d.description && d.description.length >= 50 },
+  { key: 'wiki', label: 'Wiki URL', points: 5, check: (d: RadarItem) => !!d.wikipedia_url },
+  { key: 'thumb', label: 'Thumb', points: 5, check: (d: RadarItem) => !!d.thumbnail_url },
+  { key: 'wikidata', label: 'Wikidata', points: 5, check: (d: RadarItem) => !!d.wikidata_id },
 ] as const
 
 function formatCoord(value: number, pos: string, neg: string): string {
@@ -127,7 +123,7 @@ function scoreColor(pct: number): string {
   return `hsl(${hue}, 72%, 55%)`
 }
 
-function ScoreBreakdown({ item }: { item: AggregatedDiscovery }) {
+function ScoreBreakdown({ item }: { item: RadarItem }) {
   let earned = 0
   for (const w of SCORE_WEIGHTS) {
     if (w.check(item)) earned += w.points
@@ -155,7 +151,7 @@ function ScoreBreakdown({ item }: { item: AggregatedDiscovery }) {
   )
 }
 
-function DiscoveryCard({ item }: { item: AggregatedDiscovery }) {
+function RadarCard({ item }: { item: RadarItem }) {
   const [factsExpanded, setFactsExpanded] = useState(false)
   const [videosExpanded, setVideosExpanded] = useState(false)
   const [descExpanded, setDescExpanded] = useState(false)
@@ -166,13 +162,8 @@ function DiscoveryCard({ item }: { item: AggregatedDiscovery }) {
       <div className="lyra-discovery-header">
         <div className="lyra-discovery-name-block">
           <h3 className="lyra-discovery-name">
-            {item.matched_site_name || item.display_name}
+            {item.display_name}
           </h3>
-          {item.matched_site_name && item.matched_site_name !== item.display_name && (
-            <span className="lyra-discovery-extracted-name">
-              Lyra heard: {item.display_name}
-            </span>
-          )}
         </div>
         <div className="lyra-discovery-header-badges">
           <StatusPill status={item.enrichment_status} />
@@ -306,8 +297,8 @@ function DiscoveryCard({ item }: { item: AggregatedDiscovery }) {
         </div>
       )}
 
-      {/* 11. Suggestions (only for items without a matched site) */}
-      {!item.matched_site_id && !item.best_match && item.suggestions.length > 0 && (
+      {/* 11. Suggestions (only for pending items) */}
+      {item.suggestions.length > 0 && (
         <div className="lyra-discovery-suggestions">
           <span className="lyra-suggestions-label">Similar sites:</span>
           {item.suggestions.slice(0, 3).map((s) => (
@@ -335,14 +326,14 @@ function DiscoveryCard({ item }: { item: AggregatedDiscovery }) {
   )
 }
 
-export default function LyraDiscoveriesPage() {
-  const [items, setItems] = useState<AggregatedDiscovery[]>([])
+export default function LyraRadarPage() {
+  const [items, setItems] = useState<RadarItem[]>([])
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showLyraProfile, setShowLyraProfile] = useState(false)
-  const [stats, setStats] = useState<LyraStats | null>(null)
+  const [stats, setStats] = useState<RadarStats | null>(null)
   const [minMentions, setMinMentions] = useState(1)
   const [sortBy, setSortBy] = useState<'score' | 'mentions' | 'recency'>('score')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
@@ -369,7 +360,7 @@ export default function LyraDiscoveriesPage() {
     return () => ro.disconnect()
   }, [])
 
-  const fetchDiscoveries = useCallback(async (
+  const fetchRadar = useCallback(async (
     pageNum: number,
     append: boolean = false,
     mentions: number = minMentions,
@@ -379,10 +370,10 @@ export default function LyraDiscoveriesPage() {
     try {
       setLoading(true)
       setError(null)
-      const url = `${config.api.baseUrl}/discoveries/list?page=${pageNum}&page_size=24&min_mentions=${mentions}&sort_by=${sort}&status=${statusParam}`
+      const url = `${config.api.baseUrl}/radar/list?page=${pageNum}&page_size=24&min_mentions=${mentions}&sort_by=${sort}&status=${statusParam}`
       const resp = await fetch(url)
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-      const data: DiscoveryResponse = await resp.json()
+      const data: RadarResponse = await resp.json()
       setItems(prev => append ? [...prev, ...data.items] : data.items)
       setHasMore(data.has_more)
       setPage(pageNum)
@@ -395,12 +386,12 @@ export default function LyraDiscoveriesPage() {
 
   // Initial load & filter changes
   useEffect(() => {
-    fetchDiscoveries(1, false, minMentions, sortBy, statusFilter)
+    fetchRadar(1, false, minMentions, sortBy, statusFilter)
   }, [minMentions, sortBy, statusFilter])
 
   // Fetch stats
   useEffect(() => {
-    fetch(`${config.api.baseUrl}/discoveries/stats`)
+    fetch(`${config.api.baseUrl}/radar/stats`)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setStats(d) })
       .catch(() => {})
@@ -412,14 +403,14 @@ export default function LyraDiscoveriesPage() {
     const observer = new IntersectionObserver(
       entries => {
         if (entries[0].isIntersecting && hasMore && !loading) {
-          fetchDiscoveries(page + 1, true, minMentions, sortBy, statusFilter)
+          fetchRadar(page + 1, true, minMentions, sortBy, statusFilter)
         }
       },
       { rootMargin: '200px' }
     )
     observer.observe(sentinelRef.current)
     return () => observer.disconnect()
-  }, [hasMore, loading, page, fetchDiscoveries, minMentions, sortBy, statusFilter])
+  }, [hasMore, loading, page, fetchRadar, minMentions, sortBy, statusFilter])
 
   const handleMinMentionsChange = (value: number) => {
     setMinMentions(value)
@@ -458,15 +449,15 @@ export default function LyraDiscoveriesPage() {
           onClick={() => setShowLyraProfile(true)}
         />
         <div className="news-page-lyra-label">
-          <span className="news-page-lyra-name" style={{ cursor: 'pointer' }} onClick={() => setShowLyraProfile(true)}>Discoveries</span>
+          <span className="news-page-lyra-name" style={{ cursor: 'pointer' }} onClick={() => setShowLyraProfile(true)}>Radar</span>
           {stats && (
             <div className="news-page-stats">
-              <span className="news-page-stats-item"><strong>{stats.matched_count}</strong> matched</span>
-              <span className="news-page-stats-sep">·</span>
               <span className="news-page-stats-item"><strong>{stats.enriched_count}</strong> enriched</span>
-              <span className="news-page-stats-sep">·</span>
+              <span className="news-page-stats-sep">&middot;</span>
               <span className="news-page-stats-item"><strong>{stats.pending_count}</strong> pending</span>
-              <span className="news-page-stats-sep">·</span>
+              <span className="news-page-stats-sep">&middot;</span>
+              <span className="news-page-stats-item"><strong>{stats.added_count}</strong> added</span>
+              <span className="news-page-stats-sep">&middot;</span>
               <span className="news-page-stats-item"><strong>{stats.total_sites_known.toLocaleString()}</strong> known sites</span>
             </div>
           )}
@@ -478,7 +469,7 @@ export default function LyraDiscoveriesPage() {
         <div className="lyra-filter-group">
           <span className="lyra-discoveries-filter-label">Status:</span>
           <div className="lyra-discoveries-filter-chips">
-            {([['all', 'All'], ['matched', 'Matched'], ['enriched', 'Enriched'], ['pending', 'Pending'], ['rejected', 'Rejected']] as const).map(([val, label]) => (
+            {([['all', 'All'], ['enriched', 'Enriched'], ['pending', 'Pending'], ['added', 'Added'], ['rejected', 'Rejected']] as const).map(([val, label]) => (
               <button
                 key={val}
                 className={`news-page-chip${statusFilter === val ? ' active' : ''}`}
@@ -532,13 +523,13 @@ export default function LyraDiscoveriesPage() {
       {error && (
         <div className="news-page-error">
           {error}
-          <button onClick={() => fetchDiscoveries(1)}>Retry</button>
+          <button onClick={() => fetchRadar(1)}>Retry</button>
         </div>
       )}
 
       {/* Empty state */}
       {!error && items.length === 0 && !loading && (
-        <div className="news-page-empty">No discoveries yet. Lyra is still watching...</div>
+        <div className="news-page-empty">No radar items yet. Lyra is still watching...</div>
       )}
 
       {/* Grid */}
@@ -546,7 +537,7 @@ export default function LyraDiscoveriesPage() {
         {Array.from({ length: columnCount }, (_, colIdx) => (
           <div key={colIdx} className="lyra-discoveries-column">
             {items.filter((_, i) => i % columnCount === colIdx).map(item => (
-              <DiscoveryCard key={item.id} item={item} />
+              <RadarCard key={item.id} item={item} />
             ))}
           </div>
         ))}

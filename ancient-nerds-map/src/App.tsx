@@ -1835,12 +1835,12 @@ function AppContent() {
                 </svg>
                 News Feed
               </a>
-              <a className="mobile-action-btn" href="/discoveries.html">
+              <a className="mobile-action-btn" href="/radar.html">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <circle cx="11" cy="11" r="8"></circle>
                   <path d="M21 21l-4.35-4.35"></path>
                 </svg>
-                Discoveries
+                Radar
               </a>
             </div>
             <button

@@ -40,7 +40,7 @@ primary_site rules:
 - "confidence": "high" if the topic centers on this site, "medium" if mentioned significantly but not the main focus
 - Set primary_site to null if: the topic is about a technique/method, a general region/empire, multiple sites equally, or no specific site is discussed
 - Use the site's most common English name (e.g. "Pompeii" not "Pompei", "Gobekli Tepe" not "Gobeklitepe")
-- If the video title or description mentions specific site names, use those for the correct spelling
+- If the video title, description, or tags mention specific site names, use those for the correct spelling
 - Do NOT fill for vague references like "somewhere in Egypt" or "a site in Turkey"
 - site_type must be one of: settlement, temple, tomb, fortification, megalithic, cave, rock_art, port, monument, inscription, ruin, archaeological_site
 - period: must be one of the exact values: < 4500 BC, 4500 - 3000 BC, 3000 - 1500 BC, 1500 - 500 BC, 500 BC - 1 AD, 1 - 500 AD, 500 - 1000 AD, 1000 - 1500 AD, 1500+ AD, Unknown. No freetext.
