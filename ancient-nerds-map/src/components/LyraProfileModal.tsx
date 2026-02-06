@@ -40,6 +40,7 @@ interface Props {
 export default function LyraProfileModal({ onClose }: Props) {
   const panelRef = useRef<HTMLDivElement>(null)
   const [stats, setStats] = useState<{ total_items: number; total_videos: number; total_channels: number; latest_item_date: string | null } | null>(null)
+  const [discoveryStats, setDiscoveryStats] = useState<{ total_discoveries: number; total_sites_known: number; total_name_variants: number } | null>(null)
   const [lyraStatus, setLyraStatus] = useState<'online' | 'offline' | 'error'>('offline')
   const [pos, setPos] = useState({ x: 0, y: 0 })
   const [size, setSize] = useState({ w: DEFAULT_W, h: DEFAULT_H })
@@ -70,6 +71,10 @@ export default function LyraProfileModal({ onClose }: Props) {
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setLyraStatus(d.status) })
       .catch(() => setLyraStatus('offline'))
+    fetch(`${config.api.baseUrl}/contributions/lyra/stats`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setDiscoveryStats(d) })
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -187,7 +192,22 @@ export default function LyraProfileModal({ onClose }: Props) {
                 <span className="lyra-poster-status-val">{stats?.total_channels ?? WATCHED_CHANNELS.length}</span>
                 <span className="lyra-poster-status-label">channels watched</span>
               </div>
+              <div className="lyra-poster-status-row">
+                <span className="lyra-poster-status-val">{(discoveryStats?.total_sites_known ?? 0).toLocaleString()}</span>
+                <span className="lyra-poster-status-label">sites known</span>
+              </div>
+              <div className="lyra-poster-status-row">
+                <span className="lyra-poster-status-val">{(discoveryStats?.total_name_variants ?? 0).toLocaleString()}</span>
+                <span className="lyra-poster-status-label">name variants</span>
+              </div>
+              <div className="lyra-poster-status-row lyra-poster-status-highlight">
+                <span className="lyra-poster-status-val">{discoveryStats?.total_discoveries ?? 0}</span>
+                <span className="lyra-poster-status-label">sites discovered</span>
+              </div>
             </div>
+            <a className="lyra-poster-discoveries-btn" href="/lyra-discoveries.html">
+              Analyze Discoveries
+            </a>
           </div>
         </div>
 
