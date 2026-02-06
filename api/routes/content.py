@@ -19,6 +19,12 @@ import time
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from api.services.admin_auth import (
+    AdminPinRequest,
+    AdminPinResponse,
+    get_client_ip,
+    verify_admin_pin,
+)
 from pipeline.connectors import ConnectorRegistry
 from pipeline.connectors.types import ContentItem, ContentType
 
@@ -28,13 +34,6 @@ router = APIRouter()
 # ============================================================================
 # Refresh Protection Configuration
 # ============================================================================
-
-from api.services.admin_auth import (
-    AdminPinRequest,
-    AdminPinResponse,
-    get_client_ip,
-    verify_admin_pin,
-)
 
 # Rate limiting: track last refresh time per IP
 _refresh_timestamps: dict[str, float] = {}

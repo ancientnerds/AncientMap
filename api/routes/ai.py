@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 from api.config.ai_modes import DEFAULT_MODE, get_all_modes, get_mode_config
 from api.services.access_control import get_access_control
 from api.services.admin_auth import get_client_ip
+from api.services.turnstile import verify_turnstile as _verify_turnstile
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +37,6 @@ SESSION_TTL = int(os.getenv("AI_SESSION_TTL", "3600"))  # 1 hour default
 _failed_attempts: dict[str, dict] = {}  # {ip: {"count": int, "locked_until": datetime}}
 LOCKOUT_THRESHOLD = 3  # Failed attempts before lockout
 LOCKOUT_DURATION = 3600  # 1 hour in seconds
-
-from api.services.turnstile import verify_turnstile as _verify_turnstile
 
 
 # ============================================================================
