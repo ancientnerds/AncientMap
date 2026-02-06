@@ -113,6 +113,12 @@ def main() -> None:
             EXCEPTION WHEN duplicate_table THEN NULL;
             END $$
         """))
+        # Enable pg_trgm for fuzzy matching (used by discoveries API)
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_usn_name_trgm
+            ON unified_site_names USING gin (name_normalized gin_trgm_ops)
+        """))
         # Pipeline heartbeat table (for LIVE status on frontend)
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS pipeline_heartbeats (
