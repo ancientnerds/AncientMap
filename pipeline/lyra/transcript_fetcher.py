@@ -304,10 +304,11 @@ def backfill_video_descriptions(settings: LyraSettings, max_per_cycle: int = 10)
     backfilled = 0
 
     with get_session() as session:
+        # Match NULL or empty string (previous runs may have set "" on failure)
         videos = (
             session.query(NewsVideo)
             .filter(
-                NewsVideo.description.is_(None),
+                (NewsVideo.description.is_(None)) | (NewsVideo.description == ""),
                 NewsVideo.status != "skipped",
             )
             .limit(max_per_cycle)
@@ -315,6 +316,7 @@ def backfill_video_descriptions(settings: LyraSettings, max_per_cycle: int = 10)
         )
 
         if not videos:
+            logger.info("No videos need description backfill")
             return 0
 
         logger.info(f"Backfilling descriptions for {len(videos)} videos")
@@ -326,8 +328,7 @@ def backfill_video_descriptions(settings: LyraSettings, max_per_cycle: int = 10)
                 backfilled += 1
                 logger.info(f"  Backfilled: {video.title}")
             else:
-                video.description = ""
-                logger.info(f"  No description available: {video.title}")
+                logger.info(f"  No description available: {video.title} (will retry next cycle)")
 
     logger.info(f"Backfilled {backfilled} video descriptions")
     return backfilled

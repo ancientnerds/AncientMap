@@ -169,6 +169,23 @@ def main() -> None:
             WHERE id = 'lyra'
         """))
 
+        # One-time reset: re-enrich discoveries that were processed without
+        # video descriptions. Uses enrichment_data flag to avoid repeating.
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET enrichment_status = 'pending', last_facts_hash = NULL
+            WHERE source = 'lyra'
+              AND enrichment_status = 'enriched'
+              AND promoted_site_id IS NULL
+              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v2_reset'))
+        """))
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v2_reset": true}'::jsonb
+            WHERE source = 'lyra'
+              AND promoted_site_id IS NULL
+        """))
+
         conn.commit()
 
     # Seed channels
