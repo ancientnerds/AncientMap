@@ -41,6 +41,10 @@ interface AggregatedDiscovery {
   period_name: string | null
   thumbnail_url: string | null
   wikipedia_url: string | null
+  lat: number | null
+  lon: number | null
+  description: string | null
+  wikidata_id: string | null
   mention_count: number
   facts: string[]
   videos: VideoReference[]
@@ -67,7 +71,7 @@ interface LyraStats {
   total_sites_known: number
 }
 
-type StatusFilter = 'all' | 'matched' | 'enriched' | 'pending'
+type StatusFilter = 'all' | 'matched' | 'enriched' | 'pending' | 'rejected'
 
 function formatTimestamp(seconds: number): string {
   if (!seconds || seconds <= 0) return ''
@@ -89,6 +93,10 @@ function StatusPill({ status }: { status: string }) {
       label = 'Enriched'
       cls = 'lyra-status-enriched'
       break
+    case 'rejected':
+      label = 'Rejected'
+      cls = 'lyra-status-rejected'
+      break
     default:
       label = 'Processing'
       cls = 'lyra-status-pending'
@@ -96,98 +104,69 @@ function StatusPill({ status }: { status: string }) {
   return <span className={`lyra-status-pill ${cls}`}>{label}</span>
 }
 
+const SCORE_WEIGHTS = [
+  { key: 'name', label: 'Name', points: 25, check: () => true },
+  { key: 'coords', label: 'Coords', points: 20, check: (d: AggregatedDiscovery) => d.lat != null && d.lon != null },
+  { key: 'country', label: 'Country', points: 10, check: (d: AggregatedDiscovery) => !!d.country },
+  { key: 'category', label: 'Category', points: 10, check: (d: AggregatedDiscovery) => !!d.site_type },
+  { key: 'period', label: 'Period', points: 10, check: (d: AggregatedDiscovery) => !!d.period_name },
+  { key: 'desc', label: 'Desc', points: 10, check: (d: AggregatedDiscovery) => !!d.description && d.description.length >= 50 },
+  { key: 'wiki', label: 'Wiki URL', points: 5, check: (d: AggregatedDiscovery) => !!d.wikipedia_url },
+  { key: 'thumb', label: 'Thumb', points: 5, check: (d: AggregatedDiscovery) => !!d.thumbnail_url },
+  { key: 'wikidata', label: 'Wikidata', points: 5, check: (d: AggregatedDiscovery) => !!d.wikidata_id },
+] as const
+
+function formatCoord(value: number, pos: string, neg: string): string {
+  const dir = value >= 0 ? pos : neg
+  return `${Math.abs(value).toFixed(4)}\u00B0 ${dir}`
+}
+
+function scoreColor(pct: number): string {
+  // 0% = red (hsl 0), 100% = green (hsl 120)
+  const hue = Math.round((pct / 100) * 120)
+  return `hsl(${hue}, 72%, 55%)`
+}
+
+function ScoreBreakdown({ item }: { item: AggregatedDiscovery }) {
+  let earned = 0
+  for (const w of SCORE_WEIGHTS) {
+    if (w.check(item)) earned += w.points
+  }
+  const pct = Math.round((earned / 100) * 100)
+
+  return (
+    <div className="lyra-score-section">
+      <div className="lyra-score-header">
+        <span className="lyra-discovery-percentage" style={{ color: scoreColor(pct) }}>{pct}%</span>
+        <span className="lyra-score-sublabel">enrichment score</span>
+      </div>
+      <div className="lyra-score-breakdown">
+        {SCORE_WEIGHTS.map(w => {
+          const filled = w.check(item)
+          return (
+            <div key={w.key} className={`lyra-score-bar ${filled ? 'lyra-score-bar-filled' : ''}`}>
+              <span className="lyra-score-label">{w.label}</span>
+              <span className="lyra-score-points">{w.points}</span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function DiscoveryCard({ item }: { item: AggregatedDiscovery }) {
   const [factsExpanded, setFactsExpanded] = useState(false)
-  const VISIBLE_FACTS = 2
-
-  const visibleFacts = factsExpanded ? item.facts : item.facts.slice(0, VISIBLE_FACTS)
-  const hiddenCount = item.facts.length - VISIBLE_FACTS
-
-  // Hero: matched site with thumbnail, or enrichment thumbnail, or best_match fallback
-  const showMatchedHero = item.matched_site_id && item.thumbnail_url
-  const showBestMatchHero = !item.matched_site_id && item.best_match?.thumbnail_url
+  const [videosExpanded, setVideosExpanded] = useState(false)
+  const [descExpanded, setDescExpanded] = useState(false)
 
   return (
     <div className="lyra-discovery-card">
-      {/* Hero: matched site */}
-      {showMatchedHero && (
-        <div className="lyra-discovery-hero">
-          <img
-            src={item.thumbnail_url!}
-            alt=""
-            className="lyra-hero-thumb"
-            loading="lazy"
-          />
-          <div className="lyra-hero-info">
-            <span className="lyra-hero-label">Matched site:</span>
-            <a
-              href={`/?site=${item.matched_site_id}`}
-              className="lyra-hero-name"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {item.matched_site_name || item.display_name}
-            </a>
-            {item.matched_source && (
-              <span className="lyra-hero-source">via {item.matched_source}</span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Hero: enrichment thumbnail (no matched site) */}
-      {!showMatchedHero && !showBestMatchHero && item.thumbnail_url && !item.matched_site_id && (
-        <div className="lyra-discovery-hero">
-          <img
-            src={item.thumbnail_url}
-            alt=""
-            className="lyra-hero-thumb"
-            loading="lazy"
-          />
-        </div>
-      )}
-
-      {/* Hero: best_match fallback for pending items */}
-      {showBestMatchHero && (
-        <div className="lyra-discovery-hero">
-          <img
-            src={item.best_match!.thumbnail_url!}
-            alt=""
-            className="lyra-hero-thumb"
-            loading="lazy"
-          />
-          <div className="lyra-hero-info">
-            <span className="lyra-hero-label">Possible match:</span>
-            <a
-              href={`/?site=${item.best_match!.site_id}`}
-              className="lyra-hero-name"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {item.best_match!.name}
-            </a>
-            {item.best_match!.wikipedia_url && (
-              <a
-                href={item.best_match!.wikipedia_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="lyra-hero-wiki"
-              >
-                Wikipedia
-              </a>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Header with name, score, status pill, and mentions */}
+      {/* 1. Name + status/mentions header */}
       <div className="lyra-discovery-header">
         <h3 className="lyra-discovery-name">{item.display_name}</h3>
         <div className="lyra-discovery-header-badges">
           <StatusPill status={item.enrichment_status} />
-          <span className="lyra-discovery-score" title="Enrichment score">
-            {item.enrichment_score}
-          </span>
           {item.mention_count > 1 && (
             <span className="lyra-discovery-mentions">
               {item.mention_count}x
@@ -196,20 +175,9 @@ function DiscoveryCard({ item }: { item: AggregatedDiscovery }) {
         </div>
       </div>
 
-      {/* Metadata row: country, site type, period */}
-      {(item.country || item.site_type || item.period_name) && (
+      {/* 2. Category + Period badges */}
+      {(item.site_type || item.period_name) && (
         <div className="lyra-metadata-row">
-          {item.country && (
-            <span className="lyra-metadata-chip">
-              {(() => {
-                const flagUrl = getCountryFlatFlagUrl(item.country)
-                return flagUrl ? (
-                  <img src={flagUrl} alt="" className="lyra-discovery-flag" />
-                ) : null
-              })()}
-              {item.country}
-            </span>
-          )}
           {item.site_type && (
             <span className="lyra-metadata-chip">{item.site_type}</span>
           )}
@@ -219,7 +187,44 @@ function DiscoveryCard({ item }: { item: AggregatedDiscovery }) {
         </div>
       )}
 
-      {/* Wikipedia link */}
+      {/* 3. Country with flag */}
+      {item.country && (
+        <div className="lyra-discovery-country-row">
+          {(() => {
+            const flagUrl = getCountryFlatFlagUrl(item.country)
+            return flagUrl ? (
+              <img src={flagUrl} alt="" className="lyra-discovery-flag" />
+            ) : null
+          })()}
+          <span>{item.country}</span>
+        </div>
+      )}
+
+      {/* 4. Coordinates */}
+      {item.lat != null && item.lon != null && (
+        <div className="lyra-discovery-coords">
+          {formatCoord(item.lat, 'N', 'S')}, {formatCoord(item.lon, 'E', 'W')}
+        </div>
+      )}
+
+      {/* 5. Description */}
+      {item.description && (
+        <div className="lyra-discovery-description-section">
+          <p className={`lyra-discovery-description ${!descExpanded ? 'lyra-description-clamped' : ''}`}>
+            {item.description}
+          </p>
+          {item.description.length > 180 && (
+            <button
+              className="lyra-discovery-expand"
+              onClick={() => setDescExpanded(!descExpanded)}
+            >
+              {descExpanded ? 'Show less' : 'Show more'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* 6. Wikipedia link */}
       {item.wikipedia_url && (
         <a
           href={item.wikipedia_url}
@@ -234,56 +239,77 @@ function DiscoveryCard({ item }: { item: AggregatedDiscovery }) {
         </a>
       )}
 
-      {/* Facts list */}
+      {/* 7. Thumbnail — full card width */}
+      {item.thumbnail_url && (
+        <div className="lyra-discovery-image-wrap">
+          <img
+            src={item.thumbnail_url}
+            alt=""
+            className="lyra-discovery-image"
+            loading="lazy"
+          />
+        </div>
+      )}
+
+      {/* 8. Score breakdown */}
+      <ScoreBreakdown item={item} />
+
+      {/* 9. Facts — collapsed by default */}
       {item.facts.length > 0 && (
-        <div className="lyra-discovery-facts">
-          {visibleFacts.map((fact, i) => (
-            <div key={i} className="lyra-discovery-fact">{fact}</div>
-          ))}
-          {!factsExpanded && hiddenCount > 0 && (
-            <button
-              className="lyra-discovery-expand"
-              onClick={() => setFactsExpanded(true)}
-            >
-              Show {hiddenCount} more
-            </button>
-          )}
-          {factsExpanded && item.facts.length > VISIBLE_FACTS && (
-            <button
-              className="lyra-discovery-expand"
-              onClick={() => setFactsExpanded(false)}
-            >
-              Show less
-            </button>
+        <div className="lyra-collapsible">
+          <button
+            className="lyra-collapsible-header"
+            onClick={() => setFactsExpanded(!factsExpanded)}
+          >
+            <span className="lyra-collapsible-arrow">{factsExpanded ? '\u25BE' : '\u25B8'}</span>
+            Facts ({item.facts.length})
+          </button>
+          {factsExpanded && (
+            <div className="lyra-discovery-facts">
+              {item.facts.map((fact, i) => (
+                <div key={i} className="lyra-discovery-fact">{fact}</div>
+              ))}
+            </div>
           )}
         </div>
       )}
 
-      {/* Video links */}
+      {/* 10. Videos — collapsed by default */}
       {item.videos.length > 0 && (
-        <div className="lyra-discovery-videos">
-          {item.videos.map((v) => (
-            <a
-              key={v.video_id}
-              href={v.deep_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="lyra-discovery-video-chip"
-              title={v.channel_name}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-              </svg>
-              <span className="lyra-video-channel">{v.channel_name}</span>
-              {v.timestamp_seconds > 0 && (
-                <span className="lyra-video-timestamp">{formatTimestamp(v.timestamp_seconds)}</span>
-              )}
-            </a>
-          ))}
+        <div className="lyra-collapsible">
+          <button
+            className="lyra-collapsible-header"
+            onClick={() => setVideosExpanded(!videosExpanded)}
+          >
+            <span className="lyra-collapsible-arrow">{videosExpanded ? '\u25BE' : '\u25B8'}</span>
+            Videos ({item.unique_videos} from {item.unique_channels} channel{item.unique_channels !== 1 ? 's' : ''})
+          </button>
+          {videosExpanded && (
+            <div className="lyra-discovery-videos">
+              {item.videos.map((v) => (
+                <a
+                  key={v.video_id}
+                  href={v.deep_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="lyra-discovery-video-chip"
+                  title={v.channel_name}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                  </svg>
+                  <span className="lyra-video-channel">{v.channel_name}</span>
+                  {v.timestamp_seconds > 0 && (
+                    <span className="lyra-video-timestamp">{formatTimestamp(v.timestamp_seconds)}</span>
+                  )}
+                </a>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Suggestions (only for items without a matched site) */}
+      {/* 11. Suggestions (only for items without a matched site) */}
       {!item.matched_site_id && !item.best_match && item.suggestions.length > 0 && (
         <div className="lyra-discovery-suggestions">
           <span className="lyra-suggestions-label">Similar sites:</span>
@@ -308,13 +334,6 @@ function DiscoveryCard({ item }: { item: AggregatedDiscovery }) {
           ))}
         </div>
       )}
-
-      {/* Stats row */}
-      <div className="lyra-discovery-stats">
-        <span>{item.unique_videos} video{item.unique_videos !== 1 ? 's' : ''}</span>
-        <span className="lyra-stats-sep">·</span>
-        <span>{item.unique_channels} channel{item.unique_channels !== 1 ? 's' : ''}</span>
-      </div>
     </div>
   )
 }
@@ -462,7 +481,7 @@ export default function LyraDiscoveriesPage() {
         <div className="lyra-filter-group">
           <span className="lyra-discoveries-filter-label">Status:</span>
           <div className="lyra-discoveries-filter-chips">
-            {([['all', 'All'], ['matched', 'Matched'], ['enriched', 'Enriched'], ['pending', 'Pending']] as const).map(([val, label]) => (
+            {([['all', 'All'], ['matched', 'Matched'], ['enriched', 'Enriched'], ['pending', 'Pending'], ['rejected', 'Rejected']] as const).map(([val, label]) => (
               <button
                 key={val}
                 className={`news-page-chip${statusFilter === val ? ' active' : ''}`}
