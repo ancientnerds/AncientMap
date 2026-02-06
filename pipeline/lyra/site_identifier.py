@@ -97,6 +97,11 @@ def identify_and_enrich_sites(settings: LyraSettings) -> int:
         logger.info(f"Processing {len(contributions)} discoveries for identification")
 
         for contribution in contributions:
+            logger.info(
+                f"  [{contribution.name}] status={contribution.enrichment_status}, "
+                f"hash={'set' if contribution.last_facts_hash else 'null'}, "
+                f"mentions={contribution.mention_count}"
+            )
             try:
                 # Each contribution runs in a SAVEPOINT so a failure in one
                 # doesn't poison the session for the rest.
@@ -106,9 +111,14 @@ def identify_and_enrich_sites(settings: LyraSettings) -> int:
                     )
                     if result:
                         processed += 1
+                    else:
+                        logger.info(f"  [{contribution.name}] _process_single returned False")
             except Exception:
                 logger.exception(f"Failed to process contribution {contribution.id}: {contribution.name}")
-                contribution.enrichment_status = "failed"
+                try:
+                    contribution.enrichment_status = "failed"
+                except Exception:
+                    logger.warning(f"  Could not set failed status for {contribution.name}")
 
     logger.info(f"Site identification complete: {processed}/{len(contributions)} processed")
     return processed
@@ -128,10 +138,14 @@ def _process_single(
     # Aggregate facts from all related NewsItems
     facts, video_contexts = _aggregate_facts(session, contribution)
     facts_hash = _compute_facts_hash(facts)
+    logger.info(
+        f"  [{contribution.name}] facts={len(facts)}, videos={len(video_contexts)}, "
+        f"hash_match={contribution.last_facts_hash == facts_hash}"
+    )
 
     # Skip if facts haven't changed since last processing
     if contribution.last_facts_hash == facts_hash and contribution.enrichment_status == "enriched":
-        logger.debug(f"Skipping {contribution.name} — facts unchanged")
+        logger.info(f"  [{contribution.name}] Skipping — facts unchanged")
         return False
 
     contribution.enrichment_status = "enriching"
@@ -139,9 +153,11 @@ def _process_single(
 
     # Get DB candidates via pg_trgm fuzzy matching
     db_candidates = _fetch_db_candidates(session, contribution.name)
+    logger.info(f"  [{contribution.name}] DB candidates: {len(db_candidates)}")
 
     # Get Wikidata candidates
     wikidata_candidates = _search_wikidata(contribution.name)
+    logger.info(f"  [{contribution.name}] Wikidata candidates: {len(wikidata_candidates)}")
 
     # Build and send prompt to Claude Haiku
     prompt = _build_prompt(
