@@ -291,13 +291,13 @@ def main() -> None:
               AND promoted_site_id IS NULL
         """))
 
-        # v6: re-enrich matched items missing wikipedia_url (Wikidata enrichment
-        # for db_match was added after v5 reset already ran on VPS)
+        # v6: re-enrich items missing wikipedia_url (Wikidata enrichment
+        # for db_match was added after earlier resets already ran on VPS)
         conn.execute(text("""
             UPDATE user_contributions
             SET enrichment_status = 'pending', last_facts_hash = NULL
             WHERE source = 'lyra'
-              AND enrichment_status = 'matched'
+              AND enrichment_status IN ('matched', 'failed')
               AND wikipedia_url IS NULL
               AND promoted_site_id IS NULL
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v6_reset'))
@@ -307,6 +307,25 @@ def main() -> None:
             SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v6_reset": true}'::jsonb
             WHERE source = 'lyra'
               AND promoted_site_id IS NULL
+              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v6_reset'))
+        """))
+
+        # v7: retry — v6 flag was stamped prematurely on first deploy
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET enrichment_status = 'pending', last_facts_hash = NULL
+            WHERE source = 'lyra'
+              AND enrichment_status IN ('matched', 'failed')
+              AND wikipedia_url IS NULL
+              AND promoted_site_id IS NULL
+              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v7_reset'))
+        """))
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v7_reset": true}'::jsonb
+            WHERE source = 'lyra'
+              AND promoted_site_id IS NULL
+              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v7_reset'))
         """))
 
         conn.commit()
