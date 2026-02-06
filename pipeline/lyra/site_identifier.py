@@ -205,14 +205,15 @@ def _process_single(
         f"corrected: '{corrected_name}')"
     )
 
-    # Post-processing: if Claude corrected the name (e.g. "Seab Birch" → "Sayburç")
-    # and didn't find a db_match (because pg_trgm couldn't match the garbled name),
-    # search the DB and Wikidata again with the corrected name.
-    if match_type != "db_match" and match_type != "not_a_site" and corrected_name:
+    # Post-processing: re-search with corrected name and validate new_site claims.
+    # Claude often corrects garbled names (e.g. "Seab Birch" → "Sayburç") but can't
+    # search our DB itself, so we re-search with the corrected spelling.
+    if match_type not in ("db_match", "not_a_site") and corrected_name:
         corrected_lower = corrected_name.lower().strip()
         original_lower = contribution.name.lower().strip()
         if corrected_lower != original_lower:
-            logger.info(f"Re-searching DB with corrected name '{corrected_name}'")
+            logger.info(f"Re-searching with corrected name '{corrected_name}'")
+            # Try DB first (strongly preferred — avoids duplicate dots)
             corrected_candidates = _fetch_db_candidates(session, corrected_name)
             if corrected_candidates:
                 best = corrected_candidates[0]
@@ -223,14 +224,33 @@ def _process_single(
                 identification["match_type"] = "db_match"
                 identification["match_id"] = best["site_id"]
                 match_type = "db_match"
-            elif match_type == "new_site":
-                # No DB match, but try Wikidata with the corrected name
+            else:
+                # Try Wikidata with corrected name
                 corrected_wd = _search_wikidata(corrected_name)
                 if corrected_wd:
                     logger.info(f"Found Wikidata match via corrected name: {corrected_wd[0]['label']}")
                     identification["match_type"] = "wikidata_match"
                     identification["match_id"] = corrected_wd[0]["qid"]
                     match_type = "wikidata_match"
+
+    # For new_site: extra validation — search Wikidata with the site name one more time.
+    # With 50k+ DB sites and all of Wikidata, truly unknown sites are very rare.
+    if match_type == "new_site" and corrected_name:
+        wd_retry = _search_wikidata(corrected_name)
+        if wd_retry:
+            # Check if any candidate looks archaeological/historical
+            for candidate in wd_retry:
+                desc = candidate.get("description", "").lower()
+                if any(kw in desc for kw in [
+                    "archaeolog", "ancient", "historic", "ruin", "settlement",
+                    "temple", "tomb", "fort", "monument", "castle", "church",
+                    "mosque", "palace", "site", "mound", "city", "town",
+                ]):
+                    logger.info(f"new_site override: Wikidata match '{candidate['label']}' ({candidate['qid']})")
+                    identification["match_type"] = "wikidata_match"
+                    identification["match_id"] = candidate["qid"]
+                    match_type = "wikidata_match"
+                    break
 
     if match_type == "not_a_site":
         contribution.enrichment_status = "matched"
