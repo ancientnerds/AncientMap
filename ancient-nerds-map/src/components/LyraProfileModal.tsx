@@ -165,6 +165,7 @@ export default function LyraProfileModal({ onClose }: Props) {
           <div className="lyra-poster-banner">AGENT DOSSIER</div>
           <div className="lyra-poster-portrait">
             <img src="/lyra.gif" alt="Lyra Wiskerbyte" />
+            <span className={`lyra-poster-led${lyraStatus !== 'online' ? ' offline' : ''}`} title={lyraStatus === 'online' ? 'Online' : 'Offline'} />
           </div>
           <div className="lyra-poster-name">
             <span className="lyra-poster-name-first">LYRA</span>
@@ -175,10 +176,6 @@ export default function LyraProfileModal({ onClose }: Props) {
             View NFT #001
           </a>
           <div className="lyra-poster-status">
-            <div className={`lyra-poster-status-online${lyraStatus !== 'online' ? ' lyra-poster-status-offline' : ''}`}>
-              <span className="lyra-poster-status-dot" />
-              {lyraStatus === 'online' ? 'ONLINE' : 'OFFLINE'}
-            </div>
             <div className="lyra-poster-status-stats">
               <div className="lyra-poster-status-row">
                 <span className="lyra-poster-status-val">{stats?.total_videos ?? 0}</span>

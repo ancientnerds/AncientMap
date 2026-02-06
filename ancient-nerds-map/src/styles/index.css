@@ -13376,12 +13376,13 @@ body.news-feed-open .empire-borders-window {
 
 /* Portrait */
 .lyra-poster-portrait {
+  position: relative;
   width: 120px;
   height: 120px;
   border: 3px solid rgba(192, 32, 35, 0.5);
   outline: 2px solid rgba(192, 32, 35, 0.15);
   outline-offset: 3px;
-  overflow: hidden;
+  overflow: visible;
   flex-shrink: 0;
 }
 
@@ -13391,6 +13392,25 @@ body.news-feed-open .empire-borders-window {
   object-fit: cover;
   display: block;
   filter: saturate(0.85) contrast(1.1);
+}
+
+.lyra-poster-led {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #00c850;
+  border: 2px solid rgba(10, 26, 31, 0.9);
+  box-shadow: 0 0 8px rgba(0, 200, 80, 0.6);
+  animation: lyra-pulse 2s ease-in-out infinite;
+}
+
+.lyra-poster-led.offline {
+  background: #c83c3c;
+  box-shadow: 0 0 8px rgba(200, 60, 60, 0.4);
+  animation: none;
 }
 
 /* Name - two lines, same visual width */
