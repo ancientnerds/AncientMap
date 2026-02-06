@@ -1,7 +1,9 @@
 """Fetch YouTube transcripts via RSS + youtube-transcript-api, store in PostgreSQL."""
 
+import json
 import logging
 import re
+import subprocess
 import xml.etree.ElementTree as ET
 from datetime import UTC, datetime, timedelta, timezone
 
@@ -256,3 +258,76 @@ def extract_transcript_segment(transcript_text: str, timestamp_range: str, buffe
                 segment_lines.append(line)
 
     return "\n".join(segment_lines) if segment_lines else transcript_text[:2000]
+
+
+def _fetch_description_ytdlp(video_id: str, proxy_url: str | None) -> str | None:
+    """Fetch video description using yt-dlp metadata extraction (no video download)."""
+    yt_url = f"https://www.youtube.com/watch?v={video_id}"
+    cmd = [
+        "yt-dlp",
+        "--dump-json",
+        "--no-download",
+        "--no-warnings",
+        yt_url,
+    ]
+    if proxy_url:
+        cmd.insert(1, "--proxy")
+        cmd.insert(2, proxy_url)
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if result.returncode != 0:
+            logger.warning(f"yt-dlp metadata failed for {video_id}: {result.stderr.strip()[-200:]}")
+            return None
+
+        data = json.loads(result.stdout)
+        return data.get("description", "").strip() or None
+    except subprocess.TimeoutExpired:
+        logger.warning(f"yt-dlp metadata timed out for {video_id}")
+        return None
+    except (json.JSONDecodeError, KeyError):
+        logger.warning(f"yt-dlp returned invalid JSON for {video_id}")
+        return None
+
+
+def backfill_video_descriptions(settings: LyraSettings, max_per_cycle: int = 10) -> int:
+    """Backfill descriptions for existing videos using yt-dlp.
+
+    Videos fetched before the description-parsing change have NULL descriptions.
+    This fetches them via yt-dlp metadata extraction (no video download needed).
+
+    Returns number of descriptions backfilled.
+    """
+    from pipeline.lyra.screenshot_extractor import get_proxy_url
+
+    proxy_url = get_proxy_url(settings)
+    backfilled = 0
+
+    with get_session() as session:
+        videos = (
+            session.query(NewsVideo)
+            .filter(
+                NewsVideo.description.is_(None),
+                NewsVideo.status != "skipped",
+            )
+            .limit(max_per_cycle)
+            .all()
+        )
+
+        if not videos:
+            return 0
+
+        logger.info(f"Backfilling descriptions for {len(videos)} videos")
+
+        for video in videos:
+            description = _fetch_description_ytdlp(video.id, proxy_url)
+            if description:
+                video.description = description
+                backfilled += 1
+                logger.info(f"  Backfilled: {video.title}")
+            else:
+                video.description = ""
+                logger.info(f"  No description available: {video.title}")
+
+    logger.info(f"Backfilled {backfilled} video descriptions")
+    return backfilled
