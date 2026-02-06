@@ -82,7 +82,7 @@ def identify_and_enrich_sites(settings: LyraSettings) -> int:
         # Get pending discoveries ordered by mention count (best data first)
         contributions = session.query(UserContribution).filter(
             UserContribution.source == "lyra",
-            UserContribution.enrichment_status.in_(["pending", "enriched", "enriching"]),
+            UserContribution.enrichment_status.in_(["pending", "enriched", "enriching", "rejected"]),
             UserContribution.promoted_site_id.is_(None),
         ).order_by(
             UserContribution.mention_count.desc()
@@ -144,15 +144,28 @@ def _process_single(
     )
 
     # Skip if facts haven't changed since last processing
-    if contribution.last_facts_hash == facts_hash and contribution.enrichment_status == "enriched":
-        logger.info(f"  [{contribution.name}] Skipping — facts unchanged")
+    if contribution.last_facts_hash == facts_hash and contribution.enrichment_status in ("enriched", "rejected"):
+        logger.info(f"  [{contribution.name}] Skipping — facts unchanged (status={contribution.enrichment_status})")
         return False
+
+    # Inject rejection context so AI avoids the same bad match
+    if contribution.enrichment_status == "rejected" and contribution.enrichment_data:
+        rejected = contribution.enrichment_data.get("rejected_match", {})
+        if rejected:
+            rejection_note = (
+                f"PREVIOUSLY REJECTED: Site '{rejected.get('site_name', '?')}' in "
+                f"{rejected.get('site_country', '?')} was rejected because video facts "
+                f"indicate {rejected.get('contribution_country', '?')}. "
+                f"Do NOT re-match this site."
+            )
+            facts.append(rejection_note)
+            logger.info(f"  [{contribution.name}] Injected rejection context")
 
     contribution.enrichment_status = "enriching"
     contribution.last_facts_hash = facts_hash
 
     # Get DB candidates via pg_trgm fuzzy matching
-    db_candidates = _fetch_db_candidates(session, contribution.name)
+    db_candidates = _fetch_db_candidates(session, contribution.name, threshold=settings.pg_trgm_threshold)
     if db_candidates:
         top3 = ", ".join(f"{c['name']}({c['similarity']})" for c in db_candidates[:3])
         logger.info(f"  [{contribution.name}] DB candidates: {len(db_candidates)} (top: {top3})")
@@ -197,11 +210,19 @@ def _process_single(
         contribution.enrichment_status = "failed"
         return False
 
+    # Escalate low/medium confidence to Sonnet for review
+    confidence = identification.get("confidence", "unknown")
+    if confidence in ("low", "medium"):
+        sonnet_result = _escalate_to_sonnet(client, settings, prompt, response_text, identification)
+        if sonnet_result:
+            identification = sonnet_result
+
     match_type = identification.get("match_type")
     corrected_name = identification.get("site_name", "")
+    confidence = identification.get("confidence", "unknown")
     logger.info(
         f"Identified '{contribution.name}' as {match_type} "
-        f"(confidence: {identification.get('confidence', 'unknown')}, "
+        f"(confidence: {confidence}, "
         f"corrected: '{corrected_name}')"
     )
 
@@ -214,7 +235,7 @@ def _process_single(
         if corrected_lower != original_lower:
             logger.info(f"Re-searching with corrected name '{corrected_name}'")
             # Try DB first (strongly preferred — avoids duplicate dots)
-            corrected_candidates = _fetch_db_candidates(session, corrected_name)
+            corrected_candidates = _fetch_db_candidates(session, corrected_name, threshold=settings.pg_trgm_threshold)
             if corrected_candidates:
                 best = corrected_candidates[0]
                 logger.info(
@@ -314,7 +335,7 @@ def _compute_facts_hash(facts: list[str], video_contexts: list[dict] | None = No
     return hashlib.sha256(content.encode()).hexdigest()
 
 
-def _fetch_db_candidates(session: Session, name: str, limit: int = 10) -> list[dict]:
+def _fetch_db_candidates(session: Session, name: str, limit: int = 10, threshold: float = 0.35) -> list[dict]:
     """Fetch top DB candidate matches via pg_trgm fuzzy matching."""
     normalized = normalize_name(name)
     if not normalized or len(normalized) < 3:
@@ -325,7 +346,7 @@ def _fetch_db_candidates(session: Session, name: str, limit: int = 10) -> list[d
         # Without this, a caught exception leaves PostgreSQL in "aborted" state
         # and all subsequent SQL in the same session fails with InFailedSqlTransaction.
         with session.begin_nested():
-            session.execute(text("SET LOCAL pg_trgm.word_similarity_threshold = 0.25"))
+            session.execute(text("SET LOCAL pg_trgm.word_similarity_threshold = :threshold"), {"threshold": threshold})
             rows = session.execute(text("""
                 SELECT usn.site_id, us.name AS site_name,
                        us.country, us.source_id,
@@ -592,6 +613,87 @@ def _parse_identification(response_text: str) -> dict | None:
         return None
 
 
+ESCALATION_PROMPT_TEMPLATE = """You are a senior archaeological site identification reviewer.
+
+A junior model (Haiku) was asked to identify an archaeological site from YouTube video captions. It returned a {confidence}-confidence answer. Your job is to REVIEW its work and either confirm or override its decision.
+
+## Original Prompt Given to Haiku
+<original_prompt>
+{original_prompt}
+</original_prompt>
+
+## Haiku's Response
+<haiku_response>
+{haiku_response}
+</haiku_response>
+
+## Your Task
+1. Check if Haiku's country cross-check reasoning is sound — did it verify the candidate's country matches the video facts?
+2. Check if the match_type makes sense given the evidence
+3. Check if the confidence should be higher or lower
+4. If you disagree with Haiku, provide a corrected JSON response
+
+CRITICAL: Geographic mismatches are HARD DISQUALIFIERS. If Haiku matched a site in country X but the video facts clearly indicate country Y, you MUST override to not_a_site or new_site.
+
+If you agree with Haiku's answer, return the exact same JSON.
+If you disagree, return a corrected JSON with the same schema.
+
+Return ONLY valid JSON (same schema as Haiku's response).
+"""
+
+
+def _escalate_to_sonnet(
+    client: anthropic.Anthropic,
+    settings: LyraSettings,
+    original_prompt: str,
+    haiku_response: str,
+    haiku_identification: dict,
+) -> dict | None:
+    """Escalate a low/medium confidence identification to Sonnet for review."""
+    confidence = haiku_identification.get("confidence", "unknown")
+    logger.info(f"Escalating to Sonnet (confidence={confidence})")
+
+    prompt = ESCALATION_PROMPT_TEMPLATE.format(
+        confidence=confidence,
+        original_prompt=original_prompt,
+        haiku_response=haiku_response,
+    )
+
+    try:
+        response = client.messages.create(
+            model=settings.model_identify_escalation,
+            max_tokens=1024,
+            temperature=0.0,
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except anthropic.APIError as e:
+        logger.error(f"Sonnet escalation API error: {e}")
+        return None
+
+    if not response.content or not hasattr(response.content[0], "text"):
+        logger.warning("Empty Sonnet escalation response")
+        return None
+
+    result = _parse_identification(response.content[0].text)
+    if not result:
+        logger.warning("Failed to parse Sonnet escalation response")
+        return None
+
+    sonnet_match = result.get("match_type")
+    sonnet_confidence = result.get("confidence")
+    haiku_match = haiku_identification.get("match_type")
+
+    if sonnet_match != haiku_match:
+        logger.info(
+            f"Sonnet overrode Haiku: {haiku_match} -> {sonnet_match} "
+            f"(confidence: {sonnet_confidence})"
+        )
+    else:
+        logger.info(f"Sonnet confirmed Haiku's {haiku_match} (confidence: {sonnet_confidence})")
+
+    return result
+
+
 def _handle_db_match(
     session: Session,
     contribution: UserContribution,
@@ -614,6 +716,48 @@ def _handle_db_match(
         contribution.enrichment_status = "failed"
         return False
 
+    # Post-match country validation: reject if countries clearly mismatch
+    confidence = identification.get("confidence", "unknown")
+    if confidence != "high" and site.country and contribution.country:
+        site_country = site.country.strip().lower()
+        contrib_country = contribution.country.strip().lower()
+        if site_country != contrib_country:
+            logger.warning(
+                f"Country mismatch for '{contribution.name}': "
+                f"site '{site.name}' is in '{site.country}' but "
+                f"video facts indicate '{contribution.country}' — rejecting"
+            )
+            contribution.enrichment_status = "rejected"
+            contribution.enrichment_data = {
+                "rejected_match": {
+                    "site_id": str(site.id),
+                    "site_name": site.name,
+                    "site_country": site.country,
+                    "contribution_country": contribution.country,
+                    "reason": "country_mismatch",
+                    "identification": identification,
+                },
+            }
+            return False
+
+    # Enrich contribution from matched site data (fills gaps the contribution lacks)
+    if not contribution.lat and site.lat:
+        contribution.lat = site.lat
+    if not contribution.lon and site.lon:
+        contribution.lon = site.lon
+    if not contribution.description and site.description:
+        contribution.description = site.description
+    if not contribution.thumbnail_url and site.thumbnail_url:
+        contribution.thumbnail_url = site.thumbnail_url
+    if not contribution.country and site.country:
+        contribution.country = site.country
+    if not contribution.site_type and site.site_type:
+        contribution.site_type = site.site_type
+    if not contribution.period_name and site.period_name:
+        contribution.period_name = site.period_name
+    if not contribution.wikipedia_url and site.source_url:
+        contribution.wikipedia_url = site.source_url
+
     # Update all related NewsItems to point to this site
     name_lower = contribution.name.lower().strip()
     updated = session.query(NewsItem).filter(
@@ -626,6 +770,7 @@ def _handle_db_match(
 
     contribution.enrichment_status = "matched"
     contribution.enrichment_data = {"identification": identification}
+    contribution.score = _compute_score(contribution)
     logger.info(f"DB match: '{contribution.name}' -> '{site.name}' ({updated} items linked)")
     return True
 
