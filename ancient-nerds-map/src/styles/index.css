@@ -13396,20 +13396,25 @@ body.news-feed-open .empire-borders-window {
 
 .lyra-poster-led {
   position: absolute;
-  top: -4px;
-  right: -4px;
-  width: 12px;
-  height: 12px;
+  bottom: 6px;
+  right: 6px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  background: #00c850;
-  border: 2px solid rgba(10, 26, 31, 0.9);
-  box-shadow: 0 0 8px rgba(0, 200, 80, 0.6);
-  animation: lyra-pulse 2s ease-in-out infinite;
+  background: #00e060;
+  border: 1.5px solid rgba(0, 0, 0, 0.6);
+  box-shadow:
+    0 0 6px rgba(0, 224, 96, 0.7),
+    0 0 14px rgba(0, 224, 96, 0.3),
+    inset 0 0 3px rgba(255, 255, 255, 0.3);
+  animation: lyra-led-glow 2.5s ease-in-out infinite;
 }
 
 .lyra-poster-led.offline {
   background: #c83c3c;
-  box-shadow: 0 0 8px rgba(200, 60, 60, 0.4);
+  box-shadow:
+    0 0 6px rgba(200, 60, 60, 0.5),
+    0 0 14px rgba(200, 60, 60, 0.2);
   animation: none;
 }
 
@@ -13513,6 +13518,21 @@ body.news-feed-open .empire-borders-window {
 @keyframes lyra-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
+}
+
+@keyframes lyra-led-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 6px rgba(0, 224, 96, 0.7),
+      0 0 14px rgba(0, 224, 96, 0.3),
+      inset 0 0 3px rgba(255, 255, 255, 0.3);
+  }
+  50% {
+    box-shadow:
+      0 0 3px rgba(0, 224, 96, 0.4),
+      0 0 8px rgba(0, 224, 96, 0.15),
+      inset 0 0 2px rgba(255, 255, 255, 0.15);
+  }
 }
 
 .lyra-poster-status-offline {
@@ -14287,4 +14307,32 @@ body.news-feed-open .empire-borders-window {
   .lyra-filter-group {
     flex-wrap: wrap;
   }
+}
+
+/* Scroll to top button */
+.lyra-scroll-top {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  background: rgba(10, 26, 31, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: rgba(0, 240, 255, 0.8);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.lyra-scroll-top:hover {
+  border-color: rgba(0, 240, 255, 0.6);
+  color: rgba(0, 240, 255, 1);
+  box-shadow: 0 4px 16px rgba(0, 240, 255, 0.15);
 }

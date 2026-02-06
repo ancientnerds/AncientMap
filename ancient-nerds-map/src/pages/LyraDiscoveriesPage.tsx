@@ -224,6 +224,13 @@ export default function LyraDiscoveriesPage() {
   const sentinelRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
   const [columnCount, setColumnCount] = useState(3)
+  const [showScrollTop, setShowScrollTop] = useState(false)
+
+  useEffect(() => {
+    const onScroll = () => setShowScrollTop(window.scrollY > 400)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   useEffect(() => {
     const el = gridRef.current
@@ -400,6 +407,19 @@ export default function LyraDiscoveriesPage() {
         <div className="news-page-loading">Loading...</div>
       )}
       <div ref={sentinelRef} style={{ height: 1 }} />
+
+      {/* Scroll to top button */}
+      {showScrollTop && (
+        <button
+          className="lyra-scroll-top"
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          aria-label="Scroll to top"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 19V5M5 12l7-7 7 7" />
+          </svg>
+        </button>
+      )}
 
       {showLyraProfile && (
         <Suspense fallback={null}>
