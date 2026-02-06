@@ -224,7 +224,7 @@ def _aggregate_facts(session: Session, contribution: UserContribution) -> tuple[
 
 def _compute_facts_hash(facts: list[str]) -> str:
     """Compute SHA-256 hash of sorted, deduplicated facts."""
-    unique_facts = sorted(set(str(f) for f in facts))
+    unique_facts = sorted({str(f) for f in facts})
     content = "|".join(unique_facts)
     return hashlib.sha256(content.encode()).hexdigest()
 
