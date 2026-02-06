@@ -61,70 +61,62 @@ def find_similar_sites_batch(
     db: Session, names: list[str], limit_per_name: int = 5,
 ) -> dict[str, list[dict]]:
     """
-    Find similar sites for multiple names in a single query using pg_trgm.
+    Find similar sites for multiple names using pg_trgm.
+
+    Uses the <% operator (not the word_similarity function) so PostgreSQL
+    can use the GIN trigram index on unified_site_names.name_normalized.
 
     Returns a dict mapping each input name to its top matches.
     """
     if not names:
         return {}
 
-    # Single query: cross join input names with unified_site_names, rank by similarity
-    result = db.execute(text("""
-        WITH input_names AS (
-            SELECT unnest(:names::text[]) AS query_name
-        ),
-        ranked AS (
-            SELECT
-                inp.query_name,
-                usn.site_id,
-                us.name AS site_name,
-                us.thumbnail_url,
-                us.country,
-                us.source_id,
-                us.source_url,
-                word_similarity(inp.query_name, usn.name_normalized) AS similarity,
-                ROW_NUMBER() OVER (
-                    PARTITION BY inp.query_name, usn.site_id
-                    ORDER BY word_similarity(inp.query_name, usn.name_normalized) DESC
-                ) AS rn_site,
-                ROW_NUMBER() OVER (
-                    PARTITION BY inp.query_name
-                    ORDER BY word_similarity(inp.query_name, usn.name_normalized) DESC
-                ) AS rn_global
-            FROM input_names inp
-            CROSS JOIN LATERAL (
-                SELECT usn2.site_id, usn2.name_normalized
-                FROM unified_site_names usn2
-                WHERE word_similarity(inp.query_name, usn2.name_normalized) >= 0.3
-                ORDER BY word_similarity(inp.query_name, usn2.name_normalized) DESC
-                LIMIT 20
-            ) usn
-            JOIN unified_sites us ON us.id = usn.site_id
-        )
-        SELECT query_name, site_id, site_name, thumbnail_url, country,
-               source_id, source_url, similarity
-        FROM ranked
-        WHERE rn_site = 1 AND rn_global <= :limit
-        ORDER BY query_name, similarity DESC
-    """), {"names": names, "limit": limit_per_name})
+    # Set threshold so <% operator filters at 0.3 similarity
+    db.execute(text("SET pg_trgm.word_similarity_threshold = 0.3"))
+
+    per_name_query = text("""
+        SELECT usn.site_id, us.name AS site_name, us.thumbnail_url,
+               us.country, us.source_id, us.source_url,
+               word_similarity(:qname, usn.name_normalized) AS similarity
+        FROM unified_site_names usn
+        JOIN unified_sites us ON us.id = usn.site_id
+        WHERE :qname <% usn.name_normalized
+        ORDER BY usn.name_normalized <->> :qname
+        LIMIT :limit
+    """)
 
     matches_by_name: dict[str, list[dict]] = {n: [] for n in names}
-    for row in result:
-        wikipedia_url = None
-        if row.source_id == "wikidata" and row.source_url:
-            wikipedia_url = row.source_url
-        elif row.site_name:
-            wiki_name = row.site_name.replace(" ", "_")
-            wikipedia_url = f"https://en.wikipedia.org/wiki/{wiki_name}"
 
-        matches_by_name[row.query_name].append({
-            "site_id": str(row.site_id),
-            "name": row.site_name,
-            "similarity": round(row.similarity, 2),
-            "thumbnail_url": row.thumbnail_url,
-            "wikipedia_url": wikipedia_url,
-            "country": row.country,
-        })
+    for qname in names:
+        rows = db.execute(per_name_query, {
+            "qname": qname, "limit": limit_per_name * 4,
+        }).fetchall()
+
+        seen_site_ids: set[str] = set()
+        for row in rows:
+            sid = str(row.site_id)
+            if sid in seen_site_ids:
+                continue
+            seen_site_ids.add(sid)
+
+            wikipedia_url = None
+            if row.source_id == "wikidata" and row.source_url:
+                wikipedia_url = row.source_url
+            elif row.site_name:
+                wiki_name = row.site_name.replace(" ", "_")
+                wikipedia_url = f"https://en.wikipedia.org/wiki/{wiki_name}"
+
+            matches_by_name[qname].append({
+                "site_id": sid,
+                "name": row.site_name,
+                "similarity": round(row.similarity, 2),
+                "thumbnail_url": row.thumbnail_url,
+                "wikipedia_url": wikipedia_url,
+                "country": row.country,
+            })
+
+            if len(matches_by_name[qname]) >= limit_per_name:
+                break
 
     return matches_by_name
 
