@@ -25,6 +25,100 @@ from pipeline.database import get_db
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+
+# =============================================================================
+# Lyra Stats & Discoveries Endpoints
+# =============================================================================
+
+
+@router.get("/lyra/stats")
+async def get_lyra_stats(db: Session = Depends(get_db)):
+    """
+    Get Lyra's knowledge stats for the dossier modal.
+
+    Returns:
+    - total_discoveries: sites discovered by Lyra (user_contributions with source='lyra')
+    - total_sites_known: sites in Lyra's knowledge base (unified_sites)
+    - total_name_variants: alternate names Lyra can match (unified_site_names)
+    """
+    # Sites discovered by Lyra
+    discoveries = db.execute(text("""
+        SELECT COUNT(*) FROM user_contributions WHERE source = 'lyra'
+    """)).scalar() or 0
+
+    # Sites in knowledge base
+    sites_known = db.execute(text("""
+        SELECT COUNT(*) FROM unified_sites
+    """)).scalar() or 0
+
+    # Name variants
+    name_variants = db.execute(text("""
+        SELECT COUNT(*) FROM unified_site_names
+    """)).scalar() or 0
+
+    return {
+        "total_discoveries": discoveries,
+        "total_sites_known": sites_known,
+        "total_name_variants": name_variants,
+    }
+
+
+@router.get("/lyra/list")
+async def get_lyra_contributions(
+    page: int = 1,
+    page_size: int = 20,
+    min_mentions: int = 1,
+    db: Session = Depends(get_db),
+):
+    """
+    Get paginated list of sites discovered by Lyra.
+
+    Sorted by mention_count DESC (most mentioned first).
+    """
+    if page < 1:
+        page = 1
+    if page_size < 1 or page_size > 100:
+        page_size = 20
+
+    offset = (page - 1) * page_size
+
+    # Get total count
+    total = db.execute(text("""
+        SELECT COUNT(*) FROM user_contributions
+        WHERE source = 'lyra' AND mention_count >= :min_mentions
+    """), {"min_mentions": min_mentions}).scalar() or 0
+
+    # Get paginated items
+    rows = db.execute(text("""
+        SELECT id, name, description, country, site_type, source_url, mention_count, created_at
+        FROM user_contributions
+        WHERE source = 'lyra' AND mention_count >= :min_mentions
+        ORDER BY mention_count DESC, created_at DESC
+        LIMIT :limit OFFSET :offset
+    """), {"min_mentions": min_mentions, "limit": page_size, "offset": offset}).fetchall()
+
+    items = [
+        {
+            "id": str(row.id),
+            "name": row.name,
+            "description": row.description,
+            "country": row.country,
+            "site_type": row.site_type,
+            "source_url": row.source_url,
+            "mention_count": row.mention_count,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        }
+        for row in rows
+    ]
+
+    return {
+        "items": items,
+        "total_count": total,
+        "page": page,
+        "page_size": page_size,
+        "has_more": offset + len(items) < total,
+    }
+
 # Contributions JSON file path
 CONTRIBUTIONS_FILE = Path(__file__).parent.parent.parent / "data" / "contributions.json"
 
