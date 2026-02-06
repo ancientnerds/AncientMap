@@ -760,6 +760,7 @@ class NewsVideo(Base):
     published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     duration_minutes: Mapped[float | None] = mapped_column(Float, nullable=True)
     thumbnail_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tags: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     transcript_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     processed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

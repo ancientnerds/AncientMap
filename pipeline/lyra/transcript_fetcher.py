@@ -153,8 +153,10 @@ def fetch_new_videos(settings: LyraSettings) -> int:
     Returns number of new videos processed.
     """
     from pipeline.lyra.channels import get_enabled_channels
+    from pipeline.lyra.screenshot_extractor import get_proxy_url
 
     channels = get_enabled_channels()
+    proxy_url = get_proxy_url(settings)
     total_new = 0
 
     for channel in channels:
@@ -179,6 +181,10 @@ def fetch_new_videos(settings: LyraSettings) -> int:
                     video_info["id"], settings
                 )
 
+                # Fetch tags + description via yt-dlp metadata
+                metadata = _fetch_metadata_ytdlp(video_info["id"], proxy_url)
+                tags = metadata["tags"] if metadata else None
+
                 # Skip short videos (Shorts and other non-full-length content)
                 if duration is not None and duration < settings.min_video_minutes:
                     logger.info(f"  -> skipped ({duration:.1f} min < {settings.min_video_minutes} min minimum)")
@@ -190,9 +196,15 @@ def fetch_new_videos(settings: LyraSettings) -> int:
                         published_at=video_info["published_at"],
                         duration_minutes=duration,
                         thumbnail_url=video_info.get("thumbnail_url"),
+                        tags=tags,
                         status="skipped",
                     ))
                     continue
+
+                # Prefer yt-dlp description over RSS if available
+                description = video_info.get("description")
+                if metadata and metadata["description"]:
+                    description = metadata["description"]
 
                 status = "transcribed" if transcript_text else "failed"
 
@@ -200,10 +212,11 @@ def fetch_new_videos(settings: LyraSettings) -> int:
                     id=video_info["id"],
                     channel_id=channel.id,
                     title=video_info["title"],
-                    description=video_info.get("description"),
+                    description=description,
                     published_at=video_info["published_at"],
                     duration_minutes=duration,
                     thumbnail_url=video_info.get("thumbnail_url"),
+                    tags=tags,
                     transcript_text=transcript_text,
                     status=status,
                 )
@@ -260,8 +273,11 @@ def extract_transcript_segment(transcript_text: str, timestamp_range: str, buffe
     return "\n".join(segment_lines) if segment_lines else transcript_text[:2000]
 
 
-def _fetch_description_ytdlp(video_id: str, proxy_url: str | None) -> str | None:
-    """Fetch video description using yt-dlp metadata extraction (no video download)."""
+def _fetch_metadata_ytdlp(video_id: str, proxy_url: str | None) -> dict | None:
+    """Fetch video metadata using yt-dlp (no video download).
+
+    Returns dict with 'description' and 'tags' keys, or None on failure.
+    """
     yt_url = f"https://www.youtube.com/watch?v={video_id}"
     cmd = [
         "yt-dlp",
@@ -281,7 +297,10 @@ def _fetch_description_ytdlp(video_id: str, proxy_url: str | None) -> str | None
             return None
 
         data = json.loads(result.stdout)
-        return data.get("description", "").strip() or None
+        return {
+            "description": data.get("description", "").strip() or None,
+            "tags": data.get("tags") or None,
+        }
     except subprocess.TimeoutExpired:
         logger.warning(f"yt-dlp metadata timed out for {video_id}")
         return None
@@ -291,12 +310,12 @@ def _fetch_description_ytdlp(video_id: str, proxy_url: str | None) -> str | None
 
 
 def backfill_video_descriptions(settings: LyraSettings, max_per_cycle: int = 10) -> int:
-    """Backfill descriptions for existing videos using yt-dlp.
+    """Backfill descriptions and tags for existing videos using yt-dlp.
 
-    Videos fetched before the description-parsing change have NULL descriptions.
+    Videos fetched before the description/tags-parsing change have NULL values.
     This fetches them via yt-dlp metadata extraction (no video download needed).
 
-    Returns number of descriptions backfilled.
+    Returns number of videos backfilled.
     """
     from pipeline.lyra.screenshot_extractor import get_proxy_url
 
@@ -304,11 +323,12 @@ def backfill_video_descriptions(settings: LyraSettings, max_per_cycle: int = 10)
     backfilled = 0
 
     with get_session() as session:
-        # Match NULL or empty string (previous runs may have set "" on failure)
+        # Videos missing description OR tags (backfill both)
         videos = (
             session.query(NewsVideo)
             .filter(
-                (NewsVideo.description.is_(None)) | (NewsVideo.description == ""),
+                (NewsVideo.description.is_(None)) | (NewsVideo.description == "")
+                | (NewsVideo.tags.is_(None)),
                 NewsVideo.status != "skipped",
             )
             .limit(max_per_cycle)
@@ -316,19 +336,28 @@ def backfill_video_descriptions(settings: LyraSettings, max_per_cycle: int = 10)
         )
 
         if not videos:
-            logger.info("No videos need description backfill")
+            logger.info("No videos need metadata backfill")
             return 0
 
-        logger.info(f"Backfilling descriptions for {len(videos)} videos")
+        logger.info(f"Backfilling metadata for {len(videos)} videos")
 
         for video in videos:
-            description = _fetch_description_ytdlp(video.id, proxy_url)
-            if description:
-                video.description = description
-                backfilled += 1
-                logger.info(f"  Backfilled: {video.title}")
+            metadata = _fetch_metadata_ytdlp(video.id, proxy_url)
+            if metadata:
+                updated = False
+                if metadata["description"] and not video.description:
+                    video.description = metadata["description"]
+                    updated = True
+                if metadata["tags"] and not video.tags:
+                    video.tags = metadata["tags"]
+                    updated = True
+                if updated:
+                    backfilled += 1
+                    logger.info(f"  Backfilled: {video.title}")
+                else:
+                    logger.info(f"  No new metadata: {video.title}")
             else:
-                logger.info(f"  No description available: {video.title} (will retry next cycle)")
+                logger.info(f"  yt-dlp failed: {video.title} (will retry next cycle)")
 
-    logger.info(f"Backfilled {backfilled} video descriptions")
+    logger.info(f"Backfilled {backfilled} videos")
     return backfilled

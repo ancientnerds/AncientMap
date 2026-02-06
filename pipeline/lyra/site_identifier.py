@@ -315,6 +315,8 @@ def _aggregate_facts(session: Session, contribution: UserContribution) -> tuple[
                 ctx = {"title": video.title}
                 if video.description:
                     ctx["description"] = video.description[:500]
+                if video.tags:
+                    ctx["tags"] = video.tags
                 video_contexts.append(ctx)
 
     return all_facts, video_contexts
@@ -323,7 +325,7 @@ def _aggregate_facts(session: Session, contribution: UserContribution) -> tuple[
 def _compute_facts_hash(facts: list[str], video_contexts: list[dict] | None = None) -> str:
     """Compute SHA-256 hash of facts + video contexts.
 
-    Includes video descriptions so that backfilling descriptions
+    Includes video descriptions and tags so that backfilling either
     triggers reprocessing of already-enriched contributions.
     """
     unique_facts = sorted({str(f) for f in facts})
@@ -332,6 +334,8 @@ def _compute_facts_hash(facts: list[str], video_contexts: list[dict] | None = No
         for ctx in sorted(video_contexts, key=lambda c: c.get("title", "")):
             if ctx.get("description"):
                 parts.append(ctx["description"][:500])
+            if ctx.get("tags"):
+                parts.append(",".join(ctx["tags"]))
     content = "||".join(parts)
     return hashlib.sha256(content.encode()).hexdigest()
 
@@ -664,6 +668,8 @@ def _build_prompt(
         part = f"  Title: {ctx['title']}"
         if ctx.get("description"):
             part += f"\n  Description: {ctx['description']}"
+        if ctx.get("tags"):
+            part += f"\n  Tags: {', '.join(ctx['tags'])}"
         video_text_parts.append(part)
     video_text = "\n".join(video_text_parts) if video_text_parts else "(no video context)"
 
@@ -942,6 +948,26 @@ def _handle_db_match(
     contribution.enrichment_data = {"identification": identification}
     contribution.score = _compute_score(contribution)
     logger.info(f"DB match: '{contribution.name}' -> '{site.name}' ({updated} items linked)")
+
+    # Promote to lyra source so it appears on the globe under Discoveries
+    if (
+        contribution.score >= settings.min_score_for_promotion
+        and contribution.lat is not None
+        and contribution.lon is not None
+    ):
+        record = {
+            "period_start": contribution.period_start,
+            "period_end": contribution.period_end,
+            "lon": contribution.lon,
+        }
+        if passes_date_cutoff(record):
+            site_name = identification.get("site_name") or site.name
+            promoted_id = _promote_to_unified_sites(session, contribution, site_name)
+            if promoted_id:
+                contribution.promoted_site_id = promoted_id
+                contribution.enrichment_status = "promoted"
+                logger.info(f"Promoted db_match '{contribution.name}' to Discoveries ({promoted_id})")
+
     return True
 
 
