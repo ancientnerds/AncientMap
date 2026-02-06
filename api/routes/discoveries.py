@@ -181,7 +181,10 @@ async def get_discoveries(
                 us.thumbnail_url AS matched_thumbnail,
                 us.country AS matched_country,
                 us.site_type AS matched_site_type,
-                us.period_name AS matched_period_name
+                us.period_name AS matched_period_name,
+                us.lat AS matched_lat,
+                us.lon AS matched_lon,
+                us.description AS matched_description
             FROM contrib c
             JOIN unified_sites us
                 ON us.id = (c.enrichment_data #>> '{identification,match_id}')::uuid
@@ -221,9 +224,9 @@ async def get_discoveries(
             COALESCE(mi.matched_period_name, c.period_name) AS period_name,
             COALESCE(mi.matched_thumbnail, c.thumbnail_url) AS thumbnail_url,
             c.wikipedia_url,
-            c.lat,
-            c.lon,
-            c.description,
+            COALESCE(mi.matched_lat, c.lat) AS lat,
+            COALESCE(mi.matched_lon, c.lon) AS lon,
+            COALESCE(mi.matched_description, c.description) AS description,
             c.wikidata_id,
             COALESCE(va.unique_videos, 0) AS unique_videos,
             COALESCE(va.unique_channels, 0) AS unique_channels,

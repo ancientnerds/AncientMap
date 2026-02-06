@@ -164,7 +164,16 @@ function DiscoveryCard({ item }: { item: AggregatedDiscovery }) {
     <div className="lyra-discovery-card">
       {/* 1. Name + status/mentions header */}
       <div className="lyra-discovery-header">
-        <h3 className="lyra-discovery-name">{item.display_name}</h3>
+        <div className="lyra-discovery-name-block">
+          <h3 className="lyra-discovery-name">
+            {item.matched_site_name || item.display_name}
+          </h3>
+          {item.matched_site_name && item.matched_site_name !== item.display_name && (
+            <span className="lyra-discovery-extracted-name">
+              Lyra heard: {item.display_name}
+            </span>
+          )}
+        </div>
         <div className="lyra-discovery-header-badges">
           <StatusPill status={item.enrichment_status} />
           {item.mention_count > 1 && (
