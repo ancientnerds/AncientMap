@@ -137,7 +137,7 @@ def _process_single(
     """
     # Aggregate facts from all related NewsItems
     facts, video_contexts = _aggregate_facts(session, contribution)
-    facts_hash = _compute_facts_hash(facts)
+    facts_hash = _compute_facts_hash(facts, video_contexts)
     logger.info(
         f"  [{contribution.name}] facts={len(facts)}, videos={len(video_contexts)}, "
         f"hash_match={contribution.last_facts_hash == facts_hash}"
@@ -270,10 +270,19 @@ def _aggregate_facts(session: Session, contribution: UserContribution) -> tuple[
     return all_facts, video_contexts
 
 
-def _compute_facts_hash(facts: list[str]) -> str:
-    """Compute SHA-256 hash of sorted, deduplicated facts."""
+def _compute_facts_hash(facts: list[str], video_contexts: list[dict] | None = None) -> str:
+    """Compute SHA-256 hash of facts + video contexts.
+
+    Includes video descriptions so that backfilling descriptions
+    triggers reprocessing of already-enriched contributions.
+    """
     unique_facts = sorted({str(f) for f in facts})
-    content = "|".join(unique_facts)
+    parts = ["|".join(unique_facts)]
+    if video_contexts:
+        for ctx in sorted(video_contexts, key=lambda c: c.get("title", "")):
+            if ctx.get("description"):
+                parts.append(ctx["description"][:500])
+    content = "||".join(parts)
     return hashlib.sha256(content.encode()).hexdigest()
 
 
