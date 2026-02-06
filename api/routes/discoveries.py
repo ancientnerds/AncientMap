@@ -207,7 +207,8 @@ async def get_discoveries(
                 us.period_name AS matched_period_name,
                 us.lat AS matched_lat,
                 us.lon AS matched_lon,
-                us.description AS matched_description
+                us.description AS matched_description,
+                us.source_url AS matched_source_url
             FROM contrib c
             JOIN unified_sites us
                 ON us.id = (c.enrichment_data #>> '{identification,match_id}')::uuid
@@ -246,7 +247,7 @@ async def get_discoveries(
             COALESCE(mi.matched_site_type, c.site_type) AS site_type,
             COALESCE(mi.matched_period_name, c.period_name) AS period_name,
             COALESCE(mi.matched_thumbnail, c.thumbnail_url) AS thumbnail_url,
-            c.wikipedia_url,
+            COALESCE(c.wikipedia_url, mi.matched_source_url) AS wikipedia_url,
             COALESCE(mi.matched_lat, c.lat) AS lat,
             COALESCE(mi.matched_lon, c.lon) AS lon,
             COALESCE(mi.matched_description, c.description) AS description,
@@ -315,6 +316,10 @@ async def get_discoveries(
             "suggestions": [],
             "best_match": None,
         }
+        # Generate Wikipedia URL from matched site name if none exists
+        if not item["wikipedia_url"] and item["matched_site_name"]:
+            wiki_name = item["matched_site_name"].replace(" ", "_")
+            item["wikipedia_url"] = f"https://en.wikipedia.org/wiki/{wiki_name}"
         item["enrichment_score"] = _compute_display_score(item)
         items.append(item)
 
