@@ -20,8 +20,8 @@ Select the {topic_limit} most significant archaeological discoveries, findings, 
                 "name": "Exact name of the archaeological site",
                 "country": "Modern country name",
                 "confidence": "high",
-                "site_type": "settlement|temple|tomb|fortification|megalithic|cave|rock_art|port|monument|inscription|ruin",
-                "approximate_period": "e.g. Bronze Age, 3rd century BC, Neolithic"
+                "site_type": "settlement|temple|tomb|fortification|megalithic|cave|rock_art|port|monument|inscription|ruin|archaeological_site",
+                "period": "< 4500 BC|4500 - 3000 BC|3000 - 1500 BC|1500 - 500 BC|500 BC - 1 AD|1 - 500 AD|500 - 1000 AD|1000 - 1500 AD|1500+ AD|Unknown"
             }}
         }}
     ]
@@ -43,7 +43,7 @@ primary_site rules:
 - If the video title or description mentions specific site names, use those for the correct spelling
 - Do NOT fill for vague references like "somewhere in Egypt" or "a site in Turkey"
 - site_type must be one of: settlement, temple, tomb, fortification, megalithic, cave, rock_art, port, monument, inscription, ruin, archaeological_site
-- approximate_period: use standard archaeological period names or century notation
+- period: must be one of the exact values: < 4500 BC, 4500 - 3000 BC, 3000 - 1500 BC, 1500 - 500 BC, 500 BC - 1 AD, 1 - 500 AD, 500 - 1000 AD, 1000 - 1500 AD, 1500+ AD, Unknown. No freetext.
 
 Exclude: Personal anecdotes, off-topic, technical difficulties, channel promotions, audience interactions
 

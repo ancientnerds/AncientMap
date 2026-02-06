@@ -18,9 +18,6 @@ from pipeline.utils.text import normalize_name
 
 logger = logging.getLogger(__name__)
 
-# Minimum name length to attempt matching (avoid "Rome", "Troy" false positives on LIKE)
-MIN_NAME_LENGTH_FOR_LIKE = 6
-
 
 def _load_source_priority(session: Session) -> dict[str, int]:
     """Load source priorities from source_meta. Lower priority = better source."""
@@ -41,7 +38,6 @@ def _find_site_by_name(
     1.5. Spaceless match on unified_sites.name_normalized
     2. Exact match on unified_site_names.name_normalized (alternate names)
     2.5. Spaceless match on unified_site_names.name_normalized
-    3. LIKE match on unified_sites.name_normalized (only for longer names)
     If multiple results, prefer curated sources (lowest priority number).
     """
     normalized = normalize_name(extracted_name)
@@ -110,20 +106,6 @@ def _find_site_by_name(
             if candidates:
                 return _pick_best_match(candidates, source_priority)
 
-    # 3. LIKE match (only for names long enough to avoid false positives)
-    if len(normalized) >= MIN_NAME_LENGTH_FOR_LIKE:
-        like_matches = session.query(UnifiedSite).filter(
-            UnifiedSite.name_normalized.like(f"%{normalized}%"),
-            func.length(UnifiedSite.name_normalized) <= len(normalized) * 2,
-            source_filter,
-        ).limit(5).all()
-
-        if len(like_matches) == 1:
-            return like_matches[0]
-
-        if len(like_matches) > 1:
-            return _pick_best_match(like_matches, source_priority)
-
     return None
 
 
@@ -188,7 +170,7 @@ def _extract_topic_metadata(session: Session, item: NewsItem) -> dict:
             return {
                 "country": primary_site.get("country"),
                 "site_type": primary_site.get("site_type"),
-                "period_name": primary_site.get("approximate_period"),
+                "period_name": primary_site.get("period"),
             }
     return {}
 

@@ -99,14 +99,24 @@ def clean_description(description: str | None, max_length: int = 1000) -> str | 
     return text if text else None
 
 
+PERIOD_BUCKET_TO_YEAR = {
+    "< 4500 BC": -4500,
+    "4500 - 3000 BC": -4500,
+    "3000 - 1500 BC": -3000,
+    "1500 - 500 BC": -1500,
+    "500 BC - 1 AD": -500,
+    "1 - 500 AD": 1,
+    "500 - 1000 AD": 500,
+    "1000 - 1500 AD": 1000,
+    "1500+ AD": 1500,
+}
+
+
 def extract_period_from_text(text: str) -> int | None:
     """Try to extract a year from text.
 
-    Looks for patterns like:
-    - "500 BC", "500 BCE"
-    - "100 AD", "100 CE"
-    - "c. 500 BC"
-    - "ca. 500 BCE"
+    First checks for exact period bucket labels (e.g. "3000 - 1500 BC"),
+    then falls back to parsing patterns like "500 BC", "100 AD".
 
     Args:
         text: Text to search
@@ -116,6 +126,11 @@ def extract_period_from_text(text: str) -> int | None:
     """
     if not text:
         return None
+
+    # Check for exact period bucket labels first
+    stripped = text.strip()
+    if stripped in PERIOD_BUCKET_TO_YEAR:
+        return PERIOD_BUCKET_TO_YEAR[stripped]
 
     text = text.upper()
 

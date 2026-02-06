@@ -184,19 +184,7 @@ function DiscoveryCard({ item }: { item: AggregatedDiscovery }) {
         </div>
       </div>
 
-      {/* 2. Category + Period badges */}
-      {(item.site_type || item.period_name) && (
-        <div className="lyra-metadata-row">
-          {item.site_type && (
-            <span className="lyra-metadata-chip">{item.site_type}</span>
-          )}
-          {item.period_name && (
-            <span className="lyra-metadata-chip">{item.period_name}</span>
-          )}
-        </div>
-      )}
-
-      {/* 3. Country with flag */}
+      {/* 2. Country with flag */}
       {item.country && (
         <div className="lyra-discovery-country-row">
           {(() => {

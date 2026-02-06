@@ -1,0 +1,4 @@
+Site: {site_name}{context}
+Which Wikidata entity is this site?
+{options}
+Reply with just the QID.
