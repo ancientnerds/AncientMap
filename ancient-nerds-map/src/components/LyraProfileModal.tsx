@@ -205,7 +205,7 @@ export default function LyraProfileModal({ onClose }: Props) {
                 <span className="lyra-poster-status-label">sites discovered</span>
               </div>
             </div>
-            <a className="lyra-poster-discoveries-btn" href="/lyra-discoveries.html">
+            <a className="lyra-poster-discoveries-btn" href="/discoveries.html">
               Analyze Discoveries
             </a>
           </div>
