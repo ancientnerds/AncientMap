@@ -25,13 +25,12 @@ interface PinAuthModalProps {
   isOpen: boolean
   onClose: () => void
   onSuccess: (sessionToken: string) => void
-  variant?: 'lyra' | 'admin' | 'refresh'
+  variant?: 'lyra' | 'admin'
 }
 
 export default function PinAuthModal({ isOpen, onClose, onSuccess, variant = 'lyra' }: PinAuthModalProps) {
   const [pin, setPin] = useState(['', '', '', ''])
   const isAdminMode = variant === 'admin'
-  const isRefreshMode = variant === 'refresh'
   const [error, setError] = useState('')
   const [isVerifying, setIsVerifying] = useState(false)
   const [isLocked, setIsLocked] = useState(false)
@@ -161,9 +160,9 @@ export default function PinAuthModal({ isOpen, onClose, onSuccess, variant = 'ly
     setError('')
 
     try {
-      // Use different endpoint for refresh mode
-      const endpoint = isRefreshMode
-        ? `${config.api.baseUrl}/content/connectors/verify-refresh`
+      // Admin uses ADMIN_PIN; Lyra uses AI_VALID_PINS
+      const endpoint = isAdminMode
+        ? `${config.api.baseUrl}/content/admin/verify-pin`
         : `${config.api.baseUrl}/ai/verify`
 
       const response = await fetch(endpoint, {
@@ -179,7 +178,7 @@ export default function PinAuthModal({ isOpen, onClose, onSuccess, variant = 'ly
 
       if (data.verified) {
         // Successfully verified
-        onSuccess(isRefreshMode ? 'refresh_authorized' : data.session_token)
+        onSuccess(isAdminMode ? 'admin_authorized' : data.session_token)
       } else {
         // Handle different error types
         if (data.error === 'ip_locked') {
@@ -216,7 +215,7 @@ export default function PinAuthModal({ isOpen, onClose, onSuccess, variant = 'ly
     } finally {
       setIsVerifying(false)
     }
-  }, [isVerifying, isLocked, turnstileToken, onSuccess, isRefreshMode])
+  }, [isVerifying, isLocked, turnstileToken, onSuccess, isAdminMode])
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     e.preventDefault()
@@ -241,19 +240,7 @@ export default function PinAuthModal({ isOpen, onClose, onSuccess, variant = 'ly
         </button>
 
         <div className="pin-modal-content">
-          {isRefreshMode ? (
-            /* Refresh mode header */
-            <div className="pin-header admin">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pin-admin-icon">
-                <path d="M23 4v6h-6" />
-                <path d="M1 20v-6h6" />
-                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-              </svg>
-              <h2>Refresh Connectors</h2>
-              <p className="pin-admin-subtitle">Enter admin PIN to refresh all 47 connectors</p>
-              <p className="pin-refresh-warning">This pings external APIs - use sparingly</p>
-            </div>
-          ) : isAdminMode ? (
+          {isAdminMode ? (
             /* Admin mode header */
             <div className="pin-header admin">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pin-admin-icon">
@@ -261,7 +248,7 @@ export default function PinAuthModal({ isOpen, onClose, onSuccess, variant = 'ly
                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
               </svg>
               <h2>Admin Access</h2>
-              <p className="pin-admin-subtitle">Enter PIN to edit site data</p>
+              <p className="pin-admin-subtitle">Enter admin PIN to continue</p>
             </div>
           ) : (
             <>
@@ -350,7 +337,7 @@ export default function PinAuthModal({ isOpen, onClose, onSuccess, variant = 'ly
           </div>
 
           {/* Discord CTA - only for Lyra mode */}
-          {!isAdminMode && !isRefreshMode && (
+          {!isAdminMode && (
             <div className="pin-discord">
               <p>Need access? Talk to the founders</p>
               <a

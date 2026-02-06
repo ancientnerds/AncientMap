@@ -14,10 +14,8 @@ Endpoints:
 """
 
 import logging
-import os
 import time
 
-import httpx
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
@@ -31,12 +29,12 @@ router = APIRouter()
 # Refresh Protection Configuration
 # ============================================================================
 
-# Admin PIN for connector refresh (set via environment variable)
-ADMIN_PIN = os.environ.get("ADMIN_PIN", "1234")  # Default for dev only
-
-# Turnstile verification
-TURNSTILE_SECRET = os.environ.get("TURNSTILE_SECRET_KEY", "")
-TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+from api.services.admin_auth import (
+    AdminPinRequest,
+    AdminPinResponse,
+    get_client_ip,
+    verify_admin_pin,
+)
 
 # Rate limiting: track last refresh time per IP
 _refresh_timestamps: dict[str, float] = {}
@@ -563,114 +561,46 @@ async def get_connectors_status(
 
 
 # ============================================================================
-# Refresh Verification Endpoint
+# Admin PIN Verification Endpoints
 # ============================================================================
 
-class RefreshVerifyRequest(BaseModel):
-    """Request to verify refresh permission."""
-    pin: str = Field(..., min_length=4, max_length=4, pattern=r"^\d{4}$")
-    turnstile_token: str = Field(..., description="Cloudflare Turnstile verification token")
-
-
-class RefreshVerifyResponse(BaseModel):
-    """Response from refresh verification."""
-    verified: bool
-    error: str | None = None
-    message: str | None = None
-    cooldown_remaining: int | None = None
-
-
-async def _verify_turnstile_token(token: str, ip: str) -> bool:
-    """Verify Cloudflare Turnstile token."""
-    if not TURNSTILE_SECRET:
-        # No secret configured - allow in dev mode with test key
-        logger.warning("Turnstile secret not configured - allowing request (set TURNSTILE_SECRET_KEY in production)")
-        return True
-
-    if not token or len(token) < 20:
-        logger.warning(f"Invalid Turnstile token format from {ip}")
-        return False
-
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(
-                TURNSTILE_VERIFY_URL,
-                data={
-                    "secret": TURNSTILE_SECRET,
-                    "response": token,
-                    "remoteip": ip,
-                }
-            )
-
-            if response.status_code == 200:
-                result = response.json()
-                if result.get("success", False):
-                    return True
-                else:
-                    error_codes = result.get("error-codes", [])
-                    logger.warning(f"Turnstile verification failed for {ip}: {error_codes}")
-                    return False
-    except Exception as e:
-        logger.error(f"Turnstile verification error: {e}")
-        return False
-
-    return False
-
-
-@router.post("/connectors/verify-refresh", response_model=RefreshVerifyResponse)
-async def verify_refresh(request: RefreshVerifyRequest, req: Request):
+@router.post("/admin/verify-pin", response_model=AdminPinResponse)
+async def verify_pin(request: AdminPinRequest, req: Request):
     """
-    Verify permission to refresh connector status.
+    Verify Turnstile + admin PIN.
 
-    Security layers:
-    1. Rate limiting (5 min cooldown per IP)
-    2. Cloudflare Turnstile verification (bot protection)
-    3. Admin PIN validation
-
-    This prevents DDoS attacks on external connector APIs.
+    Used by: site editing, connector tests, any admin action without rate limiting.
     """
+    ip = get_client_ip(req)
+    return await verify_admin_pin(request.pin, request.turnstile_token, ip)
 
-    # Get client IP
-    ip_address = req.client.host if req.client else "unknown"
-    forwarded = req.headers.get("X-Forwarded-For")
-    if forwarded:
-        ip_address = forwarded.split(",")[0].strip()
 
-    # 1. Check rate limit
+@router.post("/connectors/verify-refresh", response_model=AdminPinResponse)
+async def verify_refresh(request: AdminPinRequest, req: Request):
+    """
+    Verify Turnstile + admin PIN with rate limiting.
+
+    Used by: connector refresh (pings external APIs, so rate limited to 1 per 5 min).
+    """
+    ip = get_client_ip(req)
+
+    # Extra rate limit for refresh (hits external APIs)
     now = time.time()
-    last_refresh = _refresh_timestamps.get(ip_address, 0)
+    last_refresh = _refresh_timestamps.get(ip, 0)
     cooldown_remaining = int(REFRESH_COOLDOWN_SECONDS - (now - last_refresh))
 
     if cooldown_remaining > 0:
-        return RefreshVerifyResponse(
+        return AdminPinResponse(
             verified=False,
             error="rate_limited",
             message=f"Please wait {cooldown_remaining} seconds before refreshing again.",
-            cooldown_remaining=cooldown_remaining
+            cooldown_remaining=cooldown_remaining,
         )
 
-    # 2. Verify Cloudflare Turnstile token
-    if not await _verify_turnstile_token(request.turnstile_token, ip_address):
-        return RefreshVerifyResponse(
-            verified=False,
-            error="captcha_failed",
-            message="Verification failed. Please complete the captcha and try again."
-        )
+    result = await verify_admin_pin(request.pin, request.turnstile_token, ip)
 
-    # 3. Verify admin PIN
-    if request.pin != ADMIN_PIN:
-        logger.warning(f"Invalid admin PIN attempt from {ip_address}")
-        return RefreshVerifyResponse(
-            verified=False,
-            error="invalid_pin",
-            message="Invalid PIN. Contact admin for the refresh PIN."
-        )
+    if result.verified:
+        _refresh_timestamps[ip] = now
+        logger.info(f"Connector refresh authorized for {ip}")
 
-    # Success - record timestamp
-    _refresh_timestamps[ip_address] = now
-    logger.info(f"Connector refresh authorized for {ip_address}")
-
-    return RefreshVerifyResponse(
-        verified=True,
-        message="Refresh authorized"
-    )
+    return result

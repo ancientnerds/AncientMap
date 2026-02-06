@@ -13,7 +13,6 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
@@ -122,9 +121,8 @@ async def get_lyra_contributions(
 # Contributions JSON file path
 CONTRIBUTIONS_FILE = Path(__file__).parent.parent.parent / "data" / "contributions.json"
 
-# Cloudflare Turnstile configuration
-TURNSTILE_SECRET = os.environ.get("TURNSTILE_SECRET_KEY", "")
-TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+from api.services.admin_auth import get_client_ip
+from api.services.turnstile import verify_turnstile as _verify_turnstile_shared
 
 # Rate limiting: max 25 submissions per IP per hour
 RATE_LIMIT_MAX = 25
@@ -263,40 +261,8 @@ class ContributionCreate(BaseModel):
 
 
 async def verify_turnstile(token: str, ip: str) -> bool:
-    """Verify Cloudflare Turnstile token."""
-    if not TURNSTILE_SECRET:
-        # NEVER skip verification - reject if not configured
-        logger.error("Turnstile secret not configured!")
-        return False
-
-    if not token or len(token) < 20:
-        return False
-
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(
-                TURNSTILE_VERIFY_URL,
-                data={
-                    "secret": TURNSTILE_SECRET,
-                    "response": token,
-                    "remoteip": ip,
-                }
-            )
-
-            if response.status_code == 200:
-                result = response.json()
-                return result.get("success", False)
-    except httpx.TimeoutException:
-        logger.warning(f"Turnstile verification timed out for IP {ip}")
-        return False
-    except httpx.HTTPError as e:
-        logger.error(f"Turnstile HTTP error: {e}")
-        return False
-    except json.JSONDecodeError:
-        logger.error("Turnstile returned invalid JSON")
-        return False
-
-    return False
+    """Verify Cloudflare Turnstile token (delegates to shared service)."""
+    return await _verify_turnstile_shared(token, ip)
 
 
 @router.post("/")
@@ -310,11 +276,7 @@ async def create_contribution(
     Requires Cloudflare Turnstile verification.
     All submissions are saved to a JSON file for admin review.
     """
-    # Get client IP
-    client_ip = request.client.host if request.client else None
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        client_ip = forwarded.split(",")[0].strip()
+    client_ip = get_client_ip(request)
 
     # Rate limiting check (before Turnstile to save API calls)
     if client_ip and not check_rate_limit(client_ip):

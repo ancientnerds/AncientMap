@@ -14,13 +14,13 @@ import os
 import secrets
 from datetime import datetime, timedelta
 
-import httpx
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from api.config.ai_modes import DEFAULT_MODE, get_all_modes, get_mode_config
 from api.services.access_control import get_access_control
+from api.services.admin_auth import get_client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +37,7 @@ _failed_attempts: dict[str, dict] = {}  # {ip: {"count": int, "locked_until": da
 LOCKOUT_THRESHOLD = 3  # Failed attempts before lockout
 LOCKOUT_DURATION = 3600  # 1 hour in seconds
 
-# Cloudflare Turnstile configuration
-TURNSTILE_SECRET = os.environ.get("TURNSTILE_SECRET_KEY", "")
-TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+from api.services.turnstile import verify_turnstile as _verify_turnstile
 
 
 # ============================================================================
@@ -203,56 +201,6 @@ def _clear_failed_attempts(ip: str):
 
 
 # ============================================================================
-# Cloudflare Turnstile Verification
-# ============================================================================
-
-async def _verify_turnstile(token: str, ip: str) -> bool:
-    """Verify Cloudflare Turnstile token. Returns True only on successful verification."""
-    if not TURNSTILE_SECRET:
-        # No secret configured - fail closed for security
-        # TURNSTILE_SECRET_KEY must be set in production
-        logger.error("Turnstile secret not configured - rejecting request (set TURNSTILE_SECRET_KEY)")
-        return False
-
-    if not token or len(token) < 20:
-        logger.warning(f"Invalid Turnstile token format from {ip}")
-        return False
-
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(
-                TURNSTILE_VERIFY_URL,
-                data={
-                    "secret": TURNSTILE_SECRET,
-                    "response": token,
-                    "remoteip": ip,
-                }
-            )
-
-            if response.status_code == 200:
-                result = response.json()
-                if result.get("success", False):
-                    return True
-                else:
-                    error_codes = result.get("error-codes", [])
-                    logger.warning(f"Turnstile verification failed for {ip}: {error_codes}")
-                    return False
-            else:
-                logger.error(f"Turnstile API returned status {response.status_code}")
-                return False
-    except httpx.TimeoutException:
-        logger.error(f"Turnstile verification timed out for IP {ip}")
-        # Fail closed on timeout - don't allow unverified requests
-        return False
-    except httpx.HTTPError as e:
-        logger.error(f"Turnstile HTTP error: {e}")
-        return False
-    except json.JSONDecodeError:
-        logger.error("Turnstile returned invalid JSON")
-        return False
-
-
-# ============================================================================
 # Endpoints
 # ============================================================================
 
@@ -282,11 +230,7 @@ async def verify_pin(request: PinVerifyRequest, req: Request):
     # Cleanup old sessions periodically
     _cleanup_sessions()
 
-    # Get client IP (check X-Forwarded-For for proxied requests)
-    ip_address = req.client.host if req.client else "unknown"
-    forwarded = req.headers.get("X-Forwarded-For")
-    if forwarded:
-        ip_address = forwarded.split(",")[0].strip()
+    ip_address = get_client_ip(req)
 
     # 1. Check IP lockout first (before any expensive operations)
     is_locked, seconds_remaining = _check_ip_lockout(ip_address)
