@@ -142,9 +142,9 @@ export default function LyraDiscoveriesPage() {
           <span className="news-page-lyra-name" style={{ cursor: 'pointer' }} onClick={() => setShowLyraProfile(true)}>Lyra's Discoveries</span>
           {stats && (
             <div className="news-page-stats">
-              <span className="news-page-stats-item"><strong>{totalCount}</strong> sites discovered</span>
-              <span className="news-page-stats-sep">from</span>
-              <span className="news-page-stats-item"><strong>{stats.total_sites_known.toLocaleString()}</strong> known sites</span>
+              <span className="news-page-stats-item"><strong>{totalCount}</strong> new sites found</span>
+              <span className="news-page-stats-sep">·</span>
+              <span className="news-page-stats-item">not yet in <strong>{stats.total_sites_known.toLocaleString()}</strong> site database</span>
             </div>
           )}
         </div>
