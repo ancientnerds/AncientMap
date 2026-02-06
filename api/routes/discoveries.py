@@ -86,6 +86,29 @@ def find_similar_sites_batch(
     return matches_by_name
 
 
+def _compute_display_score(item: dict) -> int:
+    """Compute the same weighted score the frontend displays as a percentage."""
+    score = 25  # name always present
+    if item.get("lat") is not None and item.get("lon") is not None:
+        score += 20
+    if item.get("country"):
+        score += 10
+    if item.get("site_type"):
+        score += 10
+    if item.get("period_name"):
+        score += 10
+    desc = item.get("description") or ""
+    if len(desc) >= 50:
+        score += 10
+    if item.get("wikipedia_url"):
+        score += 5
+    if item.get("thumbnail_url"):
+        score += 5
+    if item.get("wikidata_id"):
+        score += 5
+    return score
+
+
 def _build_video_refs(videos_json: list[dict] | None) -> list[dict]:
     """Deduplicate and format video references from a JSON aggregate."""
     videos = []
@@ -266,11 +289,11 @@ async def get_discoveries(
         if status == "rejected" and enrichment_status != "rejected":
             continue
 
-        items.append({
+        item = {
             "id": row.id,
             "display_name": row.display_name,
             "enrichment_status": enrichment_status,
-            "enrichment_score": row.enrichment_score or 0,
+            "enrichment_score": 0,
             "matched_site_id": row.matched_site_id,
             "matched_site_name": row.matched_site_name,
             "matched_source": row.matched_source,
@@ -291,7 +314,9 @@ async def get_discoveries(
             "last_mentioned": row.last_mentioned.isoformat() if row.last_mentioned else None,
             "suggestions": [],
             "best_match": None,
-        })
+        }
+        item["enrichment_score"] = _compute_display_score(item)
+        items.append(item)
 
     # ── Part 2: Direct matches without user_contribution ────────────
     # news_items with site_id set, joined to unified_sites where source_id != 'ancient_nerds',
@@ -352,11 +377,11 @@ async def get_discoveries(
             if row.source_id == "wikidata" and row.source_url:
                 wikipedia_url = row.source_url
 
-            items.append({
+            item = {
                 "id": str(row.site_id),
                 "display_name": row.site_name,
                 "enrichment_status": "matched",
-                "enrichment_score": 100,
+                "enrichment_score": 0,
                 "matched_site_id": str(row.site_id),
                 "matched_site_name": row.site_name,
                 "matched_source": row.source_id,
@@ -377,7 +402,9 @@ async def get_discoveries(
                 "last_mentioned": row.last_mentioned.isoformat() if row.last_mentioned else None,
                 "suggestions": [],
                 "best_match": None,
-            })
+            }
+            item["enrichment_score"] = _compute_display_score(item)
+            items.append(item)
 
     # ── Sort ────────────────────────────────────────────────────────
     if sort_by == "score":
