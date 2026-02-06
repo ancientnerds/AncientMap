@@ -193,6 +193,10 @@ jobs:
               kill "$(cat logs/.follow_logs.pid)" 2>/dev/null || true
               sleep 1
             fi
-            [ -f scripts/follow_logs.sh ] && nohup ./scripts/follow_logs.sh </dev/null >/dev/null 2>&1 &
-            echo $! > logs/.follow_logs.pid
-            echo "==> Deploy complete!"'
+            if [ -f scripts/follow_logs.sh ]; then
+              nohup ./scripts/follow_logs.sh </dev/null >/dev/null 2>&1 &
+              echo $! > logs/.follow_logs.pid
+              disown
+            fi
+            echo "==> Deploy complete!"
+            exit 0'
