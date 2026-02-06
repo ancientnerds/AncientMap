@@ -153,11 +153,19 @@ def _process_single(
 
     # Get DB candidates via pg_trgm fuzzy matching
     db_candidates = _fetch_db_candidates(session, contribution.name)
-    logger.info(f"  [{contribution.name}] DB candidates: {len(db_candidates)}")
+    if db_candidates:
+        top3 = ", ".join(f"{c['name']}({c['similarity']})" for c in db_candidates[:3])
+        logger.info(f"  [{contribution.name}] DB candidates: {len(db_candidates)} (top: {top3})")
+    else:
+        logger.info(f"  [{contribution.name}] DB candidates: 0")
 
     # Get Wikidata candidates
     wikidata_candidates = _search_wikidata(contribution.name)
-    logger.info(f"  [{contribution.name}] Wikidata candidates: {len(wikidata_candidates)}")
+    if wikidata_candidates:
+        top3 = ", ".join(c['label'] for c in wikidata_candidates[:3])
+        logger.info(f"  [{contribution.name}] Wikidata candidates: {len(wikidata_candidates)} (top: {top3})")
+    else:
+        logger.info(f"  [{contribution.name}] Wikidata candidates: 0")
 
     # Build and send prompt to Claude Haiku
     prompt = _build_prompt(
@@ -503,11 +511,11 @@ def _build_prompt(
         video_text_parts.append(part)
     video_text = "\n".join(video_text_parts) if video_text_parts else "(no video context)"
 
-    # Format DB candidates
+    # Format DB candidates (include site_id so Haiku can return it as match_id)
     db_text_parts = []
     for c in db_candidates[:10]:
         db_text_parts.append(
-            f"  - {c['name']} (country: {c.get('country', 'unknown')}, "
+            f"  - site_id={c['site_id']}: {c['name']} (country: {c.get('country', 'unknown')}, "
             f"source: {c['source']}, similarity: {c['similarity']})"
         )
     db_text = "\n".join(db_text_parts) if db_text_parts else "(no database matches found)"
