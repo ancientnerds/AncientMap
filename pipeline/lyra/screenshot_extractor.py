@@ -14,7 +14,7 @@ SCREENSHOTS_DIR = Path("public/data/news/screenshots")
 SCREENSHOT_OFFSET = 2  # Grab frame 2 seconds after the timestamp
 
 
-def _get_proxy_url(settings: LyraSettings) -> str | None:
+def get_proxy_url(settings: LyraSettings) -> str | None:
     """Build yt-dlp proxy URL from Webshare rotating residential credentials."""
     if settings.webshare_username and settings.webshare_password:
         username = settings.webshare_username
@@ -92,7 +92,7 @@ def extract_screenshots(settings: LyraSettings) -> int:
     Returns number of screenshots extracted.
     """
     SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
-    proxy_url = _get_proxy_url(settings)
+    proxy_url = get_proxy_url(settings)
     extracted = 0
 
     with get_session() as session:

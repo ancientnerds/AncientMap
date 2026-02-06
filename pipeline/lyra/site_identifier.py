@@ -171,10 +171,39 @@ def _process_single(
         return False
 
     match_type = identification.get("match_type")
+    corrected_name = identification.get("site_name", "")
     logger.info(
         f"Identified '{contribution.name}' as {match_type} "
-        f"(confidence: {identification.get('confidence', 'unknown')})"
+        f"(confidence: {identification.get('confidence', 'unknown')}, "
+        f"corrected: '{corrected_name}')"
     )
+
+    # Post-processing: if Claude corrected the name (e.g. "Seab Birch" → "Sayburç")
+    # and didn't find a db_match (because pg_trgm couldn't match the garbled name),
+    # search the DB and Wikidata again with the corrected name.
+    if match_type != "db_match" and match_type != "not_a_site" and corrected_name:
+        corrected_lower = corrected_name.lower().strip()
+        original_lower = contribution.name.lower().strip()
+        if corrected_lower != original_lower:
+            logger.info(f"Re-searching DB with corrected name '{corrected_name}'")
+            corrected_candidates = _fetch_db_candidates(session, corrected_name)
+            if corrected_candidates:
+                best = corrected_candidates[0]
+                logger.info(
+                    f"Found DB match via corrected name: {best['name']} "
+                    f"(similarity: {best['similarity']})"
+                )
+                identification["match_type"] = "db_match"
+                identification["match_id"] = best["site_id"]
+                match_type = "db_match"
+            elif match_type == "new_site":
+                # No DB match, but try Wikidata with the corrected name
+                corrected_wd = _search_wikidata(corrected_name)
+                if corrected_wd:
+                    logger.info(f"Found Wikidata match via corrected name: {corrected_wd[0]['label']}")
+                    identification["match_type"] = "wikidata_match"
+                    identification["match_id"] = corrected_wd[0]["qid"]
+                    match_type = "wikidata_match"
 
     if match_type == "not_a_site":
         contribution.enrichment_status = "matched"

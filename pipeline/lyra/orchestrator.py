@@ -36,7 +36,7 @@ def run_pipeline(settings: LyraSettings) -> None:
     from pipeline.lyra.site_identifier import identify_and_enrich_sites
     from pipeline.lyra.site_matcher import match_sites_for_pending_items
     from pipeline.lyra.summarizer import summarize_pending_videos
-    from pipeline.lyra.transcript_fetcher import fetch_new_videos
+    from pipeline.lyra.transcript_fetcher import backfill_video_descriptions, fetch_new_videos
     from pipeline.lyra.tweet_deduplicator import deduplicate_posts
     from pipeline.lyra.tweet_generator import generate_pending_posts
     from pipeline.lyra.tweet_verifier import verify_pending_posts
@@ -70,6 +70,10 @@ def run_pipeline(settings: LyraSettings) -> None:
     # Step 7: Extract timestamp screenshots
     screenshots = extract_screenshots(settings)
     logger.info(f"Step 7: Extracted {screenshots} screenshots")
+
+    # Step 7b: Backfill video descriptions for pre-change videos
+    backfilled = backfill_video_descriptions(settings)
+    logger.info(f"Step 7b: Backfilled {backfilled} video descriptions")
 
     # Step 8: Identify and enrich unmatched site discoveries
     identified = identify_and_enrich_sites(settings)
