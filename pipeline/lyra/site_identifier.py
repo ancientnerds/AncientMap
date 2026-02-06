@@ -740,7 +740,60 @@ def _handle_db_match(
             }
             return False
 
-    # Enrich contribution from matched site data (fills gaps the contribution lacks)
+    # Copy base metadata from matched site
+    if not contribution.country and site.country:
+        contribution.country = site.country
+    if not contribution.site_type and site.site_type:
+        contribution.site_type = site.site_type
+    if not contribution.period_name and site.period_name:
+        contribution.period_name = site.period_name
+
+    # Enrich via Wikidata: search with corrected name or matched site name
+    search_name = identification.get("site_name") or site.name
+    wikidata_candidates = _search_wikidata(search_name)
+    if wikidata_candidates:
+        # Pick the best archaeological/historical candidate
+        best_qid = wikidata_candidates[0]["qid"]
+        for candidate in wikidata_candidates:
+            desc = candidate.get("description", "").lower()
+            if any(kw in desc for kw in [
+                "archaeolog", "ancient", "historic", "ruin", "settlement",
+                "temple", "tomb", "fort", "monument", "castle", "site",
+            ]):
+                best_qid = candidate["qid"]
+                break
+
+        enrichment = _enrich_from_wikidata(best_qid)
+        if enrichment:
+            contribution.wikidata_id = best_qid
+
+            if enrichment.get("lat") and enrichment.get("lon"):
+                contribution.lat = enrichment["lat"]
+                contribution.lon = enrichment["lon"]
+            if enrichment.get("thumbnail_url"):
+                contribution.thumbnail_url = enrichment["thumbnail_url"]
+            if enrichment.get("wikipedia_url"):
+                contribution.wikipedia_url = enrichment["wikipedia_url"]
+
+            # Fetch Wikipedia summary for description + better thumbnail
+            wiki_title = enrichment.get("wikipedia_title")
+            if wiki_title:
+                wiki_data = _fetch_wikipedia_summary(wiki_title)
+                if wiki_data.get("description"):
+                    contribution.description = clean_description(wiki_data["description"])
+                if wiki_data.get("thumbnail_url"):
+                    contribution.thumbnail_url = wiki_data["thumbnail_url"]
+                if wiki_data.get("lat") and wiki_data.get("lon") and not contribution.lat:
+                    contribution.lat = wiki_data["lat"]
+                    contribution.lon = wiki_data["lon"]
+
+            logger.info(
+                f"  [{contribution.name}] Wikidata enrichment: {best_qid}, "
+                f"wiki={contribution.wikipedia_url is not None}, "
+                f"coords=({contribution.lat}, {contribution.lon})"
+            )
+
+    # Fill remaining gaps from the matched site itself
     if not contribution.lat and site.lat:
         contribution.lat = site.lat
     if not contribution.lon and site.lon:
@@ -749,14 +802,10 @@ def _handle_db_match(
         contribution.description = site.description
     if not contribution.thumbnail_url and site.thumbnail_url:
         contribution.thumbnail_url = site.thumbnail_url
-    if not contribution.country and site.country:
-        contribution.country = site.country
-    if not contribution.site_type and site.site_type:
-        contribution.site_type = site.site_type
-    if not contribution.period_name and site.period_name:
-        contribution.period_name = site.period_name
-    if not contribution.wikipedia_url and site.source_url:
-        contribution.wikipedia_url = site.source_url
+
+    # Resolve country from coordinates if still missing
+    if contribution.lat and contribution.lon and not contribution.country:
+        contribution.country = lookup_country(contribution.lat, contribution.lon)
 
     # Update all related NewsItems to point to this site
     name_lower = contribution.name.lower().strip()

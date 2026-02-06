@@ -316,10 +316,6 @@ async def get_discoveries(
             "suggestions": [],
             "best_match": None,
         }
-        # Generate Wikipedia URL from matched site name if none exists
-        if not item["wikipedia_url"] and item["matched_site_name"]:
-            wiki_name = item["matched_site_name"].replace(" ", "_")
-            item["wikipedia_url"] = f"https://en.wikipedia.org/wiki/{wiki_name}"
         item["enrichment_score"] = _compute_display_score(item)
         items.append(item)
 
