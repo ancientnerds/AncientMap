@@ -71,7 +71,7 @@ def find_similar_sites_batch(
     # Single query: cross join input names with unified_site_names, rank by similarity
     result = db.execute(text("""
         WITH input_names AS (
-            SELECT unnest(:names) AS query_name
+            SELECT unnest(:names::text[]) AS query_name
         ),
         ranked AS (
             SELECT
