@@ -169,20 +169,53 @@ def main() -> None:
             WHERE id = 'lyra'
         """))
 
+        # Deduplicate lyra contributions: merge rows with same lower(name)
+        # into the one with highest mention_count, delete the rest.
+        conn.execute(text("""
+            WITH dupes AS (
+                SELECT lower(name) AS lname,
+                       array_agg(id ORDER BY mention_count DESC, created_at) AS ids,
+                       sum(mention_count) AS total_mentions
+                FROM user_contributions
+                WHERE source = 'lyra'
+                GROUP BY lower(name)
+                HAVING count(*) > 1
+            )
+            UPDATE user_contributions uc
+            SET mention_count = d.total_mentions
+            FROM dupes d
+            WHERE uc.id = d.ids[1]
+              AND lower(uc.name) = d.lname
+        """))
+        conn.execute(text("""
+            WITH dupes AS (
+                SELECT lower(name) AS lname,
+                       array_agg(id ORDER BY mention_count DESC, created_at) AS ids
+                FROM user_contributions
+                WHERE source = 'lyra'
+                GROUP BY lower(name)
+                HAVING count(*) > 1
+            )
+            DELETE FROM user_contributions
+            WHERE id IN (
+                SELECT unnest(ids[2:]) FROM dupes
+            )
+        """))
+
         # One-time resets: re-enrich discoveries processed with older prompts/logic.
         # Each reset uses a versioned flag in enrichment_data to run only once.
-        # v3: improved identify prompt with caption-garbling awareness
+        # v4: improved prompt (new_site near-impossible) + Wikidata re-search + dedup
         conn.execute(text("""
             UPDATE user_contributions
             SET enrichment_status = 'pending', last_facts_hash = NULL
             WHERE source = 'lyra'
-              AND enrichment_status IN ('enriched', 'enriching')
+              AND enrichment_status IN ('enriched', 'enriching', 'matched')
               AND promoted_site_id IS NULL
-              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v3_reset'))
+              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v4_reset'))
         """))
         conn.execute(text("""
             UPDATE user_contributions
-            SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v3_reset": true}'::jsonb
+            SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v4_reset": true}'::jsonb
             WHERE source = 'lyra'
               AND promoted_site_id IS NULL
         """))
