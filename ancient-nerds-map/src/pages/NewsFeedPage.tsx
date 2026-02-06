@@ -307,7 +307,7 @@ export default function NewsFeedPage() {
           onClick={() => setShowLyraProfile(true)}
         />
         <div className="news-page-lyra-label">
-          <span className="news-page-lyra-name" style={{ cursor: 'pointer' }} onClick={() => setShowLyraProfile(true)}>Lyra Wiskerbyte</span>
+          <span className="news-page-lyra-name" style={{ cursor: 'pointer' }} onClick={() => setShowLyraProfile(true)}>News Feed</span>
           {stats && (
             <div className="news-page-stats">
               <span className="news-page-stats-item"><strong>{stats.total_videos}</strong> videos processed</span>

@@ -57,40 +57,67 @@ def compute_score(mentions: int, videos: int, channels: int, days_since: float) 
     return round(score, 3)
 
 
-def find_similar_sites(db: Session, normalized_name: str, limit: int = 5) -> list[dict]:
+def find_similar_sites_batch(
+    db: Session, names: list[str], limit_per_name: int = 5,
+) -> dict[str, list[dict]]:
     """
-    Find similar sites using pg_trgm word_similarity.
+    Find similar sites for multiple names in a single query using pg_trgm.
 
-    Returns top matches with similarity >= 0.3.
+    Returns a dict mapping each input name to its top matches.
     """
+    if not names:
+        return {}
+
+    # Single query: cross join input names with unified_site_names, rank by similarity
     result = db.execute(text("""
-        SELECT DISTINCT ON (usn.site_id)
-            usn.site_id,
-            usn.name AS matched_name,
-            us.name AS site_name,
-            us.thumbnail_url,
-            us.country,
-            us.source_id,
-            us.source_url,
-            word_similarity(:name, usn.name_normalized) AS similarity
-        FROM unified_site_names usn
-        JOIN unified_sites us ON us.id = usn.site_id
-        WHERE word_similarity(:name, usn.name_normalized) >= 0.3
-        ORDER BY usn.site_id, word_similarity(:name, usn.name_normalized) DESC
-    """), {"name": normalized_name})
+        WITH input_names AS (
+            SELECT unnest(:names) AS query_name
+        ),
+        ranked AS (
+            SELECT
+                inp.query_name,
+                usn.site_id,
+                us.name AS site_name,
+                us.thumbnail_url,
+                us.country,
+                us.source_id,
+                us.source_url,
+                word_similarity(inp.query_name, usn.name_normalized) AS similarity,
+                ROW_NUMBER() OVER (
+                    PARTITION BY inp.query_name, usn.site_id
+                    ORDER BY word_similarity(inp.query_name, usn.name_normalized) DESC
+                ) AS rn_site,
+                ROW_NUMBER() OVER (
+                    PARTITION BY inp.query_name
+                    ORDER BY word_similarity(inp.query_name, usn.name_normalized) DESC
+                ) AS rn_global
+            FROM input_names inp
+            CROSS JOIN LATERAL (
+                SELECT usn2.site_id, usn2.name_normalized
+                FROM unified_site_names usn2
+                WHERE word_similarity(inp.query_name, usn2.name_normalized) >= 0.3
+                ORDER BY word_similarity(inp.query_name, usn2.name_normalized) DESC
+                LIMIT 20
+            ) usn
+            JOIN unified_sites us ON us.id = usn.site_id
+        )
+        SELECT query_name, site_id, site_name, thumbnail_url, country,
+               source_id, source_url, similarity
+        FROM ranked
+        WHERE rn_site = 1 AND rn_global <= :limit
+        ORDER BY query_name, similarity DESC
+    """), {"names": names, "limit": limit_per_name})
 
-    matches = []
+    matches_by_name: dict[str, list[dict]] = {n: [] for n in names}
     for row in result:
-        # Construct Wikipedia URL if wikidata source
         wikipedia_url = None
         if row.source_id == "wikidata" and row.source_url:
             wikipedia_url = row.source_url
         elif row.site_name:
-            # Fallback: construct from site name
             wiki_name = row.site_name.replace(" ", "_")
             wikipedia_url = f"https://en.wikipedia.org/wiki/{wiki_name}"
 
-        matches.append({
+        matches_by_name[row.query_name].append({
             "site_id": str(row.site_id),
             "name": row.site_name,
             "similarity": round(row.similarity, 2),
@@ -99,9 +126,7 @@ def find_similar_sites(db: Session, normalized_name: str, limit: int = 5) -> lis
             "country": row.country,
         })
 
-    # Sort by similarity descending, take top N
-    matches.sort(key=lambda x: x["similarity"], reverse=True)
-    return matches[:limit]
+    return matches_by_name
 
 
 @router.get("/list")
@@ -262,10 +287,12 @@ async def get_discoveries(
     offset = (page - 1) * page_size
     page_items = items_with_score[offset:offset + page_size]
 
-    # Find similar sites for each item on this page
-    for item in page_items:
-        normalized = normalize_name(item["name_normalized"])
-        suggestions = find_similar_sites(db, normalized, limit=5)
+    # Find similar sites for all items in a single batch query
+    query_names = [normalize_name(item["name_normalized"]) for item in page_items]
+    all_suggestions = find_similar_sites_batch(db, query_names, limit_per_name=5)
+
+    for item, qname in zip(page_items, query_names, strict=True):
+        suggestions = all_suggestions.get(qname, [])
         item["suggestions"] = suggestions
 
         # Best match if top suggestion has similarity >= 0.6
