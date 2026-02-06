@@ -153,8 +153,8 @@ jobs:
             AFTER=$(git rev-parse HEAD)
             CHANGED=$(git diff --name-only $BEFORE $AFTER)
 
-            # Only rebuild frontend if frontend files changed
-            if echo "$CHANGED" | grep -q "^ancient-nerds-map/"; then
+            # Rebuild frontend if files changed OR dist is missing key assets
+            if echo "$CHANGED" | grep -q "^ancient-nerds-map/" || [ ! -f ancient-nerds-map/dist/an-logo.svg ]; then
               echo "==> Building frontend..."
               if echo "$CHANGED" | grep -q "package-lock.json"; then
                 cd ancient-nerds-map && npm ci && npm run build && cd ..
@@ -187,12 +187,12 @@ jobs:
             curl -sf http://localhost:8000/ || echo "WARNING: Health check failed"
 
             echo "==> Restarting log streaming..."
-            chmod +x scripts/follow_logs.sh
+            [ -f scripts/follow_logs.sh ] && chmod +x scripts/follow_logs.sh
             mkdir -p logs
             if [ -f logs/.follow_logs.pid ]; then
               kill "$(cat logs/.follow_logs.pid)" 2>/dev/null || true
               sleep 1
             fi
-            nohup ./scripts/follow_logs.sh </dev/null >/dev/null 2>&1 &
+            [ -f scripts/follow_logs.sh ] && nohup ./scripts/follow_logs.sh </dev/null >/dev/null 2>&1 &
             echo $! > logs/.follow_logs.pid
             echo "==> Deploy complete!"'
