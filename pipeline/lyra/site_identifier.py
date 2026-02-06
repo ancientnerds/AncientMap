@@ -36,6 +36,7 @@ from pipeline.utils.text import clean_description, extract_period_from_text, nor
 logger = logging.getLogger(__name__)
 
 PROMPT_PATH = Path(__file__).parent / "prompts" / "identify_site.txt"
+PICK_ENTITY_PROMPT_PATH = Path(__file__).parent / "prompts" / "pick_wikidata_entity.txt"
 
 WIKIDATA_SEARCH_URL = "https://www.wikidata.org/w/api.php"
 WIKIDATA_ENTITY_URL = "https://www.wikidata.org/w/api.php"
@@ -279,7 +280,7 @@ def _process_single(
         return True
 
     if match_type == "db_match":
-        return _handle_db_match(session, contribution, identification)
+        return _handle_db_match(session, contribution, identification, client, settings)
 
     if match_type in ("wikidata_match", "new_site"):
         return _handle_wikidata_or_new(session, contribution, identification, settings)
@@ -412,6 +413,120 @@ def _search_wikidata(name: str) -> list[dict]:
         })
 
     return candidates
+
+
+def _check_enwiki_sitelinks(qids: list[str]) -> dict[str, bool]:
+    """Batch-check which Wikidata entities have English Wikipedia pages.
+
+    Single API call to wbgetentities with props=sitelinks&sitefilter=enwiki.
+    Returns {qid: has_wikipedia} dict.
+    """
+    if not qids:
+        return {}
+
+    try:
+        resp = fetch_with_retry(
+            WIKIDATA_ENTITY_URL,
+            params={
+                "action": "wbgetentities",
+                "ids": "|".join(qids),
+                "props": "sitelinks",
+                "sitefilter": "enwiki",
+                "format": "json",
+            },
+        )
+        data = resp.json()
+    except Exception as e:
+        logger.warning(f"Wikidata sitelinks check failed: {e}")
+        return {}
+
+    result = {}
+    entities = data.get("entities", {})
+    for qid in qids:
+        entity = entities.get(qid, {})
+        sitelinks = entity.get("sitelinks", {})
+        result[qid] = "enwiki" in sitelinks
+
+    return result
+
+
+def _pick_wikidata_entity(
+    client: anthropic.Anthropic,
+    model: str,
+    site_name: str,
+    country: str | None,
+    site_type: str | None,
+    candidates: list[dict],
+) -> str | None:
+    """Pick the best Wikidata entity from candidates annotated with has_wikipedia.
+
+    1. Filter to candidates with has_wikipedia == True
+    2. If 1 → return its QID directly (no Haiku call)
+    3. If 0 → return None (skip Wikidata enrichment)
+    4. If 2+ → ask Haiku to pick, return chosen QID
+    """
+    with_wiki = [c for c in candidates if c.get("has_wikipedia")]
+
+    if len(with_wiki) == 0:
+        logger.info(f"  [{site_name}] No Wikidata candidates have Wikipedia pages — skipping")
+        return None
+
+    if len(with_wiki) == 1:
+        qid = with_wiki[0]["qid"]
+        logger.info(f"  [{site_name}] Single Wikipedia candidate: {qid} ({with_wiki[0]['label']})")
+        return qid
+
+    # Multiple candidates with Wikipedia — ask Haiku to pick
+    options_lines = []
+    for i, c in enumerate(with_wiki):
+        letter = chr(ord("A") + i)
+        desc = c.get("description", "no description")
+        options_lines.append(f'{letter}) {c["qid"]}: "{c["label"]}" — {desc} (has Wikipedia)')
+
+    context_parts = []
+    if country:
+        context_parts.append(country)
+    if site_type:
+        context_parts.append(site_type)
+    context = " (" + ", ".join(context_parts) + ")" if context_parts else ""
+
+    prompt_template = PICK_ENTITY_PROMPT_PATH.read_text(encoding="utf-8")
+    prompt = prompt_template.format(
+        site_name=site_name,
+        context=context,
+        options="\n".join(options_lines),
+    )
+
+    logger.info(f"  [{site_name}] Asking Haiku to pick from {len(with_wiki)} Wikipedia candidates")
+
+    try:
+        response = client.messages.create(
+            model=model,
+            max_tokens=32,
+            temperature=0.0,
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except anthropic.APIError as e:
+        logger.warning(f"Haiku tiebreaker API error for {site_name}: {e}")
+        return with_wiki[0]["qid"]
+
+    if not response.content or not hasattr(response.content[0], "text"):
+        return with_wiki[0]["qid"]
+
+    reply = response.content[0].text.strip()
+    # Extract QID from reply (e.g. "Q115679382" or "A) Q115679382")
+    qid_match = re.search(r"Q\d+", reply)
+    if qid_match:
+        chosen_qid = qid_match.group()
+        # Validate it's one of our candidates
+        valid_qids = {c["qid"] for c in with_wiki}
+        if chosen_qid in valid_qids:
+            logger.info(f"  [{site_name}] Haiku picked: {chosen_qid}")
+            return chosen_qid
+
+    # Haiku returned something unexpected — fall back to first
+    logger.warning(f"  [{site_name}] Haiku returned unexpected: '{reply}', using first candidate")
+    return with_wiki[0]["qid"]
 
 
 def _enrich_from_wikidata(qid: str) -> dict:
@@ -698,6 +813,8 @@ def _handle_db_match(
     session: Session,
     contribution: UserContribution,
     identification: dict,
+    client: anthropic.Anthropic,
+    settings: LyraSettings,
 ) -> bool:
     """Handle a db_match result: link NewsItems to the matched site."""
     match_id = identification.get("match_id")
@@ -751,18 +868,22 @@ def _handle_db_match(
     # Enrich via Wikidata: search with corrected name or matched site name
     search_name = identification.get("site_name") or site.name
     wikidata_candidates = _search_wikidata(search_name)
+    best_qid = None
     if wikidata_candidates:
-        # Pick the best archaeological/historical candidate
-        best_qid = wikidata_candidates[0]["qid"]
-        for candidate in wikidata_candidates:
-            desc = candidate.get("description", "").lower()
-            if any(kw in desc for kw in [
-                "archaeolog", "ancient", "historic", "ruin", "settlement",
-                "temple", "tomb", "fort", "monument", "castle", "site",
-            ]):
-                best_qid = candidate["qid"]
-                break
+        # Batch-check which candidates have English Wikipedia pages
+        qids = [c["qid"] for c in wikidata_candidates]
+        sitelinks = _check_enwiki_sitelinks(qids)
+        for c in wikidata_candidates:
+            c["has_wikipedia"] = sitelinks.get(c["qid"], False)
 
+        best_qid = _pick_wikidata_entity(
+            client, settings.model_identify,
+            search_name, contribution.country or site.country,
+            contribution.site_type or site.site_type,
+            wikidata_candidates,
+        )
+
+    if best_qid:
         enrichment = _enrich_from_wikidata(best_qid)
         if enrichment:
             contribution.wikidata_id = best_qid

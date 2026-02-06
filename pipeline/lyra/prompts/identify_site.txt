@@ -56,7 +56,16 @@ Determine which of these match types applies (in order of preference):
 
 4. **new_site**: ONLY use as a last resort. With 50,000+ sites in our DB and all of Wikidata, a truly unknown site is extremely rare. Only use new_site if you are highly confident this is a real, specific, named archaeological site that genuinely does not appear in the database candidates or Wikidata candidates. If unsure, prefer not_a_site.
 
+## CRITICAL: Country/Region Cross-Check
+
+Before returning a db_match, you MUST verify the candidate's country against the video facts:
+- If the video facts say the site is in Japan but the database candidate is in the United Kingdom, DO NOT match them regardless of name similarity.
+- If the video facts mention a specific country or region, the matched candidate MUST be in that country or a neighboring/historically-related region.
+- Geographic mismatch is a HARD DISQUALIFIER. A phonetically similar name in the wrong country is a coincidence, not a match.
+- If no candidate matches both phonetically AND geographically, prefer not_a_site or new_site over a forced db_match.
+
 ## Rules
+- ALWAYS cross-check the candidate's country against the facts before confirming a match
 - ALWAYS check if the extracted name could be a YouTube caption garbling of a DB candidate — compare phonetics, not just spelling
 - Use the video title/description for correct spelling when available
 - site_name in your response MUST be the correct real name (not the garbled version)
@@ -74,6 +83,6 @@ Return ONLY valid JSON:
     "site_name": "Correct real name of the site (NOT the garbled caption version)",
     "country": "Modern country name",
     "site_type": "settlement|temple|tomb|...",
-    "period_estimate": "e.g. Bronze Age, 3rd century BC, Neolithic",
-    "reasoning": "Brief explanation of your identification"
+    "period_estimate": "< 4500 BC|4500 - 3000 BC|3000 - 1500 BC|1500 - 500 BC|500 BC - 1 AD|1 - 500 AD|500 - 1000 AD|1000 - 1500 AD|1500+ AD|Unknown",
+    "reasoning": "Brief explanation of your identification. MUST include your country cross-check reasoning."
 }}

@@ -220,6 +220,22 @@ def main() -> None:
               AND promoted_site_id IS NULL
         """))
 
+        # v5: tiered AI + country validation + tighter pg_trgm threshold
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET enrichment_status = 'pending', last_facts_hash = NULL
+            WHERE source = 'lyra'
+              AND enrichment_status IN ('enriched', 'enriching', 'matched')
+              AND promoted_site_id IS NULL
+              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v5_reset'))
+        """))
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v5_reset": true}'::jsonb
+            WHERE source = 'lyra'
+              AND promoted_site_id IS NULL
+        """))
+
         conn.commit()
 
     # Seed channels
