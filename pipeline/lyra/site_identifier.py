@@ -98,11 +98,14 @@ def identify_and_enrich_sites(settings: LyraSettings) -> int:
 
         for contribution in contributions:
             try:
-                result = _process_single(
-                    session, contribution, client, prompt_template, settings
-                )
-                if result:
-                    processed += 1
+                # Each contribution runs in a SAVEPOINT so a failure in one
+                # doesn't poison the session for the rest.
+                with session.begin_nested():
+                    result = _process_single(
+                        session, contribution, client, prompt_template, settings
+                    )
+                    if result:
+                        processed += 1
             except Exception:
                 logger.exception(f"Failed to process contribution {contribution.id}: {contribution.name}")
                 contribution.enrichment_status = "failed"
@@ -265,17 +268,21 @@ def _fetch_db_candidates(session: Session, name: str, limit: int = 10) -> list[d
         return []
 
     try:
-        session.execute(text("SET LOCAL pg_trgm.word_similarity_threshold = 0.25"))
-        rows = session.execute(text("""
-            SELECT usn.site_id, us.name AS site_name,
-                   us.country, us.source_id,
-                   word_similarity(:qname, usn.name_normalized) AS similarity
-            FROM unified_site_names usn
-            JOIN unified_sites us ON us.id = usn.site_id
-            WHERE :qname <% usn.name_normalized
-            ORDER BY usn.name_normalized <->> :qname
-            LIMIT :limit
-        """), {"qname": normalized, "limit": limit * 3}).fetchall()
+        # Use SAVEPOINT so pg_trgm failures don't poison the parent transaction.
+        # Without this, a caught exception leaves PostgreSQL in "aborted" state
+        # and all subsequent SQL in the same session fails with InFailedSqlTransaction.
+        with session.begin_nested():
+            session.execute(text("SET LOCAL pg_trgm.word_similarity_threshold = 0.25"))
+            rows = session.execute(text("""
+                SELECT usn.site_id, us.name AS site_name,
+                       us.country, us.source_id,
+                       word_similarity(:qname, usn.name_normalized) AS similarity
+                FROM unified_site_names usn
+                JOIN unified_sites us ON us.id = usn.site_id
+                WHERE :qname <% usn.name_normalized
+                ORDER BY usn.name_normalized <->> :qname
+                LIMIT :limit
+            """), {"qname": normalized, "limit": limit * 3}).fetchall()
     except Exception as e:
         logger.warning(f"pg_trgm query failed for '{name}': {e}")
         return []
