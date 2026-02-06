@@ -3,8 +3,13 @@
 Runs as a long-lived process (Docker entrypoint):
 - Hourly: fetch new videos, transcribe, summarize, generate posts, verify, deduplicate
 - Weekly: generate digest article
+
+Local dev usage:
+  python -m pipeline.lyra.orchestrator --once          # single full cycle
+  python -m pipeline.lyra.orchestrator --step identify  # single step only
 """
 
+import argparse
 import logging
 import sys
 import time
@@ -14,6 +19,22 @@ from pipeline.lyra.config import LyraSettings
 logger = logging.getLogger(__name__)
 
 CYCLE_INTERVAL = 3600  # 1 hour between pipeline runs
+
+# Step registry: name -> (function_import_path, description, needs_settings)
+STEPS = {
+    "fetch":       ("pipeline.lyra.transcript_fetcher", "fetch_new_videos",            True,  "Fetched {n} new videos"),
+    "summarize":   ("pipeline.lyra.summarizer",         "summarize_pending_videos",     True,  "Summarized {n} videos"),
+    "match":       ("pipeline.lyra.site_matcher",       "match_sites_for_pending_items", False, "Matched {n} news items to sites"),
+    "posts":       ("pipeline.lyra.tweet_generator",    "generate_pending_posts",       True,  "Generated {n} posts"),
+    "verify":      ("pipeline.lyra.tweet_verifier",     "verify_pending_posts",         True,  "Verified {n} posts"),
+    "dedup":       ("pipeline.lyra.tweet_deduplicator", "deduplicate_posts",            False, "Removed {n} duplicates"),
+    "screenshots": ("pipeline.lyra.screenshot_extractor", "extract_screenshots",        True,  "Extracted {n} screenshots"),
+    "backfill":    ("pipeline.lyra.transcript_fetcher", "backfill_video_descriptions",  True,  "Backfilled {n} video descriptions"),
+    "identify":    ("pipeline.lyra.site_identifier",    "identify_and_enrich_sites",    True,  "Identified/enriched {n} site discoveries"),
+}
+
+# Ordered step list matching the full pipeline sequence
+STEP_ORDER = ["fetch", "summarize", "match", "posts", "verify", "dedup", "screenshots", "backfill", "identify"]
 
 
 def setup_logging() -> None:
@@ -30,60 +51,93 @@ def setup_logging() -> None:
     logging.getLogger("anthropic").setLevel(logging.WARNING)
 
 
-def run_pipeline(settings: LyraSettings) -> None:
-    """Run one full pipeline cycle: fetch -> summarize -> match -> posts -> verify -> dedup -> screenshots -> identify."""
-    from pipeline.lyra.screenshot_extractor import extract_screenshots
-    from pipeline.lyra.site_identifier import identify_and_enrich_sites
-    from pipeline.lyra.site_matcher import match_sites_for_pending_items
-    from pipeline.lyra.summarizer import summarize_pending_videos
-    from pipeline.lyra.transcript_fetcher import backfill_video_descriptions, fetch_new_videos
-    from pipeline.lyra.tweet_deduplicator import deduplicate_posts
-    from pipeline.lyra.tweet_generator import generate_pending_posts
-    from pipeline.lyra.tweet_verifier import verify_pending_posts
+def _run_step(step_name: str, settings: LyraSettings) -> tuple[int, float]:
+    """Run a single pipeline step. Returns (result_count, elapsed_seconds)."""
+    import importlib
 
-    logger.info("=== Starting pipeline cycle ===")
+    module_path, func_name, needs_settings, _ = STEPS[step_name]
+    module = importlib.import_module(module_path)
+    func = getattr(module, func_name)
 
-    # Step 1: Fetch new videos and transcripts
-    new_videos = fetch_new_videos(settings)
-    logger.info(f"Step 1: Fetched {new_videos} new videos")
+    t0 = time.time()
+    result = func(settings) if needs_settings else func()
+    elapsed = time.time() - t0
+    return result, elapsed
 
-    # Step 2: Summarize transcripts
-    summarized = summarize_pending_videos(settings)
-    logger.info(f"Step 2: Summarized {summarized} videos")
 
-    # Step 3: Match extracted site names to globe sites
-    matched = match_sites_for_pending_items()
-    logger.info(f"Step 3: Matched {matched} news items to sites")
+def _log_cycle_summary(step_results: dict[str, tuple[int, float]], total_elapsed: float) -> None:
+    """Log a summary of what happened in this cycle."""
+    from sqlalchemy import text
+    from pipeline.database import engine
 
-    # Step 4: Generate posts
-    posts = generate_pending_posts(settings)
-    logger.info(f"Step 4: Generated {posts} posts")
+    # Query DB for current state
+    with engine.connect() as conn:
+        # Discovery counts
+        rows = conn.execute(text(
+            "SELECT enrichment_status, COUNT(*) FROM user_contributions "
+            "WHERE source='lyra' GROUP BY enrichment_status ORDER BY enrichment_status"
+        )).fetchall()
+        discovery_counts = {row[0]: row[1] for row in rows}
+        total_discoveries = sum(discovery_counts.values())
 
-    # Step 5: Verify posts
-    verified = verify_pending_posts(settings)
-    logger.info(f"Step 5: Verified {verified} posts")
+        # Video + news item counts
+        video_count = conn.execute(text("SELECT COUNT(*) FROM news_videos")).scalar()
+        news_count = conn.execute(text("SELECT COUNT(*) FROM news_items")).scalar()
 
-    # Step 6: Deduplicate
-    deduped = deduplicate_posts()
-    logger.info(f"Step 6: Removed {deduped} duplicates")
+    lines = ["", "=== Cycle Summary ==="]
 
-    # Step 7: Extract timestamp screenshots
-    screenshots = extract_screenshots(settings)
-    logger.info(f"Step 7: Extracted {screenshots} screenshots")
+    # Step timings
+    for name in STEP_ORDER:
+        if name in step_results:
+            count, elapsed = step_results[name]
+            _, _, _, desc_template = STEPS[name]
+            desc = desc_template.format(n=count)
+            lines.append(f"  {name:<12} {desc} ({elapsed:.1f}s)")
 
-    # Step 7b: Backfill video descriptions for pre-change videos
-    backfilled = backfill_video_descriptions(settings)
-    logger.info(f"Step 7b: Backfilled {backfilled} video descriptions")
+    lines.append(f"  ---")
+    lines.append(f"  Videos: {video_count}  |  News items: {news_count}")
 
-    # Step 8: Identify and enrich unmatched site discoveries
-    identified = identify_and_enrich_sites(settings)
-    logger.info(f"Step 8: Identified/enriched {identified} site discoveries")
+    # Discovery breakdown
+    parts = []
+    for status in ["pending", "matched", "enriched", "promoted", "rejected", "failed"]:
+        if status in discovery_counts:
+            parts.append(f"{discovery_counts[status]} {status}")
+    lines.append(f"  Discoveries: {total_discoveries} ({', '.join(parts)})")
 
-    logger.info("=== Pipeline cycle complete ===")
+    lines.append(f"=== Pipeline cycle complete ({total_elapsed:.1f}s) ===")
+    logger.info("\n".join(lines))
+
+
+def run_pipeline(settings: LyraSettings, only_step: str | None = None) -> None:
+    """Run one full pipeline cycle, or a single step if only_step is set."""
+    cycle_start = time.time()
+    step_results: dict[str, tuple[int, float]] = {}
+
+    steps_to_run = [only_step] if only_step else STEP_ORDER
+
+    if only_step:
+        logger.info(f"=== Running single step: {only_step} ===")
+    else:
+        logger.info("=== Starting pipeline cycle ===")
+
+    for step_name in steps_to_run:
+        result, elapsed = _run_step(step_name, settings)
+        step_results[step_name] = (result, elapsed)
+        _, _, _, desc_template = STEPS[step_name]
+        desc = desc_template.format(n=result)
+        logger.info(f"  {step_name}: {desc} ({elapsed:.1f}s)")
+
+    total_elapsed = time.time() - cycle_start
+    _log_cycle_summary(step_results, total_elapsed)
 
 
 def main() -> None:
     """Main entry point for the Lyra pipeline service."""
+    parser = argparse.ArgumentParser(description="Lyra news pipeline orchestrator")
+    parser.add_argument("--once", action="store_true", help="Run a single pipeline cycle and exit")
+    parser.add_argument("--step", choices=list(STEPS.keys()), help="Run only a single named step")
+    args = parser.parse_args()
+
     setup_logging()
     logger.info("Lyra Wiskerbyte pipeline starting...")
 
@@ -236,6 +290,24 @@ def main() -> None:
               AND promoted_site_id IS NULL
         """))
 
+        # v6: re-enrich matched items missing wikipedia_url (Wikidata enrichment
+        # for db_match was added after v5 reset already ran on VPS)
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET enrichment_status = 'pending', last_facts_hash = NULL
+            WHERE source = 'lyra'
+              AND enrichment_status = 'matched'
+              AND wikipedia_url IS NULL
+              AND promoted_site_id IS NULL
+              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v6_reset'))
+        """))
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v6_reset": true}'::jsonb
+            WHERE source = 'lyra'
+              AND promoted_site_id IS NULL
+        """))
+
         conn.commit()
 
     # Seed channels
@@ -246,7 +318,31 @@ def main() -> None:
     from pipeline.lyra.site_identifier import seed_lyra_source
     seed_lyra_source()
 
-    # Import article generator
+    # --once or --step: run and exit
+    if args.once or args.step:
+        cycle_status = "ok"
+        cycle_error = None
+        try:
+            run_pipeline(settings, only_step=args.step)
+        except Exception as exc:
+            logger.exception("Pipeline cycle failed")
+            cycle_status = "error"
+            cycle_error = str(exc)
+
+        # Write heartbeat
+        with engine.connect() as conn:
+            conn.execute(text("""
+                INSERT INTO pipeline_heartbeats (pipeline_name, last_heartbeat, status, last_error)
+                VALUES ('lyra', NOW(), :status, :error)
+                ON CONFLICT (pipeline_name) DO UPDATE SET
+                    last_heartbeat = NOW(),
+                    status = EXCLUDED.status,
+                    last_error = EXCLUDED.last_error
+            """), {"status": cycle_status, "error": cycle_error})
+            conn.commit()
+        return
+
+    # Production mode: infinite loop
     from pipeline.lyra.article_generator import generate_weekly_article, should_generate_article
 
     last_pipeline_run = 0.0
