@@ -128,7 +128,7 @@ async def get_discoveries(
     page_size: int = Query(24, ge=1, le=100),
     min_mentions: int = Query(1, ge=1),
     sort_by: str = Query("score", regex="^(score|mentions|recency)$"),
-    status: str = Query("all", regex="^(all|matched|enriched|pending)$"),
+    status: str = Query("all", regex="^(all|matched|enriched|pending|rejected)$"),
     db: Session = Depends(get_db),
 ):
     """
@@ -161,7 +161,11 @@ async def get_discoveries(
                 uc.thumbnail_url,
                 uc.wikipedia_url,
                 uc.enrichment_data,
-                uc.created_at
+                uc.created_at,
+                uc.lat,
+                uc.lon,
+                uc.description,
+                uc.wikidata_id
             FROM user_contributions uc
             WHERE uc.source = 'lyra'
               AND COALESCE(uc.enrichment_status, 'pending') NOT IN ('failed', 'not_a_site')
@@ -217,6 +221,10 @@ async def get_discoveries(
             COALESCE(mi.matched_period_name, c.period_name) AS period_name,
             COALESCE(mi.matched_thumbnail, c.thumbnail_url) AS thumbnail_url,
             c.wikipedia_url,
+            c.lat,
+            c.lon,
+            c.description,
+            c.wikidata_id,
             COALESCE(va.unique_videos, 0) AS unique_videos,
             COALESCE(va.unique_channels, 0) AS unique_channels,
             c.mention_count,
@@ -252,6 +260,8 @@ async def get_discoveries(
             continue
         if status == "pending" and enrichment_status not in ("pending", "enriching"):
             continue
+        if status == "rejected" and enrichment_status != "rejected":
+            continue
 
         items.append({
             "id": row.id,
@@ -266,6 +276,10 @@ async def get_discoveries(
             "period_name": row.period_name,
             "thumbnail_url": row.thumbnail_url,
             "wikipedia_url": row.wikipedia_url,
+            "lat": row.lat,
+            "lon": row.lon,
+            "description": row.description,
+            "wikidata_id": row.wikidata_id,
             "mention_count": row.mention_count,
             "facts": _flatten_facts(row.all_facts),
             "videos": _build_video_refs(row.videos),
@@ -291,6 +305,9 @@ async def get_discoveries(
                     us.site_type,
                     us.period_name,
                     us.source_url,
+                    us.lat,
+                    us.lon,
+                    us.description,
                     COUNT(*) AS mention_count,
                     COUNT(DISTINCT ni.video_id) AS unique_videos,
                     COUNT(DISTINCT nv.channel_id) AS unique_channels,
@@ -309,7 +326,8 @@ async def get_discoveries(
                   AND ni.site_match_tried = true
                   AND us.source_id != 'ancient_nerds'
                 GROUP BY us.id, us.name, us.source_id, us.thumbnail_url,
-                         us.country, us.site_type, us.period_name, us.source_url
+                         us.country, us.site_type, us.period_name, us.source_url,
+                         us.lat, us.lon, us.description
                 HAVING COUNT(*) >= :min_mentions
             )
             SELECT * FROM direct
@@ -344,6 +362,10 @@ async def get_discoveries(
                 "period_name": row.period_name,
                 "thumbnail_url": row.thumbnail_url,
                 "wikipedia_url": wikipedia_url,
+                "lat": row.lat,
+                "lon": row.lon,
+                "description": row.description,
+                "wikidata_id": None,
                 "mention_count": row.mention_count,
                 "facts": _flatten_facts(row.all_facts),
                 "videos": _build_video_refs(row.videos),
