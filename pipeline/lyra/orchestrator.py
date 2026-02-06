@@ -68,6 +68,7 @@ def _run_step(step_name: str, settings: LyraSettings) -> tuple[int, float]:
 def _log_cycle_summary(step_results: dict[str, tuple[int, float]], total_elapsed: float) -> None:
     """Log a summary of what happened in this cycle."""
     from sqlalchemy import text
+
     from pipeline.database import engine
 
     # Query DB for current state
@@ -94,7 +95,7 @@ def _log_cycle_summary(step_results: dict[str, tuple[int, float]], total_elapsed
             desc = desc_template.format(n=count)
             lines.append(f"  {name:<12} {desc} ({elapsed:.1f}s)")
 
-    lines.append(f"  ---")
+    lines.append("  ---")
     lines.append(f"  Videos: {video_count}  |  News items: {news_count}")
 
     # Discovery breakdown
