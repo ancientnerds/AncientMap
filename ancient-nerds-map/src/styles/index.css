@@ -13948,7 +13948,14 @@ body.news-feed-open .empire-borders-window {
   align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+}
+
+.lyra-discovery-header-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .lyra-discovery-name {
@@ -13959,8 +13966,18 @@ body.news-feed-open .empire-borders-window {
   line-height: 1.3;
 }
 
+.lyra-discovery-score {
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 4px;
+  font-family: 'Orbitron', sans-serif;
+}
+
 .lyra-discovery-mentions {
-  flex-shrink: 0;
   padding: 2px 8px;
   font-size: 11px;
   font-weight: 700;
@@ -13969,6 +13986,37 @@ body.news-feed-open .empire-borders-window {
   border: 1px solid rgba(192, 32, 35, 0.3);
   border-radius: 4px;
   font-family: 'Orbitron', sans-serif;
+}
+
+/* Facts list with left border accent */
+.lyra-discovery-facts {
+  margin: 0 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lyra-discovery-fact {
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.7);
+  padding-left: 10px;
+  border-left: 2px solid rgba(192, 32, 35, 0.4);
+}
+
+.lyra-discovery-expand {
+  background: transparent;
+  border: none;
+  color: rgba(0, 240, 255, 0.7);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 0;
+  text-align: left;
+  transition: color 0.15s;
+}
+
+.lyra-discovery-expand:hover {
+  color: rgba(0, 240, 255, 1);
 }
 
 .lyra-discovery-description {
@@ -14009,6 +14057,167 @@ body.news-feed-open .empire-borders-window {
   border-radius: 3px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+/* Video chips container */
+.lyra-discovery-videos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.lyra-discovery-video-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #ff4444;
+  background: rgba(255, 68, 68, 0.1);
+  border: 1px solid rgba(255, 68, 68, 0.2);
+  border-radius: 4px;
+  text-decoration: none;
+  transition: all 0.15s;
+}
+
+.lyra-discovery-video-chip:hover {
+  background: rgba(255, 68, 68, 0.2);
+  border-color: rgba(255, 68, 68, 0.4);
+}
+
+.lyra-video-channel {
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lyra-video-timestamp {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 10px;
+}
+
+/* Suggestions chips */
+.lyra-discovery-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.lyra-suggestions-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.lyra-suggestion-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  color: rgba(0, 240, 255, 0.85);
+  background: rgba(0, 240, 255, 0.08);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 3px;
+  text-decoration: none;
+  transition: all 0.15s;
+}
+
+.lyra-suggestion-chip:hover {
+  background: rgba(0, 240, 255, 0.15);
+  border-color: rgba(0, 240, 255, 0.4);
+}
+
+.lyra-suggestion-flag {
+  width: 12px;
+  height: 9px;
+  border-radius: 1px;
+}
+
+/* Hero image for high-confidence matches */
+.lyra-discovery-hero {
+  display: flex;
+  gap: 12px;
+  padding: 10px;
+  margin: -16px -16px 12px;
+  background: rgba(0, 240, 255, 0.05);
+  border-bottom: 1px solid rgba(0, 240, 255, 0.1);
+  border-radius: 8px 8px 0 0;
+}
+
+.lyra-hero-thumb {
+  width: 80px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.lyra-hero-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.lyra-hero-label {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.lyra-hero-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(0, 240, 255, 0.9);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lyra-hero-name:hover {
+  color: rgba(0, 240, 255, 1);
+  text-decoration: underline;
+}
+
+.lyra-hero-wiki {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  text-decoration: none;
+}
+
+.lyra-hero-wiki:hover {
+  color: rgba(255, 255, 255, 0.8);
+  text-decoration: underline;
+}
+
+/* Stats row */
+.lyra-discovery-stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.lyra-stats-sep {
+  color: rgba(255, 255, 255, 0.2);
+}
+
+/* Filter groups */
+.lyra-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .lyra-discovery-youtube {
@@ -14057,5 +14266,25 @@ body.news-feed-open .empire-borders-window {
     width: auto;
     padding: 4px 10px;
     font-size: 10px;
+  }
+
+  .lyra-discovery-hero {
+    flex-direction: column;
+    gap: 8px;
+    margin: -12px -12px 10px;
+    padding: 8px;
+  }
+
+  .lyra-hero-thumb {
+    width: 100%;
+    height: 100px;
+  }
+
+  .lyra-video-channel {
+    max-width: 70px;
+  }
+
+  .lyra-filter-group {
+    flex-wrap: wrap;
   }
 }

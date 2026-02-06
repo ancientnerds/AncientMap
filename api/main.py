@@ -24,7 +24,18 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from api.cache import cache_get, cache_set, get_redis_client
-from api.routes import ai, content, contributions, news, og, sitemap, sites, sources, streetview
+from api.routes import (
+    ai,
+    content,
+    contributions,
+    discoveries,
+    news,
+    og,
+    sitemap,
+    sites,
+    sources,
+    streetview,
+)
 from pipeline.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -114,6 +125,7 @@ app.include_router(sitemap.router, prefix="/api/sitemap", tags=["sitemap"])
 app.include_router(streetview.router, prefix="/api/streetview", tags=["streetview"])
 app.include_router(content.router, prefix="/api/content", tags=["content"])
 app.include_router(news.router, prefix="/api/news", tags=["news"])
+app.include_router(discoveries.router, prefix="/api/discoveries", tags=["discoveries"])
 
 # Serve news screenshots as static files
 _screenshots_dir = Path("public/data/news/screenshots")
