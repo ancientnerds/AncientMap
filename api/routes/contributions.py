@@ -19,6 +19,8 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from api.services.admin_auth import get_client_ip
+from api.services.turnstile import verify_turnstile as _verify_turnstile_shared
 from pipeline.database import get_db
 
 logger = logging.getLogger(__name__)
@@ -120,9 +122,6 @@ async def get_lyra_contributions(
 
 # Contributions JSON file path
 CONTRIBUTIONS_FILE = Path(__file__).parent.parent.parent / "data" / "contributions.json"
-
-from api.services.admin_auth import get_client_ip
-from api.services.turnstile import verify_turnstile as _verify_turnstile_shared
 
 # Rate limiting: max 25 submissions per IP per hour
 RATE_LIMIT_MAX = 25
