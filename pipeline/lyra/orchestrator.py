@@ -31,8 +31,9 @@ def setup_logging() -> None:
 
 
 def run_pipeline(settings: LyraSettings) -> None:
-    """Run one full pipeline cycle: fetch -> summarize -> match sites -> posts -> verify -> dedup -> screenshots."""
+    """Run one full pipeline cycle: fetch -> summarize -> match -> posts -> verify -> dedup -> screenshots -> identify."""
     from pipeline.lyra.screenshot_extractor import extract_screenshots
+    from pipeline.lyra.site_identifier import identify_and_enrich_sites
     from pipeline.lyra.site_matcher import match_sites_for_pending_items
     from pipeline.lyra.summarizer import summarize_pending_videos
     from pipeline.lyra.transcript_fetcher import fetch_new_videos
@@ -69,6 +70,10 @@ def run_pipeline(settings: LyraSettings) -> None:
     # Step 7: Extract timestamp screenshots
     screenshots = extract_screenshots(settings)
     logger.info(f"Step 7: Extracted {screenshots} screenshots")
+
+    # Step 8: Identify and enrich unmatched site discoveries
+    identified = identify_and_enrich_sites(settings)
+    logger.info(f"Step 8: Identified/enriched {identified} site discoveries")
 
     logger.info("=== Pipeline cycle complete ===")
 
@@ -128,11 +133,36 @@ def main() -> None:
                 last_error TEXT
             )
         """))
+
+        # Lyra auto-discovery migrations: new columns on user_contributions
+        conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS enrichment_status VARCHAR(20) DEFAULT 'pending'"))
+        conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS wikidata_id VARCHAR(20)"))
+        conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS wikipedia_url TEXT"))
+        conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS thumbnail_url TEXT"))
+        conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS period_start INTEGER"))
+        conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS period_end INTEGER"))
+        conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS period_name VARCHAR(100)"))
+        conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS score INTEGER NOT NULL DEFAULT 0"))
+        conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS last_facts_hash VARCHAR(64)"))
+        conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS enrichment_data JSONB"))
+        conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS promoted_site_id UUID REFERENCES unified_sites(id) ON DELETE SET NULL"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_contributions_enrichment ON user_contributions (source, enrichment_status)"))
+
+        # New column on news_videos for RSS description
+        conn.execute(text("ALTER TABLE news_videos ADD COLUMN IF NOT EXISTS description TEXT"))
+
+        # Functional index for site_identifier queries on news_items
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_news_items_site_name_lower ON news_items (lower(site_name_extracted))"))
+
         conn.commit()
 
     # Seed channels
     from pipeline.lyra.channels import seed_channels
     seed_channels()
+
+    # Seed Lyra source for auto-discovered sites
+    from pipeline.lyra.site_identifier import seed_lyra_source
+    seed_lyra_source()
 
     # Import article generator
     from pipeline.lyra.article_generator import generate_weekly_article, should_generate_article

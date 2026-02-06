@@ -19,6 +19,11 @@ class LyraSettings(BaseSettings):
     model_post: str = "claude-sonnet-4-5-20250929"
     model_verify: str = "claude-haiku-4-5-20251001"
     model_article: str = "claude-sonnet-4-5-20250929"
+    model_identify: str = "claude-haiku-4-5-20251001"
+
+    # Site identification settings
+    min_score_for_promotion: int = 55
+    max_identifications_per_cycle: int = 20
 
     # Pipeline settings
     lookup_days: int = 3

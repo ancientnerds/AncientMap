@@ -79,19 +79,24 @@ def get_recent_videos(channel: NewsChannel, lookup_days: int) -> list[dict]:
         if title and any(skip in title.lower() for skip in ["trailer", "premiere", "teaser", "promo"]):
             continue
 
-        # Get thumbnail
+        # Get thumbnail and description from media:group
         media_group = entry.find("media:group", ATOM_NS)
         thumbnail_url = None
+        description = None
         if media_group is not None:
             thumb = media_group.find("media:thumbnail", ATOM_NS)
             if thumb is not None:
                 thumbnail_url = thumb.get("url")
+            desc_el = media_group.find("media:description", ATOM_NS)
+            if desc_el is not None and desc_el.text:
+                description = desc_el.text.strip()
 
         videos.append({
             "id": video_id,
             "title": title,
             "published_at": published,
             "thumbnail_url": thumbnail_url,
+            "description": description,
         })
 
     return videos
@@ -179,6 +184,7 @@ def fetch_new_videos(settings: LyraSettings) -> int:
                         id=video_info["id"],
                         channel_id=channel.id,
                         title=video_info["title"],
+                        description=video_info.get("description"),
                         published_at=video_info["published_at"],
                         duration_minutes=duration,
                         thumbnail_url=video_info.get("thumbnail_url"),
@@ -192,6 +198,7 @@ def fetch_new_videos(settings: LyraSettings) -> int:
                     id=video_info["id"],
                     channel_id=channel.id,
                     title=video_info["title"],
+                    description=video_info.get("description"),
                     published_at=video_info["published_at"],
                     duration_minutes=duration,
                     thumbnail_url=video_info.get("thumbnail_url"),

@@ -2,6 +2,8 @@ Carefully analyze this entire transcript from an archaeological perspective.
 Create a comprehensive summary in strict JSON format with exact timestamp ranges.
 Select the {topic_limit} most significant archaeological discoveries, findings, or discussions.
 
+{video_context}
+
 ```json
 {{
     "main_category": "A one-line description of the content type",
@@ -17,7 +19,9 @@ Select the {topic_limit} most significant archaeological discoveries, findings, 
             "primary_site": {{
                 "name": "Exact name of the archaeological site",
                 "country": "Modern country name",
-                "confidence": "high"
+                "confidence": "high",
+                "site_type": "settlement|temple|tomb|fortification|megalithic|cave|rock_art|port|monument|inscription|ruin",
+                "approximate_period": "e.g. Bronze Age, 3rd century BC, Neolithic"
             }}
         }}
     ]
@@ -36,7 +40,10 @@ primary_site rules:
 - "confidence": "high" if the topic centers on this site, "medium" if mentioned significantly but not the main focus
 - Set primary_site to null if: the topic is about a technique/method, a general region/empire, multiple sites equally, or no specific site is discussed
 - Use the site's most common English name (e.g. "Pompeii" not "Pompei", "Gobekli Tepe" not "Gobeklitepe")
+- If the video title or description mentions specific site names, use those for the correct spelling
 - Do NOT fill for vague references like "somewhere in Egypt" or "a site in Turkey"
+- site_type must be one of: settlement, temple, tomb, fortification, megalithic, cave, rock_art, port, monument, inscription, ruin, archaeological_site
+- approximate_period: use standard archaeological period names or century notation
 
 Exclude: Personal anecdotes, off-topic, technical difficulties, channel promotions, audience interactions
 
