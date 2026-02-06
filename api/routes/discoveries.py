@@ -1,12 +1,12 @@
 """
-Lyra Discoveries API - Aggregated discovery data from news pipeline.
+Lyra Discoveries API - All Lyra-extracted sites as a curation overview.
 
-Provides deduplicated, scored discoveries with fuzzy site matching.
+Shows every site Lyra extracts from YouTube videos that is NOT in the
+manually-curated `ancient_nerds` source. Includes matched (to pleiades,
+dare, wikidata, etc.), enriched, and pending items.
 """
 
 import logging
-import math
-from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
@@ -20,41 +20,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 CACHE_TTL = 300  # 5 minutes
-
-
-def compute_score(mentions: int, videos: int, channels: int, days_since: float) -> float:
-    """
-    Compute importance score for a discovery.
-
-    Formula weights:
-    - 40% log-scaled mentions
-    - 25% log-scaled unique videos
-    - 20% unique channels (linear, capped at 5)
-    - 15% recency (decays over 90 days)
-
-    Returns a score between 0-1.
-    """
-    # Log-scaled mentions (1 mention = 0, 10 mentions = 1)
-    log_mentions = math.log10(max(1, mentions)) / math.log10(10)
-    log_mentions = min(1.0, log_mentions)
-
-    # Log-scaled videos
-    log_videos = math.log10(max(1, videos)) / math.log10(10)
-    log_videos = min(1.0, log_videos)
-
-    # Channels (linear, capped at 5)
-    channel_score = min(1.0, channels / 5.0)
-
-    # Recency (1.0 for today, decays to 0 over 90 days)
-    recency = max(0.0, 1.0 - (days_since / 90.0))
-
-    score = (
-        0.40 * log_mentions +
-        0.25 * log_videos +
-        0.20 * channel_score +
-        0.15 * recency
-    )
-    return round(score, 3)
 
 
 def find_similar_sites_batch(
@@ -121,177 +86,298 @@ def find_similar_sites_batch(
     return matches_by_name
 
 
+def _build_video_refs(videos_json: list[dict] | None) -> list[dict]:
+    """Deduplicate and format video references from a JSON aggregate."""
+    videos = []
+    seen = set()
+    if not videos_json:
+        return videos
+    for v in videos_json:
+        vid = v.get("video_id")
+        if vid and vid not in seen:
+            seen.add(vid)
+            ts = v.get("timestamp_seconds") or 0
+            deep_url = f"https://www.youtube.com/watch?v={vid}"
+            if ts > 0:
+                deep_url += f"&t={ts}s"
+            videos.append({
+                "video_id": vid,
+                "channel_name": v.get("channel_name", ""),
+                "timestamp_seconds": ts,
+                "deep_url": deep_url,
+            })
+    return videos
+
+
+def _flatten_facts(all_facts: list | None) -> list[str]:
+    """Flatten and deduplicate nested fact arrays."""
+    unique = set()
+    if not all_facts:
+        return []
+    for fact_list in all_facts:
+        if isinstance(fact_list, list):
+            for fact in fact_list:
+                if isinstance(fact, str) and fact.strip():
+                    unique.add(fact.strip())
+    return sorted(unique)
+
+
 @router.get("/list")
 async def get_discoveries(
     page: int = Query(1, ge=1),
     page_size: int = Query(24, ge=1, le=100),
     min_mentions: int = Query(1, ge=1),
     sort_by: str = Query("score", regex="^(score|mentions|recency)$"),
+    status: str = Query("all", regex="^(all|matched|enriched|pending)$"),
     db: Session = Depends(get_db),
 ):
     """
-    Get aggregated discoveries from news items.
+    Get all Lyra discoveries: any site extracted from YouTube videos that
+    is NOT in the ancient_nerds source.
 
-    Groups news_items by normalized site_name_extracted where:
-    - site_id IS NULL (not matched to a known site)
-    - site_match_tried = true (matching was attempted)
-
-    Returns deduplicated discoveries with:
-    - All unique facts from all mentions
-    - All video references with timestamps
-    - Computed importance score
-    - Top 5 similar site suggestions
+    Sources:
+    1. user_contributions WHERE source='lyra' (primary)
+    2. Direct site_matcher matches (news_items with site_id set, no contribution)
     """
-    cache_key = f"discoveries:list:{page}:{page_size}:{min_mentions}:{sort_by}"
+    cache_key = f"discoveries:list:{page}:{page_size}:{min_mentions}:{sort_by}:{status}"
     cached = cache_get(cache_key)
     if cached:
         return cached
 
-    # Aggregate query: group by normalized site name
-    # Collect all facts, video IDs, channels, and compute stats
-    agg_query = text("""
-        WITH extracted AS (
+    # ── Part 1: Lyra user_contributions ─────────────────────────────
+    # For each contribution, get matched site info (if any) from enrichment_data,
+    # and aggregate video references from news_items.
+    contributions_query = text("""
+        WITH contrib AS (
             SELECT
-                ni.site_name_extracted,
-                lower(trim(ni.site_name_extracted)) AS name_normalized,
-                ni.facts,
-                ni.video_id,
-                ni.timestamp_seconds,
-                nv.title AS video_title,
-                nc.id AS channel_id,
-                nc.name AS channel_name,
-                ni.created_at
-            FROM news_items ni
+                uc.id,
+                uc.name,
+                uc.enrichment_status,
+                uc.score,
+                uc.mention_count,
+                uc.country,
+                uc.site_type,
+                uc.period_name,
+                uc.thumbnail_url,
+                uc.wikipedia_url,
+                uc.enrichment_data,
+                uc.created_at
+            FROM user_contributions uc
+            WHERE uc.source = 'lyra'
+              AND COALESCE(uc.enrichment_status, 'pending') NOT IN ('failed', 'not_a_site')
+              AND uc.mention_count >= :min_mentions
+        ),
+        -- Get matched site info by extracting match_id from enrichment_data
+        matched_info AS (
+            SELECT
+                c.id AS contrib_id,
+                us.id AS matched_site_id,
+                us.name AS matched_site_name,
+                us.source_id AS matched_source,
+                us.thumbnail_url AS matched_thumbnail,
+                us.country AS matched_country,
+                us.site_type AS matched_site_type,
+                us.period_name AS matched_period_name
+            FROM contrib c
+            JOIN unified_sites us
+                ON us.id = (c.enrichment_data #>> '{identification,match_id}')::uuid
+            WHERE c.enrichment_data #>> '{identification,match_type}' IN ('db_match', 'wikidata_match')
+              AND c.enrichment_data #>> '{identification,match_id}' IS NOT NULL
+        ),
+        -- Aggregate video references per contribution
+        video_agg AS (
+            SELECT
+                c.id AS contrib_id,
+                jsonb_agg(DISTINCT jsonb_build_object(
+                    'video_id', ni.video_id,
+                    'channel_name', nc.name,
+                    'timestamp_seconds', ni.timestamp_seconds
+                )) AS videos,
+                jsonb_agg(ni.facts) FILTER (WHERE ni.facts IS NOT NULL) AS all_facts,
+                COUNT(DISTINCT ni.video_id) AS unique_videos,
+                COUNT(DISTINCT nc.id) AS unique_channels,
+                MAX(ni.created_at) AS last_mentioned
+            FROM contrib c
+            JOIN news_items ni ON lower(trim(ni.site_name_extracted)) = lower(trim(c.name))
             JOIN news_videos nv ON nv.id = ni.video_id
             JOIN news_channels nc ON nc.id = nv.channel_id
-            WHERE ni.site_id IS NULL
-              AND ni.site_match_tried = true
-              AND ni.site_name_extracted IS NOT NULL
-              AND ni.site_name_extracted != ''
-        ),
-        grouped AS (
-            SELECT
-                name_normalized,
-                MAX(site_name_extracted) AS display_name,
-                COUNT(*) AS mention_count,
-                COUNT(DISTINCT video_id) AS unique_videos,
-                COUNT(DISTINCT channel_id) AS unique_channels,
-                MAX(created_at) AS last_mentioned,
-                jsonb_agg(DISTINCT jsonb_build_object(
-                    'video_id', video_id,
-                    'channel_name', channel_name,
-                    'timestamp_seconds', timestamp_seconds
-                )) AS videos,
-                jsonb_agg(facts) FILTER (WHERE facts IS NOT NULL) AS all_facts
-            FROM extracted
-            GROUP BY name_normalized
-            HAVING COUNT(*) >= :min_mentions
+            GROUP BY c.id
         )
         SELECT
-            name_normalized,
-            display_name,
-            mention_count,
-            unique_videos,
-            unique_channels,
-            last_mentioned,
-            videos,
-            all_facts
-        FROM grouped
-        ORDER BY
-            CASE WHEN :sort_by = 'mentions' THEN mention_count END DESC NULLS LAST,
-            CASE WHEN :sort_by = 'recency' THEN last_mentioned END DESC NULLS LAST,
-            mention_count DESC,
-            last_mentioned DESC
+            c.id::text,
+            c.name AS display_name,
+            COALESCE(c.enrichment_status, 'pending') AS enrichment_status,
+            c.score AS enrichment_score,
+            mi.matched_site_id::text,
+            mi.matched_site_name,
+            mi.matched_source,
+            -- Prefer matched site metadata, fall back to contribution
+            COALESCE(mi.matched_country, c.country) AS country,
+            COALESCE(mi.matched_site_type, c.site_type) AS site_type,
+            COALESCE(mi.matched_period_name, c.period_name) AS period_name,
+            COALESCE(mi.matched_thumbnail, c.thumbnail_url) AS thumbnail_url,
+            c.wikipedia_url,
+            COALESCE(va.unique_videos, 0) AS unique_videos,
+            COALESCE(va.unique_channels, 0) AS unique_channels,
+            c.mention_count,
+            va.last_mentioned,
+            va.videos,
+            va.all_facts
+        FROM contrib c
+        LEFT JOIN matched_info mi ON mi.contrib_id = c.id
+        LEFT JOIN video_agg va ON va.contrib_id = c.id
+        -- Exclude items matched to ancient_nerds
+        WHERE mi.matched_source IS DISTINCT FROM 'ancient_nerds'
     """)
 
-    rows = db.execute(agg_query, {
+    contrib_rows = db.execute(contributions_query, {
         "min_mentions": min_mentions,
-        "sort_by": sort_by,
     }).fetchall()
 
-    # Process all rows for scoring, then paginate
-    now = datetime.now(UTC)
-    items_with_score = []
+    # Track contribution names (lowered) so we skip them in part 2
+    contrib_names_lower = set()
+    items = []
 
-    for row in rows:
-        # Calculate days since last mention
-        if row.last_mentioned:
-            last_dt = row.last_mentioned
-            if last_dt.tzinfo is None:
-                last_dt = last_dt.replace(tzinfo=UTC)
-            days_since = (now - last_dt).total_seconds() / 86400
-        else:
-            days_since = 90.0
+    for row in contrib_rows:
+        contrib_names_lower.add(row.display_name.lower().strip())
 
-        score = compute_score(
-            mentions=row.mention_count,
-            videos=row.unique_videos,
-            channels=row.unique_channels,
-            days_since=days_since,
-        )
+        enrichment_status = row.enrichment_status
+        # Apply status filter
+        if status == "matched" and enrichment_status != "matched":
+            continue
+        if status == "enriched" and enrichment_status not in ("enriched", "promoted"):
+            continue
+        if status == "pending" and enrichment_status not in ("pending", "enriching"):
+            continue
 
-        # Flatten and deduplicate facts from all mentions
-        unique_facts = set()
-        if row.all_facts:
-            for fact_list in row.all_facts:
-                if isinstance(fact_list, list):
-                    for fact in fact_list:
-                        if isinstance(fact, str) and fact.strip():
-                            unique_facts.add(fact.strip())
-
-        # Process video references
-        videos = []
-        seen_video_ids = set()
-        if row.videos:
-            for v in row.videos:
-                vid = v.get("video_id")
-                if vid and vid not in seen_video_ids:
-                    seen_video_ids.add(vid)
-                    ts = v.get("timestamp_seconds") or 0
-                    deep_url = f"https://www.youtube.com/watch?v={vid}"
-                    if ts > 0:
-                        deep_url += f"&t={ts}s"
-                    videos.append({
-                        "video_id": vid,
-                        "channel_name": v.get("channel_name", ""),
-                        "timestamp_seconds": ts,
-                        "deep_url": deep_url,
-                    })
-
-        items_with_score.append({
-            "name_normalized": row.name_normalized,
+        items.append({
+            "id": row.id,
             "display_name": row.display_name,
-            "facts": sorted(unique_facts),
-            "videos": videos,
-            "score": score,
+            "enrichment_status": enrichment_status,
+            "enrichment_score": row.enrichment_score or 0,
+            "matched_site_id": row.matched_site_id,
+            "matched_site_name": row.matched_site_name,
+            "matched_source": row.matched_source,
+            "country": row.country,
+            "site_type": row.site_type,
+            "period_name": row.period_name,
+            "thumbnail_url": row.thumbnail_url,
+            "wikipedia_url": row.wikipedia_url,
             "mention_count": row.mention_count,
+            "facts": _flatten_facts(row.all_facts),
+            "videos": _build_video_refs(row.videos),
             "unique_videos": row.unique_videos,
             "unique_channels": row.unique_channels,
             "last_mentioned": row.last_mentioned.isoformat() if row.last_mentioned else None,
+            "suggestions": [],
+            "best_match": None,
         })
 
-    # Sort by score if that's the sort method
+    # ── Part 2: Direct matches without user_contribution ────────────
+    # news_items with site_id set, joined to unified_sites where source_id != 'ancient_nerds',
+    # that don't already have a user_contribution.
+    if status in ("all", "matched"):
+        direct_query = text("""
+            WITH direct AS (
+                SELECT
+                    us.id AS site_id,
+                    us.name AS site_name,
+                    us.source_id,
+                    us.thumbnail_url,
+                    us.country,
+                    us.site_type,
+                    us.period_name,
+                    us.source_url,
+                    COUNT(*) AS mention_count,
+                    COUNT(DISTINCT ni.video_id) AS unique_videos,
+                    COUNT(DISTINCT nv.channel_id) AS unique_channels,
+                    MAX(ni.created_at) AS last_mentioned,
+                    jsonb_agg(DISTINCT jsonb_build_object(
+                        'video_id', ni.video_id,
+                        'channel_name', nc.name,
+                        'timestamp_seconds', ni.timestamp_seconds
+                    )) AS videos,
+                    jsonb_agg(ni.facts) FILTER (WHERE ni.facts IS NOT NULL) AS all_facts
+                FROM news_items ni
+                JOIN unified_sites us ON us.id = ni.site_id
+                JOIN news_videos nv ON nv.id = ni.video_id
+                JOIN news_channels nc ON nc.id = nv.channel_id
+                WHERE ni.site_id IS NOT NULL
+                  AND ni.site_match_tried = true
+                  AND us.source_id != 'ancient_nerds'
+                GROUP BY us.id, us.name, us.source_id, us.thumbnail_url,
+                         us.country, us.site_type, us.period_name, us.source_url
+                HAVING COUNT(*) >= :min_mentions
+            )
+            SELECT * FROM direct
+        """)
+
+        direct_rows = db.execute(direct_query, {
+            "min_mentions": min_mentions,
+        }).fetchall()
+
+        for row in direct_rows:
+            # Skip if we already have a contribution for this site name
+            if row.site_name.lower().strip() in contrib_names_lower:
+                continue
+
+            wikipedia_url = None
+            if row.source_id == "wikidata" and row.source_url:
+                wikipedia_url = row.source_url
+
+            items.append({
+                "id": str(row.site_id),
+                "display_name": row.site_name,
+                "enrichment_status": "matched",
+                "enrichment_score": 100,
+                "matched_site_id": str(row.site_id),
+                "matched_site_name": row.site_name,
+                "matched_source": row.source_id,
+                "country": row.country,
+                "site_type": row.site_type,
+                "period_name": row.period_name,
+                "thumbnail_url": row.thumbnail_url,
+                "wikipedia_url": wikipedia_url,
+                "mention_count": row.mention_count,
+                "facts": _flatten_facts(row.all_facts),
+                "videos": _build_video_refs(row.videos),
+                "unique_videos": row.unique_videos,
+                "unique_channels": row.unique_channels,
+                "last_mentioned": row.last_mentioned.isoformat() if row.last_mentioned else None,
+                "suggestions": [],
+                "best_match": None,
+            })
+
+    # ── Sort ────────────────────────────────────────────────────────
     if sort_by == "score":
-        items_with_score.sort(key=lambda x: x["score"], reverse=True)
+        items.sort(key=lambda x: x["enrichment_score"], reverse=True)
+    elif sort_by == "mentions":
+        items.sort(key=lambda x: x["mention_count"], reverse=True)
+    elif sort_by == "recency":
+        items.sort(key=lambda x: x["last_mentioned"] or "", reverse=True)
 
-    # Paginate
-    total_count = len(items_with_score)
+    # ── Paginate ────────────────────────────────────────────────────
+    total_count = len(items)
     offset = (page - 1) * page_size
-    page_items = items_with_score[offset:offset + page_size]
+    page_items = items[offset:offset + page_size]
 
-    # Find similar sites for all items in a single batch query
-    query_names = [normalize_name(item["name_normalized"]) for item in page_items]
-    all_suggestions = find_similar_sites_batch(db, query_names, limit_per_name=5)
-
-    for item, qname in zip(page_items, query_names, strict=True):
-        suggestions = all_suggestions.get(qname, [])
-        item["suggestions"] = suggestions
-
-        # Best match if top suggestion has similarity >= 0.6
-        if suggestions and suggestions[0]["similarity"] >= 0.6:
-            item["best_match"] = suggestions[0]
-        else:
-            item["best_match"] = None
+    # ── Fuzzy suggestions for pending/enriching items only ──────────
+    pending_names = [
+        normalize_name(item["display_name"])
+        for item in page_items
+        if item["enrichment_status"] in ("pending", "enriching") and not item["matched_site_id"]
+    ]
+    if pending_names:
+        all_suggestions = find_similar_sites_batch(db, pending_names, limit_per_name=5)
+        name_idx = 0
+        for item in page_items:
+            if item["enrichment_status"] in ("pending", "enriching") and not item["matched_site_id"]:
+                qname = pending_names[name_idx]
+                name_idx += 1
+                suggestions = all_suggestions.get(qname, [])
+                item["suggestions"] = suggestions
+                if suggestions and suggestions[0]["similarity"] >= 0.6:
+                    item["best_match"] = suggestions[0]
 
     response = {
         "items": page_items,
@@ -315,30 +401,34 @@ async def get_discovery_stats(db: Session = Depends(get_db)):
     if cached:
         return cached
 
-    # Count unique discoveries (unmatched sites)
-    discoveries = db.execute(text("""
-        SELECT COUNT(DISTINCT lower(trim(site_name_extracted)))
-        FROM news_items
-        WHERE site_id IS NULL
-          AND site_match_tried = true
-          AND site_name_extracted IS NOT NULL
-          AND site_name_extracted != ''
-    """)).scalar() or 0
+    stats_query = text("""
+        SELECT
+            COUNT(*) FILTER (
+                WHERE COALESCE(enrichment_status, 'pending') NOT IN ('failed', 'not_a_site')
+            ) AS total_discoveries,
+            COUNT(*) FILTER (
+                WHERE enrichment_status = 'matched'
+            ) AS matched_count,
+            COUNT(*) FILTER (
+                WHERE enrichment_status IN ('enriched', 'promoted')
+            ) AS enriched_count,
+            COUNT(*) FILTER (
+                WHERE COALESCE(enrichment_status, 'pending') IN ('pending', 'enriching')
+            ) AS pending_count
+        FROM user_contributions
+        WHERE source = 'lyra'
+    """)
 
-    # Total known sites
-    sites_known = db.execute(text("""
-        SELECT COUNT(*) FROM unified_sites
-    """)).scalar() or 0
+    row = db.execute(stats_query).fetchone()
 
-    # Total name variants
-    name_variants = db.execute(text("""
-        SELECT COUNT(*) FROM unified_site_names
-    """)).scalar() or 0
+    sites_known = db.execute(text("SELECT COUNT(*) FROM unified_sites")).scalar() or 0
 
     response = {
-        "total_discoveries": discoveries,
+        "total_discoveries": row.total_discoveries or 0,
+        "matched_count": row.matched_count or 0,
+        "enriched_count": row.enriched_count or 0,
+        "pending_count": row.pending_count or 0,
         "total_sites_known": sites_known,
-        "total_name_variants": name_variants,
     }
 
     cache_set(cache_key, response, ttl=CACHE_TTL)
