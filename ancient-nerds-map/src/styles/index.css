@@ -14217,6 +14217,12 @@ body.news-feed-open .empire-borders-window {
   border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
+.lyra-status-added {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
 /* Country row */
 .lyra-discovery-country-row {
   display: flex;

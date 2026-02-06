@@ -28,9 +28,9 @@ from api.routes import (
     ai,
     content,
     contributions,
-    discoveries,
     news,
     og,
+    radar,
     sitemap,
     sites,
     sources,
@@ -125,7 +125,7 @@ app.include_router(sitemap.router, prefix="/api/sitemap", tags=["sitemap"])
 app.include_router(streetview.router, prefix="/api/streetview", tags=["streetview"])
 app.include_router(content.router, prefix="/api/content", tags=["content"])
 app.include_router(news.router, prefix="/api/news", tags=["news"])
-app.include_router(discoveries.router, prefix="/api/discoveries", tags=["discoveries"])
+app.include_router(radar.router, prefix="/api/radar", tags=["radar"])
 
 # Serve news screenshots as static files
 _screenshots_dir = Path("public/data/news/screenshots")
