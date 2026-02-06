@@ -10,8 +10,9 @@
 // =============================================================================
 
 export const SOURCE_COLORS: Record<string, string> = {
-  // Primary source
+  // Primary sources
   ancient_nerds: '#FFD700',  // Gold
+  lyra: '#8b5cf6',           // Purple - Lyra auto-discoveries
 
   // Core ancient world databases
   pleiades: '#e74c3c',       // Red

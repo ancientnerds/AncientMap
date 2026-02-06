@@ -27,7 +27,7 @@ class AncientNerdsOriginalIngester(BaseIngester):
     """
 
     source_id = "ancient_nerds"
-    source_name = "Ancient Nerds (Original)"
+    source_name = "ANCIENT NERDS Originals"
 
     # GitHub raw URL for the original data
     GEOJSON_URL = "https://raw.githubusercontent.com/matt-cavana/ancient-map/main/cleaned_historical_sites_no_nan.geojson"

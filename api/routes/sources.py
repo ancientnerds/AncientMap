@@ -24,8 +24,9 @@ STATIC_SOURCES_PATH = Path(__file__).parent.parent.parent / "public" / "data" / 
 
 # Default source colors (matches pipeline SOURCE_CONFIG)
 DEFAULT_SOURCE_COLORS = {
-    # PRIMARY SOURCE
+    # PRIMARY SOURCES
     "ancient_nerds": "#FFD700",   # Gold - Primary source (manually curated)
+    "lyra": "#8b5cf6",            # Purple - Lyra auto-discoveries
 
     # Core ancient world
     "pleiades": "#e74c3c",        # Red - ancient places
@@ -77,9 +78,9 @@ def _load_static_sources():
             "name": info.get("n", source_id.replace("_", " ").title()),
             "count": info.get("cnt", 0),
             "color": info.get("c", DEFAULT_SOURCE_COLORS.get(source_id, DEFAULT_SOURCE_COLORS["default"])),
-            "isPrimary": source_id == "ancient_nerds",
+            "isPrimary": source_id in ("ancient_nerds", "lyra"),
             "enabledByDefault": info.get("on", False),
-            "priority": 0 if source_id == "ancient_nerds" else 50,
+            "priority": 0 if source_id == "ancient_nerds" else (1 if source_id == "lyra" else 50),
             "category": info.get("cat"),
             "description": info.get("d"),
         })
@@ -106,19 +107,23 @@ async def get_sources(db: Session = Depends(get_db)):
     try:
         query = text("""
             SELECT
-                u.source_id,
-                COUNT(*) as count,
-                COALESCE(sm.name, u.source_id) as name,
+                sm.id as source_id,
+                COALESCE(site_counts.count, 0) as count,
+                sm.name,
                 COALESCE(sm.color, :default_color) as color,
                 COALESCE(sm.is_primary, false) as is_primary,
                 COALESCE(sm.enabled_by_default, false) as enabled_by_default,
                 COALESCE(sm.priority, 999) as priority,
                 sm.category,
                 sm.description
-            FROM unified_sites u
-            LEFT JOIN source_meta sm ON u.source_id = sm.id
-            GROUP BY u.source_id, sm.name, sm.color, sm.is_primary, sm.enabled_by_default, sm.priority, sm.category, sm.description
-            ORDER BY COALESCE(sm.priority, 999), count DESC
+            FROM source_meta sm
+            LEFT JOIN (
+                SELECT source_id, COUNT(*) as count
+                FROM unified_sites
+                GROUP BY source_id
+            ) site_counts ON sm.id = site_counts.source_id
+            WHERE sm.enabled = true
+            ORDER BY sm.priority, COALESCE(site_counts.count, 0) DESC
         """)
 
         result = db.execute(query, {"default_color": DEFAULT_SOURCE_COLORS["default"]})
