@@ -1,13 +1,9 @@
 /**
- * LyraDiscoveriesPage - Sophisticated curation page showing sites discovered by Lyra.
+ * LyraDiscoveriesPage - Full curation overview of all Lyra-extracted sites.
  * Accessed via /discoveries.html (separate Vite entry point).
  *
- * Features:
- * - Deduplicated discoveries (grouped by normalized name)
- * - All facts from all mentions (expandable)
- * - Multiple video links with timestamps
- * - Importance scoring
- * - Fuzzy match suggestions to known sites
+ * Shows every site Lyra extracts from YouTube videos that is NOT in the
+ * manually-curated ancient_nerds source — matched, enriched, and pending.
  */
 
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
@@ -33,12 +29,21 @@ interface SuggestionMatch {
 }
 
 interface AggregatedDiscovery {
-  name_normalized: string
+  id: string
   display_name: string
+  enrichment_status: string
+  enrichment_score: number
+  matched_site_id: string | null
+  matched_site_name: string | null
+  matched_source: string | null
+  country: string | null
+  site_type: string | null
+  period_name: string | null
+  thumbnail_url: string | null
+  wikipedia_url: string | null
+  mention_count: number
   facts: string[]
   videos: VideoReference[]
-  score: number
-  mention_count: number
   unique_videos: number
   unique_channels: number
   last_mentioned: string | null
@@ -56,9 +61,13 @@ interface DiscoveryResponse {
 
 interface LyraStats {
   total_discoveries: number
+  matched_count: number
+  enriched_count: number
+  pending_count: number
   total_sites_known: number
-  total_name_variants: number
 }
+
+type StatusFilter = 'all' | 'matched' | 'enriched' | 'pending'
 
 function formatTimestamp(seconds: number): string {
   if (!seconds || seconds <= 0) return ''
@@ -67,21 +76,82 @@ function formatTimestamp(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
+function StatusPill({ status }: { status: string }) {
+  let label: string
+  let cls: string
+  switch (status) {
+    case 'matched':
+      label = 'Matched'
+      cls = 'lyra-status-matched'
+      break
+    case 'enriched':
+    case 'promoted':
+      label = 'Enriched'
+      cls = 'lyra-status-enriched'
+      break
+    default:
+      label = 'Processing'
+      cls = 'lyra-status-pending'
+  }
+  return <span className={`lyra-status-pill ${cls}`}>{label}</span>
+}
+
 function DiscoveryCard({ item }: { item: AggregatedDiscovery }) {
   const [factsExpanded, setFactsExpanded] = useState(false)
   const VISIBLE_FACTS = 2
 
   const visibleFacts = factsExpanded ? item.facts : item.facts.slice(0, VISIBLE_FACTS)
   const hiddenCount = item.facts.length - VISIBLE_FACTS
-  const scorePercent = Math.round(item.score * 100)
+
+  // Hero: matched site with thumbnail, or enrichment thumbnail, or best_match fallback
+  const showMatchedHero = item.matched_site_id && item.thumbnail_url
+  const showBestMatchHero = !item.matched_site_id && item.best_match?.thumbnail_url
 
   return (
     <div className="lyra-discovery-card">
-      {/* Hero image for high-confidence matches */}
-      {item.best_match && item.best_match.thumbnail_url && (
+      {/* Hero: matched site */}
+      {showMatchedHero && (
         <div className="lyra-discovery-hero">
           <img
-            src={item.best_match.thumbnail_url}
+            src={item.thumbnail_url!}
+            alt=""
+            className="lyra-hero-thumb"
+            loading="lazy"
+          />
+          <div className="lyra-hero-info">
+            <span className="lyra-hero-label">Matched site:</span>
+            <a
+              href={`/?site=${item.matched_site_id}`}
+              className="lyra-hero-name"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {item.matched_site_name || item.display_name}
+            </a>
+            {item.matched_source && (
+              <span className="lyra-hero-source">via {item.matched_source}</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Hero: enrichment thumbnail (no matched site) */}
+      {!showMatchedHero && !showBestMatchHero && item.thumbnail_url && !item.matched_site_id && (
+        <div className="lyra-discovery-hero">
+          <img
+            src={item.thumbnail_url}
+            alt=""
+            className="lyra-hero-thumb"
+            loading="lazy"
+          />
+        </div>
+      )}
+
+      {/* Hero: best_match fallback for pending items */}
+      {showBestMatchHero && (
+        <div className="lyra-discovery-hero">
+          <img
+            src={item.best_match!.thumbnail_url!}
             alt=""
             className="lyra-hero-thumb"
             loading="lazy"
@@ -89,16 +159,16 @@ function DiscoveryCard({ item }: { item: AggregatedDiscovery }) {
           <div className="lyra-hero-info">
             <span className="lyra-hero-label">Possible match:</span>
             <a
-              href={`/?site=${item.best_match.site_id}`}
+              href={`/?site=${item.best_match!.site_id}`}
               className="lyra-hero-name"
               target="_blank"
               rel="noopener noreferrer"
             >
-              {item.best_match.name}
+              {item.best_match!.name}
             </a>
-            {item.best_match.wikipedia_url && (
+            {item.best_match!.wikipedia_url && (
               <a
-                href={item.best_match.wikipedia_url}
+                href={item.best_match!.wikipedia_url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="lyra-hero-wiki"
@@ -110,12 +180,13 @@ function DiscoveryCard({ item }: { item: AggregatedDiscovery }) {
         </div>
       )}
 
-      {/* Header with name, score, and mentions */}
+      {/* Header with name, score, status pill, and mentions */}
       <div className="lyra-discovery-header">
         <h3 className="lyra-discovery-name">{item.display_name}</h3>
         <div className="lyra-discovery-header-badges">
-          <span className="lyra-discovery-score" title="Importance score">
-            {scorePercent}
+          <StatusPill status={item.enrichment_status} />
+          <span className="lyra-discovery-score" title="Enrichment score">
+            {item.enrichment_score}
           </span>
           {item.mention_count > 1 && (
             <span className="lyra-discovery-mentions">
@@ -124,6 +195,44 @@ function DiscoveryCard({ item }: { item: AggregatedDiscovery }) {
           )}
         </div>
       </div>
+
+      {/* Metadata row: country, site type, period */}
+      {(item.country || item.site_type || item.period_name) && (
+        <div className="lyra-metadata-row">
+          {item.country && (
+            <span className="lyra-metadata-chip">
+              {(() => {
+                const flagUrl = getCountryFlatFlagUrl(item.country)
+                return flagUrl ? (
+                  <img src={flagUrl} alt="" className="lyra-discovery-flag" />
+                ) : null
+              })()}
+              {item.country}
+            </span>
+          )}
+          {item.site_type && (
+            <span className="lyra-metadata-chip">{item.site_type}</span>
+          )}
+          {item.period_name && (
+            <span className="lyra-metadata-chip">{item.period_name}</span>
+          )}
+        </div>
+      )}
+
+      {/* Wikipedia link */}
+      {item.wikipedia_url && (
+        <a
+          href={item.wikipedia_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="lyra-wiki-link"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12.09 13.119c-.936 1.932-2.217 4.548-2.853 5.728-.616 1.074-1.127.931-1.532.029-1.406-3.321-4.293-9.144-5.651-12.409-.251-.604-.96-1.467-1.554-1.467H.5c-.273 0-.5-.224-.5-.5s.227-.5.5-.5h3.662c.996 0 1.903.856 2.174 1.498 1.254 2.981 3.375 7.58 4.524 10.399.345-.655 1.159-2.271 1.824-3.633.305-.624.405-1.08.141-1.691-.684-1.575-1.883-4.082-2.561-5.567-.259-.565-.888-1.006-1.488-1.006H8.316c-.273 0-.5-.224-.5-.5s.227-.5.5-.5h3.266c.876 0 1.699.826 1.959 1.441.487 1.153 1.423 3.235 1.925 4.416.483-.883 1.248-2.366 1.733-3.347.279-.562.372-1.026.105-1.627-.509-1.146-.884-1.923-1.197-2.605a.567.567 0 0 1 .088-.555.54.54 0 0 1 .516-.186h3.273c.804 0 1.519.884 1.799 1.484.496 1.062 1.476 3.192 2.01 4.385l1.734-3.468c.232-.462.381-.998.111-1.58-.248-.536-.477-1.034-.677-1.467-.099-.215.018-.474.249-.548.231-.073.503.039.601.254.199.433.427.929.676 1.465.384.824.171 1.559-.121 2.142-.522 1.044-1.803 3.593-2.387 4.741-.191.375-.549.399-.747.022-.526-1.001-1.563-3.392-2.112-4.59-.453.862-1.271 2.479-1.715 3.377-.196.396-.561.419-.747.015-.568-1.239-1.536-3.482-2.047-4.619-.476.897-1.172 2.281-1.671 3.289z"/>
+          </svg>
+          Wikipedia
+        </a>
+      )}
 
       {/* Facts list */}
       {item.facts.length > 0 && (
@@ -174,8 +283,8 @@ function DiscoveryCard({ item }: { item: AggregatedDiscovery }) {
         </div>
       )}
 
-      {/* Suggestions (only show if no best_match already displayed) */}
-      {!item.best_match && item.suggestions.length > 0 && (
+      {/* Suggestions (only for items without a matched site) */}
+      {!item.matched_site_id && !item.best_match && item.suggestions.length > 0 && (
         <div className="lyra-discovery-suggestions">
           <span className="lyra-suggestions-label">Similar sites:</span>
           {item.suggestions.slice(0, 3).map((s) => (
@@ -212,7 +321,6 @@ function DiscoveryCard({ item }: { item: AggregatedDiscovery }) {
 
 export default function LyraDiscoveriesPage() {
   const [items, setItems] = useState<AggregatedDiscovery[]>([])
-  const [totalCount, setTotalCount] = useState(0)
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -221,6 +329,7 @@ export default function LyraDiscoveriesPage() {
   const [stats, setStats] = useState<LyraStats | null>(null)
   const [minMentions, setMinMentions] = useState(1)
   const [sortBy, setSortBy] = useState<'score' | 'mentions' | 'recency'>('score')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const sentinelRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
   const [columnCount, setColumnCount] = useState(3)
@@ -248,17 +357,17 @@ export default function LyraDiscoveriesPage() {
     pageNum: number,
     append: boolean = false,
     mentions: number = minMentions,
-    sort: string = sortBy
+    sort: string = sortBy,
+    statusParam: string = statusFilter
   ) => {
     try {
       setLoading(true)
       setError(null)
-      const url = `${config.api.baseUrl}/discoveries/list?page=${pageNum}&page_size=24&min_mentions=${mentions}&sort_by=${sort}`
+      const url = `${config.api.baseUrl}/discoveries/list?page=${pageNum}&page_size=24&min_mentions=${mentions}&sort_by=${sort}&status=${statusParam}`
       const resp = await fetch(url)
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const data: DiscoveryResponse = await resp.json()
       setItems(prev => append ? [...prev, ...data.items] : data.items)
-      setTotalCount(data.total_count)
       setHasMore(data.has_more)
       setPage(pageNum)
     } catch (e) {
@@ -266,12 +375,12 @@ export default function LyraDiscoveriesPage() {
     } finally {
       setLoading(false)
     }
-  }, [minMentions, sortBy])
+  }, [minMentions, sortBy, statusFilter])
 
-  // Initial load
+  // Initial load & filter changes
   useEffect(() => {
-    fetchDiscoveries(1, false, minMentions, sortBy)
-  }, [minMentions, sortBy])
+    fetchDiscoveries(1, false, minMentions, sortBy, statusFilter)
+  }, [minMentions, sortBy, statusFilter])
 
   // Fetch stats
   useEffect(() => {
@@ -287,14 +396,14 @@ export default function LyraDiscoveriesPage() {
     const observer = new IntersectionObserver(
       entries => {
         if (entries[0].isIntersecting && hasMore && !loading) {
-          fetchDiscoveries(page + 1, true, minMentions, sortBy)
+          fetchDiscoveries(page + 1, true, minMentions, sortBy, statusFilter)
         }
       },
       { rootMargin: '200px' }
     )
     observer.observe(sentinelRef.current)
     return () => observer.disconnect()
-  }, [hasMore, loading, page, fetchDiscoveries, minMentions, sortBy])
+  }, [hasMore, loading, page, fetchDiscoveries, minMentions, sortBy, statusFilter])
 
   const handleMinMentionsChange = (value: number) => {
     setMinMentions(value)
@@ -305,6 +414,13 @@ export default function LyraDiscoveriesPage() {
 
   const handleSortChange = (value: 'score' | 'mentions' | 'recency') => {
     setSortBy(value)
+    setItems([])
+    setPage(1)
+    setHasMore(false)
+  }
+
+  const handleStatusChange = (value: StatusFilter) => {
+    setStatusFilter(value)
     setItems([])
     setPage(1)
     setHasMore(false)
@@ -329,9 +445,13 @@ export default function LyraDiscoveriesPage() {
           <span className="news-page-lyra-name" style={{ cursor: 'pointer' }} onClick={() => setShowLyraProfile(true)}>Discoveries</span>
           {stats && (
             <div className="news-page-stats">
-              <span className="news-page-stats-item"><strong>{totalCount}</strong> new sites found</span>
+              <span className="news-page-stats-item"><strong>{stats.matched_count}</strong> matched</span>
               <span className="news-page-stats-sep">·</span>
-              <span className="news-page-stats-item">not yet in <strong>{stats.total_sites_known.toLocaleString()}</strong> site database</span>
+              <span className="news-page-stats-item"><strong>{stats.enriched_count}</strong> enriched</span>
+              <span className="news-page-stats-sep">·</span>
+              <span className="news-page-stats-item"><strong>{stats.pending_count}</strong> pending</span>
+              <span className="news-page-stats-sep">·</span>
+              <span className="news-page-stats-item"><strong>{stats.total_sites_known.toLocaleString()}</strong> known sites</span>
             </div>
           )}
         </div>
@@ -340,7 +460,21 @@ export default function LyraDiscoveriesPage() {
       {/* Filter bar */}
       <div className="lyra-discoveries-filters">
         <div className="lyra-filter-group">
-          <span className="lyra-discoveries-filter-label">Minimum mentions:</span>
+          <span className="lyra-discoveries-filter-label">Status:</span>
+          <div className="lyra-discoveries-filter-chips">
+            {([['all', 'All'], ['matched', 'Matched'], ['enriched', 'Enriched'], ['pending', 'Pending']] as const).map(([val, label]) => (
+              <button
+                key={val}
+                className={`news-page-chip${statusFilter === val ? ' active' : ''}`}
+                onClick={() => handleStatusChange(val)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="lyra-filter-group">
+          <span className="lyra-discoveries-filter-label">Min. mentions:</span>
           <div className="lyra-discoveries-filter-chips">
             {[1, 2, 3, 5, 10].map(n => (
               <button
@@ -396,7 +530,7 @@ export default function LyraDiscoveriesPage() {
         {Array.from({ length: columnCount }, (_, colIdx) => (
           <div key={colIdx} className="lyra-discoveries-column">
             {items.filter((_, i) => i % columnCount === colIdx).map(item => (
-              <DiscoveryCard key={item.name_normalized} item={item} />
+              <DiscoveryCard key={item.id} item={item} />
             ))}
           </div>
         ))}
