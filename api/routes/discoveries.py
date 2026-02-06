@@ -234,12 +234,15 @@ async def get_discoveries(
         "min_mentions": min_mentions,
     }).fetchall()
 
-    # Track contribution names (lowered) so we skip them in part 2
+    # Track contribution names AND matched site IDs so we skip them in Part 2
     contrib_names_lower = set()
+    contrib_matched_site_ids = set()
     items = []
 
     for row in contrib_rows:
         contrib_names_lower.add(row.display_name.lower().strip())
+        if row.matched_site_id:
+            contrib_matched_site_ids.add(row.matched_site_id)
 
         enrichment_status = row.enrichment_status
         # Apply status filter
@@ -317,8 +320,11 @@ async def get_discoveries(
         }).fetchall()
 
         for row in direct_rows:
-            # Skip if we already have a contribution for this site name
+            # Skip if already covered by a Part 1 contribution (by name or matched site ID)
+            site_id_str = str(row.site_id)
             if row.site_name.lower().strip() in contrib_names_lower:
+                continue
+            if site_id_str in contrib_matched_site_ids:
                 continue
 
             wikipedia_url = None
