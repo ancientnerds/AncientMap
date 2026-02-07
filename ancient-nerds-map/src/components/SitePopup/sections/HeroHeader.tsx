@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import type { HeroHeaderProps, AlternateSource } from '../types'
 import { MetadataBadge } from '../../metadata'
+import LazyImage from '../../LazyImage'
 
 export function HeroHeader({
   title,
@@ -155,7 +156,8 @@ export function HeroHeader({
       style={{ cursor: !isStandalone && windowState !== 'maximized' ? 'move' : undefined }}
     >
       {heroImageSrc ? (
-        <img
+        <LazyImage
+          overlay
           src={heroImageSrc}
           alt={title}
           className="popup-hero-bg"

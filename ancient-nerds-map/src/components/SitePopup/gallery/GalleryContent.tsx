@@ -1,5 +1,6 @@
 import { GalleryGrid } from './GalleryGrid'
 import { SourceFavicon } from './galleryUtils'
+import LazyImage from '../../LazyImage'
 import type { GalleryContentProps } from '../types'
 
 // Text item structure (from unified connectors or legacy)
@@ -86,7 +87,7 @@ export function GalleryContent({
               >
                 {coverUrl ? (
                   <div className="gallery-text-cover">
-                    <img src={coverUrl} alt="" loading="lazy" />
+                    <LazyImage src={coverUrl} alt="" />
                   </div>
                 ) : (
                   <div className="gallery-text-icon">

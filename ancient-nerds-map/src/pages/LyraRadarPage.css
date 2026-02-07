@@ -473,22 +473,6 @@
   transition: transform 0.4s ease, filter 0.4s ease;
 }
 
-.lyra-discovery-image.lyra-image-hidden {
-  opacity: 0;
-  max-height: 0;
-  overflow: hidden;
-}
-
-.lyra-discovery-image.lyra-tv-on {
-  animation: tv-on 400ms ease-out;
-}
-
-@keyframes tv-on {
-  0% { opacity: 0; transform: scaleY(0.005) scaleX(1.3); filter: brightness(3); }
-  50% { opacity: 1; transform: scaleY(1.05) scaleX(1); filter: brightness(1.5); }
-  100% { opacity: 1; transform: scaleY(1) scaleX(1); filter: brightness(1); }
-}
-
 .lyra-image-clickable {
   cursor: pointer;
   position: relative;
