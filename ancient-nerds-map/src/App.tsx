@@ -11,7 +11,7 @@ const PinAuthModal = lazy(() => import('./components/PinAuthModal'))
 const AIAgentChatModal = lazy(() => import('./components/AIAgentChatModal'))
 const DownloadManager = lazy(() => import('./components/DownloadManager'))
 const NewsFeedPanel = lazy(() => import('./components/NewsFeedPanel'))
-import { SiteData, fetchSites, getCurrentSites, addSourceSites, SOURCE_COLORS, getDefaultEnabledSourceIds, getSourceColor, getCategoryColor, getPeriodColor, setDataSourceError } from './data/sites'
+import { SiteData, fetchSites, getCurrentSites, addSourceSites, SOURCE_COLORS, getDefaultEnabledSourceIds, getSourceColor, getCategoryColor, getPeriodColor, setDataSourceError, categorizePeriod } from './data/sites'
 import { DataStore } from './data/DataStore'
 import { SourceLoader } from './services/SourceLoader'
 import { ImageCache } from './services/ImageCache'
@@ -173,6 +173,8 @@ function AppContent() {
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
   const searchDebounceRef = useRef<NodeJS.Timeout | null>(null)
   const [searchAllSources, setSearchAllSources] = useState(false)
+  const [apiSearchResults, setApiSearchResults] = useState<SiteData[]>([])
+  const apiSearchAbortRef = useRef<AbortController | null>(null)
   const [applyFiltersToSearch, setApplyFiltersToSearch] = useState(true)
   const [searchWithinProximity, setSearchWithinProximity] = useState(false)
   const [filterMode, setFilterMode] = useState<FilterMode>('age')
@@ -414,6 +416,46 @@ function AppContent() {
       }
     }
   }, [searchQuery])
+
+  // API search: fetch from backend when "All sources" is checked and query is long enough
+  useEffect(() => {
+    if (!searchAllSources || debouncedSearchQuery.trim().length < 3) {
+      setApiSearchResults([])
+      return
+    }
+
+    apiSearchAbortRef.current?.abort()
+    const controller = new AbortController()
+    apiSearchAbortRef.current = controller
+
+    const encoded = encodeURIComponent(debouncedSearchQuery.trim())
+    fetch(`${config.api.baseUrl}/sites/search?q=${encoded}&limit=50`, { signal: controller.signal })
+      .then(res => res.json())
+      .then(data => {
+        if (controller.signal.aborted) return
+        const parsed: SiteData[] = (data.sites || []).map((s: { id: string; n: string; la: number; lo: number; s: string; t?: string; p?: number; pn?: string; d?: string; c?: string; u?: string }) => ({
+          id: s.id,
+          title: s.n,
+          coordinates: [s.lo, s.la] as [number, number],
+          category: s.t || 'Unknown',
+          period: s.pn || categorizePeriod(s.p),
+          periodStart: s.p ?? null,
+          location: s.c || '',
+          description: s.d || '',
+          sourceId: s.s,
+          sourceUrl: s.u,
+        }))
+        setApiSearchResults(parsed)
+      })
+      .catch(err => {
+        if (err.name !== 'AbortError') {
+          console.warn('API search failed:', err)
+          setApiSearchResults([])
+        }
+      })
+
+    return () => controller.abort()
+  }, [searchAllSources, debouncedSearchQuery])
 
   // Random mode state - when true, only the random site dot is shown
   const [randomModeActive, setRandomModeActive] = useState(false)
@@ -1047,8 +1089,28 @@ function AppContent() {
   const searchResults = useMemo(() => {
     if (!debouncedSearchQuery.trim()) return []
 
+    // When "All sources" is checked, use API search results instead of client-side
+    if (searchAllSources) {
+      return apiSearchResults.slice(0, 100).map(site => {
+        const category = site.category || 'Unknown'
+        const period = site.period || 'Unknown'
+        return {
+          id: site.id,
+          title: site.title,
+          category,
+          categoryColor: getCategoryColor(category),
+          location: site.location,
+          period,
+          periodColor: getPeriodColor(period),
+          sourceName: sourceNameMap[site.sourceId] || site.sourceId,
+          sourceColor: getSourceColor(site.sourceId),
+          sourceUrl: site.sourceUrl,
+        }
+      })
+    }
+
     const query = normalizeForSearch(debouncedSearchQuery)
-    let sitesToSearch = searchAllSources ? sites : sites.filter(s => selectedSources.includes(s.sourceId))
+    let sitesToSearch = sites.filter(s => selectedSources.includes(s.sourceId))
 
     // Apply filters to search results only if "Apply filters" is checked
     if (applyFiltersToSearch) {
@@ -1112,25 +1174,35 @@ function AppContent() {
       }
     }
 
+    // Spaceless variants for matching "göbekli tepe" → "gobeklitepe"
+    const querySpaceless = query.replace(/ /g, '')
+
     // Filter and sort by relevance
     const matchingSites = sitesToSearch
-      .filter(site =>
-        normalizeForSearch(site.title).includes(query) ||
-        (site.altNames && site.altNames.some(an => normalizeForSearch(an).includes(query))) ||
-        (site.location && normalizeForSearch(site.location).includes(query)) ||
-        (site.description && normalizeForSearch(site.description).includes(query))
-      )
+      .filter(site => {
+        const titleNorm = normalizeForSearch(site.title)
+        return titleNorm.includes(query) ||
+          titleNorm.replace(/ /g, '').includes(querySpaceless) ||
+          (site.altNames && site.altNames.some(an => normalizeForSearch(an).includes(query) || normalizeForSearch(an).replace(/ /g, '').includes(querySpaceless))) ||
+          (site.location && normalizeForSearch(site.location).includes(query)) ||
+          (site.description && normalizeForSearch(site.description).includes(query))
+      })
       .map(site => {
         const titleNorm = normalizeForSearch(site.title)
+        const titleSpaceless = titleNorm.replace(/ /g, '')
         // Calculate relevance score (higher = more relevant)
         let score = 0
         if (titleNorm === query) {
           score = 100 // Exact title match
+        } else if (titleSpaceless === querySpaceless) {
+          score = 95 // Exact spaceless title match
         } else if (titleNorm.startsWith(query)) {
           score = 80 // Title starts with query
         } else if (titleNorm.includes(query)) {
           score = 60 // Title contains query
-        } else if (site.altNames && site.altNames.some(an => normalizeForSearch(an).includes(query))) {
+        } else if (titleSpaceless.includes(querySpaceless)) {
+          score = 55 // Spaceless title contains query
+        } else if (site.altNames && site.altNames.some(an => normalizeForSearch(an).includes(query) || normalizeForSearch(an).replace(/ /g, '').includes(querySpaceless))) {
           score = 50 // Alternate name match
         } else if (site.location && normalizeForSearch(site.location).includes(query)) {
           score = 40 // Location contains query
@@ -1161,20 +1233,35 @@ function AppContent() {
           sourceUrl: site.sourceUrl,
         }
       })
-  }, [debouncedSearchQuery, searchAllSources, sites, selectedSources, sourceNameMap, sourceColorMap, applyFiltersToSearch, ageRange, selectedCategories, categoriesFromActiveSources, selectedCountries, countries, filterMode, searchWithinProximity, proximityCenter, proximityRadius, searchWithinEmpires, visibleEmpireIds, empireSliderYears, empirePolygons])
+  }, [debouncedSearchQuery, searchAllSources, apiSearchResults, sites, selectedSources, sourceNameMap, sourceColorMap, applyFiltersToSearch, ageRange, selectedCategories, categoriesFromActiveSources, selectedCountries, countries, filterMode, searchWithinProximity, proximityCenter, proximityRadius, searchWithinEmpires, visibleEmpireIds, empireSliderYears, empirePolygons])
 
   // Handle search result selection
-  const handleSearchResultSelect = useCallback((siteId: string, openPopup: boolean) => {
-    const site = sites.find(s => s.id === siteId)
+  const handleSearchResultSelect = useCallback(async (siteId: string, openPopup: boolean) => {
+    // Try in-memory sites first
+    let site = sites.find(s => s.id === siteId)
+
+    // If not in memory (API search result), check apiSearchResults or fetch from API
+    if (!site) {
+      site = apiSearchResults.find(s => s.id === siteId)
+      if (!site) {
+        try {
+          const res = await fetch(`${config.api.baseUrl}/sites/${siteId}`)
+          if (res.ok) {
+            const detail = await res.json()
+            site = apiDetailToSiteData(detail)
+          }
+        } catch { /* site stays undefined */ }
+      }
+    }
+
     if (site) {
-      // Force re-fly by clearing first, then setting coordinates
       setFlyToCoords(null)
-      setTimeout(() => setFlyToCoords(site.coordinates), 10)
+      setTimeout(() => setFlyToCoords(site!.coordinates), 10)
       if (openPopup) {
         handleSiteClick(site)
       }
     }
-  }, [sites, handleSiteClick])
+  }, [sites, apiSearchResults, handleSiteClick])
 
   // Handle random site selection - respects all search options (sources, filters, proximity)
   const handleRandomSite = useCallback(() => {

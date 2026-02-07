@@ -45,66 +45,42 @@ def _find_site_by_name(
         return None
 
     source_filter = UnifiedSite.source_id.in_(matchable_sources)
+    spaceless = normalized.replace(" ", "")
 
-    # 1. Exact match on unified_sites.name_normalized
-    matches = session.query(UnifiedSite).filter(
+    # 1+1.5. Exact + spaceless match on unified_sites.name_normalized
+    # Merged so "gobekli tepe" (exact) and "gobeklitepe" (spaceless) compete on priority.
+    exact = session.query(UnifiedSite).filter(
         UnifiedSite.name_normalized == normalized,
         source_filter,
     ).all()
-
-    if len(matches) == 1:
-        return matches[0]
-
-    if len(matches) > 1:
-        return _pick_best_match(matches, source_priority)
-
-    # 1.5. Spaceless match (handles "Gobekli Tepe" vs "Gobeklitepe")
-    spaceless = normalized.replace(" ", "")
-    matches = session.query(UnifiedSite).filter(
+    spaceless_matches = session.query(UnifiedSite).filter(
         func.replace(UnifiedSite.name_normalized, ' ', '') == spaceless,
         source_filter,
     ).all()
+    combined = {m.id: m for m in exact + spaceless_matches}
 
-    if len(matches) == 1:
-        return matches[0]
-    if len(matches) > 1:
-        return _pick_best_match(matches, source_priority)
+    if len(combined) == 1:
+        return list(combined.values())[0]
+    if len(combined) > 1:
+        return _pick_best_match(list(combined.values()), source_priority)
 
-    # 2. Exact match on unified_site_names table (alternate names)
-    alt_matches = session.query(UnifiedSiteName).filter(
+    # 2+2.5. Exact + spaceless match on unified_site_names (alternate names)
+    alt_exact = session.query(UnifiedSiteName).filter(
         UnifiedSiteName.name_normalized == normalized
     ).all()
-
-    if alt_matches:
-        site_ids = {m.site_id for m in alt_matches}
-        if len(site_ids) == 1:
-            site = session.get(UnifiedSite, site_ids.pop())
-            if site and site.source_id in matchable_sources:
-                return site
-        else:
-            candidates = session.query(UnifiedSite).filter(
-                UnifiedSite.id.in_(site_ids), source_filter
-            ).all()
-            if candidates:
-                return _pick_best_match(candidates, source_priority)
-
-    # 2.5. Spaceless match on unified_site_names
     alt_spaceless = session.query(UnifiedSiteName).filter(
         func.replace(UnifiedSiteName.name_normalized, ' ', '') == spaceless
     ).all()
+    alt_site_ids = {m.site_id for m in alt_exact + alt_spaceless}
 
-    if alt_spaceless:
-        site_ids = {m.site_id for m in alt_spaceless}
-        if len(site_ids) == 1:
-            site = session.get(UnifiedSite, site_ids.pop())
-            if site and site.source_id in matchable_sources:
-                return site
-        else:
-            candidates = session.query(UnifiedSite).filter(
-                UnifiedSite.id.in_(site_ids), source_filter
-            ).all()
-            if candidates:
-                return _pick_best_match(candidates, source_priority)
+    if alt_site_ids:
+        candidates = session.query(UnifiedSite).filter(
+            UnifiedSite.id.in_(alt_site_ids), source_filter
+        ).all()
+        if len(candidates) == 1:
+            return candidates[0]
+        if len(candidates) > 1:
+            return _pick_best_match(candidates, source_priority)
 
     return None
 
