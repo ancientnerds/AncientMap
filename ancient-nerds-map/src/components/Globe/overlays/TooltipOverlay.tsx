@@ -3,8 +3,9 @@
  * Displays site information on hover and for selected/list-highlighted sites
  */
 
-import { SiteData, getCategoryColor, getPeriodColor } from '../../../data/sites'
-import { getCountryFlatFlagUrl } from '../../../utils/countryFlags'
+import { SiteData } from '../../../data/sites'
+import { MetadataBadge, CountryFlag } from '../../metadata'
+import { getCategoryColor, getPeriodColor } from '../../../constants/colors'
 
 interface TooltipOverlayProps {
   // Main hover tooltip
@@ -90,36 +91,14 @@ export function TooltipOverlay({
           >
             <div className="tooltip-header">
               <div className="tooltip-title">{displaySite.title}</div>
-              {getCountryFlatFlagUrl(displaySite.location) && (
-                <img
-                  src={getCountryFlatFlagUrl(displaySite.location)!}
-                  alt=""
-                  className="tooltip-flag"
-                />
-              )}
+              <CountryFlag country={displaySite.location} size="sm" />
             </div>
             {displaySite.location && (
               <div className="tooltip-location">{displaySite.location}</div>
             )}
-            <div className="tooltip-badges">
-              <span
-                className="tooltip-badge"
-                style={{
-                  borderColor: getCategoryColor(displaySite.category),
-                  color: getCategoryColor(displaySite.category)
-                }}
-              >
-                {displaySite.category}
-              </span>
-              <span
-                className="tooltip-badge"
-                style={{
-                  borderColor: getPeriodColor(displaySite.period),
-                  color: getPeriodColor(displaySite.period)
-                }}
-              >
-                {displaySite.period}
-              </span>
+            <div className="meta-badges" style={{ marginTop: 6 }}>
+              <MetadataBadge label={displaySite.category} color={getCategoryColor(displaySite.category)} size="sm" />
+              <MetadataBadge label={displaySite.period} color={getPeriodColor(displaySite.period)} size="sm" />
             </div>
           </div>
         )
@@ -154,36 +133,14 @@ export function TooltipOverlay({
           >
             <div className="tooltip-header">
               <div className="tooltip-title">{site.title}</div>
-              {getCountryFlatFlagUrl(site.location) && (
-                <img
-                  src={getCountryFlatFlagUrl(site.location)!}
-                  alt=""
-                  className="tooltip-flag"
-                />
-              )}
+              <CountryFlag country={site.location} size="sm" />
             </div>
             {site.location && (
               <div className="tooltip-location">{site.location}</div>
             )}
-            <div className="tooltip-badges">
-              <span
-                className="tooltip-badge"
-                style={{
-                  borderColor: getCategoryColor(site.category),
-                  color: getCategoryColor(site.category)
-                }}
-              >
-                {site.category}
-              </span>
-              <span
-                className="tooltip-badge"
-                style={{
-                  borderColor: getPeriodColor(site.period),
-                  color: getPeriodColor(site.period)
-                }}
-              >
-                {site.period}
-              </span>
+            <div className="meta-badges" style={{ marginTop: 6 }}>
+              <MetadataBadge label={site.category} color={getCategoryColor(site.category)} size="sm" />
+              <MetadataBadge label={site.period} color={getPeriodColor(site.period)} size="sm" />
             </div>
           </div>
         )

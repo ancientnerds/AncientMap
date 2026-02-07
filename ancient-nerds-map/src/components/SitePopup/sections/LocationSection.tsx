@@ -1,11 +1,6 @@
-import { getCountryFlatFlagUrl } from '../../../utils/countryFlags'
 import type { LocationSectionProps } from '../types'
-
-const formatCoord = (coord: number, isLat: boolean) => {
-  const abs = Math.abs(coord)
-  const dir = isLat ? (coord >= 0 ? 'N' : 'S') : (coord >= 0 ? 'E' : 'W')
-  return `${abs.toFixed(4)}° ${dir}`
-}
+import { formatCoord } from '../../../utils/formatters'
+import { CountryFlag } from '../../metadata'
 
 export function LocationSection({
   location,
@@ -16,8 +11,6 @@ export function LocationSection({
   onSetProximity,
   onMinimize
 }: LocationSectionProps) {
-  const flagUrl = location ? getCountryFlatFlagUrl(location) : null
-
   return (
     <>
       {location && (
@@ -26,14 +19,8 @@ export function LocationSection({
             <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
             <circle cx="12" cy="10" r="3"></circle>
           </svg>
+          <CountryFlag country={location} size="lg" />
           {location}
-          {flagUrl && (
-            <img
-              src={flagUrl}
-              alt=""
-              className="country-flag"
-            />
-          )}
         </div>
       )}
 

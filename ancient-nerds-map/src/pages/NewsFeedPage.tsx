@@ -5,12 +5,17 @@
 
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import { config } from '../config'
-import { getCategoryColor, getPeriodColor, categorizePeriod } from '../data/sites'
+import { getCategoryColor, getPeriodColor } from '../data/sites'
+import type { SiteData } from '../data/sites'
 import type { NewsItemData, NewsFeedResponse, NewsStats, NewsFilters, ActiveFilters } from '../types/news'
 import { formatDuration, formatRelativeDate } from '../utils/formatters'
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
+import { apiDetailToSiteData } from '../utils/siteApi'
+import { SiteBadges, CountryFlag } from '../components/metadata'
+import '../components/news/news-cards.css'
 
 const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
+const SitePopup = lazy(() => import('../components/SitePopup'))
 
 export default function NewsFeedPage() {
   const [items, setItems] = useState<NewsItemData[]>([])
@@ -31,6 +36,10 @@ export default function NewsFeedPage() {
   const [pullPhase, setPullPhase] = useState<'idle' | 'refreshing' | 'done'>('idle')
   const refreshingRef = useRef(false)
   const doneTimer = useRef(0)
+
+  // Site popup
+  const [selectedSite, setSelectedSite] = useState<SiteData | null>(null)
+  const [loadingSiteId, setLoadingSiteId] = useState<string | null>(null)
 
   // Live updates
   const [online, setOnline] = useState(true)
@@ -289,6 +298,18 @@ export default function NewsFeedPage() {
     fetchFeed(1, false, newFilters)
   }
 
+  const handleSiteClick = async (siteId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (loadingSiteId) return
+    setLoadingSiteId(siteId)
+    const resp = await fetch(`${config.api.baseUrl}/sites/${siteId}`)
+    if (resp.ok) {
+      const detail = await resp.json()
+      setSelectedSite(apiDetailToSiteData(detail))
+    }
+    setLoadingSiteId(null)
+  }
+
   const activeFilterCount = Object.values(activeFilters).filter(Boolean).length
 
   return (
@@ -530,33 +551,25 @@ export default function NewsFeedPage() {
               </div>
               <div className="news-card-post-text">{item.post_text || item.headline}</div>
 
-              {item.site_id && (() => {
-                const period = item.site_period_name || (item.site_period_start != null ? categorizePeriod(item.site_period_start) : null)
-                const isGenericType = !item.site_type || ['site', 'unknown'].includes(item.site_type.toLowerCase())
-                const categoryColor = !isGenericType ? getCategoryColor(item.site_type!) : null
-                const periodColor = period && period !== 'Unknown' ? getPeriodColor(period) : null
-                const flagUrl = item.site_country ? getCountryFlatFlagUrl(item.site_country) : null
-                return (
+              {item.site_id && (
                   <div className="news-feed-site-block">
                     <div className="news-feed-site-row">
-                      <span className="news-page-card-site-name">
+                      {item.site_country && <CountryFlag country={item.site_country} size="sm" showName />}
+                      <button
+                        className="news-page-card-site-name"
+                        onClick={(e) => handleSiteClick(item.site_id!, e)}
+                        disabled={loadingSiteId === item.site_id}
+                      >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
                           <circle cx="12" cy="10" r="3"></circle>
                         </svg>
-                        {item.site_name || item.site_name_extracted}
-                      </span>
-                      {flagUrl && <img className="news-feed-site-flag" src={flagUrl} alt={item.site_country || ''} />}
+                        {loadingSiteId === item.site_id ? 'Loading...' : (item.site_name || item.site_name_extracted)}
+                      </button>
                     </div>
-                    {(categoryColor || periodColor) && (
-                      <div className="news-feed-site-badges">
-                        {categoryColor && <span className="news-feed-site-badge" style={{ borderColor: categoryColor, color: categoryColor }}>{item.site_type}</span>}
-                        {periodColor && <span className="news-feed-site-badge" style={{ borderColor: periodColor, color: periodColor }}>{period}</span>}
-                      </div>
-                    )}
+                    <SiteBadges category={item.site_type} period={item.site_period_name} periodStart={item.site_period_start} size="sm" />
                   </div>
-                )
-              })()}
+              )}
 
               {!item.site_id && item.site_name_extracted && (
                 <div className="news-feed-site-row news-feed-site-unmatched">
@@ -640,6 +653,16 @@ export default function NewsFeedPage() {
         <Suspense fallback={null}>
           <LyraProfileModal onClose={() => setShowLyraProfile(false)} />
         </Suspense>
+      )}
+
+      {selectedSite && (
+        <div className="news-site-popup-overlay" onClick={() => setSelectedSite(null)}>
+          <div className="news-site-popup-inner" onClick={e => e.stopPropagation()}>
+            <Suspense fallback={null}>
+              <SitePopup site={selectedSite} onClose={() => setSelectedSite(null)} isStandalone={true} />
+            </Suspense>
+          </div>
+        </div>
       )}
     </div>
   )
