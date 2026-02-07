@@ -486,6 +486,112 @@ async def get_clustered_sites(
     }
 
 
+@router.get("/search")
+async def search_sites(
+    q: str = Query(..., min_length=2, description="Search query"),
+    limit: int = Query(20, ge=1, le=100, description="Max results"),
+    db: Session = Depends(get_db),
+):
+    """
+    Search sites across all sources by name (spaceless-aware).
+
+    Returns compact format matching /sites/all for frontend reuse.
+    """
+    from pipeline.utils.text import normalize_name
+
+    normalized = normalize_name(q)
+    if not normalized or len(normalized) < 2:
+        return {"count": 0, "sites": []}
+
+    spaceless = normalized.replace(" ", "")
+
+    # Exact + spaceless match on name_normalized
+    query = text("""
+        SELECT
+            id::text, name, lat, lon, source_id, site_type,
+            period_start, period_name, description, country, source_url,
+            CASE
+                WHEN name_normalized = :norm THEN 1
+                WHEN replace(name_normalized, ' ', '') = :spaceless THEN 2
+            END AS rank
+        FROM unified_sites
+        WHERE name_normalized = :norm
+           OR replace(name_normalized, ' ', '') = :spaceless
+        ORDER BY rank, name
+        LIMIT :limit
+    """)
+
+    result = db.execute(query, {
+        "norm": normalized,
+        "spaceless": spaceless,
+        "limit": limit,
+    })
+    sites = []
+    seen_ids = set()
+    for row in result:
+        seen_ids.add(row.id)
+        site = {
+            "id": row.id,
+            "n": row.name,
+            "la": row.lat,
+            "lo": row.lon,
+            "s": row.source_id,
+            "t": row.site_type,
+            "p": row.period_start,
+        }
+        if row.period_name:
+            site["pn"] = row.period_name
+        if row.description:
+            site["d"] = row.description
+        if row.country:
+            site["c"] = row.country
+        if row.source_url:
+            site["u"] = row.source_url
+        sites.append(site)
+
+    # If not enough results, broaden with ILIKE substring match
+    if len(sites) < limit:
+        remaining = limit - len(sites)
+        ilike_query = text("""
+            SELECT
+                id::text, name, lat, lon, source_id, site_type,
+                period_start, period_name, description, country, source_url
+            FROM unified_sites
+            WHERE (name_normalized ILIKE :pattern
+                   OR replace(name_normalized, ' ', '') ILIKE :spaceless_pattern)
+              AND id::text != ALL(:seen)
+            ORDER BY name
+            LIMIT :limit
+        """)
+        result2 = db.execute(ilike_query, {
+            "pattern": f"%{normalized}%",
+            "spaceless_pattern": f"%{spaceless}%",
+            "seen": list(seen_ids),
+            "limit": remaining,
+        })
+        for row in result2:
+            site = {
+                "id": row.id,
+                "n": row.name,
+                "la": row.lat,
+                "lo": row.lon,
+                "s": row.source_id,
+                "t": row.site_type,
+                "p": row.period_start,
+            }
+            if row.period_name:
+                site["pn"] = row.period_name
+            if row.description:
+                site["d"] = row.description
+            if row.country:
+                site["c"] = row.country
+            if row.source_url:
+                site["u"] = row.source_url
+            sites.append(site)
+
+    return {"count": len(sites), "sites": sites}
+
+
 @router.get("/{site_id}")
 async def get_site_detail(
     site_id: str,
