@@ -1,4 +1,5 @@
-import type { HeroHeaderProps } from '../types'
+import { useState, useRef, useEffect } from 'react'
+import type { HeroHeaderProps, AlternateSource } from '../types'
 import { MetadataBadge } from '../../metadata'
 
 export function HeroHeader({
@@ -18,10 +19,133 @@ export function HeroHeader({
   onTitleBarDoubleClick,
   isStandalone = false,
   windowState = 'normal',
-  isEmpireMode = false
+  isEmpireMode = false,
+  alternateSources,
+  activeSiteId,
+  onSourceSelect
 }: HeroHeaderProps) {
   // For empires, we don't show category/period badges
   const showBadges = !isEmpireMode && category && period
+
+  const hasAlternates = (alternateSources?.length ?? 0) > 0
+
+  // Dropdown state
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    if (!dropdownOpen) return
+    const handleClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [dropdownOpen])
+
+  const handleSourceClick = (alt: AlternateSource) => {
+    if (alt.id === activeSiteId) {
+      onSourceSelect?.(null)
+    } else {
+      onSourceSelect?.(alt)
+    }
+    setDropdownOpen(false)
+  }
+
+  // Render the source badge (existing or with chevron)
+  const renderSourceBadge = () => {
+    const badge = sourceInfo?.url ? (
+      <a
+        href={sourceInfo.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="popup-source clickable"
+        style={{ borderColor: sourceColor, color: sourceColor }}
+        title={`Visit ${sourceInfo.name}`}
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+        </svg>
+        {sourceInfo.name}
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="external-icon">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+          <polyline points="15 3 21 3 21 9"></polyline>
+          <line x1="10" y1="14" x2="21" y2="3"></line>
+        </svg>
+      </a>
+    ) : sourceName ? (
+      <div className="popup-source" style={{ borderColor: sourceColor, color: sourceColor }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+        </svg>
+        {sourceName}
+      </div>
+    ) : null
+
+    if (!badge) return null
+
+    if (!hasAlternates) return badge
+
+    return (
+      <div className="source-switcher-wrap" ref={dropdownRef}>
+        {badge}
+        <button
+          className={`source-switcher-toggle ${dropdownOpen ? 'open' : ''}`}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            e.preventDefault()
+            setDropdownOpen(!dropdownOpen)
+          }}
+          title={`${alternateSources!.length} other database${alternateSources!.length > 1 ? 's' : ''}`}
+          style={{ borderColor: sourceColor, color: sourceColor }}
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
+
+        {dropdownOpen && (
+          <div className="source-switcher-dropdown">
+            {alternateSources!.map((alt) => (
+              <button
+                key={alt.id}
+                className={`source-switcher-item ${alt.id === activeSiteId ? 'active' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleSourceClick(alt)
+                }}
+              >
+                <span
+                  className="source-switcher-dot"
+                  style={{ background: alt.sourceColor }}
+                />
+                <span className="source-switcher-name">{alt.sourceName}</span>
+                {alt.sourceUrl && (
+                  <a
+                    href={alt.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="source-switcher-link"
+                    onClick={(e) => e.stopPropagation()}
+                    title="Open source"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                      <polyline points="15 3 21 3 21 9"></polyline>
+                      <line x1="10" y1="14" x2="21" y2="3"></line>
+                    </svg>
+                  </a>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div
@@ -74,33 +198,7 @@ export function HeroHeader({
           </button>
         </div>
 
-        {sourceInfo?.url ? (
-          <a
-            href={sourceInfo.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="popup-source clickable"
-            style={{ borderColor: sourceColor, color: sourceColor }}
-            title={`Visit ${sourceInfo.name}`}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-            </svg>
-            {sourceInfo.name}
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="external-icon">
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-              <polyline points="15 3 21 3 21 9"></polyline>
-              <line x1="10" y1="14" x2="21" y2="3"></line>
-            </svg>
-          </a>
-        ) : sourceName && (
-          <div className="popup-source" style={{ borderColor: sourceColor, color: sourceColor }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-            </svg>
-            {sourceName}
-          </div>
-        )}
+        {renderSourceBadge()}
 
         {showBadges && (
           <div className="meta-badges">
