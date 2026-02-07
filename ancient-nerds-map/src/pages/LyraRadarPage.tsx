@@ -8,7 +8,10 @@
 
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import { config } from '../config'
+import { formatCoord, timeAgo } from '../utils/formatters'
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
+import { SiteBadges, CountryFlag, CopyButton } from '../components/metadata'
+import './LyraRadarPage.css'
 
 const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
 
@@ -79,39 +82,32 @@ function formatTimestamp(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime()
-  const mins = Math.floor(diff / 60_000)
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  const days = Math.floor(hrs / 24)
-  if (days < 30) return `${days}d ago`
-  const months = Math.floor(days / 30)
-  return `${months}mo ago`
-}
-
 function StatusPill({ status }: { status: string }) {
   let label: string
   let cls: string
+  let hint: string
   switch (status) {
     case 'promoted':
       label = 'Added'
       cls = 'lyra-status-added'
+      hint = 'Promoted to the main sites database'
       break
     case 'enriched':
       label = 'Enriched'
       cls = 'lyra-status-enriched'
+      hint = 'Enriched with Wikipedia/Wikidata metadata'
       break
     case 'rejected':
       label = 'Rejected'
       cls = 'lyra-status-rejected'
+      hint = 'Rejected — does not meet quality criteria'
       break
     default:
       label = 'Processing'
       cls = 'lyra-status-pending'
+      hint = 'Waiting for enrichment'
   }
-  return <span className={`lyra-status-pill ${cls}`}>{label}</span>
+  return <span className={`lyra-status-pill ${cls}`} title={hint}>{label}</span>
 }
 
 const SCORE_WEIGHTS = [
@@ -125,11 +121,6 @@ const SCORE_WEIGHTS = [
   { key: 'thumb', label: 'Thumb', points: 5, check: (d: RadarItem) => !!d.thumbnail_url },
   { key: 'wikidata', label: 'Wikidata', points: 5, check: (d: RadarItem) => !!d.wikidata_id },
 ] as const
-
-function formatCoord(value: number, pos: string, neg: string): string {
-  const dir = value >= 0 ? pos : neg
-  return `${Math.abs(value).toFixed(4)}\u00B0 ${dir}`
-}
 
 function scoreColor(pct: number): string {
   // 0% = red (hsl 0), 100% = green (hsl 120)
@@ -146,9 +137,17 @@ function ScoreBreakdown({ item }: { item: RadarItem }) {
 
   return (
     <div className="lyra-score-section">
-      <div className="lyra-score-header">
+      <div className="lyra-score-header" title={`Data completeness: ${earned}/100 points. Higher scores mean more metadata (coordinates, period, category, description, images) was found for this site.`}>
         <span className="lyra-discovery-percentage" style={{ color: scoreColor(pct) }}>{pct}%</span>
         <span className="lyra-score-sublabel">enrichment score</span>
+        <span className="lyra-score-badges">
+          <StatusPill status={item.enrichment_status} />
+          {item.mention_count > 1 && (
+            <span className="lyra-discovery-mentions" title={`Mentioned in ${item.mention_count} news items`}>
+              {item.mention_count}x
+            </span>
+          )}
+        </span>
       </div>
       <div className="lyra-score-breakdown">
         {SCORE_WEIGHTS.map(w => {
@@ -165,36 +164,29 @@ function ScoreBreakdown({ item }: { item: RadarItem }) {
   )
 }
 
-function RadarCard({ item }: { item: RadarItem }) {
+function RadarCard({ item, isTest }: { item: RadarItem; isTest?: boolean }) {
   const [factsExpanded, setFactsExpanded] = useState(false)
   const [videosExpanded, setVideosExpanded] = useState(false)
-  const [descExpanded, setDescExpanded] = useState(false)
 
   return (
-    <div className="lyra-discovery-card">
-      {/* 1. Name + status/mentions header */}
-      <div className="lyra-discovery-header">
-        <div className="lyra-discovery-name-block">
-          <h3 className="lyra-discovery-name">
-            {item.display_name}
-          </h3>
-          {item.original_name && (
-            <span className="lyra-discovery-original-name">
-              Corrected from "{item.original_name}"
-            </span>
-          )}
-        </div>
-        <div className="lyra-discovery-header-badges">
-          <StatusPill status={item.enrichment_status} />
-          {item.mention_count > 1 && (
-            <span className="lyra-discovery-mentions">
-              {item.mention_count}x
-            </span>
-          )}
-          {item.last_mentioned && (
-            <span className="lyra-discovery-last-seen">{timeAgo(item.last_mentioned)}</span>
-          )}
-        </div>
+    <div className={`lyra-discovery-card${isTest ? ' lyra-test-card-fadein' : ''}`}>
+      {isTest && <span className="lyra-test-stamp">TEST</span>}
+      {/* Last seen — lower right corner */}
+      {item.last_mentioned && (
+        <span className="lyra-last-seen-corner" title={`Last mentioned ${new Date(item.last_mentioned).toLocaleString()}`}>{timeAgo(item.last_mentioned)}</span>
+      )}
+
+      {/* 1. Name — full width */}
+      <div className="lyra-discovery-name-block">
+        <h3 className="lyra-discovery-name">
+          {item.display_name}
+          <CopyButton text={item.display_name} title="Copy site name" size={14} />
+        </h3>
+        {item.original_name && (
+          <span className="lyra-discovery-original-name">
+            Corrected from "{item.original_name}"
+          </span>
+        )}
       </div>
 
       {/* Rejection reason */}
@@ -204,90 +196,86 @@ function RadarCard({ item }: { item: RadarItem }) {
         </div>
       )}
 
-      {/* 2. Country with flag */}
-      {item.country && (
+      {/* 3. Country + coordinates row */}
+      {(item.country || (item.lat != null && item.lon != null)) && (
         <div className="lyra-discovery-country-row">
-          {(() => {
-            const flagUrl = getCountryFlatFlagUrl(item.country)
-            return flagUrl ? (
-              <img src={flagUrl} alt="" className="lyra-discovery-flag" />
-            ) : null
-          })()}
-          <span>{item.country}</span>
-        </div>
-      )}
-
-      {/* 3b. Metadata tags (type + period) */}
-      {(item.site_type || item.period_name) && (
-        <div className="lyra-discovery-metadata-row">
-          {item.site_type && (
-            <span className="lyra-metadata-tag lyra-metadata-type">{item.site_type}</span>
-          )}
-          {item.period_name && (
-            <span className="lyra-metadata-tag lyra-metadata-period">{item.period_name}</span>
+          {item.country && <CountryFlag country={item.country} size="md" showName />}
+          {item.lat != null && item.lon != null && (
+            <span className="lyra-discovery-coords">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="2" y1="12" x2="22" y2="12"></line>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+              </svg>
+              {formatCoord(item.lat!, true)}, {formatCoord(item.lon!, false)}
+              <CopyButton text={`${formatCoord(item.lat!, true)}, ${formatCoord(item.lon!, false)}`} title="Copy coordinates" />
+            </span>
           )}
         </div>
       )}
 
-      {/* 4. Coordinates */}
-      {item.lat != null && item.lon != null && (
-        <div className="lyra-discovery-coords">
-          {formatCoord(item.lat, 'N', 'S')}, {formatCoord(item.lon, 'E', 'W')}
+      {/* 4. Metadata tags (type + period) */}
+      <SiteBadges category={item.site_type} period={item.period_name} size="md" />
+
+      {/* 5. Thumbnail */}
+      {item.thumbnail_url && (
+        <div className="lyra-discovery-image-wrap" key={item.thumbnail_url}>
+          {item.wikipedia_url ? (
+            <a href={item.wikipedia_url} target="_blank" rel="noopener noreferrer">
+              <img
+                src={item.thumbnail_url}
+                alt=""
+                className="lyra-discovery-image lyra-image-hidden"
+                loading="lazy"
+                onLoad={(e) => { e.currentTarget.classList.remove('lyra-image-hidden'); e.currentTarget.classList.add('lyra-tv-on') }}
+              />
+            </a>
+          ) : (
+            <img
+              src={item.thumbnail_url}
+              alt=""
+              className="lyra-discovery-image lyra-image-hidden"
+              loading="lazy"
+              onLoad={(e) => { e.currentTarget.classList.remove('lyra-image-hidden'); e.currentTarget.classList.add('lyra-tv-on') }}
+            />
+          )}
         </div>
       )}
 
-      {/* 5. Description */}
+      {/* 6. Description */}
       {item.description && (
         <div className="lyra-discovery-description-section">
-          <p className={`lyra-discovery-description ${!descExpanded ? 'lyra-description-clamped' : ''}`}>
+          <p className="lyra-discovery-description lyra-description-clamped">
             {item.description}
           </p>
-          {item.description.length > 180 && (
-            <button
-              className="lyra-discovery-expand"
-              onClick={() => setDescExpanded(!descExpanded)}
-            >
-              {descExpanded ? 'Show less' : 'Show more'}
-            </button>
-          )}
         </div>
       )}
 
-      {/* 6. Wikipedia link */}
-      {item.wikipedia_url && (
-        <a
-          href={item.wikipedia_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="lyra-wiki-link"
-        >
-          <img src="https://www.google.com/s2/favicons?domain=wikipedia.org&sz=32" alt="" className="lyra-link-favicon" />
-          Wikipedia
-        </a>
-      )}
-
-      {/* 6b. Wikidata link */}
-      {item.wikidata_id && (
-        <a
-          href={`https://www.wikidata.org/wiki/${item.wikidata_id}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="lyra-wiki-link lyra-wikidata-link"
-        >
-          <img src="https://www.google.com/s2/favicons?domain=wikidata.org&sz=32" alt="" className="lyra-link-favicon" />
-          Wikidata
-        </a>
-      )}
-
-      {/* 7. Thumbnail — full card width */}
-      {item.thumbnail_url && (
-        <div className="lyra-discovery-image-wrap">
-          <img
-            src={item.thumbnail_url}
-            alt=""
-            className="lyra-discovery-image"
-            loading="lazy"
-          />
+      {/* 7. External links row */}
+      {(item.wikipedia_url || item.wikidata_id) && (
+        <div className="lyra-wiki-links-row">
+          {item.wikipedia_url && (
+            <a
+              href={item.wikipedia_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="lyra-wiki-link"
+            >
+              <img src="https://www.google.com/s2/favicons?domain=wikipedia.org&sz=32" alt="" className="lyra-link-favicon" />
+              Wikipedia
+            </a>
+          )}
+          {item.wikidata_id && (
+            <a
+              href={`https://www.wikidata.org/wiki/${item.wikidata_id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="lyra-wiki-link lyra-wikidata-link"
+            >
+              <img src="https://www.google.com/s2/favicons?domain=wikidata.org&sz=32" alt="" className="lyra-link-favicon" />
+              Wikidata
+            </a>
+          )}
         </div>
       )}
 
@@ -402,7 +390,59 @@ function RadarCard({ item }: { item: RadarItem }) {
   )
 }
 
+// TODO: Remove after testing unified metadata components
+function useRandomTestCard(): RadarItem | null {
+  const [card, setCard] = useState<RadarItem | null>(null)
+  const [ready, setReady] = useState(false)
+  useEffect(() => {
+    setReady(false)
+    ;(async () => {
+      try {
+        const listResp = await fetch(`${config.api.baseUrl}/sites/all?source=ancient_nerds&limit=200`)
+        if (!listResp.ok) return
+        const data = await listResp.json()
+        const sites: { id: string }[] = data.sites || []
+        if (!sites.length) return
+        const pick = sites[Math.floor(Math.random() * sites.length)]
+        const detailResp = await fetch(`${config.api.baseUrl}/sites/${pick.id}`)
+        if (!detailResp.ok) return
+        const s = await detailResp.json()
+        setCard({
+          id: 'test-dummy',
+          display_name: s.name || 'Unknown Site',
+          original_name: null,
+          enrichment_status: 'enriched',
+          enrichment_score: 85,
+          rejection_reason: null,
+          country: s.country || null,
+          site_type: s.type || null,
+          period_name: s.periodName || null,
+          thumbnail_url: s.thumbnailUrl || null,
+          wikipedia_url: s.sourceUrl || null,
+          lat: s.lat,
+          lon: s.lon,
+          description: s.description || null,
+          wikidata_id: 'Q12345',
+          mention_count: 7,
+          facts: ['Test card — random Ancient Nerds Originals site'],
+          videos: [
+            { video_id: 'baY3SaIhfl0', channel_name: 'Ancient Architects', timestamp_seconds: 142, deep_url: 'https://www.youtube.com/watch?v=baY3SaIhfl0&t=142' },
+          ],
+          unique_videos: 1,
+          unique_channels: 1,
+          last_mentioned: new Date().toISOString(),
+          suggestions: [],
+          best_match: null,
+        })
+        setReady(true)
+      } catch { /* ignore */ }
+    })()
+  }, [])
+  return ready ? card : null
+}
+
 export default function LyraRadarPage() {
+  const testCard = useRandomTestCard()
   const [items, setItems] = useState<RadarItem[]>([])
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(false)
@@ -612,6 +652,8 @@ export default function LyraRadarPage() {
       <div className="lyra-discoveries-grid" ref={gridRef}>
         {Array.from({ length: columnCount }, (_, colIdx) => (
           <div key={colIdx} className="lyra-discoveries-column">
+            {/* TODO: Remove test card after visual verification */}
+            {colIdx === 0 && testCard && <RadarCard item={testCard} isTest />}
             {items.filter((_, i) => i % columnCount === colIdx).map(item => (
               <RadarCard key={item.id} item={item} />
             ))}

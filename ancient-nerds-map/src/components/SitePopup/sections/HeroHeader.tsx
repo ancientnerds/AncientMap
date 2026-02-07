@@ -1,4 +1,5 @@
 import type { HeroHeaderProps } from '../types'
+import { MetadataBadge } from '../../metadata'
 
 export function HeroHeader({
   title,
@@ -102,13 +103,9 @@ export function HeroHeader({
         )}
 
         {showBadges && (
-          <div className="popup-badges">
-            <span className="popup-badge" style={{ borderColor: catColor, color: catColor }}>
-              {category}
-            </span>
-            <span className="popup-badge" style={{ borderColor: periodColor, color: periodColor }}>
-              {period}
-            </span>
+          <div className="meta-badges">
+            <MetadataBadge label={category!} color={catColor!} size="lg" />
+            <MetadataBadge label={period!} color={periodColor!} size="lg" />
           </div>
         )}
       </div>

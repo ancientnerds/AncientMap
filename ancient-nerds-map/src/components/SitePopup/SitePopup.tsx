@@ -429,7 +429,8 @@ export default function SitePopup({
           <button
             className="popup-window-btn close-btn"
             onClick={() => {
-              window.location.href = 'https://ancientnerds.com'
+              if (onClose) onClose()
+              else window.location.href = 'https://ancientnerds.com'
             }}
             title="Close and return to globe"
           >

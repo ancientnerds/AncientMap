@@ -1,0 +1,652 @@
+/* =============================================================================
+   Lyra Discoveries Page
+   ============================================================================= */
+
+.lyra-discoveries-page {
+  min-height: 100vh;
+  height: 100vh;
+  overflow-y: auto;
+  background: linear-gradient(180deg, #0a1a1f 0%, #0d1f25 100%);
+  color: rgba(255, 255, 255, 0.85);
+  font-family: 'Inter', system-ui, sans-serif;
+  padding-bottom: 40px;
+}
+
+.lyra-discoveries-filters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.lyra-discoveries-filter-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+}
+
+.lyra-discoveries-filter-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.lyra-discoveries-grid {
+  display: flex;
+  gap: 16px;
+  padding: 20px;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.lyra-discoveries-column {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.lyra-discovery-card {
+  position: relative;
+  background: var(--bg-card, rgba(8, 18, 26, 0.7));
+  border: 1px solid var(--border-color, rgba(0, 180, 180, 0.12));
+  border-radius: 8px;
+  padding: 16px;
+  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+  transform: translateZ(0);
+}
+
+.lyra-discovery-card:hover {
+  border-color: rgba(0, 180, 180, 0.3);
+  transform: translateY(-3px) scale(1.01);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 180, 180, 0.1);
+}
+
+.lyra-discovery-name-block {
+  margin-bottom: 10px;
+}
+
+.lyra-discovery-name {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.3;
+  font-family: 'Orbitron', sans-serif;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: color 0.3s ease;
+}
+
+.lyra-discovery-card:hover .lyra-discovery-name {
+  color: #fff;
+}
+
+.lyra-discovery-original-name {
+  display: block;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.3);
+  font-style: italic;
+  margin-top: 2px;
+}
+
+.lyra-discovery-rejection {
+  font-size: 11px;
+  color: #e8a87c;
+  background: rgba(232, 168, 124, 0.08);
+  border-left: 2px solid rgba(232, 168, 124, 0.4);
+  padding: 4px 8px;
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+/* .lyra-discovery-score removed — replaced by .lyra-discovery-percentage */
+
+.lyra-discovery-mentions {
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #c02023;
+  background: rgba(192, 32, 35, 0.15);
+  border: 1px solid rgba(192, 32, 35, 0.3);
+  border-radius: 4px;
+  font-family: 'Orbitron', sans-serif;
+}
+
+/* Test card */
+.lyra-test-card-fadein {
+  animation: card-fadein 400ms ease-out;
+}
+
+@keyframes card-fadein {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.lyra-test-stamp {
+  position: absolute;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%) rotate(-30deg);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 48px;
+  font-weight: 900;
+  letter-spacing: 10px;
+  color: rgba(192, 32, 35, 0.4);
+  text-transform: uppercase;
+  pointer-events: none;
+  z-index: 2;
+  white-space: nowrap;
+  border: 4px solid rgba(192, 32, 35, 0.4);
+  border-radius: 8px;
+  padding: 4px 20px;
+}
+
+.lyra-last-seen-corner {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+/* Facts list with left border accent */
+.lyra-discovery-facts {
+  margin: 0 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lyra-discovery-fact {
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.7);
+  padding-left: 10px;
+  border-left: 2px solid rgba(192, 32, 35, 0.4);
+}
+
+.lyra-discovery-description {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(232, 232, 232, 0.85);
+  transition: color 0.3s ease;
+}
+
+.lyra-discovery-card:hover .lyra-discovery-description {
+  color: #fff;
+}
+
+.lyra-discovery-card:hover .lyra-discovery-country-row {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.lyra-discovery-card:hover .lyra-discovery-coords {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+
+/* Video chips container */
+.lyra-discovery-videos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.lyra-discovery-video-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #ff4444;
+  background: rgba(255, 68, 68, 0.1);
+  border: 1px solid rgba(255, 68, 68, 0.2);
+  border-radius: 4px;
+  text-decoration: none;
+  transition: all 0.15s;
+}
+
+.lyra-discovery-video-chip:hover {
+  background: rgba(255, 68, 68, 0.2);
+  border-color: rgba(255, 68, 68, 0.4);
+}
+
+.lyra-video-channel {
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lyra-video-timestamp {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 10px;
+}
+
+/* Suggestions chips */
+.lyra-discovery-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.lyra-suggestions-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.lyra-suggestion-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  color: rgba(0, 240, 255, 0.85);
+  background: rgba(0, 240, 255, 0.08);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 3px;
+  text-decoration: none;
+  transition: all 0.15s;
+}
+
+.lyra-suggestion-chip:hover {
+  background: rgba(0, 240, 255, 0.15);
+  border-color: rgba(0, 240, 255, 0.4);
+}
+
+.lyra-suggestion-flag {
+  width: 12px;
+  height: 9px;
+  border-radius: 1px;
+}
+
+/* Hero styles removed — replaced by .lyra-discovery-image full-width thumbnail */
+
+/* Stats row removed — video/channel counts now in collapsible header */
+
+/* Filter groups */
+.lyra-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Status pills */
+.lyra-status-pill {
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.lyra-status-matched {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.lyra-status-enriched {
+  color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.15);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.lyra-status-pending {
+  color: #6b7280;
+  background: rgba(107, 114, 128, 0.15);
+  border: 1px solid rgba(107, 114, 128, 0.3);
+}
+
+.lyra-status-rejected {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.lyra-status-added {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+/* Country row */
+.lyra-discovery-country-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 6px;
+  transition: color 0.3s ease;
+}
+
+
+/* Last-seen timestamp */
+.lyra-discovery-last-seen {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.3);
+  font-style: italic;
+  white-space: nowrap;
+}
+
+/* Wikidata link (inherits lyra-wiki-link but with distinct color) */
+.lyra-wikidata-link {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.lyra-wikidata-link:hover {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Best match highlight */
+.lyra-discovery-best-match {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+  padding: 6px 8px;
+  background: rgba(34, 197, 94, 0.06);
+  border: 1px solid rgba(34, 197, 94, 0.15);
+  border-radius: 6px;
+}
+
+.lyra-best-match-label {
+  font-size: 11px;
+  color: rgba(34, 197, 94, 0.7);
+  font-weight: 500;
+}
+
+.lyra-best-match-chip {
+  border-color: rgba(34, 197, 94, 0.35) !important;
+  color: rgba(34, 197, 94, 0.9) !important;
+  background: rgba(34, 197, 94, 0.1) !important;
+}
+
+.lyra-best-match-chip:hover {
+  border-color: rgba(34, 197, 94, 0.6) !important;
+}
+
+.lyra-best-match-pct {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 9px;
+  opacity: 0.7;
+}
+
+/* Coordinates (inline after country, matching site popup style) */
+.lyra-discovery-coords {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-left: 8px;
+  transition: color 0.3s ease;
+}
+
+/* Description with clamp */
+.lyra-discovery-description-section {
+  margin-bottom: 10px;
+}
+
+.lyra-description-clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Full-width thumbnail image */
+.lyra-discovery-image-wrap {
+  margin: 0 0 12px;
+  overflow: hidden;
+  border-radius: 6px;
+}
+
+.lyra-discovery-image-wrap a {
+  display: block;
+}
+
+.lyra-discovery-image {
+  width: 100%;
+  height: auto;
+  max-height: 200px;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.4s ease, filter 0.4s ease;
+}
+
+.lyra-discovery-image.lyra-image-hidden {
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+}
+
+.lyra-discovery-image.lyra-tv-on {
+  animation: tv-on 400ms ease-out;
+}
+
+@keyframes tv-on {
+  0% { opacity: 0; transform: scaleY(0.005) scaleX(1.3); filter: brightness(3); }
+  50% { opacity: 1; transform: scaleY(1.05) scaleX(1); filter: brightness(1.5); }
+  100% { opacity: 1; transform: scaleY(1) scaleX(1); filter: brightness(1); }
+}
+
+.lyra-discovery-image-wrap:hover .lyra-discovery-image {
+  transform: scale(1.03);
+  filter: brightness(1.1);
+}
+
+
+/* Score section */
+.lyra-score-section {
+  margin-bottom: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(0, 180, 180, 0.12);
+}
+
+.lyra-score-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.lyra-score-badges {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lyra-discovery-percentage {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.lyra-score-sublabel {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.lyra-score-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.lyra-score-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 3px;
+  font-size: 10px;
+  background: rgba(107, 114, 128, 0.15);
+  border: 1px solid rgba(107, 114, 128, 0.2);
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.lyra-score-bar-filled {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.25);
+  color: rgba(34, 197, 94, 0.85);
+}
+
+.lyra-score-label {
+  font-weight: 500;
+}
+
+.lyra-score-points {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 9px;
+  opacity: 0.7;
+}
+
+/* Collapsible sections */
+.lyra-collapsible {
+  margin-bottom: 6px;
+}
+
+.lyra-collapsible-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 0;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.15s;
+}
+
+.lyra-collapsible-header:hover {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.lyra-collapsible-arrow {
+  font-size: 10px;
+  width: 12px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* External links row */
+.lyra-wiki-links-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+/* Wikipedia link */
+.lyra-wiki-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.lyra-wiki-link:hover {
+  color: rgba(255, 255, 255, 0.8);
+  text-decoration: underline;
+}
+
+.lyra-link-favicon {
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+}
+
+/* Hero source label removed */
+
+
+/* Mobile responsive */
+@media (max-width: 600px) {
+  .lyra-discoveries-filters {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 16px;
+  }
+
+  .lyra-discoveries-grid {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .lyra-discovery-card {
+    padding: 12px;
+  }
+
+  .lyra-discovery-name {
+    font-size: 14px;
+  }
+
+  .lyra-poster-discoveries-btn {
+    width: auto;
+    padding: 4px 10px;
+    font-size: 10px;
+  }
+
+  .lyra-discovery-image-wrap {
+    margin: 0 0 10px;
+  }
+
+  .lyra-video-channel {
+    max-width: 70px;
+  }
+
+  .lyra-filter-group {
+    flex-wrap: wrap;
+  }
+}
+
+/* Scroll to top button */
+.lyra-scroll-top {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  background: rgba(10, 26, 31, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: rgba(0, 240, 255, 0.8);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.lyra-scroll-top:hover {
+  border-color: rgba(0, 240, 255, 0.6);
+  color: rgba(0, 240, 255, 1);
+  box-shadow: 0 4px 16px rgba(0, 240, 255, 0.15);
+}
