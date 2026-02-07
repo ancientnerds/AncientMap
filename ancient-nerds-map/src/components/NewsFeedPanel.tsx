@@ -76,8 +76,14 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick }: Pro
     }
   }
 
-  const toggleExpand = (id: number) => {
-    setExpandedId(prev => prev === id ? null : id)
+  const toggleExpand = (id: number, el: HTMLElement) => {
+    const collapsing = expandedId === id
+    setExpandedId(collapsing ? null : id)
+    if (!collapsing) {
+      requestAnimationFrame(() => {
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      })
+    }
   }
 
   return (
@@ -157,7 +163,7 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick }: Pro
           <div
             key={item.id}
             className={`news-feed-item${expandedId === item.id ? ' expanded' : ''}${item.site_id ? ' has-site' : ''}`}
-            onClick={() => toggleExpand(item.id)}
+            onClick={(e) => toggleExpand(item.id, e.currentTarget)}
             onMouseEnter={() => item.site_id && onSiteHover?.(item.site_id)}
             onMouseLeave={() => item.site_id && onSiteHover?.(null)}
           >
