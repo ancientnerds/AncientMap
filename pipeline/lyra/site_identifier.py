@@ -205,6 +205,10 @@ def _process_single(
         f"(confidence: {confidence})"
     )
 
+    # Store corrected name when AI fixed the caption garbling
+    if corrected_name and corrected_name.lower().strip() != contribution.name.lower().strip():
+        contribution.corrected_name = corrected_name
+
     # Step 2: Code searches DB with corrected name
     search_name = corrected_name or contribution.name
     db_candidates = _fetch_db_candidates(session, search_name, threshold=settings.pg_trgm_threshold)
@@ -214,14 +218,14 @@ def _process_single(
 
         best = db_candidates[0]
         if best["similarity"] >= settings.pg_trgm_threshold:
-            return _handle_db_match(session, contribution, best, identification, settings)
+            return _handle_db_match(session, contribution, best, identification, settings, facts, video_contexts)
 
     # Also try with original name if different
     if corrected_name and corrected_name.lower().strip() != contribution.name.lower().strip():
         orig_candidates = _fetch_db_candidates(session, contribution.name, threshold=settings.pg_trgm_threshold)
         if orig_candidates and orig_candidates[0]["similarity"] >= settings.pg_trgm_threshold:
             logger.info(f"  [{contribution.name}] DB match via original name: {orig_candidates[0]['name']}")
-            return _handle_db_match(session, contribution, orig_candidates[0], identification, settings)
+            return _handle_db_match(session, contribution, orig_candidates[0], identification, settings, facts, video_contexts)
 
     # Step 3: Code searches Wikidata for enrichment
     wikidata_candidates = _search_wikidata(search_name)
@@ -822,6 +826,8 @@ def _handle_db_match(
     db_candidate: dict,
     identification: dict,
     settings: LyraSettings,
+    facts: list[str] | None = None,
+    video_contexts: list[dict] | None = None,
 ) -> bool:
     """Handle a DB match: link NewsItems to the matched site.
 
@@ -841,27 +847,50 @@ def _handle_db_match(
 
     # Post-match country validation: reject if countries clearly mismatch
     confidence = identification.get("confidence", "unknown")
-    if confidence != "high" and site.country and contribution.country:
-        site_country = site.country.strip().lower()
-        contrib_country = contribution.country.strip().lower()
-        if site_country != contrib_country:
-            logger.warning(
-                f"Country mismatch for '{contribution.name}': "
-                f"site '{site.name}' is in '{site.country}' but "
-                f"video facts indicate '{contribution.country}' — rejecting"
-            )
-            contribution.enrichment_status = "rejected"
-            contribution.enrichment_data = {
-                "rejected_match": {
-                    "site_id": str(site.id),
-                    "site_name": site.name,
-                    "site_country": site.country,
-                    "contribution_country": contribution.country,
-                    "reason": "country_mismatch",
-                    "identification": identification,
-                },
-            }
-            return False
+    contrib_country = contribution.country
+    reject_reason = None
+
+    if confidence != "high" and site.country:
+        site_country_lower = site.country.strip().lower()
+
+        if contrib_country:
+            # Direct comparison when contribution has a country
+            if contrib_country.strip().lower() != site_country_lower:
+                reject_reason = contrib_country
+        elif db_candidate["similarity"] < 0.9:
+            # AI no longer provides country — check video context for validation.
+            # Build text blob from facts + video titles/descriptions/tags.
+            context_parts = list(facts or [])
+            for ctx in video_contexts or []:
+                if ctx.get("title"):
+                    context_parts.append(ctx["title"])
+                if ctx.get("description"):
+                    context_parts.append(ctx["description"])
+                if ctx.get("tags"):
+                    context_parts.extend(ctx["tags"])
+            context_text = " ".join(context_parts).lower()
+
+            if context_text and site_country_lower not in context_text:
+                reject_reason = "(not in video context)"
+
+    if reject_reason:
+        logger.warning(
+            f"Country mismatch for '{contribution.name}': "
+            f"site '{site.name}' is in '{site.country}' but "
+            f"video facts indicate {reject_reason} — rejecting"
+        )
+        contribution.enrichment_status = "rejected"
+        contribution.enrichment_data = {
+            "rejected_match": {
+                "site_id": str(site.id),
+                "site_name": site.name,
+                "site_country": site.country,
+                "contribution_country": reject_reason,
+                "reason": "country_mismatch",
+                "identification": identification,
+            },
+        }
+        return False
 
     # Copy base metadata from matched site
     if not contribution.country and site.country:

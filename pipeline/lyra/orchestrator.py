@@ -205,6 +205,7 @@ def main() -> None:
         conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS last_facts_hash VARCHAR(64)"))
         conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS enrichment_data JSONB"))
         conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS promoted_site_id UUID REFERENCES unified_sites(id) ON DELETE SET NULL"))
+        conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS corrected_name VARCHAR(500)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_contributions_enrichment ON user_contributions (source, enrichment_status)"))
 
         # New columns on news_videos

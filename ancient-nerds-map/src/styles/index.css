@@ -14008,6 +14008,14 @@ body.news-feed-open .empire-borders-window {
   margin-top: 2px;
 }
 
+.lyra-discovery-original-name {
+  display: block;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.3);
+  font-style: italic;
+  margin-top: 2px;
+}
+
 /* .lyra-discovery-score removed — replaced by .lyra-discovery-percentage */
 
 .lyra-discovery-mentions {

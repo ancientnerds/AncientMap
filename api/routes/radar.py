@@ -169,6 +169,7 @@ async def get_radar(
             SELECT
                 uc.id,
                 uc.name,
+                uc.corrected_name,
                 uc.enrichment_status,
                 uc.score,
                 uc.mention_count,
@@ -209,7 +210,9 @@ async def get_radar(
         )
         SELECT
             c.id::text,
-            c.name AS display_name,
+            COALESCE(c.corrected_name, c.name) AS display_name,
+            CASE WHEN c.corrected_name IS NOT NULL AND c.corrected_name != c.name
+                 THEN c.name ELSE NULL END AS original_name,
             COALESCE(c.enrichment_status, 'pending') AS enrichment_status,
             c.score AS enrichment_score,
             c.country,
@@ -253,6 +256,7 @@ async def get_radar(
         item = {
             "id": row.id,
             "display_name": row.display_name,
+            "original_name": row.original_name,
             "enrichment_status": enrichment_status,
             "enrichment_score": 0,
             "country": row.country,
