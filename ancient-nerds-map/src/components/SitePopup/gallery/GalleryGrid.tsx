@@ -1,5 +1,6 @@
 import type { GalleryGridProps } from '../types'
 import { SourceFavicon } from './galleryUtils'
+import LazyImage from '../../LazyImage'
 
 export function GalleryGrid({ items, onItemClick }: GalleryGridProps) {
   return (
@@ -12,13 +13,10 @@ export function GalleryGrid({ items, onItemClick }: GalleryGridProps) {
             onClick={() => onItemClick(index)}
             title={item.title || 'Click to enlarge'}
           >
-            <img
+            <LazyImage
               src={item.thumb}
               alt={item.title || ''}
-              loading="lazy"
-              onError={(e) => {
-                e.currentTarget.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%23333" width="100" height="100"/></svg>'
-              }}
+              fallbackSrc='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%23333" width="100" height="100"/></svg>'
             />
             <SourceFavicon
               source={item.source}

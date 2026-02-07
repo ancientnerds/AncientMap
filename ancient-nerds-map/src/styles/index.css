@@ -4509,12 +4509,6 @@ body.screenshot-mode .screenshot-mode-buttons {
   height: 100%;
   object-fit: cover;
   object-position: center;
-  animation: heroFadeIn 1s ease-out;
-}
-
-@keyframes heroFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
 }
 
 /* Color tint overlay matching UI background */
@@ -7536,8 +7530,7 @@ body.hud-hidden .empire-borders-window {
   align-items: center;
   justify-content: center;
   width: 24px;
-  height: 100%;
-  min-height: 30px;
+  align-self: stretch;
   padding: 0;
   border: 1px solid;
   border-left: none;
@@ -8137,12 +8130,6 @@ body.hud-hidden .empire-borders-window {
   object-fit: cover;
   border-radius: 5px; /* Slightly smaller than parent to ensure clean corners */
   display: block;
-  animation: galleryFadeIn 0.3s ease-out;
-}
-
-@keyframes galleryFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
 }
 
 .gallery-item-overlay {

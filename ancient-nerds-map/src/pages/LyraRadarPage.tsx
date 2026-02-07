@@ -12,6 +12,7 @@ import { formatCoord, timeAgo } from '../utils/formatters'
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
 import { SiteBadges, CountryFlag, CopyButton } from '../components/metadata'
 import { SitePopupOverlay } from '../components/SitePopupOverlay'
+import LazyImage from '../components/LazyImage'
 import type { SiteData } from '../data/sites'
 import './LyraRadarPage.css'
 
@@ -253,12 +254,10 @@ function RadarCard({ item, isTest, onViewSite }: { item: RadarItem; isTest?: boo
           key={item.thumbnail_url}
           onClick={() => onViewSite?.(radarItemToSiteData(item))}
         >
-          <img
+          <LazyImage
             src={item.thumbnail_url}
             alt=""
-            className="lyra-discovery-image lyra-image-hidden"
-            loading="lazy"
-            onLoad={(e) => { e.currentTarget.classList.remove('lyra-image-hidden'); e.currentTarget.classList.add('lyra-tv-on') }}
+            className="lyra-discovery-image"
           />
           <div className="lyra-image-hover-overlay">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

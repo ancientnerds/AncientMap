@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import ImageLightbox, { LightboxImage } from './ImageLightbox'
+import LazyImage from './LazyImage'
 
 export interface GalleryImage {
   thumb: string
@@ -59,7 +60,7 @@ export default function ImageGallery({
               onClick={() => setLightboxIndex(index)}
               title={image.title || 'Click to enlarge'}
             >
-              <img src={image.thumb} alt={image.title || `Photo ${index + 1}`} loading="lazy" />
+              <LazyImage src={image.thumb} alt={image.title || `Photo ${index + 1}`} />
               <div className="gallery-item-badge wikipedia">W</div>
               <div className="gallery-item-overlay">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
