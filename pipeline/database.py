@@ -673,6 +673,8 @@ class UserContribution(Base):
 
     # Required fields
     name: Mapped[str] = mapped_column(String(500), nullable=False)
+    # AI-corrected name (e.g. "Seab Birch" -> "Sayburç")
+    corrected_name: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # Optional location (can be entered manually or via map click)
     lat: Mapped[float | None] = mapped_column(Float, nullable=True)

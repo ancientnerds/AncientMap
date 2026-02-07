@@ -31,6 +31,7 @@ interface SuggestionMatch {
 interface RadarItem {
   id: string
   display_name: string
+  original_name: string | null
   enrichment_status: string
   enrichment_score: number
   country: string | null
@@ -164,6 +165,11 @@ function RadarCard({ item }: { item: RadarItem }) {
           <h3 className="lyra-discovery-name">
             {item.display_name}
           </h3>
+          {item.original_name && (
+            <span className="lyra-discovery-original-name">
+              Corrected from "{item.original_name}"
+            </span>
+          )}
         </div>
         <div className="lyra-discovery-header-badges">
           <StatusPill status={item.enrichment_status} />
