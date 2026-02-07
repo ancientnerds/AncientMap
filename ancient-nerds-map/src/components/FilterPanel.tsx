@@ -254,7 +254,7 @@ function FilterPanel({
 
   // Helper: check if a source needs to be loaded (not default, not loaded, not loading)
   const sourceNeedsLoading = (sourceId: string) =>
-    sourceId !== 'ancient_nerds' && sourceId !== 'lyra' &&
+    sourceId !== 'ancient_nerds' &&
     !loadedSourceIds.has(sourceId) &&
     !loadingSources?.has(sourceId)
 
