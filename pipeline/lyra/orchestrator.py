@@ -501,6 +501,51 @@ def main() -> None:
               )
         """))
 
+        # v12b: fix promoted items where period_start is NULL but period_name has
+        # parseable text (e.g. "Pre-Pottery Neolithic (11,000+ years ago)").
+        # These can't be reset to pending since they're already promoted — run the
+        # fixed Python parser directly to set period_start + canonical period_name.
+        from pipeline.utils.text import categorize_period, extract_period_from_text
+
+        canonical_periods = (
+            '< 4500 BC', '4500 - 3000 BC', '3000 - 1500 BC',
+            '1500 - 500 BC', '500 BC - 1 AD', '1 - 500 AD',
+            '500 - 1000 AD', '1000 - 1500 AD', '1500+ AD', 'Unknown',
+        )
+
+        # Fix unified_sites
+        rows = conn.execute(text("""
+            SELECT id, period_name FROM unified_sites
+            WHERE source_id = 'lyra'
+              AND period_start IS NULL
+              AND period_name IS NOT NULL
+        """)).fetchall()
+        for row in rows:
+            if row.period_name in canonical_periods:
+                continue
+            period_start = extract_period_from_text(row.period_name)
+            if period_start is not None:
+                conn.execute(text(
+                    "UPDATE unified_sites SET period_name = :pname, period_start = :pstart WHERE id = :id"
+                ), {"pname": categorize_period(period_start), "pstart": period_start, "id": row.id})
+
+        # Fix user_contributions (promoted ones the v12 reset skipped)
+        rows = conn.execute(text("""
+            SELECT id, period_name FROM user_contributions
+            WHERE source = 'lyra'
+              AND promoted_site_id IS NOT NULL
+              AND period_start IS NULL
+              AND period_name IS NOT NULL
+        """)).fetchall()
+        for row in rows:
+            if row.period_name in canonical_periods:
+                continue
+            period_start = extract_period_from_text(row.period_name)
+            if period_start is not None:
+                conn.execute(text(
+                    "UPDATE user_contributions SET period_name = :pname, period_start = :pstart WHERE id = :id"
+                ), {"pname": categorize_period(period_start), "pstart": period_start, "id": row.id})
+
         conn.commit()
 
     # Seed channels
