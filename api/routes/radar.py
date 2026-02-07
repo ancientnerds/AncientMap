@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from api.cache import cache_get, cache_set
+from api.cache import cache_delete_pattern, cache_get, cache_set
 from pipeline.database import get_db
 from pipeline.utils.text import categorize_period, normalize_name
 
@@ -391,3 +391,10 @@ async def get_radar_stats(db: Session = Depends(get_db)):
 
     cache_set(cache_key, response, ttl=CACHE_TTL)
     return response
+
+
+@router.post("/cache-bust")
+async def bust_radar_cache():
+    """Called by the Lyra pipeline after processing to show fresh data."""
+    count = cache_delete_pattern("radar:*")
+    return {"cleared": count}
