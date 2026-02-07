@@ -11,9 +11,11 @@ import { config } from '../config'
 import { formatCoord, timeAgo } from '../utils/formatters'
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
 import { SiteBadges, CountryFlag, CopyButton } from '../components/metadata'
+import type { SiteData } from '../data/sites'
 import './LyraRadarPage.css'
 
 const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
+const SitePopup = lazy(() => import('../components/SitePopup'))
 
 interface VideoReference {
   video_id: string
@@ -165,7 +167,22 @@ function ScoreBreakdown({ item }: { item: RadarItem }) {
   )
 }
 
-function RadarCard({ item, isTest }: { item: RadarItem; isTest?: boolean }) {
+function radarItemToSiteData(item: RadarItem): SiteData {
+  return {
+    id: item.id,
+    title: item.display_name || 'Unknown Site',
+    coordinates: [item.lon ?? NaN, item.lat ?? NaN],
+    category: item.site_type || 'Unknown',
+    period: item.period_name || 'Unknown',
+    periodStart: item.period_start,
+    location: item.country || '',
+    description: item.description || '',
+    sourceId: 'lyra',
+    sourceUrl: item.wikipedia_url || undefined,
+  }
+}
+
+function RadarCard({ item, isTest, onViewSite }: { item: RadarItem; isTest?: boolean; onViewSite?: (site: SiteData) => void }) {
   const [factsExpanded, setFactsExpanded] = useState(false)
   const [videosExpanded, setVideosExpanded] = useState(false)
 
@@ -218,28 +235,27 @@ function RadarCard({ item, isTest }: { item: RadarItem; isTest?: boolean }) {
       {/* 4. Metadata tags (type + period) */}
       <SiteBadges category={item.site_type} period={item.period_name} periodStart={item.period_start} size="md" />
 
-      {/* 5. Thumbnail */}
+      {/* 5. Thumbnail — click opens SitePopup */}
       {item.thumbnail_url && (
-        <div className="lyra-discovery-image-wrap" key={item.thumbnail_url}>
-          {item.wikipedia_url ? (
-            <a href={item.wikipedia_url} target="_blank" rel="noopener noreferrer">
-              <img
-                src={item.thumbnail_url}
-                alt=""
-                className="lyra-discovery-image lyra-image-hidden"
-                loading="lazy"
-                onLoad={(e) => { e.currentTarget.classList.remove('lyra-image-hidden'); e.currentTarget.classList.add('lyra-tv-on') }}
-              />
-            </a>
-          ) : (
-            <img
-              src={item.thumbnail_url}
-              alt=""
-              className="lyra-discovery-image lyra-image-hidden"
-              loading="lazy"
-              onLoad={(e) => { e.currentTarget.classList.remove('lyra-image-hidden'); e.currentTarget.classList.add('lyra-tv-on') }}
-            />
-          )}
+        <div
+          className="lyra-discovery-image-wrap lyra-image-clickable"
+          key={item.thumbnail_url}
+          onClick={() => onViewSite?.(radarItemToSiteData(item))}
+        >
+          <img
+            src={item.thumbnail_url}
+            alt=""
+            className="lyra-discovery-image lyra-image-hidden"
+            loading="lazy"
+            onLoad={(e) => { e.currentTarget.classList.remove('lyra-image-hidden'); e.currentTarget.classList.add('lyra-tv-on') }}
+          />
+          <div className="lyra-image-hover-overlay">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+              <circle cx="12" cy="10" r="3" />
+            </svg>
+            <span>View Site</span>
+          </div>
         </div>
       )}
 
@@ -451,6 +467,7 @@ export default function LyraRadarPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showLyraProfile, setShowLyraProfile] = useState(false)
+  const [selectedSite, setSelectedSite] = useState<SiteData | null>(null)
   const [stats, setStats] = useState<RadarStats | null>(null)
   const [minMentions, setMinMentions] = useState(1)
   const [sortBy, setSortBy] = useState<'score' | 'mentions' | 'recency'>('score')
@@ -655,9 +672,9 @@ export default function LyraRadarPage() {
         {Array.from({ length: columnCount }, (_, colIdx) => (
           <div key={colIdx} className="lyra-discoveries-column">
             {/* TODO: Remove test card after visual verification */}
-            {colIdx === 0 && testCard && <RadarCard item={testCard} isTest />}
+            {colIdx === 0 && testCard && <RadarCard item={testCard} isTest onViewSite={setSelectedSite} />}
             {items.filter((_, i) => i % columnCount === colIdx).map(item => (
-              <RadarCard key={item.id} item={item} />
+              <RadarCard key={item.id} item={item} onViewSite={setSelectedSite} />
             ))}
           </div>
         ))}
@@ -686,6 +703,16 @@ export default function LyraRadarPage() {
         <Suspense fallback={null}>
           <LyraProfileModal onClose={() => setShowLyraProfile(false)} />
         </Suspense>
+      )}
+
+      {selectedSite && (
+        <div className="news-site-popup-overlay" onClick={() => setSelectedSite(null)}>
+          <div className="news-site-popup-inner" onClick={e => e.stopPropagation()}>
+            <Suspense fallback={null}>
+              <SitePopup site={selectedSite} onClose={() => setSelectedSite(null)} isStandalone={true} />
+            </Suspense>
+          </div>
+        </div>
       )}
     </div>
   )
