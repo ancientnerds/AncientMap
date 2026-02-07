@@ -88,6 +88,7 @@ export const CATEGORY_COLORS: Record<string, string> = {
   'Fortress': '#aa0000',                 // Maroon
   'Gate/archway/bridge': '#e64444',      // Coral Red
   'Wall': '#bb2233',                     // Dark Rose
+  'Fortification': '#cc0000',            // Deep Red
 
   // -------------------------------------------------------------------------
   // RELIGIOUS - Yellows & Golds (spiritual, sacred)
@@ -172,6 +173,7 @@ export const CATEGORY_COLORS: Record<string, string> = {
   'port': '#00aaaa',                     // Medium Teal
   'Underwater structures': '#00dddd',    // Light Cyan
   'Bath': '#33cccc',                     // Turquoise
+  'Shipwreck': '#03a9f4',               // Light Blue
 
   // -------------------------------------------------------------------------
   // MONUMENTS - Magentas & Pinks (grandeur, significance)
@@ -186,6 +188,7 @@ export const CATEGORY_COLORS: Record<string, string> = {
   'palace': '#cc2288',                   // Magenta
   'Pyramid complex': '#dd2277',          // Vivid Pink
   'Museum': '#ee4499',                   // Bright Pink
+  'Amphitheatre': '#ee55bb',             // Light Pink
   'scheduled_monument': '#cc55aa',       // Plum
   'heritage_site': '#dd3399',            // Deep Rose
   'archaeological_site': '#ee44aa',      // Rose Magenta
@@ -259,6 +262,7 @@ const CATEGORY_TO_GROUP: Record<string, CategoryGroup> = {
   'fortress/citadel': 'Fortifications',
   'castle/palace': 'Fortifications',
   'gate/archway/bridge': 'Fortifications',
+  'fortification': 'Fortifications',
 
   // Religious - Yellows & Golds
   'church': 'Religious',
@@ -328,6 +332,7 @@ const CATEGORY_TO_GROUP: Record<string, CategoryGroup> = {
   'harbor': 'Water & Ports',
   'port': 'Water & Ports',
   'underwater structures': 'Water & Ports',
+  'shipwreck': 'Water & Ports',
 
   // Monuments - Mixed
   'monument': 'Monuments',
@@ -339,6 +344,7 @@ const CATEGORY_TO_GROUP: Record<string, CategoryGroup> = {
   'palace': 'Monuments',
   'pyramid complex': 'Monuments',
   'museum': 'Monuments',
+  'amphitheatre': 'Monuments',
   'scheduled_monument': 'Monuments',
   'heritage_site': 'Monuments',
   'archaeological_site': 'Monuments',
@@ -367,7 +373,10 @@ for (const [key, value] of Object.entries(CATEGORY_TO_GROUP)) {
 export function getCategoryGroup(category: string): CategoryGroup {
   if (!category) return 'Other'
   const normalized = category.toLowerCase()
-  return CATEGORY_TO_GROUP_NORMALIZED.get(normalized) || 'Other'
+  return CATEGORY_TO_GROUP_NORMALIZED.get(normalized)
+    || CATEGORY_TO_GROUP_NORMALIZED.get(normalized.replace(/_/g, ' '))
+    || CATEGORY_TO_GROUP_NORMALIZED.get(normalized.replace(/ /g, '_'))
+    || 'Other'
 }
 
 // =============================================================================
@@ -437,9 +446,12 @@ export function getCategoryColor(category: string): string {
   if (!category) return CATEGORY_COLORS.default
   // Try exact match first
   if (CATEGORY_COLORS[category]) return CATEGORY_COLORS[category]
-  // Try case-insensitive match
+  // Try case-insensitive, then with underscores↔spaces
   const normalized = category.toLowerCase()
-  return CATEGORY_COLORS_NORMALIZED.get(normalized) || CATEGORY_COLORS.default
+  return CATEGORY_COLORS_NORMALIZED.get(normalized)
+    || CATEGORY_COLORS_NORMALIZED.get(normalized.replace(/_/g, ' '))
+    || CATEGORY_COLORS_NORMALIZED.get(normalized.replace(/ /g, '_'))
+    || CATEGORY_COLORS.default
 }
 
 /**
