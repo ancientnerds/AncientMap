@@ -364,6 +364,18 @@ def main() -> None:
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v9_reset'))
         """))
 
+        # Backfill corrected_name from enrichment_data for already-processed items
+        # (including promoted ones that the v9 reset doesn't touch)
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET corrected_name = enrichment_data->'identification'->>'site_name'
+            WHERE source = 'lyra'
+              AND corrected_name IS NULL
+              AND enrichment_data IS NOT NULL
+              AND enrichment_data->'identification'->>'site_name' IS NOT NULL
+              AND lower(trim(enrichment_data->'identification'->>'site_name')) != lower(trim(name))
+        """))
+
         conn.commit()
 
     # Seed channels
