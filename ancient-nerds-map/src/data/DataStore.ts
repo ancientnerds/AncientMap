@@ -290,6 +290,31 @@ class DataStoreClass {
   }
 
   /**
+   * Load only source metadata (lightweight, for pages that don't need full site data).
+   */
+  async loadSources(): Promise<void> {
+    if (this.sources.size > 0) return
+    const resp = await fetch(`${API_BASE_URL}/sources/`)
+    if (!resp.ok) return
+    const data = await resp.json()
+    for (const source of data.sources) {
+      this.sources.set(source.id, {
+        id: source.id,
+        name: source.name,
+        description: source.description || '',
+        color: source.color,
+        category: source.category || 'archaeological',
+        recordCount: source.count,
+        enabled: true,
+        isPrimary: source.isPrimary || false,
+        enabledByDefault: source.enabledByDefault || false,
+        priority: source.priority || 999,
+        url: source.url,
+      })
+    }
+  }
+
+  /**
    * Check if currently running in offline mode
    */
   isOffline(): boolean {

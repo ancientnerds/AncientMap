@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import { config } from '../config'
 import { getCategoryColor, getPeriodColor } from '../data/sites'
+import { DataStore } from '../data/DataStore'
 import type { SiteData } from '../data/sites'
 import type { NewsItemData, NewsFeedResponse, NewsStats, NewsFilters, ActiveFilters } from '../types/news'
 import { formatDuration, formatRelativeDate } from '../utils/formatters'
@@ -122,6 +123,9 @@ export default function NewsFeedPage() {
   useEffect(() => {
     fetchFeed(1)
   }, [fetchFeed])
+
+  // Load source metadata on mount (for SitePopup display names)
+  useEffect(() => { DataStore.loadSources() }, [])
 
   // Fetch stats on mount (non-blocking)
   useEffect(() => {
