@@ -489,7 +489,7 @@ export default function LyraRadarPage() {
     if (!el) return
     const ro = new ResizeObserver(([entry]) => {
       const w = entry.contentRect.width
-      const cols = Math.max(1, Math.floor(w / 320))
+      const cols = Math.max(1, Math.floor(w / 300))
       setColumnCount(cols)
     })
     ro.observe(el)
