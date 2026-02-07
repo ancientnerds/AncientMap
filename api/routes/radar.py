@@ -253,12 +253,24 @@ async def get_radar(
         if status == "rejected" and enrichment_status != "rejected":
             continue
 
+        # Extract rejection reason from enrichment_data if rejected
+        rejection_reason = None
+        if enrichment_status == "rejected" and row.enrichment_data:
+            rejected = row.enrichment_data.get("rejected_match", {})
+            if rejected.get("reason") == "country_mismatch":
+                rejection_reason = (
+                    f"Matched to \"{rejected.get('site_name', '?')}\" "
+                    f"({rejected.get('site_country', '?')}), "
+                    f"but video context indicates {rejected.get('contribution_country', '?')}"
+                )
+
         item = {
             "id": row.id,
             "display_name": row.display_name,
             "original_name": row.original_name,
             "enrichment_status": enrichment_status,
             "enrichment_score": 0,
+            "rejection_reason": rejection_reason,
             "country": row.country,
             "site_type": row.site_type,
             "period_name": row.period_name,

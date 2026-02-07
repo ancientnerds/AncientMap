@@ -14016,6 +14016,16 @@ body.news-feed-open .empire-borders-window {
   margin-top: 2px;
 }
 
+.lyra-discovery-rejection {
+  font-size: 11px;
+  color: #e8a87c;
+  background: rgba(232, 168, 124, 0.08);
+  border-left: 2px solid rgba(232, 168, 124, 0.4);
+  padding: 4px 8px;
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
 /* .lyra-discovery-score removed — replaced by .lyra-discovery-percentage */
 
 .lyra-discovery-mentions {

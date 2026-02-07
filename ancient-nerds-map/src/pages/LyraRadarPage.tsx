@@ -34,6 +34,7 @@ interface RadarItem {
   original_name: string | null
   enrichment_status: string
   enrichment_score: number
+  rejection_reason: string | null
   country: string | null
   site_type: string | null
   period_name: string | null
@@ -180,6 +181,13 @@ function RadarCard({ item }: { item: RadarItem }) {
           )}
         </div>
       </div>
+
+      {/* Rejection reason */}
+      {item.rejection_reason && (
+        <div className="lyra-discovery-rejection">
+          {item.rejection_reason}
+        </div>
+      )}
 
       {/* 2. Country with flag */}
       {item.country && (
