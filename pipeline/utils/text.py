@@ -154,6 +154,32 @@ def extract_period_from_text(text: str) -> int | None:
     return None
 
 
+def categorize_period(year: int | None) -> str | None:
+    """Convert a year to a canonical period bucket name.
+
+    Mirrors frontend categorizePeriod() in src/data/sites.ts.
+    """
+    if year is None:
+        return None
+    if year < -4500:
+        return "< 4500 BC"
+    if year < -3000:
+        return "4500 - 3000 BC"
+    if year < -1500:
+        return "3000 - 1500 BC"
+    if year < -500:
+        return "1500 - 500 BC"
+    if year < 1:
+        return "500 BC - 1 AD"
+    if year < 500:
+        return "1 - 500 AD"
+    if year < 1000:
+        return "500 - 1000 AD"
+    if year < 1500:
+        return "1000 - 1500 AD"
+    return "1500+ AD"
+
+
 def sanitize_filename(name: str, max_length: int = 100) -> str:
     """Convert a string to a safe filename.
 

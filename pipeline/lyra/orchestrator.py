@@ -376,6 +376,56 @@ def main() -> None:
               AND lower(trim(enrichment_data->'identification'->>'site_name')) != lower(trim(name))
         """))
 
+        # Fix period_name: re-bucket from period_start using canonical 500-year buckets
+        # Runs once via fix_period_buckets_v1 flag in enrichment_data
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET period_name = CASE
+                WHEN period_start < -4500 THEN '< 4500 BC'
+                WHEN period_start < -3000 THEN '4500 - 3000 BC'
+                WHEN period_start < -1500 THEN '3000 - 1500 BC'
+                WHEN period_start < -500  THEN '1500 - 500 BC'
+                WHEN period_start < 1     THEN '500 BC - 1 AD'
+                WHEN period_start < 500   THEN '1 - 500 AD'
+                WHEN period_start < 1000  THEN '500 - 1000 AD'
+                WHEN period_start < 1500  THEN '1000 - 1500 AD'
+                ELSE '1500+ AD'
+            END
+            WHERE source = 'lyra'
+              AND period_start IS NOT NULL
+              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'fix_period_buckets_v1'))
+        """))
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"fix_period_buckets_v1": true}'::jsonb
+            WHERE source = 'lyra'
+              AND period_start IS NOT NULL
+              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'fix_period_buckets_v1'))
+        """))
+
+        # Also fix promoted unified_sites that have period_start but non-canonical period_name
+        conn.execute(text("""
+            UPDATE unified_sites
+            SET period_name = CASE
+                WHEN period_start < -4500 THEN '< 4500 BC'
+                WHEN period_start < -3000 THEN '4500 - 3000 BC'
+                WHEN period_start < -1500 THEN '3000 - 1500 BC'
+                WHEN period_start < -500  THEN '1500 - 500 BC'
+                WHEN period_start < 1     THEN '500 BC - 1 AD'
+                WHEN period_start < 500   THEN '1 - 500 AD'
+                WHEN period_start < 1000  THEN '500 - 1000 AD'
+                WHEN period_start < 1500  THEN '1000 - 1500 AD'
+                ELSE '1500+ AD'
+            END
+            WHERE source_id = 'lyra'
+              AND period_start IS NOT NULL
+              AND period_name NOT IN (
+                  '< 4500 BC', '4500 - 3000 BC', '3000 - 1500 BC',
+                  '1500 - 500 BC', '500 BC - 1 AD', '1 - 500 AD',
+                  '500 - 1000 AD', '1000 - 1500 AD', '1500+ AD'
+              )
+        """))
+
         conn.commit()
 
     # Seed channels

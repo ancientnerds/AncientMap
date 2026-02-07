@@ -79,6 +79,18 @@ function formatTimestamp(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diff / 60_000)
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  const days = Math.floor(hrs / 24)
+  if (days < 30) return `${days}d ago`
+  const months = Math.floor(days / 30)
+  return `${months}mo ago`
+}
+
 function StatusPill({ status }: { status: string }) {
   let label: string
   let cls: string
@@ -179,6 +191,9 @@ function RadarCard({ item }: { item: RadarItem }) {
               {item.mention_count}x
             </span>
           )}
+          {item.last_mentioned && (
+            <span className="lyra-discovery-last-seen">{timeAgo(item.last_mentioned)}</span>
+          )}
         </div>
       </div>
 
@@ -199,6 +214,18 @@ function RadarCard({ item }: { item: RadarItem }) {
             ) : null
           })()}
           <span>{item.country}</span>
+        </div>
+      )}
+
+      {/* 3b. Metadata tags (type + period) */}
+      {(item.site_type || item.period_name) && (
+        <div className="lyra-discovery-metadata-row">
+          {item.site_type && (
+            <span className="lyra-metadata-tag lyra-metadata-type">{item.site_type}</span>
+          )}
+          {item.period_name && (
+            <span className="lyra-metadata-tag lyra-metadata-period">{item.period_name}</span>
+          )}
         </div>
       )}
 
@@ -238,6 +265,21 @@ function RadarCard({ item }: { item: RadarItem }) {
             <path d="M12.09 13.119c-.936 1.932-2.217 4.548-2.853 5.728-.616 1.074-1.127.931-1.532.029-1.406-3.321-4.293-9.144-5.651-12.409-.251-.604-.96-1.467-1.554-1.467H.5c-.273 0-.5-.224-.5-.5s.227-.5.5-.5h3.662c.996 0 1.903.856 2.174 1.498 1.254 2.981 3.375 7.58 4.524 10.399.345-.655 1.159-2.271 1.824-3.633.305-.624.405-1.08.141-1.691-.684-1.575-1.883-4.082-2.561-5.567-.259-.565-.888-1.006-1.488-1.006H8.316c-.273 0-.5-.224-.5-.5s.227-.5.5-.5h3.266c.876 0 1.699.826 1.959 1.441.487 1.153 1.423 3.235 1.925 4.416.483-.883 1.248-2.366 1.733-3.347.279-.562.372-1.026.105-1.627-.509-1.146-.884-1.923-1.197-2.605a.567.567 0 0 1 .088-.555.54.54 0 0 1 .516-.186h3.273c.804 0 1.519.884 1.799 1.484.496 1.062 1.476 3.192 2.01 4.385l1.734-3.468c.232-.462.381-.998.111-1.58-.248-.536-.477-1.034-.677-1.467-.099-.215.018-.474.249-.548.231-.073.503.039.601.254.199.433.427.929.676 1.465.384.824.171 1.559-.121 2.142-.522 1.044-1.803 3.593-2.387 4.741-.191.375-.549.399-.747.022-.526-1.001-1.563-3.392-2.112-4.59-.453.862-1.271 2.479-1.715 3.377-.196.396-.561.419-.747.015-.568-1.239-1.536-3.482-2.047-4.619-.476.897-1.172 2.281-1.671 3.289z"/>
           </svg>
           Wikipedia
+        </a>
+      )}
+
+      {/* 6b. Wikidata link */}
+      {item.wikidata_id && (
+        <a
+          href={`https://www.wikidata.org/wiki/${item.wikidata_id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="lyra-wiki-link lyra-wikidata-link"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M2 3.5h1v17H2zm2 0h1v17H4zm11 0h1v17h-1zm2 0h1v17h-1zm4 0h1v17h-1zM7 3.5L9.5 12l2.5-8.5h1L10.5 12l2.5 8.5h-1L9.5 12 7 20.5H6L8.5 12 6 3.5z"/>
+          </svg>
+          Wikidata
         </a>
       )}
 
@@ -311,11 +353,35 @@ function RadarCard({ item }: { item: RadarItem }) {
         </div>
       )}
 
-      {/* 11. Suggestions (only for pending items) */}
-      {item.suggestions.length > 0 && (
+      {/* 11. Best match (high-confidence) */}
+      {item.best_match && (
+        <div className="lyra-discovery-best-match">
+          <span className="lyra-best-match-label">Strong match:</span>
+          <a
+            href={`/?site=${item.best_match.site_id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="lyra-suggestion-chip lyra-best-match-chip"
+            title={`${Math.round(item.best_match.similarity * 100)}% match`}
+          >
+            {item.best_match.name}
+            <span className="lyra-best-match-pct">{Math.round(item.best_match.similarity * 100)}%</span>
+            {item.best_match.country && (
+              <img
+                src={getCountryFlatFlagUrl(item.best_match.country) || ''}
+                alt=""
+                className="lyra-suggestion-flag"
+              />
+            )}
+          </a>
+        </div>
+      )}
+
+      {/* 12. Other suggestions (only for pending items) */}
+      {item.suggestions.filter(s => s.site_id !== item.best_match?.site_id).length > 0 && (
         <div className="lyra-discovery-suggestions">
           <span className="lyra-suggestions-label">Similar sites:</span>
-          {item.suggestions.slice(0, 3).map((s) => (
+          {item.suggestions.filter(s => s.site_id !== item.best_match?.site_id).slice(0, 3).map((s) => (
             <a
               key={s.site_id}
               href={`/?site=${s.site_id}`}
