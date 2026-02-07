@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import type { SiteData } from '../data/sites'
+import './news/news-cards.css'
 
 const SitePopup = lazy(() => import('./SitePopup'))
 
