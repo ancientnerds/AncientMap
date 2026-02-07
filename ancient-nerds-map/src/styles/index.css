@@ -14477,6 +14477,12 @@ body.news-feed-open .empire-borders-window {
   text-decoration: underline;
 }
 
+.lyra-link-favicon {
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+}
+
 /* Hero source label removed */
 
 .lyra-discovery-youtube {
