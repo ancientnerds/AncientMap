@@ -1089,8 +1089,10 @@ function AppContent() {
   const searchResults = useMemo(() => {
     if (!debouncedSearchQuery.trim()) return []
 
-    // When "All sources" is checked, use API search results instead of client-side
-    if (searchAllSources) {
+    // When "All sources" is checked and API results have arrived, use them.
+    // While API is loading (apiSearchResults still empty), fall through to
+    // client-side search so results never flash "No sites found".
+    if (searchAllSources && apiSearchResults.length > 0) {
       return apiSearchResults.slice(0, 100).map(site => {
         const category = site.category || 'Unknown'
         const period = site.period || 'Unknown'
@@ -1110,7 +1112,10 @@ function AppContent() {
     }
 
     const query = normalizeForSearch(debouncedSearchQuery)
-    let sitesToSearch = sites.filter(s => selectedSources.includes(s.sourceId))
+    // When "All sources" is checked (API loading), search all loaded sites as preview
+    let sitesToSearch = searchAllSources
+      ? sites
+      : sites.filter(s => selectedSources.includes(s.sourceId))
 
     // Apply filters to search results only if "Apply filters" is checked
     if (applyFiltersToSearch) {
