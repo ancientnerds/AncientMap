@@ -41,6 +41,7 @@ interface RadarItem {
   country: string | null
   site_type: string | null
   period_name: string | null
+  period_start: number | null
   thumbnail_url: string | null
   wikipedia_url: string | null
   lat: number | null
@@ -215,7 +216,7 @@ function RadarCard({ item, isTest }: { item: RadarItem; isTest?: boolean }) {
       )}
 
       {/* 4. Metadata tags (type + period) */}
-      <SiteBadges category={item.site_type} period={item.period_name} size="md" />
+      <SiteBadges category={item.site_type} period={item.period_name} periodStart={item.period_start} size="md" />
 
       {/* 5. Thumbnail */}
       {item.thumbnail_url && (
@@ -417,6 +418,7 @@ function useRandomTestCard(): RadarItem | null {
           country: s.country || null,
           site_type: s.type || null,
           period_name: s.periodName || null,
+          period_start: s.periodStart ?? null,
           thumbnail_url: s.thumbnailUrl || null,
           wikipedia_url: s.sourceUrl || null,
           lat: s.lat,

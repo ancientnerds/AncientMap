@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from api.cache import cache_get, cache_set
 from pipeline.database import get_db
-from pipeline.utils.text import normalize_name
+from pipeline.utils.text import categorize_period, normalize_name
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -176,6 +176,7 @@ async def get_radar(
                 uc.country,
                 uc.site_type,
                 uc.period_name,
+                uc.period_start,
                 uc.thumbnail_url,
                 uc.wikipedia_url,
                 uc.enrichment_data,
@@ -218,6 +219,7 @@ async def get_radar(
             c.country,
             c.site_type,
             c.period_name,
+            c.period_start,
             c.thumbnail_url,
             c.wikipedia_url,
             c.lat,
@@ -265,6 +267,11 @@ async def get_radar(
                     f"but video context indicates {rejected.get('contribution_country', '?')}"
                 )
 
+        # Normalize period: prefer canonical bucket from period_start
+        period_name = row.period_name
+        if row.period_start is not None:
+            period_name = categorize_period(row.period_start)
+
         item = {
             "id": row.id,
             "display_name": row.display_name,
@@ -274,7 +281,8 @@ async def get_radar(
             "rejection_reason": rejection_reason,
             "country": row.country,
             "site_type": row.site_type,
-            "period_name": row.period_name,
+            "period_name": period_name,
+            "period_start": row.period_start,
             "thumbnail_url": row.thumbnail_url,
             "wikipedia_url": row.wikipedia_url,
             "lat": row.lat,

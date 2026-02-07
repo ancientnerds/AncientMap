@@ -403,6 +403,25 @@ def main() -> None:
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'fix_period_buckets_v1'))
         """))
 
+        # v10: re-enrich items missing period_start or site_type so Wikipedia
+        # enrichment can fill them in (badges show gray/missing without these)
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET enrichment_status = 'pending', last_facts_hash = NULL
+            WHERE source = 'lyra'
+              AND enrichment_status IN ('enriched', 'enriching')
+              AND promoted_site_id IS NULL
+              AND (period_start IS NULL OR site_type IS NULL)
+              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v10_reset'))
+        """))
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v10_reset": true}'::jsonb
+            WHERE source = 'lyra'
+              AND promoted_site_id IS NULL
+              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v10_reset'))
+        """))
+
         # Also fix promoted unified_sites that have period_start but non-canonical period_name
         conn.execute(text("""
             UPDATE unified_sites
