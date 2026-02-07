@@ -592,6 +592,90 @@ async def search_sites(
     return {"count": len(sites), "sites": sites}
 
 
+@router.get("/{site_id}/alternates")
+async def get_site_alternates(
+    site_id: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Find alternate database entries for the same real-world site.
+
+    Matches by shared normalized names (via unified_site_names) within ~50 km,
+    from a different source. Joins source_meta for display info.
+    """
+    # First get the site's location
+    site_query = text("""
+        SELECT id, lat, lon FROM unified_sites WHERE id::text = :site_id
+    """)
+    site_row = db.execute(site_query, {"site_id": site_id}).fetchone()
+    if not site_row:
+        raise HTTPException(status_code=404, detail="Site not found")
+
+    query = text("""
+        WITH site_names AS (
+            SELECT name_normalized FROM unified_site_names WHERE site_id = :site_uuid
+        )
+        SELECT DISTINCT ON (us.source_id)
+            us.id::text AS id,
+            us.source_id,
+            us.name,
+            us.source_url,
+            us.description,
+            us.thumbnail_url,
+            us.site_type,
+            us.period_name,
+            us.period_start,
+            us.country,
+            us.lat,
+            us.lon,
+            sm.name AS source_name,
+            sm.color AS source_color
+        FROM unified_sites us
+        JOIN unified_site_names usn ON usn.site_id = us.id
+        LEFT JOIN source_meta sm ON sm.id = us.source_id
+        WHERE usn.name_normalized IN (SELECT name_normalized FROM site_names)
+          AND us.id != :site_uuid
+          AND ABS(us.lat - :lat) < 0.5
+          AND ABS(us.lon - :lon) < 0.5
+        ORDER BY us.source_id, us.name
+    """)
+
+    result = db.execute(query, {
+        "site_uuid": site_row.id,
+        "lat": site_row.lat,
+        "lon": site_row.lon,
+    })
+
+    alternates = []
+    for row in result:
+        alt = {
+            "id": row.id,
+            "sourceId": row.source_id,
+            "sourceName": row.source_name or row.source_id,
+            "sourceColor": row.source_color or "#888888",
+            "name": row.name,
+            "lat": row.lat,
+            "lon": row.lon,
+        }
+        if row.source_url:
+            alt["sourceUrl"] = row.source_url
+        if row.description:
+            alt["description"] = row.description
+        if row.thumbnail_url:
+            alt["thumbnailUrl"] = row.thumbnail_url
+        if row.site_type:
+            alt["siteType"] = row.site_type
+        if row.period_name:
+            alt["periodName"] = row.period_name
+        if row.period_start is not None:
+            alt["periodStart"] = row.period_start
+        if row.country:
+            alt["country"] = row.country
+        alternates.append(alt)
+
+    return {"alternates": alternates}
+
+
 @router.get("/{site_id}")
 async def get_site_detail(
     site_id: str,

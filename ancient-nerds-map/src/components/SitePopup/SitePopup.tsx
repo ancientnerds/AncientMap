@@ -81,6 +81,9 @@ import {
   EmpireSuccessionSection
 } from './sections'
 
+// Alternate sources
+import { useAlternateSources, alternateToSiteData } from './useAlternateSources'
+
 // Types
 import type { SitePopupProps, EmpireSeshatTab } from './types'
 
@@ -203,8 +206,15 @@ export default function SitePopup({
     onSiteUpdate
   })
 
-  // Use localSite from admin mode or the provided site
-  const displaySite = isEmpireMode ? dummySite : adminMode.localSite
+  // Alternate sources for source switching
+  const { alternates } = useAlternateSources(site)
+  const [overrideSite, setOverrideSite] = useState<SiteData | null>(null)
+
+  // Reset override when the base site changes
+  useEffect(() => setOverrideSite(null), [site?.id])
+
+  // Use localSite from admin mode or the provided site, with override taking priority
+  const displaySite = overrideSite || (isEmpireMode ? dummySite : adminMode.localSite)
 
   // Window management hook
   const windowHook = usePopupWindow({
@@ -472,6 +482,9 @@ export default function SitePopup({
             isStandalone={isStandalone}
             windowState={windowHook.windowState}
             isEmpireMode={isEmpireMode}
+            alternateSources={alternates}
+            activeSiteId={displaySite.id}
+            onSourceSelect={(alt) => setOverrideSite(alt ? alternateToSiteData(alt) : null)}
           />
 
           <div className="popup-body">

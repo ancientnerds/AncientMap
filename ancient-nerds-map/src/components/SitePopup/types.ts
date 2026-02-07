@@ -117,6 +117,25 @@ export interface SitePopupProps {
   onEmpireYearChange?: (year: number) => void
 }
 
+// ============= Alternate Source Types =============
+
+export interface AlternateSource {
+  id: string
+  sourceId: string
+  sourceName: string
+  sourceColor: string
+  name: string
+  sourceUrl?: string
+  description?: string
+  thumbnailUrl?: string
+  siteType?: string
+  periodName?: string
+  periodStart?: number | null
+  country?: string
+  lat: number
+  lon: number
+}
+
 // ============= Component Props =============
 
 export interface HeroHeaderProps {
@@ -137,6 +156,9 @@ export interface HeroHeaderProps {
   isStandalone?: boolean
   windowState?: WindowState
   isEmpireMode?: boolean
+  alternateSources?: AlternateSource[]
+  activeSiteId?: string
+  onSourceSelect?: (alt: AlternateSource | null) => void
 }
 
 export interface LocationSectionProps {
