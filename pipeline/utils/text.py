@@ -132,6 +132,9 @@ def extract_period_from_text(text: str) -> int | None:
     if stripped in PERIOD_BUCKET_TO_YEAR:
         return PERIOD_BUCKET_TO_YEAR[stripped]
 
+    # Strip commas from numbers: "11,000 BC" → "11000 BC"
+    text = re.sub(r"(\d),(\d)", r"\1\2", text)
+
     text = text.upper()
 
     # Pattern: number followed by BC/BCE/AD/CE
@@ -150,6 +153,13 @@ def extract_period_from_text(text: str) -> int | None:
             if era in ("BC", "BCE"):
                 return -year
             return year
+
+    # Pattern: "X years ago" / "X year old" (assume BC for large numbers)
+    match = re.search(r"(\d+)\+?\s*YEARS?\s*(?:AGO|OLD)", text)
+    if match:
+        years = int(match.group(1))
+        if years > 100:
+            return -years
 
     return None
 

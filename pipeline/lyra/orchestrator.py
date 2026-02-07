@@ -20,6 +20,18 @@ logger = logging.getLogger(__name__)
 
 CYCLE_INTERVAL = 3600  # 1 hour between pipeline runs
 
+
+def _bust_radar_cache():
+    """Tell the API to drop cached radar responses after pipeline updates."""
+    import urllib.request
+
+    try:
+        req = urllib.request.Request("http://api:8000/radar/cache-bust", method="POST")
+        urllib.request.urlopen(req, timeout=5)
+        logger.info("Radar cache busted")
+    except Exception as e:
+        logger.debug(f"Radar cache-bust failed (API may be down): {e}")
+
 # Step registry: name -> (function_import_path, description, needs_settings)
 STEPS = {
     "fetch":       ("pipeline.lyra.transcript_fetcher", "fetch_new_videos",            True,  "Fetched {n} new videos"),
@@ -422,6 +434,50 @@ def main() -> None:
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v10_reset'))
         """))
 
+        # v11: retry country_mismatch rejections — comparison now normalizes name variants
+        # (e.g. "United States" vs "United States of America" no longer mismatches)
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET enrichment_status = 'pending', last_facts_hash = NULL
+            WHERE source = 'lyra'
+              AND enrichment_status = 'rejected'
+              AND promoted_site_id IS NULL
+              AND enrichment_data->'rejected_match'->>'reason' = 'country_mismatch'
+              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v11_reset'))
+        """))
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v11_reset": true}'::jsonb
+            WHERE source = 'lyra'
+              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v11_reset'))
+              AND enrichment_data->'rejected_match'->>'reason' = 'country_mismatch'
+        """))
+
+        # v12: re-enrich items with non-canonical period_name (comma-formatted numbers
+        # like "11,000+" weren't parsed by extract_period_from_text, leaving period_start NULL
+        # and raw freetext in period_name). The fixed parser can now handle these.
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET enrichment_status = 'pending', last_facts_hash = NULL
+            WHERE source = 'lyra'
+              AND enrichment_status IN ('enriched', 'enriching')
+              AND promoted_site_id IS NULL
+              AND period_name IS NOT NULL
+              AND period_name NOT IN (
+                  '< 4500 BC', '4500 - 3000 BC', '3000 - 1500 BC',
+                  '1500 - 500 BC', '500 BC - 1 AD', '1 - 500 AD',
+                  '500 - 1000 AD', '1000 - 1500 AD', '1500+ AD', 'Unknown'
+              )
+              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v12_reset'))
+        """))
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v12_reset": true}'::jsonb
+            WHERE source = 'lyra'
+              AND promoted_site_id IS NULL
+              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v12_reset'))
+        """))
+
         # Also fix promoted unified_sites that have period_start but non-canonical period_name
         conn.execute(text("""
             UPDATE unified_sites
@@ -466,6 +522,8 @@ def main() -> None:
             cycle_status = "error"
             cycle_error = str(exc)
 
+        _bust_radar_cache()
+
         # Write heartbeat
         with engine.connect() as conn:
             conn.execute(text("""
@@ -498,6 +556,8 @@ def main() -> None:
                 cycle_status = "error"
                 cycle_error = str(exc)
             last_pipeline_run = now
+
+            _bust_radar_cache()
 
             # Write heartbeat so the API can report LIVE/OFFLINE
             try:

@@ -14,7 +14,7 @@ from pipeline.database import (
     UserContribution,
     get_session,
 )
-from pipeline.utils.text import normalize_name
+from pipeline.utils.text import categorize_period, extract_period_from_text, normalize_name
 
 logger = logging.getLogger(__name__)
 
@@ -143,10 +143,13 @@ def _extract_topic_metadata(session: Session, item: NewsItem) -> dict:
             continue
         # Match by site name
         if primary_site.get("name") and normalize_name(primary_site["name"]) == normalize_name(item.site_name_extracted):
+            raw_period = primary_site.get("period")
+            period_start = extract_period_from_text(raw_period) if raw_period else None
             return {
                 "country": primary_site.get("country"),
                 "site_type": primary_site.get("site_type"),
-                "period_name": primary_site.get("period"),
+                "period_name": categorize_period(period_start) if period_start is not None else raw_period,
+                "period_start": period_start,
             }
     return {}
 
@@ -173,6 +176,8 @@ def _upsert_lyra_suggestion(session: Session, item: NewsItem) -> None:
             existing.site_type = metadata["site_type"]
         if metadata.get("period_name") and not existing.period_name:
             existing.period_name = metadata["period_name"]
+        if metadata.get("period_start") is not None and existing.period_start is None:
+            existing.period_start = metadata["period_start"]
     else:
         session.add(UserContribution(
             name=item.site_name_extracted,
@@ -182,5 +187,6 @@ def _upsert_lyra_suggestion(session: Session, item: NewsItem) -> None:
             country=metadata.get("country"),
             site_type=metadata.get("site_type"),
             period_name=metadata.get("period_name"),
+            period_start=metadata.get("period_start"),
             source_url=f"https://www.youtube.com/watch?v={item.video_id}" if item.video_id else None,
         ))
