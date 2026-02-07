@@ -224,6 +224,7 @@ async def get_radar(
             c.lon,
             c.description,
             c.wikidata_id,
+            c.enrichment_data,
             COALESCE(va.unique_videos, 0) AS unique_videos,
             COALESCE(va.unique_channels, 0) AS unique_channels,
             c.mention_count,
