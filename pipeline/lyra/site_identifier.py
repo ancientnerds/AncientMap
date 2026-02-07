@@ -38,10 +38,12 @@ logger = logging.getLogger(__name__)
 
 PROMPT_PATH = Path(__file__).parent / "prompts" / "identify_site.txt"
 PICK_ENTITY_PROMPT_PATH = Path(__file__).parent / "prompts" / "pick_wikidata_entity.txt"
+EXTRACT_METADATA_PROMPT_PATH = Path(__file__).parent / "prompts" / "extract_metadata.txt"
 
 WIKIDATA_SEARCH_URL = "https://www.wikidata.org/w/api.php"
 WIKIDATA_ENTITY_URL = "https://www.wikidata.org/w/api.php"
 WIKIPEDIA_SUMMARY_URL = "https://en.wikipedia.org/api/rest_v1/page/summary/{title}"
+WIKIPEDIA_LEAD_URL = "https://en.wikipedia.org/api/rest_v1/page/mobile-sections-lead/{title}"
 
 
 def seed_lyra_source() -> None:
@@ -137,10 +139,11 @@ def _process_single(
     """Process a single candidate through identification + enrichment.
 
     Pipeline:
-    1. AI identifies the site (name, country, type, period)
+    1. AI identifies the site (name only — no metadata)
     2. Code searches DB for match (pg_trgm fuzzy)
     3. If DB match → link news items, status=matched (hidden from Radar)
     4. If no DB match → search Wikidata for enrichment → Radar candidate
+       Wikidata path extracts metadata (period, site_type) from Wikipedia text
 
     Returns True if the contribution was meaningfully updated.
     """
@@ -201,17 +204,6 @@ def _process_single(
         f"  [{contribution.name}] Identified as '{corrected_name}' "
         f"(confidence: {confidence})"
     )
-
-    # Update contribution metadata from AI
-    if identification.get("country"):
-        contribution.country = identification["country"]
-    if identification.get("site_type"):
-        contribution.site_type = normalize_site_type(identification["site_type"])
-    if identification.get("period_estimate"):
-        contribution.period_name = identification["period_estimate"]
-        period_start = extract_period_from_text(identification["period_estimate"])
-        if period_start is not None:
-            contribution.period_start = period_start
 
     # Step 2: Code searches DB with corrected name
     search_name = corrected_name or contribution.name
@@ -623,6 +615,67 @@ def _fetch_wikipedia_summary(title: str) -> dict:
     return result
 
 
+def _fetch_wikipedia_lead(title: str) -> str | None:
+    """Fetch the full lead section from Wikipedia via mobile-sections-lead API.
+
+    Returns plain text (HTML stripped), first ~2000 chars. Used when the
+    /page/summary extract is too short for meaningful metadata extraction.
+    """
+    encoded_title = urllib.parse.quote(title.replace(" ", "_"), safe="")
+    url = WIKIPEDIA_LEAD_URL.format(title=encoded_title)
+
+    try:
+        resp = fetch_with_retry(url)
+        data = resp.json()
+    except Exception as e:
+        logger.warning(f"Wikipedia lead fetch failed for '{title}': {e}")
+        return None
+
+    sections = data.get("sections", [])
+    if not sections:
+        return None
+
+    # The first section (index 0) is the lead/intro
+    html = sections[0].get("text", "")
+    if not html:
+        return None
+
+    # Strip HTML tags to get plain text
+    text = re.sub(r"<[^>]+>", "", html)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text[:2000] if text else None
+
+
+def _extract_metadata_from_wikipedia(
+    client: anthropic.Anthropic,
+    model: str,
+    site_name: str,
+    wiki_text: str,
+) -> dict | None:
+    """Extract period and site_type from Wikipedia text via Haiku.
+
+    Returns {"period": "...", "site_type": "..."} or None.
+    """
+    prompt_template = EXTRACT_METADATA_PROMPT_PATH.read_text(encoding="utf-8")
+    prompt = prompt_template.format(
+        site_name=site_name,
+        wiki_text=wiki_text[:2000],
+    )
+
+    result = _call_ai(client, model, prompt)
+    if not result:
+        logger.warning(f"  [{site_name}] Failed to extract metadata from Wikipedia")
+        return None
+
+    period = result.get("period")
+    site_type = result.get("site_type")
+    if not period and not site_type:
+        return None
+
+    logger.info(f"  [{site_name}] Wikipedia metadata: period={period}, site_type={site_type}")
+    return result
+
+
 def _build_prompt(
     template: str,
     contribution: UserContribution,
@@ -647,9 +700,6 @@ def _build_prompt(
     return template.format(
         site_name=contribution.name,
         mention_count=contribution.mention_count,
-        existing_country=contribution.country or "unknown",
-        existing_site_type=contribution.site_type or "unknown",
-        existing_period=contribution.period_name or "unknown",
         facts=facts_text,
         video_contexts=video_text,
     )
@@ -703,12 +753,11 @@ A junior model (Haiku) was asked to identify an archaeological site from YouTube
 ## Your Task
 1. Is this actually a specific archaeological site, or a region/person/method?
 2. Is the site name correct (not a caption garbling)?
-3. Is the country plausible given the facts?
-4. Should confidence be higher or lower?
+3. Should confidence be higher or lower?
 
 If you agree with Haiku's answer, return the exact same JSON.
 If you disagree, return a corrected JSON with the same schema:
-- For a real site: {{"is_site": true, "site_name": "...", "country": "...", "site_type": "...", "period_estimate": "...", "confidence": "...", "reasoning": "..."}}
+- For a real site: {{"is_site": true, "site_name": "...", "confidence": "...", "reasoning": "..."}}
 - For not a site: {{"is_site": false, "reasoning": "..."}}
 
 Return ONLY valid JSON.
@@ -892,12 +941,32 @@ def _handle_wikidata_match(
             if wiki_data.get("thumbnail_url") and not enrichment.get("thumbnail_url"):
                 enrichment["thumbnail_url"] = wiki_data["thumbnail_url"]
 
+            # Extract period + site_type from Wikipedia text via Haiku
+            wiki_text = wiki_data.get("description", "")
+            if len(wiki_text) < 200:
+                lead_text = _fetch_wikipedia_lead(wiki_title)
+                if lead_text:
+                    wiki_text = lead_text
+
+            if wiki_text:
+                metadata = _extract_metadata_from_wikipedia(
+                    client, settings.model_identify, site_name, wiki_text
+                )
+                if metadata:
+                    if metadata.get("period") and metadata["period"] != "Unknown":
+                        contribution.period_name = metadata["period"]
+                        period_start = extract_period_from_text(metadata["period"])
+                        if period_start is not None:
+                            contribution.period_start = period_start
+                    if metadata.get("site_type") and metadata["site_type"] != "Unknown":
+                        contribution.site_type = normalize_site_type(metadata["site_type"])
+
     # Apply coordinates
     if enrichment.get("lat") and enrichment.get("lon"):
         contribution.lat = enrichment["lat"]
         contribution.lon = enrichment["lon"]
 
-    # Apply country from coords or identification
+    # Country from coordinates (not AI)
     if contribution.lat and contribution.lon and not contribution.country:
         contribution.country = lookup_country(contribution.lat, contribution.lon)
 
@@ -933,10 +1002,6 @@ def _handle_new_site(
 ) -> bool:
     """Handle a site with no DB or Wikidata match: store what we have."""
     site_name = identification.get("site_name", contribution.name)
-
-    # Apply country from identification if not set
-    if not contribution.country and identification.get("country"):
-        contribution.country = identification["country"]
 
     contribution.enrichment_data = {"identification": identification}
     contribution.score = _compute_score(contribution)

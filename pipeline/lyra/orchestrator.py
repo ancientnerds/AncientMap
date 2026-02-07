@@ -346,6 +346,23 @@ def main() -> None:
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v8_reset'))
         """))
 
+        # v9: AI names only — metadata now comes from Wikipedia, not AI guesses
+        # Reset ALL non-promoted items for re-identification with simplified prompt
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET enrichment_status = 'pending', last_facts_hash = NULL
+            WHERE source = 'lyra'
+              AND promoted_site_id IS NULL
+              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v9_reset'))
+        """))
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v9_reset": true}'::jsonb
+            WHERE source = 'lyra'
+              AND promoted_site_id IS NULL
+              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v9_reset'))
+        """))
+
         conn.commit()
 
     # Seed channels
