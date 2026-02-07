@@ -28,9 +28,10 @@ from pipeline.database import (
     get_session,
 )
 from pipeline.lyra.config import LyraSettings
+from pipeline.lyra.site_matcher import fill_contrib_from_site
 from pipeline.normalizers.dates import passes_date_cutoff
 from pipeline.normalizers.site_type import normalize_site_type
-from pipeline.utils.country_lookup import lookup_country
+from pipeline.utils.country_lookup import country_name_variants, lookup_country, normalize_country
 from pipeline.utils.http import fetch_with_retry
 from pipeline.utils.text import (
     categorize_period,
@@ -146,7 +147,9 @@ def _process_single(
     Pipeline:
     1. AI identifies the site (name only — no metadata)
     2. Code searches DB for match (pg_trgm fuzzy)
-    3. If DB match → link news items, status=matched (hidden from Radar)
+    3. If DB match:
+       - AN Originals/promoted → status=matched (hidden from Radar)
+       - External source → status=enriched (visible on Radar, metadata from all matching sources)
     4. If no DB match → search Wikidata for enrichment → Radar candidate
        Wikidata path extracts metadata (period, site_type) from Wikipedia text
 
@@ -223,14 +226,14 @@ def _process_single(
 
         best = db_candidates[0]
         if best["similarity"] >= settings.pg_trgm_threshold:
-            return _handle_db_match(session, contribution, best, identification, settings, facts, video_contexts)
+            return _handle_db_match(session, contribution, best, identification, settings, facts, video_contexts, all_candidates=db_candidates)
 
     # Also try with original name if different
     if corrected_name and corrected_name.lower().strip() != contribution.name.lower().strip():
         orig_candidates = _fetch_db_candidates(session, contribution.name, threshold=settings.pg_trgm_threshold)
         if orig_candidates and orig_candidates[0]["similarity"] >= settings.pg_trgm_threshold:
             logger.info(f"  [{contribution.name}] DB match via original name: {orig_candidates[0]['name']}")
-            return _handle_db_match(session, contribution, orig_candidates[0], identification, settings, facts, video_contexts)
+            return _handle_db_match(session, contribution, orig_candidates[0], identification, settings, facts, video_contexts, all_candidates=orig_candidates)
 
     # Step 3: Code searches Wikidata for enrichment
     wikidata_candidates = _search_wikidata(search_name)
@@ -833,11 +836,21 @@ def _handle_db_match(
     settings: LyraSettings,
     facts: list[str] | None = None,
     video_contexts: list[dict] | None = None,
+    all_candidates: list[dict] | None = None,
 ) -> bool:
     """Handle a DB match: link NewsItems to the matched site.
 
-    db_match = already in our database = NOT a Radar item.
+    AN Originals / promoted matches → hidden ("matched", not a Radar item).
+    External source matches → visible ("enriched", Radar card with metadata from all matching sources).
     """
+    # Preload all promoted site IDs in one query (avoids N+1 per-candidate lookups)
+    promoted_ids = {
+        row.promoted_site_id
+        for row in session.query(UserContribution.promoted_site_id).filter(
+            UserContribution.promoted_site_id.isnot(None)
+        )
+    }
+
     site_id_str = db_candidate["site_id"]
     try:
         site_uuid = uuid.UUID(site_id_str)
@@ -857,11 +870,11 @@ def _handle_db_match(
     reject_reason = None
 
     if site.country:
-        site_country_lower = site.country.strip().lower()
+        site_iso = normalize_country(site.country)
 
         if contrib_country:
-            # Direct comparison when contribution has a country
-            if contrib_country.strip().lower() != site_country_lower:
+            # Compare ISO codes so "United States" == "United States of America"
+            if normalize_country(contrib_country) != site_iso:
                 reject_reason = contrib_country
         elif db_candidate["similarity"] < 0.9:
             # AI no longer provides country — check video context for validation.
@@ -876,8 +889,12 @@ def _handle_db_match(
                     context_parts.extend(ctx["tags"])
             context_text = " ".join(context_parts).lower()
 
-            if context_text and site_country_lower not in context_text:
-                reject_reason = "(not in video context)"
+            # Check all known name variants for the country (e.g. "usa",
+            # "united states", "united states of america" all match US)
+            if context_text:
+                variants = country_name_variants(site.country)
+                if not any(v in context_text for v in variants):
+                    reject_reason = "(not in video context)"
 
     if reject_reason:
         logger.warning(
@@ -898,21 +915,9 @@ def _handle_db_match(
         }
         return False
 
-    # Copy base metadata from matched site
-    if not contribution.country and site.country:
-        contribution.country = site.country
-    if not contribution.site_type and site.site_type:
-        contribution.site_type = site.site_type
-    if not contribution.period_name and site.period_name:
-        contribution.period_name = site.period_name
-    if not contribution.lat and site.lat:
-        contribution.lat = site.lat
-    if not contribution.lon and site.lon:
-        contribution.lon = site.lon
-    if not contribution.description and site.description:
-        contribution.description = site.description
-    if not contribution.thumbnail_url and site.thumbnail_url:
-        contribution.thumbnail_url = site.thumbnail_url
+    # Copy base metadata from matched site (fills all missing fields including
+    # period_start, wikipedia_url, and description)
+    fill_contrib_from_site(contribution, site)
 
     # Resolve country from coordinates if still missing
     if contribution.lat and contribution.lon and not contribution.country:
@@ -928,11 +933,40 @@ def _handle_db_match(
         synchronize_session="fetch",
     )
 
-    contribution.enrichment_status = "matched"
-    contribution.enrichment_data = {"identification": identification, "db_match": db_candidate}
-    contribution.score = _compute_score(contribution)
-    logger.info(f"DB match: '{contribution.name}' -> '{site.name}' ({updated} items linked)")
+    # Branch: AN Originals or promoted → hidden ("matched"); external source → visible ("enriched")
+    if db_candidate["source"] == "ancient_nerds" or site_uuid in promoted_ids:
+        contribution.enrichment_status = "matched"
+        contribution.enrichment_data = {"identification": identification, "db_match": db_candidate}
+        logger.info(f"DB match (AN/promoted): '{contribution.name}' -> '{site.name}' ({updated} items linked)")
+    else:
+        # External source match — visible on Radar, enriched with metadata from ALL matching sources
+        # Merge metadata from all external candidates (best similarity first, fill gaps)
+        external_sources = []
+        for cand in (all_candidates or []):
+            if cand["source"] == "ancient_nerds" or uuid.UUID(cand["site_id"]) in promoted_ids:
+                continue
+            cand_site = session.get(UnifiedSite, uuid.UUID(cand["site_id"]))
+            if cand_site:
+                fill_contrib_from_site(contribution, cand_site)
+                external_sources.append({
+                    "source_id": cand["source"],
+                    "site_id": cand["site_id"],
+                    "name": cand["name"],
+                    "source_url": cand_site.source_url,
+                })
 
+        contribution.enrichment_status = "enriched"
+        contribution.enrichment_data = {
+            "identification": identification,
+            "db_match": db_candidate,
+            "external_sources": external_sources,
+        }
+        logger.info(
+            f"DB match (external: {db_candidate['source']}): '{contribution.name}' -> "
+            f"'{site.name}' ({updated} items linked, {len(external_sources)} ext sources)"
+        )
+
+    contribution.score = _compute_score(contribution)
     return True
 
 

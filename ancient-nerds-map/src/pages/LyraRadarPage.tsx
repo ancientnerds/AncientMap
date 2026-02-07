@@ -31,6 +31,15 @@ interface SuggestionMatch {
   thumbnail_url: string | null
   wikipedia_url: string | null
   country: string | null
+  source_id?: string
+  source_name?: string
+}
+
+interface ExternalSource {
+  source_id: string
+  site_id: string
+  name: string
+  source_url: string | null
 }
 
 interface RadarItem {
@@ -58,6 +67,7 @@ interface RadarItem {
   last_mentioned: string | null
   suggestions: SuggestionMatch[]
   best_match: SuggestionMatch | null
+  external_sources: ExternalSource[]
 }
 
 interface RadarResponse {
@@ -185,6 +195,7 @@ function radarItemToSiteData(item: RadarItem): SiteData {
 function RadarCard({ item, isTest, onViewSite }: { item: RadarItem; isTest?: boolean; onViewSite?: (site: SiteData) => void }) {
   const [factsExpanded, setFactsExpanded] = useState(false)
   const [videosExpanded, setVideosExpanded] = useState(false)
+  const [sourcesExpanded, setSourcesExpanded] = useState(false)
 
   return (
     <div className={`lyra-discovery-card${isTest ? ' lyra-test-card-fadein' : ''}`}>
@@ -299,6 +310,48 @@ function RadarCard({ item, isTest, onViewSite }: { item: RadarItem; isTest?: boo
 
       {/* 8. Score breakdown */}
       <ScoreBreakdown item={item} />
+
+      {/* 8.5. External sources — collapsed by default */}
+      {item.external_sources && item.external_sources.length > 0 && (
+        <div className="lyra-collapsible">
+          <button
+            className="lyra-collapsible-header"
+            onClick={() => setSourcesExpanded(!sourcesExpanded)}
+          >
+            <span className="lyra-collapsible-arrow">{sourcesExpanded ? '\u25BE' : '\u25B8'}</span>
+            Sources ({item.external_sources.length})
+          </button>
+          {sourcesExpanded && (
+            <div className="lyra-discovery-sources">
+              {item.external_sources.map((src) => (
+                <span key={`${src.source_id}-${src.site_id}`} className="lyra-source-chip">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                    <path d="M2 17l10 5 10-5" />
+                    <path d="M2 12l10 5 10-5" />
+                  </svg>
+                  <span className="lyra-source-name">{src.name}</span>
+                  {src.source_url && (
+                    <a
+                      href={src.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="lyra-source-link"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                        <polyline points="15 3 21 3 21 9" />
+                        <line x1="10" y1="14" x2="21" y2="3" />
+                      </svg>
+                    </a>
+                  )}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 9. Facts — collapsed by default */}
       {item.facts.length > 0 && (
@@ -452,6 +505,7 @@ function useRandomTestCard(): RadarItem | null {
           last_mentioned: new Date().toISOString(),
           suggestions: [],
           best_match: null,
+          external_sources: [],
         })
         setReady(true)
       } catch { /* ignore */ }

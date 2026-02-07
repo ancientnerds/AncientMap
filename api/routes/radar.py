@@ -41,9 +41,11 @@ def find_similar_sites_batch(
     per_name_query = text("""
         SELECT usn.site_id, us.name AS site_name, us.thumbnail_url,
                us.country, us.source_id, us.source_url,
+               sm.name AS source_name,
                word_similarity(:qname, usn.name_normalized) AS similarity
         FROM unified_site_names usn
         JOIN unified_sites us ON us.id = usn.site_id
+        LEFT JOIN source_meta sm ON sm.id = us.source_id
         WHERE :qname <% usn.name_normalized
         ORDER BY usn.name_normalized <->> :qname
         LIMIT :limit
@@ -77,6 +79,8 @@ def find_similar_sites_batch(
                 "thumbnail_url": row.thumbnail_url,
                 "wikipedia_url": wikipedia_url,
                 "country": row.country,
+                "source_id": row.source_id,
+                "source_name": row.source_name,
             })
 
             if len(matches_by_name[qname]) >= limit_per_name:
@@ -272,6 +276,11 @@ async def get_radar(
         if row.period_start is not None:
             period_name = categorize_period(row.period_start)
 
+        # Extract external sources from enrichment_data (set by site_identifier for external DB matches)
+        external_sources = []
+        if row.enrichment_data and isinstance(row.enrichment_data, dict):
+            external_sources = row.enrichment_data.get("external_sources", [])
+
         item = {
             "id": row.id,
             "display_name": row.display_name,
@@ -297,6 +306,7 @@ async def get_radar(
             "last_mentioned": row.last_mentioned.isoformat() if row.last_mentioned else None,
             "suggestions": [],
             "best_match": None,
+            "external_sources": external_sources,
         }
         item["enrichment_score"] = _compute_display_score(item)
         items.append(item)

@@ -101,6 +101,14 @@ def match_sites_for_pending_items() -> int:
         source_priority = _load_source_priority(session)
         matchable_sources = list(source_priority.keys())
 
+        # Preload promoted site IDs so we know which radar items are already "ours"
+        promoted_ids = {
+            row.promoted_site_id
+            for row in session.query(UserContribution.promoted_site_id).filter(
+                UserContribution.promoted_site_id.isnot(None)
+            )
+        }
+
         items = session.query(NewsItem).filter(
             NewsItem.site_name_extracted.isnot(None),
             NewsItem.site_id.is_(None),
@@ -117,10 +125,20 @@ def match_sites_for_pending_items() -> int:
             if site:
                 item.site_id = site.id
                 matched += 1
-                logger.info(
-                    f"Matched item {item.id} '{item.site_name_extracted}' -> "
-                    f"site '{site.name}' ({site.id})"
-                )
+
+                if site.source_id == "ancient_nerds" or site.id in promoted_ids:
+                    # AN Originals or already-promoted radar item — no radar card needed
+                    logger.info(
+                        f"Matched item {item.id} '{item.site_name_extracted}' -> "
+                        f"site '{site.name}' ({site.id}) [AN/promoted, no radar]"
+                    )
+                else:
+                    # External source match — still create a radar card enriched with metadata
+                    logger.info(
+                        f"Matched item {item.id} '{item.site_name_extracted}' -> "
+                        f"site '{site.name}' ({site.id}) [external: {site.source_id}, creating radar card]"
+                    )
+                    _upsert_lyra_suggestion(session, item, matched_site=site)
             else:
                 logger.debug(f"No match for item {item.id} '{item.site_name_extracted}'")
                 _upsert_lyra_suggestion(session, item)
@@ -154,8 +172,14 @@ def _extract_topic_metadata(session: Session, item: NewsItem) -> dict:
     return {}
 
 
-def _upsert_lyra_suggestion(session: Session, item: NewsItem) -> None:
-    """Upsert unmatched site name into user_contributions for curation."""
+def _upsert_lyra_suggestion(
+    session: Session, item: NewsItem, matched_site: UnifiedSite | None = None,
+) -> None:
+    """Upsert site name into user_contributions for curation.
+
+    When matched_site is provided (external source match), copies metadata
+    from the matched site into the contribution using a fill-if-missing pattern.
+    """
     normalized = normalize_name(item.site_name_extracted)
     if not normalized or len(normalized) < 3:
         return
@@ -178,8 +202,11 @@ def _upsert_lyra_suggestion(session: Session, item: NewsItem) -> None:
             existing.period_name = metadata["period_name"]
         if metadata.get("period_start") is not None and existing.period_start is None:
             existing.period_start = metadata["period_start"]
+        # Enrich from matched external site (fill-if-missing)
+        if matched_site:
+            fill_contrib_from_site(existing, matched_site)
     else:
-        session.add(UserContribution(
+        contrib = UserContribution(
             name=item.site_name_extracted,
             source="lyra",
             mention_count=1,
@@ -189,4 +216,33 @@ def _upsert_lyra_suggestion(session: Session, item: NewsItem) -> None:
             period_name=metadata.get("period_name"),
             period_start=metadata.get("period_start"),
             source_url=f"https://www.youtube.com/watch?v={item.video_id}" if item.video_id else None,
-        ))
+        )
+        # Enrich from matched external site (fill-if-missing)
+        if matched_site:
+            fill_contrib_from_site(contrib, matched_site)
+        session.add(contrib)
+
+
+def fill_contrib_from_site(contrib: UserContribution, site: UnifiedSite) -> None:
+    """Copy metadata from a matched site into a contribution (fill-if-missing).
+
+    Canonical fill function — used by both site_matcher and site_identifier.
+    """
+    if not contrib.country and site.country:
+        contrib.country = site.country
+    if not contrib.site_type and site.site_type:
+        contrib.site_type = site.site_type
+    if not contrib.period_name and site.period_name:
+        contrib.period_name = site.period_name
+    if contrib.period_start is None and site.period_start is not None:
+        contrib.period_start = site.period_start
+    if not contrib.lat and site.lat:
+        contrib.lat = site.lat
+    if not contrib.lon and site.lon:
+        contrib.lon = site.lon
+    if not contrib.description and site.description:
+        contrib.description = site.description
+    if not contrib.thumbnail_url and site.thumbnail_url:
+        contrib.thumbnail_url = site.thumbnail_url
+    if not contrib.wikipedia_url and site.source_url:
+        contrib.wikipedia_url = site.source_url
