@@ -845,12 +845,13 @@ def _handle_db_match(
         contribution.enrichment_status = "failed"
         return False
 
-    # Post-match country validation: reject if countries clearly mismatch
-    confidence = identification.get("confidence", "unknown")
+    # Post-match country validation: reject if countries clearly mismatch.
+    # AI confidence is about the name identification, not the DB match —
+    # always validate country regardless of confidence.
     contrib_country = contribution.country
     reject_reason = None
 
-    if confidence != "high" and site.country:
+    if site.country:
         site_country_lower = site.country.strip().lower()
 
         if contrib_country:
