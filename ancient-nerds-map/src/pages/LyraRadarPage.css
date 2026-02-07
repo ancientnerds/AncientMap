@@ -231,6 +231,50 @@
   font-size: 10px;
 }
 
+/* External source chips */
+.lyra-discovery-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.lyra-source-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(0, 180, 180, 0.85);
+  background: rgba(0, 180, 180, 0.08);
+  border: 1px solid rgba(0, 180, 180, 0.2);
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.lyra-source-chip:hover {
+  background: rgba(0, 180, 180, 0.15);
+  border-color: rgba(0, 180, 180, 0.35);
+}
+
+.lyra-source-name {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lyra-source-link {
+  color: rgba(0, 180, 180, 0.6);
+  transition: color 0.15s;
+  display: inline-flex;
+}
+
+.lyra-source-link:hover {
+  color: rgba(0, 180, 180, 1);
+}
+
 /* Suggestions chips */
 .lyra-discovery-suggestions {
   display: flex;

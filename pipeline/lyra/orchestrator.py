@@ -546,6 +546,24 @@ def main() -> None:
                     "UPDATE user_contributions SET period_name = :pname, period_start = :pstart WHERE id = :id"
                 ), {"pname": categorize_period(period_start), "pstart": period_start, "id": row.id})
 
+        # v13: external source matches should create radar cards (not be hidden as "matched").
+        # Re-process items that were matched to external sources (not AN Originals, not promoted).
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET enrichment_status = 'pending', last_facts_hash = NULL
+            WHERE source = 'lyra'
+              AND enrichment_status = 'matched'
+              AND promoted_site_id IS NULL
+              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v13_reset'))
+        """))
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v13_reset": true}'::jsonb
+            WHERE source = 'lyra'
+              AND promoted_site_id IS NULL
+              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v13_reset'))
+        """))
+
         conn.commit()
 
     # Seed channels
