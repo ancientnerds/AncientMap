@@ -11,11 +11,11 @@ import { config } from '../config'
 import { formatCoord, timeAgo } from '../utils/formatters'
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
 import { SiteBadges, CountryFlag, CopyButton } from '../components/metadata'
+import { SitePopupOverlay } from '../components/SitePopupOverlay'
 import type { SiteData } from '../data/sites'
 import './LyraRadarPage.css'
 
 const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
-const SitePopup = lazy(() => import('../components/SitePopup'))
 
 interface VideoReference {
   video_id: string
@@ -251,10 +251,11 @@ function RadarCard({ item, isTest, onViewSite }: { item: RadarItem; isTest?: boo
           />
           <div className="lyra-image-hover-overlay">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-              <circle cx="12" cy="10" r="3" />
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="16" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12.01" y2="8" />
             </svg>
-            <span>View Site</span>
+            <span>Site Details</span>
           </div>
         </div>
       )}
@@ -706,13 +707,7 @@ export default function LyraRadarPage() {
       )}
 
       {selectedSite && (
-        <div className="news-site-popup-overlay" onClick={() => setSelectedSite(null)}>
-          <div className="news-site-popup-inner" onClick={e => e.stopPropagation()}>
-            <Suspense fallback={null}>
-              <SitePopup site={selectedSite} onClose={() => setSelectedSite(null)} isStandalone={true} />
-            </Suspense>
-          </div>
-        </div>
+        <SitePopupOverlay site={selectedSite} onClose={() => setSelectedSite(null)} />
       )}
     </div>
   )

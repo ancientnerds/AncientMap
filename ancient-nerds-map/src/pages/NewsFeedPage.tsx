@@ -13,10 +13,10 @@ import { formatDuration, formatRelativeDate } from '../utils/formatters'
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
 import { apiDetailToSiteData } from '../utils/siteApi'
 import { SiteBadges, CountryFlag } from '../components/metadata'
+import { SitePopupOverlay } from '../components/SitePopupOverlay'
 import '../components/news/news-cards.css'
 
 const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
-const SitePopup = lazy(() => import('../components/SitePopup'))
 
 export default function NewsFeedPage() {
   const [items, setItems] = useState<NewsItemData[]>([])
@@ -660,13 +660,7 @@ export default function NewsFeedPage() {
       )}
 
       {selectedSite && (
-        <div className="news-site-popup-overlay" onClick={() => setSelectedSite(null)}>
-          <div className="news-site-popup-inner" onClick={e => e.stopPropagation()}>
-            <Suspense fallback={null}>
-              <SitePopup site={selectedSite} onClose={() => setSelectedSite(null)} isStandalone={true} />
-            </Suspense>
-          </div>
-        </div>
+        <SitePopupOverlay site={selectedSite} onClose={() => setSelectedSite(null)} />
       )}
     </div>
   )
