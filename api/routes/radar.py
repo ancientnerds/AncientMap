@@ -306,22 +306,27 @@ async def get_radar(
     page_items = items[offset:offset + page_size]
 
     # ── Fuzzy suggestions for pending/enriching items only ──────────
+    # Wrapped in try/except: suggestions are optional, a pg_trgm or
+    # missing-table error must not 500 the whole radar list.
     pending_names = [
         normalize_name(item["display_name"])
         for item in page_items
         if item["enrichment_status"] in ("pending", "enriching")
     ]
     if pending_names:
-        all_suggestions = find_similar_sites_batch(db, pending_names, limit_per_name=5)
-        name_idx = 0
-        for item in page_items:
-            if item["enrichment_status"] in ("pending", "enriching"):
-                qname = pending_names[name_idx]
-                name_idx += 1
-                suggestions = all_suggestions.get(qname, [])
-                item["suggestions"] = suggestions
-                if suggestions and suggestions[0]["similarity"] >= 0.6:
-                    item["best_match"] = suggestions[0]
+        try:
+            all_suggestions = find_similar_sites_batch(db, pending_names, limit_per_name=5)
+            name_idx = 0
+            for item in page_items:
+                if item["enrichment_status"] in ("pending", "enriching"):
+                    qname = pending_names[name_idx]
+                    name_idx += 1
+                    suggestions = all_suggestions.get(qname, [])
+                    item["suggestions"] = suggestions
+                    if suggestions and suggestions[0]["similarity"] >= 0.6:
+                        item["best_match"] = suggestions[0]
+        except Exception:
+            logger.warning("Fuzzy suggestions failed — returning items without suggestions", exc_info=True)
 
     response = {
         "items": page_items,

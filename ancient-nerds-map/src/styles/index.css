@@ -14251,6 +14251,89 @@ body.news-feed-open .empire-borders-window {
   margin-bottom: 6px;
 }
 
+/* Metadata tags row (type + period) */
+.lyra-discovery-metadata-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.lyra-metadata-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 500;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.lyra-metadata-type {
+  color: rgba(0, 240, 255, 0.85);
+  background: rgba(0, 240, 255, 0.08);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+}
+
+.lyra-metadata-period {
+  color: rgba(232, 168, 124, 0.85);
+  background: rgba(232, 168, 124, 0.08);
+  border: 1px solid rgba(232, 168, 124, 0.2);
+}
+
+/* Last-seen timestamp */
+.lyra-discovery-last-seen {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.3);
+  font-style: italic;
+  white-space: nowrap;
+}
+
+/* Wikidata link (inherits lyra-wiki-link but with distinct color) */
+.lyra-wikidata-link {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.lyra-wikidata-link:hover {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Best match highlight */
+.lyra-discovery-best-match {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+  padding: 6px 8px;
+  background: rgba(34, 197, 94, 0.06);
+  border: 1px solid rgba(34, 197, 94, 0.15);
+  border-radius: 6px;
+}
+
+.lyra-best-match-label {
+  font-size: 11px;
+  color: rgba(34, 197, 94, 0.7);
+  font-weight: 500;
+}
+
+.lyra-best-match-chip {
+  border-color: rgba(34, 197, 94, 0.35) !important;
+  color: rgba(34, 197, 94, 0.9) !important;
+  background: rgba(34, 197, 94, 0.1) !important;
+}
+
+.lyra-best-match-chip:hover {
+  border-color: rgba(34, 197, 94, 0.6) !important;
+}
+
+.lyra-best-match-pct {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 9px;
+  opacity: 0.7;
+}
+
 /* Coordinates */
 .lyra-discovery-coords {
   font-size: 12px;

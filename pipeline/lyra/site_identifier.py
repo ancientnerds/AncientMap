@@ -32,7 +32,12 @@ from pipeline.normalizers.dates import passes_date_cutoff
 from pipeline.normalizers.site_type import normalize_site_type
 from pipeline.utils.country_lookup import lookup_country
 from pipeline.utils.http import fetch_with_retry
-from pipeline.utils.text import clean_description, extract_period_from_text, normalize_name
+from pipeline.utils.text import (
+    categorize_period,
+    clean_description,
+    extract_period_from_text,
+    normalize_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -984,10 +989,10 @@ def _handle_wikidata_match(
                 )
                 if metadata:
                     if metadata.get("period") and metadata["period"] != "Unknown":
-                        contribution.period_name = metadata["period"]
                         period_start = extract_period_from_text(metadata["period"])
                         if period_start is not None:
                             contribution.period_start = period_start
+                            contribution.period_name = categorize_period(period_start)
                     if metadata.get("site_type") and metadata["site_type"] != "Unknown":
                         contribution.site_type = normalize_site_type(metadata["site_type"])
 
