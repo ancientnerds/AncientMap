@@ -12,7 +12,7 @@ from pipeline.database import NewsChannel, get_session
 
 logger = logging.getLogger(__name__)
 
-CHANNELS_JSON = Path(__file__).resolve().parents[2] / "channels.json"
+CHANNELS_JSON = Path(__file__).resolve().parent / "channels.json"
 
 
 def _load_seed_channels() -> list[dict]:
