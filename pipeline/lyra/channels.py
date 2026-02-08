@@ -26,6 +26,9 @@ SEED_CHANNELS = [
     {"id": "UCFestibN7lYXvEj_BMEh29w", "name": "Luke Caverns"},
     {"id": "UC65XXzhHyH3BKZ72Q1eKF8Q", "name": "Matthew LaCroix"},
     {"id": "UC9qJWqnmPhDLnZNllSQ8uQA", "name": "Nikkiana Jones"},
+    {"id": "UCRDZ_t_-uHLsz_Otq6iOgyg", "name": "Michael Button"},
+    {"id": "UCAPciy143ZBXBrFpCVPnWDg", "name": "The Randall Carlson"},
+    {"id": "UCQoVoWXj6jyibI3gs3J4rbg", "name": "SPIRIT in STONE"},
 ]
 
 
