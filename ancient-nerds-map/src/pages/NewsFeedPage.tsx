@@ -15,6 +15,7 @@ import { apiDetailToSiteData } from '../utils/siteApi'
 import { SiteBadges, CountryFlag } from '../components/metadata'
 import { SitePopupOverlay } from '../components/SitePopupOverlay'
 import LazyImage from '../components/LazyImage'
+import { getSignificanceColor, getSignificanceLabel, getNewsCategoryLabel } from '../components/news/significance'
 import '../components/news/news-cards.css'
 
 const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
@@ -67,6 +68,7 @@ export default function NewsFeedPage() {
   const [filters, setFilters] = useState<NewsFilters | null>(null)
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
     channel: null, site: null, category: null, period: null, country: null,
+    min_significance: null, news_category: null,
   })
   const [filtersExpanded, setFiltersExpanded] = useState(false)
 
@@ -82,6 +84,8 @@ export default function NewsFeedPage() {
       if (f.category) url += `&category=${encodeURIComponent(f.category)}`
       if (f.period) url += `&period=${encodeURIComponent(f.period)}`
       if (f.country) url += `&country=${encodeURIComponent(f.country)}`
+      if (f.min_significance) url += `&min_significance=${f.min_significance}`
+      if (f.news_category) url += `&news_category=${encodeURIComponent(f.news_category)}`
       const resp = await fetch(url)
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const data: NewsFeedResponse = await resp.json()
@@ -293,9 +297,11 @@ export default function NewsFeedPage() {
     setExpandedId(prev => prev === id ? null : id)
   }
 
-  const handleFilterToggle = (dimension: keyof ActiveFilters, value: string | null) => {
+  const handleFilterToggle = (dimension: keyof ActiveFilters, value: string | number | null) => {
     const newFilters = { ...activeFilters }
-    newFilters[dimension] = activeFilters[dimension] === value ? null : value
+    const current = activeFilters[dimension]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(newFilters as any)[dimension] = current === value ? null : value
     setActiveFilters(newFilters)
     setItems([])
     setPage(1)
@@ -477,6 +483,45 @@ export default function NewsFeedPage() {
                   </div>
                 </div>
               )}
+
+              {/* Significance threshold row */}
+              <div className="news-page-filter-row">
+                <span className="news-page-filter-label">Significance</span>
+                <div className="news-page-chips">
+                  {([
+                    { label: 'All', value: null },
+                    { label: 'Notable 5+', value: 5 },
+                    { label: 'Significant 7+', value: 7 },
+                    { label: 'Breaking 9+', value: 9 },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.label}
+                      className={`news-page-chip${activeFilters.min_significance === opt.value ? ' active' : ''}`}
+                      onClick={() => handleFilterToggle('min_significance', opt.value)}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* News category row */}
+              {filters.news_categories.length > 0 && (
+                <div className="news-page-filter-row">
+                  <span className="news-page-filter-label">Topic</span>
+                  <div className="news-page-chips news-page-chips-scroll">
+                    {filters.news_categories.map(cat => (
+                      <button
+                        key={cat}
+                        className={`news-page-chip${activeFilters.news_category === cat ? ' active' : ''}`}
+                        onClick={() => handleFilterToggle('news_category', cat)}
+                      >
+                        {getNewsCategoryLabel(cat)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -546,6 +591,7 @@ export default function NewsFeedPage() {
               <div
                 key={item.id}
                 className={`news-page-card${expandedId === item.id ? ' expanded' : ''}${newItemIds.has(item.id) ? ' new-item' : ''}`}
+                style={item.significance ? { borderLeftWidth: 4, borderLeftStyle: 'solid', borderLeftColor: getSignificanceColor(item.significance) } : undefined}
                 onClick={() => toggleExpand(item.id)}
                 onAnimationEnd={() => setNewItemIds(prev => { const next = new Set(prev); next.delete(item.id); return next })}
               >
@@ -553,8 +599,18 @@ export default function NewsFeedPage() {
               <div className="news-card-meta">
                 <span className="news-card-channel">{item.video.channel_name}</span>
                 <span>{formatRelativeDate(item.video.published_at)}</span>
+                {item.significance != null && item.significance >= 7 && (
+                  <span className="news-significance-badge" style={{ color: getSignificanceColor(item.significance) }}>
+                    <span className="news-significance-dot" style={{ background: getSignificanceColor(item.significance) }} />
+                    {getSignificanceLabel(item.significance)}
+                  </span>
+                )}
               </div>
               <div className="news-card-post-text">{item.post_text || item.headline}</div>
+
+              {item.news_category && item.news_category !== 'general' && (
+                <span className="news-category-pill">{getNewsCategoryLabel(item.news_category)}</span>
+              )}
 
               {item.site_id && (
                   <div className="news-feed-site-block">

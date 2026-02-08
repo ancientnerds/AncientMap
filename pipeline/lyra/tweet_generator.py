@@ -15,6 +15,12 @@ logger = logging.getLogger(__name__)
 
 PROMPT_PATH = Path(__file__).parent / "prompts" / "tweet_template.txt"
 
+VALID_CATEGORIES = {
+    "excavation", "artifact", "architecture", "bioarchaeology", "dating",
+    "remote_sensing", "underwater", "epigraphy", "conservation", "heritage",
+    "theory", "technology", "survey", "art", "general",
+}
+
 
 def _load_prompt() -> str:
     return PROMPT_PATH.read_text(encoding="utf-8")
@@ -106,11 +112,17 @@ def generate_posts_for_video(video: NewsVideo, settings: LyraSettings) -> int:
             if not post_text:
                 continue
 
+            # Validate significance and category
+            sig = post_data.get("significance")
+            cat = post_data.get("category", "general")
+
             # Match to a news item if possible
             if i < len(items):
                 items[i].post_text = post_text
                 if ts_range:
                     items[i].timestamp_range = ts_range
+                items[i].significance = max(1, min(10, int(sig))) if sig is not None else 3
+                items[i].news_category = cat if cat in VALID_CATEGORIES else "general"
                 count += 1
 
         db_video.status = "posted"

@@ -798,6 +798,8 @@ class NewsItem(Base):
     )
     site_name_extracted: Mapped[str | None] = mapped_column(String(500), nullable=True)
     site_match_tried: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    significance: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    news_category: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     video: Mapped["NewsVideo"] = relationship("NewsVideo", back_populates="items")
     site: Mapped[Optional["UnifiedSite"]] = relationship("UnifiedSite", lazy="joined")
