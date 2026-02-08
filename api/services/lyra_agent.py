@@ -14,7 +14,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 from langchain_core.messages import AIMessageChunk, HumanMessage, SystemMessage
 from langchain_core.tools import tool
