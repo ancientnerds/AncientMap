@@ -912,27 +912,26 @@ async def run_agent_stream(
                     "country": s.get("country"),
                 })
 
-        # Fetch related news: by matched site IDs + query-extracted filters
+        # Fetch related news: site-specific first, then broader filters
         site_ids = [s["id"] for s in all_sites if s.get("id")]
-        news_filters = await _extract_news_filters(message)
-        logger.info(f"News fetch: {len(site_ids)} site_ids, filters={news_filters}")
-
-        # Site-specific news first (by ID and name to handle cross-source mismatches)
         site_names = [s["name"] for s in all_sites if s.get("name")]
-        all_news = _get_related_news(site_ids=site_ids, site_names=site_names) if (site_ids or site_names) else []
-        logger.info(f"News by site: {len(all_news)} items (ids={site_ids[:3]}, names={site_names[:3]})")
 
-        # Broader filter-based news (country, category, period, etc.)
-        if news_filters:
-            filter_news = _get_related_news(**news_filters)
-            logger.info(f"News by filter: {len(filter_news)} items")
-            # Merge, deduplicating by video_id+headline
-            existing_keys = {f"{n['video_id']}::{n['headline']}" for n in all_news}
-            for n in filter_news:
-                key = f"{n['video_id']}::{n['headline']}"
-                if key not in existing_keys:
-                    all_news.append(n)
-                    existing_keys.add(key)
+        # Site-specific news (by ID and name — always works, no LLM needed)
+        all_news = _get_related_news(site_ids=site_ids, site_names=site_names) if (site_ids or site_names) else []
+
+        # Broader filter-based news (uses Haiku to extract filters — isolated so failure doesn't kill response)
+        try:
+            news_filters = await _extract_news_filters(message)
+            if news_filters:
+                filter_news = _get_related_news(**news_filters)
+                existing_keys = {f"{n['video_id']}::{n['headline']}" for n in all_news}
+                for n in filter_news:
+                    key = f"{n['video_id']}::{n['headline']}"
+                    if key not in existing_keys:
+                        all_news.append(n)
+                        existing_keys.add(key)
+        except Exception as e:
+            logger.warning(f"News filter extraction failed (site-specific news still available): {e}")
 
         # Add news to retrieved context so the LLM can reference them
         if all_news:
