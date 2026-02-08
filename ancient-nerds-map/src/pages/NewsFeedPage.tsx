@@ -68,7 +68,7 @@ export default function NewsFeedPage() {
   const [filters, setFilters] = useState<NewsFilters | null>(null)
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
     channel: null, site: null, category: null, period: null, country: null,
-    min_significance: null, news_category: null,
+    min_significance: null, news_category: null, sort: null,
   })
   const [filtersExpanded, setFiltersExpanded] = useState(false)
 
@@ -86,6 +86,7 @@ export default function NewsFeedPage() {
       if (f.country) url += `&country=${encodeURIComponent(f.country)}`
       if (f.min_significance) url += `&min_significance=${f.min_significance}`
       if (f.news_category) url += `&news_category=${encodeURIComponent(f.news_category)}`
+      if (f.sort) url += `&sort=${encodeURIComponent(f.sort)}`
       const resp = await fetch(url)
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const data: NewsFeedResponse = await resp.json()
@@ -505,6 +506,25 @@ export default function NewsFeedPage() {
                 </div>
               </div>
 
+              {/* Sort order row */}
+              <div className="news-page-filter-row">
+                <span className="news-page-filter-label">Sort</span>
+                <div className="news-page-chips">
+                  {([
+                    { label: 'Latest', value: null },
+                    { label: 'Top Rated', value: 'significance' },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.label}
+                      className={`news-page-chip${activeFilters.sort === opt.value ? ' active' : ''}`}
+                      onClick={() => handleFilterToggle('sort', opt.value)}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* News category row */}
               {filters.news_categories.length > 0 && (
                 <div className="news-page-filter-row">
@@ -602,10 +622,10 @@ export default function NewsFeedPage() {
               <div className="news-card-meta">
                 <span className="news-card-channel">{item.video.channel_name}</span>
                 <span>{formatRelativeDate(item.video.published_at)}</span>
-                {item.significance != null && item.significance >= 7 && (
+                {item.significance != null && (
                   <span className="news-significance-badge" style={{ color: getSignificanceColor(item.significance) }}>
                     <span className="news-significance-dot" style={{ background: getSignificanceColor(item.significance) }} />
-                    {getSignificanceLabel(item.significance)}
+                    {item.significance >= 7 ? getSignificanceLabel(item.significance) : item.significance}
                   </span>
                 )}
               </div>

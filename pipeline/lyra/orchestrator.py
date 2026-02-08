@@ -171,6 +171,17 @@ def main() -> None:
         conn.execute(text(
             "ALTER TABLE news_items ADD COLUMN IF NOT EXISTS news_category VARCHAR(50)"
         ))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_news_items_significance ON news_items (significance)"
+        ))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_news_items_news_category ON news_items (news_category)"
+        ))
+        # Backfill any items that have post_text but no significance (e.g. from errors or old code)
+        conn.execute(text("""
+            UPDATE news_items SET significance = 3, news_category = 'general'
+            WHERE post_text IS NOT NULL AND significance IS NULL
+        """))
         # Create unified_site_names table if it doesn't exist (for alt-name matching)
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS unified_site_names (
