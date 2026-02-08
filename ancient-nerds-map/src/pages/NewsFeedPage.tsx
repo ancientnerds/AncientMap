@@ -8,7 +8,7 @@ import { config } from '../config'
 import { getCategoryColor, getPeriodColor } from '../data/sites'
 import { DataStore } from '../data/DataStore'
 import type { SiteData } from '../data/sites'
-import type { NewsItemData, NewsFeedResponse, NewsStats, NewsFilters, ActiveFilters } from '../types/news'
+import type { NewsItemData, NewsStats, NewsFilters, ActiveFilters } from '../types/news'
 import { formatDuration, formatRelativeDate } from '../utils/formatters'
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
 import { apiDetailToSiteData } from '../utils/siteApi'
@@ -44,7 +44,6 @@ export default function NewsFeedPage() {
 
   // Live updates
   const [online, setOnline] = useState(true)
-  const [newItemIds, setNewItemIds] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     const el = gridRef.current
@@ -183,29 +182,6 @@ export default function NewsFeedPage() {
     observer.observe(sentinelRef.current)
     return () => observer.disconnect()
   }, [hasMore, loading])
-
-  // Keep ref in sync for polling
-  const allItemsRef = useRef<NewsItemData[]>([])
-  useEffect(() => { allItemsRef.current = allItems }, [allItems])
-
-  // Live polling — check for new items every 30s
-  useEffect(() => {
-    const poll = async () => {
-      try {
-        const resp = await fetch(`${config.api.baseUrl}/news/feed?page=1&page_size=5`)
-        if (!resp.ok) return
-        const data: NewsFeedResponse = await resp.json()
-        const existingIds = new Set(allItemsRef.current.map(i => i.id))
-        const fresh = data.items.filter(i => !existingIds.has(i.id))
-        if (fresh.length > 0) {
-          setNewItemIds(prev => new Set([...prev, ...fresh.map(i => i.id)]))
-          setAllItems(prev => [...fresh, ...prev])
-        }
-      } catch { /* ignore — lyra-status drives the LED */ }
-    }
-    const id = setInterval(poll, 30_000)
-    return () => clearInterval(id)
-  }, [])
 
   // Pull-to-refresh: touch (mobile) + wheel/trackpad (desktop)
   useEffect(() => {
@@ -617,10 +593,9 @@ export default function NewsFeedPage() {
               return (
               <div
                 key={item.id}
-                className={`news-page-card${expandedId === item.id ? ' expanded' : ''}${newItemIds.has(item.id) ? ' new-item' : ''}`}
+                className={`news-page-card${expandedId === item.id ? ' expanded' : ''}`}
                 style={item.significance ? getSignificanceCardStyle(item.significance) : undefined}
                 onClick={() => toggleExpand(item.id)}
-                onAnimationEnd={() => setNewItemIds(prev => { const next = new Set(prev); next.delete(item.id); return next })}
               >
             <div className="news-page-card-body">
               {item.news_category && item.news_category !== 'general' && (

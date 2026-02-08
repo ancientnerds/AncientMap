@@ -4511,6 +4511,19 @@ body.screenshot-mode .screenshot-mode-buttons {
   object-position: center;
 }
 
+/* Hero image: gentler TV-on animation — no scaleY bounce (causes stripe
+   at the bottom since the header uses overflow:visible) and lower
+   brightness (vignette gradient amplifies the brightness flash). */
+.popup-hero-bg.lazy-image--tv-on {
+  animation: hero-tv-on 400ms ease-out;
+}
+
+@keyframes hero-tv-on {
+  0%   { opacity: 0; filter: brightness(2); }
+  50%  { opacity: 1; filter: brightness(1.2); }
+  100% { opacity: 1; filter: brightness(1); }
+}
+
 /* Color tint overlay matching UI background */
 .popup-hero-header::before {
   content: '';
