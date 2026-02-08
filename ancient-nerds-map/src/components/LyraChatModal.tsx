@@ -131,7 +131,6 @@ export default function LyraChatModal({
 
   const hasSiteSidebar = sidebarSites.length > 0 || sidebarSources.length > 0
   const hasNews = sortedNews.length > 0
-  const hasSidebar = hasSiteSidebar || hasNews
 
   // Custom react-markdown components for interactive content
   const mdComponents = useMemo(() => ({
