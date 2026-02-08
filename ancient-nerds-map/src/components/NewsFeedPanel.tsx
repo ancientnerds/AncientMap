@@ -179,7 +179,7 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick }: Pro
             </div>
             {item.significance != null && (
               <div className="news-significance-stamp" style={{ color: getSignificanceColor(item.significance) }}>
-                {item.significance} — {getSignificanceLabel(item.significance)}
+                {getSignificanceLabel(item.significance)}
               </div>
             )}
             <div className="news-card-post-text">{item.post_text || item.headline}</div>
