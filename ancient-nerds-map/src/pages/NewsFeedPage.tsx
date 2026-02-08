@@ -3,7 +3,7 @@
  * Accessed via /news.html (separate Vite entry point).
  */
 
-import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
 import { config } from '../config'
 import { getCategoryColor, getPeriodColor } from '../data/sites'
 import { DataStore } from '../data/DataStore'
@@ -21,11 +21,9 @@ import '../components/news/news-cards.css'
 const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
 
 export default function NewsFeedPage() {
-  const [items, setItems] = useState<NewsItemData[]>([])
-  const [, setTotalCount] = useState(0)
-  const [page, setPage] = useState(1)
-  const [hasMore, setHasMore] = useState(false)
+  const [allItems, setAllItems] = useState<NewsItemData[]>([])
   const [loading, setLoading] = useState(true)
+  const [visibleCount, setVisibleCount] = useState(30)
   const [error, setError] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [showLyraProfile, setShowLyraProfile] = useState(false)
@@ -47,7 +45,6 @@ export default function NewsFeedPage() {
   // Live updates
   const [online, setOnline] = useState(true)
   const [newItemIds, setNewItemIds] = useState<Set<number>>(new Set())
-  const itemsRef = useRef<NewsItemData[]>([])
 
   useEffect(() => {
     const el = gridRef.current
@@ -73,33 +70,43 @@ export default function NewsFeedPage() {
   const [filtersExpanded, setFiltersExpanded] = useState(false)
 
 
-  const fetchFeed = useCallback(async (pageNum: number, append: boolean = false, af?: ActiveFilters) => {
+  const fetchAll = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
-      let url = `${config.api.baseUrl}/news/feed?page=${pageNum}&page_size=30`
-      const f = af || activeFilters
-      if (f.channel) url += `&channel_id=${encodeURIComponent(f.channel)}`
-      if (f.site) url += `&site_id=${encodeURIComponent(f.site)}`
-      if (f.category) url += `&category=${encodeURIComponent(f.category)}`
-      if (f.period) url += `&period=${encodeURIComponent(f.period)}`
-      if (f.country) url += `&country=${encodeURIComponent(f.country)}`
-      if (f.min_significance) url += `&min_significance=${f.min_significance}`
-      if (f.news_category) url += `&news_category=${encodeURIComponent(f.news_category)}`
-      if (f.sort) url += `&sort=${encodeURIComponent(f.sort)}`
-      const resp = await fetch(url)
+      const resp = await fetch('/data/news/feed.json')
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-      const data: NewsFeedResponse = await resp.json()
-      setItems(prev => append ? [...prev, ...data.items] : data.items)
-      setTotalCount(data.total_count)
-      setHasMore(data.has_more)
-      setPage(pageNum)
+      const data: { items: NewsItemData[] } = await resp.json()
+      setAllItems(data.items)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load')
     } finally {
       setLoading(false)
     }
-  }, [activeFilters])
+  }, [])
+
+  // Client-side filter + sort — instant, no API round-trip
+  const filteredItems = useMemo(() => {
+    let result = allItems
+    const f = activeFilters
+    if (f.channel) result = result.filter(i => i.video.channel_id === f.channel)
+    if (f.site) result = result.filter(i => i.site_id === f.site)
+    if (f.category) result = result.filter(i => i.site_type === f.category)
+    if (f.period) result = result.filter(i => i.site_period_name === f.period)
+    if (f.country) result = result.filter(i => i.site_country === f.country)
+    if (f.min_significance) result = result.filter(i => i.significance != null && i.significance >= f.min_significance!)
+    if (f.news_category) result = result.filter(i => i.news_category === f.news_category)
+    if (f.sort === 'significance') {
+      result = [...result].sort((a, b) => {
+        const diff = (b.significance ?? 0) - (a.significance ?? 0)
+        return diff !== 0 ? diff : new Date(b.video.published_at).getTime() - new Date(a.video.published_at).getTime()
+      })
+    }
+    return result
+  }, [allItems, activeFilters])
+
+  const displayItems = filteredItems.slice(0, visibleCount)
+  const hasMore = visibleCount < filteredItems.length
 
   const PULL_THRESHOLD = 70
 
@@ -108,7 +115,7 @@ export default function NewsFeedPage() {
     setPullPhase('refreshing')
     refreshingRef.current = true
     const t0 = Date.now()
-    await fetchFeed(1, false, activeFilters)
+    await fetchAll()
     fetch(`${config.api.baseUrl}/news/stats`)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setStats(d) })
@@ -120,15 +127,15 @@ export default function NewsFeedPage() {
       setPullPhase('idle')
       refreshingRef.current = false   // unlock AFTER done phase ends
     }, 900)
-  }, [fetchFeed, activeFilters])
+  }, [fetchAll])
 
   const doRefreshRef = useRef(doRefresh)
   doRefreshRef.current = doRefresh
 
-  // Initial feed load
+  // Fetch all items once on mount
   useEffect(() => {
-    fetchFeed(1)
-  }, [fetchFeed])
+    fetchAll()
+  }, [fetchAll])
 
   // Load source metadata on mount (for SitePopup display names)
   useEffect(() => { DataStore.loadSources() }, [])
@@ -162,24 +169,24 @@ export default function NewsFeedPage() {
       .catch(() => {})
   }, [])
 
-  // Infinite scroll via IntersectionObserver
+  // Infinite scroll — purely client-side, just reveals more from filteredItems
   useEffect(() => {
     if (!sentinelRef.current || !hasMore || loading) return
-    const af = activeFilters
     const observer = new IntersectionObserver(
       entries => {
-        if (entries[0].isIntersecting && hasMore && !loading) {
-          fetchFeed(page + 1, true, af)
+        if (entries[0].isIntersecting) {
+          setVisibleCount(prev => prev + 30)
         }
       },
       { rootMargin: '200px' }
     )
     observer.observe(sentinelRef.current)
     return () => observer.disconnect()
-  }, [hasMore, loading, page, fetchFeed, activeFilters])
+  }, [hasMore, loading])
 
-  // Keep itemsRef in sync for polling
-  useEffect(() => { itemsRef.current = items }, [items])
+  // Keep ref in sync for polling
+  const allItemsRef = useRef<NewsItemData[]>([])
+  useEffect(() => { allItemsRef.current = allItems }, [allItems])
 
   // Live polling — check for new items every 30s
   useEffect(() => {
@@ -188,12 +195,11 @@ export default function NewsFeedPage() {
         const resp = await fetch(`${config.api.baseUrl}/news/feed?page=1&page_size=5`)
         if (!resp.ok) return
         const data: NewsFeedResponse = await resp.json()
-        const existingIds = new Set(itemsRef.current.map(i => i.id))
+        const existingIds = new Set(allItemsRef.current.map(i => i.id))
         const fresh = data.items.filter(i => !existingIds.has(i.id))
         if (fresh.length > 0) {
           setNewItemIds(prev => new Set([...prev, ...fresh.map(i => i.id)]))
-          setItems(prev => [...fresh, ...prev])
-          setTotalCount(data.total_count)
+          setAllItems(prev => [...fresh, ...prev])
         }
       } catch { /* ignore — lyra-status drives the LED */ }
     }
@@ -299,15 +305,11 @@ export default function NewsFeedPage() {
   }
 
   const handleFilterToggle = (dimension: keyof ActiveFilters, value: string | number | null) => {
-    const newFilters = { ...activeFilters }
-    const current = activeFilters[dimension]
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(newFilters as any)[dimension] = current === value ? null : value
-    setActiveFilters(newFilters)
-    setItems([])
-    setPage(1)
-    setHasMore(false)
-    fetchFeed(1, false, newFilters)
+    setActiveFilters(prev => ({
+      ...prev,
+      [dimension]: prev[dimension] === value ? null : value,
+    }))
+    setVisibleCount(30)
   }
 
   const handleSiteClick = async (siteId: string, e: React.MouseEvent) => {
@@ -491,8 +493,7 @@ export default function NewsFeedPage() {
                 <div className="news-page-chips">
                   {([
                     { label: 'All', value: null },
-                    { label: 'Interesting 3+', value: 3 },
-                    { label: 'Notable 5+', value: 5 },
+                    { label: 'New Research 6+', value: 6 },
                     { label: 'Significant 7+', value: 7 },
                     { label: 'Breaking 9+', value: 9 },
                   ] as const).map(opt => (
@@ -589,20 +590,23 @@ export default function NewsFeedPage() {
       {error && (
         <div className="news-page-error">
           {error}
-          <button onClick={() => fetchFeed(1, false, activeFilters)}>Retry</button>
+          <button onClick={() => fetchAll()}>Retry</button>
         </div>
       )}
 
       {/* Empty state */}
-      {!error && items.length === 0 && !loading && (
+      {!error && !loading && allItems.length === 0 && (
         <div className="news-page-empty">No news items yet. Check back soon.</div>
+      )}
+      {!error && !loading && allItems.length > 0 && filteredItems.length === 0 && (
+        <div className="news-page-empty">No items match the current filters.</div>
       )}
 
       {/* Grid */}
       <div className="news-page-grid" ref={gridRef}>
         {Array.from({ length: columnCount }, (_, colIdx) => (
           <div key={colIdx} className="news-page-column">
-            {items.filter((_, i) => i % columnCount === colIdx).map(item => {
+            {displayItems.filter((_, i) => i % columnCount === colIdx).map(item => {
               const screenshotSrc = item.screenshot_url
                 ? `${config.api.baseUrl}${item.screenshot_url.replace('/api', '')}`
                 : item.video.thumbnail_url
@@ -624,7 +628,7 @@ export default function NewsFeedPage() {
                 <span className="news-card-channel">{item.video.channel_name}</span>
                 <span>{formatRelativeDate(item.video.published_at)}</span>
               </div>
-              {item.significance != null && item.significance >= 3 && (
+              {item.significance != null && item.significance >= 6 && (
                 <div className="news-significance-stamp" style={{ color: getSignificanceColor(item.significance) }}>
                   {getSignificanceLabel(item.significance)}
                 </div>

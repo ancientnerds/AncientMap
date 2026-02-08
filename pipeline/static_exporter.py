@@ -432,6 +432,105 @@ class StaticExporter:
             logger.info(f"Total gzipped size: {total_gz_size / 1024 / 1024:.2f} MB")
 
 
+def export_news_feed(output_dir: Path = OUTPUT_DIR):
+    """Export news feed to a static JSON file for zero-API client-side filtering.
+
+    Joins news_items + news_videos + news_channels + unified_sites in one query.
+    Output shape matches the frontend's NewsItemData interface.
+    """
+    logger.info("\nExporting news/feed.json...")
+
+    with get_session() as session:
+        result = session.execute(text("""
+            SELECT
+                ni.id,
+                ni.headline,
+                ni.summary,
+                ni.post_text,
+                ni.facts,
+                ni.timestamp_range,
+                ni.timestamp_seconds,
+                ni.screenshot_url,
+                ni.created_at,
+                ni.site_id,
+                ni.site_name_extracted,
+                ni.significance,
+                ni.news_category,
+                nv.id AS video_id,
+                nv.title AS video_title,
+                nv.published_at,
+                nv.thumbnail_url AS video_thumbnail,
+                nv.duration_minutes,
+                nc.name AS channel_name,
+                nc.id AS channel_id,
+                us.name AS site_name,
+                us.lat AS site_lat,
+                us.lon AS site_lon,
+                us.site_type,
+                us.period_name AS site_period_name,
+                us.period_start AS site_period_start,
+                us.country AS site_country
+            FROM news_items ni
+            JOIN news_videos nv ON nv.id = ni.video_id
+            JOIN news_channels nc ON nc.id = nv.channel_id
+            LEFT JOIN unified_sites us ON us.id = ni.site_id
+            WHERE ni.post_text IS NOT NULL
+            ORDER BY nv.published_at DESC NULLS LAST, ni.created_at DESC
+        """))
+
+        items = []
+        for row in result:
+            youtube_url = f"https://www.youtube.com/watch?v={row.video_id}"
+            youtube_deep_url = None
+            if row.timestamp_seconds:
+                youtube_deep_url = f"https://www.youtube.com/watch?v={row.video_id}&t={row.timestamp_seconds}s"
+
+            item: dict[str, Any] = {
+                "id": row.id,
+                "headline": row.headline,
+                "summary": row.summary,
+                "post_text": row.post_text,
+                "facts": row.facts,
+                "timestamp_range": row.timestamp_range,
+                "timestamp_seconds": row.timestamp_seconds,
+                "screenshot_url": row.screenshot_url,
+                "youtube_url": youtube_url,
+                "youtube_deep_url": youtube_deep_url,
+                "video": {
+                    "id": row.video_id,
+                    "title": row.video_title,
+                    "channel_name": row.channel_name,
+                    "channel_id": row.channel_id,
+                    "published_at": row.published_at.isoformat() if row.published_at else "",
+                    "thumbnail_url": row.video_thumbnail,
+                    "duration_minutes": row.duration_minutes,
+                },
+                "created_at": row.created_at.isoformat() if row.created_at else "",
+                "site_id": str(row.site_id) if row.site_id else None,
+                "site_name": row.site_name,
+                "site_lat": row.site_lat,
+                "site_lon": row.site_lon,
+                "site_type": row.site_type,
+                "site_period_name": row.site_period_name,
+                "site_period_start": row.site_period_start,
+                "site_country": row.site_country,
+                "site_name_extracted": row.site_name_extracted if not row.site_id else None,
+                "significance": row.significance,
+                "news_category": row.news_category,
+            }
+            items.append(item)
+
+        output = {
+            "items": items,
+            "total_count": len(items),
+            "exported_at": datetime.utcnow().isoformat(),
+        }
+
+        news_dir = output_dir / "news"
+        save_json(news_dir / "feed.json", output)
+        logger.info(f"  Exported {len(items):,} news items")
+
+
 def build_static(output_dir: str | None = None, sites_only: bool = False):
     """Build static files for deployment."""
     exporter = StaticExporter(Path(output_dir) if output_dir else OUTPUT_DIR)
