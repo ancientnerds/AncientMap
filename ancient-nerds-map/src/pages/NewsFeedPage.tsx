@@ -596,6 +596,9 @@ export default function NewsFeedPage() {
                 onAnimationEnd={() => setNewItemIds(prev => { const next = new Set(prev); next.delete(item.id); return next })}
               >
             <div className="news-page-card-body">
+              {item.news_category && item.news_category !== 'general' && (
+                <span className="news-category-badge">{getNewsCategoryLabel(item.news_category)}</span>
+              )}
               <div className="news-card-meta">
                 <span className="news-card-channel">{item.video.channel_name}</span>
                 <span>{formatRelativeDate(item.video.published_at)}</span>
@@ -607,10 +610,6 @@ export default function NewsFeedPage() {
                 )}
               </div>
               <div className="news-card-post-text">{item.post_text || item.headline}</div>
-
-              {item.news_category && item.news_category !== 'general' && (
-                <span className="news-category-pill">{getNewsCategoryLabel(item.news_category)}</span>
-              )}
 
               {item.site_id && (
                   <div className="news-feed-site-block">
