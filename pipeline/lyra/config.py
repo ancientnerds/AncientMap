@@ -44,7 +44,3 @@ class LyraSettings(BaseSettings):
     # Webshare proxy (for YouTube transcript fetching from VPS)
     webshare_username: str = ""
     webshare_password: str = ""
-
-    # Queue management
-    post_queue_soft_cap: int = 32
-    post_queue_hard_cap: int = 48

@@ -4,7 +4,6 @@ import json
 import logging
 import re
 from datetime import datetime
-from math import floor
 from pathlib import Path
 
 import anthropic
@@ -21,30 +20,19 @@ def _load_prompt() -> str:
     return PROMPT_PATH.read_text(encoding="utf-8")
 
 
-def _calculate_topic_limit(duration_minutes: float | None, queue_size: int, settings: LyraSettings) -> int:
-    """Calculate how many topics to extract based on video length and queue state."""
+def _calculate_topic_limit(duration_minutes: float | None, settings: LyraSettings) -> int:
+    """Calculate how many topics to extract based on video length."""
     if duration_minutes is None:
         duration_minutes = 15.0
 
     if duration_minutes <= settings.post_threshold_short:
-        base = settings.post_amounts_short
+        return settings.post_amounts_short
     elif duration_minutes <= settings.post_threshold_medium:
-        base = settings.post_amounts_medium
+        return settings.post_amounts_medium
     elif duration_minutes <= settings.post_threshold_long:
-        base = settings.post_amounts_long
+        return settings.post_amounts_long
     else:
-        base = settings.post_amounts_very_long
-
-    # Soft cap: reduce topics when queue is large
-    if queue_size >= settings.post_queue_hard_cap:
-        return 1
-    elif queue_size >= settings.post_queue_soft_cap:
-        factor = (settings.post_queue_hard_cap - queue_size) / (
-            settings.post_queue_hard_cap - settings.post_queue_soft_cap
-        )
-        return max(1, floor(base * factor))
-
-    return base
+        return settings.post_amounts_very_long
 
 
 def _parse_timestamp_to_seconds(ts: str) -> int | None:
@@ -68,13 +56,7 @@ def summarize_video(video: NewsVideo, settings: LyraSettings) -> bool:
         logger.error("No Anthropic API key configured")
         return False
 
-    # Count existing unposted items for queue sizing
-    with get_session() as session:
-        queue_size = session.query(NewsItem).filter(
-            NewsItem.post_text.isnot(None)
-        ).count()
-
-    topic_limit = _calculate_topic_limit(video.duration_minutes, queue_size, settings)
+    topic_limit = _calculate_topic_limit(video.duration_minutes, settings)
 
     # Build video context from title, description, and tags
     context_parts = [f"Video title: {video.title}"]
