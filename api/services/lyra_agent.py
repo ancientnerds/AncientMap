@@ -915,14 +915,17 @@ async def run_agent_stream(
         # Fetch related news: by matched site IDs + query-extracted filters
         site_ids = [s["id"] for s in all_sites if s.get("id")]
         news_filters = await _extract_news_filters(message)
+        logger.info(f"News fetch: {len(site_ids)} site_ids, filters={news_filters}")
 
         # Site-specific news first (by ID and name to handle cross-source mismatches)
         site_names = [s["name"] for s in all_sites if s.get("name")]
         all_news = _get_related_news(site_ids=site_ids, site_names=site_names) if (site_ids or site_names) else []
+        logger.info(f"News by site: {len(all_news)} items (ids={site_ids[:3]}, names={site_names[:3]})")
 
         # Broader filter-based news (country, category, period, etc.)
         if news_filters:
             filter_news = _get_related_news(**news_filters)
+            logger.info(f"News by filter: {len(filter_news)} items")
             # Merge, deduplicating by video_id+headline
             existing_keys = {f"{n['video_id']}::{n['headline']}" for n in all_news}
             for n in filter_news:
