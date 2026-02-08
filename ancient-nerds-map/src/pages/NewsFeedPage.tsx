@@ -218,6 +218,8 @@ export default function NewsFeedPage() {
     let currentPull = 0
 
     const onTouchStart = (e: TouchEvent) => {
+      // Don't start pull-to-refresh when touching inside scrollable filter body
+      if ((e.target as HTMLElement).closest('.news-page-filters-body')) return
       if (el.scrollTop <= 0 && !refreshingRef.current) {
         startY = e.touches[0].clientY
       }
