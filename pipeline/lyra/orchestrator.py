@@ -604,6 +604,13 @@ def main() -> None:
 
         _bust_radar_cache()
 
+        # Export news feed static JSON
+        from pipeline.static_exporter import export_news_feed
+        try:
+            export_news_feed()
+        except Exception:
+            logger.exception("News feed export failed")
+
         # Write heartbeat
         with engine.connect() as conn:
             conn.execute(text("""
@@ -638,6 +645,13 @@ def main() -> None:
             last_pipeline_run = now
 
             _bust_radar_cache()
+
+            # Export news feed static JSON
+            from pipeline.static_exporter import export_news_feed
+            try:
+                export_news_feed()
+            except Exception:
+                logger.exception("News feed export failed")
 
             # Write heartbeat so the API can report LIVE/OFFLINE
             try:

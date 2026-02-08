@@ -27,6 +27,13 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
     }
 
+    # Static news feed + screenshots — served directly, no API
+    location /data/news/ {
+        alias /var/www/ancientnerds/public/data/news/;
+        add_header Cache-Control "public, max-age=300";
+        gzip_static on;
+    }
+
     location / {
         try_files $uri $uri/ /index.html;
     }
