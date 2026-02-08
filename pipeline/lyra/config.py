@@ -28,7 +28,7 @@ class LyraSettings(BaseSettings):
     pg_trgm_threshold: float = 0.35
 
     # Pipeline settings
-    lookup_days: int = 3
+    lookup_days: int = 14
     min_video_minutes: float = 5.0  # Skip videos shorter than this (filters out Shorts)
     transcript_trim_start: int = 120  # Skip first 2 minutes of videos
 
