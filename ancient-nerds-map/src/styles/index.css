@@ -12947,6 +12947,13 @@ body.news-feed-open .empire-borders-window {
     padding: 5px 10px;
   }
 
+  .news-page-filters-body {
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
   .news-page-filter-row {
     flex-direction: column;
     gap: 4px;
