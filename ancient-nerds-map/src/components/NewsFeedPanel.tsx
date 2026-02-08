@@ -176,13 +176,12 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick }: Pro
             <div className="news-card-meta">
               <span className="news-card-channel">{item.video.channel_name}</span>
               <span className="news-feed-date">{formatRelativeDate(item.video.published_at)}</span>
-              {item.significance != null && (
-                <span className="news-significance-badge" style={{ color: getSignificanceColor(item.significance) }}>
-                  <span className="news-significance-dot" style={{ background: getSignificanceColor(item.significance) }} />
-                  {item.significance >= 7 ? getSignificanceLabel(item.significance) : item.significance}
-                </span>
-              )}
             </div>
+            {item.significance != null && (
+              <div className="news-significance-stamp" style={{ color: getSignificanceColor(item.significance) }}>
+                {item.significance} — {getSignificanceLabel(item.significance)}
+              </div>
+            )}
             <div className="news-card-post-text">{item.post_text || item.headline}</div>
 
             {item.site_id && (
