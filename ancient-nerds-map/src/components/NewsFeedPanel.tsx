@@ -10,7 +10,7 @@ import type { NewsItemData, NewsFeedResponse } from '../types/news'
 import { formatDuration, formatRelativeDate } from '../utils/formatters'
 import { SiteBadges, CountryFlag } from './metadata'
 import LazyImage from './LazyImage'
-import { getSignificanceColor, getSignificanceLabel, getNewsCategoryLabel } from './news/significance'
+import { getSignificanceColor, getSignificanceLabel, getSignificanceCardStyle, getNewsCategoryLabel } from './news/significance'
 import './news/news-cards.css'
 
 const LyraProfileModal = lazy(() => import('./LyraProfileModal'))
@@ -165,7 +165,7 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick }: Pro
           <div
             key={item.id}
             className={`news-feed-item${expandedId === item.id ? ' expanded' : ''}${item.site_id ? ' has-site' : ''}`}
-            style={item.significance ? { borderLeft: `3px solid ${getSignificanceColor(item.significance)}` } : undefined}
+            style={item.significance ? getSignificanceCardStyle(item.significance) : undefined}
             onClick={(e) => toggleExpand(item.id, e.currentTarget)}
             onMouseEnter={() => item.site_id && onSiteHover?.(item.site_id)}
             onMouseLeave={() => item.site_id && onSiteHover?.(null)}
