@@ -491,6 +491,7 @@ export default function NewsFeedPage() {
                 <div className="news-page-chips">
                   {([
                     { label: 'All', value: null },
+                    { label: 'Interesting 3+', value: 3 },
                     { label: 'Notable 5+', value: 5 },
                     { label: 'Significant 7+', value: 7 },
                     { label: 'Breaking 9+', value: 9 },
@@ -623,7 +624,7 @@ export default function NewsFeedPage() {
                 <span className="news-card-channel">{item.video.channel_name}</span>
                 <span>{formatRelativeDate(item.video.published_at)}</span>
               </div>
-              {item.significance != null && (
+              {item.significance != null && item.significance >= 3 && (
                 <div className="news-significance-stamp" style={{ color: getSignificanceColor(item.significance) }}>
                   {getSignificanceLabel(item.significance)}
                 </div>
