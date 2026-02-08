@@ -180,7 +180,7 @@ function ScoreBreakdown({ item }: { item: RadarItem }) {
 
 function radarItemToSiteData(item: RadarItem): SiteData {
   return {
-    id: item.id,
+    id: item.best_match?.site_id || item.id,
     title: item.display_name || 'Unknown Site',
     coordinates: [item.lon ?? NaN, item.lat ?? NaN],
     category: item.site_type || 'Unknown',

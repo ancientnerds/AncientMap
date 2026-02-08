@@ -4561,7 +4561,7 @@ body.screenshot-mode .screenshot-mode-buttons {
   margin-bottom: 0;
 }
 
-.popup-hero-content .source-switcher-toggle {
+.popup-hero-content .source-switcher-trigger {
   background: rgba(0, 15, 20, 0.7);
   backdrop-filter: blur(4px);
 }
@@ -7520,36 +7520,24 @@ body.hud-hidden .empire-borders-window {
 
 .source-switcher-wrap .popup-source {
   margin-bottom: 0;
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-  border-right: none;
 }
 
-.source-switcher-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  align-self: stretch;
-  padding: 0;
-  border: 1px solid;
-  border-left: none;
-  border-radius: 0 16px 16px 0;
-  background: var(--bg-inner);
+.source-switcher-trigger {
   cursor: pointer;
-  transition: background 0.2s ease;
+  gap: 5px;
 }
 
-.source-switcher-toggle:hover {
+.source-switcher-trigger:hover {
   background: rgba(192, 32, 35, 0.1);
 }
 
-.source-switcher-toggle.open svg {
-  transform: rotate(180deg);
+.source-switcher-chevron {
+  transition: transform 0.2s ease;
+  margin-left: 2px;
 }
 
-.source-switcher-toggle svg {
-  transition: transform 0.2s ease;
+.source-switcher-trigger.open .source-switcher-chevron {
+  transform: rotate(180deg);
 }
 
 .source-switcher-dropdown {

@@ -933,6 +933,28 @@ def _handle_db_match(
         synchronize_session="fetch",
     )
 
+    # Prefer AN Originals / promoted candidate if present anywhere in the list
+    an_candidate = None
+    for cand in (all_candidates or []):
+        try:
+            cand_uuid = uuid.UUID(cand["site_id"])
+        except (ValueError, TypeError):
+            continue
+        if cand["source"] == "ancient_nerds" or cand_uuid in promoted_ids:
+            an_candidate = cand
+            break
+
+    if an_candidate and an_candidate["site_id"] != db_candidate["site_id"]:
+        # Re-link NewsItems to the AN/promoted site instead
+        an_site = session.get(UnifiedSite, uuid.UUID(an_candidate["site_id"]))
+        if an_site:
+            fill_contrib_from_site(contribution, an_site)
+            session.query(NewsItem).filter(
+                func.lower(NewsItem.site_name_extracted) == name_lower,
+            ).update({NewsItem.site_id: an_site.id}, synchronize_session="fetch")
+            db_candidate = an_candidate
+            site_uuid = uuid.UUID(an_candidate["site_id"])
+
     # Branch: AN Originals or promoted → hidden ("matched"); external source → visible ("enriched")
     if db_candidate["source"] == "ancient_nerds" or site_uuid in promoted_ids:
         contribution.enrichment_status = "matched"

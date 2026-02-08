@@ -85,7 +85,7 @@ import {
 import { useAlternateSources, alternateToSiteData } from './useAlternateSources'
 
 // Types
-import type { SitePopupProps, EmpireSeshatTab } from './types'
+import type { SitePopupProps, EmpireSeshatTab, AlternateSource } from './types'
 
 export default function SitePopup({
   site,
@@ -209,6 +209,30 @@ export default function SitePopup({
   // Alternate sources for source switching
   const { alternates } = useAlternateSources(site)
   const [overrideSite, setOverrideSite] = useState<SiteData | null>(null)
+
+  // Build full source list: original site + alternates, so switching back is always possible
+  const baseSite = isEmpireMode ? dummySite : adminMode.localSite
+  const allSources = useMemo(() => {
+    if (!alternates.length) return alternates
+    const baseSourceInfo = getSourceInfo(baseSite.sourceId)
+    const primary: AlternateSource = {
+      id: baseSite.id,
+      sourceId: baseSite.sourceId || '',
+      sourceName: baseSourceInfo?.name || baseSite.sourceId || '',
+      sourceColor: getSourceColor(baseSite.sourceId),
+      name: baseSite.title,
+      sourceUrl: baseSite.sourceUrl,
+      description: baseSite.description,
+      thumbnailUrl: baseSite.image,
+      siteType: baseSite.category,
+      periodName: baseSite.period,
+      periodStart: baseSite.periodStart,
+      country: baseSite.location,
+      lat: baseSite.coordinates[1],
+      lon: baseSite.coordinates[0],
+    }
+    return [primary, ...alternates]
+  }, [baseSite, alternates])
 
   // Reset override when the base site changes
   useEffect(() => setOverrideSite(null), [site?.id])
@@ -482,9 +506,9 @@ export default function SitePopup({
             isStandalone={isStandalone}
             windowState={windowHook.windowState}
             isEmpireMode={isEmpireMode}
-            alternateSources={alternates}
+            alternateSources={allSources}
             activeSiteId={displaySite.id}
-            onSourceSelect={(alt) => setOverrideSite(alt ? alternateToSiteData(alt) : null)}
+            onSourceSelect={(alt) => setOverrideSite(!alt || alt.id === baseSite.id ? null : alternateToSiteData(alt))}
           />
 
           <div className="popup-body">
