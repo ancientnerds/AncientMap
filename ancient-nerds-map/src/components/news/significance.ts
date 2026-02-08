@@ -25,6 +25,15 @@ export function getSignificanceColor(level: number): string {
   return 'rgba(255,255,255,0.3)'        // grey
 }
 
+/** Subtle tinted background + border for glassy card effect. */
+export function getSignificanceCardStyle(level: number): React.CSSProperties {
+  if (level >= 9) return { background: 'rgba(192, 32, 35, 0.12)', borderColor: 'rgba(192, 32, 35, 0.25)' }
+  if (level >= 7) return { background: 'rgba(212, 98, 42, 0.10)', borderColor: 'rgba(212, 98, 42, 0.22)' }
+  if (level >= 5) return { background: 'rgba(212, 168, 67, 0.08)', borderColor: 'rgba(212, 168, 67, 0.18)' }
+  if (level >= 3) return { background: 'rgba(91, 138, 114, 0.06)', borderColor: 'rgba(91, 138, 114, 0.14)' }
+  return { background: 'rgba(255, 255, 255, 0.02)', borderColor: 'rgba(255, 255, 255, 0.08)' }
+}
+
 const CATEGORY_LABELS: Record<string, string> = {
   excavation: 'Excavation',
   artifact: 'Artifact',

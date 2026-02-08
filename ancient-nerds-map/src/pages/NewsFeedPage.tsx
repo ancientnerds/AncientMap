@@ -15,7 +15,7 @@ import { apiDetailToSiteData } from '../utils/siteApi'
 import { SiteBadges, CountryFlag } from '../components/metadata'
 import { SitePopupOverlay } from '../components/SitePopupOverlay'
 import LazyImage from '../components/LazyImage'
-import { getSignificanceColor, getSignificanceLabel, getNewsCategoryLabel } from '../components/news/significance'
+import { getSignificanceColor, getSignificanceLabel, getSignificanceCardStyle, getNewsCategoryLabel } from '../components/news/significance'
 import '../components/news/news-cards.css'
 
 const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
@@ -591,7 +591,7 @@ export default function NewsFeedPage() {
               <div
                 key={item.id}
                 className={`news-page-card${expandedId === item.id ? ' expanded' : ''}${newItemIds.has(item.id) ? ' new-item' : ''}`}
-                style={item.significance ? { borderLeftWidth: 4, borderLeftStyle: 'solid', borderLeftColor: getSignificanceColor(item.significance) } : undefined}
+                style={item.significance ? getSignificanceCardStyle(item.significance) : undefined}
                 onClick={() => toggleExpand(item.id)}
                 onAnimationEnd={() => setNewItemIds(prev => { const next = new Set(prev); next.delete(item.id); return next })}
               >
