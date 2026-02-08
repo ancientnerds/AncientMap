@@ -12517,7 +12517,9 @@ body.news-feed-open .empire-borders-window {
 
 .news-page {
   min-height: 100vh;
+  min-height: 100dvh;
   height: 100vh;
+  height: 100dvh;
   overflow-y: auto;
   background: var(--bg-main, #0a1520);
   color: var(--text-primary, #e8e8e8);
@@ -12886,7 +12888,7 @@ body.news-feed-open .empire-borders-window {
 .news-page-grid {
   display: flex;
   gap: 12px;
-  padding: 12px 20px;
+  padding: 12px 20px 40px;
 }
 
 .news-page-column {
