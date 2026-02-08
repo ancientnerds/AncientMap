@@ -25,9 +25,9 @@ from fastapi.staticfiles import StaticFiles
 
 from api.cache import cache_get, cache_set, get_redis_client
 from api.routes import (
-    ai,
     content,
     contributions,
+    lyra,
     news,
     og,
     radar,
@@ -120,7 +120,7 @@ app.include_router(sites.router, prefix="/api/sites", tags=["sites"])
 app.include_router(sources.router, prefix="/api/sources", tags=["sources"])
 app.include_router(og.router, prefix="/api/og", tags=["og"])
 app.include_router(contributions.router, prefix="/api/contributions", tags=["contributions"])
-app.include_router(ai.router, prefix="/api/ai", tags=["ai"])
+app.include_router(lyra.router, prefix="/api/lyra", tags=["lyra"])
 app.include_router(sitemap.router, prefix="/api/sitemap", tags=["sitemap"])
 app.include_router(streetview.router, prefix="/api/streetview", tags=["streetview"])
 app.include_router(content.router, prefix="/api/content", tags=["content"])

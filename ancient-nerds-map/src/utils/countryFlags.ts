@@ -49,7 +49,7 @@ const CODE_TO_CONTINENT: Record<string, Continent> = {
 }
 
 // Country name → ISO 3166-1 alpha-2 code mapping
-const COUNTRY_CODES: Record<string, string> = {
+export const COUNTRY_CODES: Record<string, string> = {
   // Middle East & Near East (important for archaeology)
   'Egypt': 'EG',
   'Iraq': 'IQ',

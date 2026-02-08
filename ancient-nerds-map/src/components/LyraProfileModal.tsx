@@ -237,6 +237,26 @@ export default function LyraProfileModal({ onClose }: Props) {
                 <span className="lyra-poster-ability-name">24/7 Surveillance</span>
                 <span className="lyra-poster-ability-desc">Monitors {WATCHED_CHANNELS.length} channels around the clock via RSS</span>
               </div>
+              <div className="lyra-poster-ability">
+                <span className="lyra-poster-ability-name">Conversational AI</span>
+                <span className="lyra-poster-ability-desc">Chat about any site, empire, or discovery</span>
+              </div>
+              <div className="lyra-poster-ability">
+                <span className="lyra-poster-ability-name">Image Analysis</span>
+                <span className="lyra-poster-ability-desc">Analyze photos of artifacts, ruins, and inscriptions</span>
+              </div>
+              <div className="lyra-poster-ability">
+                <span className="lyra-poster-ability-name">Database Search</span>
+                <span className="lyra-poster-ability-desc">Query 40K+ archaeological sites by period, type, location</span>
+              </div>
+              <div className="lyra-poster-ability">
+                <span className="lyra-poster-ability-name">News Intelligence</span>
+                <span className="lyra-poster-ability-desc">Search recent discoveries from the news pipeline</span>
+              </div>
+              <div className="lyra-poster-ability">
+                <span className="lyra-poster-ability-name">Empire Knowledge</span>
+                <span className="lyra-poster-ability-desc">Access Seshat data for 37 empires across history</span>
+              </div>
             </div>
           </div>
           <div className="lyra-poster-section">

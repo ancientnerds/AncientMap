@@ -22,7 +22,6 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Install Python dependencies (API-only, not full dev/pipeline requirements)
 COPY requirements-api.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir -r requirements-api.txt
 
 # =============================================================================
@@ -50,6 +49,8 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Copy application code
 COPY api/ ./api/
 COPY pipeline/ ./pipeline/
+# Copy Seshat polity data (used by Lyra agent for empire knowledge)
+COPY ancient-nerds-map/src/data/seshat/ ./ancient-nerds-map/src/data/seshat/
 # Copy optional asset directories (may not exist in all environments)
 COPY font[s]/ ./fonts/
 COPY log[o]/ ./logo/

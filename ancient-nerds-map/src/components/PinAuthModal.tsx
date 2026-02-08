@@ -6,12 +6,7 @@ import { config } from '../config'
 declare global {
   interface Window {
     turnstile?: {
-      render: (container: HTMLElement, options: {
-        sitekey: string
-        callback: (token: string) => void
-        'error-callback'?: () => void
-        'expired-callback'?: () => void
-      }) => string
+      render: (container: HTMLElement | string, options: Record<string, unknown>) => string
       reset: (widgetId: string) => void
       remove: (widgetId: string) => void
     }

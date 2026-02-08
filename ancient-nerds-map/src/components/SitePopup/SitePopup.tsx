@@ -100,6 +100,7 @@ export default function SitePopup({
   minimizedStackIndex = -1,
   isLoadingImages = false,
   onSiteUpdate,
+  onAskLyra,
   empire,
   empireYear,
   empireYearOptions,
@@ -680,6 +681,24 @@ export default function SitePopup({
                 onAdminClick={() => adminMode.setShowAdminPin(true)}
                 isEmpireMode={isEmpireMode}
               />
+            )}
+
+            {/* Ask Lyra button */}
+            {onAskLyra && (
+              <button
+                className="ask-lyra-btn"
+                style={{ marginTop: 8 }}
+                onClick={() => {
+                  if (isEmpireMode && empire) {
+                    onAskLyra('empire', empire.id, empireYear)
+                  } else if (site) {
+                    onAskLyra('site', site.id)
+                  }
+                }}
+              >
+                <img src="/lyra.gif" alt="" />
+                Ask Lyra
+              </button>
             )}
           </div>
         </div>

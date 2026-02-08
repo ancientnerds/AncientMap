@@ -244,6 +244,11 @@ def main() -> None:
         # Functional index for site_identifier queries on news_items
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_news_items_site_name_lower ON news_items (lower(site_name_extracted))"))
 
+        # Lyra RAG enrichment columns on news_items
+        conn.execute(text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS transcript_segment TEXT"))
+        conn.execute(text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS entities JSONB"))
+        conn.execute(text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS tags JSONB"))
+
         # Rename sources for branding
         conn.execute(text("""
             UPDATE source_meta SET name = 'ANCIENT NERDS Originals'

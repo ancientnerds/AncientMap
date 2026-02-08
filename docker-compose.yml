@@ -56,7 +56,7 @@ services:
   # Qdrant Vector Database for AI Search
   # ==========================================================================
   qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.13.2
     container_name: ancient_nerds_qdrant
     restart: unless-stopped
     logging:
@@ -69,34 +69,10 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/readyz"]
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/6333'"]
       interval: 10s
       timeout: 5s
       retries: 5
-
-  # ==========================================================================
-  # SearXNG - Self-hosted Web Search (FREE FOREVER)
-  # ==========================================================================
-  searxng:
-    image: searxng/searxng:latest
-    container_name: ancient_nerds_searxng
-    restart: unless-stopped
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    ports:
-      - "${SEARXNG_PORT:-8888}:8080"
-    environment:
-      - SEARXNG_BASE_URL=http://localhost:${SEARXNG_PORT:-8888}
-    volumes:
-      - searxng_data:/etc/searxng
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   # ==========================================================================
   # API Service (FastAPI + Uvicorn)
@@ -121,7 +97,6 @@ services:
       POSTGRES_HOST: db
       REDIS_HOST: redis
       QDRANT_HOST: qdrant
-      SEARXNG_URL: http://searxng:8080
       BUILD_HASH: ${BUILD_HASH:-}
     volumes:
       - ./public/data:/app/public/data
@@ -129,6 +104,8 @@ services:
       db:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      qdrant:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/"]
@@ -191,8 +168,6 @@ volumes:
     name: ancient_map_pgadmin_data
   qdrant_data:
     name: ancient_map_qdrant_data
-  searxng_data:
-    name: ancient_map_searxng_data
 
 networks:
   default:
