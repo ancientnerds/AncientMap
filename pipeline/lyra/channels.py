@@ -1,43 +1,33 @@
-"""YouTube channel management for the Lyra news pipeline."""
+"""YouTube channel management for the Lyra news pipeline.
 
+Channel list lives in channels.json at the repo root.
+To suggest a new channel, add a {"id": "...", "name": "..."} entry and open a PR.
+"""
+
+import json
 import logging
+from pathlib import Path
 
 from pipeline.database import NewsChannel, get_session
 
 logger = logging.getLogger(__name__)
 
-# Seed channels from the original Lyra channels.json
-SEED_CHANNELS = [
-    {"id": "UCscI4NOggNSN-Si5QgErNCw", "name": "Ancient Architects"},
-    {"id": "UCxq9PsBVarBK9BpG9SYQF7w", "name": "Curious Being"},
-    {"id": "UCodgvia5IT5wiV0II9swBLw", "name": "DeDunking"},
-    {"id": "UCsIlJ9eYylZQcyfMOPNUz9w", "name": "Bright Insight"},
-    {"id": "UCDWboBDVnIsGdYSK3KUO0hQ", "name": "History for GRANITE"},
-    {"id": "UCmhg8Hd2vOHwH3Pi3_9fYag", "name": "Wandering Wolf"},
-    {"id": "UCqMVaZM-USi0G54pu5318dQ", "name": "MegalithomaniaUK"},
-    {"id": "UCN2Z_nuG5XtVnE998unA3PA", "name": "Funny Olde World"},
-    {"id": "UCOnnmKlDZltHAqJLz-XIpGA", "name": "Universe Inside You"},
-    {"id": "UC8QWOIcinxsrvMGlWox7bXg", "name": "Dark5 Ancient Mysteries"},
-    {"id": "UC2Stn8atEra7SMdPWyQoSLA", "name": "UnchartedX"},
-    {"id": "UCMwDeEoupy8QQpKKc8pzU_Q", "name": "History with Kayleigh"},
-    {"id": "UCLclaVGVpaNIbdQaRs1wC5Q", "name": "One-eyed giant building walls"},
-    {"id": "UC452QHC05BAbQZZlYDUaoAA", "name": "Institute for Natural Philosophy"},
-    {"id": "UCgMfHNvlc4Zvr8FJHopDnvA", "name": "History, Myths & Legends"},
-    {"id": "UCFestibN7lYXvEj_BMEh29w", "name": "Luke Caverns"},
-    {"id": "UC65XXzhHyH3BKZ72Q1eKF8Q", "name": "Matthew LaCroix"},
-    {"id": "UC9qJWqnmPhDLnZNllSQ8uQA", "name": "Nikkiana Jones"},
-    {"id": "UCRDZ_t_-uHLsz_Otq6iOgyg", "name": "Michael Button"},
-    {"id": "UCAPciy143ZBXBrFpCVPnWDg", "name": "The Randall Carlson"},
-    {"id": "UCQoVoWXj6jyibI3gs3J4rbg", "name": "SPIRIT in STONE"},
-]
+CHANNELS_JSON = Path(__file__).resolve().parents[2] / "channels.json"
+
+
+def _load_seed_channels() -> list[dict]:
+    """Load the channel list from channels.json."""
+    with open(CHANNELS_JSON, encoding="utf-8") as f:
+        return json.load(f)
 
 
 def seed_channels() -> None:
     """Insert seed channels into the database if they don't already exist."""
+    channels = _load_seed_channels()
     with get_session() as session:
         existing = {c.id for c in session.query(NewsChannel.id).all()}
         added = 0
-        for ch in SEED_CHANNELS:
+        for ch in channels:
             if ch["id"] not in existing:
                 session.add(NewsChannel(
                     id=ch["id"],
