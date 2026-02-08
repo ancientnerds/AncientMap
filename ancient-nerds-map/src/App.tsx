@@ -7,8 +7,7 @@ import { EMPIRES, EmpireConfig } from './config/empireData'
 // Lazy-load modals for faster initial load
 const ContributeModal = lazy(() => import('./components/ContributeModal'))
 const DisclaimerModal = lazy(() => import('./components/DisclaimerModal'))
-const PinAuthModal = lazy(() => import('./components/PinAuthModal'))
-const AIAgentChatModal = lazy(() => import('./components/AIAgentChatModal'))
+const LyraChatModal = lazy(() => import('./components/LyraChatModal'))
 const DownloadManager = lazy(() => import('./components/DownloadManager'))
 const NewsFeedPanel = lazy(() => import('./components/NewsFeedPanel'))
 import { SiteData, fetchSites, getCurrentSites, addSourceSites, SOURCE_COLORS, getDefaultEnabledSourceIds, getSourceColor, getCategoryColor, getPeriodColor, setDataSourceError, categorizePeriod } from './data/sites'
@@ -469,10 +468,9 @@ function AppContent() {
   // Disclaimer modal state
   const [showDisclaimerModal, setShowDisclaimerModal] = useState(false)
 
-  // AI Agent modal state
-  const [showPinModal, setShowPinModal] = useState(false)
-  const [showAIChatModal, setShowAIChatModal] = useState(false)
-  const [aiSessionToken, setAiSessionToken] = useState<string | null>(null)
+  // Lyra chat modal state
+  const [showLyraChat, setShowLyraChat] = useState(false)
+  const [lyraChatContext, setLyraChatContext] = useState<{ type: 'global' | 'site' | 'empire' | 'news'; id?: string; year?: number }>({ type: 'global' })
 
   // Download manager modal state
   const [showDownloadManager, setShowDownloadManager] = useState(false)
@@ -537,25 +535,13 @@ function AppContent() {
     setContributeHoverCoords(null)
   }, [])
 
-  // AI Agent handlers
+  // Lyra chat handlers
   const handleAIAgentClick = useCallback(() => {
-    if (aiSessionToken) {
-      // Already authenticated, open chat directly
-      setShowAIChatModal(true)
-    } else {
-      // Need to authenticate first
-      setShowPinModal(true)
-    }
-  }, [aiSessionToken])
-
-  const handlePinSuccess = useCallback((token: string) => {
-    setAiSessionToken(token)
-    setShowPinModal(false)
-    setShowAIChatModal(true)
+    setLyraChatContext({ type: 'global' })
+    setShowLyraChat(true)
   }, [])
 
-  const handleAIHighlightSites = useCallback((siteIds: string[]) => {
-    // Use the existing selection mechanism to highlight sites
+  const handleLyraHighlightSites = useCallback((siteIds: string[]) => {
     setListFrozenSiteIds(siteIds)
   }, [])
 
@@ -2232,6 +2218,10 @@ function AppContent() {
                 // Refresh from API failed, local state is still updated
               }
             }}
+            onAskLyra={(ctxType, ctxId, ctxYear) => {
+              setLyraChatContext({ type: ctxType, id: ctxId, year: ctxYear })
+              setShowLyraChat(true)
+            }}
           />
         )
       })}
@@ -2255,6 +2245,10 @@ function AppContent() {
             onClose={() => closeEmpirePopup(empireId)}
             onMinimizedChange={(isMin) => setEmpirePopupMinimized(empireId, isMin)}
             minimizedStackIndex={stackIndex}
+            onAskLyra={(ctxType, ctxId, ctxYear) => {
+              setLyraChatContext({ type: ctxType, id: ctxId, year: ctxYear })
+              setShowLyraChat(true)
+            }}
           />
         )
       })}
@@ -2278,6 +2272,10 @@ function AppContent() {
               if (match) {
                 updateSelection([match.id])
               }
+            }}
+            onAskLyra={(newsItemId) => {
+              setLyraChatContext({ type: 'news', id: String(newsItemId) })
+              setShowLyraChat(true)
             }}
           />
         )}
@@ -2319,18 +2317,14 @@ function AppContent() {
           onToggleOffline={() => setOfflineMode(!isOffline)}
         />
 
-        {/* AI Agent Modals */}
-        <PinAuthModal
-          isOpen={showPinModal}
-          onClose={() => setShowPinModal(false)}
-          onSuccess={handlePinSuccess}
-        />
-
-        <AIAgentChatModal
-          isOpen={showAIChatModal}
-          onClose={() => setShowAIChatModal(false)}
-          sessionToken={aiSessionToken || ''}
-          onHighlightSites={handleAIHighlightSites}
+        {/* Lyra Chat Modal */}
+        <LyraChatModal
+          isOpen={showLyraChat}
+          onClose={() => setShowLyraChat(false)}
+          contextType={lyraChatContext.type}
+          contextId={lyraChatContext.id}
+          contextYear={lyraChatContext.year}
+          onHighlightSites={handleLyraHighlightSites}
           onFlyToSite={(coords) => {
             setFlyToCoords(null)
             setTimeout(() => setFlyToCoords(coords), 10)

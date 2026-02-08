@@ -26,21 +26,7 @@ interface FormData {
 
 type SubmitStatus = 'idle' | 'submitting' | 'success' | 'queued' | 'error'
 
-// Extend Window interface for Turnstile
-declare global {
-  interface Window {
-    turnstile?: {
-      render: (container: HTMLElement, options: {
-        sitekey: string
-        callback: (token: string) => void
-        'error-callback'?: () => void
-        'expired-callback'?: () => void
-      }) => string
-      reset: (widgetId: string) => void
-      remove: (widgetId: string) => void
-    }
-  }
-}
+// Turnstile types declared in PinAuthModal.tsx (shared)
 
 
 export default function ContributeModal({

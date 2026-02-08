@@ -6,6 +6,7 @@ import { useOffline } from '../contexts/OfflineContext'
 import { getCountryFlatFlagUrl, getCountryContinent, CONTINENT_ORDER, Continent } from '../utils/countryFlags'
 import { parseAnyCoordinate, formatCoordinate, applyCoordMask } from '../utils/coordinateParser'
 import { haversineDistance } from '../utils/geoMath'
+import SiteResultItem from './SiteResultItem'
 
 interface SourceInfo {
   id: string
@@ -804,64 +805,30 @@ function FilterPanel({
                   className="search-results-list"
                 >
                   {searchResults.slice(0, 100).map((result) => (
-                    <div
+                    <SiteResultItem
                       key={result.id}
-                      className={`search-result-item${selectedSiteIds.includes(result.id) ? ' selected' : ''}`}
-                      onMouseEnter={() => onSiteHover?.(result.id)}
-                      onMouseLeave={() => onSiteHover?.(null)}
-                    >
-                      <div
-                        className="search-result-main"
-                        onClick={(e) => {
-                          // Ctrl+click for multi-select, normal click for single select/toggle
-                          onSiteListClick?.(result.id, e.ctrlKey || e.metaKey)
-                          // Fly to site
-                          onSearchResultSelect(result.id, false)
-                        }}
-                      >
-                        <div className="search-result-content">
-                          <div className="search-result-title">{result.title}</div>
-                          {result.location && (
-                            <div className="search-result-location">
-                              {result.location}
-                              {getCountryFlatFlagUrl(result.location) && (
-                                <img
-                                  src={getCountryFlatFlagUrl(result.location)!}
-                                  alt=""
-                                  className="search-result-flag"
-                                />
-                              )}
-                            </div>
-                          )}
-                          <div className="search-result-meta">
-                            {result.category && (
-                              <span className="search-result-badge" style={{ borderColor: result.categoryColor, color: result.categoryColor }}>{result.category}</span>
-                            )}
-                            {result.period && (
-                              <span className="search-result-badge" style={{ borderColor: result.periodColor, color: result.periodColor }}>{result.period}</span>
-                            )}
-                            {searchAllSources && result.sourceName && (
-                              <span className="search-result-badge search-result-source" style={{ borderColor: result.sourceColor, color: result.sourceColor }}>{result.sourceName}</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <button
-                        className="search-result-info-btn"
-                        onClick={() => {
-                          // Select and open popup (deselects when popup opens)
-                          onSiteListClick?.(null)  // Clear selection since popup will open
-                          onSearchResultSelect(result.id, true)
-                        }}
-                        title="Open details"
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                          <polyline points="15 3 21 3 21 9"></polyline>
-                          <line x1="10" y1="14" x2="21" y2="3"></line>
-                        </svg>
-                      </button>
-                    </div>
+                      id={result.id}
+                      title={result.title}
+                      category={result.category}
+                      categoryColor={result.categoryColor}
+                      location={result.location}
+                      period={result.period}
+                      periodColor={result.periodColor}
+                      sourceName={result.sourceName}
+                      sourceColor={result.sourceColor}
+                      selected={selectedSiteIds.includes(result.id)}
+                      showSource={searchAllSources}
+                      onMainClick={(e) => {
+                        onSiteListClick?.(result.id, e.ctrlKey || e.metaKey)
+                        onSearchResultSelect(result.id, false)
+                      }}
+                      onInfoClick={() => {
+                        onSiteListClick?.(null)
+                        onSearchResultSelect(result.id, true)
+                      }}
+                      onHoverEnter={() => onSiteHover?.(result.id)}
+                      onHoverLeave={() => onSiteHover?.(null)}
+                    />
                   ))}
                 </div>
               ) : (
@@ -900,64 +867,30 @@ function FilterPanel({
                   className="search-results-list"
                 >
                   {proximityResults.map((result) => (
-                    <div
+                    <SiteResultItem
                       key={result.id}
-                      className={`search-result-item${selectedSiteIds.includes(result.id) ? ' selected' : ''}`}
-                      onMouseEnter={() => onSiteHover?.(result.id)}
-                      onMouseLeave={() => onSiteHover?.(null)}
-                    >
-                      <div
-                        className="search-result-main"
-                        onClick={(e) => {
-                          // Ctrl+click for multi-select, normal click for single select/toggle
-                          onSiteListClick?.(result.id, e.ctrlKey || e.metaKey)
-                          // Fly to site
-                          onSearchResultSelect(result.id, false)
-                        }}
-                      >
-                        <div className="search-result-content">
-                          <div className="search-result-title">{result.title}</div>
-                          {result.location && (
-                            <div className="search-result-location">
-                              {result.location}
-                              {getCountryFlatFlagUrl(result.location) && (
-                                <img
-                                  src={getCountryFlatFlagUrl(result.location)!}
-                                  alt=""
-                                  className="search-result-flag"
-                                />
-                              )}
-                            </div>
-                          )}
-                          <div className="search-result-meta">
-                            {result.category && (
-                              <span className="search-result-badge" style={{ borderColor: result.categoryColor, color: result.categoryColor }}>{result.category}</span>
-                            )}
-                            {result.period && (
-                              <span className="search-result-badge" style={{ borderColor: result.periodColor, color: result.periodColor }}>{result.period}</span>
-                            )}
-                            {result.sourceName && (
-                              <span className="search-result-badge search-result-source" style={{ borderColor: result.sourceColor, color: result.sourceColor }}>{result.sourceName}</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <button
-                        className="search-result-info-btn"
-                        onClick={() => {
-                          // Select and open popup (deselects when popup opens)
-                          onSiteListClick?.(null)  // Clear selection since popup will open
-                          onSearchResultSelect(result.id, true)
-                        }}
-                        title="Open details"
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                          <polyline points="15 3 21 3 21 9"></polyline>
-                          <line x1="10" y1="14" x2="21" y2="3"></line>
-                        </svg>
-                      </button>
-                    </div>
+                      id={result.id}
+                      title={result.title}
+                      category={result.category}
+                      categoryColor={result.categoryColor}
+                      location={result.location}
+                      period={result.period}
+                      periodColor={result.periodColor}
+                      sourceName={result.sourceName}
+                      sourceColor={result.sourceColor}
+                      selected={selectedSiteIds.includes(result.id)}
+                      showSource={!!result.sourceName}
+                      onMainClick={(e) => {
+                        onSiteListClick?.(result.id, e.ctrlKey || e.metaKey)
+                        onSearchResultSelect(result.id, false)
+                      }}
+                      onInfoClick={() => {
+                        onSiteListClick?.(null)
+                        onSearchResultSelect(result.id, true)
+                      }}
+                      onHoverEnter={() => onSiteHover?.(result.id)}
+                      onHoverLeave={() => onSiteHover?.(null)}
+                    />
                   ))}
                 </div>
               ) : (

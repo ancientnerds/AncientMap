@@ -19,9 +19,10 @@ interface Props {
   onClose: () => void
   onSiteHover?: (siteId: string | null) => void
   onSiteClick?: (siteName: string, lat: number, lon: number) => void
+  onAskLyra?: (newsItemId: number) => void
 }
 
-export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick }: Props) {
+export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAskLyra }: Props) {
   const [items, setItems] = useState<NewsItemData[]>([])
   const [totalCount, setTotalCount] = useState(0)
   const [page, setPage] = useState(1)
@@ -259,6 +260,17 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick }: Pro
                     Watch on YouTube
                     {item.timestamp_seconds != null && <span className="news-card-ts"> (at {formatDuration(item.timestamp_seconds / 60)})</span>}
                   </a>
+                )}
+
+                {onAskLyra && (
+                  <button
+                    className="ask-lyra-btn"
+                    style={{ marginTop: 6 }}
+                    onClick={e => { e.stopPropagation(); onAskLyra(item.id) }}
+                  >
+                    <img src="/lyra.gif" alt="" />
+                    Ask Lyra
+                  </button>
                 )}
 
                 <div className="news-card-video-title">{item.video.title}</div>

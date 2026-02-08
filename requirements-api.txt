@@ -23,11 +23,14 @@ aiohttp>=3.9.0
 tenacity>=8.2.0
 aiofiles>=23.2.0
 
-# --- AI / Vector search (lazy-loaded) ---
-# NOTE: torch is installed separately with CPU-only index in Dockerfile
+# --- Lyra RAG Agent (LangChain + Claude Haiku) ---
+langchain>=0.3
+langchain-anthropic>=0.3
+langchain-core>=0.3
 qdrant-client>=1.7.0
-sentence-transformers>=2.2.2
-transformers>=4.40.0
+fastembed>=0.4.0
+voyageai>=0.3
+anthropic>=0.40
 
 # --- Image processing ---
 Pillow>=10.0.0

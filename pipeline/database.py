@@ -801,6 +801,11 @@ class NewsItem(Base):
     significance: Mapped[int | None] = mapped_column(Integer, nullable=True)
     news_category: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
+    # RAG enrichment fields
+    transcript_segment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    entities: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    tags: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+
     video: Mapped["NewsVideo"] = relationship("NewsVideo", back_populates="items")
     site: Mapped[Optional["UnifiedSite"]] = relationship("UnifiedSite", lazy="joined")
 
