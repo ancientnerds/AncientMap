@@ -6,8 +6,8 @@ Usage:
 """
 
 import argparse
-import re
 import logging
+import re
 from collections import Counter
 
 from sqlalchemy import text
