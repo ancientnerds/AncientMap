@@ -77,4 +77,5 @@ export interface ActiveFilters {
   country: string | null
   min_significance: number | null
   news_category: string | null
+  sort: string | null
 }
