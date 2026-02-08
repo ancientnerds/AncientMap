@@ -95,6 +95,8 @@ class NewsItemResponse(BaseModel):
     site_period_start: int | None = None
     site_country: str | None = None
     site_name_extracted: str | None = None
+    significance: int | None = None
+    news_category: str | None = None
 
 
 class NewsFeedResponse(BaseModel):
@@ -140,6 +142,7 @@ class NewsFiltersResponse(BaseModel):
     categories: list[str]
     periods: list[str]
     countries: list[str]
+    news_categories: list[str] = []
 
 
 # =============================================================================
@@ -156,10 +159,13 @@ async def get_news_feed(
     category: str | None = None,
     period: str | None = None,
     country: str | None = None,
+    min_significance: int | None = Query(None, ge=1, le=10),
+    news_category: str | None = None,
+    sort: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Get paginated news feed items, newest first."""
-    cache_key = f"news:feed:{page}:{page_size}:{channel_id or 'all'}:{site_id or 'all'}:{category or 'all'}:{period or 'all'}:{country or 'all'}"
+    cache_key = f"news:feed:{page}:{page_size}:{channel_id or 'all'}:{site_id or 'all'}:{category or 'all'}:{period or 'all'}:{country or 'all'}:{min_significance or 'all'}:{news_category or 'all'}:{sort or 'default'}"
     cached = cache_get(cache_key)
     if cached:
         return cached
@@ -199,10 +205,19 @@ async def get_news_feed(
             lo, hi = period_range
             query = query.filter(UnifiedSite.period_start >= lo, UnifiedSite.period_start < hi)
 
+    if min_significance:
+        query = query.filter(NewsItem.significance >= min_significance)
+
+    if news_category:
+        query = query.filter(NewsItem.news_category == news_category)
+
     total_count = query.count()
     offset = (page - 1) * page_size
 
-    items = query.order_by(NewsVideo.published_at.desc(), NewsItem.created_at.desc()).offset(offset).limit(page_size).all()
+    if sort == "significance":
+        items = query.order_by(NewsItem.significance.desc().nullslast(), NewsVideo.published_at.desc(), NewsItem.created_at.desc()).offset(offset).limit(page_size).all()
+    else:
+        items = query.order_by(NewsVideo.published_at.desc(), NewsItem.created_at.desc()).offset(offset).limit(page_size).all()
 
     result_items = []
     for item in items:
@@ -245,6 +260,8 @@ async def get_news_feed(
             site_period_start=site.period_start if site else None,
             site_country=site.country if site else None,
             site_name_extracted=item.site_name_extracted if not site else None,
+            significance=item.significance,
+            news_category=item.news_category,
         ))
 
     response = NewsFeedResponse(
@@ -326,12 +343,22 @@ async def get_news_filters(db: Session = Depends(get_db)):
     )
     countries = sorted([row[0] for row in country_rows])
 
+    # News categories: distinct news_category values from news items
+    news_cat_rows = (
+        db.query(NewsItem.news_category)
+        .filter(NewsItem.post_text.isnot(None), NewsItem.news_category.isnot(None))
+        .distinct()
+        .all()
+    )
+    news_categories = sorted([row[0] for row in news_cat_rows])
+
     result = NewsFiltersResponse(
         channels=channels,
         sites=sites,
         categories=categories,
         periods=period_labels,
         countries=countries,
+        news_categories=news_categories,
     )
 
     cache_set(cache_key, result.model_dump(), ttl=600)  # 10 min cache

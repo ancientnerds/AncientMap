@@ -10,6 +10,7 @@ import type { NewsItemData, NewsFeedResponse } from '../types/news'
 import { formatDuration, formatRelativeDate } from '../utils/formatters'
 import { SiteBadges, CountryFlag } from './metadata'
 import LazyImage from './LazyImage'
+import { getSignificanceColor, getSignificanceLabel, getNewsCategoryLabel } from './news/significance'
 import './news/news-cards.css'
 
 const LyraProfileModal = lazy(() => import('./LyraProfileModal'))
@@ -164,6 +165,7 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick }: Pro
           <div
             key={item.id}
             className={`news-feed-item${expandedId === item.id ? ' expanded' : ''}${item.site_id ? ' has-site' : ''}`}
+            style={item.significance ? { borderLeft: `3px solid ${getSignificanceColor(item.significance)}` } : undefined}
             onClick={(e) => toggleExpand(item.id, e.currentTarget)}
             onMouseEnter={() => item.site_id && onSiteHover?.(item.site_id)}
             onMouseLeave={() => item.site_id && onSiteHover?.(null)}
@@ -171,8 +173,18 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick }: Pro
             <div className="news-card-meta">
               <span className="news-card-channel">{item.video.channel_name}</span>
               <span className="news-feed-date">{formatRelativeDate(item.video.published_at)}</span>
+              {item.significance != null && item.significance >= 7 && (
+                <span className="news-significance-badge" style={{ color: getSignificanceColor(item.significance) }}>
+                  <span className="news-significance-dot" style={{ background: getSignificanceColor(item.significance) }} />
+                  {getSignificanceLabel(item.significance)}
+                </span>
+              )}
             </div>
             <div className="news-card-post-text">{item.post_text || item.headline}</div>
+
+            {item.news_category && item.news_category !== 'general' && (
+              <span className="news-category-pill">{getNewsCategoryLabel(item.news_category)}</span>
+            )}
 
             {item.site_id && (
                 <div className="news-feed-site-block">

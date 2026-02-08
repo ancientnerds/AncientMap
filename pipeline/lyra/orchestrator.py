@@ -165,6 +165,12 @@ def main() -> None:
         conn.execute(text(
             "ALTER TABLE news_items ADD COLUMN IF NOT EXISTS site_match_tried BOOLEAN DEFAULT FALSE"
         ))
+        conn.execute(text(
+            "ALTER TABLE news_items ADD COLUMN IF NOT EXISTS significance INTEGER"
+        ))
+        conn.execute(text(
+            "ALTER TABLE news_items ADD COLUMN IF NOT EXISTS news_category VARCHAR(50)"
+        ))
         # Create unified_site_names table if it doesn't exist (for alt-name matching)
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS unified_site_names (

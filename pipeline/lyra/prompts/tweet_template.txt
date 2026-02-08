@@ -39,11 +39,28 @@ TIMESTAMP REQUIREMENTS:
 - If no clear timestamp range exists, use null
 - Timestamp should correspond to the specific content of the tweet
 
+SIGNIFICANCE RATING (1-10 integer):
+10 = Groundbreaking — rewrites history, new civilization, lost city found, paradigm shift
+9 = Major Discovery — new site found, unknown chamber opened, first-of-its-kind
+8 = Breakthrough — major dating revision, DNA results changing understanding
+7 = Significant Find — important artifact, tomb, or structure uncovered
+6 = New Research — published study, peer-reviewed results, new interpretation
+5 = Notable Update — meaningful excavation progress, important restoration
+4 = Interesting — new technique applied, interesting survey results
+3 = Routine Update — season progress, standard excavation report
+2 = Background — general context, methodology description, site overview
+1 = Filler — channel promo, tangential discussion, opinion piece
+
+CATEGORY (pick one):
+excavation, artifact, architecture, bioarchaeology, dating, remote_sensing, underwater, epigraphy, conservation, heritage, theory, technology, survey, art, general
+
 OUTPUT FORMAT:
 [
     {{
         "tweet": "Tweet content here",
-        "timestamp_range": "MM:SS-MM:SS"
+        "timestamp_range": "MM:SS-MM:SS",
+        "significance": 5,
+        "category": "excavation"
     }}
 ]
 
