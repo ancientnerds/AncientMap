@@ -276,7 +276,7 @@ def retry_failed_videos(settings: LyraSettings) -> int:
     return retried
 
 
-def _parse_timestamp(ts: str) -> int | None:
+def parse_timestamp_to_seconds(ts: str) -> int | None:
     """Parse 'MM:SS' to seconds."""
     m = re.match(r"(\d+):(\d{2})", ts)
     if m:
@@ -299,8 +299,8 @@ def extract_transcript_segment(transcript_text: str, timestamp_range: str, buffe
     if len(parts) != 2:
         return transcript_text[:2000]  # Fallback: return beginning
 
-    start_secs = _parse_timestamp(parts[0].strip())
-    end_secs = _parse_timestamp(parts[1].strip())
+    start_secs = parse_timestamp_to_seconds(parts[0].strip())
+    end_secs = parse_timestamp_to_seconds(parts[1].strip())
     if start_secs is None or end_secs is None:
         return transcript_text[:2000]
 
@@ -314,7 +314,7 @@ def extract_transcript_segment(transcript_text: str, timestamp_range: str, buffe
     for line in lines:
         m = ts_pattern.match(line)
         if m:
-            line_secs = _parse_timestamp(m.group(1))
+            line_secs = parse_timestamp_to_seconds(m.group(1))
             if line_secs is not None and start_secs <= line_secs <= end_secs:
                 segment_lines.append(line)
 
