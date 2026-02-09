@@ -156,12 +156,13 @@ jobs:
             # Rebuild frontend if files changed OR dist is missing key assets
             if echo "$CHANGED" | grep -q "^ancient-nerds-map/" || [ ! -f ancient-nerds-map/dist/an-logo.svg ]; then
               echo "==> Building frontend..."
-              rm -rf ancient-nerds-map/dist
+              mv ancient-nerds-map/dist ancient-nerds-map/dist-old 2>/dev/null || true
               if echo "$CHANGED" | grep -q "package-lock.json"; then
                 cd ancient-nerds-map && npm ci && npm run build && cd ..
               else
                 cd ancient-nerds-map && npm run build && cd ..
               fi
+              rm -rf ancient-nerds-map/dist-old 2>/dev/null || true
             else
               echo "==> Frontend unchanged, skipping build"
             fi
