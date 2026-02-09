@@ -26,6 +26,7 @@ class LyraSettings(BaseSettings):
     min_score_for_promotion: int = 55
     max_identifications_per_cycle: int = 20
     pg_trgm_threshold: float = 0.35
+    identify_thinking_budget: int = 4096
 
     # Pipeline settings
     lookup_days: int = 14
