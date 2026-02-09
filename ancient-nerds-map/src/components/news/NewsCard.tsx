@@ -200,11 +200,11 @@ export default function NewsCard({
       {expanded && (
         <div className="news-card-expanded">
           {facts && facts.length > 0 && (
-            <ul className="news-card-facts">
+            <div className="news-card-facts">
               {facts.map((fact, i) => (
-                <li key={i}>{fact}</li>
+                <div key={i} className="news-card-fact">{fact}</div>
               ))}
-            </ul>
+            </div>
           )}
 
           {deepLink && deepLink !== '#' && (
