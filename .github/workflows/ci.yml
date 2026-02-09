@@ -162,6 +162,14 @@ jobs:
               else
                 cd ancient-nerds-map && npm run build && cd ..
               fi
+              # Verify build output — fail fast if build silently broke
+              if [ ! -f ancient-nerds-map/dist/index.html ] || [ ! -f ancient-nerds-map/dist/an-logo.svg ]; then
+                echo "ERROR: Frontend build failed — dist/index.html or dist/an-logo.svg missing!"
+                echo "Restoring previous build..."
+                rm -rf ancient-nerds-map/dist 2>/dev/null || true
+                mv ancient-nerds-map/dist-old ancient-nerds-map/dist 2>/dev/null || true
+                exit 1
+              fi
               rm -rf ancient-nerds-map/dist-old 2>/dev/null || true
             else
               echo "==> Frontend unchanged, skipping build"
