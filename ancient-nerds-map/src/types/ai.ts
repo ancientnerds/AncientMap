@@ -18,6 +18,7 @@ export interface SiteHighlight {
   site_type?: string
   period_name?: string
   country?: string
+  thumbnail_url?: string
 }
 
 /**

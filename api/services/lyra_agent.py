@@ -107,7 +107,7 @@ def search_sites(
     where = " AND ".join(conditions)
     sql = f"""
         SELECT id::text, name, lat, lon, site_type, period_name, period_start,
-               country, description
+               country, description, thumbnail_url
         FROM unified_sites
         WHERE {where}
         ORDER BY
@@ -119,7 +119,7 @@ def search_sites(
     if not query:
         sql = f"""
             SELECT id::text, name, lat, lon, site_type, period_name, period_start,
-                   country, description
+                   country, description, thumbnail_url
             FROM unified_sites
             WHERE {where}
             ORDER BY period_start ASC NULLS LAST
@@ -145,6 +145,8 @@ def search_sites(
             "period": r.period_name,
             "country": r.country,
         }
+        if r.thumbnail_url:
+            site["thumbnail_url"] = r.thumbnail_url
         if r.description:
             site["description"] = r.description[:200]
         sites.append(site)
@@ -224,6 +226,7 @@ def get_site_details(site_id: str) -> str:
         "description": row.description,
         "source_url": row.source_url,
         "source": row.source_id,
+        "thumbnail_url": row.thumbnail_url,
     }
 
     if names:
@@ -1086,6 +1089,7 @@ async def run_agent_stream(
                     "site_type": s.get("site_type"),
                     "period_name": s.get("period_name"),
                     "country": s.get("country"),
+                    "thumbnail_url": s.get("thumbnail_url"),
                 })
 
         # Fetch related news: site-specific first, then broader filters
@@ -1229,6 +1233,7 @@ async def run_agent_stream(
                                         "site_type": s.get("type") or s.get("site_type"),
                                         "period_name": s.get("period") or s.get("period_name"),
                                         "country": s.get("country"),
+                                        "thumbnail_url": s.get("thumbnail_url"),
                                     })
                         elif isinstance(parsed, dict) and "lat" in parsed:
                             all_sites.append({
@@ -1239,6 +1244,7 @@ async def run_agent_stream(
                                 "site_type": parsed.get("type") or parsed.get("site_type"),
                                 "period_name": parsed.get("period") or parsed.get("period_name"),
                                 "country": parsed.get("country"),
+                                "thumbnail_url": parsed.get("thumbnail_url"),
                             })
                     except (json.JSONDecodeError, KeyError):
                         pass
