@@ -116,6 +116,14 @@ def generate_posts_for_video(
             NewsItem.post_text.is_(None),
         ).all()
 
+        logger.info(
+            f"Video {video.id}: {len(posts_data)} LLM posts, {len(items)} DB items awaiting text"
+        )
+        if not items:
+            logger.warning(f"Video {video.id}: no DB items to attach posts to — skipping")
+            db_video.status = "posted"
+            return 0
+
         # Build headline -> item lookup (normalized lowercase for matching)
         headline_to_item: dict[str, NewsItem] = {}
         items_by_order: list[NewsItem] = []  # Fallback: match by position
@@ -124,6 +132,9 @@ def generate_posts_for_video(
                 headline_to_item[item.headline.strip().lower()] = item
             items_by_order.append(item)
 
+        matched_by_headline = 0
+        matched_by_position = 0
+        unmatched = 0
         fallback_idx = 0
         count = 0
         for post_data in posts_data:
@@ -138,15 +149,19 @@ def generate_posts_for_video(
             key = headline.strip().lower()
             item = headline_to_item.pop(key, None)
 
-            # Fallback: match by position if headline didn't match
-            if item is None:
+            if item is not None:
+                matched_by_headline += 1
+            else:
+                # Fallback: match by position if headline didn't match
                 while fallback_idx < len(items_by_order) and items_by_order[fallback_idx].post_text is not None:
                     fallback_idx += 1
                 if fallback_idx < len(items_by_order):
                     item = items_by_order[fallback_idx]
                     fallback_idx += 1
+                    matched_by_position += 1
                     logger.info(f"Headline mismatch, matched by position: {headline!r} → item {item.id}")
                 else:
+                    unmatched += 1
                     logger.warning(f"No matching item for headline: {headline!r}")
                     continue
 
@@ -160,7 +175,10 @@ def generate_posts_for_video(
 
         db_video.status = "posted"
 
-    logger.info(f"Generated {count} posts for video {video.id}")
+    logger.info(
+        f"Video {video.id}: {count} posts written "
+        f"(headline={matched_by_headline}, position={matched_by_position}, dropped={unmatched})"
+    )
     return count
 
 
