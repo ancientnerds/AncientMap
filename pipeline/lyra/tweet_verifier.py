@@ -7,7 +7,7 @@ from pathlib import Path
 import anthropic
 
 from pipeline.database import NewsItem, NewsVideo, get_session
-from pipeline.lyra.config import LyraSettings
+from pipeline.lyra.config import LyraSettings, get_anthropic_client
 from pipeline.lyra.transcript_fetcher import extract_transcript_segment, parse_timestamp_to_seconds
 
 logger = logging.getLogger(__name__)
@@ -19,16 +19,6 @@ VERIFY_SCHEMA = {
     "properties": {
         "verification_level": {"type": "string", "enum": ["VERIFY_AS_IS", "MODIFY", "REJECT"]},
         "timestamp": {"type": "string"},
-        "core_claim": {
-            "type": "object",
-            "properties": {
-                "text": {"type": "string"},
-                "supported": {"type": "boolean"},
-                "evidence": {"type": "string"},
-            },
-            "required": ["text", "supported", "evidence"],
-            "additionalProperties": False,
-        },
         "suggested_modification": {
             "anyOf": [
                 {
@@ -43,11 +33,8 @@ VERIFY_SCHEMA = {
                 {"type": "null"},
             ],
         },
-        "site_name_correction": {
-            "anyOf": [{"type": "string"}, {"type": "null"}],
-        },
     },
-    "required": ["verification_level", "timestamp", "core_claim", "suggested_modification", "site_name_correction"],
+    "required": ["verification_level", "timestamp", "suggested_modification"],
     "additionalProperties": False,
 }
 
@@ -61,6 +48,7 @@ def verify_single_post(
     transcript_text: str,
     client: anthropic.Anthropic,
     model: str,
+    system_prompt: str | None = None,
 ) -> dict | None:
     """Verify a single post against the transcript.
 
@@ -73,7 +61,8 @@ def verify_single_post(
     if not segment:
         return None
 
-    system_prompt = _load_prompt()
+    if system_prompt is None:
+        system_prompt = _load_prompt()
 
     user_content = (
         f"Tweet to verify:\n{item.post_text}\n\n"
@@ -106,7 +95,9 @@ def verify_single_post(
     return json.loads(response.content[0].text)
 
 
-def verify_video_posts(video: NewsVideo, settings: LyraSettings) -> int:
+def verify_video_posts(
+    video: NewsVideo, settings: LyraSettings, system_prompt: str | None = None,
+) -> int:
     """Verify all posts for a video against its transcript.
 
     Applies modifications or clears rejected posts.
@@ -118,7 +109,9 @@ def verify_video_posts(video: NewsVideo, settings: LyraSettings) -> int:
     if not settings.anthropic_api_key:
         return 0
 
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=120.0)
+    client = get_anthropic_client(settings)
+    if system_prompt is None:
+        system_prompt = _load_prompt()
 
     with get_session() as session:
         items = session.query(NewsItem).filter(
@@ -128,7 +121,7 @@ def verify_video_posts(video: NewsVideo, settings: LyraSettings) -> int:
 
         verified = 0
         for item in items:
-            result = verify_single_post(item, video.transcript_text, client, settings.model_verify)
+            result = verify_single_post(item, video.transcript_text, client, settings.model_verify, system_prompt)
             if not result:
                 continue
 
@@ -173,9 +166,10 @@ def verify_pending_posts(settings: LyraSettings) -> int:
         ).all()
         session.expunge_all()
 
+    system_prompt = _load_prompt()
     total = 0
     for video in videos:
-        total += verify_video_posts(video, settings)
+        total += verify_video_posts(video, settings, system_prompt)
 
     logger.info(f"Verified {total} posts total")
     return total

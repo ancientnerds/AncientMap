@@ -68,18 +68,6 @@ EXTRACT_METADATA_SCHEMA = {
     "additionalProperties": False,
 }
 
-ESCALATION_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "is_site": {"type": "boolean"},
-        "site_name": {"type": "string"},
-        "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
-        "reasoning": {"type": "string"},
-    },
-    "required": ["is_site", "reasoning"],
-    "additionalProperties": False,
-}
-
 WIKIDATA_SEARCH_URL = "https://www.wikidata.org/w/api.php"
 WIKIDATA_ENTITY_URL = "https://www.wikidata.org/w/api.php"
 WIKIPEDIA_SUMMARY_URL = "https://en.wikipedia.org/api/rest_v1/page/summary/{title}"
@@ -121,6 +109,8 @@ def identify_and_enrich_sites(settings: LyraSettings) -> int:
 
     processed = 0
     system_prompt = PROMPT_PATH.read_text(encoding="utf-8")
+    pick_entity_prompt = PICK_ENTITY_PROMPT_PATH.read_text(encoding="utf-8")
+    extract_metadata_prompt = EXTRACT_METADATA_PROMPT_PATH.read_text(encoding="utf-8")
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=120.0)
 
     with get_session() as session:
@@ -141,6 +131,14 @@ def identify_and_enrich_sites(settings: LyraSettings) -> int:
 
         logger.info(f"Processing {len(contributions)} candidates for identification")
 
+        # Preload all promoted site IDs once (used by _handle_db_match)
+        promoted_ids = {
+            row.promoted_site_id
+            for row in session.query(UserContribution.promoted_site_id).filter(
+                UserContribution.promoted_site_id.isnot(None)
+            )
+        }
+
         for contribution in contributions:
             logger.info(
                 f"  [{contribution.name}] status={contribution.enrichment_status}, "
@@ -152,7 +150,8 @@ def identify_and_enrich_sites(settings: LyraSettings) -> int:
                 # doesn't poison the session for the rest.
                 with session.begin_nested():
                     result = _process_single(
-                        session, contribution, client, system_prompt, settings
+                        session, contribution, client, system_prompt, settings, promoted_ids,
+                        pick_entity_prompt, extract_metadata_prompt,
                     )
                     if result:
                         processed += 1
@@ -175,6 +174,9 @@ def _process_single(
     client: anthropic.Anthropic,
     system_prompt: str,
     settings: LyraSettings,
+    promoted_ids: set[uuid.UUID] | None = None,
+    pick_entity_prompt: str | None = None,
+    extract_metadata_prompt: str | None = None,
 ) -> bool:
     """Process a single candidate through identification + enrichment.
 
@@ -266,21 +268,21 @@ def _process_single(
 
         best = db_candidates[0]
         if best["similarity"] >= settings.pg_trgm_threshold:
-            return _handle_db_match(session, contribution, best, identification, settings, facts, video_contexts, all_candidates=db_candidates)
+            return _handle_db_match(session, contribution, best, identification, settings, facts, video_contexts, all_candidates=db_candidates, promoted_ids=promoted_ids)
 
     # Also try with original name if different
     if corrected_name and corrected_name.lower().strip() != contribution.name.lower().strip():
         orig_candidates = _fetch_db_candidates(session, contribution.name, threshold=settings.pg_trgm_threshold)
         if orig_candidates and orig_candidates[0]["similarity"] >= settings.pg_trgm_threshold:
             logger.info(f"  [{contribution.name}] DB match via original name: {orig_candidates[0]['name']}")
-            return _handle_db_match(session, contribution, orig_candidates[0], identification, settings, facts, video_contexts, all_candidates=orig_candidates)
+            return _handle_db_match(session, contribution, orig_candidates[0], identification, settings, facts, video_contexts, all_candidates=orig_candidates, promoted_ids=promoted_ids)
 
     # Step 3: Code searches Wikidata for enrichment
     wikidata_candidates = _search_wikidata(search_name)
     if wikidata_candidates:
         top3 = ", ".join(c['label'] for c in wikidata_candidates[:3])
         logger.info(f"  [{contribution.name}] Wikidata candidates: {len(wikidata_candidates)} (top: {top3})")
-        return _handle_wikidata_match(session, contribution, identification, wikidata_candidates, client, settings)
+        return _handle_wikidata_match(session, contribution, identification, wikidata_candidates, client, settings, pick_entity_prompt, extract_metadata_prompt)
 
     # Step 4: Neither DB nor Wikidata → new site
     return _handle_new_site(session, contribution, identification, settings)
@@ -336,9 +338,7 @@ def _call_ai(
     # With extended thinking, the text block may not be the first content block
     for block in response.content:
         if hasattr(block, "text"):
-            if schema:
-                return json.loads(block.text)
-            return _parse_identification(block.text)
+            return json.loads(block.text)
 
     logger.warning("No text block in AI response")
     return None
@@ -356,24 +356,30 @@ def _aggregate_facts(session: Session, contribution: UserContribution) -> tuple[
         func.lower(NewsItem.site_name_extracted) == name_lower
     ).all()
 
-    all_facts = []
+    all_facts: list[str] = []
     video_contexts = []
-    seen_video_ids = set()
 
+    # Collect facts and unique video IDs
+    video_ids = set()
     for item in items:
         if item.facts:
             all_facts.extend(item.facts)
-        if item.video_id and item.video_id not in seen_video_ids:
-            seen_video_ids.add(item.video_id)
-            video = session.get(NewsVideo, item.video_id)
-            if video:
-                ctx = {"title": video.title}
-                if video.description:
-                    ctx["description"] = video.description[:500]
-                if video.tags:
-                    ctx["tags"] = video.tags
-                video_contexts.append(ctx)
+        if item.video_id:
+            video_ids.add(item.video_id)
 
+    # Batch-load videos instead of N+1 queries
+    if video_ids:
+        videos = session.query(NewsVideo).filter(NewsVideo.id.in_(video_ids)).all()
+        for video in videos:
+            ctx = {"title": video.title}
+            if video.description:
+                ctx["description"] = video.description[:500]
+            if video.tags:
+                ctx["tags"] = video.tags
+            video_contexts.append(ctx)
+
+    # Deduplicate facts while preserving order
+    all_facts = list(dict.fromkeys(all_facts))
     return all_facts, video_contexts
 
 
@@ -516,6 +522,7 @@ def _pick_wikidata_entity(
     country: str | None,
     site_type: str | None,
     candidates: list[dict],
+    pick_entity_prompt: str | None = None,
 ) -> str | None:
     """Pick the best Wikidata entity from candidates annotated with has_wikipedia.
 
@@ -549,8 +556,9 @@ def _pick_wikidata_entity(
         context_parts.append(site_type)
     context = " (" + ", ".join(context_parts) + ")" if context_parts else ""
 
-    prompt_template = PICK_ENTITY_PROMPT_PATH.read_text(encoding="utf-8")
-    prompt = prompt_template.format(
+    if pick_entity_prompt is None:
+        pick_entity_prompt = PICK_ENTITY_PROMPT_PATH.read_text(encoding="utf-8")
+    prompt = pick_entity_prompt.format(
         site_name=site_name,
         context=context,
         options="\n".join(options_lines),
@@ -563,6 +571,11 @@ def _pick_wikidata_entity(
             model=model,
             max_tokens=32,
             temperature=0.0,
+            system=[{
+                "type": "text",
+                "text": "Pick the Wikidata entity that best matches the archaeological site.",
+                "cache_control": {"type": "ephemeral"},
+            }],
             messages=[{"role": "user", "content": prompt}],
         )
     except anthropic.APIError as e:
@@ -741,12 +754,13 @@ def _extract_metadata_from_wikipedia(
     model: str,
     site_name: str,
     wiki_text: str,
+    extract_metadata_prompt: str | None = None,
 ) -> dict | None:
     """Extract period and site_type from Wikipedia text via Haiku.
 
     Returns {"period": "...", "site_type": "..."} or None.
     """
-    extract_system_prompt = EXTRACT_METADATA_PROMPT_PATH.read_text(encoding="utf-8")
+    extract_system_prompt = extract_metadata_prompt or EXTRACT_METADATA_PROMPT_PATH.read_text(encoding="utf-8")
     user_content = (
         f'Site: "{site_name}"\n\n'
         f"<wikipedia_text>\n{wiki_text[:2000]}\n</wikipedia_text>"
@@ -795,37 +809,6 @@ def _build_user_prompt(
     )
 
 
-def _parse_identification(response_text: str) -> dict | None:
-    """Parse Claude's JSON identification response.
-
-    Tries: 1) full text as JSON, 2) markdown code fence, 3) greedy brace match.
-    """
-    # Try parsing the full response as JSON first
-    stripped = response_text.strip()
-    if stripped.startswith("{"):
-        try:
-            return json.loads(stripped)
-        except json.JSONDecodeError:
-            pass
-
-    # Try extracting from markdown code fence
-    fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", response_text, re.DOTALL)
-    if fence_match:
-        try:
-            return json.loads(fence_match.group(1))
-        except json.JSONDecodeError:
-            pass
-
-    # Fall back to greedy brace match
-    json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
-    if not json_match:
-        return None
-    try:
-        return json.loads(json_match.group())
-    except json.JSONDecodeError:
-        return None
-
-
 ESCALATION_SYSTEM_PROMPT = """You are a senior archaeological site identification reviewer.
 
 A junior model (Haiku) was asked to identify an archaeological site from YouTube video captions. Your job is to REVIEW its work and either confirm or override its decision.
@@ -872,7 +855,7 @@ def _escalate_to_sonnet(
             output_config={
                 "format": {
                     "type": "json_schema",
-                    "schema": ESCALATION_SCHEMA,
+                    "schema": IDENTIFY_SITE_SCHEMA,
                 },
             },
         )
@@ -912,19 +895,15 @@ def _handle_db_match(
     facts: list[str] | None = None,
     video_contexts: list[dict] | None = None,
     all_candidates: list[dict] | None = None,
+    promoted_ids: set[uuid.UUID] | None = None,
 ) -> bool:
     """Handle a DB match: link NewsItems to the matched site.
 
     AN Originals / promoted matches → hidden ("matched", not a Radar item).
     External source matches → visible ("enriched", Radar card with metadata from all matching sources).
     """
-    # Preload all promoted site IDs in one query (avoids N+1 per-candidate lookups)
-    promoted_ids = {
-        row.promoted_site_id
-        for row in session.query(UserContribution.promoted_site_id).filter(
-            UserContribution.promoted_site_id.isnot(None)
-        )
-    }
+    if promoted_ids is None:
+        promoted_ids = set()
 
     site_id_str = db_candidate["site_id"]
     try:
@@ -1074,6 +1053,8 @@ def _handle_wikidata_match(
     wikidata_candidates: list[dict],
     client: anthropic.Anthropic,
     settings: LyraSettings,
+    pick_entity_prompt: str | None = None,
+    extract_metadata_prompt: str | None = None,
 ) -> bool:
     """Handle Wikidata match: enrich from Wikidata/Wikipedia, possibly promote."""
     site_name = identification.get("site_name", contribution.name)
@@ -1089,6 +1070,7 @@ def _handle_wikidata_match(
         site_name, contribution.country,
         contribution.site_type,
         wikidata_candidates,
+        pick_entity_prompt,
     )
 
     enrichment = {}
@@ -1116,7 +1098,7 @@ def _handle_wikidata_match(
 
             if wiki_text:
                 metadata = _extract_metadata_from_wikipedia(
-                    client, settings.model_identify, site_name, wiki_text
+                    client, settings.model_identify, site_name, wiki_text, extract_metadata_prompt
                 )
                 if metadata:
                     if metadata.get("period") and metadata["period"] != "Unknown":

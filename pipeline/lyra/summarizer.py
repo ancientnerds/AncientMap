@@ -2,14 +2,14 @@
 
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import anthropic
 from sqlalchemy import func
 
 from pipeline.database import NewsItem, NewsVideo, get_session
-from pipeline.lyra.config import LyraSettings
+from pipeline.lyra.config import LyraSettings, get_anthropic_client
 from pipeline.lyra.transcript_fetcher import parse_timestamp_to_seconds
 
 logger = logging.getLogger(__name__)
@@ -94,6 +94,7 @@ def _check_relevance(
     video: NewsVideo,
     client: anthropic.Anthropic,
     settings: LyraSettings,
+    relevance_prompt: str | None = None,
 ) -> bool:
     """Quick Haiku check: is this video about real archaeology?
 
@@ -107,11 +108,11 @@ def _check_relevance(
     if video.transcript_text:
         context_parts.append(f"Transcript start: {video.transcript_text[:500]}")
 
-    system_prompt = _load_relevance_prompt()
+    system_prompt = relevance_prompt or _load_relevance_prompt()
     user_content = "\n".join(context_parts)
 
     response = client.messages.create(
-        model="claude-haiku-4-5-20251001",
+        model=settings.model_relevance,
         max_tokens=256,
         temperature=0.0,
         system=[{
@@ -179,6 +180,8 @@ def summarize_video(
     settings: LyraSettings,
     channel_item_count: int = 0,
     avg_items: float = 0,
+    summary_prompt: str | None = None,
+    relevance_prompt: str | None = None,
 ) -> bool:
     """Summarize a single video's transcript using Claude AI.
 
@@ -192,10 +195,10 @@ def summarize_video(
         logger.error("No Anthropic API key configured")
         return False
 
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=120.0)
+    client = get_anthropic_client(settings)
 
     # Relevance gate: skip non-archaeology videos
-    if not _check_relevance(video, client, settings):
+    if not _check_relevance(video, client, settings, relevance_prompt):
         with get_session() as session:
             v = session.get(NewsVideo, video.id)
             if v:
@@ -217,7 +220,7 @@ def summarize_video(
         context_parts.append(f"Video tags: {', '.join(video.tags)}")
     video_context = "\n".join(context_parts)
 
-    system_prompt = _load_prompt()
+    system_prompt = summary_prompt or _load_prompt()
 
     user_content = (
         f"Extract exactly {topic_limit} key topics from this video.\n\n"
@@ -262,7 +265,7 @@ def summarize_video(
 
         db_video.summary_json = summary_data
         db_video.status = "summarized"
-        db_video.processed_at = datetime.utcnow()
+        db_video.processed_at = datetime.now(UTC)
 
         for topic in key_topics:
             ts_range = topic.get("timestamp_range")
@@ -323,10 +326,12 @@ def summarize_pending_videos(settings: LyraSettings) -> int:
         )
     avg_items = sum(channel_counts.values()) / max(len(channel_counts), 1)
 
+    summary_prompt = _load_prompt()
+    relevance_prompt = _load_relevance_prompt()
     count = 0
     for video in pending:
         ch_count = channel_counts.get(video.channel_id, 0)
-        if summarize_video(video, settings, ch_count, avg_items):
+        if summarize_video(video, settings, ch_count, avg_items, summary_prompt, relevance_prompt):
             count += 1
 
     logger.info(f"Summarized {count}/{len(pending)} pending videos")

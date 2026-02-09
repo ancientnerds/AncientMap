@@ -3,13 +3,13 @@
 import json
 import logging
 import re
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import anthropic
 
 from pipeline.database import NewsArticle, NewsItem, NewsVideo, get_session
-from pipeline.lyra.config import LyraSettings
+from pipeline.lyra.config import LyraSettings, get_anthropic_client
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ def _load_prompt(path: Path) -> str:
 
 def _get_week_range() -> tuple[datetime, datetime]:
     """Get the start (Monday) and end (Sunday) of the current week."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     start = now - timedelta(days=now.weekday())  # Monday
     start = start.replace(hour=0, minute=0, second=0, microsecond=0)
     end = start + timedelta(days=6, hours=23, minutes=59, seconds=59)
@@ -35,10 +35,12 @@ def _generate_paragraphs(
     videos: list[NewsVideo],
     client: anthropic.Anthropic,
     model: str,
+    prompt_template: str | None = None,
 ) -> list[dict]:
     """Generate summary paragraphs for each video."""
     paragraphs = []
-    prompt_template = _load_prompt(PARAGRAPH_PROMPT_PATH)
+    if prompt_template is None:
+        prompt_template = _load_prompt(PARAGRAPH_PROMPT_PATH)
 
     for video in videos:
         if not video.summary_json:
@@ -51,6 +53,11 @@ def _generate_paragraphs(
             response = client.messages.create(
                 model=model,
                 max_tokens=1024,
+                system=[{
+                    "type": "text",
+                    "text": "You are an archaeological news writer.",
+                    "cache_control": {"type": "ephemeral"},
+                }],
                 messages=[{"role": "user", "content": prompt}],
             )
             paragraph = response.content[0].text.strip()
@@ -70,15 +77,22 @@ def _fact_check_paragraph(
     paragraph: str,
     client: anthropic.Anthropic,
     model: str,
+    prompt_template: str | None = None,
 ) -> str:
     """Fact-check a paragraph and return the verified version."""
-    prompt_template = _load_prompt(FACT_CHECK_PROMPT_PATH)
+    if prompt_template is None:
+        prompt_template = _load_prompt(FACT_CHECK_PROMPT_PATH)
     prompt = prompt_template.format(paragraph=paragraph)
 
     try:
         response = client.messages.create(
             model=model,
             max_tokens=1024,
+            system=[{
+                "type": "text",
+                "text": "You are a fact-checking expert for archaeological content.",
+                "cache_control": {"type": "ephemeral"},
+            }],
             messages=[{"role": "user", "content": prompt}],
         )
         text = response.content[0].text
@@ -97,15 +111,22 @@ def _generate_headline(
     content: str,
     client: anthropic.Anthropic,
     model: str,
+    prompt_template: str | None = None,
 ) -> tuple[str, str, list[str]]:
     """Generate headline, TLDR, and subheadings."""
-    prompt_template = _load_prompt(HEADLINE_PROMPT_PATH)
+    if prompt_template is None:
+        prompt_template = _load_prompt(HEADLINE_PROMPT_PATH)
     prompt = prompt_template.format(content=content)
 
     try:
         response = client.messages.create(
             model=model,
             max_tokens=1024,
+            system=[{
+                "type": "text",
+                "text": "You are an archaeological news editor.",
+                "cache_control": {"type": "ephemeral"},
+            }],
             messages=[{"role": "user", "content": prompt}],
         )
         text = response.content[0].text
@@ -162,7 +183,7 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
         videos = session.query(NewsVideo).filter(
             NewsVideo.published_at >= week_start,
             NewsVideo.published_at <= week_end,
-            NewsVideo.status.in_(["summarized", "tweeted"]),
+            NewsVideo.status.in_(["summarized", "rescored"]),
             NewsVideo.summary_json.isnot(None),
         ).order_by(NewsVideo.published_at).all()
 
@@ -171,10 +192,15 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
             return False
 
         # Need to access relationships within session
-        client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=120.0)
+        client = get_anthropic_client(settings)
+
+        # Load prompts once
+        paragraph_prompt = _load_prompt(PARAGRAPH_PROMPT_PATH)
+        fact_check_prompt = _load_prompt(FACT_CHECK_PROMPT_PATH)
+        headline_prompt = _load_prompt(HEADLINE_PROMPT_PATH)
 
         # Generate paragraphs for each video
-        paragraphs = _generate_paragraphs(videos, client, settings.model_article)
+        paragraphs = _generate_paragraphs(videos, client, settings.model_article, paragraph_prompt)
 
         if not paragraphs:
             return False
@@ -182,14 +208,14 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
         # Fact-check each paragraph
         for para in paragraphs:
             para["paragraph"] = _fact_check_paragraph(
-                para["paragraph"], client, settings.model_verify
+                para["paragraph"], client, settings.model_verify, fact_check_prompt
             )
 
         # Build article content
         all_content = "\n\n".join(p["paragraph"] for p in paragraphs)
 
         # Generate headline and structure
-        headline, tldr, subheads = _generate_headline(all_content, client, settings.model_article)
+        headline, tldr, subheads = _generate_headline(all_content, client, settings.model_article, headline_prompt)
 
         # Assemble final article markdown
         sections = []
@@ -212,7 +238,7 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
             week_start=week_start,
             week_end=week_end,
             video_ids=video_ids,
-            published_at=datetime.utcnow(),
+            published_at=datetime.now(UTC),
         )
         session.add(article)
 
@@ -222,5 +248,5 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
 
 def should_generate_article() -> bool:
     """Check if it's time to generate a weekly article (Sunday evening)."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     return now.weekday() == 6 and now.hour >= 20  # Sunday 8 PM UTC

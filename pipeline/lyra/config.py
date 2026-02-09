@@ -1,5 +1,6 @@
 """Configuration for the Lyra news pipeline."""
 
+import anthropic
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 VALID_CATEGORIES = {
@@ -28,6 +29,7 @@ class LyraSettings(BaseSettings):
     model_identify: str = "claude-haiku-4-5-20251001"
     model_identify_escalation: str = "claude-sonnet-4-5-20250929"
     model_rescore: str = "claude-haiku-4-5-20251001"
+    model_relevance: str = "claude-haiku-4-5-20251001"
 
     # Site identification settings
     min_score_for_promotion: int = 55
@@ -51,6 +53,24 @@ class LyraSettings(BaseSettings):
     post_threshold_medium: int = 30
     post_threshold_long: int = 60
 
+    # Deduplication
+    dedup_similarity_threshold: float = 0.25
+
     # Webshare proxy (for YouTube transcript fetching from VPS)
     webshare_username: str = ""
     webshare_password: str = ""
+
+
+_cached_client: anthropic.Anthropic | None = None
+_cached_client_key: str = ""
+
+
+def get_anthropic_client(settings: "LyraSettings") -> anthropic.Anthropic:
+    """Return a module-level cached Anthropic client for connection reuse."""
+    global _cached_client, _cached_client_key
+    if _cached_client is None or _cached_client_key != settings.anthropic_api_key:
+        _cached_client = anthropic.Anthropic(
+            api_key=settings.anthropic_api_key, timeout=120.0
+        )
+        _cached_client_key = settings.anthropic_api_key
+    return _cached_client

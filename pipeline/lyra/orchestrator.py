@@ -41,7 +41,7 @@ STEPS = {
     "posts":       ("pipeline.lyra.tweet_generator",    "generate_pending_posts",       True,  "Generated {n} posts"),
     "verify":      ("pipeline.lyra.tweet_verifier",     "verify_pending_posts",         True,  "Verified {n} posts"),
     "rescore":     ("pipeline.lyra.significance_scorer", "rescore_pending_items",        True,  "Re-scored {n} items"),
-    "dedup":       ("pipeline.lyra.tweet_deduplicator", "deduplicate_posts",            False, "Removed {n} duplicates"),
+    "dedup":       ("pipeline.lyra.tweet_deduplicator", "deduplicate_posts",            True,  "Removed {n} duplicates"),
     "screenshots": ("pipeline.lyra.screenshot_extractor", "extract_screenshots",        True,  "Extracted {n} screenshots"),
     "backfill":    ("pipeline.lyra.transcript_fetcher", "backfill_video_descriptions",  True,  "Backfilled {n} video descriptions"),
     "identify":    ("pipeline.lyra.site_identifier",    "identify_and_enrich_sites",    True,  "Identified/enriched {n} site discoveries"),
