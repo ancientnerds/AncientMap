@@ -50,6 +50,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   survey: 'Survey',
   art: 'Art',
   general: 'General',
+  speculative: 'Speculative',
 }
 
 export function getNewsCategoryLabel(cat: string): string {

@@ -162,10 +162,11 @@ async def get_news_feed(
     min_significance: int | None = Query(None, ge=1, le=10),
     news_category: str | None = None,
     sort: str | None = None,
+    include_speculative: bool = Query(False),
     db: Session = Depends(get_db),
 ):
     """Get paginated news feed items, newest first."""
-    cache_key = f"news:feed:{page}:{page_size}:{channel_id or 'all'}:{site_id or 'all'}:{category or 'all'}:{period or 'all'}:{country or 'all'}:{min_significance or 'all'}:{news_category or 'all'}:{sort or 'default'}"
+    cache_key = f"news:feed:{page}:{page_size}:{channel_id or 'all'}:{site_id or 'all'}:{category or 'all'}:{period or 'all'}:{country or 'all'}:{min_significance or 'all'}:{news_category or 'all'}:{sort or 'default'}:{include_speculative}"
     cached = cache_get(cache_key)
     if cached:
         return cached
@@ -210,6 +211,10 @@ async def get_news_feed(
 
     if news_category:
         query = query.filter(NewsItem.news_category == news_category)
+    elif not include_speculative:
+        query = query.filter(
+            (NewsItem.news_category != "speculative") | (NewsItem.news_category.is_(None))
+        )
 
     total_count = query.count()
     offset = (page - 1) * page_size
@@ -350,7 +355,7 @@ async def get_news_filters(db: Session = Depends(get_db)):
         .distinct()
         .all()
     )
-    news_categories = sorted([row[0] for row in news_cat_rows])
+    news_categories = sorted([row[0] for row in news_cat_rows if row[0] != "speculative"])
 
     result = NewsFiltersResponse(
         channels=channels,

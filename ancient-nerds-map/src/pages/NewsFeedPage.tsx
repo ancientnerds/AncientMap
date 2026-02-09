@@ -67,6 +67,7 @@ export default function NewsFeedPage() {
     min_significance: null, news_category: null, sort: null,
   })
   const [filtersExpanded, setFiltersExpanded] = useState(false)
+  const [showSpeculative, setShowSpeculative] = useState(false)
 
 
   const fetchAll = useCallback(async () => {
@@ -77,7 +78,7 @@ export default function NewsFeedPage() {
       let page = 1
       let hasMore = true
       while (hasMore) {
-        const resp = await fetch(`${config.api.baseUrl}/news/feed?page=${page}&page_size=100`)
+        const resp = await fetch(`${config.api.baseUrl}/news/feed?page=${page}&page_size=100&include_speculative=true`)
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
         const data: { items: NewsItemData[]; has_more: boolean } = await resp.json()
         allFetched.push(...data.items)
@@ -95,6 +96,7 @@ export default function NewsFeedPage() {
   // Client-side filter + sort — instant, no API round-trip
   const filteredItems = useMemo(() => {
     let result = allItems
+    if (!showSpeculative) result = result.filter(i => i.news_category !== 'speculative')
     const f = activeFilters
     if (f.channel) result = result.filter(i => i.video.channel_id === f.channel)
     if (f.site) result = result.filter(i => i.site_id === f.site)
@@ -110,7 +112,7 @@ export default function NewsFeedPage() {
       })
     }
     return result
-  }, [allItems, activeFilters])
+  }, [allItems, activeFilters, showSpeculative])
 
   const displayItems = filteredItems.slice(0, visibleCount)
   const hasMore = visibleCount < filteredItems.length
@@ -530,6 +532,19 @@ export default function NewsFeedPage() {
                   </div>
                 </div>
               )}
+
+              {/* Speculative content toggle */}
+              <div className="news-page-filter-row">
+                <span className="news-page-filter-label">Speculative</span>
+                <div className="news-page-chips">
+                  <button
+                    className={`news-page-chip${showSpeculative ? ' active' : ''}`}
+                    onClick={() => setShowSpeculative(prev => !prev)}
+                  >
+                    Include speculative content
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
