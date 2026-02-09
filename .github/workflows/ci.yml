@@ -162,7 +162,9 @@ jobs:
                 cd ancient-nerds-map && npm run build && cd ..
               fi
               # Vite sometimes skips public/ files — ensure logos are always in dist
-              cp -f ancient-nerds-map/public/an-logo.* ancient-nerds-map/dist/ 2>/dev/null || true
+              cp -f ancient-nerds-map/public/an-logo.svg ancient-nerds-map/dist/an-logo.svg
+              cp -f ancient-nerds-map/public/an-logo.png ancient-nerds-map/dist/an-logo.png
+              echo "==> Logo files copied to dist"
             else
               echo "==> Frontend unchanged, skipping build"
             fi
