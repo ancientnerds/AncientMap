@@ -97,7 +97,7 @@ def get_qdrant_client():
 
     qdrant_host = os.getenv("QDRANT_HOST", "localhost")
     qdrant_port = int(os.getenv("QDRANT_PORT", "6333"))
-    _qdrant_client = QdrantClient(host=qdrant_host, port=qdrant_port)
+    _qdrant_client = QdrantClient(host=qdrant_host, port=qdrant_port, check_compatibility=False)
     logger.info(f"Initialized QdrantClient: {qdrant_host}:{qdrant_port}")
     return _qdrant_client
 
