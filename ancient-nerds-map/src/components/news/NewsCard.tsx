@@ -1,11 +1,20 @@
 /**
- * NewsCard — Single reusable news card component.
+ * NewsCard — Single self-contained news card component.
  *
  * Used by NewsFeedPanel, NewsFeedPage, and LyraChatModal.
- * Size prop controls icon/font scaling only — layout is identical.
+ * Drop it anywhere — it handles expand/collapse and site fetching internally.
+ *
+ * Parent only provides:
+ * - Data props (headline, site info, etc.)
+ * - onSiteLoaded(siteData) — called after the card fetches a site; parent shows the popup
+ * - onSiteHover(hovering) — optional, for globe highlighting
+ * - onAskLyra() — optional
+ * - size — 'sm' | 'md' | 'lg'
  */
 
+import { useState } from 'react'
 import { config } from '../../config'
+import { apiDetailToSiteData } from '../../utils/siteApi'
 import { formatDuration, formatRelativeDate } from '../../utils/formatters'
 import { SiteBadges, CountryFlag } from '../metadata'
 import LazyImage from '../LazyImage'
@@ -15,6 +24,7 @@ import {
   getSignificanceCardStyle,
   getNewsCategoryLabel,
 } from './significance'
+import type { SiteData } from '../../data/sites'
 import type { NewsHighlight } from '../../types/ai'
 
 export interface NewsCardProps {
@@ -40,15 +50,12 @@ export interface NewsCardProps {
   sitePeriodName?: string | null
   sitePeriodStart?: number | null
 
-  // Callbacks
-  onSiteClick?: (e: React.MouseEvent) => void
+  // Callbacks — minimal, parent just reacts to results
+  onSiteLoaded?: (site: SiteData) => void
   onSiteHover?: (hovering: boolean) => void
-  onToggleExpand?: (e: React.MouseEvent) => void
   onAskLyra?: () => void
 
-  // State
-  expanded?: boolean
-  loading?: boolean
+  // Facts (from API expand)
   facts?: string[] | null
 
   // Size
@@ -77,25 +84,38 @@ export default function NewsCard({
   siteType,
   sitePeriodName,
   sitePeriodStart,
-  onSiteClick,
+  onSiteLoaded,
   onSiteHover,
-  onToggleExpand,
   onAskLyra,
-  expanded,
-  loading,
   facts,
   size = 'md',
 }: NewsCardProps) {
+  const [expanded, setExpanded] = useState(false)
+  const [loading, setLoading] = useState(false)
+
   const playSize = PLAY_SIZE[size]
   const pinSize = PIN_SIZE[size]
   const hasMatchedSite = !!(siteId || (siteName && (siteCountry || siteType || sitePeriodName)))
   const displaySiteName = siteName || siteNameExtracted
+  const siteIdentifier = siteId || siteName
+  const isClickable = !!(onSiteLoaded && siteIdentifier)
+
+  const handleSiteClick = async () => {
+    if (loading || !siteIdentifier || !onSiteLoaded) return
+    setLoading(true)
+    const res = await fetch(`${config.api.baseUrl}/sites/${encodeURIComponent(siteIdentifier)}`)
+    if (res.ok) {
+      const detail = await res.json()
+      onSiteLoaded(apiDetailToSiteData(detail))
+    }
+    setLoading(false)
+  }
 
   return (
     <div
       className={`news-feed-item${expanded ? ' expanded' : ''}${hasMatchedSite ? ' has-site' : ''}`}
       style={significance ? getSignificanceCardStyle(significance) : undefined}
-      onClick={onToggleExpand}
+      onClick={() => setExpanded(prev => !prev)}
       onMouseEnter={() => hasMatchedSite && onSiteHover?.(true)}
       onMouseLeave={() => hasMatchedSite && onSiteHover?.(false)}
     >
@@ -120,10 +140,10 @@ export default function NewsCard({
         <div className="news-feed-site-block">
           <div className="news-feed-site-row">
             {siteCountry && <CountryFlag country={siteCountry} size="sm" showName />}
-            {onSiteClick ? (
+            {isClickable ? (
               <button
                 className="news-page-card-site-name"
-                onClick={(e) => { e.stopPropagation(); onSiteClick(e) }}
+                onClick={(e) => { e.stopPropagation(); handleSiteClick() }}
                 disabled={loading}
               >
                 <svg width={pinSize} height={pinSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -246,6 +266,7 @@ export function newsHighlightToCardProps(news: NewsHighlight): NewsCardProps {
     deepLink,
     videoTitle: news.video_title,
     timestampSeconds: news.timestamp_seconds,
+    siteId: news.site_id,
     siteName: isMatched ? news.site_name : undefined,
     siteNameExtracted: !isMatched ? news.site_name : undefined,
     siteCountry: news.site_country,

@@ -274,10 +274,11 @@ export default function LyraChatModal({
     },
   }), [onHighlightSites, onFlyToSite])
 
-  // Auto-scroll
+  // Auto-scroll: instant during streaming (tokens fire rapidly), smooth otherwise
+  const lastMsg = messages[messages.length - 1]
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    messagesEndRef.current?.scrollIntoView({ behavior: isStreaming ? 'instant' : 'smooth' })
+  }, [messages.length, isStreaming, lastMsg?.content.length])
 
   // Focus input when opening (if authenticated)
   useEffect(() => {
@@ -663,6 +664,11 @@ export default function LyraChatModal({
             Stop
           </button>
         )}
+        <a className="lyra-chat-icon-btn" href="/lyra.html" target="_blank" rel="noopener noreferrer" title="Open in new tab">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+          </svg>
+        </a>
         <button className="lyra-chat-close-btn" onClick={onClose}>
           <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
             <line x1="2" y1="2" x2="10" y2="10" /><line x1="10" y1="2" x2="2" y2="10" />
@@ -899,6 +905,7 @@ export default function LyraChatModal({
                         key={`${news.video_id}-${i}`}
                         size="sm"
                         {...newsHighlightToCardProps(news)}
+                        onSiteLoaded={setSelectedSite}
                       />
                     ))}
                   </div>
@@ -983,6 +990,7 @@ export default function LyraChatModal({
                             key={`${news.video_id}-${i}`}
                             size="sm"
                             {...newsHighlightToCardProps(news)}
+                            onSiteLoaded={setSelectedSite}
                           />
                         ))}
                       </div>
@@ -1085,6 +1093,9 @@ export default function LyraChatModal({
   return createPortal(
     <div className="lyra-chat-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
       {modalContent}
+      {selectedSite && (
+        <SitePopupOverlay site={selectedSite} onClose={() => setSelectedSite(null)} />
+      )}
       {dossierModal}
     </div>,
     document.body

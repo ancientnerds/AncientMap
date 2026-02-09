@@ -579,7 +579,7 @@ def _get_related_news(
     sql = f"""
         SELECT ni.id, ni.headline, ni.summary, ni.video_id, ni.timestamp_seconds,
                ni.news_category, ni.significance, ni.created_at,
-               ni.post_text, ni.screenshot_url, ni.site_name_extracted,
+               ni.post_text, ni.screenshot_url, ni.site_name_extracted, ni.site_id,
                nv.title AS video_title, nc.name AS channel,
                us.name AS canonical_site_name,
                us.country AS site_country, us.site_type AS site_type,
@@ -608,6 +608,7 @@ def _get_related_news(
             "date": str(row.created_at) if row.created_at else None,
             "post_text": row.post_text,
             "screenshot_url": row.screenshot_url,
+            "site_id": str(row.site_id) if row.site_id else None,
             "site_name": row.canonical_site_name or row.site_name_extracted,
             "site_country": row.site_country,
             "site_type": row.site_type,

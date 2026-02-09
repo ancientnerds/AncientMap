@@ -26,7 +26,6 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [expandedId, setExpandedId] = useState<number | null>(null)
   const [showLyraProfile, setShowLyraProfile] = useState(false)
   const [online, setOnline] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -76,15 +75,6 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
     }
   }
 
-  const toggleExpand = (id: number, el: HTMLElement) => {
-    const collapsing = expandedId === id
-    setExpandedId(collapsing ? null : id)
-    if (!collapsing) {
-      requestAnimationFrame(() => {
-        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-      })
-    }
-  }
 
   return (
     <div className="news-feed-panel">
@@ -185,10 +175,8 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
               siteType={item.site_type}
               sitePeriodName={item.site_period_name}
               sitePeriodStart={item.site_period_start}
-              expanded={expandedId === item.id}
               facts={item.facts}
-              onToggleExpand={(e) => toggleExpand(item.id, (e.target as HTMLElement).closest('.news-feed-item') as HTMLElement)}
-              onSiteClick={() => onSiteClick?.(item.site_name!, item.site_lat!, item.site_lon!)}
+              onSiteLoaded={(site) => onSiteClick?.(site.title, site.coordinates[1], site.coordinates[0])}
               onSiteHover={(hovering) => onSiteHover?.(hovering ? item.site_id! : null)}
               onAskLyra={onAskLyra ? () => onAskLyra(item.id) : undefined}
             />
