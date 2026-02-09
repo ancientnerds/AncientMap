@@ -2,13 +2,13 @@
 
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import anthropic
 
 from pipeline.database import NewsItem, NewsVideo, get_session
-from pipeline.lyra.config import VALID_CATEGORIES, LyraSettings
+from pipeline.lyra.config import LyraSettings, get_anthropic_client
 
 logger = logging.getLogger(__name__)
 
@@ -27,13 +27,8 @@ POSTS_SCHEMA = {
                     "timestamp_range": {
                         "anyOf": [{"type": "string"}, {"type": "null"}],
                     },
-                    "significance": {"type": "integer", "minimum": 1, "maximum": 10},
-                    "category": {
-                        "type": "string",
-                        "enum": sorted(VALID_CATEGORIES),
-                    },
                 },
-                "required": ["headline", "tweet", "timestamp_range", "significance", "category"],
+                "required": ["headline", "tweet", "timestamp_range"],
                 "additionalProperties": False,
             },
         },
@@ -47,13 +42,9 @@ def _load_prompt() -> str:
     return PROMPT_PATH.read_text(encoding="utf-8")
 
 
-def _format_attribution(video_id: str, channel_name: str, timestamp: str | None) -> str:
-    """Format the attribution line for a post."""
-    ts_part = f" at {timestamp}'" if timestamp else ""
-    return f"\n\nvia {channel_name}{ts_part}"
-
-
-def generate_posts_for_video(video: NewsVideo, settings: LyraSettings) -> int:
+def generate_posts_for_video(
+    video: NewsVideo, settings: LyraSettings, system_prompt: str | None = None,
+) -> int:
     """Generate post text for each news item of a summarized video.
 
     Returns number of posts generated.
@@ -66,12 +57,15 @@ def generate_posts_for_video(video: NewsVideo, settings: LyraSettings) -> int:
         return 0
 
     summary_text = json.dumps(video.summary_json, indent=2)
-    system_prompt = _load_prompt()
+    if system_prompt is None:
+        system_prompt = _load_prompt()
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     time_instruction = ""
     if video.published_at:
-        days_ago = (now - video.published_at).days
+        # published_at is stored as naive UTC in the DB
+        pub = video.published_at.replace(tzinfo=UTC) if video.published_at.tzinfo is None else video.published_at
+        days_ago = (now - pub).days
         if days_ago == 0:
             time_instruction = "This content was published today."
         elif days_ago == 1:
@@ -85,7 +79,7 @@ def generate_posts_for_video(video: NewsVideo, settings: LyraSettings) -> int:
         f"Source Material:\n{summary_text}"
     )
 
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=120.0)
+    client = get_anthropic_client(settings)
 
     try:
         response = client.messages.create(
@@ -137,9 +131,6 @@ def generate_posts_for_video(video: NewsVideo, settings: LyraSettings) -> int:
             if not post_text:
                 continue
 
-            sig = post_data.get("significance")
-            cat = post_data.get("category", "general")
-
             # Match by headline
             item = headline_to_item.get(headline.strip().lower())
             if item is None:
@@ -149,8 +140,9 @@ def generate_posts_for_video(video: NewsVideo, settings: LyraSettings) -> int:
             item.post_text = post_text
             if ts_range:
                 item.timestamp_range = ts_range
-            item.significance = max(1, min(10, int(sig))) if sig is not None else 3
-            item.news_category = cat if cat in VALID_CATEGORIES else "general"
+            # Placeholders — rescorer overwrites both after the verify step
+            item.significance = 3
+            item.news_category = "general"
             # Remove from lookup so duplicate headlines don't overwrite
             del headline_to_item[headline.strip().lower()]
             count += 1
@@ -172,9 +164,10 @@ def generate_pending_posts(settings: LyraSettings) -> int:
         ).all()
         session.expunge_all()
 
+    system_prompt = _load_prompt()
     total = 0
     for video in pending:
-        total += generate_posts_for_video(video, settings)
+        total += generate_posts_for_video(video, settings, system_prompt)
 
     logger.info(f"Generated {total} posts total")
     return total

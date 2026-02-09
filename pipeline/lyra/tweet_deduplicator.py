@@ -4,10 +4,9 @@ import logging
 import re
 
 from pipeline.database import NewsItem, get_session
+from pipeline.lyra.config import LyraSettings
 
 logger = logging.getLogger(__name__)
-
-SIMILARITY_THRESHOLD = 0.25
 
 
 def _extract_features(text: str) -> dict:
@@ -63,12 +62,15 @@ def _similarity(feat1: dict, feat2: dict) -> float:
     return 0.4 * num_sim + 0.4 * word_sim + 0.2 * meta_sim
 
 
-def deduplicate_posts() -> int:
-    """Remove duplicate posts from the queue.
+def deduplicate_posts(settings: LyraSettings | None = None) -> int:
+    """Soft-delete duplicate posts from the queue.
 
-    Keeps newer posts, removes older duplicates.
+    Keeps newer posts, marks older duplicates by clearing post_text and
+    setting news_category to "duplicate" for audit trail.
     Returns number of duplicates removed.
     """
+    threshold = settings.dedup_similarity_threshold if settings else 0.25
+
     with get_session() as session:
         items = session.query(NewsItem).filter(
             NewsItem.post_text.isnot(None),
@@ -81,7 +83,7 @@ def deduplicate_posts() -> int:
         features = {item.id: _extract_features(item.post_text) for item in items}
 
         # Find duplicates (newer items take priority)
-        to_clear = set()
+        to_clear: dict[int, tuple[int, float]] = {}  # older_id -> (kept_id, similarity)
         checked = []
 
         for item in items:
@@ -93,17 +95,19 @@ def deduplicate_posts() -> int:
                     continue
 
                 sim = _similarity(features[item.id], features[older_id])
-                if sim > SIMILARITY_THRESHOLD:
-                    to_clear.add(older_id)
-                    logger.debug(f"Dedup: removing item {older_id} (similar to {item.id}, score={sim:.2f})")
+                if sim > threshold:
+                    to_clear[older_id] = (item.id, sim)
 
             checked.append(item.id)
 
-        # Delete duplicate items
+        # Soft-delete: clear post_text and mark as duplicate
         if to_clear:
             for item in items:
                 if item.id in to_clear:
-                    session.delete(item)
+                    kept_id, sim = to_clear[item.id]
+                    logger.info(f"Dedup: soft-deleting item {item.id} (similar to {kept_id}, score={sim:.2f})")
+                    item.post_text = None
+                    item.news_category = "duplicate"
 
-        logger.info(f"Deduplication: deleted {len(to_clear)} duplicates from {len(items)} items")
+        logger.info(f"Deduplication: soft-deleted {len(to_clear)} duplicates from {len(items)} items")
         return len(to_clear)
