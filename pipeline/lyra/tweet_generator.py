@@ -56,6 +56,20 @@ def generate_posts_for_video(
         logger.error("No Anthropic API key configured")
         return 0
 
+    # Check if there are items to attach posts to BEFORE calling the API
+    with get_session() as session:
+        item_count = session.query(NewsItem).filter(
+            NewsItem.video_id == video.id,
+            NewsItem.post_text.is_(None),
+        ).count()
+    if item_count == 0:
+        logger.info(f"Video {video.id}: no DB items awaiting text — skipping API call")
+        with get_session() as session:
+            v = session.get(NewsVideo, video.id)
+            if v:
+                v.status = "posted"
+        return 0
+
     summary_text = json.dumps(video.summary_json, indent=2)
     if system_prompt is None:
         system_prompt = _load_prompt()

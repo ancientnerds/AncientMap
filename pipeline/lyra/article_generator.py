@@ -205,8 +205,10 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
         if not paragraphs:
             return False
 
-        # Fact-check each paragraph
+        # Fact-check each paragraph (skip empty ones to avoid wasting API calls)
         for para in paragraphs:
+            if not para["paragraph"].strip():
+                continue
             para["paragraph"] = _fact_check_paragraph(
                 para["paragraph"], client, settings.model_verify, fact_check_prompt
             )
