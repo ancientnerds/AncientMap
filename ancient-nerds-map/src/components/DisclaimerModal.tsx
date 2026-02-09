@@ -202,14 +202,14 @@ function DisclaimerModal({ isOpen, onClose }: DisclaimerModalProps) {
             <h4>AI Pipeline & Third-Party Data Processing</h4>
             <p>Our news pipeline and AI research assistant use third-party services to process <strong>publicly available archaeological data</strong> (YouTube video content, site names, descriptions). No user personal data is sent to these services.</p>
             <ul>
-              <li><strong>Anthropic Claude API</strong> (Haiku 4.5, Sonnet 4.5) — Used for content summarization, post generation, fact verification, and site identification. API data is <strong>never used for model training</strong>. Inputs/outputs are retained for <strong>7 days</strong> then auto-deleted. Data is processed in the US/EU and stored in the US. Anthropic holds SOC 2 Type II and ISO 27001 certifications. <a href="https://privacy.claude.com/" target="_blank" rel="noopener noreferrer">Anthropic Privacy Center</a></li>
+              <li><strong>Anthropic Claude API</strong> (Haiku, Sonnet) — Used for content summarization, post generation, fact verification, and site identification. API data is <strong>never used for model training</strong>. Inputs/outputs are retained for <strong>7 days</strong> then auto-deleted. Data is processed in the US/EU and stored in the US. Anthropic holds SOC 2 Type II and ISO 27001 certifications. <a href="https://privacy.claude.com/" target="_blank" rel="noopener noreferrer">Anthropic Privacy Center</a></li>
               <li><strong>Voyage AI</strong> (voyage-4, rerank-2.5-lite) — Used for embedding site/news data for semantic search. We have <strong>opted out of data training</strong>, which provides zero-day retention (data is deleted immediately after processing). <a href="https://www.voyageai.com/privacy" target="_blank" rel="noopener noreferrer">Voyage AI Privacy Policy</a></li>
               <li><strong>Qdrant</strong> (vector database) — <strong>Self-hosted</strong> on our infrastructure with telemetry disabled. No data leaves our servers.</li>
             </ul>
 
             <h4>AI Chat (Research Assistant)</h4>
             <ul>
-              <li>Chat queries are processed in real-time via Claude Haiku 4.5 through the Anthropic API.</li>
+              <li>Chat queries are processed in real-time via Claude Haiku through the Anthropic API.</li>
               <li>Conversations are <strong>not stored</strong> on our servers beyond the active session.</li>
               <li>Anthropic retains API request logs for <strong>7 days</strong> for abuse prevention, then deletes them.</li>
               <li>Your queries are <strong>never used to train AI models</strong>.</li>
