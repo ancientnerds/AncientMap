@@ -276,10 +276,12 @@ def search_news(
                ni.timestamp_seconds, ni.site_name_extracted,
                nv.id AS video_id, nv.title AS video_title,
                nc.name AS channel_name,
+               us.name AS canonical_site_name,
                ni.created_at::text AS created_at
         FROM news_items ni
         JOIN news_videos nv ON ni.video_id = nv.id
         JOIN news_channels nc ON nv.channel_id = nc.id
+        LEFT JOIN unified_sites us ON ni.site_id = us.id
         WHERE {where}
         ORDER BY ni.created_at DESC
         LIMIT :limit
@@ -303,7 +305,7 @@ def search_news(
             "channel": r.channel_name,
             "video_id": r.video_id,
             "video_title": r.video_title,
-            "site_mentioned": r.site_name_extracted,
+            "site_mentioned": r.canonical_site_name or r.site_name_extracted,
             "date": r.created_at,
         }
         if r.timestamp_seconds:
@@ -579,6 +581,7 @@ def _get_related_news(
                ni.news_category, ni.significance, ni.created_at,
                ni.post_text, ni.screenshot_url, ni.site_name_extracted,
                nv.title AS video_title, nc.name AS channel,
+               us.name AS canonical_site_name,
                us.country AS site_country, us.site_type AS site_type,
                us.period_name AS site_period_name, us.period_start AS site_period_start
         FROM news_items ni
@@ -605,7 +608,7 @@ def _get_related_news(
             "date": str(row.created_at) if row.created_at else None,
             "post_text": row.post_text,
             "screenshot_url": row.screenshot_url,
-            "site_name": row.site_name_extracted,
+            "site_name": row.canonical_site_name or row.site_name_extracted,
             "site_country": row.site_country,
             "site_type": row.site_type,
             "site_period_name": row.site_period_name,

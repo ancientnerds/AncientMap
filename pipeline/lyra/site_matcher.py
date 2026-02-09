@@ -1,6 +1,8 @@
 """Match extracted site names from news items to unified_sites in the database."""
 
+import json
 import logging
+import re
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -114,6 +116,29 @@ def _pick_best_match(matches: list[UnifiedSite], source_priority: dict[str, int]
     return min(matches, key=lambda m: source_priority.get(m.source_id, 99))
 
 
+def _correct_text_fields(item: NewsItem, canonical_name: str) -> None:
+    """Replace garbled site_name_extracted with canonical name in text fields.
+
+    Case-insensitive replacement. Only runs if names actually differ.
+    """
+    extracted = item.site_name_extracted
+    if not extracted or extracted == canonical_name:
+        return
+
+    pattern = re.compile(re.escape(extracted), re.IGNORECASE)
+
+    if item.headline and pattern.search(item.headline):
+        item.headline = pattern.sub(canonical_name, item.headline)
+    if item.post_text and pattern.search(item.post_text):
+        item.post_text = pattern.sub(canonical_name, item.post_text)
+    if item.summary and pattern.search(item.summary):
+        item.summary = pattern.sub(canonical_name, item.summary)
+    if item.facts:
+        corrected = [pattern.sub(canonical_name, f) if pattern.search(f) else f for f in item.facts]
+        if corrected != item.facts:
+            item.facts = corrected
+
+
 def match_sites_for_pending_items() -> int:
     """Match site names for all NewsItems that have site_name_extracted but no site_id.
 
@@ -150,6 +175,7 @@ def match_sites_for_pending_items() -> int:
             site = _find_site_by_name(session, item.site_name_extracted, matchable_sources, source_priority)
             if site:
                 item.site_id = site.id
+                _correct_text_fields(item, site.name)
                 matched += 1
 
                 if site.source_id == "ancient_nerds" or site.id in promoted_ids:

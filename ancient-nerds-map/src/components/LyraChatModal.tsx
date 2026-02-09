@@ -21,12 +21,9 @@ import { config } from '../config'
 import type { LyraContextType, LyraMessage, SiteHighlight, NewsHighlight } from '../types/ai'
 import { getCategoryColor, getPeriodColor } from '../constants/colors'
 import { enrichLyraContent } from '../utils/lyraContentEnricher'
-import { formatRelativeDate, formatDuration } from '../utils/formatters'
-import { getSignificanceColor, getSignificanceLabel, getSignificanceCardStyle, getNewsCategoryLabel } from './news/significance'
-import { SiteBadges, CountryFlag } from './metadata'
+import NewsCard, { newsHighlightToCardProps } from './news/NewsCard'
 import SiteResultItem from './SiteResultItem'
 import { SitePopupOverlay } from './SitePopupOverlay'
-import LazyImage from './LazyImage'
 import LyraAuthGate from './LyraAuthGate'
 import { apiDetailToSiteData } from '../utils/siteApi'
 import type { SiteData } from '../data/sites'
@@ -695,70 +692,13 @@ export default function LyraChatModal({
                     News ({sortedNews.length})
                   </div>
                   <div className="lyra-chat-news-scroll">
-                    {sortedNews.map((news, i) => {
-                      const deepLink = news.timestamp_seconds
-                        ? `https://youtu.be/${news.video_id}?t=${news.timestamp_seconds}`
-                        : `https://youtu.be/${news.video_id}`
-                      const thumbSrc = news.screenshot_url
-                        ? `${config.api.baseUrl}${news.screenshot_url.replace('/api', '')}`
-                        : `https://img.youtube.com/vi/${news.video_id}/mqdefault.jpg`
-
-                      return (
-                        <div
-                          key={`${news.video_id}-${i}`}
-                          className={`news-feed-item${news.site_name ? ' has-site' : ''}`}
-                          style={news.significance ? getSignificanceCardStyle(news.significance) : undefined}
-                        >
-                          {news.category && news.category !== 'general' && (
-                            <span className="news-category-badge">{getNewsCategoryLabel(news.category)}</span>
-                          )}
-                          <div className="news-card-meta">
-                            <span className="news-card-channel">{news.channel}</span>
-                            {news.date && <span className="news-feed-date">{formatRelativeDate(news.date)}</span>}
-                          </div>
-                          {news.significance != null && news.significance >= 6 && (
-                            <div className="news-significance-stamp" style={{ color: getSignificanceColor(news.significance) }}>
-                              {getSignificanceLabel(news.significance)}
-                            </div>
-                          )}
-                          <div className="news-card-post-text">{news.post_text || news.headline}</div>
-
-                          {news.site_name && (
-                            <div className="news-feed-site-block">
-                              <div className="news-feed-site-row">
-                                {news.site_country && <CountryFlag country={news.site_country} size="sm" showName />}
-                                <span className="lyra-news-site-name">
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                                    <circle cx="12" cy="10" r="3"></circle>
-                                  </svg>
-                                  {news.site_name}
-                                </span>
-                              </div>
-                              <SiteBadges category={news.site_type} period={news.site_period_name} periodStart={news.site_period_start} size="sm" />
-                            </div>
-                          )}
-
-                          {thumbSrc && (
-                            <a
-                              className="news-card-thumb"
-                              href={deepLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={e => e.stopPropagation()}
-                            >
-                              <LazyImage src={thumbSrc} alt="" />
-                              <svg className="news-card-play" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                              </svg>
-                              {news.timestamp_seconds != null && (
-                                <span className="news-card-timestamp">&#9654; {formatDuration(news.timestamp_seconds / 60)}</span>
-                              )}
-                            </a>
-                          )}
-                        </div>
-                      )
-                    })}
+                    {sortedNews.map((news, i) => (
+                      <NewsCard
+                        key={`${news.video_id}-${i}`}
+                        size="sm"
+                        {...newsHighlightToCardProps(news)}
+                      />
+                    ))}
                   </div>
                 </div>
               )}
@@ -836,42 +776,13 @@ export default function LyraChatModal({
                     </button>
                     {mobilePanelOpen === 'news' && (
                       <div className="lyra-mobile-panel-content">
-                        {sortedNews.map((news, i) => {
-                          const deepLink = news.timestamp_seconds
-                            ? `https://youtu.be/${news.video_id}?t=${news.timestamp_seconds}`
-                            : `https://youtu.be/${news.video_id}`
-                          return (
-                            <div key={`${news.video_id}-${i}`} className="news-feed-item compact">
-                              <div className="news-card-meta">
-                                <span className="news-card-channel">{news.channel}</span>
-                                {news.date && <span className="news-feed-date">{formatRelativeDate(news.date)}</span>}
-                              </div>
-                              <div className="news-card-post-text">{news.post_text || news.headline}</div>
-                              {news.site_name && (
-                                <div className="news-feed-site-block">
-                                  <span className="lyra-news-site-name">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                                      <circle cx="12" cy="10" r="3"></circle>
-                                    </svg>
-                                    {news.site_name}
-                                  </span>
-                                </div>
-                              )}
-                              <a className="news-card-thumb" href={deepLink} target="_blank" rel="noopener noreferrer">
-                                <LazyImage
-                                  src={news.screenshot_url
-                                    ? `${config.api.baseUrl}${news.screenshot_url.replace('/api', '')}`
-                                    : `https://img.youtube.com/vi/${news.video_id}/mqdefault.jpg`}
-                                  alt=""
-                                />
-                                <svg className="news-card-play" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                                </svg>
-                              </a>
-                            </div>
-                          )
-                        })}
+                        {sortedNews.map((news, i) => (
+                          <NewsCard
+                            key={`${news.video_id}-${i}`}
+                            size="sm"
+                            {...newsHighlightToCardProps(news)}
+                          />
+                        ))}
                       </div>
                     )}
                   </div>

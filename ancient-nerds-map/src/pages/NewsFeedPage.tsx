@@ -9,13 +9,11 @@ import { getCategoryColor, getPeriodColor } from '../data/sites'
 import { DataStore } from '../data/DataStore'
 import type { SiteData } from '../data/sites'
 import type { NewsItemData, NewsStats, NewsFilters, ActiveFilters } from '../types/news'
-import { formatDuration, formatRelativeDate } from '../utils/formatters'
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
 import { apiDetailToSiteData } from '../utils/siteApi'
-import { SiteBadges, CountryFlag } from '../components/metadata'
 import { SitePopupOverlay } from '../components/SitePopupOverlay'
-import LazyImage from '../components/LazyImage'
-import { getSignificanceColor, getSignificanceLabel, getSignificanceCardStyle, getNewsCategoryLabel } from '../components/news/significance'
+import NewsCard from '../components/news/NewsCard'
+import { getNewsCategoryLabel } from '../components/news/significance'
 import '../components/news/news-cards.css'
 
 const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
@@ -610,113 +608,36 @@ export default function NewsFeedPage() {
               const deepLink = item.youtube_deep_url || item.youtube_url || '#'
 
               return (
-              <div
-                key={item.id}
-                className={`news-page-card${expandedId === item.id ? ' expanded' : ''}`}
-                style={item.significance ? getSignificanceCardStyle(item.significance) : undefined}
-                onClick={() => toggleExpand(item.id)}
-              >
-            <div className="news-page-card-body">
-              {item.news_category && item.news_category !== 'general' && (
-                <span className="news-category-badge">{getNewsCategoryLabel(item.news_category)}</span>
-              )}
-              <div className="news-card-meta">
-                <span className="news-card-channel">{item.video.channel_name}</span>
-                <span>{formatRelativeDate(item.video.published_at)}</span>
-              </div>
-              {item.significance != null && item.significance >= 6 && (
-                <div className="news-significance-stamp" style={{ color: getSignificanceColor(item.significance) }}>
-                  {getSignificanceLabel(item.significance)}
-                </div>
-              )}
-              <div className="news-card-post-text">{item.post_text || item.headline}</div>
-
-              {item.site_id && (
-                  <div className="news-feed-site-block">
-                    <div className="news-feed-site-row">
-                      {item.site_country && <CountryFlag country={item.site_country} size="sm" showName />}
-                      <button
-                        className="news-page-card-site-name"
-                        onClick={(e) => handleSiteClick(item.site_id!, e)}
-                        disabled={loadingSiteId === item.site_id}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                          <circle cx="12" cy="10" r="3"></circle>
-                        </svg>
-                        {loadingSiteId === item.site_id ? 'Loading...' : (item.site_name || item.site_name_extracted)}
-                      </button>
-                    </div>
-                    <SiteBadges category={item.site_type} period={item.site_period_name} periodStart={item.site_period_start} size="sm" />
+                <div key={item.id} className={`news-page-card${expandedId === item.id ? ' expanded' : ''}`}>
+                  <div className="news-page-card-body">
+                    <NewsCard
+                      size="lg"
+                      headline={item.headline}
+                      postText={item.post_text}
+                      channelName={item.video.channel_name}
+                      publishedAt={item.video.published_at}
+                      significance={item.significance}
+                      newsCategory={item.news_category}
+                      screenshotUrl={screenshotSrc}
+                      deepLink={deepLink}
+                      videoTitle={item.video.title}
+                      durationMinutes={item.video.duration_minutes}
+                      timestampSeconds={item.timestamp_seconds}
+                      siteName={item.site_name || item.site_name_extracted}
+                      siteNameExtracted={item.site_name_extracted}
+                      siteId={item.site_id}
+                      siteCountry={item.site_country}
+                      siteType={item.site_type}
+                      sitePeriodName={item.site_period_name}
+                      sitePeriodStart={item.site_period_start}
+                      expanded={expandedId === item.id}
+                      loading={loadingSiteId === item.site_id}
+                      facts={item.facts}
+                      onToggleExpand={() => toggleExpand(item.id)}
+                      onSiteClick={(e) => handleSiteClick(item.site_id!, e)}
+                    />
                   </div>
-              )}
-
-              {!item.site_id && item.site_name_extracted && (
-                <div className="news-feed-site-row news-feed-site-unmatched">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.4">
-                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                    <circle cx="12" cy="10" r="3"></circle>
-                  </svg>
-                  <span className="news-feed-site-unmatched-name">{item.site_name_extracted}</span>
                 </div>
-              )}
-
-              {screenshotSrc && (
-                <a
-                  className="news-card-thumb"
-                  href={deepLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={e => e.stopPropagation()}
-                >
-                  <LazyImage src={screenshotSrc} alt="" />
-                  <svg className="news-card-play" width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                  </svg>
-                  {item.video.duration_minutes != null && (
-                    <span className="news-card-duration">
-                      {formatDuration(item.video.duration_minutes)}
-                    </span>
-                  )}
-                  {item.timestamp_seconds != null && (
-                    <span className="news-card-timestamp">
-                      ▶ {formatDuration(item.timestamp_seconds / 60)}
-                    </span>
-                  )}
-                </a>
-              )}
-
-              {expandedId === item.id && (
-                <div className="news-card-expanded">
-                  {item.facts && item.facts.length > 0 && (
-                    <ul className="news-card-facts">
-                      {item.facts.map((fact, i) => (
-                        <li key={i}>{fact}</li>
-                      ))}
-                    </ul>
-                  )}
-
-                  {(item.youtube_deep_url || item.youtube_url) && (
-                    <a
-                      className="news-card-watch"
-                      href={deepLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={e => e.stopPropagation()}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                      </svg>
-                      Watch on YouTube
-                      {item.timestamp_seconds != null && <span className="news-card-ts"> (at {formatDuration(item.timestamp_seconds / 60)})</span>}
-                    </a>
-                  )}
-
-                  <div className="news-card-video-title">{item.video.title}</div>
-                </div>
-              )}
-            </div>
-          </div>
               )
             })}
           </div>
