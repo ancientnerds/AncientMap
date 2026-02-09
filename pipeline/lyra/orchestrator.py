@@ -35,6 +35,7 @@ def _bust_radar_cache():
 # Step registry: name -> (function_import_path, description, needs_settings)
 STEPS = {
     "fetch":       ("pipeline.lyra.transcript_fetcher", "fetch_new_videos",            True,  "Fetched {n} new videos"),
+    "retry":       ("pipeline.lyra.transcript_fetcher", "retry_failed_videos",         True,  "Retried {n} failed videos"),
     "summarize":   ("pipeline.lyra.summarizer",         "summarize_pending_videos",     True,  "Summarized {n} videos"),
     "match":       ("pipeline.lyra.site_matcher",       "match_sites_for_pending_items", False, "Matched {n} news items to sites"),
     "posts":       ("pipeline.lyra.tweet_generator",    "generate_pending_posts",       True,  "Generated {n} posts"),
@@ -46,7 +47,7 @@ STEPS = {
 }
 
 # Ordered step list matching the full pipeline sequence
-STEP_ORDER = ["fetch", "summarize", "match", "posts", "verify", "dedup", "screenshots", "backfill", "identify"]
+STEP_ORDER = ["fetch", "retry", "summarize", "match", "posts", "verify", "dedup", "screenshots", "backfill", "identify"]
 
 
 def setup_logging() -> None:
@@ -240,6 +241,7 @@ def main() -> None:
         # New columns on news_videos
         conn.execute(text("ALTER TABLE news_videos ADD COLUMN IF NOT EXISTS description TEXT"))
         conn.execute(text("ALTER TABLE news_videos ADD COLUMN IF NOT EXISTS tags JSONB"))
+        conn.execute(text("ALTER TABLE news_videos ADD COLUMN IF NOT EXISTS last_attempted_at TIMESTAMP"))
 
         # Functional index for site_identifier queries on news_items
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_news_items_site_name_lower ON news_items (lower(site_name_extracted))"))

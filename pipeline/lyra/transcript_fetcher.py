@@ -219,6 +219,7 @@ def fetch_new_videos(settings: LyraSettings) -> int:
                     tags=tags,
                     transcript_text=transcript_text,
                     status=status,
+                    last_attempted_at=datetime.now(UTC) if status == "failed" else None,
                 )
                 session.add(video)
                 total_new += 1
@@ -226,6 +227,53 @@ def fetch_new_videos(settings: LyraSettings) -> int:
 
     logger.info(f"Fetched {total_new} new videos total")
     return total_new
+
+
+def retry_failed_videos(settings: LyraSettings) -> int:
+    """Retry transcript fetching for videos that previously failed (e.g. livestreams
+    where captions weren't ready yet).
+
+    Only retries videos still within the lookup_days window and whose last attempt
+    was at least retry_delay_hours ago. Returns number of successfully retried videos.
+    """
+    cutoff = datetime.now(UTC) - timedelta(days=settings.lookup_days)
+    retry_after = datetime.now(UTC) - timedelta(hours=settings.retry_delay_hours)
+    retried = 0
+
+    with get_session() as session:
+        failed_videos = (
+            session.query(NewsVideo)
+            .filter(
+                NewsVideo.status == "failed",
+                NewsVideo.published_at > cutoff,
+                (NewsVideo.last_attempted_at.is_(None)) | (NewsVideo.last_attempted_at < retry_after),
+            )
+            .all()
+        )
+
+        if not failed_videos:
+            logger.info("No failed videos eligible for retry")
+            return 0
+
+        logger.info(f"Retrying transcript fetch for {len(failed_videos)} failed videos")
+
+        for video in failed_videos:
+            logger.info(f"  Retrying: {video.title} ({video.id})")
+            transcript_text, duration = fetch_transcript(video.id, settings)
+
+            if transcript_text:
+                video.status = "transcribed"
+                video.transcript_text = transcript_text
+                video.duration_minutes = duration
+                video.last_attempted_at = datetime.now(UTC)
+                retried += 1
+                logger.info(f"    -> transcribed ({duration:.1f} min)" if duration else "    -> transcribed")
+            else:
+                video.last_attempted_at = datetime.now(UTC)
+                logger.info(f"    -> still no transcript, will retry later")
+
+    logger.info(f"Retried {retried} videos successfully")
+    return retried
 
 
 def _parse_timestamp(ts: str) -> int | None:
