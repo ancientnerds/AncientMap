@@ -604,6 +604,39 @@ def main() -> None:
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v13_reset'))
         """))
 
+        # v14: Fix garbled site names in news_items text fields.
+        # Replace site_name_extracted with canonical unified_sites.name
+        # in headline, post_text, and summary for already-matched items.
+        conn.execute(text("""
+            UPDATE news_items ni
+            SET headline = REPLACE(ni.headline, ni.site_name_extracted, us.name),
+                post_text = REPLACE(ni.post_text, ni.site_name_extracted, us.name),
+                summary = REPLACE(ni.summary, ni.site_name_extracted, us.name)
+            FROM unified_sites us
+            WHERE ni.site_id = us.id
+              AND ni.site_name_extracted IS NOT NULL
+              AND ni.site_name_extracted != us.name
+              AND (ni.headline LIKE '%' || ni.site_name_extracted || '%'
+                   OR ni.post_text LIKE '%' || ni.site_name_extracted || '%'
+                   OR ni.summary LIKE '%' || ni.site_name_extracted || '%')
+        """))
+        # Also fix facts (JSONB array of strings): replace garbled name in each element
+        conn.execute(text("""
+            UPDATE news_items ni
+            SET facts = (
+                SELECT jsonb_agg(
+                    to_jsonb(REPLACE(elem #>> '{}', ni.site_name_extracted, us.name))
+                )
+                FROM jsonb_array_elements(ni.facts) AS elem
+            )
+            FROM unified_sites us
+            WHERE ni.site_id = us.id
+              AND ni.site_name_extracted IS NOT NULL
+              AND ni.site_name_extracted != us.name
+              AND ni.facts IS NOT NULL
+              AND ni.facts::text LIKE '%' || ni.site_name_extracted || '%'
+        """))
+
         conn.commit()
 
     # Seed channels
