@@ -143,6 +143,11 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
         Open full news page
       </a>
 
+      {/* AI disclosure */}
+      <div className="news-feed-ai-notice">
+        Content is AI-generated from YouTube video transcripts. Always verify with original sources.
+      </div>
+
       {/* Content */}
       <div className="news-feed-content" ref={scrollRef}>
         {error && (

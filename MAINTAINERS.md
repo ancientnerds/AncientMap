@@ -63,11 +63,11 @@ May be invited to become maintainers.
 
 - **GitHub Issues**: Bug reports, feature requests
 - **GitHub Discussions**: General questions, ideas, RFC discussions
-- **Email**: ancientnerds@proton.me (security issues, private matters)
+- **Email**: ancient.nerds@protonmail.com (security issues, private matters)
 
 ## Security
 
-Security vulnerabilities should be reported privately to: ancientnerds@proton.me
+Security vulnerabilities should be reported privately to: ancient.nerds@protonmail.com
 
 See [SECURITY.md](SECURITY.md) for our full security policy.
 

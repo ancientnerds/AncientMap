@@ -13,7 +13,7 @@ readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.11"
 authors = [
-    {name = "Ancient Nerds Team", email = "ancientnerds@proton.me"}
+    {name = "Ancient Nerds Team", email = "ancient.nerds@protonmail.com"}
 ]
 keywords = ["archaeology", "gis", "data-pipeline", "api"]
 classifiers = [

@@ -20,3 +20,4 @@ Requirements:
 - Use exact timestamps [MM:SS] format
 - Double fact check especially names, dates and numbers
 - Exclude: Personal anecdotes, off-topic, technical difficulties, channel promotions, audience interactions
+- Extract only verifiable archaeological facts (names, dates, locations, findings, methodologies). Do NOT reproduce the speaker's distinctive phrasing, narrative structure, opinions, or creative expression

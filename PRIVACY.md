@@ -112,7 +112,7 @@ If you are in the European Union, you have the right to:
 5. **Object:** Object to processing of your data
 6. **Withdraw consent:** Withdraw any previously given consent
 
-To exercise these rights, contact us at: ancientnerds@proton.me
+To exercise these rights, contact us at: ancient.nerds@protonmail.com
 
 **Note on AI sub-processors:** Anthropic provides a GDPR-compliant DPA with Standard Contractual Clauses, automatically included in their API terms. Voyage AI does not currently publish a separate DPA.
 
@@ -154,8 +154,12 @@ We may update this policy periodically. Significant changes will be announced vi
 
 For privacy-related inquiries:
 
-- **Email:** ancientnerds@proton.me
+- **Email:** ancient.nerds@protonmail.com
 - **GitHub Issues:** [Privacy-related issues](https://github.com/AncientNerds/AncientMap/issues)
+
+## YouTube Creator Opt-Out
+
+If you are a YouTube creator and would like your channel excluded from our news pipeline, please contact us at ancient.nerds@protonmail.com with the subject "Channel Opt-Out" and your channel name or URL. We will remove your channel within 7 days.
 
 ## Open Source Transparency
 
