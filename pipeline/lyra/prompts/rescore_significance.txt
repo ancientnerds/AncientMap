@@ -15,15 +15,27 @@ SCORING CRITERIA (be strict — most items should be 3-5):
  4 = Interesting technique — new method applied, interesting survey or analysis
  3 = Standard update — routine season report, site overview, known facts restated
  2 = Background context — methodology description, general history recap
- 1 = Not archaeology — video games, space weather, conspiracy, politics, entertainment
+ 1 = Not archaeology — video games, space weather, modern politics, entertainment
 
 AUTOMATIC SCORE 1 IF:
 - Content is from a video game, simulation, or fictional media
 - Content is about planets, space weather, or non-Earth features
-- Content is conspiracy theory (Hollow Earth, ancient aliens) with no archaeological evidence
 - Content is modern politics or current events unrelated to archaeology
+
+SPECULATIVE CONTENT:
+If the content's PRIMARY argument relies on non-human intervention (aliens, ancient astronauts,
+Annunaki), lost advanced civilizations with no archaeological evidence, or supernatural/
+extraterrestrial explanations for real artifacts or sites, classify it as category "speculative".
+Score its significance honestly based on the underlying archaeology discussed — do not
+automatically score 1.
+
+Do NOT classify as speculative:
+- Legitimate archaeological debates (pre-Clovis, Younger Dryas impact)
+- Unconventional dating theories supported by evidence
+- Channels debunking pseudoscience (discussing ≠ promoting)
+- Speculative-but-evidence-based interpretations
 
 CATEGORY (pick one):
 excavation, artifact, architecture, bioarchaeology, dating, remote_sensing,
 underwater, epigraphy, conservation, heritage, theory, technology,
-archaeoastronomy, survey, art, general
+archaeoastronomy, survey, art, general, speculative

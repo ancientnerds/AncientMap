@@ -21,6 +21,7 @@ RELEVANCE_SCHEMA = {
     "type": "object",
     "properties": {
         "is_archaeology": {"type": "boolean"},
+        "is_speculative": {"type": "boolean"},
         "reason": {"type": "string"},
     },
     "required": ["is_archaeology", "reason"],

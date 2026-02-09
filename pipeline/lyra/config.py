@@ -7,6 +7,7 @@ VALID_CATEGORIES = {
     "excavation", "artifact", "architecture", "bioarchaeology", "dating",
     "remote_sensing", "underwater", "epigraphy", "conservation", "heritage",
     "theory", "technology", "archaeoastronomy", "survey", "art", "general",
+    "speculative",
 }
 
 

@@ -6,9 +6,21 @@ Answer YES if it covers: excavations, archaeological sites, ancient artifacts, a
 archaeoastronomy, underwater archaeology, paleoanthropology field discoveries, ancient architecture,
 epigraphy, or dating methods applied to real sites.
 
+Also answer YES (with is_speculative = true) if the video discusses real archaeological sites or
+artifacts but its PRIMARY argument relies on:
+- Non-human intervention (ancient aliens, ancient astronauts, Annunaki)
+- Lost advanced civilizations with no archaeological evidence
+- Supernatural or extraterrestrial explanations for real artifacts/sites
+
+Do NOT mark as speculative:
+- Legitimate archaeological debates (pre-Clovis, Younger Dryas impact)
+- Unconventional dating theories supported by evidence
+- Channels debunking pseudoscience (discussing ≠ promoting)
+- Speculative-but-evidence-based interpretations
+
 Answer NO if it is primarily about: video games, solar/space weather, Mars/planetary features,
-conspiracy theories (Hollow Earth, flat earth), modern politics, product reviews, or content
+Hollow Earth, flat earth, modern politics, product reviews, or content
 with no connection to real archaeological sites or discoveries.
 
-A video that DISCUSSES real archaeology while playing a game or in a speculative context is still NO.
+A video that DISCUSSES real archaeology while playing a game is still NO.
 The archaeology must be the primary content, not a tangent.
