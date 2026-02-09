@@ -65,7 +65,9 @@ AncientMap/
 │   ├── config/              # Configuration modules
 │   │   └── ai_modes.py      # AI mode configurations
 │   ├── routes/              # API endpoint handlers
-│   │   ├── ai.py            # AI chat endpoints
+│   │   ├── lyra.py          # Lyra AI chat (SSE streaming)
+│   │   ├── radar.py         # Lyra Radar (discovered sites)
+│   │   ├── news.py          # News feed endpoints
 │   │   ├── sites.py         # Site data endpoints
 │   │   ├── sources.py       # Data source endpoints
 │   │   ├── contributions.py # User contributions
@@ -73,19 +75,35 @@ AncientMap/
 │   │   ├── sitemap.py       # XML sitemap generation
 │   │   └── streetview.py    # Street View integration
 │   └── services/            # Business logic
-│       ├── access_control.py # PIN-based access management
-│       └── rag_service.py   # RAG pipeline for AI chat
+│       ├── admin_auth.py    # PIN auth (timing-safe, XFF-aware)
+│       ├── lyra_agent.py    # Claude-powered RAG agent with tools
+│       ├── lyra_embeddings.py # Voyage AI embeddings + Qdrant
+│       └── turnstile.py     # Cloudflare Turnstile verification
 │
-├── pipeline/                 # Data ingestion pipeline
+├── pipeline/                 # Data ingestion + news pipeline
 │   ├── main.py              # Pipeline orchestrator
 │   ├── unified_loader.py    # Central data loading
-│   ├── database.py          # Database interface
+│   ├── database.py          # Database models (SQLAlchemy)
 │   ├── config.py            # Pipeline configuration
 │   ├── ingesters/           # Data source ingesters (30+)
 │   │   ├── pleiades.py
 │   │   ├── dare.py
 │   │   ├── unesco.py
 │   │   └── ...
+│   ├── lyra/                # AI news pipeline (hourly cycle)
+│   │   ├── orchestrator.py  # 9-step pipeline runner
+│   │   ├── config.py        # Lyra settings + shared client
+│   │   ├── transcript_fetcher.py  # YouTube RSS + transcripts
+│   │   ├── summarizer.py    # Claude topic extraction
+│   │   ├── site_matcher.py  # DB fuzzy matching (pg_trgm)
+│   │   ├── tweet_generator.py     # Social post generation
+│   │   ├── tweet_verifier.py      # Fact verification
+│   │   ├── tweet_deduplicator.py  # Semantic deduplication
+│   │   ├── significance_scorer.py # Rescore + categorize
+│   │   ├── screenshot_extractor.py # Video frame extraction
+│   │   ├── site_identifier.py     # AI site identification
+│   │   ├── article_generator.py   # Weekly article
+│   │   └── prompts/         # 11 LLM prompt files (all guarded)
 │   ├── normalizers/         # Data normalization
 │   ├── deduplication/       # Duplicate detection
 │   └── utils/               # Utility functions
@@ -144,8 +162,10 @@ AncientMap/
 - Rate limiting with Redis
 
 **Services**
-- `access_control.py`: PIN-based authentication for AI
-- `rag_service.py`: Retrieval-Augmented Generation
+- `admin_auth.py`: Timing-safe PIN authentication with XFF-aware IP extraction
+- `lyra_agent.py`: Claude-powered RAG agent with 5 tools (site search, news lookup, map navigation, etc.)
+- `lyra_embeddings.py`: Voyage AI embeddings + Qdrant vector search
+- `turnstile.py`: Cloudflare Turnstile bot protection
 - `cache.py`: Redis caching with TTL
 
 ### Data Pipeline
@@ -173,10 +193,10 @@ AncientMap/
 - Rate limiting counters
 - Session storage fallback
 
-**Qdrant**
-- Vector embeddings for semantic search
-- Powers AI site discovery
-- Collection per data source
+**Qdrant** (self-hosted, telemetry disabled)
+- Vector embeddings via Voyage AI (voyage-4)
+- Powers Lyra agent's semantic site search tool
+- Reranking via Voyage rerank-2.5-lite
 
 ## Data Flow
 
@@ -192,21 +212,23 @@ AncientMap/
 7. Frontend renders markers on globe
 ```
 
-### AI Chat Query
+### AI Chat Query (Lyra)
 
 ```
 1. User submits question
-2. POST /api/ai/verify (Turnstile + PIN)
-3. Session token returned
-4. GET /api/ai/stream?message=...
-5. API enters inference queue
-6. RAG pipeline:
-   a. Embed query with sentence-transformers
-   b. Search Qdrant for relevant sites
-   c. Build context from top results
-   d. Stream response from Ollama LLM
-7. SSE events sent to frontend
-8. Frontend displays streaming response
+2. POST /api/lyra/chat (Turnstile + rate limit)
+3. Lyra agent initialized with Claude Haiku
+4. Agent loop (tool use):
+   a. Claude decides which tools to call
+   b. Tools: site_search, news_search, navigate_map, etc.
+   c. Tool results fed back to Claude
+   d. Claude generates streamed response
+5. SSE events sent to frontend:
+   - token events (streaming text)
+   - sites events (map markers)
+   - news events (related articles)
+   - done event (completion)
+6. 5-minute timeout enforced on connection
 ```
 
 ### Data Ingestion
@@ -236,9 +258,9 @@ AncientMap/
            ┌───────────────┼───────────────┐
            ▼               ▼               ▼
     ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
-    │   Static    │ │   FastAPI   │ │   Ollama    │
-    │   Files     │ │   (API)     │ │   (LLM)     │
-    │   (Vite)    │ │             │ │             │
+    │   Static    │ │   FastAPI   │ │  Anthropic  │
+    │   Files     │ │   (API)     │ │  Claude API │
+    │   (Vite)    │ │             │ │  (external) │
     └─────────────┘ └─────────────┘ └─────────────┘
                            │
            ┌───────────────┼───────────────┐
@@ -251,13 +273,13 @@ AncientMap/
 
 ### Docker Services
 
-| Service    | Image                    | Port  | Purpose              |
-|------------|--------------------------|-------|----------------------|
-| db         | postgis/postgis:16-3.4   | 5432  | Primary database     |
-| redis      | redis:7-alpine           | 6379  | Caching              |
-| qdrant     | qdrant/qdrant            | 6333  | Vector search        |
-| searxng    | searxng/searxng          | 8888  | Web search (AI)      |
-| pgadmin    | dpage/pgadmin4           | 5050  | DB admin (dev only)  |
+| Service    | Image                    | Port  | Purpose                           |
+|------------|--------------------------|-------|-----------------------------------|
+| api        | custom (Dockerfile)      | 8000  | FastAPI + Lyra pipeline           |
+| db         | postgis/postgis:16-3.4   | 5432  | Primary database (PostGIS)        |
+| redis      | redis:7-alpine           | 6379  | API response caching              |
+| qdrant     | qdrant/qdrant            | 6333  | Vector search (self-hosted)       |
+| pgadmin    | dpage/pgadmin4           | 5050  | DB admin (dev only)               |
 
 ## Performance Optimizations
 
@@ -283,11 +305,14 @@ AncientMap/
 
 See [SECURITY.md](SECURITY.md) for details.
 
-- PIN-based authentication for AI features
-- Cloudflare Turnstile for bot protection
-- Rate limiting per IP and tier
-- Session timeout and cleanup
-- Input validation on all endpoints
+- **Authentication**: Timing-safe PIN comparison (`secrets.compare_digest`), Bearer token for admin
+- **Bot protection**: Cloudflare Turnstile on chat and contribution endpoints
+- **Rate limiting**: Per-IP in-memory rate limiter (20/hr on chat), XFF-aware behind proxy
+- **Input validation**: Pydantic models with size constraints on all endpoints
+- **XSS prevention**: UUID validation on dynamic URL parameters, HTML escaping
+- **SSE protection**: 5-minute max stream duration, generic error messages
+- **AI security**: Prompt injection guards on all 11 LLM prompts, sanitized tool errors
+- **Connection pooling**: Shared Anthropic client across pipeline modules
 
 ## Future Considerations
 

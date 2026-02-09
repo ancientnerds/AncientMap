@@ -4,12 +4,16 @@ The one and only platform with all ancient archaeological sites in one place for
 
 ## Project Overview
 
-This project aggregates data from 100+ open-source archaeological databases worldwide into a unified, deduplicated dataset. It includes:
+This project aggregates data from 30+ open-source archaeological databases into a unified dataset of 800,000+ sites, displayed on an interactive 3D globe. It includes:
 
-- **Data Pipeline**: Python scripts to ingest data from various sources (Pleiades, UNESCO, Open Context, DINAA, etc.)
-- **PostgreSQL + PostGIS Database**: Unified storage with geospatial support
-- **FastAPI Backend**: REST API with rate limiting and API keys for monetization
-- **React + Mapbox Frontend**: Interactive map visualization (in `ancient-nerds-map/`)
+- **3D Globe**: Three.js + Mapbox GL interactive visualization with 800K+ site markers
+- **Lyra AI Agent**: Claude-powered research assistant with tool use (site search, news lookup, map navigation)
+- **News Pipeline**: Automated archaeological news discovery from 18+ YouTube channels (hourly cycle)
+- **Radar**: AI-discovered archaeological sites not yet in the main database
+- **Data Pipeline**: Python ingesters for 30+ external data sources
+- **PostgreSQL + PostGIS Database**: Unified storage with spatial indexing
+- **FastAPI Backend**: REST API with rate limiting and bot protection
+- **React + TypeScript Frontend**: Full-featured SPA with filtering, empires, sea levels, and more
 
 ## Quick Start
 
@@ -77,8 +81,9 @@ The `.env` file controls all configuration. Key sections:
 | `POSTGRES_PASSWORD` | Database password | ✅ Yes |
 | `DATABASE_URL` | Full PostgreSQL connection string | Auto-generated |
 | `MAPBOX_ACCESS_TOKEN` | For map tiles ([get free token](https://mapbox.com)) | ✅ Yes |
-| `AI_VALID_PINS` | JSON of PINs for AI agent access | Optional |
-| `OLLAMA_MODEL` | LLM model for AI features | Optional |
+| `ADMIN_PIN` | 4-digit PIN for admin features | Optional |
+| `LYRA_ADMIN_KEY` | Bearer token for Lyra admin chat | Optional |
+| `LYRA_ANTHROPIC_API_KEY` | Anthropic API key for AI features | For AI |
 
 See `.env.example` for all available options with descriptions.
 
@@ -97,49 +102,39 @@ python -m pipeline.main status
 ## Project Structure
 
 ```
-AncientNerds/
-├── pipeline/               # Data ingestion pipeline
-│   ├── config.py          # Configuration management
-│   ├── database.py        # SQLAlchemy models
-│   ├── main.py            # CLI entry point
-│   ├── ingesters/         # Source-specific ingesters
-│   │   ├── base.py        # Base ingester class
-│   │   ├── pleiades.py    # Pleiades ingester
-│   │   └── ...
-│   ├── normalizers/       # Data normalization
-│   └── deduplication/     # Deduplication logic
+AncientMap/
 ├── api/                    # FastAPI backend
 │   ├── main.py            # API entry point
-│   ├── routers/           # API endpoints
-│   └── middleware/        # Rate limiting, auth
+│   ├── routes/            # API endpoints (sites, lyra, radar, news, og)
+│   └── services/          # Business logic (lyra_agent, admin_auth)
+├── pipeline/               # Data ingestion + news pipeline
+│   ├── database.py        # SQLAlchemy models
+│   ├── ingesters/         # Source-specific ingesters (30+)
+│   ├── lyra/              # AI news pipeline (9-step hourly cycle)
+│   │   ├── orchestrator.py
+│   │   ├── prompts/       # 11 LLM prompt files
+│   │   └── ...
+│   └── utils/             # Shared utilities
+├── ancient-nerds-map/      # React + TypeScript frontend
+│   └── src/
+├── docs/                  # Technical documentation
 ├── scripts/               # Utility scripts
-│   ├── init_db.py         # Database initialization
-│   └── run_pipeline.py    # Pipeline runner
-├── data/                  # Data storage
-│   ├── raw/               # Downloaded raw data
-│   └── processed/         # Processed exports
-├── tests/                 # Test suite
 ├── docker-compose.yml     # Docker services
-├── requirements.txt       # Python dependencies
-├── .env.example           # Environment template (copy to .env)
-└── .env                   # Your local config (not in git)
+└── .env.example           # Environment template (copy to .env)
 ```
 
 ## Data Sources
 
-Currently implemented:
+30+ integrated sources including:
 - **Pleiades** (38,000+ ancient Mediterranean places)
+- **UNESCO** World Heritage Sites
+- **Wikidata** archaeological sites
+- **Open Context**, **DINAA**, **Historic England**, **GeoNames**
+- **OSM** historic features
+- **Lyra Radar**: AI-discovered sites from YouTube archaeology channels
+- And 20+ more regional databases
 
-Planned:
-- UNESCO World Heritage Sites
-- GeoNames (archaeological features)
-- Open Context
-- DINAA (900,000+ North American sites)
-- Historic England
-- EAMENA
-- And 100+ more regional databases
-
-See `ANCIENT_NERDS_MAP_DATA_SOURCES.md` for the complete list.
+See [CHANGELOG.md](CHANGELOG.md) for the full list.
 
 ## Pipeline Commands
 
@@ -162,8 +157,12 @@ python -m pipeline.main preview pleiades --limit 20
 
 ## Documentation
 
-- `ANCIENT_NERDS_MAP_DATA_SOURCES.md` - Complete list of 100+ data sources
-- `DATA_MERGING_DEDUPLICATION_STRATEGY.md` - Technical strategy for deduplication
+- [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture and data flow
+- [API.md](API.md) - API endpoint documentation
+- [SECURITY.md](SECURITY.md) - Security policy and measures
+- [CHANGELOG.md](CHANGELOG.md) - Release history and audit changes
+- [docs/lyra-pipeline.md](docs/lyra-pipeline.md) - Lyra news pipeline (9-step cycle)
+- [docs/lyra-rag-pipeline.html](docs/lyra-rag-pipeline.html) - Full AI architecture diagram
 
 ## License
 
@@ -176,11 +175,11 @@ Please respect the attribution requirements of each data source.
 
 ## Contributing
 
-Contributions welcome! Especially:
+Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. Especially:
 - New data source ingesters
-- Deduplication improvements
-- API features
 - Frontend enhancements
+- Security improvements
+- Documentation
 
 ## Contact
 

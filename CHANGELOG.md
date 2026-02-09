@@ -45,9 +45,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Lyra News Pipeline: fully automated 9-step archaeological news discovery from 18+ YouTube channels
+- AI-powered site identification via Claude Haiku with extended thinking for garbled caption names
+- Radar page showing AI-discovered archaeological sites not yet in the main database
+- News feed with curated social posts, screenshot thumbnails, and deep-link timestamps
+- Lyra RAG chat agent (Claude-powered) with tool use: site search, news lookup, map navigation
+- Weekly AI-generated article summarizing archaeological news
+- Automatic site promotion from Radar to globe when enrichment score >= 55
+- Creator opt-out system for YouTube channel exclusion
+
+### Changed
+- AI chat backend migrated from Ollama/Qdrant to Anthropic Claude API with Voyage AI embeddings
+- All AI pipeline calls use structured JSON schema outputs (zero parse failures)
+- Prompt caching on all pipeline LLM calls (90% cost reduction on repeated prompts)
+- Shared Anthropic client pool across all pipeline modules (connection reuse)
+
+### Security (Audit Rounds 1-3)
+- Fixed reflected XSS in OG share page (UUID validation + HTML escaping)
+- Fixed X-Forwarded-For header spoofing (only trust when TRUSTED_PROXY=1)
+- Fixed admin PIN: removed insecure default, use timing-safe comparison
+- Added prompt injection guards to all 11 LLM prompt files
+- Added request payload size limits (images: 5, history: 50 messages)
+- Added SSE stream timeout (5 minutes max connection duration)
+- Capped sites endpoint at 50k rows (was 1M)
+- Fixed radar cache-bust endpoint open when LYRA_ADMIN_KEY unconfigured
+- Sanitized tool error messages in Lyra agent (no internal leak to users)
+- Removed token waste: significance/category scoring from post generator (rescorer handles it)
+- Removed unused schema fields from verifier (core_claim, site_name_correction)
+- Replaced hard-delete with soft-delete in deduplicator
+- Bounded deduplicator query to 500 items (prevents O(n^2) blowup)
+- Fixed stale "tweeted" video status filter in article generator
+- Fixed all datetime.utcnow() calls to datetime.now(UTC)
+- Deleted dead code: _format_attribution, ESCALATION_SCHEMA, _parse_identification
+
 ### Planned
-- Additional data source integrations
-- Improved deduplication algorithms
 - Timeline animation feature
 - User accounts and saved searches
 - Mobile native apps
