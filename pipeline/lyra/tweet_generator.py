@@ -8,17 +8,11 @@ from pathlib import Path
 import anthropic
 
 from pipeline.database import NewsItem, NewsVideo, get_session
-from pipeline.lyra.config import LyraSettings
+from pipeline.lyra.config import VALID_CATEGORIES, LyraSettings
 
 logger = logging.getLogger(__name__)
 
 PROMPT_PATH = Path(__file__).parent / "prompts" / "tweet_template.txt"
-
-VALID_CATEGORIES = {
-    "excavation", "artifact", "architecture", "bioarchaeology", "dating",
-    "remote_sensing", "underwater", "epigraphy", "conservation", "heritage",
-    "theory", "technology", "survey", "art", "general",
-}
 
 POSTS_SCHEMA = {
     "type": "object",
@@ -28,14 +22,18 @@ POSTS_SCHEMA = {
             "items": {
                 "type": "object",
                 "properties": {
+                    "headline": {"type": "string"},
                     "tweet": {"type": "string"},
                     "timestamp_range": {
                         "anyOf": [{"type": "string"}, {"type": "null"}],
                     },
-                    "significance": {"type": "integer"},
-                    "category": {"type": "string"},
+                    "significance": {"type": "integer", "minimum": 1, "maximum": 10},
+                    "category": {
+                        "type": "string",
+                        "enum": sorted(VALID_CATEGORIES),
+                    },
                 },
-                "required": ["tweet", "timestamp_range", "significance", "category"],
+                "required": ["headline", "tweet", "timestamp_range", "significance", "category"],
                 "additionalProperties": False,
             },
         },
@@ -118,32 +116,44 @@ def generate_posts_for_video(video: NewsVideo, settings: LyraSettings) -> int:
         if not db_video:
             return 0
 
-        # Match posts to existing news items
+        # Match posts to existing news items by headline
         items = session.query(NewsItem).filter(
             NewsItem.video_id == video.id,
             NewsItem.post_text.is_(None),
-        ).order_by(NewsItem.id).all()
+        ).all()
+
+        # Build headline -> item lookup (normalized lowercase for matching)
+        headline_to_item: dict[str, NewsItem] = {}
+        for item in items:
+            if item.headline:
+                headline_to_item[item.headline.strip().lower()] = item
 
         count = 0
-        for i, post_data in enumerate(posts_data):
+        for post_data in posts_data:
             post_text = post_data.get("tweet", "")
+            headline = post_data.get("headline", "")
             ts_range = post_data.get("timestamp_range")
 
             if not post_text:
                 continue
 
-            # Validate significance and category
             sig = post_data.get("significance")
             cat = post_data.get("category", "general")
 
-            # Match to a news item if possible
-            if i < len(items):
-                items[i].post_text = post_text
-                if ts_range:
-                    items[i].timestamp_range = ts_range
-                items[i].significance = max(1, min(10, int(sig))) if sig is not None else 3
-                items[i].news_category = cat if cat in VALID_CATEGORIES else "general"
-                count += 1
+            # Match by headline
+            item = headline_to_item.get(headline.strip().lower())
+            if item is None:
+                logger.warning(f"No matching item for headline: {headline!r}")
+                continue
+
+            item.post_text = post_text
+            if ts_range:
+                item.timestamp_range = ts_range
+            item.significance = max(1, min(10, int(sig))) if sig is not None else 3
+            item.news_category = cat if cat in VALID_CATEGORIES else "general"
+            # Remove from lookup so duplicate headlines don't overwrite
+            del headline_to_item[headline.strip().lower()]
+            count += 1
 
         db_video.status = "posted"
 

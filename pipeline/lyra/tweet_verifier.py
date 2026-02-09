@@ -2,14 +2,13 @@
 
 import json
 import logging
-import re
 from pathlib import Path
 
 import anthropic
 
 from pipeline.database import NewsItem, NewsVideo, get_session
 from pipeline.lyra.config import LyraSettings
-from pipeline.lyra.transcript_fetcher import extract_transcript_segment
+from pipeline.lyra.transcript_fetcher import extract_transcript_segment, parse_timestamp_to_seconds
 
 logger = logging.getLogger(__name__)
 
@@ -107,14 +106,6 @@ def verify_single_post(
     return json.loads(response.content[0].text)
 
 
-def _parse_timestamp_to_seconds(ts: str) -> int | None:
-    """Parse 'MM:SS' to seconds."""
-    m = re.match(r"(\d+):(\d{2})", ts.strip())
-    if m:
-        return int(m.group(1)) * 60 + int(m.group(2))
-    return None
-
-
 def verify_video_posts(video: NewsVideo, settings: LyraSettings) -> int:
     """Verify all posts for a video against its transcript.
 
@@ -156,7 +147,7 @@ def verify_video_posts(video: NewsVideo, settings: LyraSettings) -> int:
             # Update timestamp if verification found a more precise one
             ts = result.get("timestamp")
             if ts:
-                secs = _parse_timestamp_to_seconds(ts)
+                secs = parse_timestamp_to_seconds(ts)
                 if secs is not None:
                     item.timestamp_seconds = secs
 

@@ -40,6 +40,7 @@ STEPS = {
     "match":       ("pipeline.lyra.site_matcher",       "match_sites_for_pending_items", False, "Matched {n} news items to sites"),
     "posts":       ("pipeline.lyra.tweet_generator",    "generate_pending_posts",       True,  "Generated {n} posts"),
     "verify":      ("pipeline.lyra.tweet_verifier",     "verify_pending_posts",         True,  "Verified {n} posts"),
+    "rescore":     ("pipeline.lyra.significance_scorer", "rescore_pending_items",        True,  "Re-scored {n} items"),
     "dedup":       ("pipeline.lyra.tweet_deduplicator", "deduplicate_posts",            False, "Removed {n} duplicates"),
     "screenshots": ("pipeline.lyra.screenshot_extractor", "extract_screenshots",        True,  "Extracted {n} screenshots"),
     "backfill":    ("pipeline.lyra.transcript_fetcher", "backfill_video_descriptions",  True,  "Backfilled {n} video descriptions"),
@@ -47,7 +48,7 @@ STEPS = {
 }
 
 # Ordered step list matching the full pipeline sequence
-STEP_ORDER = ["fetch", "retry", "summarize", "match", "posts", "verify", "dedup", "screenshots", "backfill", "identify"]
+STEP_ORDER = ["fetch", "retry", "summarize", "match", "posts", "verify", "rescore", "dedup", "screenshots", "backfill", "identify"]
 
 
 def setup_logging() -> None:
@@ -524,6 +525,10 @@ def main() -> None:
                   '500 - 1000 AD', '1000 - 1500 AD', '1500+ AD'
               )
         """))
+
+        # Data quality patches (countries, periods, aliases) — see data_patches.py
+        from pipeline.lyra.data_patches import run_data_patches
+        run_data_patches(conn)
 
         # v12b: fix promoted items where period_start is NULL but period_name has
         # parseable text (e.g. "Pre-Pottery Neolithic (11,000+ years ago)").

@@ -47,6 +47,7 @@ SIGNIFICANCE RATING (1-10 integer):
 1 = Filler — channel promo, tangential discussion, opinion piece
 
 CATEGORY (pick one):
-excavation, artifact, architecture, bioarchaeology, dating, remote_sensing, underwater, epigraphy, conservation, heritage, theory, technology, survey, art, general
+excavation, artifact, architecture, bioarchaeology, dating, remote_sensing, underwater, epigraphy, conservation, heritage, theory, technology, archaeoastronomy, survey, art, general
 
-IMPORTANT: Write exactly ONE tweet PER key Topic! MAX 170 chars!
+IMPORTANT: Write exactly ONE tweet PER key topic! MAX 170 chars!
+For each post, echo back the EXACT headline string from the corresponding key topic so posts can be matched to their source.

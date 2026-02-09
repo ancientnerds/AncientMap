@@ -2,28 +2,40 @@
 
 import json
 import logging
-import re
 from datetime import datetime
 from pathlib import Path
 
 import anthropic
+from sqlalchemy import func
 
 from pipeline.database import NewsItem, NewsVideo, get_session
 from pipeline.lyra.config import LyraSettings
+from pipeline.lyra.transcript_fetcher import parse_timestamp_to_seconds
 
 logger = logging.getLogger(__name__)
 
 PROMPT_PATH = Path(__file__).parent / "prompts" / "summary.txt"
+RELEVANCE_PROMPT_PATH = Path(__file__).parent / "prompts" / "relevance_gate.txt"
+
+RELEVANCE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "is_archaeology": {"type": "boolean"},
+        "reason": {"type": "string"},
+    },
+    "required": ["is_archaeology", "reason"],
+    "additionalProperties": False,
+}
 
 SUMMARY_SCHEMA = {
     "type": "object",
     "properties": {
-        "main_category": {"type": "string"},
         "key_topics": {
             "type": "array",
             "items": {
                 "type": "object",
                 "properties": {
+                    "headline": {"type": "string", "maxLength": 100},
                     "timestamp_range": {"type": "string"},
                     "facts": {"type": "array", "items": {"type": "string"}},
                     "primary_site": {
@@ -34,8 +46,24 @@ SUMMARY_SCHEMA = {
                                     "name": {"type": "string"},
                                     "country": {"type": "string"},
                                     "confidence": {"type": "string", "enum": ["high", "medium"]},
-                                    "site_type": {"type": "string"},
-                                    "period": {"type": "string"},
+                                    "site_type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "settlement", "temple", "tomb", "fortification",
+                                            "megalithic", "cave", "rock_art", "port",
+                                            "monument", "inscription", "ruin",
+                                            "archaeological_site",
+                                        ],
+                                    },
+                                    "period": {
+                                        "type": "string",
+                                        "enum": [
+                                            "< 4500 BC", "4500 - 3000 BC", "3000 - 1500 BC",
+                                            "1500 - 500 BC", "500 BC - 1 AD", "1 - 500 AD",
+                                            "500 - 1000 AD", "1000 - 1500 AD", "1500+ AD",
+                                            "Unknown",
+                                        ],
+                                    },
                                 },
                                 "required": ["name", "country", "confidence", "site_type", "period"],
                                 "additionalProperties": False,
@@ -44,12 +72,12 @@ SUMMARY_SCHEMA = {
                         ],
                     },
                 },
-                "required": ["timestamp_range", "facts", "primary_site"],
+                "required": ["headline", "timestamp_range", "facts", "primary_site"],
                 "additionalProperties": False,
             },
         },
     },
-    "required": ["main_category", "key_topics"],
+    "required": ["key_topics"],
     "additionalProperties": False,
 }
 
@@ -58,30 +86,100 @@ def _load_prompt() -> str:
     return PROMPT_PATH.read_text(encoding="utf-8")
 
 
-def _calculate_topic_limit(duration_minutes: float | None, settings: LyraSettings) -> int:
-    """Calculate how many topics to extract based on video length."""
+def _load_relevance_prompt() -> str:
+    return RELEVANCE_PROMPT_PATH.read_text(encoding="utf-8")
+
+
+def _check_relevance(
+    video: NewsVideo,
+    client: anthropic.Anthropic,
+    settings: LyraSettings,
+) -> bool:
+    """Quick Haiku check: is this video about real archaeology?
+
+    Returns True if the video passes the relevance gate.
+    """
+    context_parts = [f"Title: {video.title}"]
+    if video.description:
+        context_parts.append(f"Description: {video.description[:500]}")
+    if video.tags:
+        context_parts.append(f"Tags: {', '.join(video.tags)}")
+    if video.transcript_text:
+        context_parts.append(f"Transcript start: {video.transcript_text[:500]}")
+
+    system_prompt = _load_relevance_prompt()
+    user_content = "\n".join(context_parts)
+
+    response = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=256,
+        temperature=0.0,
+        system=[{
+            "type": "text",
+            "text": system_prompt,
+            "cache_control": {"type": "ephemeral"},
+        }],
+        messages=[{"role": "user", "content": user_content}],
+        output_config={
+            "format": {
+                "type": "json_schema",
+                "schema": RELEVANCE_SCHEMA,
+            },
+        },
+    )
+
+    result = json.loads(response.content[0].text)
+    if not result["is_archaeology"]:
+        logger.info(f"Relevance gate: {video.title!r} -> NO ({result['reason']})")
+    return result["is_archaeology"]
+
+
+def _calculate_topic_limit(
+    duration_minutes: float | None,
+    settings: LyraSettings,
+    channel_item_count: int = 0,
+    avg_items: float = 0,
+) -> int:
+    """Calculate how many topics to extract based on video length and channel balance."""
     if duration_minutes is None:
         duration_minutes = 15.0
 
     if duration_minutes <= settings.post_threshold_short:
-        return settings.post_amounts_short
+        base_limit = settings.post_amounts_short
     elif duration_minutes <= settings.post_threshold_medium:
-        return settings.post_amounts_medium
+        base_limit = settings.post_amounts_medium
     elif duration_minutes <= settings.post_threshold_long:
-        return settings.post_amounts_long
+        base_limit = settings.post_amounts_long
     else:
-        return settings.post_amounts_very_long
+        base_limit = settings.post_amounts_very_long
+
+    # Channel balancing: reduce topics for over-represented channels
+    if avg_items > 0 and settings.channel_balance_factor > 0:
+        ratio = channel_item_count / avg_items
+        if ratio > settings.channel_balance_factor * 2:   # >4x avg
+            original = base_limit
+            base_limit = max(1, base_limit // 3)
+            logger.info(
+                f"Channel balance: {channel_item_count} items "
+                f"({ratio:.1f}x avg) -> {base_limit} topics (was {original})"
+            )
+        elif ratio > settings.channel_balance_factor:      # >2x avg
+            original = base_limit
+            base_limit = max(1, base_limit // 2)
+            logger.info(
+                f"Channel balance: {channel_item_count} items "
+                f"({ratio:.1f}x avg) -> {base_limit} topics (was {original})"
+            )
+
+    return base_limit
 
 
-def _parse_timestamp_to_seconds(ts: str) -> int | None:
-    """Parse 'MM:SS' to seconds."""
-    m = re.match(r"(\d+):(\d{2})", ts.strip())
-    if m:
-        return int(m.group(1)) * 60 + int(m.group(2))
-    return None
-
-
-def summarize_video(video: NewsVideo, settings: LyraSettings) -> bool:
+def summarize_video(
+    video: NewsVideo,
+    settings: LyraSettings,
+    channel_item_count: int = 0,
+    avg_items: float = 0,
+) -> bool:
     """Summarize a single video's transcript using Claude AI.
 
     Creates NewsItem records for each key topic. Returns True on success.
@@ -94,7 +192,20 @@ def summarize_video(video: NewsVideo, settings: LyraSettings) -> bool:
         logger.error("No Anthropic API key configured")
         return False
 
-    topic_limit = _calculate_topic_limit(video.duration_minutes, settings)
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=120.0)
+
+    # Relevance gate: skip non-archaeology videos
+    if not _check_relevance(video, client, settings):
+        with get_session() as session:
+            v = session.get(NewsVideo, video.id)
+            if v:
+                v.status = "skipped"
+        logger.info(f"Skipped {video.id}: not archaeology ({video.title})")
+        return False
+
+    topic_limit = _calculate_topic_limit(
+        video.duration_minutes, settings, channel_item_count, avg_items
+    )
 
     # Build video context from title, description, and tags
     context_parts = [f"Video title: {video.title}"]
@@ -113,8 +224,6 @@ def summarize_video(video: NewsVideo, settings: LyraSettings) -> bool:
         f"{video_context}\n\n"
         f"<transcript>\n{video.transcript_text}\n</transcript>"
     )
-
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=120.0)
 
     try:
         response = client.messages.create(
@@ -161,15 +270,13 @@ def summarize_video(video: NewsVideo, settings: LyraSettings) -> bool:
             if ts_range:
                 parts = ts_range.split("-")
                 if parts:
-                    ts_seconds = _parse_timestamp_to_seconds(parts[0])
+                    ts_seconds = parse_timestamp_to_seconds(parts[0])
 
             facts = topic.get("facts", [])
-            headline = facts[0] if facts else "Archaeological finding"
+            headline = topic.get("headline") or (facts[0] if facts else "Archaeological finding")
             # Truncate headline to fit DB column
             if len(headline) > 500:
                 headline = headline[:497] + "..."
-
-            summary_text = "\n".join(f"- {f}" for f in facts)
 
             # Extract primary site name if LLM provided one with high confidence
             site_name = None
@@ -182,7 +289,7 @@ def summarize_video(video: NewsVideo, settings: LyraSettings) -> bool:
             item = NewsItem(
                 video_id=video.id,
                 headline=headline,
-                summary=summary_text,
+                summary="",
                 facts=facts,
                 timestamp_range=ts_range,
                 timestamp_seconds=ts_seconds,
@@ -205,9 +312,21 @@ def summarize_pending_videos(settings: LyraSettings) -> int:
         ).all()
         session.expunge_all()
 
+    # Query channel item counts for balancing
+    with get_session() as session:
+        channel_counts = dict(
+            session.query(NewsVideo.channel_id, func.count(NewsItem.id))
+            .join(NewsItem, NewsItem.video_id == NewsVideo.id)
+            .filter(NewsItem.post_text.isnot(None))
+            .group_by(NewsVideo.channel_id)
+            .all()
+        )
+    avg_items = sum(channel_counts.values()) / max(len(channel_counts), 1)
+
     count = 0
     for video in pending:
-        if summarize_video(video, settings):
+        ch_count = channel_counts.get(video.channel_id, 0)
+        if summarize_video(video, settings, ch_count, avg_items):
             count += 1
 
     logger.info(f"Summarized {count}/{len(pending)} pending videos")

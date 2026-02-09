@@ -2,6 +2,12 @@
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+VALID_CATEGORIES = {
+    "excavation", "artifact", "architecture", "bioarchaeology", "dating",
+    "remote_sensing", "underwater", "epigraphy", "conservation", "heritage",
+    "theory", "technology", "archaeoastronomy", "survey", "art", "general",
+}
+
 
 class LyraSettings(BaseSettings):
     """Lyra pipeline settings loaded from LYRA_* environment variables."""
@@ -21,6 +27,7 @@ class LyraSettings(BaseSettings):
     model_article: str = "claude-sonnet-4-5-20250929"
     model_identify: str = "claude-haiku-4-5-20251001"
     model_identify_escalation: str = "claude-sonnet-4-5-20250929"
+    model_rescore: str = "claude-haiku-4-5-20251001"
 
     # Site identification settings
     min_score_for_promotion: int = 55
@@ -29,6 +36,7 @@ class LyraSettings(BaseSettings):
     identify_thinking_budget: int = 4096
 
     # Pipeline settings
+    channel_balance_factor: float = 2.0  # Throttle channels with >Nx average item count
     lookup_days: int = 14
     retry_delay_hours: int = 12  # Hours between retry attempts for failed transcripts
     min_video_minutes: float = 5.0  # Skip videos shorter than this (filters out Shorts)

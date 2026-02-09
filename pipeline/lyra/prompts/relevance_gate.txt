@@ -1,0 +1,12 @@
+Is this video primarily about real-world archaeology, ancient history, or archaeological sites?
+
+Answer YES if it covers: excavations, archaeological sites, ancient artifacts, ancient civilizations,
+archaeoastronomy, underwater archaeology, paleoanthropology field discoveries, ancient architecture,
+epigraphy, or dating methods applied to real sites.
+
+Answer NO if it is primarily about: video games, solar/space weather, Mars/planetary features,
+conspiracy theories (Hollow Earth, flat earth), modern politics, product reviews, or content
+with no connection to real archaeological sites or discoveries.
+
+A video that DISCUSSES real archaeology while playing a game or in a speculative context is still NO.
+The archaeology must be the primary content, not a tangent.

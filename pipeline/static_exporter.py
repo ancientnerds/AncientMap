@@ -445,7 +445,6 @@ def export_news_feed(output_dir: Path = OUTPUT_DIR):
             SELECT
                 ni.id,
                 ni.headline,
-                ni.summary,
                 ni.post_text,
                 ni.facts,
                 ni.timestamp_range,
@@ -488,7 +487,6 @@ def export_news_feed(output_dir: Path = OUTPUT_DIR):
             item: dict[str, Any] = {
                 "id": row.id,
                 "headline": row.headline,
-                "summary": row.summary,
                 "post_text": row.post_text,
                 "facts": row.facts,
                 "timestamp_range": row.timestamp_range,

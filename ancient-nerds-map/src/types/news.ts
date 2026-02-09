@@ -11,7 +11,7 @@ export interface NewsVideoInfo {
 export interface NewsItemData {
   id: number
   headline: string
-  summary: string
+  summary?: string
   post_text: string | null
   facts: string[] | null
   timestamp_range: string | null
