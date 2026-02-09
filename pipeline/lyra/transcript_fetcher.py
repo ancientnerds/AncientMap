@@ -270,7 +270,7 @@ def retry_failed_videos(settings: LyraSettings) -> int:
                 logger.info(f"    -> transcribed ({duration:.1f} min)" if duration else "    -> transcribed")
             else:
                 video.last_attempted_at = datetime.now(UTC)
-                logger.info(f"    -> still no transcript, will retry later")
+                logger.info("    -> still no transcript, will retry later")
 
     logger.info(f"Retried {retried} videos successfully")
     return retried
