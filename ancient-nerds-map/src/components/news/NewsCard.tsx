@@ -88,7 +88,7 @@ export default function NewsCard({
 }: NewsCardProps) {
   const playSize = PLAY_SIZE[size]
   const pinSize = PIN_SIZE[size]
-  const hasMatchedSite = !!siteId
+  const hasMatchedSite = !!(siteId || (siteName && (siteCountry || siteType || sitePeriodName)))
   const displaySiteName = siteName || siteNameExtracted
 
   return (
@@ -232,6 +232,9 @@ export function newsHighlightToCardProps(news: NewsHighlight): NewsCardProps {
     ? `${config.api.baseUrl}${news.screenshot_url.replace('/api', '')}`
     : `https://img.youtube.com/vi/${news.video_id}/mqdefault.jpg`
 
+  // Matched = has site metadata from unified_sites join (country/type/period)
+  const isMatched = !!(news.site_name && (news.site_country || news.site_type || news.site_period_name))
+
   return {
     headline: news.headline,
     postText: news.post_text,
@@ -243,7 +246,8 @@ export function newsHighlightToCardProps(news: NewsHighlight): NewsCardProps {
     deepLink,
     videoTitle: news.video_title,
     timestampSeconds: news.timestamp_seconds,
-    siteName: news.site_name,
+    siteName: isMatched ? news.site_name : undefined,
+    siteNameExtracted: !isMatched ? news.site_name : undefined,
     siteCountry: news.site_country,
     siteType: news.site_type,
     sitePeriodName: news.site_period_name,
