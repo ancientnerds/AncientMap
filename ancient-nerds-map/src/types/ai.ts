@@ -36,6 +36,7 @@ export interface NewsHighlight {
   date?: string
   post_text?: string
   screenshot_url?: string
+  site_id?: string
   site_name?: string
   site_country?: string
   site_type?: string

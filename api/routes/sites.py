@@ -682,28 +682,36 @@ async def get_site_detail(
     db: Session = Depends(get_db),
 ):
     """Get full details for a single site."""
-    query = text("""
-        SELECT
-            id::text,
-            source_id,
-            source_record_id,
-            name,
-            lat,
-            lon,
-            site_type,
-            period_start,
-            period_end,
-            period_name,
-            country,
-            description,
-            thumbnail_url,
-            source_url,
-            raw_data
-        FROM unified_sites
-        WHERE id::text = :site_id
-    """)
+    # Try UUID match first, then fall back to name search
+    import uuid as _uuid
+    try:
+        _uuid.UUID(site_id)
+        is_uuid = True
+    except ValueError:
+        is_uuid = False
 
-    result = db.execute(query, {"site_id": site_id})
+    if is_uuid:
+        query = text("""
+            SELECT id::text, source_id, source_record_id, name, lat, lon,
+                   site_type, period_start, period_end, period_name,
+                   country, description, thumbnail_url, source_url, raw_data
+            FROM unified_sites WHERE id::text = :site_id
+        """)
+        result = db.execute(query, {"site_id": site_id})
+    else:
+        query = text("""
+            SELECT id::text, source_id, source_record_id, name, lat, lon,
+                   site_type, period_start, period_end, period_name,
+                   country, description, thumbnail_url, source_url, raw_data
+            FROM unified_sites
+            WHERE name ILIKE :name
+               OR name_normalized = LOWER(:name)
+               OR REPLACE(name_normalized, ' ', '') = LOWER(REPLACE(:name, ' ', ''))
+               OR id IN (SELECT site_id FROM unified_site_names WHERE name ILIKE :name)
+            LIMIT 1
+        """)
+        result = db.execute(query, {"name": site_id})
+
     row = result.fetchone()
 
     if not row:

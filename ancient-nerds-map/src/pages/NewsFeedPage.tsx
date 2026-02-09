@@ -10,7 +10,6 @@ import { DataStore } from '../data/DataStore'
 import type { SiteData } from '../data/sites'
 import type { NewsItemData, NewsStats, NewsFilters, ActiveFilters } from '../types/news'
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
-import { apiDetailToSiteData } from '../utils/siteApi'
 import { SitePopupOverlay } from '../components/SitePopupOverlay'
 import NewsCard from '../components/news/NewsCard'
 import { getNewsCategoryLabel } from '../components/news/significance'
@@ -23,7 +22,6 @@ export default function NewsFeedPage() {
   const [loading, setLoading] = useState(true)
   const [visibleCount, setVisibleCount] = useState(30)
   const [error, setError] = useState<string | null>(null)
-  const [expandedId, setExpandedId] = useState<number | null>(null)
   const [showLyraProfile, setShowLyraProfile] = useState(false)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
@@ -38,7 +36,6 @@ export default function NewsFeedPage() {
 
   // Site popup
   const [selectedSite, setSelectedSite] = useState<SiteData | null>(null)
-  const [loadingSiteId, setLoadingSiteId] = useState<string | null>(null)
 
   // Live updates
   const [online, setOnline] = useState(true)
@@ -286,9 +283,6 @@ export default function NewsFeedPage() {
     }
   }, [])
 
-  const toggleExpand = (id: number) => {
-    setExpandedId(prev => prev === id ? null : id)
-  }
 
   const handleFilterToggle = (dimension: keyof ActiveFilters, value: string | number | null) => {
     setActiveFilters(prev => ({
@@ -298,17 +292,6 @@ export default function NewsFeedPage() {
     setVisibleCount(30)
   }
 
-  const handleSiteClick = async (siteId: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (loadingSiteId) return
-    setLoadingSiteId(siteId)
-    const resp = await fetch(`${config.api.baseUrl}/sites/${siteId}`)
-    if (resp.ok) {
-      const detail = await resp.json()
-      setSelectedSite(apiDetailToSiteData(detail))
-    }
-    setLoadingSiteId(null)
-  }
 
   const activeFilterCount = Object.values(activeFilters).filter(Boolean).length
 
@@ -608,7 +591,7 @@ export default function NewsFeedPage() {
               const deepLink = item.youtube_deep_url || item.youtube_url || '#'
 
               return (
-                <div key={item.id} className={`news-page-card${expandedId === item.id ? ' expanded' : ''}`}>
+                <div key={item.id} className="news-page-card">
                   <div className="news-page-card-body">
                     <NewsCard
                       size="lg"
@@ -630,11 +613,8 @@ export default function NewsFeedPage() {
                       siteType={item.site_type}
                       sitePeriodName={item.site_period_name}
                       sitePeriodStart={item.site_period_start}
-                      expanded={expandedId === item.id}
-                      loading={loadingSiteId === item.site_id}
                       facts={item.facts}
-                      onToggleExpand={() => toggleExpand(item.id)}
-                      onSiteClick={(e) => handleSiteClick(item.site_id!, e)}
+                      onSiteLoaded={setSelectedSite}
                     />
                   </div>
                 </div>
