@@ -354,14 +354,16 @@ export default function LyraChatModal({
           } else if (line.startsWith('data: ')) {
             try {
               const data = JSON.parse(line.slice(6))
+              // Use data.type from JSON payload (always present, immune to chunk splitting)
+              const type = data.type || eventType || ''
 
-              if (eventType === 'token' && data.content) {
+              if (type === 'token' && data.content) {
                 setMessages(prev => prev.map(m =>
                   m.id === assistantId
                     ? { ...m, content: m.content + data.content }
                     : m
                 ))
-              } else if (eventType === 'status' && data.content) {
+              } else if (type === 'status' && data.content) {
                 // Pre-tool-call preamble: move streamed tokens to a status line
                 // and reset content so the real answer starts clean
                 setMessages(prev => prev.map(m =>
@@ -369,7 +371,7 @@ export default function LyraChatModal({
                     ? { ...m, statusLines: [...(m.statusLines || []), data.content], content: '' }
                     : m
                 ))
-              } else if (eventType === 'sites' && data.sites) {
+              } else if (type === 'sites' && data.sites) {
                 collectedSites = data.sites
                 // Merge & deduplicate by id
                 setSidebarSites(prev => {
@@ -385,7 +387,7 @@ export default function LyraChatModal({
                     ? { ...m, sites: data.sites }
                     : m
                 ))
-              } else if (eventType === 'news' && data.news) {
+              } else if (type === 'news' && data.news) {
                 // Merge & deduplicate by video_id+headline
                 setSidebarNews(prev => {
                   const keys = new Set(prev.map(n => `${n.video_id}::${n.headline}`))
@@ -401,7 +403,7 @@ export default function LyraChatModal({
                     ? { ...m, news: data.news }
                     : m
                 ))
-              } else if (eventType === 'done') {
+              } else if (type === 'done') {
                 const avgRelevance = data.metadata?.avg_relevance ?? null
                 const tokens = data.metadata?.tokens ?? undefined
                 setMessages(prev => prev.map(m =>
@@ -409,7 +411,7 @@ export default function LyraChatModal({
                     ? { ...m, isStreaming: false, confidence: avgRelevance, tokens }
                     : m
                 ))
-              } else if (eventType === 'error') {
+              } else if (type === 'error') {
                 throw new Error(data.error || 'Stream error')
               }
             } catch (e) {
