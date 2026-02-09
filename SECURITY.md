@@ -85,14 +85,45 @@ The following are in scope for security reports:
 
 ## Security Features
 
-This project implements several security measures:
+This project implements multiple layers of security, hardened through three dedicated audit rounds.
 
-- **Rate limiting**: API endpoints are rate-limited to prevent abuse
-- **Input validation**: All inputs are validated using Pydantic models
-- **CORS**: Cross-origin requests are restricted to allowed origins
-- **Session management**: Sessions expire after configurable timeout
-- **Bot protection**: Cloudflare Turnstile integration for sensitive endpoints
-- **SQL injection prevention**: Parameterized queries via SQLAlchemy
+### Authentication & Access Control
+
+- **Admin PIN**: Required for site editing and administrative actions. Must be set via `ADMIN_PIN` environment variable (no default). Compared using `secrets.compare_digest()` (timing-safe)
+- **Lyra Admin Key**: Bearer token authentication for the AI chat admin endpoint and radar cache-bust. Required via `LYRA_ADMIN_KEY` env var; endpoints return 503 if unconfigured
+- **Cloudflare Turnstile**: Bot protection on all public-facing sensitive endpoints (chat, contributions, admin PIN verification)
+
+### Network & Transport
+
+- **X-Forwarded-For handling**: Only trusted when `TRUSTED_PROXY=1` env var is set (for deployments behind nginx/Caddy). Uses the rightmost header entry (proxy-appended) to prevent client spoofing
+- **CORS**: Cross-origin requests restricted to configured allowed origins
+- **HTTPS**: All production traffic encrypted via Cloudflare
+
+### Input Validation & XSS Prevention
+
+- **Pydantic models**: All API request bodies validated with strict types and constraints
+- **Payload limits**: Lyra chat images capped at 5, conversation history at 50 messages, context IDs at 100 characters
+- **Sites endpoint**: Query limit capped at 50,000 rows
+- **OG share page**: Site IDs validated as UUID format; all URLs HTML-escaped before insertion into meta tags and JavaScript
+- **SQL injection prevention**: Parameterized queries via SQLAlchemy throughout
+
+### Rate Limiting & Resource Protection
+
+- **Per-IP rate limiting**: 20 requests/hour on public Lyra chat (configurable via `LYRA_RATE_LIMIT`)
+- **SSE stream timeout**: Maximum 5-minute connection duration per chat stream
+- **In-memory rate bucket cleanup**: Expired entries pruned on each request
+
+### AI Pipeline Security
+
+- **Prompt injection guards**: All 11 LLM prompt files include explicit instructions to treat external content (YouTube transcripts, metadata, Wikidata results) as data only, not as instructions to follow
+- **Tool error sanitization**: Internal exceptions from Lyra agent tool calls are replaced with generic messages before being sent to the LLM (prevents leaking stack traces, file paths, or database details to users)
+- **Shared client pooling**: Single cached `anthropic.Anthropic()` instance reused across all pipeline modules (connection pooling, prompt cache hits)
+
+### Infrastructure
+
+- **Environment variables**: All secrets (API keys, database passwords, admin PINs) loaded from environment; never hardcoded or committed
+- **Docker isolation**: API runs in isolated container; database persists in Docker volume
+- **CI security scanning**: Automated Bandit (Python) and npm audit checks in GitHub Actions
 
 ## Dependency Security
 

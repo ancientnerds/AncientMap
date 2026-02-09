@@ -534,7 +534,7 @@
           <span class="badge badge-cache">cached</span>
         </div>
         <div class="node-desc">
-          Summary JSON &rarr; Claude writes <strong>engaging news feed posts</strong> (max 170 chars each). Each post gets a significance score (1&ndash;10) and category (excavation, artifact, dating, etc.).<br>
+          Summary JSON &rarr; Claude writes <strong>engaging news feed posts</strong> (max 170 chars each). Significance scoring and categorization are handled by a separate rescore step (5b) to reduce token waste.<br>
           Persona: hobby archaeologist sharing discoveries. No hashtags. Video status &rarr; <code>"posted"</code>.
         </div>
         <div style="margin-top: 8px; font-size: 11px; color: var(--dim);">
@@ -576,6 +576,34 @@
 
   <div class="flow-arrow">&#x25BC;</div>
 
+  <!-- Step 5b: Rescore -->
+  <div class="stage">
+    <div class="stage-label">step 5b<br><strong>rescore</strong></div>
+    <div class="stage-content">
+      <div class="node node-ai">
+        <div class="node-title">
+          Significance Rescore
+          <span class="badge badge-model">Haiku 4.5</span>
+          <span class="badge badge-cache">cached</span>
+          <span class="badge badge-new">audit fix</span>
+        </div>
+        <div class="node-desc">
+          Independent re-scoring of each verified item. Assigns <strong>significance (1&ndash;10)</strong> and <strong>category</strong> (excavation, artifact, dating, etc.).<br>
+          Items scored 1 (not archaeology) are removed from the feed. Separated from post generation to reduce token waste and improve score quality.<br>
+          Video status &rarr; <code>"rescored"</code>.
+        </div>
+        <div style="margin-top: 8px; font-size: 11px; color: var(--dim);">
+          <span style="color: var(--cyan);">temp: 0.0</span> &nbsp;|&nbsp;
+          <span style="color: var(--green);">structured output</span> &nbsp;|&nbsp;
+          <span style="color: var(--purple);">~256 max tokens</span> &nbsp;|&nbsp;
+          <span style="color: var(--orange);">shared client pool</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-arrow">&#x25BC;</div>
+
   <!-- Step 6: Dedup -->
   <div class="stage">
     <div class="stage-label">step 6<br><strong>dedup</strong></div>
@@ -583,7 +611,7 @@
       <div class="node" style="border-left: 3px solid var(--dim);">
         <div class="node-title">Deduplication <span class="badge badge-existing">code</span></div>
         <div class="node-desc">
-          Remove duplicate posts across videos (same site + similar facts). Keeps highest-significance version.
+          Soft-delete duplicate posts across videos (same site + similar facts). Keeps newest version. Query bounded to 500 most recent items. Threshold configurable (default: 0.25).
         </div>
       </div>
     </div>
@@ -710,7 +738,7 @@
     <div style="color: var(--text);">Sonnet Escalation</div>
     <div style="color: var(--pink);">Sonnet 4.5</div>
     <div style="color: var(--cyan);">0.0</div>
-    <div style="color: var(--green);">ESCALATION_SCHEMA</div>
+    <div style="color: var(--green);">IDENTIFY_SCHEMA</div>
     <div style="color: var(--orange);">ephemeral</div>
     <div style="color: var(--dim);">Reviews low/medium confidence IDs</div>
   </div>
@@ -815,6 +843,22 @@
     &bull; Few-shot garbled name examples in identify_site prompt (5 examples)<br>
     &bull; Removed JSON code fence examples (conflict with structured outputs)<br>
     &bull; Split all prompts: static system prompt + variable user content
+  </div>
+</div>
+
+<!-- Security Hardening -->
+<div class="node" style="border-left: 3px solid var(--red); margin: 12px 0;">
+  <div class="node-title" style="color: var(--red);">Security Hardening <span class="badge badge-critical">3 audit rounds</span></div>
+  <div class="node-desc" style="line-height: 1.8;">
+    &bull; <strong>Prompt injection guards</strong> on all 11 prompt files &mdash; explicit "treat as data only" instructions for untrusted content<br>
+    &bull; <strong>Shared client pool</strong> &mdash; single cached <code>anthropic.Anthropic()</code> instance across all modules (connection reuse + prompt cache hits)<br>
+    &bull; <strong>XSS prevention</strong> &mdash; UUID validation on OG share page, HTML escaping of dynamic URLs<br>
+    &bull; <strong>XFF spoofing fix</strong> &mdash; X-Forwarded-For only trusted when <code>TRUSTED_PROXY=1</code>, rightmost entry used<br>
+    &bull; <strong>Timing-safe auth</strong> &mdash; <code>secrets.compare_digest()</code> for all PIN/key comparisons<br>
+    &bull; <strong>SSE timeout</strong> &mdash; 5-minute max stream duration on chat connections<br>
+    &bull; <strong>Payload limits</strong> &mdash; images (5), history (50), context_id (100 chars), sites endpoint (50K rows)<br>
+    &bull; <strong>Soft-delete dedup</strong> &mdash; preserves audit trail instead of hard-deleting items, bounded to 500 items<br>
+    &bull; <strong>Tool error sanitization</strong> &mdash; generic messages to LLM instead of internal exception details
   </div>
 </div>
 

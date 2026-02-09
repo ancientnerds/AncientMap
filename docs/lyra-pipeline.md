@@ -13,7 +13,8 @@ flowchart LR
         S --> M[3. Match]
         M --> P[4. Posts]
         P --> V[5. Verify]
-        V --> D[6. Dedup]
+        V --> R[5b. Rescore]
+        R --> D[6. Dedup]
         D --> SC[7. Screenshots]
         SC --> B[8. Backfill]
         B --> I[9. Identify]
@@ -29,6 +30,7 @@ flowchart LR
 | 3. Match | `site_matcher.py` | `match_sites_for_pending_items()` | - |
 | 4. Posts | `tweet_generator.py` | `generate_pending_posts()` | Sonnet |
 | 5. Verify | `tweet_verifier.py` | `verify_pending_posts()` | Haiku |
+| 5b. Rescore | `significance_scorer.py` | `rescore_pending_items()` | Haiku |
 | 6. Dedup | `tweet_deduplicator.py` | `deduplicate_posts()` | - |
 | 7. Screenshots | `screenshot_extractor.py` | `extract_screenshots()` | - |
 | 8. Backfill | `transcript_fetcher.py` | `backfill_video_descriptions()` | - |
@@ -108,26 +110,39 @@ flowchart TD
 
 ### 4. Posts (`tweet_generator.py`)
 
-Generates short-form social posts (280 chars) from news items via Sonnet. One post per item. Includes timestamp attribution and recency note.
+Generates short-form news feed posts (max 170 chars) from news items via Sonnet. One post per item. Includes timestamp attribution and recency note. Significance scoring and categorization are handled by the separate rescore step (5b).
 
 - **Reads:** `news_items`, `news_videos.summary_json`
 - **Writes:** `news_items.post_text`
 - **Model:** Sonnet (`prompts/tweet_template.txt`)
+- **Security:** Shared Anthropic client pool, prompt caching (ephemeral)
 
 ### 5. Verify (`tweet_verifier.py`)
 
-Fact-checks posts against the transcript segment around the timestamp (+/-10s). Verdict: ACCEPT / MODIFY / REJECT.
+Fact-checks posts against the transcript segment around the timestamp (+/-10s). Verdict: VERIFY_AS_IS / MODIFY / REJECT.
 
 - **Reads:** `news_items.post_text`, `news_videos.transcript_text`
 - **Writes:** `news_items.post_text` (modifications), `news_items.timestamp_seconds` (refinements)
-- **Deletes:** rejected items
+- **Deletes:** rejected items (post_text set to NULL)
 - **Model:** Haiku (`prompts/verify_tweets.txt`)
+- **Security:** Prompt injection guard on transcript segment
+
+### 5b. Rescore (`significance_scorer.py`)
+
+Independent re-scoring of each verified item's significance (1-10) and category assignment. Items scored 1 (not archaeology) have their post_text set to NULL, removing them from the feed. This step was separated from post generation to avoid wasting tokens on scores the LLM generates poorly alongside creative writing.
+
+- **Reads:** `news_items` (verified videos), `news_videos`
+- **Writes:** `news_items.significance`, `news_items.news_category`, `news_items.post_text` (NULL for score=1)
+- **Video status:** `verified` → `rescored`
+- **Model:** Haiku (`prompts/rescore_significance.txt`)
+- **Security:** Shared client pool, prompt caching, injection guard
 
 ### 6. Dedup (`tweet_deduplicator.py`)
 
-Removes semantic duplicates. Feature extraction: numbers, words > 3 chars, URLs, timestamps. Weighted similarity: 40% numbers + 40% words + 20% metadata. Threshold: 0.25. Keeps newest.
+Soft-deletes semantic duplicates. Feature extraction: numbers, words > 3 chars, URLs, timestamps. Weighted similarity: 40% numbers + 40% words + 20% metadata. Threshold configurable (default: 0.25). Keeps newest. Query bounded to 500 most recent items.
 
-- **Reads/Deletes:** `news_items` (with post_text)
+- **Reads:** `news_items` (with post_text, limit 500)
+- **Soft-deletes:** `news_items.post_text` → NULL, `news_items.news_category` → "duplicate"
 
 ### 7. Screenshots (`screenshot_extractor.py`)
 
@@ -300,11 +315,12 @@ erDiagram
 | Status | Meaning | Next Stage |
 |--------|---------|------------|
 | `transcribed` | Has transcript | Summarize |
-| `failed` | No transcript available | - |
+| `failed` | No transcript available | Retry (after delay) |
 | `skipped` | Too short (< 5 min) | - |
 | `summarized` | summary_json populated | Posts |
 | `posted` | Posts generated | Verify |
-| `verified` | Posts fact-checked | Dedup/Screenshots |
+| `verified` | Posts fact-checked | Rescore |
+| `rescored` | Significance rescored + categorized | Dedup/Screenshots |
 
 ### `user_contributions.enrichment_status`
 

@@ -26,7 +26,7 @@ Get all sites as compact JSON for globe rendering.
 | site_type   | string   | all     | Filter by site type            |
 | period_max  | int      | all     | Maximum period year            |
 | skip        | int      | 0       | Pagination offset              |
-| limit       | int      | 50000   | Max results (capped at 1M)     |
+| limit       | int      | 50000   | Max results (capped at 50K)    |
 
 **Response:**
 ```json
@@ -180,143 +180,132 @@ Get all available data sources.
 
 ---
 
-### AI Chat
+### Lyra AI Chat
 
-#### POST /api/ai/verify
+Lyra is an AI research assistant powered by Claude (Anthropic). It uses a tool-based agent
+architecture with site search, news lookup, and map navigation capabilities. Responses are
+streamed via Server-Sent Events (SSE) with a 5-minute maximum connection duration.
 
-Verify PIN and create session.
+#### POST /api/lyra/chat
+
+Chat with Lyra. Requires Cloudflare Turnstile token. Rate limited to 20 requests/hour/IP.
 
 **Request Body:**
 ```json
 {
-  "pin": "1234",
-  "turnstile_token": "cloudflare-token..."
+  "message": "Tell me about Göbekli Tepe",
+  "turnstile_token": "cloudflare-token...",
+  "context_type": "global",
+  "context_id": null,
+  "context_year": null,
+  "history": [],
+  "images": []
 }
 ```
 
-**Response:**
-```json
-{
-  "verified": true,
-  "session_token": "abc123...",
-  "expires_in": 3600,
-  "connected": true,
-  "users_connected": 1
-}
-```
-
-**Error Responses:**
-- `invalid_pin`: PIN not recognized
-- `ip_locked`: Too many failed attempts
-- `captcha_failed`: Turnstile verification failed
-
----
-
-#### GET /api/ai/stream
-
-Stream chat response using Server-Sent Events.
-
-**Query Parameters:**
-| Parameter     | Type   | Required | Description                     |
-|---------------|--------|----------|---------------------------------|
-| session_token | string | Yes      | Token from /verify              |
-| message       | string | Yes      | User's question (1-2000 chars)  |
-| sources       | string | No       | Comma-separated source IDs      |
-| mode          | string | No       | "chat" or "research"            |
+| Field           | Type         | Constraints       | Description                                    |
+|-----------------|--------------|-------------------|------------------------------------------------|
+| message         | string       | 1-4000 chars      | User's question                                |
+| turnstile_token | string       | required          | Cloudflare Turnstile verification token        |
+| context_type    | string       | default: "global" | Where chat was opened: global, site, empire, news |
+| context_id      | string\|null | max 100 chars     | UUID of site, empire polity ID, or news item   |
+| context_year    | int\|null    |                   | Year for empire context                        |
+| history         | list\|null   | max 50 items      | Conversation history [{role, content}]         |
+| images          | list\|null   | max 5 items       | Base64 images [{data: "data:image/..."}]       |
 
 **SSE Events:**
 
 ```
-event: queued
-data: {"position": 2}
-
-event: processing
-data: {"status": "starting"}
-
 event: token
-data: {"content": "The "}
+data: {"type": "token", "content": "Göbekli Tepe is a "}
 
 event: sites
-data: {"sites": [{"id": "...", "name": "...", "lat": 41.9, "lon": 12.5}]}
+data: {"type": "sites", "sites": [{"id": "...", "name": "Göbekli Tepe", "lat": 37.22, "lon": 38.92}]}
+
+event: news
+data: {"type": "news", "items": [...]}
 
 event: done
-data: {"metadata": {"model": "qwen2.5:3b", "mode": "chat"}}
+data: {"type": "done"}
 
 event: error
-data: {"error": "Error message"}
+data: {"type": "error", "error": "Response time limit reached"}
 ```
+
+**Error Responses:**
+- `403`: Turnstile verification failed
+- `429`: Rate limit exceeded (20/hour)
 
 ---
 
-#### POST /api/ai/disconnect
+#### POST /api/lyra/admin
 
-Disconnect user and free up slot.
+Admin chat with Lyra. No Turnstile or rate limit. Requires `Authorization: Bearer <LYRA_ADMIN_KEY>`.
+
+Same request body as `/lyra/chat` minus `turnstile_token`.
+
+**Error Responses:**
+- `401`: Missing Authorization header
+- `403`: Invalid admin key
+- `503`: LYRA_ADMIN_KEY not configured
+
+---
+
+#### POST /api/lyra/admin/verify
+
+Lightweight key verification (no LLM call). Used by frontend auth gate.
+
+**Headers:** `Authorization: Bearer <LYRA_ADMIN_KEY>`
+
+**Response:** `{"verified": true}`
+
+---
+
+### Lyra Radar
+
+The Radar shows archaeological sites discovered by the Lyra pipeline that aren't yet in the main database.
+
+#### GET /api/radar/
+
+Get radar items (paginated, cached 5 minutes).
 
 **Query Parameters:**
-| Parameter     | Type   | Required | Description        |
-|---------------|--------|----------|--------------------|
-| session_token | string | Yes      | Token from /verify |
+| Parameter | Type   | Default   | Description                    |
+|-----------|--------|-----------|--------------------------------|
+| page      | int    | 1         | Page number                    |
+| per_page  | int    | 20        | Items per page (max 50)        |
+| status    | string | all       | Filter: enriched, promoted, pending |
+| sort      | string | score     | Sort by: score, name, mentions |
 
 ---
 
-#### GET /api/ai/access-status
+#### GET /api/radar/stats
 
-Get current access control status.
-
-**Response:**
-```json
-{
-  "connected_users": 3,
-  "pins_in_use": 3,
-  "queue_length": 1,
-  "inference_active": true
-}
-```
+Get radar statistics (counts by status, recent promotions).
 
 ---
 
-#### GET /api/ai/modes
+#### POST /api/radar/cache-bust
 
-Get available AI modes.
+Invalidate radar cache. Called by pipeline after processing.
 
-**Response:**
-```json
-{
-  "chat": {
-    "name": "Chat",
-    "description": "Fast responses",
-    "model": "qwen2.5:3b",
-    "max_tokens": 500
-  },
-  "research": {
-    "name": "Research",
-    "description": "Detailed analysis",
-    "model": "qwen2.5:7b",
-    "max_tokens": 2000
-  }
-}
-```
+**Headers:** `Authorization: Bearer <LYRA_ADMIN_KEY>` (required; returns 503 if key not configured)
 
 ---
 
-#### GET /api/ai/health
+### News Feed
 
-Check AI service health.
+#### GET /api/news/feed
 
-**Response:**
-```json
-{
-  "status": "healthy",
-  "vector_store": {
-    "status": "connected",
-    "collections": 5
-  },
-  "llm": {
-    "status": "connected",
-    "model": "qwen2.5:3b"
-  }
-}
-```
+Get curated archaeological news posts.
+
+**Query Parameters:**
+| Parameter | Type     | Default | Description                       |
+|-----------|----------|---------|-----------------------------------|
+| limit     | int      | 20      | Max items                         |
+| offset    | int      | 0       | Pagination offset                 |
+| category  | string   | all     | Filter by news_category           |
+| site_id   | string   | null    | Filter by linked site UUID        |
 
 ---
 
@@ -388,17 +377,17 @@ Check if Street View is available for coordinates.
 
 ## Rate Limiting
 
-| Tier       | Requests/Day |
-|------------|--------------|
-| Anonymous  | 100          |
-| Free       | 1,000        |
-| Pro        | 50,000       |
-| Enterprise | Unlimited    |
+| Endpoint           | Limit              | Window | Mechanism        |
+|--------------------|--------------------|--------|------------------|
+| POST /lyra/chat    | 20 requests        | 1 hour | Per-IP in-memory |
+| POST /lyra/admin   | Unlimited          | -      | Bearer token auth|
+| GET /sites/all     | No explicit limit  | -      | Response cached  |
+| GET /radar/        | No explicit limit  | -      | Response cached  |
 
-Rate limit headers are included in responses:
-- `X-RateLimit-Limit`
-- `X-RateLimit-Remaining`
-- `X-RateLimit-Reset`
+The Lyra chat rate limit is configurable via the `LYRA_RATE_LIMIT` environment variable.
+
+SSE streams have a maximum duration of 5 minutes. Connections exceeding this receive
+an error event and are terminated.
 
 ---
 
