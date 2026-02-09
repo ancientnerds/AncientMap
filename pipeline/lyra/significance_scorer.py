@@ -81,9 +81,11 @@ def rescore_pending_items(settings: LyraSettings) -> int:
             channel_name = ch.name if ch else video.channel_id
 
             rescored_count = 0
+            skipped = 0
             for item in items:
                 result = _rescore_item(item, video, channel_name, client, system_prompt, settings)
                 if result is None:
+                    skipped += 1
                     continue
 
                 new_sig = max(1, min(10, result["significance"]))
@@ -108,10 +110,13 @@ def rescore_pending_items(settings: LyraSettings) -> int:
 
                 rescored_count += 1
 
-            # Mark video as rescored
+            # Only transition if all items were processed
             v = session.get(NewsVideo, video.id)
             if v:
-                v.status = "rescored"
+                if skipped == 0:
+                    v.status = "rescored"
+                else:
+                    logger.warning(f"Video {video.id}: {skipped} items skipped, keeping 'verified' for retry")
 
             total_rescored += rescored_count
 
