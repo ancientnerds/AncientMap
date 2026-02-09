@@ -156,15 +156,12 @@ jobs:
             # Rebuild frontend if files changed OR dist is missing key assets
             if echo "$CHANGED" | grep -q "^ancient-nerds-map/" || [ ! -f ancient-nerds-map/dist/an-logo.svg ]; then
               echo "==> Building frontend..."
+              rm -rf ancient-nerds-map/dist
               if echo "$CHANGED" | grep -q "package-lock.json"; then
                 cd ancient-nerds-map && npm ci && npm run build && cd ..
               else
                 cd ancient-nerds-map && npm run build && cd ..
               fi
-              # Vite sometimes skips public/ files — ensure logos are always in dist
-              cp -f ancient-nerds-map/public/an-logo.svg ancient-nerds-map/dist/an-logo.svg
-              cp -f ancient-nerds-map/public/an-logo.png ancient-nerds-map/dist/an-logo.png
-              echo "==> Logo files copied to dist"
             else
               echo "==> Frontend unchanged, skipping build"
             fi
