@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last Updated:** 2026-01-28
+**Last Updated:** 2026-02-09
 
 ## Overview
 
@@ -33,7 +33,9 @@ When enabled, we may collect:
 If you use the AI research assistant:
 - **Session data:** Temporary conversation history (deleted after session)
 - **PIN validation:** Used only for access control, not stored
-- **Queries:** Processed in real-time, not permanently stored
+- **Queries:** Processed in real-time via the Anthropic Claude API, not permanently stored on our servers
+- **Anthropic retention:** API request logs are retained by Anthropic for 7 days for abuse prevention, then automatically deleted
+- **Training:** Your queries are **never used to train AI models** (Anthropic API policy)
 
 ### 4. Rate Limiting
 
@@ -41,17 +43,60 @@ If you use the AI research assistant:
 - Automatically purged after the rate limit window expires
 - Not linked to any personal information
 
+## AI Pipeline & Third-Party Data Processing
+
+Our automated news pipeline and AI research assistant process **publicly available archaeological data** (YouTube transcripts, site names, descriptions). No user personal data is sent to these services.
+
+### Anthropic Claude API
+
+- **Models used:** Claude Haiku 4.5 (summarization, verification, site identification, chat), Claude Sonnet 4.5 (post generation, escalation review)
+- **Data sent:** YouTube video transcripts, archaeological site names, summary text, news posts for verification, chat queries
+- **Training:** API data is **never used for model training**. This is Anthropic's default policy for all API customers — no opt-out required.
+- **Retention:** Inputs and outputs are retained for **7 days** then automatically deleted.
+- **Data location:** Processed in the US, EU, Asia, and Australia. Stored in the **United States**.
+- **Certifications:** SOC 2 Type II, ISO 27001:2022, ISO/IEC 42001:2023
+- **GDPR:** Data Processing Addendum with Standard Contractual Clauses is automatically included in their Commercial Terms.
+- **Features used:** Structured outputs (JSON schema), extended thinking, prompt caching (ephemeral) — all subject to the same 7-day retention policy.
+- **More info:** [Anthropic Privacy Center](https://privacy.claude.com/)
+
+### Voyage AI (Embeddings & Reranking)
+
+- **Models used:** voyage-4 / voyage-4-large (embeddings), rerank-2.5-lite (reranking)
+- **Data sent:** Archaeological site descriptions and news item text for semantic embedding; queries and document text for reranking
+- **Training opt-out:** We have **opted out of data training** via the Voyage AI dashboard. This revokes their license to use our data for model improvement.
+- **Retention:** With opt-out enabled, data is deleted **immediately after processing** (zero-day retention).
+- **Parent company:** MongoDB (acquired Voyage AI in Feb 2025). MongoDB holds SOC 2 Type II and ISO 27001.
+- **More info:** [Voyage AI Privacy Policy](https://www.voyageai.com/privacy), [Voyage AI Terms of Service](https://www.voyageai.com/tos)
+
+### Qdrant (Vector Database)
+
+- **Deployment:** **Self-hosted** on our infrastructure (Docker container, v1.13.2)
+- **Telemetry:** Disabled (`QDRANT__TELEMETRY_DISABLED=true`)
+- **Data sovereignty:** All vector data (embeddings, metadata) stays on our servers. No data is sent to Qdrant's servers.
+- **More info:** [Qdrant Security Docs](https://qdrant.tech/documentation/guides/security/)
+
+### Data Flow Summary
+
+| Service | Data Sent | Used for Training? | Retention | Location |
+|---------|-----------|-------------------|-----------|----------|
+| Anthropic Claude API | Transcripts, site names, queries | **Never** | 7 days | US |
+| Voyage AI | Site/news text for embedding | **No** (opted out) | Immediate deletion | US |
+| Qdrant | Vector embeddings | N/A (self-hosted) | We control | Our VPS |
+
 ## How We Use Data
 
 1. **Providing the service:** Displaying archaeological sites on the map
-2. **Improving the application:** Aggregate usage patterns help us prioritize features
-3. **Security:** Rate limiting prevents abuse
-4. **AI features:** Processing research queries in real-time
+2. **News pipeline:** Extracting and summarizing archaeological news from public YouTube channels
+3. **AI features:** Processing research queries in real-time
+4. **Improving the application:** Aggregate usage patterns help us prioritize features
+5. **Security:** Rate limiting prevents abuse
 
 ## Data Sharing
 
 We do **NOT** sell, trade, or share your data with third parties except:
 
+- **Anthropic:** AI processing of archaeological content and chat queries (see above)
+- **Voyage AI:** Embedding archaeological text for semantic search (see above)
 - **Mapbox:** Map tiles are loaded from Mapbox (see their [privacy policy](https://www.mapbox.com/legal/privacy))
 - **Cloudflare:** We use Cloudflare for security and CDN services
 - **Legal requirements:** If required by law
@@ -69,6 +114,8 @@ If you are in the European Union, you have the right to:
 
 To exercise these rights, contact us at: ancientnerds@proton.me
 
+**Note on AI sub-processors:** Anthropic provides a GDPR-compliant DPA with Standard Contractual Clauses, automatically included in their API terms. Voyage AI does not currently publish a separate DPA.
+
 ## Cookies
 
 We use minimal cookies:
@@ -85,10 +132,13 @@ We do **NOT** use tracking cookies or third-party advertising cookies.
 We implement appropriate security measures including:
 
 - HTTPS encryption for all data in transit
+- API keys stored as environment variables, never in client-side code
+- Qdrant vector database self-hosted with telemetry disabled
 - Cloudflare Turnstile for bot protection
 - Rate limiting to prevent abuse
 - No storage of sensitive personal data
 - Regular security audits
+- Open source codebase for full transparency
 
 ## Children's Privacy
 
@@ -113,4 +163,7 @@ This project is open source. You can audit our data handling practices by review
 
 - API routes: `/api/routes/`
 - Data pipeline: `/pipeline/`
+- AI pipeline: `/pipeline/lyra/`
+- RAG agent: `/api/services/lyra_agent.py`
+- Embeddings: `/api/services/lyra_embeddings.py`
 - Frontend: `/ancient-nerds-map/src/`
