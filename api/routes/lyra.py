@@ -30,6 +30,7 @@ router = APIRouter()
 
 LYRA_ADMIN_KEY = os.getenv("LYRA_ADMIN_KEY", "")
 RATE_LIMIT = int(os.getenv("LYRA_RATE_LIMIT", "20"))  # requests per hour per IP
+SSE_MAX_DURATION = 300  # Max SSE stream duration in seconds (5 minutes)
 
 # ---------------------------------------------------------------------------
 # Rate limiting (in-memory, per IP)
@@ -63,22 +64,22 @@ def _check_rate_limit(ip: str) -> bool:
 class LyraChatRequest(BaseModel):
     """Request body for Lyra chat."""
     message: str = Field(..., min_length=1, max_length=4000)
-    images: list[dict] | None = Field(default=None, description="Base64 images: [{data: 'data:image/...;base64,...'}]")
+    images: list[dict] | None = Field(default=None, max_length=5, description="Base64 images: [{data: 'data:image/...;base64,...'}]")
     context_type: str = Field(default="global", description="Where chat was opened: global, site, empire, news")
-    context_id: str | None = Field(default=None, description="UUID of site, empire polity ID, or news item ID")
+    context_id: str | None = Field(default=None, max_length=100, description="UUID of site, empire polity ID, or news item ID")
     context_year: int | None = Field(default=None, description="Year for empire context")
     turnstile_token: str = Field(..., description="Cloudflare Turnstile token")
-    history: list[dict] | None = Field(default=None, description="Conversation history [{role, content}]")
+    history: list[dict] | None = Field(default=None, max_length=50, description="Conversation history [{role, content}]")
 
 
 class LyraAdminRequest(BaseModel):
     """Request body for admin (no Turnstile)."""
     message: str = Field(..., min_length=1, max_length=4000)
-    images: list[dict] | None = None
+    images: list[dict] | None = Field(default=None, max_length=5)
     context_type: str = "global"
-    context_id: str | None = None
+    context_id: str | None = Field(default=None, max_length=100)
     context_year: int | None = None
-    history: list[dict] | None = None
+    history: list[dict] | None = Field(default=None, max_length=50)
 
 
 # ---------------------------------------------------------------------------
@@ -174,6 +175,7 @@ def _stream_response(
     """Create an SSE streaming response from the Lyra agent."""
 
     async def generate():
+        deadline = time.monotonic() + SSE_MAX_DURATION
         try:
             from api.services.lyra_agent import run_agent_stream
 
@@ -185,6 +187,9 @@ def _stream_response(
                 context_id=context_id,
                 context_year=context_year,
             ):
+                if time.monotonic() > deadline:
+                    yield f"event: error\ndata: {json.dumps({'type': 'error', 'error': 'Response time limit reached'})}\n\n"
+                    return
                 event_type = chunk.get("type", "token")
                 yield f"event: {event_type}\ndata: {json.dumps(chunk)}\n\n"
 

@@ -13,7 +13,7 @@ from pathlib import Path
 import anthropic
 
 from pipeline.database import NewsItem, NewsVideo, get_session
-from pipeline.lyra.config import VALID_CATEGORIES, LyraSettings
+from pipeline.lyra.config import VALID_CATEGORIES, LyraSettings, get_anthropic_client
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ def rescore_pending_items(settings: LyraSettings) -> int:
     if not videos:
         return 0
 
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=120.0)
+    client = get_anthropic_client(settings)
     system_prompt = _load_prompt()
     total_rescored = 0
 

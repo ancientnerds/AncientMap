@@ -27,7 +27,7 @@ from pipeline.database import (
     UserContribution,
     get_session,
 )
-from pipeline.lyra.config import LyraSettings
+from pipeline.lyra.config import LyraSettings, get_anthropic_client
 from pipeline.lyra.site_matcher import fill_contrib_from_site
 from pipeline.normalizers.dates import passes_date_cutoff
 from pipeline.normalizers.site_type import normalize_site_type
@@ -111,7 +111,7 @@ def identify_and_enrich_sites(settings: LyraSettings) -> int:
     system_prompt = PROMPT_PATH.read_text(encoding="utf-8")
     pick_entity_prompt = PICK_ENTITY_PROMPT_PATH.read_text(encoding="utf-8")
     extract_metadata_prompt = EXTRACT_METADATA_PROMPT_PATH.read_text(encoding="utf-8")
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=120.0)
+    client = get_anthropic_client(settings)
 
     with get_session() as session:
         # Get pending candidates ordered by mention count (best data first)

@@ -1117,7 +1117,7 @@ async def run_agent_stream(
 
             except Exception as e:
                 logger.error(f"Tool {tc['name']} failed: {e}")
-                messages.append(ToolMessage(content=f"Tool error: {e}", tool_call_id=tc["id"]))
+                messages.append(ToolMessage(content="Tool encountered an error. Try a different approach.", tool_call_id=tc["id"]))
 
         # Emit sites after tool calls
         if all_sites:
