@@ -15,6 +15,43 @@ logger = logging.getLogger(__name__)
 
 PROMPT_PATH = Path(__file__).parent / "prompts" / "verify_tweets.txt"
 
+VERIFY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "verification_level": {"type": "string", "enum": ["VERIFY_AS_IS", "MODIFY", "REJECT"]},
+        "timestamp": {"type": "string"},
+        "core_claim": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string"},
+                "supported": {"type": "boolean"},
+                "evidence": {"type": "string"},
+            },
+            "required": ["text", "supported", "evidence"],
+            "additionalProperties": False,
+        },
+        "suggested_modification": {
+            "anyOf": [
+                {
+                    "type": "object",
+                    "properties": {
+                        "modified_text": {"type": "string"},
+                        "changes_explained": {"type": "string"},
+                    },
+                    "required": ["modified_text", "changes_explained"],
+                    "additionalProperties": False,
+                },
+                {"type": "null"},
+            ],
+        },
+        "site_name_correction": {
+            "anyOf": [{"type": "string"}, {"type": "null"}],
+        },
+    },
+    "required": ["verification_level", "timestamp", "core_claim", "suggested_modification", "site_name_correction"],
+    "additionalProperties": False,
+}
+
 
 def _load_prompt() -> str:
     return PROMPT_PATH.read_text(encoding="utf-8")
@@ -37,34 +74,37 @@ def verify_single_post(
     if not segment:
         return None
 
-    prompt_template = _load_prompt()
-    prompt = prompt_template.format(
-        tweet_content=item.post_text,
-        timestamp=item.timestamp_range,
-        transcript_segment=segment,
+    system_prompt = _load_prompt()
+
+    user_content = (
+        f"Tweet to verify:\n{item.post_text}\n\n"
+        f"Relevant transcript segment (roughly from {item.timestamp_range}):\n"
+        f"<transcript_segment>\n{segment}\n</transcript_segment>"
     )
 
     try:
         response = client.messages.create(
             model=model,
             max_tokens=1024,
-            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0,
+            system=[{
+                "type": "text",
+                "text": system_prompt,
+                "cache_control": {"type": "ephemeral"},
+            }],
+            messages=[{"role": "user", "content": user_content}],
+            output_config={
+                "format": {
+                    "type": "json_schema",
+                    "schema": VERIFY_SCHEMA,
+                },
+            },
         )
     except anthropic.APIError as e:
         logger.warning(f"Verification API error for item {item.id}: {e}")
         return None
 
-    response_text = response.content[0].text
-
-    # Parse JSON response
-    json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
-    if not json_match:
-        return None
-
-    try:
-        return json.loads(json_match.group())
-    except json.JSONDecodeError:
-        return None
+    return json.loads(response.content[0].text)
 
 
 def _parse_timestamp_to_seconds(ts: str) -> int | None:

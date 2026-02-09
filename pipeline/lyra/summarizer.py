@@ -15,6 +15,44 @@ logger = logging.getLogger(__name__)
 
 PROMPT_PATH = Path(__file__).parent / "prompts" / "summary.txt"
 
+SUMMARY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "main_category": {"type": "string"},
+        "key_topics": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "timestamp_range": {"type": "string"},
+                    "facts": {"type": "array", "items": {"type": "string"}},
+                    "primary_site": {
+                        "anyOf": [
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "name": {"type": "string"},
+                                    "country": {"type": "string"},
+                                    "confidence": {"type": "string", "enum": ["high", "medium"]},
+                                    "site_type": {"type": "string"},
+                                    "period": {"type": "string"},
+                                },
+                                "required": ["name", "country", "confidence", "site_type", "period"],
+                                "additionalProperties": False,
+                            },
+                            {"type": "null"},
+                        ],
+                    },
+                },
+                "required": ["timestamp_range", "facts", "primary_site"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["main_category", "key_topics"],
+    "additionalProperties": False,
+}
+
 
 def _load_prompt() -> str:
     return PROMPT_PATH.read_text(encoding="utf-8")
@@ -68,11 +106,12 @@ def summarize_video(video: NewsVideo, settings: LyraSettings) -> bool:
         context_parts.append(f"Video tags: {', '.join(video.tags)}")
     video_context = "\n".join(context_parts)
 
-    prompt_template = _load_prompt()
-    prompt = prompt_template.format(
-        topic_limit=topic_limit,
-        video_context=video_context,
-        content=video.transcript_text,
+    system_prompt = _load_prompt()
+
+    user_content = (
+        f"Extract exactly {topic_limit} key topics from this video.\n\n"
+        f"{video_context}\n\n"
+        f"<transcript>\n{video.transcript_text}\n</transcript>"
     )
 
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
@@ -81,25 +120,25 @@ def summarize_video(video: NewsVideo, settings: LyraSettings) -> bool:
         response = client.messages.create(
             model=settings.model_summarize,
             max_tokens=4096,
-            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0,
+            system=[{
+                "type": "text",
+                "text": system_prompt,
+                "cache_control": {"type": "ephemeral"},
+            }],
+            messages=[{"role": "user", "content": user_content}],
+            output_config={
+                "format": {
+                    "type": "json_schema",
+                    "schema": SUMMARY_SCHEMA,
+                },
+            },
         )
     except anthropic.APIError as e:
         logger.error(f"Anthropic API error for {video.id}: {e}")
         return False
 
-    response_text = response.content[0].text
-
-    # Extract JSON from response
-    json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
-    if not json_match:
-        logger.warning(f"No JSON in summary response for {video.id}")
-        return False
-
-    try:
-        summary_data = json.loads(json_match.group())
-    except json.JSONDecodeError as e:
-        logger.warning(f"Invalid JSON in summary for {video.id}: {e}")
-        return False
+    summary_data = json.loads(response.content[0].text)
 
     key_topics = summary_data.get("key_topics", [])
     if not key_topics:

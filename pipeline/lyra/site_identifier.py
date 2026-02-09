@@ -46,6 +46,40 @@ PROMPT_PATH = Path(__file__).parent / "prompts" / "identify_site.txt"
 PICK_ENTITY_PROMPT_PATH = Path(__file__).parent / "prompts" / "pick_wikidata_entity.txt"
 EXTRACT_METADATA_PROMPT_PATH = Path(__file__).parent / "prompts" / "extract_metadata.txt"
 
+IDENTIFY_SITE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "is_site": {"type": "boolean"},
+        "site_name": {"type": "string"},
+        "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
+        "reasoning": {"type": "string"},
+    },
+    "required": ["is_site", "reasoning"],
+    "additionalProperties": False,
+}
+
+EXTRACT_METADATA_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "period": {"type": "string"},
+        "site_type": {"type": "string"},
+    },
+    "required": ["period", "site_type"],
+    "additionalProperties": False,
+}
+
+ESCALATION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "is_site": {"type": "boolean"},
+        "site_name": {"type": "string"},
+        "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
+        "reasoning": {"type": "string"},
+    },
+    "required": ["is_site", "reasoning"],
+    "additionalProperties": False,
+}
+
 WIKIDATA_SEARCH_URL = "https://www.wikidata.org/w/api.php"
 WIKIDATA_ENTITY_URL = "https://www.wikidata.org/w/api.php"
 WIKIPEDIA_SUMMARY_URL = "https://en.wikipedia.org/api/rest_v1/page/summary/{title}"
@@ -86,7 +120,7 @@ def identify_and_enrich_sites(settings: LyraSettings) -> int:
         return 0
 
     processed = 0
-    prompt_template = PROMPT_PATH.read_text(encoding="utf-8")
+    system_prompt = PROMPT_PATH.read_text(encoding="utf-8")
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
     with get_session() as session:
@@ -118,7 +152,7 @@ def identify_and_enrich_sites(settings: LyraSettings) -> int:
                 # doesn't poison the session for the rest.
                 with session.begin_nested():
                     result = _process_single(
-                        session, contribution, client, prompt_template, settings
+                        session, contribution, client, system_prompt, settings
                     )
                     if result:
                         processed += 1
@@ -139,7 +173,7 @@ def _process_single(
     session: Session,
     contribution: UserContribution,
     client: anthropic.Anthropic,
-    prompt_template: str,
+    system_prompt: str,
     settings: LyraSettings,
 ) -> bool:
     """Process a single candidate through identification + enrichment.
@@ -185,9 +219,15 @@ def _process_single(
     contribution.last_facts_hash = facts_hash
 
     # Step 1: AI identifies the site
-    prompt = _build_prompt(prompt_template, contribution, facts, video_contexts)
+    user_prompt = _build_user_prompt(contribution, facts, video_contexts)
 
-    identification = _call_ai(client, settings.model_identify, prompt)
+    identification = _call_ai(
+        client, settings.model_identify, user_prompt,
+        schema=IDENTIFY_SITE_SCHEMA,
+        system_prompt=system_prompt,
+        max_tokens=settings.identify_thinking_budget + 1024,
+        thinking={"type": "enabled", "budget_tokens": settings.identify_thinking_budget},
+    )
     if not identification:
         contribution.enrichment_status = "failed"
         return False
@@ -195,7 +235,7 @@ def _process_single(
     # Escalate low/medium confidence to Sonnet for review
     confidence = identification.get("confidence", "unknown")
     if confidence in ("low", "medium"):
-        sonnet_result = _escalate_to_sonnet(client, settings, prompt, json.dumps(identification), identification)
+        sonnet_result = _escalate_to_sonnet(client, settings, user_prompt, json.dumps(identification), identification)
         if sonnet_result:
             identification = sonnet_result
 
@@ -246,24 +286,62 @@ def _process_single(
     return _handle_new_site(session, contribution, identification, settings)
 
 
-def _call_ai(client: anthropic.Anthropic, model: str, prompt: str) -> dict | None:
-    """Call Claude and parse the JSON identification response."""
+def _call_ai(
+    client: anthropic.Anthropic,
+    model: str,
+    prompt: str,
+    schema: dict | None = None,
+    system_prompt: str | None = None,
+    **kwargs,
+) -> dict | None:
+    """Call Claude and parse the JSON response.
+
+    If schema is provided, uses structured outputs for guaranteed valid JSON.
+    If system_prompt is provided, it is sent as a cached system message.
+    Additional kwargs (e.g. thinking) are passed through to messages.create().
+    """
+    create_kwargs: dict = {
+        "model": model,
+        "max_tokens": kwargs.pop("max_tokens", 1024),
+        "messages": [{"role": "user", "content": prompt}],
+    }
+
+    if system_prompt:
+        create_kwargs["system"] = [{
+            "type": "text",
+            "text": system_prompt,
+            "cache_control": {"type": "ephemeral"},
+        }]
+
+    # Extended thinking is incompatible with temperature
+    if "thinking" not in kwargs:
+        create_kwargs["temperature"] = 0.0
+
+    if schema:
+        create_kwargs["output_config"] = {
+            "format": {
+                "type": "json_schema",
+                "schema": schema,
+            },
+        }
+
+    create_kwargs.update(kwargs)
+
     try:
-        response = client.messages.create(
-            model=model,
-            max_tokens=1024,
-            temperature=0.0,
-            messages=[{"role": "user", "content": prompt}],
-        )
+        response = client.messages.create(**create_kwargs)
     except anthropic.APIError as e:
         logger.error(f"Anthropic API error: {e}")
         return None
 
-    if not response.content or not hasattr(response.content[0], "text"):
-        logger.warning("Empty or non-text response from AI")
-        return None
+    # With extended thinking, the text block may not be the first content block
+    for block in response.content:
+        if hasattr(block, "text"):
+            if schema:
+                return json.loads(block.text)
+            return _parse_identification(block.text)
 
-    return _parse_identification(response.content[0].text)
+    logger.warning("No text block in AI response")
+    return None
 
 
 def _aggregate_facts(session: Session, contribution: UserContribution) -> tuple[list[str], list[dict]]:
@@ -668,13 +746,17 @@ def _extract_metadata_from_wikipedia(
 
     Returns {"period": "...", "site_type": "..."} or None.
     """
-    prompt_template = EXTRACT_METADATA_PROMPT_PATH.read_text(encoding="utf-8")
-    prompt = prompt_template.format(
-        site_name=site_name,
-        wiki_text=wiki_text[:2000],
+    extract_system_prompt = EXTRACT_METADATA_PROMPT_PATH.read_text(encoding="utf-8")
+    user_content = (
+        f'Site: "{site_name}"\n\n'
+        f"<wikipedia_text>\n{wiki_text[:2000]}\n</wikipedia_text>"
     )
 
-    result = _call_ai(client, model, prompt)
+    result = _call_ai(
+        client, model, user_content,
+        schema=EXTRACT_METADATA_SCHEMA,
+        system_prompt=extract_system_prompt,
+    )
     if not result:
         logger.warning(f"  [{site_name}] Failed to extract metadata from Wikipedia")
         return None
@@ -688,17 +770,14 @@ def _extract_metadata_from_wikipedia(
     return result
 
 
-def _build_prompt(
-    template: str,
+def _build_user_prompt(
     contribution: UserContribution,
     facts: list[str],
     video_contexts: list[dict],
 ) -> str:
-    """Build the identification prompt for Claude Haiku."""
-    # Format facts
+    """Build the variable user content for identification."""
     facts_text = "\n".join(f"- {f}" for f in facts[:30]) if facts else "(no facts extracted)"
 
-    # Format video contexts
     video_text_parts = []
     for ctx in video_contexts[:5]:
         part = f"  Title: {ctx['title']}"
@@ -709,11 +788,10 @@ def _build_prompt(
         video_text_parts.append(part)
     video_text = "\n".join(video_text_parts) if video_text_parts else "(no video context)"
 
-    return template.format(
-        site_name=contribution.name,
-        mention_count=contribution.mention_count,
-        facts=facts_text,
-        video_contexts=video_text,
+    return (
+        f'Extracted Name: "{contribution.name}" (mentioned in {contribution.mention_count} video(s))\n\n'
+        f"<video_facts>\n{facts_text}\n</video_facts>\n\n"
+        f"<video_metadata>\n{video_text}\n</video_metadata>"
     )
 
 
@@ -748,32 +826,17 @@ def _parse_identification(response_text: str) -> dict | None:
         return None
 
 
-ESCALATION_PROMPT_TEMPLATE = """You are a senior archaeological site identification reviewer.
+ESCALATION_SYSTEM_PROMPT = """You are a senior archaeological site identification reviewer.
 
-A junior model (Haiku) was asked to identify an archaeological site from YouTube video captions. It returned a {confidence}-confidence answer. Your job is to REVIEW its work and either confirm or override its decision.
+A junior model (Haiku) was asked to identify an archaeological site from YouTube video captions. Your job is to REVIEW its work and either confirm or override its decision.
 
-## Original Prompt Given to Haiku
-<original_prompt>
-{original_prompt}
-</original_prompt>
-
-## Haiku's Response
-<haiku_response>
-{haiku_response}
-</haiku_response>
-
-## Your Task
+Your Task:
 1. Is this actually a specific archaeological site, or a region/person/method?
 2. Is the site name correct (not a caption garbling)?
 3. Should confidence be higher or lower?
 
 If you agree with Haiku's answer, return the exact same JSON.
-If you disagree, return a corrected JSON with the same schema:
-- For a real site: {{"is_site": true, "site_name": "...", "confidence": "...", "reasoning": "..."}}
-- For not a site: {{"is_site": false, "reasoning": "..."}}
-
-Return ONLY valid JSON.
-"""
+If you disagree, return a corrected JSON."""
 
 
 def _escalate_to_sonnet(
@@ -787,10 +850,12 @@ def _escalate_to_sonnet(
     confidence = haiku_identification.get("confidence", "unknown")
     logger.info(f"Escalating to Sonnet (confidence={confidence})")
 
-    prompt = ESCALATION_PROMPT_TEMPLATE.format(
-        confidence=confidence,
-        original_prompt=original_prompt,
-        haiku_response=haiku_response,
+    user_content = (
+        f"Haiku returned a {confidence}-confidence answer.\n\n"
+        f"## Original Prompt Given to Haiku\n"
+        f"<original_prompt>\n{original_prompt}\n</original_prompt>\n\n"
+        f"## Haiku's Response\n"
+        f"<haiku_response>\n{haiku_response}\n</haiku_response>"
     )
 
     try:
@@ -798,19 +863,29 @@ def _escalate_to_sonnet(
             model=settings.model_identify_escalation,
             max_tokens=1024,
             temperature=0.0,
-            messages=[{"role": "user", "content": prompt}],
+            system=[{
+                "type": "text",
+                "text": ESCALATION_SYSTEM_PROMPT,
+                "cache_control": {"type": "ephemeral"},
+            }],
+            messages=[{"role": "user", "content": user_content}],
+            output_config={
+                "format": {
+                    "type": "json_schema",
+                    "schema": ESCALATION_SCHEMA,
+                },
+            },
         )
     except anthropic.APIError as e:
         logger.error(f"Sonnet escalation API error: {e}")
         return None
 
-    if not response.content or not hasattr(response.content[0], "text"):
+    for block in response.content:
+        if hasattr(block, "text"):
+            result = json.loads(block.text)
+            break
+    else:
         logger.warning("Empty Sonnet escalation response")
-        return None
-
-    result = _parse_identification(response.content[0].text)
-    if not result:
-        logger.warning("Failed to parse Sonnet escalation response")
         return None
 
     sonnet_is_site = result.get("is_site", True)

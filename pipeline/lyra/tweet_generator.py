@@ -2,7 +2,6 @@
 
 import json
 import logging
-import re
 from datetime import datetime
 from pathlib import Path
 
@@ -19,6 +18,30 @@ VALID_CATEGORIES = {
     "excavation", "artifact", "architecture", "bioarchaeology", "dating",
     "remote_sensing", "underwater", "epigraphy", "conservation", "heritage",
     "theory", "technology", "survey", "art", "general",
+}
+
+POSTS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "posts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "tweet": {"type": "string"},
+                    "timestamp_range": {
+                        "anyOf": [{"type": "string"}, {"type": "null"}],
+                    },
+                    "significance": {"type": "integer"},
+                    "category": {"type": "string"},
+                },
+                "required": ["tweet", "timestamp_range", "significance", "category"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["posts"],
+    "additionalProperties": False,
 }
 
 
@@ -45,7 +68,7 @@ def generate_posts_for_video(video: NewsVideo, settings: LyraSettings) -> int:
         return 0
 
     summary_text = json.dumps(video.summary_json, indent=2)
-    prompt_template = _load_prompt()
+    system_prompt = _load_prompt()
 
     now = datetime.utcnow()
     time_instruction = ""
@@ -58,10 +81,10 @@ def generate_posts_for_video(video: NewsVideo, settings: LyraSettings) -> int:
         else:
             time_instruction = f"This content was published {days_ago} days ago."
 
-    prompt = prompt_template.format(
-        current_date=now.strftime("%Y-%m-%d"),
-        time_instruction=time_instruction,
-        summary=summary_text,
+    user_content = (
+        f"Today's date: {now.strftime('%Y-%m-%d')}\n"
+        f"{time_instruction}\n\n"
+        f"Source Material:\n{summary_text}"
     )
 
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
@@ -70,28 +93,25 @@ def generate_posts_for_video(video: NewsVideo, settings: LyraSettings) -> int:
         response = client.messages.create(
             model=settings.model_post,
             max_tokens=4096,
-            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            system=[{
+                "type": "text",
+                "text": system_prompt,
+                "cache_control": {"type": "ephemeral"},
+            }],
+            messages=[{"role": "user", "content": user_content}],
+            output_config={
+                "format": {
+                    "type": "json_schema",
+                    "schema": POSTS_SCHEMA,
+                },
+            },
         )
     except anthropic.APIError as e:
         logger.error(f"Post generation API error for {video.id}: {e}")
         return 0
 
-    response_text = response.content[0].text
-
-    # Extract JSON array from response
-    json_match = re.search(r"\[.*\]", response_text, re.DOTALL)
-    if not json_match:
-        logger.warning(f"No JSON array in post response for {video.id}")
-        return 0
-
-    try:
-        posts_data = json.loads(json_match.group())
-    except json.JSONDecodeError as e:
-        logger.warning(f"Invalid JSON in post response for {video.id}: {e}")
-        return 0
-
-    if not isinstance(posts_data, list):
-        return 0
+    posts_data = json.loads(response.content[0].text).get("posts", [])
 
     with get_session() as session:
         db_video = session.get(NewsVideo, video.id)
