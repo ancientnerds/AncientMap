@@ -13992,20 +13992,7 @@ body.news-feed-open .empire-borders-window {
   border-top-right-radius: 2px;
 }
 
-/* Streaming cursor */
-.lyra-chat-cursor {
-  display: inline-block;
-  width: 6px;
-  height: 14px;
-  background: var(--primary-red);
-  margin-left: 2px;
-  vertical-align: text-bottom;
-  animation: lyra-blink 0.6s step-end infinite;
-}
-
-@keyframes lyra-blink {
-  50% { opacity: 0; }
-}
+/* Streaming cursor: now in StreamingText.css */
 
 /* Image in messages */
 .lyra-chat-msg-images {
@@ -14327,6 +14314,39 @@ body.news-feed-open .empire-borders-window {
   font-size: 10px;
   color: var(--primary-red);
   font-weight: 500;
+}
+
+.lyra-sidebar-source-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+}
+
+.lyra-sidebar-source-icon--video,
+.lyra-sidebar-source-icon--channel {
+  color: #ff4444;
+}
+
+.lyra-sidebar-source-icon--site {
+  color: var(--primary-red);
+}
+
+.lyra-sidebar-source-icon--web {
+  color: #5b9bd5;
+}
+
+.lyra-sidebar-source-icon--seshat {
+  color: #d4a853;
+}
+
+.lyra-sidebar-source-icon--qdrant {
+  color: #7b68ee;
 }
 
 /* News items in sidebar */

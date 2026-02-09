@@ -46,6 +46,16 @@ export interface NewsHighlight {
 }
 
 /**
+ * A source used by Lyra to generate a response.
+ */
+export interface LyraSource {
+  type: 'video' | 'site' | 'web' | 'seshat' | 'qdrant' | 'channel'
+  title: string
+  url?: string
+  detail?: string
+}
+
+/**
  * A message in the Lyra chat conversation.
  */
 export interface LyraMessage {
@@ -60,6 +70,7 @@ export interface LyraMessage {
   images?: string[]
   confidence?: number | null
   tokens?: { input: number; output: number; voyage?: number }
+  sources?: LyraSource[]
 }
 
 /**
@@ -78,7 +89,7 @@ export interface LyraChatRequest {
 /**
  * Server-Sent Event types for streaming.
  */
-export type SSEEventType = 'token' | 'status' | 'sites' | 'news' | 'done' | 'error'
+export type SSEEventType = 'token' | 'status' | 'sites' | 'news' | 'sources' | 'done' | 'error'
 
 export interface SSETokenEvent {
   type: 'token'
@@ -116,7 +127,12 @@ export interface SSEStatusEvent {
   content: string
 }
 
-export type SSEEvent = SSETokenEvent | SSEStatusEvent | SSESitesEvent | SSENewsEvent | SSEDoneEvent | SSEErrorEvent
+export interface SSESourcesEvent {
+  type: 'sources'
+  sources: LyraSource[]
+}
+
+export type SSEEvent = SSETokenEvent | SSEStatusEvent | SSESitesEvent | SSENewsEvent | SSESourcesEvent | SSEDoneEvent | SSEErrorEvent
 
 /**
  * Summary of a saved conversation for the history panel.
