@@ -454,8 +454,22 @@ def _auto_retrieve(query: str, context_type: str) -> tuple[str, list[dict], floa
     total_voyage_tokens = 0
 
     if context_type == "news":
-        # News-only context: skip site search entirely
-        return "", [], None, 0
+        # Search news collection for related items
+        results, vt = _hybrid_search(query, collection="news", limit=5)
+        total_voyage_tokens += vt
+        if not results:
+            return "", [], None, total_voyage_tokens
+        lines = []
+        for r in results:
+            headline = r.get("headline", "?")
+            channel = r.get("channel", "")
+            desc = r.get("description", r.get("summary", ""))[:150]
+            line = f"- **{headline}** ({channel})"
+            if desc:
+                line += f" — {desc}"
+            lines.append(line)
+        context_str = "\n\n## Retrieved Context\nRelated news items:\n\n" + "\n".join(lines) + "\n"
+        return context_str, [], None, total_voyage_tokens
 
     results, vt = _hybrid_search(query, collection="sites", limit=5)
     total_voyage_tokens += vt
@@ -707,6 +721,115 @@ def vector_search(
     return json.dumps(items, ensure_ascii=False)
 
 
+@tool
+def search_radar(
+    query: str | None = None,
+    country: str | None = None,
+    status: str | None = None,
+    limit: int = 10,
+) -> str:
+    """Search Lyra's auto-discovered archaeological sites (Radar).
+
+    These are sites discovered by Lyra from YouTube archaeology channels,
+    enriched with Wikidata/Wikipedia data. Use this when users ask about
+    recent discoveries, new sites, or what Lyra has found.
+
+    Args:
+        query: Search by site name (optional).
+        country: Filter by country (optional).
+        status: Filter by status: 'enriched' (identified), 'promoted' (added to map), 'pending' (awaiting identification). Default: all visible.
+        limit: Max results (default 10, max 20).
+    """
+    limit = min(limit, 20)
+    conditions = ["uc.source = 'lyra'"]
+    params: dict = {"limit": limit}
+
+    visible = ("enriched", "promoted", "pending")
+    if status and status in visible:
+        conditions.append("uc.enrichment_status = :status")
+        params["status"] = status
+    else:
+        conditions.append("uc.enrichment_status IN ('enriched', 'promoted', 'pending')")
+
+    if query:
+        conditions.append("(uc.name ILIKE :q OR uc.corrected_name ILIKE :q)")
+        params["q"] = f"%{query}%"
+    if country:
+        conditions.append("uc.country ILIKE :country")
+        params["country"] = f"%{country}%"
+
+    where = " AND ".join(conditions)
+    sql = f"""
+        SELECT uc.id, uc.name, uc.corrected_name, uc.country, uc.site_type,
+               uc.period_name, uc.lat, uc.lon, uc.description,
+               uc.enrichment_status, uc.mention_count, uc.score,
+               uc.wikipedia_url, uc.thumbnail_url
+        FROM user_contributions uc
+        WHERE {where}
+        ORDER BY uc.mention_count DESC, uc.score DESC NULLS LAST
+        LIMIT :limit
+    """
+    with get_session() as session:
+        result = session.execute(text(sql), params)
+        rows = result.fetchall()
+
+    if not rows:
+        return "No Lyra discoveries found matching the search."
+
+    items = []
+    for r in rows:
+        item = {
+            "name": r.corrected_name or r.name,
+            "original_name": r.name if r.corrected_name else None,
+            "status": r.enrichment_status,
+            "mentions": r.mention_count,
+            "score": r.score,
+            "country": r.country,
+            "type": r.site_type,
+            "period": r.period_name,
+            "description": (r.description or "")[:200],
+        }
+        if r.lat and r.lon:
+            item["lat"] = r.lat
+            item["lon"] = r.lon
+        if r.wikipedia_url:
+            item["wikipedia"] = r.wikipedia_url
+        items.append(item)
+
+    return json.dumps(items, ensure_ascii=False)
+
+
+@tool
+def list_channels() -> str:
+    """List all YouTube archaeology channels that Lyra monitors.
+
+    Use this when users ask what channels you follow, what sources you have,
+    or where your news comes from.
+    """
+    sql = """
+        SELECT nc.id, nc.name, nc.enabled,
+               COUNT(nv.id) AS video_count
+        FROM news_channels nc
+        LEFT JOIN news_videos nv ON nc.id = nv.channel_id
+        GROUP BY nc.id, nc.name, nc.enabled
+        ORDER BY video_count DESC
+    """
+    with get_session() as session:
+        result = session.execute(text(sql))
+        rows = result.fetchall()
+
+    channels = []
+    for r in rows:
+        channels.append({
+            "name": r.name,
+            "enabled": r.enabled,
+            "videos_processed": r.video_count,
+            "youtube_url": f"https://www.youtube.com/channel/{r.id}",
+        })
+
+    return json.dumps(channels, ensure_ascii=False)
+
+
 def _format_payload_for_rerank(payload: dict) -> str:
     """Format a Qdrant payload dict into text for the reranker."""
     parts = []
@@ -779,6 +902,8 @@ LYRA_SYSTEM_PROMPT = """You are LYRA WISKERBYTE, an archaeological AI agent for 
 4. **Empire Knowledge** — Access Seshat polity data (warfare, social, economy, crisis)
 5. **Image Analysis** — Analyze photos of artifacts, ruins, and inscriptions
 6. **Semantic Search** — Deep-dive vector search with metadata filters for follow-up queries
+7. **Radar Discoveries** — Search Lyra's auto-discovered sites from YouTube channels
+8. **Channel Directory** — List monitored YouTube archaeology channels
 
 ## Behavior
 - You have retrieved context below. Use it to answer the user's question directly.
@@ -862,7 +987,7 @@ def _build_context_prompt(context_type: str, context_id: str | None, context_yea
 # Agent execution
 # ---------------------------------------------------------------------------
 
-TOOLS = [search_sites, get_site_details, search_news, get_empire_data, vector_search]
+TOOLS = [search_sites, get_site_details, search_news, get_empire_data, vector_search, search_radar, list_channels]
 
 
 def _build_messages(

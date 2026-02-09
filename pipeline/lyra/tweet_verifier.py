@@ -54,19 +54,24 @@ def verify_single_post(
 
     Returns verification result dict or None on failure.
     """
-    if not item.post_text or not item.timestamp_range:
+    if not item.post_text:
         return None
 
-    segment = extract_transcript_segment(transcript_text, item.timestamp_range)
+    # If no timestamp, use first 3000 chars of transcript as context
+    if not item.timestamp_range:
+        segment = transcript_text[:3000] if transcript_text else None
+    else:
+        segment = extract_transcript_segment(transcript_text, item.timestamp_range)
     if not segment:
         return None
 
     if system_prompt is None:
         system_prompt = _load_prompt()
 
+    ts_label = item.timestamp_range or "start of video"
     user_content = (
         f"Tweet to verify:\n{item.post_text}\n\n"
-        f"Relevant transcript segment (roughly from {item.timestamp_range}):\n"
+        f"Relevant transcript segment (roughly from {ts_label}):\n"
         f"<transcript_segment>\n{segment}\n</transcript_segment>"
     )
 
@@ -128,8 +133,9 @@ def verify_video_posts(
             level = result.get("verification_level", "")
 
             if level == "REJECT":
-                session.delete(item)
-                logger.info(f"Rejected and deleted item {item.id}")
+                item.post_text = None
+                item.news_category = "rejected"
+                logger.info(f"Rejected item {item.id} (soft-delete)")
             elif level == "MODIFY":
                 mod = result.get("suggested_modification", {})
                 modified = mod.get("modified_text", "") if mod else ""

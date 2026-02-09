@@ -118,10 +118,13 @@ def generate_posts_for_video(
 
         # Build headline -> item lookup (normalized lowercase for matching)
         headline_to_item: dict[str, NewsItem] = {}
+        items_by_order: list[NewsItem] = []  # Fallback: match by position
         for item in items:
             if item.headline:
                 headline_to_item[item.headline.strip().lower()] = item
+            items_by_order.append(item)
 
+        fallback_idx = 0
         count = 0
         for post_data in posts_data:
             post_text = post_data.get("tweet", "")
@@ -131,11 +134,21 @@ def generate_posts_for_video(
             if not post_text:
                 continue
 
-            # Match by headline
-            item = headline_to_item.get(headline.strip().lower())
+            # Primary: match by headline
+            key = headline.strip().lower()
+            item = headline_to_item.pop(key, None)
+
+            # Fallback: match by position if headline didn't match
             if item is None:
-                logger.warning(f"No matching item for headline: {headline!r}")
-                continue
+                while fallback_idx < len(items_by_order) and items_by_order[fallback_idx].post_text is not None:
+                    fallback_idx += 1
+                if fallback_idx < len(items_by_order):
+                    item = items_by_order[fallback_idx]
+                    fallback_idx += 1
+                    logger.info(f"Headline mismatch, matched by position: {headline!r} → item {item.id}")
+                else:
+                    logger.warning(f"No matching item for headline: {headline!r}")
+                    continue
 
             item.post_text = post_text
             if ts_range:
@@ -143,8 +156,6 @@ def generate_posts_for_video(
             # Placeholders — rescorer overwrites both after the verify step
             item.significance = 3
             item.news_category = "general"
-            # Remove from lookup so duplicate headlines don't overwrite
-            del headline_to_item[headline.strip().lower()]
             count += 1
 
         db_video.status = "posted"
