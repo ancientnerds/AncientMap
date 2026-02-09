@@ -22,7 +22,7 @@ PROMPT_PATH = Path(__file__).parent / "prompts" / "rescore_significance.txt"
 RESCORE_SCHEMA = {
     "type": "object",
     "properties": {
-        "significance": {"type": "integer", "minimum": 1, "maximum": 10},
+        "significance": {"type": "integer"},
         "news_category": {
             "type": "string",
             "enum": sorted(VALID_CATEGORIES),
