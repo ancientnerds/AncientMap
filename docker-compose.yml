@@ -64,6 +64,8 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    environment:
+      QDRANT__TELEMETRY_DISABLED: "true"
     ports:
       - "${QDRANT_PORT:-6333}:6333"
     volumes:
