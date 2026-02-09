@@ -46,7 +46,10 @@ def _check_rate_limit(ip: str) -> bool:
     # Clean old entries
     _rate_buckets[ip] = [t for t in _rate_buckets[ip] if now - t < window]
 
-    if len(_rate_buckets[ip]) >= RATE_LIMIT:
+    if not _rate_buckets[ip]:
+        del _rate_buckets[ip]
+
+    if len(_rate_buckets.get(ip, [])) >= RATE_LIMIT:
         return False
 
     _rate_buckets[ip].append(now)
@@ -187,7 +190,7 @@ def _stream_response(
 
         except Exception as e:
             logger.error(f"Lyra stream error: {e}", exc_info=True)
-            yield f"event: error\ndata: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+            yield f"event: error\ndata: {json.dumps({'type': 'error', 'error': 'An internal error occurred'})}\n\n"
 
     return StreamingResponse(
         generate(),

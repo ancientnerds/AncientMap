@@ -20,7 +20,7 @@ import gzip
 import json
 import shutil
 from collections import defaultdict
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -99,6 +99,9 @@ class StaticExporter:
             # Export content data
             self._export_content()
 
+            # Export news feed
+            export_news_feed(self.output_dir)
+
         self._print_summary()
 
     def _export_sources(self):
@@ -142,7 +145,7 @@ class StaticExporter:
             output = {
                 "sources": sources,
                 "total": total_count,
-                "exported_at": datetime.utcnow().isoformat(),
+                "exported_at": datetime.now(UTC).isoformat(),
             }
 
             save_json(self.output_dir / "sources.json", output)
@@ -248,7 +251,7 @@ class StaticExporter:
                 "sites": sites,
                 "count": len(sites),
                 "by_source": dict(source_counts),
-                "exported_at": datetime.utcnow().isoformat(),
+                "exported_at": datetime.now(UTC).isoformat(),
             }
 
             save_json(sites_dir / "index.json", output)
@@ -361,7 +364,7 @@ class StaticExporter:
             output = {
                 "links": {k: dict(v) for k, v in links.items()},
                 "count": len(links),
-                "exported_at": datetime.utcnow().isoformat(),
+                "exported_at": datetime.now(UTC).isoformat(),
             }
 
             save_json(self.output_dir / "links.json", output)
@@ -481,7 +484,7 @@ def export_news_feed(output_dir: Path = OUTPUT_DIR):
         for row in result:
             youtube_url = f"https://www.youtube.com/watch?v={row.video_id}"
             youtube_deep_url = None
-            if row.timestamp_seconds:
+            if row.timestamp_seconds is not None:
                 youtube_deep_url = f"https://www.youtube.com/watch?v={row.video_id}&t={row.timestamp_seconds}s"
 
             item: dict[str, Any] = {
@@ -521,7 +524,7 @@ def export_news_feed(output_dir: Path = OUTPUT_DIR):
         output = {
             "items": items,
             "total_count": len(items),
-            "exported_at": datetime.utcnow().isoformat(),
+            "exported_at": datetime.now(UTC).isoformat(),
         }
 
         news_dir = output_dir / "news"

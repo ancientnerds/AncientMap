@@ -18,6 +18,30 @@ from pipeline.utils.text import categorize_period, extract_period_from_text, nor
 
 logger = logging.getLogger(__name__)
 
+# Module-level cache for lyra contribution lookup (built once per match_sites_for_pending_items call)
+_lyra_contrib_cache: dict[str, UserContribution] | None = None
+
+
+def _build_lyra_contrib_cache(session: Session) -> dict[str, UserContribution]:
+    """Build a normalize_name → UserContribution lookup for all lyra contributions."""
+    all_lyra = session.query(UserContribution).filter(
+        UserContribution.source == "lyra",
+    ).all()
+    cache: dict[str, UserContribution] = {}
+    for contrib in all_lyra:
+        key = normalize_name(contrib.corrected_name or contrib.name)
+        if key and key not in cache:
+            cache[key] = contrib
+    return cache
+
+
+def _find_lyra_contribution(session: Session, normalized: str) -> UserContribution | None:
+    """Find an existing lyra contribution by normalized name."""
+    global _lyra_contrib_cache
+    if _lyra_contrib_cache is None:
+        _lyra_contrib_cache = _build_lyra_contrib_cache(session)
+    return _lyra_contrib_cache.get(normalized)
+
 
 def _load_source_priority(session: Session) -> dict[str, int]:
     """Load source priorities from source_meta. Lower priority = better source."""
@@ -95,6 +119,8 @@ def match_sites_for_pending_items() -> int:
 
     Returns number of items matched.
     """
+    global _lyra_contrib_cache
+    _lyra_contrib_cache = None  # Rebuild cache fresh each cycle
     matched = 0
 
     with get_session() as session:
@@ -186,10 +212,10 @@ def _upsert_lyra_suggestion(
 
     metadata = _extract_topic_metadata(session, item)
 
-    existing = session.query(UserContribution).filter(
-        UserContribution.source == "lyra",
-        func.lower(UserContribution.name) == normalized,
-    ).first()
+    # Match using normalize_name() on both sides. func.lower() alone would miss
+    # diacritic/parenthetical differences (e.g. "Göbekli Tepe (Turkey)" vs "gobekli tepe").
+    # Use corrected_name if available, falling back to name.
+    existing = _find_lyra_contribution(session, normalized)
 
     if existing:
         existing.mention_count += 1
@@ -221,6 +247,9 @@ def _upsert_lyra_suggestion(
         if matched_site:
             fill_contrib_from_site(contrib, matched_site)
         session.add(contrib)
+        # Add to cache so subsequent items in the same cycle find it
+        if _lyra_contrib_cache is not None:
+            _lyra_contrib_cache[normalized] = contrib
 
 
 def fill_contrib_from_site(contrib: UserContribution, site: UnifiedSite) -> None:

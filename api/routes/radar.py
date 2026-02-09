@@ -6,8 +6,10 @@ rejected items. Matched items (already in DB) and not_a_site are excluded.
 """
 
 import logging
+import os
+import secrets
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -17,6 +19,8 @@ from pipeline.utils.text import categorize_period, normalize_name
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+CACHE_BUST_SECRET = os.getenv("LYRA_ADMIN_KEY", "")
 
 CACHE_TTL = 300  # 5 minutes
 
@@ -404,7 +408,12 @@ async def get_radar_stats(db: Session = Depends(get_db)):
 
 
 @router.post("/cache-bust")
-async def bust_radar_cache():
+async def bust_radar_cache(authorization: str | None = Header(None)):
     """Called by the Lyra pipeline after processing to show fresh data."""
+    if CACHE_BUST_SECRET:
+        if not authorization or not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Authorization required")
+        if not secrets.compare_digest(authorization[7:], CACHE_BUST_SECRET):
+            raise HTTPException(status_code=403, detail="Invalid token")
     count = cache_delete_pattern("radar:*")
     return {"cleared": count}

@@ -632,20 +632,30 @@ Examples:
 Return ONLY valid JSON, no explanation."""
 
 
+_filter_llm = None
+
+
+def _get_filter_llm():
+    """Get a cached Haiku instance for news filter extraction."""
+    global _filter_llm
+    if _filter_llm is None:
+        from langchain_anthropic import ChatAnthropic
+        api_key = os.getenv("LYRA_ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
+        _filter_llm = ChatAnthropic(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=150,
+            temperature=0,
+            api_key=api_key,
+        )
+    return _filter_llm
+
+
 async def _extract_news_filters(query: str) -> dict:
     """Use Haiku to extract structured news filters from the user's query.
 
     Returns a dict of filter kwargs suitable for _get_related_news().
     """
-    from langchain_anthropic import ChatAnthropic
-
-    api_key = os.getenv("LYRA_ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
-    llm = ChatAnthropic(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=150,
-        temperature=0,
-        api_key=api_key,
-    )
+    llm = _get_filter_llm()
     response = await llm.ainvoke([
         SystemMessage(content=_NEWS_FILTER_EXTRACTION_PROMPT),
         HumanMessage(content=query),
@@ -822,6 +832,10 @@ def _build_context_prompt(context_type: str, context_id: str | None, context_yea
             )
 
     if context_type == "news":
+        try:
+            news_id = int(context_id)
+        except (ValueError, TypeError):
+            return ""
         sql = """
             SELECT ni.headline, ni.summary, nv.title AS video_title, nc.name AS channel
             FROM news_items ni
@@ -830,7 +844,7 @@ def _build_context_prompt(context_type: str, context_id: str | None, context_yea
             WHERE ni.id = :news_id
         """
         with get_session() as session:
-            row = session.execute(text(sql), {"news_id": int(context_id)}).fetchone()
+            row = session.execute(text(sql), {"news_id": news_id}).fetchone()
         if row:
             return (
                 f"\n\n## Current Context — News Item\n"

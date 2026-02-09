@@ -9,7 +9,7 @@ Verify:
 
 Rules:
 - Prefer VERIFY_AS_IS. Only MODIFY for genuinely wrong facts (wrong dates, wrong names, wrong claims).
-- modified_text MUST be a standalone tweet under 220 characters. If you cannot fix it that concisely, REJECT instead.
+- modified_text MUST be a standalone tweet under 170 characters. If you cannot fix it that concisely, REJECT instead.
 - NEVER reference "the transcript", "the audio", "the speaker", or "the segment" in modified_text.
 - Keep the original tweet style — short, punchy, no hedging or caveats.
 - If a name sounds garbled in the transcript but the tweet's interpretation is reasonable, VERIFY_AS_IS.

@@ -181,11 +181,7 @@ def fetch_new_videos(settings: LyraSettings) -> int:
                     video_info["id"], settings
                 )
 
-                # Fetch tags + description via yt-dlp metadata
-                metadata = _fetch_metadata_ytdlp(video_info["id"], proxy_url)
-                tags = metadata["tags"] if metadata else None
-
-                # Skip short videos (Shorts and other non-full-length content)
+                # Skip short videos BEFORE fetching yt-dlp metadata (saves a subprocess call)
                 if duration is not None and duration < settings.min_video_minutes:
                     logger.info(f"  -> skipped ({duration:.1f} min < {settings.min_video_minutes} min minimum)")
                     session.add(NewsVideo(
@@ -196,10 +192,13 @@ def fetch_new_videos(settings: LyraSettings) -> int:
                         published_at=video_info["published_at"],
                         duration_minutes=duration,
                         thumbnail_url=video_info.get("thumbnail_url"),
-                        tags=tags,
                         status="skipped",
                     ))
                     continue
+
+                # Fetch tags + description via yt-dlp metadata (only for non-skipped videos)
+                metadata = _fetch_metadata_ytdlp(video_info["id"], proxy_url)
+                tags = metadata["tags"] if metadata else None
 
                 # Prefer yt-dlp description over RSS if available
                 description = video_info.get("description")
@@ -277,7 +276,10 @@ def retry_failed_videos(settings: LyraSettings) -> int:
 
 
 def parse_timestamp_to_seconds(ts: str) -> int | None:
-    """Parse 'MM:SS' to seconds."""
+    """Parse 'MM:SS' or 'HH:MM:SS' to seconds."""
+    m = re.match(r"(\d+):(\d{2}):(\d{2})", ts)
+    if m:
+        return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + int(m.group(3))
     m = re.match(r"(\d+):(\d{2})", ts)
     if m:
         return int(m.group(1)) * 60 + int(m.group(2))

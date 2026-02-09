@@ -114,7 +114,9 @@ def extract_screenshots(settings: LyraSettings) -> int:
         logger.info(f"Extracting screenshots for {len(items)} items")
 
         # Build work list, skipping items that already have a file on disk
-        to_extract: list[tuple[NewsItem, int, str, Path]] = []
+        # Map item_id -> item for applying results back in the main thread
+        item_by_id: dict[int, NewsItem] = {}
+        to_extract: list[tuple[int, str, int, str, Path]] = []  # (item_id, video_id, ts, filename, output_path)
         for item in items:
             timestamp = item.timestamp_seconds + SCREENSHOT_OFFSET
             filename = f"{item.video_id}_{timestamp}.webp"
@@ -125,28 +127,30 @@ def extract_screenshots(settings: LyraSettings) -> int:
                 extracted += 1
                 logger.info(f"  Reused existing screenshot: {filename}")
             else:
-                to_extract.append((item, timestamp, filename, output_path))
+                item_by_id[item.id] = item
+                to_extract.append((item.id, item.video_id, timestamp, filename, output_path))
 
         # Extract in parallel (4 workers — enough concurrency without hammering proxy)
-        def _do_extract(args: tuple[NewsItem, int, str, Path]) -> tuple[NewsItem, str, bool]:
-            item, ts, fn, out = args
+        # Only immutable data is passed to worker threads; ORM objects stay in main thread.
+        def _do_extract(args: tuple[int, str, int, str, Path]) -> tuple[int, str, str, bool]:
+            item_id, video_id, ts, fn, out = args
             for attempt in range(3):
-                if _extract_frame(item.video_id, ts, out, proxy_url):
-                    return item, fn, True
+                if _extract_frame(video_id, ts, out, proxy_url):
+                    return item_id, video_id, fn, True
                 if attempt < 2:
                     logger.info(f"  Retry {attempt + 2}/3 for {fn} (new proxy IP)")
-            return item, fn, False
+            return item_id, video_id, fn, False
 
         with ThreadPoolExecutor(max_workers=4) as pool:
             futures = {pool.submit(_do_extract, task): task for task in to_extract}
             for future in as_completed(futures):
-                item, filename, success = future.result()
+                item_id, video_id, filename, success = future.result()
                 if success:
-                    item.screenshot_url = f"/api/news/screenshots/{filename}"
+                    item_by_id[item_id].screenshot_url = f"/api/news/screenshots/{filename}"
                     extracted += 1
                     logger.info(f"  Extracted: {filename}")
                 else:
-                    logger.warning(f"  Failed: {item.video_id}@{filename}")
+                    logger.warning(f"  Failed: {video_id}@{filename}")
 
     logger.info(f"Extracted {extracted} screenshots")
     return extracted
