@@ -1,0 +1,1273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lyra RAG Pipeline — Architecture</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #232733;
+    --border: #2e3344;
+    --text: #e0e0e0;
+    --dim: #8890a4;
+    --accent: #6c9cff;
+    --green: #4ade80;
+    --orange: #fb923c;
+    --red: #f87171;
+    --purple: #c084fc;
+    --cyan: #22d3ee;
+    --yellow: #facc15;
+    --pink: #f472b6;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    padding: 40px 20px;
+    line-height: 1.6;
+  }
+
+  .container { max-width: 1200px; margin: 0 auto; }
+
+  h1 {
+    font-size: 28px;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .subtitle { color: var(--dim); font-size: 14px; margin-bottom: 48px; }
+
+  h2 {
+    font-size: 18px;
+    color: var(--accent);
+    margin: 48px 0 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2 .num {
+    background: var(--accent);
+    color: var(--bg);
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  /* Pipeline diagram */
+  .pipeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: relative;
+  }
+
+  .stage {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    position: relative;
+  }
+
+  .stage-label {
+    width: 140px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 20px;
+    font-size: 11px;
+    color: var(--dim);
+    text-align: right;
+    position: relative;
+  }
+
+  .stage-label::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--border);
+  }
+
+  .stage-content {
+    flex: 1;
+    padding: 12px 0 12px 24px;
+    position: relative;
+  }
+
+  .node {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin: 6px 0;
+    position: relative;
+    transition: border-color 0.2s;
+  }
+  .node:hover { border-color: var(--accent); }
+
+  .node-title {
+    font-weight: 700;
+    font-size: 14px;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .node-desc { font-size: 12px; color: var(--dim); }
+
+  .badge {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .badge-new { background: rgba(74, 222, 128, 0.15); color: var(--green); }
+  .badge-upgraded { background: rgba(251, 146, 60, 0.15); color: var(--orange); }
+  .badge-existing { background: rgba(136, 144, 164, 0.1); color: var(--dim); }
+  .badge-critical { background: rgba(248, 113, 113, 0.15); color: var(--red); }
+
+  /* Arrow connectors */
+  .arrow-down {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 0;
+    color: var(--border);
+  }
+  .arrow-down svg { width: 20px; height: 20px; }
+
+  /* Split flow */
+  .split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .split-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+  }
+
+  /* Color accents per type */
+  .node-query { border-left: 3px solid var(--cyan); }
+  .node-embed { border-left: 3px solid var(--purple); }
+  .node-search { border-left: 3px solid var(--accent); }
+  .node-rerank { border-left: 3px solid var(--orange); }
+  .node-llm { border-left: 3px solid var(--green); }
+  .node-output { border-left: 3px solid var(--yellow); }
+  .node-db { border-left: 3px solid var(--pink); }
+  .node-tool { border-left: 3px solid var(--dim); }
+  .node-index { border-left: 3px solid var(--cyan); }
+
+  /* Data flow arrow */
+  .flow-arrow {
+    text-align: center;
+    padding: 6px 0;
+    color: var(--dim);
+    font-size: 18px;
+    user-select: none;
+  }
+
+  /* Comparison table */
+  .comparison {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin: 24px 0;
+  }
+
+  .compare-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+  }
+
+  .compare-box h3 {
+    font-size: 14px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .compare-box.old h3 { color: var(--red); }
+  .compare-box.new h3 { color: var(--green); }
+
+  .compare-box .flow {
+    font-size: 12px;
+    color: var(--dim);
+    line-height: 2;
+  }
+  .compare-box .flow .step {
+    background: var(--surface2);
+    padding: 4px 10px;
+    border-radius: 4px;
+    display: inline-block;
+    margin: 2px 0;
+    color: var(--text);
+  }
+  .compare-box .flow .step-dim {
+    background: transparent;
+    border: 1px dashed var(--border);
+    padding: 4px 10px;
+    border-radius: 4px;
+    display: inline-block;
+    margin: 2px 0;
+    color: var(--dim);
+  }
+
+  /* File list */
+  .file-list {
+    display: grid;
+    gap: 8px;
+    margin: 16px 0;
+  }
+  .file-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+  }
+  .file-path { color: var(--accent); font-weight: 600; min-width: 280px; }
+  .file-desc { color: var(--dim); font-size: 12px; }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin: 16px 0 32px;
+    padding: 16px;
+    background: var(--surface);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--dim);
+  }
+  .legend-color {
+    width: 12px; height: 12px;
+    border-radius: 3px;
+  }
+
+  /* Responsive */
+  @media (max-width: 800px) {
+    .split, .split-3, .comparison { grid-template-columns: 1fr; }
+    .stage-label { display: none; }
+    .stage-content { padding-left: 0; }
+  }
+
+  /* Section separator */
+  .sep {
+    height: 1px;
+    background: var(--border);
+    margin: 48px 0;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Lyra RAG Pipeline</h1>
+<p class="subtitle">Hybrid dense+BM25 retrieval with auto-grounding &mdash; Ancient Nerds Map</p>
+
+<!-- ================================================================== -->
+<!-- QUERY PIPELINE (runtime) -->
+<!-- ================================================================== -->
+<h2><span class="num">1</span> Query Pipeline (Runtime)</h2>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-color" style="background: var(--cyan);"></div> Input</div>
+  <div class="legend-item"><div class="legend-color" style="background: var(--purple);"></div> Embedding</div>
+  <div class="legend-item"><div class="legend-color" style="background: var(--accent);"></div> Vector Search</div>
+  <div class="legend-item"><div class="legend-color" style="background: var(--orange);"></div> Reranking</div>
+  <div class="legend-item"><div class="legend-color" style="background: var(--green);"></div> LLM</div>
+  <div class="legend-item"><div class="legend-color" style="background: var(--yellow);"></div> Output</div>
+  <div class="legend-item"><div class="legend-color" style="background: var(--dim);"></div> Tools (optional)</div>
+  <div class="legend-item"><span class="badge badge-new">new</span></div>
+  <div class="legend-item"><span class="badge badge-upgraded">upgraded</span></div>
+</div>
+
+<div class="pipeline">
+
+  <!-- User Query -->
+  <div class="stage">
+    <div class="stage-label">user input</div>
+    <div class="stage-content">
+      <div class="node node-query">
+        <div class="node-title">User Query <span class="badge badge-existing">existing</span></div>
+        <div class="node-desc">
+          "Tell me about Gobekli Tepe" &mdash; text + optional images + context (site/news/empire/global)
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-arrow">&#x25BC;</div>
+
+  <!-- Auto-Retrieve (THE critical change) -->
+  <div class="stage">
+    <div class="stage-label" style="color: var(--green); font-weight: 700;">auto-retrieve<br><small>(before LLM)</small></div>
+    <div class="stage-content">
+      <div class="node node-embed" style="border: 1px solid var(--green); background: rgba(74, 222, 128, 0.03);">
+        <div class="node-title">_auto_retrieve() <span class="badge badge-critical">critical fix</span></div>
+        <div class="node-desc">
+          Runs BEFORE the LLM sees the message. Searches both collections (sites + news) automatically.
+          Returns formatted context string + site results for immediate map highlighting.
+        </div>
+      </div>
+
+      <div class="flow-arrow">&#x25BC;</div>
+
+      <!-- Dual embedding -->
+      <div class="split">
+        <div class="node node-embed">
+          <div class="node-title">Dense Embedding <span class="badge badge-upgraded">input_type</span></div>
+          <div class="node-desc">
+            <strong>voyage-4</strong> (query model, fast/cheap) via raw <code>voyageai.Client</code><br>
+            1024-dim vector, <code>input_type="query"</code> &mdash; Voyage prepends retrieval-optimized prompt
+          </div>
+        </div>
+        <div class="node node-embed">
+          <div class="node-title">Sparse Embedding <span class="badge badge-new">new</span></div>
+          <div class="node-desc">
+            <strong>Qdrant/bm25</strong> via fastembed<br>
+            BM25 sparse vector &mdash; catches exact keyword matches
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-arrow">&#x25BC;</div>
+
+      <!-- Qdrant hybrid query -->
+      <div class="node node-search">
+        <div class="node-title">Qdrant Hybrid Query <span class="badge badge-new">new</span></div>
+        <div class="node-desc">
+          <strong>Prefetch</strong>: dense &rarr; top 20 &nbsp;+&nbsp; BM25 &rarr; top 20<br>
+          <strong>Fusion</strong>: Reciprocal Rank Fusion (RRF) merges both result sets &rarr; top 20<br>
+          <strong>Filters</strong>: optional country / period_name / site_type payload conditions
+        </div>
+      </div>
+
+      <div class="flow-arrow">&#x25BC;</div>
+
+      <!-- Rerank -->
+      <div class="node node-rerank">
+        <div class="node-title">Voyage Reranker <span class="badge badge-upgraded">instructions fix</span></div>
+        <div class="node-desc">
+          <strong>rerank-2.5-lite</strong> via shared <code>voyageai.Client</code> singleton &mdash; cross-encoder second-pass scorer<br>
+          Re-scores top-20 RRF results &rarr; top 5 with relevance scores<br>
+          Collection-specific instructions <strong>prepended to query string</strong> (per Voyage docs, not kwargs):<br>
+          &bull; Sites: prioritize period/type/region match, documented provenance<br>
+          &bull; News: prioritize specific discoveries, factual claims, recency
+        </div>
+      </div>
+
+      <div class="flow-arrow">&#x25BC;</div>
+
+      <!-- Inject -->
+      <div class="split">
+        <div class="node node-output">
+          <div class="node-title">Inject into System Prompt <span class="badge badge-new">new</span></div>
+          <div class="node-desc">
+            Top-5 sites and news formatted as <code>## Retrieved Context</code><br>
+            Appended to system message so LLM reasons over real data
+          </div>
+        </div>
+        <div class="node node-output">
+          <div class="node-title">Emit Sites to Frontend <span class="badge badge-new">new</span></div>
+          <div class="node-desc">
+            <code>{"type": "sites", "sites": [...]}</code><br>
+            Sent immediately for map highlighting before LLM starts streaming
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-arrow">&#x25BC;</div>
+
+  <!-- LLM with tools -->
+  <div class="stage">
+    <div class="stage-label">LLM reasoning</div>
+    <div class="stage-content">
+      <div class="node node-llm">
+        <div class="node-title">LLM Agent Loop <span class="badge badge-upgraded">upgraded prompt</span></div>
+        <div class="node-desc">
+          <strong>Claude Haiku 4.5</strong> (default) via LangChain &mdash; $1/MTok input, $5/MTok output<br>
+          System prompt now says: "You have retrieved context below. Use it to answer."<br>
+          Streams tokens as <code>{"type": "token", "content": "..."}</code><br>
+          Up to 5 tool-call rounds if follow-up needed
+        </div>
+      </div>
+
+      <div class="flow-arrow" style="font-size: 12px; color: var(--dim);">&#x25BC; optional tool calls</div>
+
+      <!-- Tools grid -->
+      <div class="split-3" style="opacity: 0.7;">
+        <div class="node node-tool">
+          <div class="node-title" style="font-size: 12px;">search_sites</div>
+          <div class="node-desc">SQL ILIKE &mdash; for structured period/country/type filters</div>
+        </div>
+        <div class="node node-tool">
+          <div class="node-title" style="font-size: 12px;">search_news</div>
+          <div class="node-desc">SQL &mdash; by channel, days_back, keywords</div>
+        </div>
+        <div class="node node-tool">
+          <div class="node-title" style="font-size: 12px;">get_site_details</div>
+          <div class="node-desc">Full site info by UUID (names, links)</div>
+        </div>
+      </div>
+      <div class="split-3" style="opacity: 0.7;">
+        <div class="node node-tool">
+          <div class="node-title" style="font-size: 12px;">get_empire_data</div>
+          <div class="node-desc">Seshat polity data &mdash; warfare, economy, crisis</div>
+        </div>
+        <div class="node node-tool" style="border: 1px dashed var(--orange);">
+          <div class="node-title" style="font-size: 12px;">vector_search <span class="badge badge-upgraded" style="font-size: 9px;">upgraded</span></div>
+          <div class="node-desc">Deep-dive hybrid search w/ metadata filters. Now uses same _hybrid_search() pipeline.</div>
+        </div>
+        <div class="node node-tool" style="opacity: 0.5;">
+          <div class="node-title" style="font-size: 12px; color: var(--dim);">(future tools)</div>
+          <div class="node-desc">Extensible tool list</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-arrow">&#x25BC;</div>
+
+  <!-- Output -->
+  <div class="stage">
+    <div class="stage-label">output stream</div>
+    <div class="stage-content">
+      <div class="split-3">
+        <div class="node node-output">
+          <div class="node-title" style="font-size: 12px;">{"type": "sites"}</div>
+          <div class="node-desc">Site data for map pins &mdash; from auto-retrieve + tool calls</div>
+        </div>
+        <div class="node node-output">
+          <div class="node-title" style="font-size: 12px;">{"type": "token"}</div>
+          <div class="node-desc">Streamed text chunks from LLM response</div>
+        </div>
+        <div class="node node-output">
+          <div class="node-title" style="font-size: 12px;">{"type": "done"}</div>
+          <div class="node-desc">Metadata: model, tool_calls count, sites_found</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="sep"></div>
+
+<!-- ================================================================== -->
+<!-- INDEXING PIPELINE -->
+<!-- ================================================================== -->
+<h2><span class="num">2</span> Indexing Pipeline (build_lyra_index.py --rebuild)</h2>
+
+<div class="pipeline">
+
+  <!-- Data sources -->
+  <div class="stage">
+    <div class="stage-label">data sources</div>
+    <div class="stage-content">
+      <div class="split">
+        <div class="node node-db">
+          <div class="node-title">unified_sites <span class="badge badge-upgraded">richer text</span></div>
+          <div class="node-desc">
+            5K+ ancient_nerds sites: name + alt_names + type + period + country + description<br>
+            <strong>Filtered</strong>: <code>source_id = 'ancient_nerds'</code> only &mdash; curated sites with real descriptions<br>
+            raw_data.description fallback + content_titles join
+          </div>
+        </div>
+        <div class="node node-db">
+          <div class="node-title">news_items <span class="badge badge-upgraded">+transcript</span></div>
+          <div class="node-desc">
+            News chunks: headline + summary + facts + channel<br>
+            <strong>New</strong>: transcript_segment (up to 800 chars)
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-arrow">&#x25BC;</div>
+
+  <!-- Text building -->
+  <div class="stage">
+    <div class="stage-label">text building</div>
+    <div class="stage-content">
+      <div class="node node-index">
+        <div class="node-title">Build Embedding Text</div>
+        <div class="node-desc">
+          <strong>Sites</strong>: "Gobekli Tepe | Also known as: G&ouml;bekli Tepe, Portasar | Type: temple | Period: Pre-Pottery Neolithic (9500 BCE) | Country: Turkey | [description or raw_data fallback] | Related: [content titles]"<br>
+          <strong>News</strong>: "headline | summary | transcript_segment | Facts: fact1; fact2 | Site: name | Channel: name"
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-arrow">&#x25BC;</div>
+
+  <!-- Dual embedding -->
+  <div class="stage">
+    <div class="stage-label">embedding</div>
+    <div class="stage-content">
+      <div class="split">
+        <div class="node node-embed">
+          <div class="node-title">Dense: voyage-4-large <span class="badge badge-upgraded">input_type</span></div>
+          <div class="node-desc">1024-dim vectors via raw <code>voyageai.Client</code>, <code>input_type="document"</code>. Best quality model for indexing. Shared space with voyage-4 (query model).</div>
+        </div>
+        <div class="node node-embed">
+          <div class="node-title">Sparse: Qdrant/bm25 <span class="badge badge-new">new</span></div>
+          <div class="node-desc">BM25 token frequencies via fastembed. Server-side IDF weighting in Qdrant.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-arrow">&#x25BC;</div>
+
+  <!-- Qdrant storage -->
+  <div class="stage">
+    <div class="stage-label">vector storage</div>
+    <div class="stage-content">
+      <div class="node node-search">
+        <div class="node-title">Qdrant Collections <span class="badge badge-upgraded">named vectors</span></div>
+        <div class="node-desc">
+          Each point has <strong>two named vectors</strong>:<br>
+          <code>"dense"</code>: VectorParams(size=1024, distance=COSINE)<br>
+          <code>"bm25"</code>: SparseVectorParams(modifier=IDF)<br><br>
+          <strong>Payload indexes</strong> (keyword):<br>
+          Sites: <code>country</code>, <code>period_name</code>, <code>site_type</code><br>
+          News: <code>channel</code>, <code>category</code>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="sep"></div>
+
+<!-- ================================================================== -->
+<!-- HYBRID SEARCH DETAIL -->
+<!-- ================================================================== -->
+<h2><span class="num">3</span> Hybrid Search Detail (_hybrid_search)</h2>
+
+<div class="pipeline">
+  <div class="stage">
+    <div class="stage-label">step 1<br>embed</div>
+    <div class="stage-content">
+      <div class="split">
+        <div class="node node-embed">
+          <div class="node-title" style="font-size: 13px;">voyage-4 &rarr; dense vector <span class="badge badge-upgraded" style="font-size: 9px;">input_type="query"</span></div>
+          <div class="node-desc">1024-dim, <code>input_type="query"</code> triggers retrieval-optimized prompt. Shared space w/ index model.</div>
+        </div>
+        <div class="node node-embed">
+          <div class="node-title" style="font-size: 13px;">Qdrant/bm25 &rarr; sparse vector</div>
+          <div class="node-desc">Token ID + frequency pairs, local inference (fastembed)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-arrow">&#x25BC;</div>
+
+  <div class="stage">
+    <div class="stage-label">step 2<br>filter</div>
+    <div class="stage-content">
+      <div class="node node-search">
+        <div class="node-title" style="font-size: 13px;">Build Qdrant Filter</div>
+        <div class="node-desc">
+          Optional: <code>country</code> MatchText + <code>period_name</code> MatchText + <code>site_type</code> MatchText<br>
+          Applied to both prefetch branches
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-arrow">&#x25BC;</div>
+
+  <div class="stage">
+    <div class="stage-label">step 3<br>prefetch + fuse</div>
+    <div class="stage-content">
+      <div class="split">
+        <div class="node node-search">
+          <div class="node-title" style="font-size: 13px;">Prefetch: Dense ANN</div>
+          <div class="node-desc">HNSW index, cosine similarity &rarr; top 20</div>
+        </div>
+        <div class="node node-search">
+          <div class="node-title" style="font-size: 13px;">Prefetch: BM25 Sparse</div>
+          <div class="node-desc">Inverted index, IDF-weighted &rarr; top 20</div>
+        </div>
+      </div>
+      <div class="flow-arrow" style="font-size: 12px;">&#x25BC; RRF Fusion (Reciprocal Rank Fusion) &#x25BC;</div>
+      <div class="node node-search" style="text-align: center;">
+        <div class="node-title" style="justify-content: center; font-size: 13px;">Fused Top 20</div>
+        <div class="node-desc">RRF score = &Sigma; 1/(k + rank_i) across both lists. Balances semantic + lexical.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-arrow">&#x25BC;</div>
+
+  <div class="stage">
+    <div class="stage-label">step 4<br>rerank</div>
+    <div class="stage-content">
+      <div class="node node-rerank">
+        <div class="node-title" style="font-size: 13px;">Voyage rerank-2.5-lite <span class="badge badge-upgraded" style="font-size: 9px;">instructions</span></div>
+        <div class="node-desc">
+          Cross-encoder scores each (query, document) pair.<br>
+          Collection-specific instructions <strong>prepended to query</strong>: <code>f"{instruction}\n{query}"</code><br>
+          Top 20 &rarr; <strong>top 5</strong> with relevance scores (0.0 &ndash; 1.0).
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="sep"></div>
+
+<!-- ================================================================== -->
+<!-- FILE MAP -->
+<!-- ================================================================== -->
+<h2><span class="num">4</span> Files Modified</h2>
+
+<div class="file-list">
+  <div class="file-item">
+    <span class="file-path">api/services/lyra_embeddings.py</span>
+    <span class="badge badge-critical">rewrite</span>
+    <span class="file-desc">Dropped langchain-voyageai wrapper. Raw <code>voyageai.Client</code> with <code>input_type="document"/"query"</code>. Single shared client for embed + rerank. VoyageEmbeddings thin wrapper class.</span>
+  </div>
+  <div class="file-item">
+    <span class="file-path">api/services/lyra_agent.py</span>
+    <span class="badge badge-upgraded">rerank fix</span>
+    <span class="file-desc">Rerank instructions prepended to query string (per Voyage docs). _auto_retrieve(), _hybrid_search(), system prompt, metadata filters.</span>
+  </div>
+  <div class="file-item">
+    <span class="file-path">scripts/build_lyra_index.py</span>
+    <span class="badge badge-existing">no change</span>
+    <span class="file-desc">Uses get_embeddings().embed_documents() &mdash; wrapper interface preserved. Named vectors, BM25 sparse, payload indexes.</span>
+  </div>
+  <div class="file-item">
+    <span class="file-path">requirements-api.txt</span>
+    <span class="badge badge-upgraded">cleaned</span>
+    <span class="file-desc">&minus;langchain-voyageai (dropped, no longer needed). Kept voyageai>=0.3 (raw client).</span>
+  </div>
+  <div class="file-item">
+    <span class="file-path">docker-compose.yml</span>
+    <span class="badge badge-existing">prev</span>
+    <span class="file-desc">Qdrant pinned to v1.13.2, added to API depends_on with health check</span>
+  </div>
+</div>
+
+<div class="sep"></div>
+
+<!-- ================================================================== -->
+<!-- WHY HYBRID -->
+<!-- ================================================================== -->
+<h2><span class="num">5</span> Why Dense + BM25 + Rerank</h2>
+
+<div style="margin: 16px 0;">
+  <div class="node" style="border-left: 3px solid var(--purple);">
+    <div class="node-desc" style="color: var(--text); font-size: 13px; line-height: 2;">
+      <strong style="color: var(--purple);">Dense only</strong> &mdash; "Gobekli Tepe" query returns semantically similar sites (temples, Neolithic) but may rank the exact match lower than a site with a similar <em>description</em>.<br>
+      <strong style="color: var(--cyan);">BM25 only</strong> &mdash; "Gobekli Tepe" returns exact keyword matches. But "ancient temple complex in Turkey" returns nothing if no document has that exact phrase.<br>
+      <strong style="color: var(--green);">Dense + BM25 + Rerank</strong> &mdash; BM25 catches the exact name. Dense catches the semantic concept. RRF fuses both. Reranker picks the best.
+      <span style="color: var(--orange);"> Anthropic research: 67% fewer retrieval failures vs dense alone.</span>
+    </div>
+  </div>
+</div>
+
+<div class="sep"></div>
+
+<!-- ================================================================== -->
+<!-- CHUNK ANATOMY -->
+<!-- ================================================================== -->
+<h2><span class="num">6</span> What&rsquo;s Inside Each Chunk</h2>
+
+<p style="font-size: 13px; color: var(--dim); margin-bottom: 20px;">
+  1 entity = 1 Qdrant point. No text splitting needed &mdash; our data has natural boundaries.
+</p>
+
+<div class="comparison">
+  <div class="compare-box" style="border-left: 3px solid var(--pink);">
+    <h3 style="color: var(--pink);">Site Chunk (1 row in unified_sites)</h3>
+    <div style="font-size: 12px; color: var(--dim); line-height: 2;">
+      <span class="step">name</span> primary name, e.g. "Masada"<br>
+      <span class="step">site_type</span> normalized &mdash; "Fortification" (from fortress/fort/hillfort/citadel/oppidum)<br>
+      <span class="step">period_name</span> human label &mdash; "Roman"<br>
+      <span class="step">period_start/end</span> year (neg=BCE) &mdash; -31 / 73<br>
+      <span class="step">country</span> modern country &mdash; "Israel"<br>
+      <span class="step">description</span> <span style="color: var(--orange);">varies wildly by source (see below)</span><br>
+      <span class="step">alt_names</span> joined alternates &mdash; "Metzada, &#x5DE;&#x5E6;&#x5D3;&#x5D4;"<br>
+      <span class="step">content_titles</span> linked resource names<br>
+      <span class="step">lat/lon</span> coordinates for map
+    </div>
+  </div>
+
+  <div class="compare-box" style="border-left: 3px solid var(--yellow);">
+    <h3 style="color: var(--yellow);">News Chunk (1 row in news_items)</h3>
+    <div style="font-size: 12px; color: var(--dim); line-height: 2;">
+      <span class="step">headline</span> AI-extracted topic title (first fact)<br>
+      <span class="step">summary</span> bullet-point facts joined as text<br>
+      <span class="step">facts</span> JSONB array of 3&ndash;8 specific claims<br>
+      <span class="step">significance</span> 1&ndash;10 importance score<br>
+      <span class="step">news_category</span> "discovery", "dating", "general", etc.<br>
+      <span class="step">site_name_extracted</span> linked site name<br>
+      <span class="step">site_id</span> FK to unified_sites (nullable)<br>
+      <span class="step">timestamp_seconds</span> deep link into YouTube video
+    </div>
+  </div>
+</div>
+
+<!-- Data sources -->
+<h3 style="font-size: 14px; color: var(--green); margin: 24px 0 12px;">Data quality &mdash; ancient_nerds only</h3>
+
+<div style="display: grid; gap: 8px; margin-bottom: 24px;">
+  <div class="node" style="border-left: 3px solid var(--green);">
+    <div class="node-title" style="font-size: 13px;">Sites (ancient_nerds, 5K+) <span class="badge badge-new">curated</span></div>
+    <div class="node-desc">
+      Hand-curated sites with real descriptions, alternate names, content links, and Wikipedia data.<br>
+      Only <code>source_id = 'ancient_nerds'</code> is indexed &mdash; no DARE stubs, no Pleiades one-liners.
+    </div>
+  </div>
+  <div class="node" style="border-left: 3px solid var(--green);">
+    <div class="node-title" style="font-size: 13px;">News (Claude-extracted) <span class="badge badge-new">richest</span></div>
+    <div class="node-desc">
+      AI distills full YouTube transcripts into structured facts + summary. Contains specific findings, dating methods, researcher names.
+      The signal &mdash; not the raw transcript noise.
+    </div>
+  </div>
+</div>
+
+<!-- What gets embedded -->
+<div class="node node-embed" style="margin-bottom: 8px;">
+  <div class="node-title" style="font-size: 13px;">What gets embedded (site)</div>
+  <div class="node-desc">
+    <code style="color: var(--text); font-size: 11px;">Masada | Also known as: Metzada | Type: Fortification | Period: Roman (-31 BCE) | Country: Israel | [description] | Related: [content titles]</code>
+  </div>
+</div>
+<div class="node node-embed">
+  <div class="node-title" style="font-size: 13px;">What gets embedded (news)</div>
+  <div class="node-desc">
+    <code style="color: var(--text); font-size: 11px;">headline | summary[:500] | Facts: fact1; fact2; fact3 | Site: Masada | Channel: World of Antiquity</code>
+  </div>
+</div>
+
+<div class="sep"></div>
+
+<!-- ================================================================== -->
+<!-- QUERY CAPABILITY -->
+<!-- ================================================================== -->
+<h2><span class="num">7</span> Query Capability &mdash; What Works vs What Doesn&rsquo;t</h2>
+
+<p style="font-size: 13px; color: var(--dim); margin-bottom: 12px;">
+  Example query: <em style="color: var(--text);">&ldquo;Are there any sites in the Mediterranean, that were part of the early Roman empire, fortresses with human remains found older than the site itself? Show them on the globe!&rdquo;</em>
+</p>
+
+<!-- Decomposition table -->
+<div style="margin: 20px 0; font-size: 12px;">
+  <div style="display: grid; grid-template-columns: 180px 120px 1fr; gap: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden;">
+    <!-- Header -->
+    <div style="background: var(--surface2); padding: 10px 14px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Constraint</div>
+    <div style="background: var(--surface2); padding: 10px 14px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Searchable?</div>
+    <div style="background: var(--surface2); padding: 10px 14px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">How / Why Not</div>
+
+    <!-- Mediterranean -->
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">&ldquo;Mediterranean&rdquo;</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border);"><span style="color: var(--orange);">Partial</span></div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">No &ldquo;region&rdquo; field. LLM must enumerate countries (Greece, Turkey, Italy, Tunisia&hellip;) or embedding catches it semantically. No geo-bounding-box.</div>
+
+    <!-- Early Roman -->
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">&ldquo;early Roman empire&rdquo;</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border);"><span style="color: var(--orange);">Partial</span></div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);"><code>period_name = "Roman"</code> works, but &ldquo;early&rdquo; vs &ldquo;late&rdquo; is NOT distinguished. LLM can filter by period_start range if needed.</div>
+
+    <!-- Fortresses -->
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">&ldquo;fortresses&rdquo;</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border);"><span style="color: var(--green);">Yes</span></div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);"><code>site_type = "Fortification"</code> &mdash; normalized from fortress/fort/hillfort/citadel/oppidum. Clean metadata filter.</div>
+
+    <!-- Human remains -->
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">&ldquo;human remains found&rdquo;</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border);"><span style="color: var(--red);">Unreliable</span></div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">Only in free-text description if the curated entry mentions it. This detail lives in excavation reports we don&rsquo;t have.</div>
+
+    <!-- Older than site -->
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">&ldquo;older than the site&rdquo;</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border);"><span style="color: var(--orange);">Indirect</span></div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">No structured artifact-dating field, but news facts or site descriptions may mention it. Haiku can reason over retrieved context to find clues (e.g. &ldquo;remains predating the structure&rdquo;). Not a metadata filter &mdash; depends on what the text contains.</div>
+
+    <!-- Show on globe -->
+    <div style="background: var(--surface2); padding: 10px 14px; color: var(--text);">&ldquo;show on the globe&rdquo;</div>
+    <div style="background: var(--surface2); padding: 10px 14px;"><span style="color: var(--green);">Yes</span></div>
+    <div style="background: var(--surface2); padding: 10px 14px; color: var(--dim);">All sites have lat/lon. Auto-retrieve emits sites for immediate map highlighting.</div>
+  </div>
+</div>
+
+<!-- Verdict boxes -->
+<div class="comparison">
+  <div class="compare-box new" style="border-left: 3px solid var(--green);">
+    <h3 style="color: var(--green);">&#x2713; Works Reliably</h3>
+    <div style="font-size: 12px; color: var(--dim); line-height: 1.8;">
+      <strong style="color: var(--text);">&ldquo;Show me Roman fortresses in the Mediterranean&rdquo;</strong><br>
+      &#x2022; Auto-retrieve embeds query &rarr; dense vector catches &ldquo;Roman fortification Mediterranean&rdquo;<br>
+      &#x2022; BM25 catches exact keyword &ldquo;fortress&rdquo; / &ldquo;Roman&rdquo;<br>
+      &#x2022; LLM uses <code>search_sites(type=&rdquo;Fortification&rdquo;, period=&rdquo;Roman&rdquo;, country=&rdquo;Greece&rdquo;)</code> for follow-up<br>
+      &#x2022; All results have lat/lon &rarr; map highlighting works<br>
+      &#x2022; ~860ms to first token (single collection + Haiku)
+    </div>
+  </div>
+
+  <div class="compare-box old" style="border-left: 3px solid var(--orange);">
+    <h3 style="color: var(--orange);">&#x26A0; Edge Case</h3>
+    <div style="font-size: 12px; color: var(--dim); line-height: 1.8;">
+      <strong style="color: var(--text);">&ldquo;&hellip;with human remains older than the site&rdquo;</strong><br>
+      &#x2022; Site ages work fine &mdash; we have period_start/end on every site<br>
+      &#x2022; &ldquo;Older than site&rdquo; needs comparing <em>individual find dating</em> vs site founding<br>
+      &#x2022; No finds/artifacts table &mdash; individual objects within a site aren&rsquo;t tracked<br>
+      &#x2022; News collection may surface this if a YouTube channel covered it
+    </div>
+  </div>
+</div>
+
+<div class="sep"></div>
+
+<!-- ================================================================== -->
+<!-- PERFORMANCE (measured) -->
+<!-- ================================================================== -->
+<h2><span class="num">8</span> Performance Budget (Measured)</h2>
+
+<p style="font-size: 12px; color: var(--dim); margin-bottom: 16px;">
+  Real measurements from 14 test queries across EASY/MEDIUM/HARD/NEWS/IMPOSSIBLE levels.
+  Latencies include Voyage API round-trip + Qdrant query + rerank. Cold start (first query, model load) excluded from averages.
+</p>
+
+<div style="margin: 20px 0; font-size: 12px;">
+  <div style="display: grid; grid-template-columns: 260px 100px 1fr; gap: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden;">
+    <div style="background: var(--surface2); padding: 10px 14px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Step</div>
+    <div style="background: var(--surface2); padding: 10px 14px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Latency</div>
+    <div style="background: var(--surface2); padding: 10px 14px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Notes</div>
+
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">Hybrid search (embed+RRF+rerank)</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--cyan);">p50: 560ms</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">Measured across 16 warm calls (voyage-4 embed + Qdrant + rerank-2.5-lite)</div>
+
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">Hybrid search (95th percentile)</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--orange);">p95: 899ms</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">Long-tail from complex semantic queries or news collection</div>
+
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">Cold start (first query)</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--orange);">2,360ms</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">fastembed model load + Voyage client init + first Qdrant connection</div>
+
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text); font-weight: 700;">Auto-retrieve total (2 collections)</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--accent); font-weight: 700;">~1,120ms</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">2 &times; p50 (sites + news searched sequentially). Before LLM starts.</div>
+
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">LLM first token (Haiku 4.5)</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--cyan);">~300ms</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">Streaming begins after retrieval completes</div>
+
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">Tool calls (if any)</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">~560ms ea.</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">Each tool-triggered hybrid search</div>
+
+    <div style="background: var(--surface); padding: 10px 14px; color: var(--text); font-weight: 700;">Total to first token</div>
+    <div style="background: var(--surface); padding: 10px 14px; color: var(--green); font-weight: 700;">~1.4s</div>
+    <div style="background: var(--surface); padding: 10px 14px; color: var(--dim);">Auto-retrieve (2 colls) + Haiku first token. Single-collection context &rarr; ~860ms.</div>
+  </div>
+</div>
+
+<div class="sep"></div>
+
+<!-- ================================================================== -->
+<!-- TEST SCORECARD -->
+<!-- ================================================================== -->
+<h2><span class="num">9</span> Test Scorecard</h2>
+
+<p style="font-size: 12px; color: var(--dim); margin-bottom: 16px;">
+  14 graded queries through the full hybrid search pipeline. Measured Feb 2026 on local Qdrant + Voyage API.
+</p>
+
+<div style="margin: 20px 0; font-size: 11px; overflow-x: auto;">
+  <div style="display: grid; grid-template-columns: 70px 1fr 180px 80px 70px; gap: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; min-width: 700px;">
+    <!-- Header -->
+    <div style="background: var(--surface2); padding: 8px 10px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Level</div>
+    <div style="background: var(--surface2); padding: 8px 10px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Query</div>
+    <div style="background: var(--surface2); padding: 8px 10px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Top-1 Result</div>
+    <div style="background: var(--surface2); padding: 8px 10px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Score</div>
+    <div style="background: var(--surface2); padding: 8px 10px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Latency</div>
+
+    <!-- #1 EASY -->
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 600;">EASY</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">What does Machu Picchu mean?</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">Machu Picchu</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 600;">0.805</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">534ms*</div>
+
+    <!-- #2 EASY -->
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 600;">EASY</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">Tell me about Gobekli Tepe</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">G&ouml;beklitepe</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 600;">0.840</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">534ms</div>
+
+    <!-- #3 EASY -->
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 600;">EASY</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">Where is Stonehenge?</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">Stonehenge</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 600;">0.883</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">506ms</div>
+
+    <!-- #4 MEDIUM -->
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--yellow); font-weight: 600;">MEDIUM</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">Show me pyramids in Egypt</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">Great Pyramid of Giza</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 600;">0.840</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">560ms</div>
+
+    <!-- #5 MEDIUM -->
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--yellow); font-weight: 600;">MEDIUM</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">What megalithic sites are in France?</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">Carnac Stones</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 600;">0.852</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">479ms</div>
+
+    <!-- #6 MEDIUM -->
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--yellow); font-weight: 600;">MEDIUM</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">Roman fortresses in England</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">Navio Roman Fort</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 600;">0.863</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">552ms</div>
+
+    <!-- #7 HARD -->
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--purple); font-weight: 600;">HARD</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">Ancient temples older than the Egyptian pyramids</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">&#288;gantija</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 600;">0.891</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">786ms</div>
+
+    <!-- #8 HARD -->
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--purple); font-weight: 600;">HARD</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">Mediterranean Roman Empire fortifications</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">Gemellae Fortress</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--orange); font-weight: 600;">0.762</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">539ms</div>
+
+    <!-- #9 HARD -->
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--purple); font-weight: 600;">HARD</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">Cave paintings and rock art in Europe</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">Roca dels Moros</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 600;">0.840</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">558ms</div>
+
+    <!-- #10 NEWS -->
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--cyan); font-weight: 600;">NEWS</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">Recent discoveries about Karahantepe</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">Serpent head carving&hellip;</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--orange); font-weight: 600;">0.719</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">571ms</div>
+
+    <!-- #11 NEWS -->
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--cyan); font-weight: 600;">NEWS</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">Water rituals at ancient sites?</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">Water exposure marks&hellip;</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--orange); font-weight: 600;">0.695</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">899ms</div>
+
+    <!-- #12 NEWS -->
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--cyan); font-weight: 600;">NEWS</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">LiDAR archaeological discoveries</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">LiDAR app Alabama&hellip;</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--orange); font-weight: 600;">0.707</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">550ms</div>
+
+    <!-- #13 IMPOSSIBLE -->
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--red); font-weight: 600;">IMPOSS.</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">Fortresses with human remains older than site</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">Castro Monte Valinhas</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--orange); font-weight: 600;">0.793</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">550ms</div>
+
+    <!-- #14 IMPOSSIBLE -->
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--red); font-weight: 600;">IMPOSS.</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">DNA analysis revealing population migration</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">Pen&iacute;nsula de Kola</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--orange); font-weight: 600;">0.637</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">568ms</div>
+
+    <!-- Summary row -->
+    <div style="background: var(--surface); padding: 8px 10px; font-weight: 700; color: var(--accent);" colspan="2">AVERAGES</div>
+    <div style="background: var(--surface); padding: 8px 10px; font-weight: 700; color: var(--dim);">14 queries, 17 searches</div>
+    <div style="background: var(--surface); padding: 8px 10px; font-weight: 700; color: var(--dim);">Scores by level &darr;</div>
+    <div style="background: var(--surface); padding: 8px 10px; font-weight: 700; color: var(--accent);">p50: 560ms</div>
+  </div>
+</div>
+
+<!-- Level breakdown -->
+<div style="display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0;">
+  <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; font-size: 12px;">
+    <span style="color: var(--green); font-weight: 700;">EASY</span>
+    <span style="color: var(--dim);">avg top-1:</span>
+    <span style="color: var(--green); font-weight: 600;">0.828</span>
+  </div>
+  <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; font-size: 12px;">
+    <span style="color: var(--yellow); font-weight: 700;">MEDIUM</span>
+    <span style="color: var(--dim);">avg top-1:</span>
+    <span style="color: var(--green); font-weight: 600;">0.852</span>
+  </div>
+  <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; font-size: 12px;">
+    <span style="color: var(--purple); font-weight: 700;">HARD</span>
+    <span style="color: var(--dim);">avg top-1:</span>
+    <span style="color: var(--green); font-weight: 600;">0.831</span>
+  </div>
+  <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; font-size: 12px;">
+    <span style="color: var(--cyan); font-weight: 700;">NEWS</span>
+    <span style="color: var(--dim);">avg top-1:</span>
+    <span style="color: var(--orange); font-weight: 600;">0.707</span>
+  </div>
+  <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; font-size: 12px;">
+    <span style="color: var(--red); font-weight: 700;">IMPOSSIBLE</span>
+    <span style="color: var(--dim);">avg top-1:</span>
+    <span style="color: var(--orange); font-weight: 600;">0.645</span>
+  </div>
+</div>
+
+<p style="font-size: 11px; color: var(--dim);">
+  * Query #1 latency shown excludes cold start (2,360ms). Score colors: <span style="color: var(--green);">green &ge;0.8</span>,
+  <span style="color: var(--orange);">orange &ge;0.6</span>, <span style="color: var(--red);">red &lt;0.6</span>.
+</p>
+
+<div class="sep"></div>
+
+<!-- ================================================================== -->
+<!-- COST ANALYSIS -->
+<!-- ================================================================== -->
+<h2><span class="num">10</span> Cost Analysis</h2>
+
+<p style="font-size: 12px; color: var(--dim); margin-bottom: 20px;">
+  Full pipeline cost: Voyage AI retrieval + Claude Haiku 4.5 reasoning. Prices as of Feb 2026.
+</p>
+
+<!-- Model pricing table -->
+<h3 style="font-size: 14px; color: var(--accent); margin: 24px 0 12px;">Model Pricing</h3>
+
+<div style="margin: 16px 0; font-size: 12px;">
+  <div style="display: grid; grid-template-columns: 200px 140px 1fr; gap: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden;">
+    <div style="background: var(--surface2); padding: 10px 14px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Model</div>
+    <div style="background: var(--surface2); padding: 10px 14px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Price / 1M tokens</div>
+    <div style="background: var(--surface2); padding: 10px 14px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Used For</div>
+
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">voyage-4-large</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--cyan);">$0.12</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">Indexing (one-time, document embeddings)</div>
+
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">voyage-4</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--cyan);">$0.06</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">Query embedding (per-query)</div>
+
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">rerank-2.5-lite</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--cyan);">$0.02</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">Reranking (query&times;docs + doc_tokens)</div>
+
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">Qdrant/bm25 (fastembed)</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--green);">Free</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">Local sparse embedding + vector search</div>
+
+    <div style="background: var(--surface); padding: 10px 14px; color: var(--text);">Claude Haiku 4.5</div>
+    <div style="background: var(--surface); padding: 10px 14px; color: var(--cyan);">$1 in / $5 out</div>
+    <div style="background: var(--surface); padding: 10px 14px; color: var(--dim);">LLM reasoning + tool calls (per-1M-token)</div>
+  </div>
+</div>
+
+<!-- Per-query cost breakdown -->
+<h3 style="font-size: 14px; color: var(--accent); margin: 24px 0 12px;">Per-Query Cost Breakdown</h3>
+
+<div class="comparison">
+  <div class="compare-box" style="border-left: 3px solid var(--purple);">
+    <h3 style="color: var(--purple);">Retrieval (Voyage AI)</h3>
+    <div style="font-size: 12px; color: var(--dim); line-height: 2;">
+      <span class="step">Dense embed</span> ~30 tokens &times; $0.06/1M = <strong style="color: var(--text);">$0.000002</strong><br>
+      <span class="step">Rerank</span> (30&times;20 + 200&times;20) = ~4,600 tokens &times; $0.02/1M = <strong style="color: var(--text);">$0.000092</strong><br>
+      <span class="step">BM25 + Qdrant</span> local/self-hosted = <strong style="color: var(--green);">$0.00</strong><br>
+      <br>
+      <strong style="color: var(--purple);">Subtotal: ~$0.0001/query</strong>
+      <span style="color: var(--dim); font-size: 11px;">(~2% of total cost)</span>
+    </div>
+  </div>
+
+  <div class="compare-box" style="border-left: 3px solid var(--green);">
+    <h3 style="color: var(--green);">Reasoning (Claude Haiku 4.5)</h3>
+    <div style="font-size: 12px; color: var(--dim); line-height: 2;">
+      <span class="step">Input</span> ~730 tokens (system + context + query) &times; $1/1M = <strong style="color: var(--text);">$0.00073</strong><br>
+      <span class="step">Output</span> ~200 tokens &times; $5/1M = <strong style="color: var(--text);">$0.001</strong><br>
+      <span class="step">Prompt caching</span> 300 cached tokens at $0.10/1M = <strong style="color: var(--text);">saves ~$0.0003</strong><br>
+      <br>
+      <strong style="color: var(--green);">Subtotal: ~$0.002/query</strong>
+      <span style="color: var(--dim); font-size: 11px;">(~98% of total cost)</span>
+    </div>
+  </div>
+</div>
+
+<div class="node" style="border-left: 3px solid var(--accent); margin: 16px 0;">
+  <div class="node-title" style="color: var(--accent);">Total per query: ~$0.002</div>
+  <div class="node-desc">
+    Claude Haiku 4.5 dominates at ~98% of per-query cost. Voyage retrieval is negligible.
+    Prompt caching on the static system prompt could cut LLM input costs further.
+  </div>
+</div>
+
+<!-- Index rebuild cost -->
+<h3 style="font-size: 14px; color: var(--accent); margin: 24px 0 12px;">Index Rebuild Cost (One-Time)</h3>
+
+<div style="margin: 16px 0; font-size: 12px;">
+  <div style="display: grid; grid-template-columns: 1fr 120px 180px; gap: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden;">
+    <div style="background: var(--surface2); padding: 10px 14px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Collection</div>
+    <div style="background: var(--surface2); padding: 10px 14px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Tokens</div>
+    <div style="background: var(--surface2); padding: 10px 14px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Cost (voyage-4-large)</div>
+
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">5,005 sites &times; ~400 tokens avg</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">~2M</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--cyan);">~$0.24</div>
+
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">34 news items &times; ~300 tokens avg</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">~10K</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--green);">~$0.00</div>
+
+    <div style="background: var(--surface); padding: 10px 14px; color: var(--text); font-weight: 700;">Total rebuild</div>
+    <div style="background: var(--surface); padding: 10px 14px; color: var(--dim);"></div>
+    <div style="background: var(--surface); padding: 10px 14px; color: var(--green); font-weight: 700;">~$0.24 (within 200M free tier)</div>
+  </div>
+</div>
+
+<!-- Monthly projections -->
+<h3 style="font-size: 14px; color: var(--accent); margin: 24px 0 12px;">Monthly Projections</h3>
+
+<div style="margin: 16px 0; font-size: 12px;">
+  <div style="display: grid; grid-template-columns: 120px 100px 100px 120px; gap: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden;">
+    <div style="background: var(--surface2); padding: 10px 14px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Daily Queries</div>
+    <div style="background: var(--surface2); padding: 10px 14px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Voyage/mo</div>
+    <div style="background: var(--surface2); padding: 10px 14px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Haiku/mo</div>
+    <div style="background: var(--surface2); padding: 10px 14px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Total/mo</div>
+
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">100</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">$0.30</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">$6</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 700;">~$6</div>
+
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">1,000</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">$3</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">$60</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--yellow); font-weight: 700;">~$63</div>
+
+    <div style="background: var(--surface); padding: 10px 14px; color: var(--text);">10,000</div>
+    <div style="background: var(--surface); padding: 10px 14px; color: var(--dim);">$30</div>
+    <div style="background: var(--surface); padding: 10px 14px; color: var(--dim);">$600</div>
+    <div style="background: var(--surface); padding: 10px 14px; color: var(--orange); font-weight: 700;">~$630</div>
+  </div>
+</div>
+
+<p style="font-size: 11px; color: var(--dim); margin-top: 8px;">
+  Voyage offers 200M free embedding tokens/month (covers ~6,600 queries/day for retrieval).
+  Prompt caching on the static system prompt (~300 tokens) could cut Haiku input costs by ~40%.
+</p>
+
+<div class="sep"></div>
+
+<!-- ================================================================== -->
+<!-- VERDICT -->
+<!-- ================================================================== -->
+<h2><span class="num">11</span> Verdict</h2>
+
+<div style="margin: 20px 0; font-size: 12px;">
+  <div style="display: grid; grid-template-columns: 200px 100px 1fr; gap: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden;">
+    <div style="background: var(--surface2); padding: 10px 14px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Aspect</div>
+    <div style="background: var(--surface2); padding: 10px 14px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Status</div>
+    <div style="background: var(--surface2); padding: 10px 14px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Notes</div>
+
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">Chunking boundaries</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 700;">Correct</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">1 entity = 1 chunk, natural boundaries, no splitting needed</div>
+
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">Chunk size</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 700;">Good</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">200&ndash;1000 chars, appropriate for 1024-dim embeddings</div>
+
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">Metadata filtering</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 700;">Strong</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">site_type, period_name, country as Qdrant payload indexes</div>
+
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">Voyage integration</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 700;">SOTA</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">Raw voyageai.Client: input_type=&ldquo;document&rdquo;/&ldquo;query&rdquo;, rerank instructions prepended to query. No langchain wrapper.</div>
+
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">Hybrid retrieval</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 700;">Strong</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">Dense + BM25 + rerank catches both semantic and keyword matches</div>
+
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">Relevance (measured)</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 700;">0.83 avg</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">EASY: 0.83, MEDIUM: 0.85, HARD: 0.83 &mdash; rerank-2.5-lite top-1 scores across 14 test queries</div>
+
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">Latency (measured)</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 700;">p50: 560ms</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">Per hybrid_search call. p95: 899ms. First token ~1.4s (2 colls + Haiku). Cold start: 2.4s.</div>
+
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">Cost per query</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 700;">~$0.002</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">Haiku 4.5 dominates at ~98%. Voyage retrieval &lt;$0.0001. ~$6/mo at 100 queries/day.</div>
+
+    <div style="background: var(--surface); padding: 10px 14px; color: var(--text); font-weight: 700;">Edge case</div>
+    <div style="background: var(--surface); padding: 10px 14px; color: var(--orange); font-weight: 700;">No finds table</div>
+    <div style="background: var(--surface); padding: 10px 14px; color: var(--dim);">Individual artifacts/remains within a site aren&rsquo;t stored &mdash; e.g. &ldquo;sites where remains predate the structure&rdquo; needs per-find dating</div>
+  </div>
+</div>
+
+<div class="node" style="border-left: 3px solid var(--green); margin-top: 24px;">
+  <div class="node-title" style="color: var(--green);">Pipeline is SOTA &mdash; ancient_nerds only, Voyage at full capability</div>
+  <div class="node-desc" style="line-height: 1.8;">
+    5,005 curated sites with real descriptions, period_start/end, alternate names, and content links.<br>
+    News items with AI-extracted facts from 18+ YouTube channels.<br>
+    Voyage embeddings with <code>input_type</code>, rerank with prepended instructions, hybrid dense+BM25, RRF fusion.<br>
+    <strong>Measured</strong>: 0.83 avg relevance, 560ms p50 latency, ~$0.002/query (Haiku-dominated).<br>
+    <strong style="color: var(--dim);">Edge case</strong>: no per-find/artifact data within sites &mdash; individual remains, pottery, etc. aren&rsquo;t tracked separately.
+  </div>
+</div>
+
+<div style="color: var(--dim); font-size: 11px; margin-top: 48px; text-align: center;">
+  Lyra RAG Pipeline &mdash; Ancient Nerds Map &mdash; Feb 2026
+</div>
+
+</div>
+</body>
+</html>

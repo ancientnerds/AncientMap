@@ -950,7 +950,6 @@ async def run_agent_stream(
 
         # Site-specific news (by ID and name — always works, no LLM needed)
         all_news = _get_related_news(site_ids=site_ids, site_names=site_names) if (site_ids or site_names) else []
-        print(f"[NEWS-DEBUG] site_ids={site_ids[:3]}, site_names={site_names[:3]}, news_count={len(all_news)}", flush=True)
 
         # Filter-based news (uses Haiku to extract filters including site names — catches site queries even when Qdrant is down)
         try:
@@ -985,10 +984,8 @@ async def run_agent_stream(
         yield {"type": "sites", "sites": all_sites}
 
     # Emit news linked to matched sites for sidebar
-    print(f"[NEWS-DEBUG] About to yield news: count={len(all_news)}, headlines={[n.get('headline','')[:40] for n in all_news[:3]]}", flush=True)
     if all_news:
         yield {"type": "news", "news": all_news}
-        print("[NEWS-DEBUG] News event yielded successfully", flush=True)
 
     tool_calls_made = 0
     max_tool_rounds = 5
