@@ -1060,8 +1060,6 @@ async def run_agent_stream(
     retrieved_context = ""
     all_sites: list[dict] = []
     all_news: list[dict] = []
-    all_sources: list[dict] = []
-    seen_videos: set[str] = set()
     avg_relevance: float | None = None
     total_input_tokens = 0
     total_output_tokens = 0
@@ -1074,14 +1072,6 @@ async def run_agent_stream(
             total_voyage_tokens += vt
         except Exception as e:
             logger.error(f"Auto-retrieve failed (Qdrant/Voyage issue, falling back to filter-based news): {e}")
-
-        # Record Qdrant auto-retrieve as a source
-        if auto_site_results:
-            all_sources.append({
-                "type": "qdrant",
-                "title": "Vector search: sites",
-                "detail": f"{len(auto_site_results)} results",
-            })
 
         # Extract sites from auto-retrieved results for map highlighting
         # Only include sites with relevance above threshold to avoid irrelevant results
@@ -1118,18 +1108,6 @@ async def run_agent_stream(
                         existing_keys.add(key)
         except Exception as e:
             logger.warning(f"News filter extraction failed: {e}")
-
-        # Record unique video sources from auto-retrieved news
-        for n in all_news:
-            vid = n.get("video_id")
-            if vid and vid not in seen_videos:
-                seen_videos.add(vid)
-                all_sources.append({
-                    "type": "video",
-                    "title": n.get("video_title") or n.get("channel", ""),
-                    "url": f"https://youtu.be/{vid}",
-                    "detail": n.get("channel"),
-                })
 
         # Add news to retrieved context so the LLM can reference them
         if all_news:
@@ -1236,7 +1214,7 @@ async def run_agent_stream(
                 result = tool_fn.invoke(args)
                 tool_calls_made += 1
 
-                # Extract site data for highlighting + collect sources
+                # Extract site data for map highlighting
                 if tc["name"] in ("search_sites", "get_site_details", "vector_search"):
                     try:
                         parsed = json.loads(result)
@@ -1252,17 +1230,6 @@ async def run_agent_stream(
                                         "period_name": s.get("period") or s.get("period_name"),
                                         "country": s.get("country"),
                                     })
-                                if tc["name"] in ("search_sites", "vector_search"):
-                                    sname = s.get("name", "")
-                                    speriod = s.get("period") or s.get("period_name") or ""
-                                    scountry = s.get("country") or ""
-                                    detail_parts = [p for p in [scountry, speriod] if p]
-                                    src_type = "qdrant" if tc["name"] == "vector_search" else "site"
-                                    all_sources.append({
-                                        "type": src_type,
-                                        "title": sname,
-                                        "detail": ", ".join(detail_parts) if detail_parts else None,
-                                    })
                         elif isinstance(parsed, dict) and "lat" in parsed:
                             all_sites.append({
                                 "id": parsed.get("id", ""),
@@ -1273,100 +1240,6 @@ async def run_agent_stream(
                                 "period_name": parsed.get("period") or parsed.get("period_name"),
                                 "country": parsed.get("country"),
                             })
-                        # get_site_details: single site dict
-                        if tc["name"] == "get_site_details" and isinstance(parsed, dict) and parsed.get("name"):
-                            speriod = parsed.get("period") or ""
-                            scountry = parsed.get("country") or ""
-                            detail_parts = [p for p in [scountry, speriod] if p]
-                            all_sources.append({
-                                "type": "site",
-                                "title": parsed["name"],
-                                "detail": ", ".join(detail_parts) if detail_parts else None,
-                            })
-                            # Content links as web sources
-                            for link in parsed.get("content_links", []):
-                                if link.get("url"):
-                                    all_sources.append({
-                                        "type": "web",
-                                        "title": link.get("title") or link["url"],
-                                        "url": link["url"],
-                                    })
-                            # Source URL as web source
-                            if parsed.get("source_url"):
-                                all_sources.append({
-                                    "type": "web",
-                                    "title": parsed["name"] + " (source)",
-                                    "url": parsed["source_url"],
-                                })
-                    except (json.JSONDecodeError, KeyError):
-                        pass
-
-                # search_news: extract video sources
-                if tc["name"] == "search_news":
-                    try:
-                        parsed = json.loads(result)
-                        if isinstance(parsed, list):
-                            for item in parsed:
-                                vid = item.get("video_id")
-                                if vid and vid not in seen_videos:
-                                    seen_videos.add(vid)
-                                    all_sources.append({
-                                        "type": "video",
-                                        "title": item.get("video_title") or item.get("channel", ""),
-                                        "url": f"https://youtu.be/{vid}",
-                                        "detail": item.get("channel"),
-                                    })
-                    except (json.JSONDecodeError, KeyError):
-                        pass
-
-                # get_empire_data: Seshat source
-                if tc["name"] == "get_empire_data":
-                    try:
-                        parsed = json.loads(result)
-                        if isinstance(parsed, dict) and not parsed.get("error"):
-                            polity_name = parsed.get("name") or parsed.get("polity_id") or args.get("empire_id", "")
-                            all_sources.append({
-                                "type": "seshat",
-                                "title": polity_name,
-                                "detail": "Seshat historical data",
-                            })
-                    except (json.JSONDecodeError, KeyError):
-                        pass
-
-                # search_radar: web sources from wikipedia URLs
-                if tc["name"] == "search_radar":
-                    try:
-                        parsed = json.loads(result)
-                        if isinstance(parsed, list):
-                            for item in parsed:
-                                name = item.get("name", "")
-                                wiki_url = item.get("wikipedia")
-                                if wiki_url:
-                                    all_sources.append({
-                                        "type": "web",
-                                        "title": name,
-                                        "url": wiki_url,
-                                    })
-                                elif name:
-                                    all_sources.append({
-                                        "type": "site",
-                                        "title": name,
-                                        "detail": item.get("country"),
-                                    })
-                    except (json.JSONDecodeError, KeyError):
-                        pass
-
-                # list_channels: channel sources
-                if tc["name"] == "list_channels":
-                    try:
-                        parsed = json.loads(result)
-                        if isinstance(parsed, list):
-                            for ch in parsed:
-                                all_sources.append({
-                                    "type": "channel",
-                                    "title": ch.get("name", ""),
-                                    "url": ch.get("youtube_url"),
-                                })
                     except (json.JSONDecodeError, KeyError):
                         pass
 
@@ -1391,17 +1264,6 @@ async def run_agent_stream(
             if new_news:
                 all_news.extend(new_news)
                 yield {"type": "news", "news": all_news}
-
-    # Emit deduplicated sources
-    if all_sources:
-        deduped: list[dict] = []
-        seen_keys: set[tuple[str, str]] = set()
-        for src in all_sources:
-            key = (src["type"], src["title"])
-            if key not in seen_keys:
-                seen_keys.add(key)
-                deduped.append(src)
-        yield {"type": "sources", "sources": deduped}
 
     # Done
     yield {"type": "done", "metadata": {
