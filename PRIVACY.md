@@ -49,7 +49,7 @@ Our automated news pipeline and AI research assistant process **publicly availab
 
 ### Anthropic Claude API
 
-- **Models used:** Claude Haiku 4.5 (summarization, verification, site identification, chat), Claude Sonnet 4.5 (post generation, escalation review)
+- **Models used:** Claude Haiku (summarization, verification, site identification, chat), Claude Sonnet (post generation, escalation review)
 - **Data sent:** YouTube video content, archaeological site names, summary text, news posts for verification, chat queries
 - **Training:** API data is **never used for model training**. This is Anthropic's default policy for all API customers — no opt-out required.
 - **Retention:** Inputs and outputs are retained for **7 days** then automatically deleted.
