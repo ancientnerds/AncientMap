@@ -72,7 +72,7 @@ rich>=13.7.0                # Beautiful terminal output
 # =============================================================================
 # AI AGENT (BitNet RAG)
 # =============================================================================
-qdrant-client>=1.7.0        # Vector database for RAG (multi-collection support)
+qdrant-client>=1.13.0,<1.14  # Pinned to match Qdrant server v1.13.2 in docker-compose
 sentence-transformers>=2.2.2  # Embedding model
 # NOTE: Use BAAI/bge-small-en-v1.5 (MIT) instead of all-MiniLM-L6-v2 (training data restrictions)
 transformers>=4.40.0        # Hugging Face transformers for BitNet
