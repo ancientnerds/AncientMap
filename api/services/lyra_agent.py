@@ -579,7 +579,7 @@ def _get_related_news(
     sql = f"""
         SELECT ni.id, ni.headline, ni.summary, ni.video_id, ni.timestamp_seconds,
                ni.news_category, ni.significance, ni.created_at,
-               ni.post_text, ni.screenshot_url, ni.site_name_extracted, ni.site_id,
+               ni.post_text, ni.screenshot_url, ni.site_name_extracted, ni.site_id, ni.facts,
                nv.title AS video_title, nc.name AS channel,
                us.name AS canonical_site_name,
                us.country AS site_country, us.site_type AS site_type,
@@ -614,6 +614,7 @@ def _get_related_news(
             "site_type": row.site_type,
             "site_period_name": row.site_period_name,
             "site_period_start": row.site_period_start,
+            "facts": row.facts,
         }
         for row in rows
     ]

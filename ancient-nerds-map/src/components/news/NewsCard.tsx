@@ -273,5 +273,6 @@ export function newsHighlightToCardProps(news: NewsHighlight): NewsCardProps {
     siteType: news.site_type,
     sitePeriodName: news.site_period_name,
     sitePeriodStart: news.site_period_start,
+    facts: news.facts,
   }
 }

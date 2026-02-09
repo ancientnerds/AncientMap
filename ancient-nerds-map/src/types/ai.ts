@@ -42,6 +42,7 @@ export interface NewsHighlight {
   site_type?: string
   site_period_name?: string
   site_period_start?: number
+  facts?: string[] | null
 }
 
 /**
