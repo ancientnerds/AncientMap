@@ -248,7 +248,7 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
 
       try {
         const response = await fetch(
-          `${config.api.baseUrl}/sites/all?source=${sourceId}&limit=1000000`
+          `${config.api.baseUrl}/sites/all?source=${sourceId}&limit=100000`
         )
         if (!response.ok) throw new Error('Failed to fetch')
 

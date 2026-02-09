@@ -68,7 +68,7 @@ class DataStoreClass {
 
     const [sourcesResponse, sitesResponse] = await Promise.all([
       offlineFetch(`${API_BASE_URL}/sources/`),
-      offlineFetch(`${API_BASE_URL}/sites/all?limit=1000000&source=${DEFAULT_SOURCE}`)
+      offlineFetch(`${API_BASE_URL}/sites/all?limit=100000&source=${DEFAULT_SOURCE}`)
     ])
 
     if (!sourcesResponse.ok) {
