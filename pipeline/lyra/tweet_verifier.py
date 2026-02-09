@@ -127,7 +127,7 @@ def verify_video_posts(video: NewsVideo, settings: LyraSettings) -> int:
     if not settings.anthropic_api_key:
         return 0
 
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=120.0)
 
     with get_session() as session:
         items = session.query(NewsItem).filter(

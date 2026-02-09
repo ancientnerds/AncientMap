@@ -87,7 +87,7 @@ def generate_posts_for_video(video: NewsVideo, settings: LyraSettings) -> int:
         f"Source Material:\n{summary_text}"
     )
 
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=120.0)
 
     try:
         response = client.messages.create(
