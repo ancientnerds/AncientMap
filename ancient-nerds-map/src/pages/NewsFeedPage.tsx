@@ -527,6 +527,11 @@ export default function NewsFeedPage() {
         </div>
       )}
 
+      {/* AI disclosure */}
+      <div className="news-page-ai-notice">
+        Content is AI-generated from YouTube video transcripts. Always verify with original sources.
+      </div>
+
       {/* Pull-to-refresh zone */}
       <div
         className="news-page-pull-zone"

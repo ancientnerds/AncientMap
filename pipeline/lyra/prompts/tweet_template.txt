@@ -26,6 +26,7 @@ Remember:
 - Keep tweets clear and engaging
 - Focus on building community through shared interest
 - No #Hashtags ever!
+- Extract and share only factual archaeological information. Do NOT reproduce the creator's distinctive phrasing, narrative structure, or creative expression — use your own words to convey the facts
 
 TIMESTAMP REQUIREMENTS:
 - For EACH tweet, determine the most relevant timestamp range from the summary

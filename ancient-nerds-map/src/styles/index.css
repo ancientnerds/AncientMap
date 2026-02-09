@@ -12524,6 +12524,16 @@ body.news-feed-open .empire-borders-window {
   color: var(--primary-red);
 }
 
+.news-feed-ai-notice {
+  margin: 0 16px;
+  padding: 6px 10px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.4);
+  border-bottom: 1px solid rgba(0, 180, 180, 0.08);
+  text-align: center;
+  flex-shrink: 0;
+}
+
 /* =============================================================================
    News Page - dedicated full-page grid layout (/news.html)
    ============================================================================= */
@@ -12734,6 +12744,15 @@ body.news-feed-open .empire-borders-window {
 @keyframes news-live-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
+}
+
+.news-page-ai-notice {
+  text-align: center;
+  padding: 5px 20px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  background: rgba(0, 0, 0, 0.15);
+  border-bottom: 1px solid rgba(0, 180, 180, 0.06);
 }
 
 /* Filter section — sticks right below header */
