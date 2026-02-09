@@ -121,7 +121,7 @@ def identify_and_enrich_sites(settings: LyraSettings) -> int:
 
     processed = 0
     system_prompt = PROMPT_PATH.read_text(encoding="utf-8")
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=120.0)
 
     with get_session() as session:
         # Get pending candidates ordered by mention count (best data first)

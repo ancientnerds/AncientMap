@@ -114,7 +114,7 @@ def summarize_video(video: NewsVideo, settings: LyraSettings) -> bool:
         f"<transcript>\n{video.transcript_text}\n</transcript>"
     )
 
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=120.0)
 
     try:
         response = client.messages.create(

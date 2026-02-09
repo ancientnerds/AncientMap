@@ -171,7 +171,7 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
             return False
 
         # Need to access relationships within session
-        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=120.0)
 
         # Generate paragraphs for each video
         paragraphs = _generate_paragraphs(videos, client, settings.model_article)
