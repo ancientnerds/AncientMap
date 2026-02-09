@@ -203,7 +203,7 @@ def get_site_details(site_id: str) -> str:
             LIMIT 20
         """
         links_sql = """
-            SELECT content_type, title, url, description
+            SELECT content_type, title, content_url
             FROM site_content_links
             WHERE site_id = CAST(:site_id AS uuid)
             LIMIT 10
@@ -234,7 +234,7 @@ def get_site_details(site_id: str) -> str:
 
     if links:
         site["content_links"] = [
-            {"type": l.content_type, "title": l.title, "url": l.url}
+            {"type": l.content_type, "title": l.title, "url": l.content_url}
             for l in links
         ]
 
@@ -950,6 +950,7 @@ async def run_agent_stream(
 
         # Site-specific news (by ID and name — always works, no LLM needed)
         all_news = _get_related_news(site_ids=site_ids, site_names=site_names) if (site_ids or site_names) else []
+        logger.info(f"[NEWS-DEBUG] site_ids={site_ids[:3]}, site_names={site_names[:3]}, news_count={len(all_news)}")
 
         # Filter-based news (uses Haiku to extract filters including site names — catches site queries even when Qdrant is down)
         try:
@@ -984,8 +985,10 @@ async def run_agent_stream(
         yield {"type": "sites", "sites": all_sites}
 
     # Emit news linked to matched sites for sidebar
+    logger.info(f"[NEWS-DEBUG] About to yield news: count={len(all_news)}, headlines={[n.get('headline','')[:40] for n in all_news[:3]]}")
     if all_news:
         yield {"type": "news", "news": all_news}
+        logger.info("[NEWS-DEBUG] News event yielded successfully")
 
     tool_calls_made = 0
     max_tool_rounds = 5
