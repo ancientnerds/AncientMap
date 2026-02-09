@@ -193,14 +193,13 @@ function radarItemToSiteData(item: RadarItem): SiteData {
   }
 }
 
-function RadarCard({ item, isTest, onViewSite }: { item: RadarItem; isTest?: boolean; onViewSite?: (site: SiteData) => void }) {
+function RadarCard({ item, onViewSite }: { item: RadarItem; onViewSite?: (site: SiteData) => void }) {
   const [factsExpanded, setFactsExpanded] = useState(false)
   const [videosExpanded, setVideosExpanded] = useState(false)
   const [sourcesExpanded, setSourcesExpanded] = useState(false)
 
   return (
-    <div className={`lyra-discovery-card${isTest ? ' lyra-test-card-fadein' : ''}`}>
-      {isTest && <span className="lyra-test-stamp">TEST</span>}
+    <div className="lyra-discovery-card">
       {/* Last seen — lower right corner */}
       {item.last_mentioned && (
         <span className="lyra-last-seen-corner" title={`Last mentioned ${new Date(item.last_mentioned).toLocaleString()}`}>{timeAgo(item.last_mentioned)}</span>
@@ -460,61 +459,7 @@ function RadarCard({ item, isTest, onViewSite }: { item: RadarItem; isTest?: boo
   )
 }
 
-// TODO: Remove after testing unified metadata components
-function useRandomTestCard(): RadarItem | null {
-  const [card, setCard] = useState<RadarItem | null>(null)
-  const [ready, setReady] = useState(false)
-  useEffect(() => {
-    setReady(false)
-    ;(async () => {
-      try {
-        const listResp = await fetch(`${config.api.baseUrl}/sites/all?source=ancient_nerds&limit=200`)
-        if (!listResp.ok) return
-        const data = await listResp.json()
-        const sites: { id: string }[] = data.sites || []
-        if (!sites.length) return
-        const pick = sites[Math.floor(Math.random() * sites.length)]
-        const detailResp = await fetch(`${config.api.baseUrl}/sites/${pick.id}`)
-        if (!detailResp.ok) return
-        const s = await detailResp.json()
-        setCard({
-          id: 'test-dummy',
-          display_name: s.name || 'Unknown Site',
-          original_name: null,
-          enrichment_status: 'enriched',
-          enrichment_score: 85,
-          rejection_reason: null,
-          country: s.country || null,
-          site_type: s.type || null,
-          period_name: s.periodName || null,
-          period_start: s.periodStart ?? null,
-          thumbnail_url: s.thumbnailUrl || null,
-          wikipedia_url: s.sourceUrl || null,
-          lat: s.lat,
-          lon: s.lon,
-          description: s.description || null,
-          wikidata_id: 'Q12345',
-          mention_count: 7,
-          facts: ['Test card — random Ancient Nerds Originals site'],
-          videos: [
-            { video_id: 'baY3SaIhfl0', channel_name: 'Ancient Architects', timestamp_seconds: 142, deep_url: 'https://www.youtube.com/watch?v=baY3SaIhfl0&t=142' },
-          ],
-          unique_videos: 1,
-          unique_channels: 1,
-          last_mentioned: new Date().toISOString(),
-          suggestions: [],
-          best_match: null,
-          external_sources: [],
-        })
-        setReady(true)
-      } catch { /* ignore */ }
-    })()
-  }, [])
-  return ready ? card : null
-}
-
 export default function LyraRadarPage() {
-  const testCard = useRandomTestCard()
   const [items, setItems] = useState<RadarItem[]>([])
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(false)
@@ -730,8 +675,7 @@ export default function LyraRadarPage() {
       <div className="lyra-discoveries-grid" ref={gridRef}>
         {Array.from({ length: columnCount }, (_, colIdx) => (
           <div key={colIdx} className="lyra-discoveries-column">
-            {/* TODO: Remove test card after visual verification */}
-            {colIdx === 0 && testCard && <RadarCard item={testCard} isTest onViewSite={setSelectedSite} />}
+            {/* Radar cards */}
             {items.filter((_, i) => i % columnCount === colIdx).map(item => (
               <RadarCard key={item.id} item={item} onViewSite={setSelectedSite} />
             ))}

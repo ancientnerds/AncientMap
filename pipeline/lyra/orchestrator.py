@@ -23,10 +23,14 @@ CYCLE_INTERVAL = 3600  # 1 hour between pipeline runs
 
 def _bust_radar_cache():
     """Tell the API to drop cached radar responses after pipeline updates."""
+    import os
     import urllib.request
 
     try:
         req = urllib.request.Request("http://api:8000/radar/cache-bust", method="POST")
+        admin_key = os.getenv("LYRA_ADMIN_KEY", "")
+        if admin_key:
+            req.add_header("Authorization", f"Bearer {admin_key}")
         urllib.request.urlopen(req, timeout=5)
         logger.info("Radar cache busted")
     except Exception as e:
@@ -105,9 +109,12 @@ def _log_cycle_summary(step_results: dict[str, tuple[int, float]], total_elapsed
     for name in STEP_ORDER:
         if name in step_results:
             count, elapsed = step_results[name]
-            _, _, _, desc_template = STEPS[name]
-            desc = desc_template.format(n=count)
-            lines.append(f"  {name:<12} {desc} ({elapsed:.1f}s)")
+            if count < 0:
+                lines.append(f"  {name:<12} FAILED")
+            else:
+                _, _, _, desc_template = STEPS[name]
+                desc = desc_template.format(n=count)
+                lines.append(f"  {name:<12} {desc} ({elapsed:.1f}s)")
 
     lines.append("  ---")
     lines.append(f"  Videos: {video_count}  |  News items: {news_count}")
@@ -136,11 +143,15 @@ def run_pipeline(settings: LyraSettings, only_step: str | None = None) -> None:
         logger.info("=== Starting pipeline cycle ===")
 
     for step_name in steps_to_run:
-        result, elapsed = _run_step(step_name, settings)
-        step_results[step_name] = (result, elapsed)
-        _, _, _, desc_template = STEPS[step_name]
-        desc = desc_template.format(n=result)
-        logger.info(f"  {step_name}: {desc} ({elapsed:.1f}s)")
+        try:
+            result, elapsed = _run_step(step_name, settings)
+            step_results[step_name] = (result, elapsed)
+            _, _, _, desc_template = STEPS[step_name]
+            desc = desc_template.format(n=result)
+            logger.info(f"  {step_name}: {desc} ({elapsed:.1f}s)")
+        except Exception:
+            logger.exception(f"  {step_name}: FAILED — continuing to next step")
+            step_results[step_name] = (-1, 0.0)
 
     total_elapsed = time.time() - cycle_start
     _log_cycle_summary(step_results, total_elapsed)
