@@ -74,7 +74,7 @@ def deduplicate_posts(settings: LyraSettings | None = None) -> int:
     with get_session() as session:
         items = session.query(NewsItem).filter(
             NewsItem.post_text.isnot(None),
-        ).order_by(NewsItem.id.desc()).all()
+        ).order_by(NewsItem.id.desc()).limit(500).all()
 
         if len(items) < 2:
             return 0

@@ -10,6 +10,7 @@ import io
 import json
 import logging
 import os
+import re
 from pathlib import Path
 
 import httpx
@@ -364,6 +365,10 @@ async def get_share_page(
     db: Session = Depends(get_db),
 ):
     """Serve HTML page with OG meta tags for social media sharing."""
+    # Validate site_id is a UUID to prevent XSS via crafted IDs
+    if not re.match(r'^[0-9a-fA-F-]{36}$', site_id):
+        return HTMLResponse(content="Invalid site ID", status_code=400)
+
     base_url = str(request.base_url).rstrip('/')
 
     query = text("""
@@ -387,8 +392,8 @@ async def get_share_page(
         country = row.country or ""
 
     og_image_url = f"{base_url}/api/og/{site_id}"
-    app_url = f"/?site={site_id}"
-    canonical_url = f"{base_url}/?site={site_id}"
+    app_url = html.escape(f"/?site={site_id}")
+    canonical_url = html.escape(f"{base_url}/?site={site_id}")
 
     # OG description: just country
     og_desc = country if country else description

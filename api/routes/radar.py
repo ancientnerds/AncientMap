@@ -410,10 +410,11 @@ async def get_radar_stats(db: Session = Depends(get_db)):
 @router.post("/cache-bust")
 async def bust_radar_cache(authorization: str | None = Header(None)):
     """Called by the Lyra pipeline after processing to show fresh data."""
-    if CACHE_BUST_SECRET:
-        if not authorization or not authorization.startswith("Bearer "):
-            raise HTTPException(status_code=401, detail="Authorization required")
-        if not secrets.compare_digest(authorization[7:], CACHE_BUST_SECRET):
-            raise HTTPException(status_code=403, detail="Invalid token")
+    if not CACHE_BUST_SECRET:
+        raise HTTPException(status_code=503, detail="LYRA_ADMIN_KEY not configured")
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Authorization required")
+    if not secrets.compare_digest(authorization[7:], CACHE_BUST_SECRET):
+        raise HTTPException(status_code=403, detail="Invalid token")
     count = cache_delete_pattern("radar:*")
     return {"cleared": count}
