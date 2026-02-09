@@ -2701,6 +2701,17 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   margin-top: 0;
 }
 
+.disclaimer-section-content a {
+  color: var(--primary-red);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.disclaimer-section-content a:hover {
+  color: var(--primary-red-hover);
+  text-decoration: underline;
+}
+
 .source-licenses .license-group {
   margin-bottom: 12px;
 }
