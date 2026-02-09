@@ -147,18 +147,16 @@ export default function LyraProfileModal({ onClose }: Props) {
         {/* LEFT: portrait + NFT link */}
         <div className="lyra-poster-left">
           <div className="lyra-poster-banner">AGENT DOSSIER</div>
-          <div className="lyra-poster-portrait">
+          <a className="lyra-poster-portrait" href={NFT_URL} target="_blank" rel="noopener noreferrer">
             <img src="/lyra.gif" alt="Lyra Wiskerbyte" />
             <span className={`lyra-poster-led${lyraStatus !== 'online' ? ' offline' : ''}`} title={lyraStatus === 'online' ? 'Online' : 'Offline'} />
-          </div>
+            <span className="lyra-poster-nft-badge">NFT #001</span>
+          </a>
           <div className="lyra-poster-name">
             <span className="lyra-poster-name-first">LYRA</span>
             <span className="lyra-poster-name-last">WISKERBYTE</span>
           </div>
           <span className="lyra-poster-tag">Archaeological Agent</span>
-          <a className="lyra-poster-nft" href={NFT_URL} target="_blank" rel="noopener noreferrer">
-            View NFT #001
-          </a>
           <div className="lyra-poster-status">
             <div className="lyra-poster-status-stats">
               <div className="lyra-poster-status-row">
@@ -231,7 +229,7 @@ export default function LyraProfileModal({ onClose }: Props) {
               </div>
               <div className="lyra-poster-ability">
                 <span className="lyra-poster-ability-name">Database Search</span>
-                <span className="lyra-poster-ability-desc">Query 40K+ archaeological sites by period, type, location</span>
+                <span className="lyra-poster-ability-desc">Query 5K+ archaeological sites by period, type, location</span>
               </div>
               <div className="lyra-poster-ability">
                 <span className="lyra-poster-ability-name">News Intelligence</span>

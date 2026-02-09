@@ -13085,7 +13085,7 @@ body.news-feed-open .empire-borders-window {
     );
 }
 
-/* LEFT column: portrait + stats + NFT */
+/* LEFT column: portrait + stats */
 .lyra-poster-left {
   width: 185px;
   flex-shrink: 0;
@@ -13095,6 +13095,7 @@ body.news-feed-open .empire-borders-window {
   padding: 14px 12px 14px 16px;
   gap: 8px;
   border-right: 1px solid rgba(192, 32, 35, 0.15);
+  overflow-y: auto;
 }
 
 /* Banner */
@@ -13116,6 +13117,7 @@ body.news-feed-open .empire-borders-window {
 /* Portrait */
 .lyra-poster-portrait {
   position: relative;
+  display: block;
   width: 120px;
   height: 120px;
   border: 3px solid rgba(192, 32, 35, 0.5);
@@ -13123,6 +13125,12 @@ body.news-feed-open .empire-borders-window {
   outline-offset: 3px;
   overflow: visible;
   flex-shrink: 0;
+  text-decoration: none;
+  transition: border-color 0.15s;
+}
+
+.lyra-poster-portrait:hover {
+  border-color: rgba(232, 160, 32, 0.5);
 }
 
 .lyra-poster-portrait img {
@@ -13203,26 +13211,25 @@ body.news-feed-open .empire-borders-window {
   box-sizing: border-box;
 }
 
-/* NFT link */
-.lyra-poster-nft {
-  font-size: 12px;
-  font-weight: 600;
+/* NFT badge on portrait */
+.lyra-poster-nft-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 7px;
+  font-weight: 700;
   color: #e8a020;
-  text-decoration: none;
-  padding: 5px 0;
-  border: 1px solid rgba(232, 160, 32, 0.3);
-  border-radius: 2px;
-  transition: color 0.15s, background-color 0.15s, border-color 0.15s;
+  background: rgba(10, 10, 14, 0.85);
+  padding: 2px 4px;
   letter-spacing: 0.5px;
-  width: 120px;
-  text-align: center;
-  box-sizing: border-box;
+  border-top: 1px solid rgba(232, 160, 32, 0.3);
+  border-left: 1px solid rgba(232, 160, 32, 0.3);
 }
 
-.lyra-poster-nft:hover {
-  background: rgba(232, 160, 32, 0.1);
-  border-color: rgba(232, 160, 32, 0.5);
+.lyra-poster-portrait:hover .lyra-poster-nft-badge {
   color: #f0b830;
+  border-color: rgba(232, 160, 32, 0.5);
 }
 
 /* Status section */
@@ -13315,7 +13322,25 @@ body.news-feed-open .empire-borders-window {
   flex-direction: column;
   gap: 10px;
   padding: 14px 12px;
-  overflow: hidden;
+  overflow-y: auto;
+}
+
+/* Thin scrollbar for center column */
+.lyra-poster-center::-webkit-scrollbar {
+  width: 4px;
+}
+
+.lyra-poster-center::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.lyra-poster-center::-webkit-scrollbar-thumb {
+  background: rgba(192, 32, 35, 0.25);
+  border-radius: 2px;
+}
+
+.lyra-poster-center::-webkit-scrollbar-thumb:hover {
+  background: rgba(192, 32, 35, 0.4);
 }
 
 /* Sections */
@@ -13405,11 +13430,11 @@ body.news-feed-open .empire-borders-window {
   border-left: 1px solid rgba(192, 32, 35, 0.15);
 }
 
-/* Channel list (only scrollable area) */
+/* Channel list */
 .lyra-poster-channel-list {
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -13511,7 +13536,18 @@ body.news-feed-open .empire-borders-window {
   }
 
   .lyra-poster-dragbar {
-    padding: 6px 10px;
+    padding: 8px 12px;
+  }
+
+  /* Bigger close button for touch */
+  .lyra-modal .popup-window-btn.close-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .lyra-modal .popup-window-btn.close-btn svg {
+    width: 16px;
+    height: 16px;
   }
 
   .lyra-poster-body {
@@ -13520,22 +13556,21 @@ body.news-feed-open .empire-borders-window {
     overflow-x: hidden;
   }
 
+  /* Left column: vertical stack, centered */
   .lyra-poster-left {
     width: 100%;
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
     padding: 12px 16px;
     border-right: none;
     border-bottom: 1px solid rgba(192, 32, 35, 0.15);
-    gap: 10px;
+    gap: 6px;
+    overflow: visible;
   }
 
+  /* Hide banner on mobile — redundant with the modal itself */
   .lyra-poster-banner {
-    width: 100%;
-    font-size: 11px;
-    letter-spacing: 2px;
-    padding: 3px 0;
+    display: none;
   }
 
   .lyra-poster-portrait {
@@ -13544,8 +13579,7 @@ body.news-feed-open .empire-borders-window {
   }
 
   .lyra-poster-name {
-    width: auto;
-    align-items: flex-start;
+    align-items: center;
   }
 
   .lyra-poster-name-first {
@@ -13565,27 +13599,29 @@ body.news-feed-open .empire-borders-window {
     padding: 3px 10px;
   }
 
-  .lyra-poster-nft {
-    width: auto;
-    padding: 4px 10px;
-    font-size: 11px;
-  }
-
+  /* Stats: compact 2-column grid */
   .lyra-poster-status {
-    width: auto;
-    flex-direction: row;
-    align-items: center;
-    gap: 10px;
+    width: 100%;
   }
 
   .lyra-poster-status-stats {
-    flex-direction: row;
-    gap: 10px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 16px;
   }
 
+  .lyra-poster-status-highlight {
+    grid-column: 1 / -1;
+    text-align: center;
+    margin-top: 2px;
+    padding-top: 4px;
+  }
+
+  /* Center column: no overflow on mobile (parent body scrolls) */
   .lyra-poster-center {
     padding: 12px 16px;
     gap: 8px;
+    overflow: visible;
   }
 
   .lyra-poster-section p {
