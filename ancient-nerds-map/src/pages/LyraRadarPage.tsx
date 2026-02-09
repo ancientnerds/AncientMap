@@ -708,6 +708,11 @@ export default function LyraRadarPage() {
         </div>
       </div>
 
+      {/* AI disclosure */}
+      <div className="news-page-ai-notice">
+        Content is AI-generated from YouTube video content. Always verify with original sources.
+      </div>
+
       {/* Error state */}
       {error && (
         <div className="news-page-error">
