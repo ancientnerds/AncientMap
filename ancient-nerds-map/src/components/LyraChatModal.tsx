@@ -18,14 +18,13 @@ import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } fro
 import { createPortal } from 'react-dom'
 import ReactMarkdown from 'react-markdown'
 import { config } from '../config'
-import type { LyraContextType, LyraMessage, LyraSource, SiteHighlight, NewsHighlight, ConversationSummary } from '../types/ai'
+import type { LyraContextType, LyraMessage, SiteHighlight, NewsHighlight, ConversationSummary } from '../types/ai'
 import { getCategoryColor, getPeriodColor } from '../constants/colors'
 import { enrichLyraContent } from '../utils/lyraContentEnricher'
 import { formatRelativeDate } from '../utils/formatters'
 import NewsCard, { newsHighlightToCardProps } from './news/NewsCard'
 import SiteResultItem from './SiteResultItem'
 import { SitePopupOverlay } from './SitePopupOverlay'
-import StreamingText from './StreamingText'
 import LyraAuthGate from './LyraAuthGate'
 import { apiDetailToSiteData } from '../utils/siteApi'
 import type { SiteData } from '../data/sites'
@@ -151,72 +150,6 @@ function ConfidenceBadge({ value }: { value: number }) {
   )
 }
 
-const SOURCE_ICONS: Record<LyraSource['type'], string> = {
-  video: 'M10 15l5.19-3L10 9v6m11.56-7.83c.13.47.22 1.1.28 1.9.07.8.1 1.49.1 2.09L22 12c0 2.19-.16 3.8-.44 4.83-.25.9-.83 1.48-1.73 1.73-.47.13-1.33.22-2.65.28-1.3.07-2.49.1-3.59.1L12 19c-4.19 0-6.8-.16-7.83-.44-.9-.25-1.48-.83-1.73-1.73-.13-.47-.22-1.1-.28-1.9-.07-.8-.1-1.49-.1-2.09L2 12c0-2.19.16-3.8.44-4.83.25-.9.83-1.48 1.73-1.73C4.64 5.31 5.5 5.22 6.82 5.16c1.3-.07 2.49-.1 3.59-.1L12 5c4.19 0 6.8.16 7.83.44.9.25 1.48.83 1.73 1.73z',
-  site: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
-  web: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z',
-  seshat: 'M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z',
-  qdrant: 'M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z',
-  channel: 'M10 15l5.19-3L10 9v6m11.56-7.83c.13.47.22 1.1.28 1.9.07.8.1 1.49.1 2.09L22 12c0 2.19-.16 3.8-.44 4.83-.25.9-.83 1.48-1.73 1.73-.47.13-1.33.22-2.65.28-1.3.07-2.49.1-3.59.1L12 19c-4.19 0-6.8-.16-7.83-.44-.9-.25-1.48-.83-1.73-1.73-.13-.47-.22-1.1-.28-1.9-.07-.8-.1-1.49-.1-2.09L2 12c0-2.19.16-3.8.44-4.83.25-.9.83-1.48 1.73-1.73C4.64 5.31 5.5 5.22 6.82 5.16c1.3-.07 2.49-.1 3.59-.1L12 5c4.19 0 6.8.16 7.83.44.9.25 1.48.83 1.73 1.73z',
-}
-
-const SOURCE_TYPE_LABELS: Record<LyraSource['type'], string> = {
-  video: 'YouTube',
-  site: 'Database',
-  web: 'Web',
-  seshat: 'Seshat',
-  qdrant: 'Vector search',
-  channel: 'Channel',
-}
-
-function SourceItem({ source }: { source: LyraSource }) {
-  const isVideo = source.type === 'video'
-  const videoId = isVideo && source.url ? source.url.split('/').pop()?.split('?')[0] : null
-
-  const content = (
-    <>
-      {isVideo && videoId ? (
-        <img
-          className="lyra-sidebar-source-thumb"
-          src={`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`}
-          alt=""
-        />
-      ) : (
-        <span className={`lyra-sidebar-source-icon lyra-sidebar-source-icon--${source.type}`}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d={SOURCE_ICONS[source.type]} />
-          </svg>
-        </span>
-      )}
-      <div className="lyra-sidebar-source-body">
-        <div className="lyra-sidebar-source-title">{source.title}</div>
-        <div className="lyra-sidebar-source-channel">
-          {source.detail || SOURCE_TYPE_LABELS[source.type]}
-        </div>
-      </div>
-    </>
-  )
-
-  if (source.url) {
-    return (
-      <a
-        className={`lyra-sidebar-source lyra-sidebar-source--${source.type}`}
-        href={source.url}
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        {content}
-      </a>
-    )
-  }
-
-  return (
-    <div className={`lyra-sidebar-source lyra-sidebar-source--${source.type}`}>
-      {content}
-    </div>
-  )
-}
-
 export default function LyraChatModal({
   isOpen,
   onClose,
@@ -252,12 +185,10 @@ export default function LyraChatModal({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
-  const [sidebarSources, setSidebarSources] = useState<LyraSource[]>([])
-
   // Sort news by relevance (highest first)
   const sortedNews = [...sidebarNews].sort((a, b) => (b.relevance ?? 0) - (a.relevance ?? 0))
 
-  const hasSiteSidebar = sidebarSites.length > 0 || sidebarSources.length > 0
+  const hasSiteSidebar = sidebarSites.length > 0
   const hasNews = sortedNews.length > 0
 
   // Custom react-markdown components for interactive content
@@ -450,7 +381,6 @@ export default function LyraChatModal({
     // Reset sidebar for new query
     setSidebarSites([])
     setSidebarNews([])
-    setSidebarSources([])
 
     // Add user message
     const userMsg: LyraMessage = {
@@ -582,13 +512,6 @@ export default function LyraChatModal({
                 setMessages(prev => prev.map(m =>
                   m.id === assistantId
                     ? { ...m, news: data.news }
-                    : m
-                ))
-              } else if (type === 'sources' && data.sources) {
-                setSidebarSources(data.sources as LyraSource[])
-                setMessages(prev => prev.map(m =>
-                  m.id === assistantId
-                    ? { ...m, sources: data.sources }
                     : m
                 ))
               } else if (type === 'done') {
@@ -864,7 +787,7 @@ export default function LyraChatModal({
                           <div className="lyra-chat-msg-text">
                             {msg.role === 'assistant' ? (
                               msg.isStreaming ? (
-                                <StreamingText text={msg.content} />
+                                msg.content
                               ) : (
                                 <ReactMarkdown components={mdComponents}>
                                   {enrichLyraContent(msg.content, sidebarSites)}
@@ -893,55 +816,41 @@ export default function LyraChatModal({
                 </div>
               </div>
 
-              {/* Middle: sidebar with sites & sources */}
+              {/* Middle: sidebar with sites */}
               {hasSiteSidebar && (
                 <div className="lyra-chat-sidebar">
-                  {sidebarSites.length > 0 && (
-                    <div className="lyra-chat-sidebar-panel">
-                      <div className="lyra-chat-sidebar-header">
-                        Sites ({sidebarSites.length})
-                      </div>
-                      <div className="lyra-chat-sidebar-list">
-                        {sidebarSites.map((site, i) => (
-                          <SiteResultItem
-                            key={site.id || i}
-                            id={site.id}
-                            title={site.name}
-                            category={site.site_type}
-                            categoryColor={site.site_type ? getCategoryColor(site.site_type) : undefined}
-                            location={site.country}
-                            period={site.period_name}
-                            periodColor={site.period_name ? getPeriodColor(site.period_name) : undefined}
-                            showInfoBtn={false}
-                            onMainClick={async () => {
-                              if (onFlyToSite) {
-                                onHighlightSites?.([site.id])
-                                onFlyToSite([site.lon, site.lat])
-                              } else {
-                                const res = await fetch(`${config.api.baseUrl}/sites/${site.id}`)
-                                if (res.ok) {
-                                  const detail = await res.json()
-                                  setSelectedSite(apiDetailToSiteData(detail))
-                                }
+                  <div className="lyra-chat-sidebar-panel">
+                    <div className="lyra-chat-sidebar-header">
+                      Sites ({sidebarSites.length})
+                    </div>
+                    <div className="lyra-chat-sidebar-list">
+                      {sidebarSites.map((site, i) => (
+                        <SiteResultItem
+                          key={site.id || i}
+                          id={site.id}
+                          title={site.name}
+                          category={site.site_type}
+                          categoryColor={site.site_type ? getCategoryColor(site.site_type) : undefined}
+                          location={site.country}
+                          period={site.period_name}
+                          periodColor={site.period_name ? getPeriodColor(site.period_name) : undefined}
+                          showInfoBtn={false}
+                          onMainClick={async () => {
+                            if (onFlyToSite) {
+                              onHighlightSites?.([site.id])
+                              onFlyToSite([site.lon, site.lat])
+                            } else {
+                              const res = await fetch(`${config.api.baseUrl}/sites/${site.id}`)
+                              if (res.ok) {
+                                const detail = await res.json()
+                                setSelectedSite(apiDetailToSiteData(detail))
                               }
-                            }}
-                          />
-                        ))}
-                      </div>
+                            }
+                          }}
+                        />
+                      ))}
                     </div>
-                  )}
-                  {sidebarSources.length > 0 && (
-                    <div className="lyra-chat-sidebar-panel">
-                      <div className="lyra-chat-sidebar-header">
-                        Sources ({sidebarSources.length})
-                      </div>
-                      <div className="lyra-chat-sidebar-list">
-                        {sidebarSources.map((src, i) => (
-                          <SourceItem key={`${src.type}-${src.title}-${i}`} source={src} />
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  </div>
                 </div>
               )}
 
@@ -974,7 +883,7 @@ export default function LyraChatModal({
                       className="lyra-mobile-panel-header"
                       onClick={() => setMobilePanelOpen(mobilePanelOpen === 'sites' ? null : 'sites')}
                     >
-                      <span>Sites ({sidebarSites.length}){sidebarSources.length > 0 ? ` · Sources (${sidebarSources.length})` : ''}</span>
+                      <span>Sites ({sidebarSites.length})</span>
                       <svg className="lyra-mobile-panel-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <polyline points="6 9 12 15 18 9" />
                       </svg>
@@ -1000,9 +909,6 @@ export default function LyraChatModal({
                               }
                             }}
                           />
-                        ))}
-                        {sidebarSources.map((src, i) => (
-                          <SourceItem key={`${src.type}-${src.title}-${i}`} source={src} />
                         ))}
                       </div>
                     )}
