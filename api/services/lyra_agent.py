@@ -154,38 +154,63 @@ def search_sites(
 
 @tool
 def get_site_details(site_id: str) -> str:
-    """Get detailed information about a specific archaeological site by its UUID.
+    """Get detailed information about a specific archaeological site by its UUID or name.
 
     Args:
-        site_id: The UUID of the site.
+        site_id: The UUID or name/slug of the site.
     """
-    sql = """
-        SELECT s.id::text, s.name, s.lat, s.lon, s.site_type, s.period_name,
-               s.period_start, s.period_end, s.country, s.description,
-               s.source_url, s.source_id, s.thumbnail_url
-        FROM unified_sites s
-        WHERE s.id = CAST(:site_id AS uuid)
-    """
-    names_sql = """
-        SELECT name, language_code, name_type
-        FROM unified_site_names
-        WHERE site_id = CAST(:site_id AS uuid)
-        LIMIT 20
-    """
-    links_sql = """
-        SELECT content_type, title, url, description
-        FROM site_content_links
-        WHERE site_id = CAST(:site_id AS uuid)
-        LIMIT 10
-    """
+    import uuid as _uuid
+
+    # Detect whether input is a UUID or a name/slug
+    try:
+        _uuid.UUID(site_id)
+        is_uuid = True
+    except ValueError:
+        is_uuid = False
+
+    if is_uuid:
+        find_sql = """
+            SELECT s.id::text, s.name, s.lat, s.lon, s.site_type, s.period_name,
+                   s.period_start, s.period_end, s.country, s.description,
+                   s.source_url, s.source_id, s.thumbnail_url
+            FROM unified_sites s
+            WHERE s.id = CAST(:site_id AS uuid)
+        """
+        find_params = {"site_id": site_id}
+    else:
+        # Name/slug lookup: replace hyphens with spaces and search case-insensitively
+        search_name = site_id.replace("-", " ").replace("_", " ").strip()
+        find_sql = """
+            SELECT s.id::text, s.name, s.lat, s.lon, s.site_type, s.period_name,
+                   s.period_start, s.period_end, s.country, s.description,
+                   s.source_url, s.source_id, s.thumbnail_url
+            FROM unified_sites s
+            LEFT JOIN unified_site_names usn ON usn.site_id = s.id
+            WHERE s.name ILIKE :name OR usn.name ILIKE :name
+            LIMIT 1
+        """
+        find_params = {"name": f"%{search_name}%"}
 
     with get_session() as session:
-        row = session.execute(text(sql), {"site_id": site_id}).fetchone()
+        row = session.execute(text(find_sql), find_params).fetchone()
         if not row:
-            return f"Site {site_id} not found."
+            return f"Site '{site_id}' not found."
 
-        names = session.execute(text(names_sql), {"site_id": site_id}).fetchall()
-        links = session.execute(text(links_sql), {"site_id": site_id}).fetchall()
+        actual_uuid = row.id
+        names_sql = """
+            SELECT name, language_code, name_type
+            FROM unified_site_names
+            WHERE site_id = CAST(:site_id AS uuid)
+            LIMIT 20
+        """
+        links_sql = """
+            SELECT content_type, title, url, description
+            FROM site_content_links
+            WHERE site_id = CAST(:site_id AS uuid)
+            LIMIT 10
+        """
+        names = session.execute(text(names_sql), {"site_id": actual_uuid}).fetchall()
+        links = session.execute(text(links_sql), {"site_id": actual_uuid}).fetchall()
 
     site = {
         "id": row.id,
@@ -583,6 +608,7 @@ The current year is 2026. The database stores period_start as an integer year (n
 
 Return a JSON object with ONLY the fields that apply (omit fields that don't apply):
 
+- "site_names": List of archaeological site names mentioned in the query. Include alternate spellings (e.g. ["Karahan Tepe", "Karahantepe"]). ALWAYS extract site names when the user asks about a specific site.
 - "country": The country name as stored in a DB (e.g. "Turkey" not "Anatolia", "Egypt" not "Nile Valley"). Resolve region names to countries.
 - "category": One of: excavation, artifact, architecture, bioarchaeology, dating, remote_sensing, underwater, epigraphy, conservation, heritage, theory, technology, survey, art, general
 - "period": Archaeological period name (e.g. "Neolithic", "Bronze Age", "Iron Age", "Roman", "Byzantine", "Medieval")
@@ -600,7 +626,9 @@ Examples:
 - "major pyramid finds in Egypt" → {"country": "Egypt", "category": "architecture", "min_significance": 7}
 - "castles older than 2000 years in Peru from DeDunking" → {"site_type": "fortress/citadel", "max_year": 26, "country": "Peru", "channel": "DeDunking"}
 - "Bronze Age sites before 1500 BC" → {"period": "Bronze Age", "max_year": -1500}
-- "tell me about Göbekli Tepe" → {}
+- "tell me about Göbekli Tepe" → {"site_names": ["Göbekli Tepe", "Gobekli Tepe"]}
+- "recent discoveries about Karahantepe" → {"site_names": ["Karahan Tepe", "Karahantepe"]}
+- "news about Pompeii excavations" → {"site_names": ["Pompeii"], "category": "excavation"}
 
 Return ONLY valid JSON, no explanation."""
 
@@ -632,7 +660,7 @@ async def _extract_news_filters(query: str) -> dict:
             raw = raw.rsplit("```", 1)[0].strip()
         filters = json.loads(raw)
         # Validate: only keep known keys
-        valid_keys = {"country", "category", "period", "site_type", "channel", "min_significance", "max_year", "min_year"}
+        valid_keys = {"site_names", "country", "category", "period", "site_type", "channel", "min_significance", "max_year", "min_year"}
         return {k: v for k, v in filters.items() if k in valid_keys and v is not None}
     except (json.JSONDecodeError, AttributeError):
         logger.warning(f"Failed to parse news filter extraction: {response.content}")
@@ -894,8 +922,13 @@ async def run_agent_stream(
     total_output_tokens = 0
     total_voyage_tokens = 0
     if message and len(message.strip()) > 2:
-        retrieved_context, auto_site_results, avg_relevance, vt = _auto_retrieve(message, context_type)
-        total_voyage_tokens += vt
+        # Auto-retrieve sites from Qdrant (isolated so Qdrant failures don't kill the response)
+        auto_site_results: list[dict] = []
+        try:
+            retrieved_context, auto_site_results, avg_relevance, vt = _auto_retrieve(message, context_type)
+            total_voyage_tokens += vt
+        except Exception as e:
+            logger.error(f"Auto-retrieve failed (Qdrant/Voyage issue, falling back to filter-based news): {e}")
 
         # Extract sites from auto-retrieved results for map highlighting
         # Only include sites with relevance above threshold to avoid irrelevant results
@@ -919,7 +952,7 @@ async def run_agent_stream(
         # Site-specific news (by ID and name — always works, no LLM needed)
         all_news = _get_related_news(site_ids=site_ids, site_names=site_names) if (site_ids or site_names) else []
 
-        # Broader filter-based news (uses Haiku to extract filters — isolated so failure doesn't kill response)
+        # Filter-based news (uses Haiku to extract filters including site names — catches site queries even when Qdrant is down)
         try:
             news_filters = await _extract_news_filters(message)
             if news_filters:
@@ -931,7 +964,7 @@ async def run_agent_stream(
                         all_news.append(n)
                         existing_keys.add(key)
         except Exception as e:
-            logger.warning(f"News filter extraction failed (site-specific news still available): {e}")
+            logger.warning(f"News filter extraction failed: {e}")
 
         # Add news to retrieved context so the LLM can reference them
         if all_news:
