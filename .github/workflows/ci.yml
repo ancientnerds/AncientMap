@@ -196,18 +196,6 @@ jobs:
             sleep 5
             curl -sf http://localhost:8000/ || echo "WARNING: Health check failed"
 
-            echo "==> Exporting news feed.json..."
-            docker exec ancient_nerds_db psql -U ancient_map -d ancient_map -c "ALTER TABLE news_items ADD COLUMN IF NOT EXISTS significance INTEGER; ALTER TABLE news_items ADD COLUMN IF NOT EXISTS news_category VARCHAR;" 2>/dev/null || true
-            docker exec ancient_nerds_api python -c "import sys; from pipeline.static_exporter import export_news_feed; from pathlib import Path; export_news_feed(Path(sys.argv[1]))" /app/public/data 2>&1 || echo "WARNING: News feed export failed"
-            mkdir -p ancient-nerds-map/dist/data/news 2>/dev/null || true
-            if [ -f public/data/news/feed.json ]; then
-              cp -f public/data/news/feed.json ancient-nerds-map/dist/data/news/feed.json 2>/dev/null \
-                && cp -f public/data/news/feed.json.gz ancient-nerds-map/dist/data/news/feed.json.gz 2>/dev/null || true
-              echo "==> News feed copied to dist ($(python3 -c "import json; print(json.load(open('ancient-nerds-map/dist/data/news/feed.json'))['total_count'])" 2>/dev/null || echo '?') items)"
-            else
-              echo "WARNING: public/data/news/feed.json not found — Lyra pipeline may not have run yet."
-            fi
-
             echo "==> Restarting log streaming..."
             [ -f scripts/follow_logs.sh ] && chmod +x scripts/follow_logs.sh
             mkdir -p logs
