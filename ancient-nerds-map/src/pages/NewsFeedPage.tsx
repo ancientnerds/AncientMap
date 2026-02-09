@@ -350,26 +350,48 @@ export default function NewsFeedPage() {
       {/* Multi-dimension filter section */}
       {filters && (
         <div className="news-page-filters">
-          <button
-            className="news-page-filters-toggle"
-            onClick={() => setFiltersExpanded(prev => !prev)}
-          >
-            <svg
-              className={filtersExpanded ? 'rotated' : ''}
-              width="10"
-              height="10"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
+          <div className="news-page-filters-bar">
+            <button
+              className="news-page-filters-toggle"
+              onClick={() => setFiltersExpanded(prev => !prev)}
             >
-              <path d="M9 18l6-6-6-6" />
-            </svg>
-            Filters
-            {activeFilterCount > 0 && (
-              <span className="news-page-filters-count">{activeFilterCount}</span>
-            )}
-          </button>
+              <svg
+                className={filtersExpanded ? 'rotated' : ''}
+                width="10"
+                height="10"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+              >
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="news-page-filters-count">{activeFilterCount}</span>
+              )}
+            </button>
+            <div className="news-page-filters-bar-actions">
+              <button
+                className={`news-page-chip${activeFilters.sort == null ? ' active' : ''}`}
+                onClick={() => handleFilterToggle('sort', null)}
+              >
+                Latest
+              </button>
+              <button
+                className={`news-page-chip${activeFilters.sort === 'significance' ? ' active' : ''}`}
+                onClick={() => handleFilterToggle('sort', 'significance')}
+              >
+                Top Rated
+              </button>
+              <button
+                className={`news-page-chip${showSpeculative ? ' active' : ''}`}
+                onClick={() => setShowSpeculative(prev => !prev)}
+              >
+                Speculative
+              </button>
+            </div>
+          </div>
 
           {filtersExpanded && (
             <div className="news-page-filters-body">
@@ -496,25 +518,6 @@ export default function NewsFeedPage() {
                 </div>
               </div>
 
-              {/* Sort order row */}
-              <div className="news-page-filter-row">
-                <span className="news-page-filter-label">Sort</span>
-                <div className="news-page-chips">
-                  {([
-                    { label: 'Latest', value: null },
-                    { label: 'Top Rated', value: 'significance' },
-                  ] as const).map(opt => (
-                    <button
-                      key={opt.label}
-                      className={`news-page-chip${activeFilters.sort === opt.value ? ' active' : ''}`}
-                      onClick={() => handleFilterToggle('sort', opt.value)}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               {/* News category row */}
               {filters.news_categories.length > 0 && (
                 <div className="news-page-filter-row">
@@ -533,18 +536,6 @@ export default function NewsFeedPage() {
                 </div>
               )}
 
-              {/* Speculative content toggle */}
-              <div className="news-page-filter-row">
-                <span className="news-page-filter-label">Speculative</span>
-                <div className="news-page-chips">
-                  <button
-                    className={`news-page-chip${showSpeculative ? ' active' : ''}`}
-                    onClick={() => setShowSpeculative(prev => !prev)}
-                  >
-                    Include speculative content
-                  </button>
-                </div>
-              </div>
             </div>
           )}
         </div>
