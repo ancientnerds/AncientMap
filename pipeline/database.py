@@ -767,6 +767,7 @@ class NewsVideo(Base):
     summary_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     processed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    last_attempted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     channel: Mapped["NewsChannel"] = relationship("NewsChannel", back_populates="videos")
     items: Mapped[list["NewsItem"]] = relationship("NewsItem", back_populates="video")
