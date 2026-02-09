@@ -356,7 +356,6 @@ export default function LyraChatModal({
               const data = JSON.parse(line.slice(6))
               // Use data.type from JSON payload (always present, immune to chunk splitting)
               const type = data.type || eventType || ''
-              if (type !== 'token') console.log('[SSE]', type, Object.keys(data))
 
               if (type === 'token' && data.content) {
                 setMessages(prev => prev.map(m =>
@@ -389,7 +388,6 @@ export default function LyraChatModal({
                     : m
                 ))
               } else if (type === 'news' && data.news) {
-                console.log('[SSE-NEWS] Received', data.news.length, 'items', data.news[0]?.headline)
                 // Merge & deduplicate by video_id+headline
                 setSidebarNews(prev => {
                   const keys = new Set(prev.map(n => `${n.video_id}::${n.headline}`))
