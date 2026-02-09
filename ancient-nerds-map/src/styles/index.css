@@ -2026,6 +2026,14 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   gap: 4px;
 }
 
+.search-result-thumb {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
 .search-result-flag {
   height: 12px;
   width: auto;
@@ -14432,6 +14440,52 @@ body.news-feed-open .empire-borders-window {
 .lyra-inline-site:hover {
   color: rgba(0, 220, 220, 1);
   border-bottom-color: rgba(0, 200, 200, 0.7);
+}
+
+.lyra-inline-site-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.lyra-inline-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.3);
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+.lyra-inline-site-wrap:hover .lyra-inline-copy {
+  opacity: 1;
+}
+
+.lyra-inline-copy:hover {
+  color: var(--primary-red);
+}
+
+.lyra-inline-copy .lyra-inline-check-icon {
+  display: none;
+}
+
+.lyra-inline-copy.copied {
+  opacity: 1;
+  color: #22c55e;
+}
+
+.lyra-inline-copy.copied .lyra-inline-copy-icon {
+  display: none;
+}
+
+.lyra-inline-copy.copied .lyra-inline-check-icon {
+  display: block;
 }
 
 /* Inline country flags in Lyra messages */

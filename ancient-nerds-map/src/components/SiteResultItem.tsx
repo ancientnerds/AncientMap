@@ -1,4 +1,5 @@
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
+import LazyImage from './LazyImage'
 
 export interface SiteResultItemProps {
   id: string
@@ -10,6 +11,7 @@ export interface SiteResultItemProps {
   periodColor?: string
   sourceName?: string
   sourceColor?: string
+  thumbnailUrl?: string
   selected?: boolean
   showSource?: boolean
   showInfoBtn?: boolean
@@ -28,6 +30,7 @@ export default function SiteResultItem({
   periodColor,
   sourceName,
   sourceColor,
+  thumbnailUrl,
   selected,
   showSource = false,
   showInfoBtn = true,
@@ -43,6 +46,9 @@ export default function SiteResultItem({
       onMouseLeave={onHoverLeave}
     >
       <div className="search-result-main" onClick={onMainClick}>
+        {thumbnailUrl && (
+          <LazyImage src={thumbnailUrl} alt="" className="search-result-thumb" />
+        )}
         <div className="search-result-content">
           <div className="search-result-title">{title}</div>
           {location && (

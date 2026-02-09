@@ -38,9 +38,13 @@ WIKIDATA_SPARQL_URL = "https://query.wikidata.org/sparql"
 # Wikimedia Commons API
 COMMONS_API_URL = "https://commons.wikimedia.org/w/api.php"
 
+# Wikipedia API
+WIKIPEDIA_API_URL = "https://en.wikipedia.org/w/api.php"
+
 # Rate limits
 WIKIDATA_DELAY = 2.0  # Wikidata requests 1 req/sec for bots
 COMMONS_DELAY = 0.5   # Commons is more lenient
+WIKIPEDIA_DELAY = 0.2  # Wikipedia allows ~5 req/s
 
 # Batch sizes
 WIKIDATA_BATCH_SIZE = 5000  # SPARQL results per query
@@ -371,20 +375,168 @@ def search_commons_for_site(site_name: str) -> str | None:
 
 
 # =============================================================================
+# Wikipedia Opensearch + Batch Pageimages
+# =============================================================================
+
+WIKIPEDIA_PAGEIMAGES_BATCH = 50  # Max titles per pageimages request
+
+def wikipedia_opensearch(site_name: str) -> str | None:
+    """Resolve a site name to a Wikipedia article title using fuzzy search."""
+    params = {
+        "action": "opensearch",
+        "search": site_name,
+        "limit": "3",
+        "namespace": "0",
+        "profile": "fuzzy",
+        "format": "json",
+    }
+    headers = {
+        "User-Agent": "AncientNerds/1.0 (Archaeological Research Platform; contact@ancientnerds.com)",
+    }
+    try:
+        response = fetch_with_retry(WIKIPEDIA_API_URL, params=params, headers=headers, timeout=15)
+        if response.status_code == 200:
+            data = response.json()
+            titles = data[1] if len(data) > 1 else []
+            return titles[0] if titles else None
+    except Exception as e:
+        logger.debug(f"Wikipedia opensearch error for '{site_name}': {e}")
+    return None
+
+
+def wikipedia_batch_pageimages(titles: list[str], width: int = 500) -> dict[str, str]:
+    """Get thumbnail URLs for up to 50 Wikipedia titles in one request."""
+    params = {
+        "action": "query",
+        "prop": "pageimages",
+        "piprop": "thumbnail",
+        "pithumbsize": str(width),
+        "pilimit": str(len(titles)),
+        "titles": "|".join(titles),
+        "format": "json",
+    }
+    headers = {
+        "User-Agent": "AncientNerds/1.0 (Archaeological Research Platform; contact@ancientnerds.com)",
+    }
+    try:
+        response = fetch_with_retry(WIKIPEDIA_API_URL, params=params, headers=headers, timeout=30)
+        if response.status_code != 200:
+            return {}
+        data = response.json()
+        result = {}
+        for page in data.get("query", {}).get("pages", {}).values():
+            title = page.get("title", "")
+            thumb = page.get("thumbnail", {}).get("source")
+            if thumb and title:
+                result[title] = thumb
+        return result
+    except Exception as e:
+        logger.debug(f"Wikipedia batch pageimages error: {e}")
+        return {}
+
+
+def search_wikipedia_thumbnails(
+    session: Session,
+    limit: int = None,
+    source_id: str = None,
+) -> int:
+    """
+    Resolve site names via Wikipedia opensearch, then batch-fetch thumbnails.
+
+    Phase 1: For each site without a thumbnail, call opensearch to resolve the
+             Wikipedia article title (fuzzy matching handles diacritics).
+    Phase 2: Batch resolved titles (50/request) to get thumbnail URLs.
+    Phase 3: Update the database.
+    """
+    sites = get_sites_without_images(session, limit=limit, source_id=source_id)
+    logger.info(f"Wikipedia opensearch: {len(sites)} sites to process")
+
+    if not sites:
+        return 0
+
+    # Phase 1: Resolve site names → Wikipedia titles
+    # Maps: site_id → wikipedia_title
+    resolved: dict[str, str] = {}
+    site_id_by_title: dict[str, list[str]] = {}  # title → [site_ids] (for reverse lookup)
+
+    for i, (site_id, site_name, _lat, _lon) in enumerate(sites):
+        if i % 50 == 0 and i > 0:
+            logger.info(f"  Opensearch progress: {i}/{len(sites)} ({len(resolved)} resolved)")
+
+        title = wikipedia_opensearch(site_name)
+        if title:
+            sid = str(site_id)
+            resolved[sid] = title
+            site_id_by_title.setdefault(title, []).append(sid)
+
+        time.sleep(WIKIPEDIA_DELAY)
+
+    logger.info(f"  Resolved {len(resolved)}/{len(sites)} site names to Wikipedia titles")
+
+    if not resolved:
+        return 0
+
+    # Phase 2: Batch fetch thumbnails (50 per request)
+    unique_titles = list(site_id_by_title.keys())
+    title_to_thumb: dict[str, str] = {}
+
+    for i in range(0, len(unique_titles), WIKIPEDIA_PAGEIMAGES_BATCH):
+        batch = unique_titles[i:i + WIKIPEDIA_PAGEIMAGES_BATCH]
+        batch_result = wikipedia_batch_pageimages(batch)
+        title_to_thumb.update(batch_result)
+        time.sleep(0.5)
+
+    logger.info(f"  Got thumbnails for {len(title_to_thumb)}/{len(unique_titles)} Wikipedia articles")
+
+    if not title_to_thumb:
+        return 0
+
+    # Phase 3: Update database
+    updated = 0
+    for title, thumb_url in title_to_thumb.items():
+        for sid in site_id_by_title.get(title, []):
+            try:
+                session.execute(
+                    update(UnifiedSite)
+                    .where(UnifiedSite.id == sid)
+                    .values(thumbnail_url=thumb_url)
+                )
+                updated += 1
+            except Exception as e:
+                logger.debug(f"Update error for {sid}: {e}")
+
+        if updated % 100 == 0 and updated > 0:
+            session.commit()
+
+    session.commit()
+    logger.info(f"  Updated {updated} sites with Wikipedia thumbnails")
+    return updated
+
+
+# =============================================================================
 # Database Matching & Updates
 # =============================================================================
 
-def get_sites_without_images(session: Session, limit: int = None) -> list[tuple]:
+def get_sites_without_images(session: Session, limit: int = None, source_id: str = None) -> list[tuple]:
     """Get sites that don't have thumbnail_url set."""
-    query = text("""
-        SELECT id, name, lat, lon
-        FROM unified_sites
-        WHERE thumbnail_url IS NULL
-        ORDER BY name
-        LIMIT :limit
-    """)
-
-    result = session.execute(query, {"limit": limit or 1000000})
+    if source_id:
+        query = text("""
+            SELECT id, name, lat, lon
+            FROM unified_sites
+            WHERE thumbnail_url IS NULL AND source_id = :source_id
+            ORDER BY name
+            LIMIT :limit
+        """)
+        result = session.execute(query, {"limit": limit or 1000000, "source_id": source_id})
+    else:
+        query = text("""
+            SELECT id, name, lat, lon
+            FROM unified_sites
+            WHERE thumbnail_url IS NULL
+            ORDER BY name
+            LIMIT :limit
+        """)
+        result = session.execute(query, {"limit": limit or 1000000})
     return list(result.fetchall())
 
 
@@ -585,7 +737,9 @@ def run_wikimedia_fallback(
     limit: int = None,
     wikidata_only: bool = False,
     commons_only: bool = False,
+    wikipedia_only: bool = False,
     stats_only: bool = False,
+    source_id: str = None,
 ):
     """
     Run the Wikimedia image fallback pipeline.
@@ -594,7 +748,9 @@ def run_wikimedia_fallback(
         limit: Maximum number of sites to process
         wikidata_only: Only use Wikidata SPARQL (faster)
         commons_only: Only use Commons search (slower but finds more)
+        wikipedia_only: Only use Wikipedia opensearch + pageimages
         stats_only: Just print statistics
+        source_id: Filter to sites from this source only (e.g. 'ancient_nerds')
     """
     with get_session() as session:
         # Print initial stats
@@ -606,9 +762,20 @@ def run_wikimedia_fallback(
 
         total_updated = 0
 
-        # Phase 1: Wikidata SPARQL matching
-        if not commons_only:
-            logger.info("Phase 1: Wikidata SPARQL matching...")
+        # Phase 1: Wikipedia opensearch + batch pageimages (best for named sites)
+        if wikipedia_only or not (wikidata_only or commons_only):
+            logger.info("Phase 1: Wikipedia opensearch + pageimages...")
+            updated = search_wikipedia_thumbnails(session, limit=limit, source_id=source_id)
+            total_updated += updated
+            if wikipedia_only:
+                stats = get_image_stats(session)
+                print_stats(stats)
+                logger.info(f"Total images added: {total_updated}")
+                return stats
+
+        # Phase 2: Wikidata SPARQL matching
+        if not (commons_only or wikipedia_only):
+            logger.info("Phase 2: Wikidata SPARQL matching...")
             wikidata_results = list(fetch_wikidata_images(limit=limit or 100000))
 
             if wikidata_results:
@@ -618,9 +785,9 @@ def run_wikimedia_fallback(
                     total_updated += updated
                     logger.info(f"Wikidata: Updated {updated} sites")
 
-        # Phase 2: Commons search fallback
-        if not wikidata_only:
-            logger.info("Phase 2: Commons search fallback...")
+        # Phase 3: Commons search fallback
+        if not (wikidata_only or wikipedia_only):
+            logger.info("Phase 3: Commons search fallback...")
             commons_limit = min(limit or 10000, 10000)  # Cap Commons searches
             updated = search_commons_fallback(session, limit=commons_limit)
             total_updated += updated
@@ -650,6 +817,14 @@ def main():
         help="Only use Commons search (slower but finds more)"
     )
     parser.add_argument(
+        "--wikipedia-only", action="store_true",
+        help="Only use Wikipedia opensearch + pageimages (best for named sites)"
+    )
+    parser.add_argument(
+        "--source-filter", type=str, default=None,
+        help="Only process sites from this source (e.g. 'ancient_nerds')"
+    )
+    parser.add_argument(
         "--stats", action="store_true",
         help="Just print statistics"
     )
@@ -660,7 +835,9 @@ def main():
         limit=args.limit,
         wikidata_only=args.wikidata_only,
         commons_only=args.commons_only,
+        wikipedia_only=args.wikipedia_only,
         stats_only=args.stats,
+        source_id=args.source_filter,
     )
 
 

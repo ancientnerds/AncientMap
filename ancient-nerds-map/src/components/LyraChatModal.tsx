@@ -200,25 +200,49 @@ export default function LyraChatModal({
         const siteId = parts[0]
         const lon = parseFloat(parts[1])
         const lat = parseFloat(parts[2])
+        // Extract plain text from children for copy
+        const text = Array.isArray(children)
+          ? children.map(c => (typeof c === 'string' ? c : '')).join('')
+          : typeof children === 'string' ? children : ''
         return (
-          <button
-            className="lyra-inline-site"
-            onClick={async () => {
-              if (onFlyToSite) {
-                onHighlightSites?.([siteId])
-                if (!isNaN(lon) && !isNaN(lat)) onFlyToSite([lon, lat])
-              } else {
-                // Page mode: open SitePopupOverlay
+          <span className="lyra-inline-site-wrap">
+            <button
+              className="lyra-inline-site"
+              onClick={async () => {
+                if (onFlyToSite) {
+                  onHighlightSites?.([siteId])
+                  if (!isNaN(lon) && !isNaN(lat)) onFlyToSite([lon, lat])
+                }
                 const res = await fetch(`${config.api.baseUrl}/sites/${siteId}`)
                 if (res.ok) {
                   const detail = await res.json()
                   setSelectedSite(apiDetailToSiteData(detail))
                 }
-              }
-            }}
-          >
-            {children}
-          </button>
+              }}
+            >
+              {children}
+            </button>
+            {text && (
+              <button
+                className="lyra-inline-copy"
+                title="Copy site name"
+                onClick={(e) => {
+                  const btn = e.currentTarget
+                  navigator.clipboard.writeText(text)
+                  btn.classList.add('copied')
+                  setTimeout(() => btn.classList.remove('copied'), 2000)
+                }}
+              >
+                <svg className="lyra-inline-copy-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+                <svg className="lyra-inline-check-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </button>
+            )}
+          </span>
         )
       }
       // Coordinate link: lyra-coord:lat,lon
@@ -834,6 +858,7 @@ export default function LyraChatModal({
                           location={site.country}
                           period={site.period_name}
                           periodColor={site.period_name ? getPeriodColor(site.period_name) : undefined}
+                          thumbnailUrl={site.thumbnail_url}
                           showInfoBtn={false}
                           onMainClick={async () => {
                             if (onFlyToSite) {
@@ -900,6 +925,7 @@ export default function LyraChatModal({
                             location={site.country}
                             period={site.period_name}
                             periodColor={site.period_name ? getPeriodColor(site.period_name) : undefined}
+                            thumbnailUrl={site.thumbnail_url}
                             showInfoBtn={false}
                             onMainClick={async () => {
                               const res = await fetch(`${config.api.baseUrl}/sites/${site.id}`)
