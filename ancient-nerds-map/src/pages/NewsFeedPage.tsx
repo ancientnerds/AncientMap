@@ -73,10 +73,18 @@ export default function NewsFeedPage() {
     try {
       setLoading(true)
       setError(null)
-      const resp = await fetch('/data/news/feed.json')
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-      const data: { items: NewsItemData[] } = await resp.json()
-      setAllItems(data.items)
+      const allFetched: NewsItemData[] = []
+      let page = 1
+      let hasMore = true
+      while (hasMore) {
+        const resp = await fetch(`${config.api.baseUrl}/news/feed?page=${page}&page_size=100`)
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+        const data: { items: NewsItemData[]; has_more: boolean } = await resp.json()
+        allFetched.push(...data.items)
+        hasMore = data.has_more
+        page++
+      }
+      setAllItems(allFetched)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load')
     } finally {
