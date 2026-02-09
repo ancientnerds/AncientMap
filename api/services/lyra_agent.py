@@ -178,18 +178,17 @@ def get_site_details(site_id: str) -> str:
         """
         find_params = {"site_id": site_id}
     else:
-        # Name/slug lookup: replace hyphens with spaces and search case-insensitively
+        # Name/slug lookup: replace hyphens with spaces, try exact match first (fast)
         search_name = site_id.replace("-", " ").replace("_", " ").strip()
         find_sql = """
             SELECT s.id::text, s.name, s.lat, s.lon, s.site_type, s.period_name,
                    s.period_start, s.period_end, s.country, s.description,
                    s.source_url, s.source_id, s.thumbnail_url
             FROM unified_sites s
-            LEFT JOIN unified_site_names usn ON usn.site_id = s.id
-            WHERE s.name ILIKE :name OR usn.name ILIKE :name
+            WHERE lower(s.name) = lower(:name)
             LIMIT 1
         """
-        find_params = {"name": f"%{search_name}%"}
+        find_params = {"name": search_name}
 
     with get_session() as session:
         row = session.execute(text(find_sql), find_params).fetchone()
