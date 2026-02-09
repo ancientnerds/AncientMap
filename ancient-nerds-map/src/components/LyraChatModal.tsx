@@ -25,8 +25,11 @@ import { formatRelativeDate, formatDuration } from '../utils/formatters'
 import { getSignificanceColor, getSignificanceLabel, getSignificanceCardStyle, getNewsCategoryLabel } from './news/significance'
 import { SiteBadges, CountryFlag } from './metadata'
 import SiteResultItem from './SiteResultItem'
+import { SitePopupOverlay } from './SitePopupOverlay'
 import LazyImage from './LazyImage'
 import LyraAuthGate from './LyraAuthGate'
+import { apiDetailToSiteData } from '../utils/siteApi'
+import type { SiteData } from '../data/sites'
 import './news/news-cards.css'
 
 interface Props {
@@ -37,6 +40,7 @@ interface Props {
   contextYear?: number
   onHighlightSites?: (siteIds: string[]) => void
   onFlyToSite?: (coords: [number, number]) => void
+  mode?: 'modal' | 'page'
 }
 
 interface ExamplePrompt {
@@ -98,6 +102,7 @@ export default function LyraChatModal({
   contextYear,
   onHighlightSites,
   onFlyToSite,
+  mode = 'modal',
 }: Props) {
   const [messages, setMessages] = useState<LyraMessage[]>([])
   const [input, setInput] = useState('')
@@ -106,6 +111,8 @@ export default function LyraChatModal({
   const [error, setError] = useState<string | null>(null)
   const [sidebarSites, setSidebarSites] = useState<SiteHighlight[]>([])
   const [sidebarNews, setSidebarNews] = useState<NewsHighlight[]>([])
+  const [selectedSite, setSelectedSite] = useState<SiteData | null>(null)
+  const [mobilePanelOpen, setMobilePanelOpen] = useState<'sites' | 'news' | null>(null)
 
   // Auth state — hydrate from sessionStorage
   const [adminKey, setAdminKey] = useState<string | null>(() =>
@@ -144,9 +151,18 @@ export default function LyraChatModal({
         return (
           <button
             className="lyra-inline-site"
-            onClick={() => {
-              onHighlightSites?.([siteId])
-              if (!isNaN(lon) && !isNaN(lat)) onFlyToSite?.([lon, lat])
+            onClick={async () => {
+              if (onFlyToSite) {
+                onHighlightSites?.([siteId])
+                if (!isNaN(lon) && !isNaN(lat)) onFlyToSite([lon, lat])
+              } else {
+                // Page mode: open SitePopupOverlay
+                const res = await fetch(`${config.api.baseUrl}/sites/${siteId}`)
+                if (res.ok) {
+                  const detail = await res.json()
+                  setSelectedSite(apiDetailToSiteData(detail))
+                }
+              }
             }}
           >
             {children}
@@ -210,21 +226,21 @@ export default function LyraChatModal({
     }
   }, [isOpen, isAuthenticated])
 
-  // Close on Escape
+  // Close on Escape (modal mode) / stop streaming (page mode)
   useEffect(() => {
     if (!isOpen) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (isStreaming) {
           abortRef.current?.abort()
-        } else {
+        } else if (mode === 'modal') {
           onClose()
         }
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [isOpen, isStreaming, onClose])
+  }, [isOpen, isStreaming, onClose, mode])
 
   const handleAuthenticated = useCallback((key: string) => {
     setAdminKey(key)
@@ -459,32 +475,50 @@ export default function LyraChatModal({
   if (!isOpen) return null
 
   const examples = EXAMPLE_QUESTIONS[contextType] || EXAMPLE_QUESTIONS.global
+  const isPage = mode === 'page'
 
-  return createPortal(
-    <div className="lyra-chat-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className={`lyra-chat-modal${hasSiteSidebar ? ' has-sidebar' : ''}${hasNews ? ' has-news' : ''}`}>
-        {/* Header */}
-        <div className="lyra-chat-header">
-          <div className="lyra-chat-header-left">
-            <img src="/lyra.gif" alt="Lyra" className="lyra-chat-avatar" />
-            <div>
-              <div className="lyra-chat-header-name">Lyra Wiskerbyte</div>
-              <div className="lyra-chat-header-status">Archaeological Agent</div>
-            </div>
-          </div>
-          <div className="lyra-chat-header-right">
-            {isStreaming && (
-              <button className="lyra-chat-stop-btn" onClick={() => abortRef.current?.abort()}>
-                Stop
-              </button>
-            )}
-            <button className="lyra-chat-close-btn" onClick={onClose}>
-              <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <line x1="2" y1="2" x2="10" y2="10" /><line x1="10" y1="2" x2="2" y2="10" />
-              </svg>
-            </button>
-          </div>
+  const header = isPage ? (
+    <header className="lyra-chat-page-header">
+      <a href="/" className="news-page-brand">
+        <img src="/an-logo.svg" alt="" className="news-page-logo" />
+        <span className="news-page-brand-text">ANCIENT NERDS</span>
+      </a>
+      <div className="news-page-divider" />
+      <img src="/lyra.png" alt="Lyra" className="news-page-avatar" />
+      <span className="lyra-chat-page-label">Lyra</span>
+      {isStreaming && (
+        <button className="lyra-chat-stop-btn" onClick={() => abortRef.current?.abort()}>
+          Stop
+        </button>
+      )}
+    </header>
+  ) : (
+    <div className="lyra-chat-header">
+      <div className="lyra-chat-header-left">
+        <img src="/lyra.gif" alt="Lyra" className="lyra-chat-avatar" />
+        <div>
+          <div className="lyra-chat-header-name">Lyra Wiskerbyte</div>
+          <div className="lyra-chat-header-status">Archaeological Agent</div>
         </div>
+      </div>
+      <div className="lyra-chat-header-right">
+        {isStreaming && (
+          <button className="lyra-chat-stop-btn" onClick={() => abortRef.current?.abort()}>
+            Stop
+          </button>
+        )}
+        <button className="lyra-chat-close-btn" onClick={onClose}>
+          <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <line x1="2" y1="2" x2="10" y2="10" /><line x1="10" y1="2" x2="2" y2="10" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  )
+
+  const modalContent = (
+    <div className={`lyra-chat-modal${hasSiteSidebar ? ' has-sidebar' : ''}${hasNews ? ' has-news' : ''}`}>
+      {header}
 
         {/* Auth gate or chat content */}
         {!isAuthenticated ? (
@@ -604,9 +638,17 @@ export default function LyraChatModal({
                             period={site.period_name}
                             periodColor={site.period_name ? getPeriodColor(site.period_name) : undefined}
                             showInfoBtn={false}
-                            onMainClick={() => {
-                              onHighlightSites?.([site.id])
-                              onFlyToSite?.([site.lon, site.lat])
+                            onMainClick={async () => {
+                              if (onFlyToSite) {
+                                onHighlightSites?.([site.id])
+                                onFlyToSite([site.lon, site.lat])
+                              } else {
+                                const res = await fetch(`${config.api.baseUrl}/sites/${site.id}`)
+                                if (res.ok) {
+                                  const detail = await res.json()
+                                  setSelectedSite(apiDetailToSiteData(detail))
+                                }
+                              }
                             }}
                           />
                         ))}
@@ -722,6 +764,121 @@ export default function LyraChatModal({
               )}
             </div>
 
+            {/* Mobile collapsible panels (page mode only, hidden on desktop via CSS) */}
+            {isPage && (hasSiteSidebar || hasNews) && (
+              <div className="lyra-mobile-panels">
+                {hasSiteSidebar && (
+                  <div className={`lyra-mobile-panel${mobilePanelOpen === 'sites' ? ' open' : ''}`}>
+                    <button
+                      className="lyra-mobile-panel-header"
+                      onClick={() => setMobilePanelOpen(mobilePanelOpen === 'sites' ? null : 'sites')}
+                    >
+                      <span>Sites ({sidebarSites.length}){sidebarSources.length > 0 ? ` · Sources (${sidebarSources.length})` : ''}</span>
+                      <svg className="lyra-mobile-panel-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </button>
+                    {mobilePanelOpen === 'sites' && (
+                      <div className="lyra-mobile-panel-content">
+                        {sidebarSites.map((site, i) => (
+                          <SiteResultItem
+                            key={site.id || i}
+                            id={site.id}
+                            title={site.name}
+                            category={site.site_type}
+                            categoryColor={site.site_type ? getCategoryColor(site.site_type) : undefined}
+                            location={site.country}
+                            period={site.period_name}
+                            periodColor={site.period_name ? getPeriodColor(site.period_name) : undefined}
+                            showInfoBtn={false}
+                            onMainClick={async () => {
+                              const res = await fetch(`${config.api.baseUrl}/sites/${site.id}`)
+                              if (res.ok) {
+                                const detail = await res.json()
+                                setSelectedSite(apiDetailToSiteData(detail))
+                              }
+                            }}
+                          />
+                        ))}
+                        {sidebarSources.map((src) => (
+                          <a
+                            key={src.video_id}
+                            className="lyra-sidebar-source"
+                            href={`https://youtu.be/${src.video_id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <img
+                              className="lyra-sidebar-source-thumb"
+                              src={`https://img.youtube.com/vi/${src.video_id}/mqdefault.jpg`}
+                              alt=""
+                            />
+                            <div className="lyra-sidebar-source-body">
+                              <div className="lyra-sidebar-source-title">{src.video_title || src.channel}</div>
+                              <div className="lyra-sidebar-source-channel">{src.channel}</div>
+                            </div>
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {hasNews && (
+                  <div className={`lyra-mobile-panel${mobilePanelOpen === 'news' ? ' open' : ''}`}>
+                    <button
+                      className="lyra-mobile-panel-header"
+                      onClick={() => setMobilePanelOpen(mobilePanelOpen === 'news' ? null : 'news')}
+                    >
+                      <span>News ({sortedNews.length})</span>
+                      <svg className="lyra-mobile-panel-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </button>
+                    {mobilePanelOpen === 'news' && (
+                      <div className="lyra-mobile-panel-content">
+                        {sortedNews.map((news, i) => {
+                          const deepLink = news.timestamp_seconds
+                            ? `https://youtu.be/${news.video_id}?t=${news.timestamp_seconds}`
+                            : `https://youtu.be/${news.video_id}`
+                          return (
+                            <div key={`${news.video_id}-${i}`} className="news-feed-item compact">
+                              <div className="news-card-meta">
+                                <span className="news-card-channel">{news.channel}</span>
+                                {news.date && <span className="news-feed-date">{formatRelativeDate(news.date)}</span>}
+                              </div>
+                              <div className="news-card-post-text">{news.post_text || news.headline}</div>
+                              {news.site_name && (
+                                <div className="news-feed-site-block">
+                                  <span className="lyra-news-site-name">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                      <circle cx="12" cy="10" r="3"></circle>
+                                    </svg>
+                                    {news.site_name}
+                                  </span>
+                                </div>
+                              )}
+                              <a className="news-card-thumb" href={deepLink} target="_blank" rel="noopener noreferrer">
+                                <LazyImage
+                                  src={news.screenshot_url
+                                    ? `${config.api.baseUrl}${news.screenshot_url.replace('/api', '')}`
+                                    : `https://img.youtube.com/vi/${news.video_id}/mqdefault.jpg`}
+                                  alt=""
+                                />
+                                <svg className="news-card-play" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                                </svg>
+                              </a>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Error */}
             {error && (
               <div className="lyra-chat-error">
@@ -792,6 +949,22 @@ export default function LyraChatModal({
           </>
         )}
       </div>
+  )
+
+  if (isPage) {
+    return (
+      <div className="lyra-chat-page">
+        {modalContent}
+        {selectedSite && (
+          <SitePopupOverlay site={selectedSite} onClose={() => setSelectedSite(null)} />
+        )}
+      </div>
+    )
+  }
+
+  return createPortal(
+    <div className="lyra-chat-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      {modalContent}
     </div>,
     document.body
   )
