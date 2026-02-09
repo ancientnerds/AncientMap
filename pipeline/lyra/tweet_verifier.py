@@ -125,9 +125,11 @@ def verify_video_posts(
         ).all()
 
         verified = 0
+        skipped = 0
         for item in items:
             result = verify_single_post(item, video.transcript_text, client, settings.model_verify, system_prompt)
             if not result:
+                skipped += 1
                 continue
 
             level = result.get("verification_level", "")
@@ -152,12 +154,15 @@ def verify_video_posts(
 
             verified += 1
 
-        # Transition video so it won't be re-verified next cycle
+        # Only transition if all items were processed (no API errors left behind)
         v = session.get(NewsVideo, video.id)
         if v:
-            v.status = "verified"
+            if skipped == 0:
+                v.status = "verified"
+            else:
+                logger.warning(f"Video {video.id}: {skipped} items skipped, keeping 'posted' for retry")
 
-    logger.info(f"Verified {verified} posts for video {video.id}")
+    logger.info(f"Verified {verified}/{len(items)} posts for video {video.id} ({skipped} skipped)")
     return verified
 
 
