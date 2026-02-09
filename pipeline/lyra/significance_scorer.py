@@ -75,15 +75,10 @@ def rescore_pending_items(settings: LyraSettings) -> int:
                     v.status = "rescored"
                 continue
 
-            # Load channel name
-            channel_name = video.channel_id
-            if video.channel:
-                channel_name = video.channel.name
-            else:
-                from pipeline.database import NewsChannel
-                ch = session.get(NewsChannel, video.channel_id)
-                if ch:
-                    channel_name = ch.name
+            # Load channel name (video is detached, so query directly)
+            from pipeline.database import NewsChannel
+            ch = session.get(NewsChannel, video.channel_id)
+            channel_name = ch.name if ch else video.channel_id
 
             rescored_count = 0
             for item in items:
