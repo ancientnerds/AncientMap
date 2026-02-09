@@ -14,13 +14,14 @@
  * - Token usage display
  */
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import ReactMarkdown from 'react-markdown'
 import { config } from '../config'
-import type { LyraContextType, LyraMessage, SiteHighlight, NewsHighlight } from '../types/ai'
+import type { LyraContextType, LyraMessage, SiteHighlight, NewsHighlight, ConversationSummary } from '../types/ai'
 import { getCategoryColor, getPeriodColor } from '../constants/colors'
 import { enrichLyraContent } from '../utils/lyraContentEnricher'
+import { formatRelativeDate } from '../utils/formatters'
 import NewsCard, { newsHighlightToCardProps } from './news/NewsCard'
 import SiteResultItem from './SiteResultItem'
 import { SitePopupOverlay } from './SitePopupOverlay'
@@ -28,6 +29,8 @@ import LyraAuthGate from './LyraAuthGate'
 import { apiDetailToSiteData } from '../utils/siteApi'
 import type { SiteData } from '../data/sites'
 import './news/news-cards.css'
+
+const LyraProfileModal = lazy(() => import('./LyraProfileModal'))
 
 interface Props {
   isOpen: boolean
@@ -81,6 +84,62 @@ const LEVEL_LABELS: Record<string, string> = {
   NEWS: 'News',
 }
 
+/* ---- Conversation persistence ---- */
+const STORAGE_KEY = 'lyra_conversations'
+
+interface StoredConversation {
+  id: string
+  title: string
+  updatedAt: number
+  messages: (Omit<LyraMessage, 'timestamp'> & { timestamp: string })[]
+}
+
+function saveConversation(id: string, title: string, messages: LyraMessage[]) {
+  const all = loadAllStored()
+  const serialized: StoredConversation = {
+    id,
+    title,
+    updatedAt: Date.now(),
+    messages: messages.map(m => ({
+      ...m,
+      timestamp: m.timestamp.toISOString(),
+      isStreaming: undefined,
+    })),
+  }
+  const idx = all.findIndex(c => c.id === id)
+  if (idx >= 0) all[idx] = serialized
+  else all.unshift(serialized)
+  // Keep max 50 conversations
+  if (all.length > 50) all.length = 50
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(all))
+}
+
+function loadConversation(id: string): LyraMessage[] {
+  const all = loadAllStored()
+  const conv = all.find(c => c.id === id)
+  if (!conv) return []
+  return conv.messages.map(m => ({ ...m, timestamp: new Date(m.timestamp) }))
+}
+
+function listConversations(): ConversationSummary[] {
+  return loadAllStored()
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .map(c => ({ id: c.id, title: c.title, updatedAt: c.updatedAt }))
+}
+
+function deleteConversation(id: string) {
+  const all = loadAllStored().filter(c => c.id !== id)
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(all))
+}
+
+function loadAllStored(): StoredConversation[] {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
+  } catch {
+    return []
+  }
+}
+
 function ConfidenceBadge({ value }: { value: number }) {
   const pct = Math.round(value * 100)
   const tier = pct >= 80 ? 'high' : pct >= 60 ? 'medium' : 'low'
@@ -110,6 +169,10 @@ export default function LyraChatModal({
   const [sidebarNews, setSidebarNews] = useState<NewsHighlight[]>([])
   const [selectedSite, setSelectedSite] = useState<SiteData | null>(null)
   const [mobilePanelOpen, setMobilePanelOpen] = useState<'sites' | 'news' | null>(null)
+  const [showDossier, setShowDossier] = useState(false)
+  const [conversationId, setConversationId] = useState<string>(() => crypto.randomUUID())
+  const [conversations, setConversations] = useState<ConversationSummary[]>(() => listConversations())
+  const [showHistory, setShowHistory] = useState(false)
 
   // Auth state — hydrate from sessionStorage
   const [adminKey, setAdminKey] = useState<string | null>(() =>
@@ -248,6 +311,48 @@ export default function LyraChatModal({
     setAdminKey(null)
     setMessages([])
   }, [])
+
+  const startNewChat = useCallback(() => {
+    // Save current conversation if non-empty
+    if (messages.length > 0) {
+      const title = messages.find(m => m.role === 'user')?.content.slice(0, 50) || 'New conversation'
+      saveConversation(conversationId, title, messages)
+    }
+    setConversationId(crypto.randomUUID())
+    setMessages([])
+    setSidebarSites([])
+    setSidebarNews([])
+    setError(null)
+    setShowHistory(false)
+    setConversations(listConversations())
+  }, [messages, conversationId])
+
+  const loadChat = useCallback((id: string) => {
+    // Save current conversation first if non-empty
+    if (messages.length > 0) {
+      const title = messages.find(m => m.role === 'user')?.content.slice(0, 50) || 'New conversation'
+      saveConversation(conversationId, title, messages)
+    }
+    const loaded = loadConversation(id)
+    setConversationId(id)
+    setMessages(loaded)
+    setSidebarSites([])
+    setSidebarNews([])
+    setError(null)
+    setShowHistory(false)
+  }, [messages, conversationId])
+
+  const handleDeleteConversation = useCallback((id: string) => {
+    deleteConversation(id)
+    setConversations(listConversations())
+    // If we deleted the current conversation, start fresh
+    if (id === conversationId) {
+      setConversationId(crypto.randomUUID())
+      setMessages([])
+      setSidebarSites([])
+      setSidebarNews([])
+    }
+  }, [conversationId])
 
   const handleImageUpload = useCallback((files: FileList | null) => {
     if (!files) return
@@ -419,11 +524,18 @@ export default function LyraChatModal({
               } else if (type === 'done') {
                 const avgRelevance = data.metadata?.avg_relevance ?? null
                 const tokens = data.metadata?.tokens ?? undefined
-                setMessages(prev => prev.map(m =>
-                  m.id === assistantId
-                    ? { ...m, isStreaming: false, confidence: avgRelevance, tokens }
-                    : m
-                ))
+                setMessages(prev => {
+                  const updated = prev.map(m =>
+                    m.id === assistantId
+                      ? { ...m, isStreaming: false, confidence: avgRelevance, tokens }
+                      : m
+                  )
+                  // Auto-save conversation
+                  const title = updated.find(m => m.role === 'user')?.content.slice(0, 50) || 'New conversation'
+                  saveConversation(conversationId, title, updated)
+                  setConversations(listConversations())
+                  return updated
+                })
               } else if (type === 'error') {
                 throw new Error(data.error || 'Stream error')
               }
@@ -456,7 +568,7 @@ export default function LyraChatModal({
       setIsStreaming(false)
       abortRef.current = null
     }
-  }, [input, adminKey, pendingImages, messages, contextType, contextId, contextYear, onHighlightSites, clearAuth])
+  }, [input, adminKey, pendingImages, messages, contextType, contextId, contextYear, onHighlightSites, clearAuth, conversationId])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -481,24 +593,71 @@ export default function LyraChatModal({
         <span className="news-page-brand-text">ANCIENT NERDS</span>
       </a>
       <div className="news-page-divider" />
-      <img src="/lyra.png" alt="Lyra" className="news-page-avatar" />
+      <img
+        src="/lyra.png"
+        alt="Lyra"
+        className="news-page-avatar lyra-avatar-clickable"
+        onClick={() => setShowDossier(true)}
+      />
       <span className="lyra-chat-page-label">Lyra</span>
-      {isStreaming && (
-        <button className="lyra-chat-stop-btn" onClick={() => abortRef.current?.abort()}>
-          Stop
-        </button>
+      {messages.length === 0 && (
+        <div className="lyra-chat-speech-bubble">
+          I can search 800K+ sites, find news, and answer archaeology questions!
+        </div>
       )}
+      <div className="lyra-chat-header-actions">
+        {messages.length > 0 && (
+          <button className="lyra-chat-icon-btn" onClick={startNewChat} title="New chat">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+            </svg>
+          </button>
+        )}
+        <button className="lyra-chat-icon-btn" onClick={() => { setConversations(listConversations()); setShowHistory(!showHistory) }} title="Chat history">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+          </svg>
+        </button>
+        {isStreaming && (
+          <button className="lyra-chat-stop-btn" onClick={() => abortRef.current?.abort()}>
+            Stop
+          </button>
+        )}
+      </div>
     </header>
   ) : (
     <div className="lyra-chat-header">
       <div className="lyra-chat-header-left">
-        <img src="/lyra.gif" alt="Lyra" className="lyra-chat-avatar" />
+        <img
+          src="/lyra.gif"
+          alt="Lyra"
+          className="lyra-chat-avatar lyra-avatar-clickable"
+          onClick={() => setShowDossier(true)}
+        />
         <div>
           <div className="lyra-chat-header-name">Lyra Wiskerbyte</div>
-          <div className="lyra-chat-header-status">Archaeological Agent</div>
+          {messages.length === 0 ? (
+            <div className="lyra-chat-speech-bubble">
+              I can search 800K+ sites, find news, and answer archaeology questions!
+            </div>
+          ) : (
+            <div className="lyra-chat-header-status">Archaeological Agent</div>
+          )}
         </div>
       </div>
       <div className="lyra-chat-header-right">
+        {messages.length > 0 && (
+          <button className="lyra-chat-icon-btn" onClick={startNewChat} title="New chat">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+            </svg>
+          </button>
+        )}
+        <button className="lyra-chat-icon-btn" onClick={() => { setConversations(listConversations()); setShowHistory(!showHistory) }} title="Chat history">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+          </svg>
+        </button>
         {isStreaming && (
           <button className="lyra-chat-stop-btn" onClick={() => abortRef.current?.abort()}>
             Stop
@@ -513,9 +672,52 @@ export default function LyraChatModal({
     </div>
   )
 
+  const historyPanel = showHistory && (
+    <div className="lyra-chat-history-overlay" onClick={() => setShowHistory(false)}>
+      <div className="lyra-chat-history-panel" onClick={e => e.stopPropagation()}>
+        <div className="lyra-chat-history-header">
+          <span>Chat History</span>
+          <button className="lyra-chat-close-btn" onClick={() => setShowHistory(false)}>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <line x1="2" y1="2" x2="10" y2="10" /><line x1="10" y1="2" x2="2" y2="10" />
+            </svg>
+          </button>
+        </div>
+        <div className="lyra-chat-history-list">
+          {conversations.length === 0 ? (
+            <div className="lyra-chat-history-empty">No conversations yet</div>
+          ) : (
+            conversations.map(c => (
+              <div
+                key={c.id}
+                className={`lyra-chat-history-item${c.id === conversationId ? ' active' : ''}`}
+                onClick={() => loadChat(c.id)}
+              >
+                <div className="lyra-chat-history-item-title">{c.title}</div>
+                <div className="lyra-chat-history-item-date">
+                  {formatRelativeDate(new Date(c.updatedAt).toISOString())}
+                </div>
+                <button
+                  className="lyra-chat-history-item-delete"
+                  onClick={e => { e.stopPropagation(); handleDeleteConversation(c.id) }}
+                  title="Delete conversation"
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <line x1="2" y1="2" x2="10" y2="10" /><line x1="10" y1="2" x2="2" y2="10" />
+                  </svg>
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  )
+
   const modalContent = (
     <div className={`lyra-chat-modal${hasSiteSidebar ? ' has-sidebar' : ''}${hasNews ? ' has-news' : ''}`}>
       {header}
+      {historyPanel}
 
         {/* Auth gate or chat content */}
         {!isAuthenticated ? (
@@ -862,6 +1064,12 @@ export default function LyraChatModal({
       </div>
   )
 
+  const dossierModal = showDossier && (
+    <Suspense fallback={null}>
+      <LyraProfileModal onClose={() => setShowDossier(false)} />
+    </Suspense>
+  )
+
   if (isPage) {
     return (
       <div className="lyra-chat-page">
@@ -869,6 +1077,7 @@ export default function LyraChatModal({
         {selectedSite && (
           <SitePopupOverlay site={selectedSite} onClose={() => setSelectedSite(null)} />
         )}
+        {dossierModal}
       </div>
     )
   }
@@ -876,6 +1085,7 @@ export default function LyraChatModal({
   return createPortal(
     <div className="lyra-chat-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
       {modalContent}
+      {dossierModal}
     </div>,
     document.body
   )

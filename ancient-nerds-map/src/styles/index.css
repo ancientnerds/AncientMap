@@ -13755,6 +13755,7 @@ body.news-feed-open .empire-borders-window {
 }
 
 .lyra-chat-modal {
+  position: relative;
   width: min(520px, calc(100vw - 32px));
   height: min(680px, calc(100vh - 64px));
   display: flex;
@@ -14903,5 +14904,191 @@ body.news-feed-open .empire-borders-window {
 .lyra-chat-confidence.low {
   background: rgba(244, 67, 54, 0.15);
   color: #f44336;
+}
+
+/* =============================================
+   Speech Bubble (shown when no messages)
+   ============================================= */
+
+.lyra-chat-speech-bubble {
+  position: relative;
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: rgba(192, 32, 35, 0.08);
+  border: 1px solid rgba(192, 32, 35, 0.2);
+  border-radius: 8px;
+  padding: 4px 10px;
+  max-width: 280px;
+  line-height: 1.4;
+}
+
+/* Triangle pointer for modal header (points left toward avatar) */
+.lyra-chat-header-left .lyra-chat-speech-bubble::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-right: 6px solid rgba(192, 32, 35, 0.2);
+}
+
+.lyra-chat-header-left .lyra-chat-speech-bubble::after {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-right: 5px solid rgba(192, 32, 35, 0.08);
+}
+
+/* Page header speech bubble (no pointer, inline) */
+.lyra-chat-page-header .lyra-chat-speech-bubble {
+  margin-left: 4px;
+}
+
+/* =============================================
+   Icon Buttons (new chat, history)
+   ============================================= */
+
+.lyra-chat-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.lyra-chat-icon-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.lyra-chat-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+/* =============================================
+   History Panel (overlay)
+   ============================================= */
+
+.lyra-chat-history-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+}
+
+.lyra-chat-history-panel {
+  width: 280px;
+  max-width: 80%;
+  height: 100%;
+  background: var(--bg-card-solid);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  animation: lyra-history-slide-in 0.2s ease-out;
+}
+
+@keyframes lyra-history-slide-in {
+  from { transform: translateX(-100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.lyra-chat-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.lyra-chat-history-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+
+.lyra-chat-history-empty {
+  padding: 24px 14px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.lyra-chat-history-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.12s;
+  position: relative;
+}
+
+.lyra-chat-history-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.lyra-chat-history-item.active {
+  background: rgba(192, 32, 35, 0.1);
+  border-left: 2px solid var(--primary-red);
+}
+
+.lyra-chat-history-item-title {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.lyra-chat-history-item-date {
+  font-size: 10px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.lyra-chat-history-item-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 3px;
+  opacity: 0;
+  transition: all 0.12s;
+  flex-shrink: 0;
+}
+
+.lyra-chat-history-item:hover .lyra-chat-history-item-delete {
+  opacity: 1;
+}
+
+.lyra-chat-history-item-delete:hover {
+  color: var(--primary-red);
+  background: rgba(192, 32, 35, 0.15);
 }
 

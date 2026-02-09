@@ -115,3 +115,12 @@ export interface SSEStatusEvent {
 }
 
 export type SSEEvent = SSETokenEvent | SSEStatusEvent | SSESitesEvent | SSENewsEvent | SSEDoneEvent | SSEErrorEvent
+
+/**
+ * Summary of a saved conversation for the history panel.
+ */
+export interface ConversationSummary {
+  id: string
+  title: string
+  updatedAt: number
+}
