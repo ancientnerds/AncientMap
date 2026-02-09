@@ -124,7 +124,7 @@ class SourceLoaderClass {
 
     try {
       const response = await offlineFetch(
-        `${API_BASE_URL}/sites/all?source=${sourceId}&limit=1000000`
+        `${API_BASE_URL}/sites/all?source=${sourceId}&limit=100000`
       )
 
       if (!response.ok) {
