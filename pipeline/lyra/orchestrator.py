@@ -123,7 +123,7 @@ def _log_cycle_summary(step_results: dict[str, tuple[int, float]], total_elapsed
 
     # Discovery breakdown
     parts = []
-    for status in ["pending", "matched", "enriched", "promoted", "rejected", "failed"]:
+    for status in ["pending", "matched", "enriched", "promoted", "not_a_site", "rejected", "failed"]:
         if status in discovery_counts:
             parts.append(f"{discovery_counts[status]} {status}")
     lines.append(f"  Discoveries: {total_discoveries} ({', '.join(parts)})")
@@ -706,6 +706,24 @@ def _run_migrations(engine) -> None:
                 )
                 updates["id"] = row.id
                 conn.execute(text(f"UPDATE news_items SET {sets} WHERE id = :id"), updates)
+
+        # v15: retry all failed discoveries now that API has rate throttle + retry backoff
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET enrichment_status = 'pending', last_facts_hash = NULL
+            WHERE source = 'lyra'
+              AND enrichment_status = 'failed'
+              AND promoted_site_id IS NULL
+              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v15_reset'))
+        """))
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v15_reset": true}'::jsonb
+            WHERE source = 'lyra'
+              AND enrichment_status IN ('pending', 'failed')
+              AND promoted_site_id IS NULL
+              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v15_reset'))
+        """))
 
         conn.commit()
 
