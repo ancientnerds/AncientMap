@@ -13,7 +13,12 @@ from pathlib import Path
 import anthropic
 
 from pipeline.database import NewsItem, NewsVideo, get_session
-from pipeline.lyra.config import VALID_CATEGORIES, VALID_SPECULATIVE_TAGS, LyraSettings, get_anthropic_client
+from pipeline.lyra.config import (
+    VALID_CATEGORIES,
+    VALID_SPECULATIVE_TAGS,
+    LyraSettings,
+    get_anthropic_client,
+)
 
 logger = logging.getLogger(__name__)
 
