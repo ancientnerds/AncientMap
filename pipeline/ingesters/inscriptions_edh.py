@@ -16,7 +16,7 @@ import io
 import json
 import re
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from loguru import logger
@@ -198,7 +198,7 @@ class EDHInscriptionsIngester(BaseIngester):
                 "source": "Epigraphic Database Heidelberg",
                 "source_url": "https://edh.ub.uni-heidelberg.de/",
                 "data_download_url": "https://edh.ub.uni-heidelberg.de/data/download",
-                "fetched_at": datetime.utcnow().isoformat(),
+                "fetched_at": datetime.now(UTC).isoformat(),
                 "total_inscriptions": len(all_inscriptions),
                 "data_type": "latin_inscriptions",
                 "license": "CC BY-SA 4.0",

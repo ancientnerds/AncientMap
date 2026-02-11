@@ -458,7 +458,7 @@ async def get_connectors_status(
     - include_tests=True: run test queries against all connectors (expensive)
     - run_tests_for=<connector_id>: run tests for a single connector only
     """
-    from datetime import datetime
+    from datetime import UTC, datetime
 
     # Single connector test mode
     if run_tests_for:
@@ -555,7 +555,7 @@ async def get_connectors_status(
             for s in statuses
         ],
         summary=summary,
-        checked_at=datetime.utcnow().isoformat(),
+        checked_at=datetime.now(UTC).isoformat(),
     )
 
 

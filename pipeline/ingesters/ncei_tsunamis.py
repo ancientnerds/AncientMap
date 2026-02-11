@@ -11,7 +11,7 @@ API Key: Not required
 
 import json
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from loguru import logger
@@ -108,7 +108,7 @@ class NCEITsunamisIngester(BaseIngester):
             "metadata": {
                 "source": "NCEI Tsunami Events Database",
                 "source_url": "https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/hazards/MapServer/0",
-                "fetched_at": datetime.utcnow().isoformat(),
+                "fetched_at": datetime.now(UTC).isoformat(),
                 "total_tsunamis": len(all_tsunamis),
                 "license": "Public Domain",
                 "attribution": "NOAA NCEI Natural Hazards",

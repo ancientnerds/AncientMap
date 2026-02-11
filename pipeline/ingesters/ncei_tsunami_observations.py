@@ -12,7 +12,7 @@ API Key: Not required
 
 import json
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from loguru import logger
@@ -95,7 +95,7 @@ class NCEITsunamiObservationsIngester(BaseIngester):
                 "source": "NCEI Tsunami Runups Database",
                 "source_url": "https://www.ncei.noaa.gov/maps/hazards/",
                 "api_url": self.API_URL,
-                "fetched_at": datetime.utcnow().isoformat(),
+                "fetched_at": datetime.now(UTC).isoformat(),
                 "total_observations": len(all_observations),
                 "data_type": "tsunami_observations",
                 "license": "Public Domain",

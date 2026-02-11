@@ -15,7 +15,7 @@ API Key: Not required
 import csv
 import io
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from loguru import logger
@@ -177,7 +177,7 @@ class SeshatIngester(BaseIngester):
                 "source_url": "https://seshat-db.com/",
                 "github_url": "https://github.com/seshatdb/Equinox_Data",
                 "zenodo_doi": "10.5281/zenodo.6642229",
-                "fetched_at": datetime.utcnow().isoformat(),
+                "fetched_at": datetime.now(UTC).isoformat(),
                 "total_polities": len(all_polities),
                 "total_ngas": len(all_ngas),
                 "data_type": "historical_polities",

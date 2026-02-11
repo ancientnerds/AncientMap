@@ -10,7 +10,7 @@ Provides:
 
 import asyncio
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 
 from loguru import logger
 
@@ -190,7 +190,7 @@ class ConnectorRegistry:
         Returns:
             ContentSearchResult with aggregated items
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(UTC)
 
         # Determine which connectors to search
         if sources:
@@ -259,7 +259,7 @@ class ConnectorRegistry:
         all_items.sort(key=lambda x: x.relevance_score, reverse=True)
 
         # Calculate timing
-        end_time = datetime.utcnow()
+        end_time = datetime.now(UTC)
         search_time_ms = (end_time - start_time).total_seconds() * 1000
 
         return ContentSearchResult(
@@ -297,7 +297,7 @@ class ConnectorRegistry:
         Returns:
             ContentSearchResult with aggregated items
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(UTC)
 
         # Determine which connectors to query
         if sources:
@@ -356,7 +356,7 @@ class ConnectorRegistry:
 
         all_items.sort(key=lambda x: x.relevance_score, reverse=True)
 
-        end_time = datetime.utcnow()
+        end_time = datetime.now(UTC)
         return ContentSearchResult(
             items=all_items,
             total_count=len(all_items),
@@ -392,7 +392,7 @@ class ConnectorRegistry:
         Returns:
             ContentSearchResult with aggregated items
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(UTC)
 
         # Get relevant connectors
         connectors = cls.get_all()
@@ -452,7 +452,7 @@ class ConnectorRegistry:
 
         all_items.sort(key=lambda x: x.relevance_score, reverse=True)
 
-        end_time = datetime.utcnow()
+        end_time = datetime.now(UTC)
         return ContentSearchResult(
             items=all_items,
             total_count=len(all_items),
@@ -484,7 +484,7 @@ class ConnectorRegistry:
         Returns:
             ContentSearchResult with aggregated items
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(UTC)
 
         connectors = cls.get_all()
 
@@ -539,7 +539,7 @@ class ConnectorRegistry:
 
         all_items.sort(key=lambda x: x.relevance_score, reverse=True)
 
-        end_time = datetime.utcnow()
+        end_time = datetime.now(UTC)
         return ContentSearchResult(
             items=all_items,
             total_count=len(all_items),
@@ -675,7 +675,7 @@ class ConnectorRegistry:
                 status="unavailable",
                 available=False,
                 base_url=getattr(connector, 'website_url', None) or getattr(connector, 'base_url', None),
-                last_ping=datetime.utcnow(),
+                last_ping=datetime.now(UTC),
                 error_message=reason,
                 response_time_ms=0,
                 tabs=cls._get_connector_tabs(connector),
@@ -701,7 +701,7 @@ class ConnectorRegistry:
                     status="unavailable",
                     available=False,
                     base_url=getattr(connector, 'website_url', None) or getattr(connector, 'base_url', None),
-                    last_ping=datetime.utcnow(),
+                    last_ping=datetime.now(UTC),
                     error_message=result.error_message,
                     response_time_ms=result.response_time_ms,
                     tabs=cls._get_connector_tabs(connector),
@@ -721,7 +721,7 @@ class ConnectorRegistry:
                 status=status,
                 available=True,
                 base_url=getattr(connector, 'website_url', None) or getattr(connector, 'base_url', None),
-                last_ping=datetime.utcnow(),
+                last_ping=datetime.now(UTC),
                 error_message=result.error_message,
                 item_count=result.item_count,
                 response_time_ms=result.response_time_ms,
@@ -740,7 +740,7 @@ class ConnectorRegistry:
                 status="error",
                 available=True,
                 base_url=getattr(connector, 'website_url', None) or getattr(connector, 'base_url', None),
-                last_ping=datetime.utcnow(),
+                last_ping=datetime.now(UTC),
                 error_message=f"Health check timed out after {effective_timeout}s",
                 tabs=cls._get_connector_tabs(connector),
             )
@@ -755,7 +755,7 @@ class ConnectorRegistry:
                 status="error",
                 available=True,
                 base_url=getattr(connector, 'website_url', None) or getattr(connector, 'base_url', None),
-                last_ping=datetime.utcnow(),
+                last_ping=datetime.now(UTC),
                 error_message=str(e),
                 tabs=cls._get_connector_tabs(connector),
             )
@@ -802,7 +802,7 @@ class ConnectorRegistry:
                     status="error",
                     available=True,
                     base_url=getattr(connector, 'website_url', None) or getattr(connector, 'base_url', None) if connector else None,
-                    last_ping=datetime.utcnow(),
+                    last_ping=datetime.now(UTC),
                     error_message=str(result),
                     tabs=cls._get_connector_tabs(connector) if connector else [],
                 ))

@@ -14,6 +14,8 @@ import logging
 import sys
 import time
 
+from sqlalchemy import text
+
 from pipeline.lyra.config import LyraSettings
 
 logger = logging.getLogger(__name__)
@@ -162,23 +164,8 @@ def run_pipeline(settings: LyraSettings, only_step: str | None = None) -> None:
     _log_cycle_summary(step_results, total_elapsed)
 
 
-def main() -> None:
-    """Main entry point for the Lyra pipeline service."""
-    parser = argparse.ArgumentParser(description="Lyra news pipeline orchestrator")
-    parser.add_argument("--once", action="store_true", help="Run a single pipeline cycle and exit")
-    parser.add_argument("--step", choices=list(STEPS.keys()), help="Run only a single named step")
-    args = parser.parse_args()
-
-    setup_logging()
-    logger.info("Lyra Wiskerbyte pipeline starting...")
-
-    settings = LyraSettings()
-
-    # Create tables if they don't exist, then run migrations
-    from pipeline.database import create_all_tables, engine
-    create_all_tables()
-
-    from sqlalchemy import text
+def _run_migrations(engine) -> None:
+    """Run all database migrations (schema + data) for the Lyra pipeline."""
     with engine.connect() as conn:
         conn.execute(text(
             "ALTER TABLE news_items ADD COLUMN IF NOT EXISTS site_match_tried BOOLEAN DEFAULT FALSE"
@@ -643,6 +630,24 @@ def main() -> None:
         """))
 
         conn.commit()
+
+
+def main() -> None:
+    """Main entry point for the Lyra pipeline service."""
+    parser = argparse.ArgumentParser(description="Lyra news pipeline orchestrator")
+    parser.add_argument("--once", action="store_true", help="Run a single pipeline cycle and exit")
+    parser.add_argument("--step", choices=list(STEPS.keys()), help="Run only a single named step")
+    args = parser.parse_args()
+
+    setup_logging()
+    logger.info("Lyra Wiskerbyte pipeline starting...")
+
+    settings = LyraSettings()
+
+    # Create tables if they don't exist, then run migrations
+    from pipeline.database import create_all_tables, engine
+    create_all_tables()
+    _run_migrations(engine)
 
     # Seed channels
     from pipeline.lyra.channels import seed_channels

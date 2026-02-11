@@ -11,7 +11,7 @@ API Key: Not required
 
 import json
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -123,7 +123,7 @@ class DAREIngester(BaseIngester):
             "metadata": {
                 "source": "Digital Atlas of the Roman Empire",
                 "source_url": "https://imperium.ahlfeldt.se/",
-                "fetched_at": datetime.utcnow().isoformat(),
+                "fetched_at": datetime.now(UTC).isoformat(),
                 "total_places": len(features),
             }
         }

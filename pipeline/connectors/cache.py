@@ -14,7 +14,7 @@ import hashlib
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from loguru import logger
@@ -91,7 +91,7 @@ class MemoryCache:
         value, expires_at = self._cache[key]
 
         # Check expiration
-        if expires_at and datetime.utcnow() > expires_at:
+        if expires_at and datetime.now(UTC) > expires_at:
             del self._cache[key]
             if key in self._access_order:
                 self._access_order.remove(key)
@@ -114,7 +114,7 @@ class MemoryCache:
 
         expires_at = None
         if ttl_seconds:
-            expires_at = datetime.utcnow() + timedelta(seconds=ttl_seconds)
+            expires_at = datetime.now(UTC) + timedelta(seconds=ttl_seconds)
 
         self._cache[key] = (value, expires_at)
         self._access_order.append(key)

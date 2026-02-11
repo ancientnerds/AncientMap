@@ -12,7 +12,7 @@ API Key: Not required
 import json
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from loguru import logger
@@ -138,7 +138,7 @@ class NCEIVolcanoesIngester(BaseIngester):
             "metadata": {
                 "source": "NCEI Significant Volcanic Eruptions Database",
                 "source_url": "https://www.ngdc.noaa.gov/hazel/hazard-service/api/v1/volcanoes",
-                "fetched_at": datetime.utcnow().isoformat(),
+                "fetched_at": datetime.now(UTC).isoformat(),
                 "total_eruptions": len(parsed_eruptions),
                 "data_type": "volcanic_eruptions",
                 "license": "Public Domain",

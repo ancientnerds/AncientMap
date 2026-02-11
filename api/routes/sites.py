@@ -13,7 +13,6 @@ import json
 import logging
 import os
 import secrets
-import time
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -227,8 +226,6 @@ async def get_all_sites(
 
     Falls back to static JSON if database is empty.
     """
-    time.time()
-
     # Build cache key from parameters
     source_key = ",".join(sorted(source)) if source else "all"
     cache_key = f"sites:all:{source_key}:{site_type or 'all'}:{period_max or 'all'}:{skip}:{limit}"
@@ -278,12 +275,9 @@ async def get_all_sites(
             LIMIT :limit
         """)
 
-        query_start = time.time()
         result = db.execute(query, params)
-        (time.time() - query_start) * 1000
 
         # Return as compact array of arrays for minimal JSON size
-        serialize_start = time.time()
         sites = []
         images_found = 0
         for row in result:
@@ -309,7 +303,6 @@ async def get_all_sites(
             if row.source_url:
                 site["u"] = row.source_url
             sites.append(site)
-        (time.time() - serialize_start) * 1000
 
         if sites:
             response = {

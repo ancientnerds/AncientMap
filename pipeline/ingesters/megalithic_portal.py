@@ -14,7 +14,7 @@ import re
 import xml.etree.ElementTree as ET
 import zipfile
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -131,7 +131,7 @@ class MegalithicPortalIngester(BaseIngester):
             "metadata": {
                 "source": "Megalithic Portal",
                 "source_url": "https://www.megalithic.co.uk/",
-                "fetched_at": datetime.utcnow().isoformat(),
+                "fetched_at": datetime.now(UTC).isoformat(),
                 "total_sites": len(sites),
             }
         }

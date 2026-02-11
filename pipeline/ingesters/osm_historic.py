@@ -11,7 +11,7 @@ License: ODbL (Open Database License)
 import json
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -189,7 +189,7 @@ class OSMHistoricIngester(BaseIngester):
             "metadata": {
                 "source": "OpenStreetMap",
                 "source_url": "https://www.openstreetmap.org/",
-                "fetched_at": datetime.utcnow().isoformat(),
+                "fetched_at": datetime.now(UTC).isoformat(),
                 "total_sites": len(all_elements),
                 "license": "ODbL (Open Database License)",
                 "tags_queried": self.HISTORIC_TAGS,

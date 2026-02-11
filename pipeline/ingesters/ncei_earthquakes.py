@@ -11,7 +11,7 @@ API Key: Not required
 
 import json
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from loguru import logger
@@ -108,7 +108,7 @@ class NCEIEarthquakesIngester(BaseIngester):
             "metadata": {
                 "source": "NCEI Significant Earthquakes Database",
                 "source_url": "https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/hazards/MapServer/5",
-                "fetched_at": datetime.utcnow().isoformat(),
+                "fetched_at": datetime.now(UTC).isoformat(),
                 "total_earthquakes": len(all_earthquakes),
                 "license": "Public Domain",
                 "attribution": "NOAA NCEI Natural Hazards",
