@@ -63,35 +63,55 @@ export function getNewsCategoryLabel(cat: string): string {
 }
 
 const TOPIC_COLORS: Record<string, string> = {
-  // Fieldwork (warm earth)
-  excavation: '#c17f3e',
-  survey: '#b89254',
-  underwater: '#5e8fa8',
-  // Artifacts (amber/gold)
-  artifact: '#c9a84c',
-  art: '#d4a05a',
-  epigraphy: '#a89060',
-  // Science (blue/cyan)
-  dating: '#4a90b8',
-  remote_sensing: '#5c7eb0',
-  technology: '#6a88b0',
-  bioarchaeology: '#5d9a8a',
-  // Cultural (green)
-  heritage: '#6b9e6b',
-  conservation: '#7aab6f',
-  architecture: '#8a9e6b',
-  // Theory (neutral)
-  theory: '#8888a0',
-  general: '#7a7a8a',
-  // Alternative (purple range)
-  ancient_astronauts: '#9b70c0',
-  annunaki: '#8a6ab0',
-  lost_civilization: '#a078b8',
-  giants: '#b07aaa',
-  supernatural: '#8860a8',
-  conspiracy: '#7a6498',
+  // Science & dating (blue)
+  dating: '#4a9fd4',
+  bioarchaeology: '#3db5b0',
+  remote_sensing: '#5a8ec4',
+  technology: '#6c9fd0',
+  // Fieldwork (teal → earth)
+  excavation: '#c48840',
+  survey: '#a89050',
+  underwater: '#3aa0a8',
+  // Artifacts & records (amber/gold)
+  artifact: '#d4a038',
+  art: '#cc8844',
+  epigraphy: '#b8983c',
+  architecture: '#c4963a',
+  // Cultural & heritage (green)
+  heritage: '#5daa5d',
+  conservation: '#72b860',
+  // Theory & general (neutral grey)
+  theory: '#8888a8',
+  general: '#7a7a90',
+  archaeoastronomy: '#6888b8',
+  // Speculative (purple → red)
+  lost_civilization: '#a070cc',
+  ancient_astronauts: '#bb66aa',
+  annunaki: '#c46090',
+  giants: '#cc5566',
+  supernatural: '#9060b8',
+  conspiracy: '#886098',
 }
 
+/** Canonical order: scientific → fieldwork → artifacts → cultural → general → speculative */
+const TOPIC_ORDER: string[] = [
+  'dating', 'bioarchaeology', 'remote_sensing', 'technology',
+  'excavation', 'survey', 'underwater',
+  'artifact', 'art', 'epigraphy', 'architecture',
+  'heritage', 'conservation',
+  'archaeoastronomy', 'theory', 'general',
+  'lost_civilization', 'ancient_astronauts', 'annunaki', 'giants', 'supernatural', 'conspiracy',
+]
+
 export function getTopicColor(topic: string): string {
-  return TOPIC_COLORS[topic] || '#7a7a8a'
+  return TOPIC_COLORS[topic] || '#7a7a90'
+}
+
+/** Sort topics from scientific to fringe using canonical order. Unknown topics go to the end. */
+export function sortTopics(topics: string[]): string[] {
+  return [...topics].sort((a, b) => {
+    const ai = TOPIC_ORDER.indexOf(a)
+    const bi = TOPIC_ORDER.indexOf(b)
+    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+  })
 }
