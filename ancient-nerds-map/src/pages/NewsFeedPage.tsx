@@ -12,7 +12,7 @@ import type { NewsItemData, NewsStats, NewsFilters, ActiveFilters } from '../typ
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
 import { SitePopupOverlay } from '../components/SitePopupOverlay'
 import NewsCard from '../components/news/NewsCard'
-import { getNewsCategoryLabel, getTopicColor } from '../components/news/significance'
+import { getNewsCategoryLabel, getTopicColor, sortTopics } from '../components/news/significance'
 import '../components/news/news-cards.css'
 
 const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
@@ -481,36 +481,25 @@ export default function NewsFeedPage() {
                 </div>
               </div>
 
-              {/* Topic row (news categories + speculative tags merged) */}
+              {/* Topic row (news categories + speculative tags merged, sorted scientific → fringe) */}
               {(filters.news_categories.length > 0 || (filters.speculative_tags && filters.speculative_tags.length > 0)) && (
                 <div className="news-page-filter-row">
                   <span className="news-page-filter-label">Topic</span>
-                  <div className="news-page-chips news-page-chips-scroll">
-                    {filters.news_categories.map(cat => {
-                      const color = getTopicColor(cat)
-                      const isActive = activeFilters.news_category === cat
+                  <div className="news-page-chips">
+                    {sortTopics([...filters.news_categories, ...(filters.speculative_tags || [])]).map(topic => {
+                      const color = getTopicColor(topic)
+                      const isSpecTag = filters.speculative_tags?.includes(topic)
+                      const isActive = isSpecTag
+                        ? activeFilters.speculative_tag === topic
+                        : activeFilters.news_category === topic
                       return (
                         <button
-                          key={cat}
+                          key={topic}
                           className={`news-page-chip${isActive ? ' active' : ''}`}
                           style={!isActive ? { borderColor: color, color } : undefined}
-                          onClick={() => handleFilterToggle('news_category', cat)}
+                          onClick={() => handleFilterToggle(isSpecTag ? 'speculative_tag' : 'news_category', topic)}
                         >
-                          {getNewsCategoryLabel(cat)}
-                        </button>
-                      )
-                    })}
-                    {filters.speculative_tags?.map(tag => {
-                      const color = getTopicColor(tag)
-                      const isActive = activeFilters.speculative_tag === tag
-                      return (
-                        <button
-                          key={tag}
-                          className={`news-page-chip${isActive ? ' active' : ''}`}
-                          style={!isActive ? { borderColor: color, color } : undefined}
-                          onClick={() => handleFilterToggle('speculative_tag', tag)}
-                        >
-                          {getNewsCategoryLabel(tag)}
+                          {getNewsCategoryLabel(topic)}
                         </button>
                       )
                     })}
