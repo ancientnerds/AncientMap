@@ -132,6 +132,11 @@ def _log_cycle_summary(step_results: dict[str, tuple[int, float]], total_elapsed
 
 def run_pipeline(settings: LyraSettings, only_step: str | None = None) -> None:
     """Run one full pipeline cycle, or a single step if only_step is set."""
+    # Re-seed channels every cycle so new entries in channels.json are picked up
+    # without restarting the container.
+    from pipeline.lyra.channels import seed_channels
+    seed_channels()
+
     cycle_start = time.time()
     step_results: dict[str, tuple[int, float]] = {}
 
