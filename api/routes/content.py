@@ -191,7 +191,7 @@ class ConnectorsStatusResponse(BaseModel):
 
 def _init_connectors():
     """Initialize connectors with API keys from environment."""
-    api_keys = {
+    api_keys: dict[str, str | None] = {
         # Add API keys as needed for connectors that require authentication
         # Example: "europeana": os.environ.get("EUROPEANA_API_KEY"),
     }

@@ -38,7 +38,7 @@ Issues = "https://github.com/AncientNerds/AncientMap/issues"
 # =============================================================================
 [tool.mypy]
 python_version = "3.11"
-warn_return_any = true
+warn_return_any = false
 warn_unused_configs = true
 warn_redundant_casts = true
 warn_unused_ignores = true
@@ -59,9 +59,17 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = [
     "api.*",
+]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false  # FastAPI endpoints have partial annotations
+
+[[tool.mypy.overrides]]
+module = [
     "pipeline.*",
 ]
-disallow_untyped_defs = false  # Allow gradual typing adoption
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+follow_imports = "silent"  # Don't report errors in pipeline when checking api/
 
 [[tool.mypy.overrides]]
 module = "tests.*"

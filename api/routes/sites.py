@@ -239,7 +239,7 @@ async def get_all_sites(
     try:
         # Build query with filters
         conditions = []
-        params = {"limit": limit, "skip": skip}
+        params: dict[str, object] = {"limit": limit, "skip": skip}
 
         if source:
             conditions.append("source_id = ANY(:sources)")
@@ -358,7 +358,7 @@ async def get_sites_in_viewport(
     conditions = [
         "geom && ST_MakeEnvelope(:min_lon, :min_lat, :max_lon, :max_lat, 4326)"
     ]
-    params = {
+    params: dict[str, object] = {
         "min_lat": min_lat,
         "max_lat": max_lat,
         "min_lon": min_lon,

@@ -520,3 +520,50 @@ Use this for fast scanning. Each item maps to a dimension above.
 - [ ] `.env` in `.gitignore`
 - [ ] CI jobs are blocking (no `|| true`)
 - [ ] No credentials in Docker build args
+
+---
+
+## D3-MAINT Refactoring Backlog
+
+Oversized files/functions flagged for gradual refactoring. Address when touching these files.
+
+### Python (>400 lines or functions >50 lines)
+
+| File | Lines | Long functions |
+|------|-------|----------------|
+| `pipeline/lyra/site_identifier.py` | ~1328 | `_handle_db_match` (~160), `_process_single` (~120), `_enrich_from_wikidata` (~90) |
+| `pipeline/lyra/orchestrator.py` | ~831 | `main` (~100) |
+| `api/routes/sites.py` | ~819 | Multiple endpoint handlers |
+| `api/services/lyra_agent.py` | ~618 | `run_agent_stream` (~150) |
+| `api/services/lyra_tools.py` | ~606 | `search_sites` (~90), `_hybrid_search` (~81) |
+| `api/routes/content.py` | ~605 | `get_connectors_status` (~126) |
+| `api/routes/news.py` | ~510 | `get_news_feed` (~133) |
+| `api/routes/og.py` | ~499 | `generate_og_image` (~127) |
+| `api/routes/radar.py` | ~433 | `get_radar` (~222) |
+| `pipeline/lyra/transcript_fetcher.py` | ~413 | `fetch_new_videos` (~81) |
+
+### TypeScript (>400 lines)
+
+| File | Lines |
+|------|-------|
+| `src/App.tsx` | ~2355 |
+| `src/components/Globe.tsx` | ~2135 |
+| `src/services/MapboxGlobeService.ts` | ~1469 |
+| `src/components/FilterPanel.tsx` | ~1353 |
+| `src/components/LyraChatModal.tsx` | ~1071 |
+| `src/components/SitePopup/SitePopup.tsx` | ~900 |
+| `src/hooks/globe/useGeoLabels.ts` | ~771 |
+| `src/components/DownloadManager.tsx` | ~735 |
+| `src/pages/LyraRadarPage.tsx` | ~716 |
+| `src/pages/NewsFeedPage.tsx` | ~655 |
+| `src/components/ContributeModal.tsx` | ~620 |
+| `src/hooks/globe/useGlobeScene.ts` | ~540 |
+| `src/hooks/globe/createGlobeRefs.ts` | ~532 |
+
+### CSS (>400 lines)
+
+| File | Lines |
+|------|-------|
+| `src/styles/index.css` | ~15089 |
+| `src/pages/LyraRadarPage.css` | ~708 |
+| `src/components/DownloadManager.css` | ~701 |

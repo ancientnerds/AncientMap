@@ -269,7 +269,7 @@ async def get_site_types(db: Session = Depends(get_db)):
         return {"site_types": types}
     except SQLAlchemyError as e:
         logger.error(f"Database error fetching site types: {e}")
-        raise HTTPException(status_code=500, detail="Database error fetching site types")
+        raise HTTPException(status_code=500, detail="Database error fetching site types") from e
 
 
 @router.get("/countries")

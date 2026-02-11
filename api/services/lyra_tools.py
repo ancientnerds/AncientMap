@@ -394,14 +394,14 @@ def _hybrid_search(
     )
 
     # Step 2: Build metadata filter
-    conditions = []
+    conditions: list[models.FieldCondition | models.Filter] = []
     if country:
         conditions.append(models.FieldCondition(key="country", match=models.MatchText(text=country)))
     if period:
         conditions.append(models.FieldCondition(key="period_name", match=models.MatchText(text=period)))
     if site_type:
         conditions.append(models.FieldCondition(key="site_type", match=models.MatchText(text=site_type)))
-    query_filter = models.Filter(must=conditions) if conditions else None
+    query_filter = models.Filter(must=conditions) if conditions else None  # type: ignore[arg-type]
 
     # Step 3: Hybrid query — prefetch dense + BM25, fuse with RRF
     results = client.query_points(

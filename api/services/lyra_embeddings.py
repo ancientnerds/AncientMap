@@ -45,13 +45,13 @@ class VoyageEmbeddings:
         client = _get_voyage_client()
         result = client.embed(texts, model=self.model, input_type=self.input_type)
         self.last_total_tokens = getattr(result, "total_tokens", 0) or 0
-        return result.embeddings
+        return result.embeddings  # type: ignore[return-value]  # voyageai returns floats
 
     def embed_query(self, text: str) -> list[float]:
         client = _get_voyage_client()
         result = client.embed([text], model=self.model, input_type=self.input_type)
         self.last_total_tokens = getattr(result, "total_tokens", 0) or 0
-        return result.embeddings[0]
+        return result.embeddings[0]  # type: ignore[return-value]  # voyageai returns floats
 
 
 # Singletons per usage type

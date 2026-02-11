@@ -118,7 +118,7 @@ def _compute_display_score(item: dict) -> int:
 
 def _build_video_refs(videos_json: list[dict] | None) -> list[dict]:
     """Deduplicate and format video references from a JSON aggregate."""
-    videos = []
+    videos: list[dict[str, object]] = []
     seen = set()
     if not videos_json:
         return videos
@@ -409,10 +409,10 @@ async def get_radar_stats(db: Session = Depends(get_db)):
     sites_known = db.execute(text("SELECT COUNT(*) FROM unified_sites")).scalar() or 0
 
     response = {
-        "total_radar": row.total_radar or 0,
-        "enriched_count": row.enriched_count or 0,
-        "pending_count": row.pending_count or 0,
-        "added_count": row.added_count or 0,
+        "total_radar": (row.total_radar or 0) if row else 0,
+        "enriched_count": (row.enriched_count or 0) if row else 0,
+        "pending_count": (row.pending_count or 0) if row else 0,
+        "added_count": (row.added_count or 0) if row else 0,
         "total_sites_known": sites_known,
     }
 

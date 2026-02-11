@@ -53,8 +53,7 @@ jobs:
         run: ruff check api/ pipeline/
 
       - name: Type check with mypy
-        continue-on-error: true
-        run: mypy api/ --ignore-missing-imports --no-error-summary
+        run: mypy api/ --no-error-summary
 
   security-scan:
     name: Security Scan
@@ -143,7 +142,7 @@ jobs:
 
       - name: Deploy via SSH
         run: |
-          ssh -o StrictHostKeyChecking=no -p ${{ secrets.VPS_PORT }} ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'set -e
+          ssh -o StrictHostKeyChecking=accept-new -p ${{ secrets.VPS_PORT }} ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'set -e
             cd /var/www/ancientnerds
             BEFORE=$(git rev-parse HEAD)
             echo "==> Discarding local changes..."
