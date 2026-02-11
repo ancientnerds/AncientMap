@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from api.cache import cache_get, cache_set
 from pipeline.database import NewsArticle, NewsChannel, NewsItem, NewsVideo, UnifiedSite, get_db
+from pipeline.utils.country_lookup import country_name_variants, normalize_country
 from pipeline.utils.text import categorize_period
 
 logger = logging.getLogger(__name__)
@@ -194,7 +195,11 @@ async def get_news_feed(
         if not site_joined:
             query = query.join(UnifiedSite, NewsItem.site_id == UnifiedSite.id)
             site_joined = True
-        query = query.filter(UnifiedSite.country == country)
+        variants = country_name_variants(country)
+        if variants:
+            query = query.filter(func.lower(UnifiedSite.country).in_(variants))
+        else:
+            query = query.filter(UnifiedSite.country == country)
 
     if period:
         period_range = _period_label_to_range(period)
@@ -349,7 +354,13 @@ async def get_news_filters(db: Session = Depends(get_db)):
         .distinct()
         .all()
     )
-    countries = sorted([row[0] for row in country_rows])
+    raw_countries = [row[0] for row in country_rows]
+    iso_groups: dict[str, str] = {}
+    for c in raw_countries:
+        iso = normalize_country(c)
+        if iso not in iso_groups:
+            iso_groups[iso] = c
+    countries = sorted(iso_groups.values())
 
     # News categories: distinct news_category values from news items
     news_cat_rows = (
