@@ -35,7 +35,8 @@ router = APIRouter()
 # Refresh Protection Configuration
 # ============================================================================
 
-# Rate limiting: track last refresh time per IP
+# Rate limiting: track last refresh time per IP (capped to prevent memory exhaustion)
+_MAX_REFRESH_ENTRIES = 10_000
 _refresh_timestamps: dict[str, float] = {}
 REFRESH_COOLDOWN_SECONDS = 300  # 5 minutes between refreshes per IP
 
@@ -599,6 +600,10 @@ async def verify_refresh(request: AdminPinRequest, req: Request):
     result = await verify_admin_pin(request.pin, request.turnstile_token, ip)
 
     if result.verified:
+        # Evict oldest entries if dict exceeds cap (DoS protection)
+        if len(_refresh_timestamps) >= _MAX_REFRESH_ENTRIES:
+            oldest_ip = min(_refresh_timestamps, key=_refresh_timestamps.get)
+            del _refresh_timestamps[oldest_ip]
         _refresh_timestamps[ip] = now
         logger.info(f"Connector refresh authorized for {ip}")
 

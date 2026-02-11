@@ -123,7 +123,7 @@ async def get_lyra_contributions(
 # Contributions JSON file path
 CONTRIBUTIONS_FILE = Path(__file__).parent.parent.parent / "data" / "contributions.json"
 
-_rate_limiter = RateLimiter(max_requests=25, window_seconds=3600)
+_rate_limiter = RateLimiter(max_requests=25, window_seconds=3600, namespace="contributions")
 
 
 def load_contributions() -> list[dict]:

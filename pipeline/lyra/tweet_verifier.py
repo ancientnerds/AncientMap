@@ -98,7 +98,11 @@ def verify_single_post(
         logger.warning(f"Verification API error for item {item.id}: {e}")
         return None
 
-    return json.loads(response.content[0].text)
+    text_block = next((b.text for b in response.content if hasattr(b, "text")), None)
+    if not text_block:
+        logger.warning(f"Empty verification response for item {item.id}")
+        return None
+    return json.loads(text_block)
 
 
 def verify_video_posts(

@@ -112,26 +112,35 @@ def _check_relevance(
     system_prompt = relevance_prompt or _load_relevance_prompt()
     user_content = "\n".join(context_parts)
 
-    response = call_api(
-        client,
-        model=settings.model_relevance,
-        max_tokens=256,
-        temperature=0.0,
-        system=[{
-            "type": "text",
-            "text": system_prompt,
-            "cache_control": {"type": "ephemeral"},
-        }],
-        messages=[{"role": "user", "content": user_content}],
-        output_config={
-            "format": {
-                "type": "json_schema",
-                "schema": RELEVANCE_SCHEMA,
+    try:
+        response = call_api(
+            client,
+            model=settings.model_relevance,
+            max_tokens=256,
+            temperature=0.0,
+            system=[{
+                "type": "text",
+                "text": system_prompt,
+                "cache_control": {"type": "ephemeral"},
+            }],
+            messages=[{"role": "user", "content": user_content}],
+            output_config={
+                "format": {
+                    "type": "json_schema",
+                    "schema": RELEVANCE_SCHEMA,
+                },
             },
-        },
-    )
+        )
+    except anthropic.APIError as e:
+        logger.error(f"Relevance gate API error for {video.id}: {e}")
+        return True  # pass through on API failure rather than crashing the batch
 
-    result = json.loads(response.content[0].text)
+    text_block = next((b.text for b in response.content if hasattr(b, "text")), None)
+    if not text_block:
+        logger.warning(f"Relevance gate: empty response for {video.id}")
+        return True
+
+    result = json.loads(text_block)
     if not result["is_archaeology"]:
         logger.info(f"Relevance gate: {video.title!r} -> NO ({result['reason']})")
     return result["is_archaeology"]
@@ -253,7 +262,11 @@ def summarize_video(
         logger.error(f"Anthropic API error for {video.id}: {e}")
         return False
 
-    summary_data = json.loads(response.content[0].text)
+    text_block = next((b.text for b in response.content if hasattr(b, "text")), None)
+    if not text_block:
+        logger.warning(f"Empty response content for {video.id}")
+        return False
+    summary_data = json.loads(text_block)
 
     key_topics = summary_data.get("key_topics", [])
     if not key_topics:

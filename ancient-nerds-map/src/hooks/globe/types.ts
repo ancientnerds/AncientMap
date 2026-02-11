@@ -293,6 +293,8 @@ export interface GlobeRefs {
   onMeasurePointAdd: React.MutableRefObject<((coords: [number, number], snapped: boolean) => void) | undefined>
   onMeasurementComplete: React.MutableRefObject<((start: [number, number], end: [number, number]) => void) | undefined>
   onContributeMapConfirm: React.MutableRefObject<(() => void) | undefined>
+  onProximitySet: React.MutableRefObject<((coords: [number, number]) => void) | undefined>
+  isLoading: React.MutableRefObject<boolean>
 
   // ========== Update Function Refs ==========
   updateGeoLabels: React.MutableRefObject<(() => void) | null>

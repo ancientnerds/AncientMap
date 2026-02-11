@@ -166,6 +166,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     measurementObjects: measurementObjectsRef, measurementLabels: measurementLabelsRef,
     measurementLines: measurementLinesRef, measurementMarkers: measurementMarkersRef,
     labelGroup: labelGroupRef, sites: sitesRef,
+    onProximitySet: onProximitySetRef, isLoading: isLoadingRef,
   } = refs
 
   // Sync callback refs with current values
@@ -177,6 +178,8 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   measureSnapEnabledRef.current = measureSnapEnabled
   measurementsRef.current = measurements
   currentMeasurePointsRef.current = currentMeasurePoints
+  onProximitySetRef.current = onProximitySet
+  isLoadingRef.current = isLoading ?? false
   const [sceneReady, setSceneReady] = useState(false)
   const [softwareRendering, setSoftwareRendering] = useState(false)
   const [warningDismissed, setWarningDismissed] = useState(false)
@@ -621,8 +624,8 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     }
 
     const handlerCallbacks: EventHandlerCallbacks = {
-      onProximitySet,
-      isLoading
+      onProximitySet: (...args) => onProximitySetRef.current?.(...args),
+      getIsLoading: () => isLoadingRef.current,
     }
     const { cleanup: cleanupEventHandlers } = setupEventHandlers(
       sceneObjects, handlerRefs, handlerSetters, handlerCallbacks, isManualZoom
@@ -1825,7 +1828,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       setZoom,
       setListHighlightedSites,
       setListHighlightedPositions,
-      onProximitySet,
+      onProximitySet: (...args: [coords: [number, number]]) => onProximitySetRef.current?.(...args),
     }
     createModeSwitchEffect(deps)
   }, [showMapbox, onSiteClick])
