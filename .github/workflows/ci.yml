@@ -158,6 +158,7 @@ jobs:
               echo "==> Building frontend..."
               mv ancient-nerds-map/dist ancient-nerds-map/dist-old 2>/dev/null || true
               if echo "$CHANGED" | grep -q "package-lock.json"; then
+                rm -rf ancient-nerds-map/node_modules 2>/dev/null || true
                 cd ancient-nerds-map && npm ci && npm run build && cd ..
               else
                 cd ancient-nerds-map && npm run build && cd ..
