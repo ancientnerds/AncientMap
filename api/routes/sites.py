@@ -249,7 +249,7 @@ async def get_all_sites(
             conditions.append("site_type = :site_type")
             params["site_type"] = site_type
 
-        if period_max:
+        if period_max is not None:
             conditions.append("(period_start IS NULL OR period_start <= :period_max)")
             params["period_max"] = period_max
 

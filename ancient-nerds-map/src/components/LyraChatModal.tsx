@@ -185,6 +185,11 @@ export default function LyraChatModal({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
+  // Abort in-flight SSE stream on unmount
+  useEffect(() => {
+    return () => { abortRef.current?.abort() }
+  }, [])
+
   // Sort news by relevance (highest first)
   const sortedNews = [...sidebarNews].sort((a, b) => (b.relevance ?? 0) - (a.relevance ?? 0))
 

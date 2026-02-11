@@ -1015,10 +1015,6 @@ export class MapboxGlobeService {
 
     if (!this.map || !this.isInitialized) return
 
-    console.log('[Mapbox] setMeasurementLines called:', { measurements: measurements.length, singlePoints: singlePoints?.length ?? 0 })
-    if (measurements.length > 0) console.log('[Mapbox] First measurement:', measurements[0])
-    if (singlePoints && singlePoints.length > 0) console.log('[Mapbox] Single points:', singlePoints)
-
     // Remove existing layers and source
     if (this.map.getLayer('measurement-labels')) {
       this.map.removeLayer('measurement-labels')
@@ -1087,8 +1083,6 @@ export class MapboxGlobeService {
           geometry: { type: 'Point' as const, coordinates: [midLng, midLat] }
         }
       })
-
-    console.log('[Mapbox] Point features:', pointFeatures.map(f => ({ coords: f.geometry, snapped: f.properties?.snapped })))
 
     // Add source with lines, points, and labels
     this.map.addSource('measurements', {

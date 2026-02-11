@@ -239,8 +239,7 @@ class EAMENAIngester(BaseIngester):
                 continue
 
             try:
-                import ast
-                geom_data = ast.literal_eval(geom_str)
+                geom_data = json.loads(geom_str)
 
                 if isinstance(geom_data, dict) and "features" in geom_data:
                     for feature in geom_data["features"]:

@@ -31,7 +31,7 @@ router = APIRouter()
 LYRA_ADMIN_KEY = os.getenv("LYRA_ADMIN_KEY", "")
 SSE_MAX_DURATION = 300  # Max SSE stream duration in seconds (5 minutes)
 
-_rate_limiter = RateLimiter(max_requests=int(os.getenv("LYRA_RATE_LIMIT", "20")))
+_rate_limiter = RateLimiter(max_requests=int(os.getenv("LYRA_RATE_LIMIT", "20")), namespace="lyra")
 
 
 # ---------------------------------------------------------------------------

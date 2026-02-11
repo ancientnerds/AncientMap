@@ -118,7 +118,11 @@ def generate_posts_for_video(
         logger.error(f"Post generation API error for {video.id}: {e}")
         return 0
 
-    posts_data = json.loads(response.content[0].text).get("posts", [])
+    text_block = next((b.text for b in response.content if hasattr(b, "text")), None)
+    if not text_block:
+        logger.warning(f"Empty response content for {video.id}")
+        return 0
+    posts_data = json.loads(text_block).get("posts", [])
 
     with get_session() as session:
         db_video = session.get(NewsVideo, video.id)

@@ -104,7 +104,7 @@ def process_maps():
 
         try:
             gcps = ast.literal_eval(gcps_str)
-        except:
+        except Exception:
             continue
 
         if not gcps or len(gcps) < 3:
@@ -129,7 +129,7 @@ def process_maps():
         # Parse date
         try:
             date = int(float(row['date'])) if pd.notna(row['date']) else None
-        except:
+        except Exception:
             date = None
 
         # Build map data with compact keys

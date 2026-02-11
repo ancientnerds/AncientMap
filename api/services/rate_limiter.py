@@ -32,11 +32,12 @@ except Exception as e:
 
 
 class RateLimiter:
-    """Sliding-window rate limiter. Redis when available, in-memory otherwise."""
+    """Rate limiter. Redis path uses fixed-window (INCR+EXPIRE), in-memory path uses sliding-window."""
 
-    def __init__(self, max_requests: int, window_seconds: int = 3600):
+    def __init__(self, max_requests: int, window_seconds: int = 3600, namespace: str = "default"):
         self.max_requests = max_requests
         self.window_seconds = window_seconds
+        self.namespace = namespace
         # In-memory fallback state
         self._store: dict[str, list[float]] = {}
         self._last_cleanup = 0.0
@@ -55,7 +56,7 @@ class RateLimiter:
 
     def _check_redis(self, ip: str) -> bool:
         assert _redis_client is not None  # caller checks before calling
-        key = f"rate_limit:{ip}"
+        key = f"rate_limit:{self.namespace}:{ip}"
         count: int = _redis_client.incr(key)
         if count == 1:
             _redis_client.expire(key, self.window_seconds)

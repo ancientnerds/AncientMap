@@ -1415,7 +1415,6 @@ class UnifiedLoader:
 
     def _parse_eamena(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
         """Parse EAMENA (Endangered Archaeology of MENA) data with nested geometry."""
-        import ast
 
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
@@ -1443,7 +1442,7 @@ class UnifiedLoader:
                 if geom_str:
                     try:
                         # Parse the stringified GeoJSON
-                        geom_data = ast.literal_eval(geom_str)
+                        geom_data = json.loads(geom_str)
                         features = geom_data.get("features", [])
                         if features:
                             geometry = features[0].get("geometry", {})

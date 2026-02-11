@@ -251,6 +251,8 @@ export function useGlobeRefs(): GlobeRefs {
   const onMeasurePointAdd = useRef<((coords: [number, number], snapped: boolean) => void) | undefined>(undefined)
   const onMeasurementComplete = useRef<((start: [number, number], end: [number, number]) => void) | undefined>(undefined)
   const onContributeMapConfirm = useRef<(() => void) | undefined>(undefined)
+  const onProximitySet = useRef<((coords: [number, number]) => void) | undefined>(undefined)
+  const isLoading = useRef<boolean>(false)
 
   // ========== Update Function Refs ==========
   const updateGeoLabels = useRef<(() => void) | null>(null)
@@ -491,6 +493,8 @@ export function useGlobeRefs(): GlobeRefs {
     onMeasurePointAdd,
     onMeasurementComplete,
     onContributeMapConfirm,
+    onProximitySet,
+    isLoading,
 
     // Update Function Refs
     updateGeoLabels,

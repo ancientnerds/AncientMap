@@ -62,10 +62,10 @@ export interface EventHandlerSetters {
   setFrozenSite: (site: SiteData | null) => void
 }
 
-/** External callbacks passed from the Globe component props. */
+/** External callbacks passed from the Globe component props (via refs for freshness). */
 export interface EventHandlerCallbacks {
   onProximitySet?: (coords: [number, number]) => void
-  isLoading?: boolean
+  getIsLoading?: () => boolean
 }
 
 /** Core scene objects needed by event handlers. */
@@ -699,7 +699,7 @@ export function createSingleClickHandler(
 /** Creates the click handler that distinguishes single vs double click. */
 export function createClickHandler(
   handleSingleClick: (e: MouseEvent) => void,
-  isLoading?: boolean
+  getIsLoading?: () => boolean
 ): {
   onClick: (e: MouseEvent) => void
   clickState: { clickTimeout: number | null; pendingClickEvent: MouseEvent | null }
@@ -710,7 +710,7 @@ export function createClickHandler(
   }
 
   const onClick = (e: MouseEvent) => {
-    if (isLoading) return  // Don't handle clicks while loading
+    if (getIsLoading?.()) return  // Don't handle clicks while loading
     // Store click and wait to see if it's a double-click
     clickState.pendingClickEvent = e
     if (clickState.clickTimeout) clearTimeout(clickState.clickTimeout)
@@ -906,7 +906,7 @@ export function setupEventHandlers(
     mouseState.mouseDownPos
   )
 
-  const { onClick, clickState } = createClickHandler(handleSingleClick, callbacks.isLoading)
+  const { onClick, clickState } = createClickHandler(handleSingleClick, callbacks.getIsLoading)
 
   // Double-click zoom
   const onDoubleClick = createDoubleClickHandler(
