@@ -62,7 +62,7 @@ export default function NewsFeedPage() {
     min_significance: null, news_category: null, sort: null,
   })
   const [filtersExpanded, setFiltersExpanded] = useState(false)
-  const [showSpeculative, setShowSpeculative] = useState(false)
+  const [showSpeculative, setShowSpeculative] = useState(true)
 
 
   const fetchAll = useCallback(async () => {
