@@ -12,7 +12,7 @@ import type { NewsItemData, NewsStats, NewsFilters, ActiveFilters } from '../typ
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
 import { SitePopupOverlay } from '../components/SitePopupOverlay'
 import NewsCard from '../components/news/NewsCard'
-import { getNewsCategoryLabel, getSpeculativeTagLabel } from '../components/news/significance'
+import { getNewsCategoryLabel, getTopicColor } from '../components/news/significance'
 import '../components/news/news-cards.css'
 
 const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
@@ -64,8 +64,6 @@ export default function NewsFeedPage() {
     min_significance: null, news_category: null, speculative_tag: null, sort: null,
   })
   const [filtersExpanded, setFiltersExpanded] = useState(false)
-  const [showSpeculative, setShowSpeculative] = useState(true)
-
 
   const PAGE_SIZE = 50
 
@@ -76,7 +74,7 @@ export default function NewsFeedPage() {
       const params = new URLSearchParams()
       params.set('page', String(pageNum))
       params.set('page_size', String(PAGE_SIZE))
-      params.set('include_speculative', String(showSpeculative))
+      params.set('include_speculative', 'true')
       if (activeFilters.channel) params.set('channel_id', activeFilters.channel)
       if (activeFilters.site) params.set('site_id', activeFilters.site)
       if (activeFilters.category) params.set('category', activeFilters.category)
@@ -98,7 +96,7 @@ export default function NewsFeedPage() {
     } finally {
       setLoading(false)
     }
-  }, [activeFilters, showSpeculative])
+  }, [activeFilters])
 
   const PULL_THRESHOLD = 70
 
@@ -355,13 +353,6 @@ export default function NewsFeedPage() {
               >
                 Top Rated
               </button>
-              <button
-                className={`news-page-chip${showSpeculative ? ' active' : ''}`}
-                onClick={() => setShowSpeculative(prev => !prev)}
-                title="Toggle speculative content — alternative theories not supported by mainstream archaeology"
-              >
-                Speculative
-              </button>
             </div>
           </div>
 
@@ -490,38 +481,39 @@ export default function NewsFeedPage() {
                 </div>
               </div>
 
-              {/* News category row */}
-              {filters.news_categories.length > 0 && (
+              {/* Topic row (news categories + speculative tags merged) */}
+              {(filters.news_categories.length > 0 || (filters.speculative_tags && filters.speculative_tags.length > 0)) && (
                 <div className="news-page-filter-row">
                   <span className="news-page-filter-label">Topic</span>
                   <div className="news-page-chips news-page-chips-scroll">
-                    {filters.news_categories.map(cat => (
-                      <button
-                        key={cat}
-                        className={`news-page-chip${activeFilters.news_category === cat ? ' active' : ''}`}
-                        onClick={() => handleFilterToggle('news_category', cat)}
-                      >
-                        {getNewsCategoryLabel(cat)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Speculative tags row — only visible when speculative toggle is on */}
-              {showSpeculative && filters.speculative_tags && filters.speculative_tags.length > 0 && (
-                <div className="news-page-filter-row">
-                  <span className="news-page-filter-label">Speculative</span>
-                  <div className="news-page-chips">
-                    {filters.speculative_tags.map(tag => (
-                      <button
-                        key={tag}
-                        className={`news-page-chip speculative-tag${activeFilters.speculative_tag === tag ? ' active' : ''}`}
-                        onClick={() => handleFilterToggle('speculative_tag', tag)}
-                      >
-                        {getSpeculativeTagLabel(tag)}
-                      </button>
-                    ))}
+                    {filters.news_categories.map(cat => {
+                      const color = getTopicColor(cat)
+                      const isActive = activeFilters.news_category === cat
+                      return (
+                        <button
+                          key={cat}
+                          className={`news-page-chip${isActive ? ' active' : ''}`}
+                          style={!isActive ? { borderColor: color, color } : undefined}
+                          onClick={() => handleFilterToggle('news_category', cat)}
+                        >
+                          {getNewsCategoryLabel(cat)}
+                        </button>
+                      )
+                    })}
+                    {filters.speculative_tags?.map(tag => {
+                      const color = getTopicColor(tag)
+                      const isActive = activeFilters.speculative_tag === tag
+                      return (
+                        <button
+                          key={tag}
+                          className={`news-page-chip${isActive ? ' active' : ''}`}
+                          style={!isActive ? { borderColor: color, color } : undefined}
+                          onClick={() => handleFilterToggle('speculative_tag', tag)}
+                        >
+                          {getNewsCategoryLabel(tag)}
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
               )}
@@ -584,7 +576,7 @@ export default function NewsFeedPage() {
       {/* Empty state */}
       {!error && !loading && items.length === 0 && (
         <div className="news-page-empty">
-          {Object.values(activeFilters).some(Boolean) || !showSpeculative
+          {Object.values(activeFilters).some(Boolean)
             ? 'No items match the current filters.'
             : 'No news items yet. Check back soon.'}
         </div>

@@ -50,14 +50,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   survey: 'Survey',
   art: 'Art',
   general: 'General',
-  speculative: 'Speculative',
-}
-
-export function getNewsCategoryLabel(cat: string): string {
-  return CATEGORY_LABELS[cat] || cat
-}
-
-const SPECULATIVE_TAG_LABELS: Record<string, string> = {
   ancient_astronauts: 'Ancient Astronauts',
   annunaki: 'Annunaki',
   lost_civilization: 'Lost Civilization',
@@ -66,6 +58,40 @@ const SPECULATIVE_TAG_LABELS: Record<string, string> = {
   conspiracy: 'Conspiracy',
 }
 
-export function getSpeculativeTagLabel(tag: string): string {
-  return SPECULATIVE_TAG_LABELS[tag] || tag
+export function getNewsCategoryLabel(cat: string): string {
+  return CATEGORY_LABELS[cat] || cat
+}
+
+const TOPIC_COLORS: Record<string, string> = {
+  // Fieldwork (warm earth)
+  excavation: '#c17f3e',
+  survey: '#b89254',
+  underwater: '#5e8fa8',
+  // Artifacts (amber/gold)
+  artifact: '#c9a84c',
+  art: '#d4a05a',
+  epigraphy: '#a89060',
+  // Science (blue/cyan)
+  dating: '#4a90b8',
+  remote_sensing: '#5c7eb0',
+  technology: '#6a88b0',
+  bioarchaeology: '#5d9a8a',
+  // Cultural (green)
+  heritage: '#6b9e6b',
+  conservation: '#7aab6f',
+  architecture: '#8a9e6b',
+  // Theory (neutral)
+  theory: '#8888a0',
+  general: '#7a7a8a',
+  // Alternative (purple range)
+  ancient_astronauts: '#9b70c0',
+  annunaki: '#8a6ab0',
+  lost_civilization: '#a078b8',
+  giants: '#b07aaa',
+  supernatural: '#8860a8',
+  conspiracy: '#7a6498',
+}
+
+export function getTopicColor(topic: string): string {
+  return TOPIC_COLORS[topic] || '#7a7a8a'
 }

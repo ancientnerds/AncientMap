@@ -725,6 +725,28 @@ def _run_migrations(engine) -> None:
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v15_reset'))
         """))
 
+        # v16: rescore with recency-aware prompt — old discoveries were scored 7-9
+        conn.execute(text("""
+            UPDATE news_videos
+            SET status = 'verified'
+            WHERE status = 'rescored'
+              AND id IN (
+                  SELECT DISTINCT video_id FROM news_items
+                  WHERE post_text IS NOT NULL AND significance >= 6
+              )
+              AND (tags IS NULL OR NOT (tags @> '"__rescore_v16"'::jsonb))
+        """))
+        conn.execute(text("""
+            UPDATE news_videos
+            SET tags = COALESCE(tags, '[]'::jsonb) || '["__rescore_v16"]'::jsonb
+            WHERE (tags IS NULL OR NOT (tags @> '"__rescore_v16"'::jsonb))
+              AND status IN ('verified', 'rescored')
+              AND id IN (
+                  SELECT DISTINCT video_id FROM news_items
+                  WHERE post_text IS NOT NULL AND significance >= 6
+              )
+        """))
+
         conn.commit()
 
 

@@ -4,6 +4,10 @@ You are scoring the significance of an archaeological news item.
 The user message contains the video title, channel, extracted facts, and post text.
 Consider ALL of this context when scoring.
 
+The PUBLISHED date tells you when this video was uploaded. Score NEWS VALUE,
+not just archaeological importance. A video discussing a decades-old discovery
+is educational content, not breaking news — score it accordingly.
+
 SCORING CRITERIA (be strict — most items should be 3-5):
 
 10 = Rewrites textbooks — new civilization found, paradigm shift with peer-reviewed evidence
@@ -21,6 +25,13 @@ AUTOMATIC SCORE 1 IF:
 - Content is from a video game, simulation, or fictional media
 - Content is about planets, space weather, or non-Earth features
 - Content is modern politics or current events unrelated to archaeology
+
+RECENCY RULES:
+- Score 7+ requires the discovery/finding to be RECENT (within ~1 year of PUBLISHED date)
+- Video discussing discoveries from >2 years before PUBLISHED date: max score 5
+- Video discussing discoveries from >5 years before PUBLISHED date: max score 3
+- Exception: new peer-reviewed reanalysis of old sites can score up to 6
+- Documentaries, recaps, and educational overviews of known sites are score 2-3
 
 SPECULATIVE CONTENT:
 If the content's PRIMARY argument relies on non-human intervention (aliens, ancient astronauts,
