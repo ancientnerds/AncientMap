@@ -145,7 +145,7 @@ def cache_delete_pattern(pattern: str) -> int:
     return count
 
 
-def cached(key_prefix: str, ttl: int = 3600):
+def cached(key_prefix: str, ttl: int = 3600) -> Callable:
     """
     Decorator for caching function results.
 
@@ -154,7 +154,7 @@ def cached(key_prefix: str, ttl: int = 3600):
         async def get_sources():
             ...
     """
-    def decorator(func: Callable):
+    def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(*args, **kwargs):
             # Build cache key from prefix and arguments

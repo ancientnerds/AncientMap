@@ -54,8 +54,9 @@ class RateLimiter:
     # -- Redis path --------------------------------------------------------
 
     def _check_redis(self, ip: str) -> bool:
+        assert _redis_client is not None  # caller checks before calling
         key = f"rate_limit:{ip}"
-        count = _redis_client.incr(key)
+        count: int = _redis_client.incr(key)
         if count == 1:
             _redis_client.expire(key, self.window_seconds)
         return count <= self.max_requests

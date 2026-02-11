@@ -15,7 +15,14 @@ import logging
 import os
 from collections.abc import AsyncIterator
 
-from langchain_core.messages import AIMessageChunk, HumanMessage, SystemMessage
+from langchain_core.messages import (
+    AIMessage,
+    AIMessageChunk,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
 from sqlalchemy import text
 
 from api.services.lyra_prompts import LYRA_SYSTEM_PROMPT, _build_context_prompt
@@ -338,10 +345,10 @@ def _build_messages(
     context_id: str | None,
     context_year: int | None,
     retrieved_context: str = "",
-) -> list:
+) -> list[BaseMessage]:
     """Build the message list for the LLM."""
     system_text = LYRA_SYSTEM_PROMPT + _build_context_prompt(context_type, context_id, context_year) + retrieved_context
-    messages = [SystemMessage(content=system_text)]
+    messages: list[BaseMessage] = [SystemMessage(content=system_text)]
 
     # Add conversation history
     if history:
@@ -349,7 +356,6 @@ def _build_messages(
             if msg["role"] == "user":
                 messages.append(HumanMessage(content=msg["content"]))
             else:
-                from langchain_core.messages import AIMessage
                 messages.append(AIMessage(content=msg["content"]))
 
     # Build the current user message (may include images)
@@ -365,7 +371,7 @@ def _build_messages(
     if len(content_blocks) == 1:
         messages.append(HumanMessage(content=message))
     else:
-        messages.append(HumanMessage(content=content_blocks))
+        messages.append(HumanMessage(content=content_blocks))  # type: ignore[arg-type]
 
     return messages
 
@@ -477,7 +483,7 @@ async def run_agent_stream(
     for _round in range(max_tool_rounds):
         # Stream the LLM response
         collected_content = ""
-        tool_calls = []
+        tool_calls: list[dict[str, str | int | None]] = []
 
         async for chunk in llm_with_tools.astream(messages):
             if isinstance(chunk, AIMessageChunk):
@@ -499,21 +505,21 @@ async def run_agent_stream(
                         yield {"type": "token", "content": text_content}
 
                 if chunk.tool_call_chunks:
-                    for tc in chunk.tool_call_chunks:
+                    for tcc in chunk.tool_call_chunks:
                         # Find or create the tool call entry
                         existing = None
                         for existing_tc in tool_calls:
-                            if existing_tc.get("index") == tc.get("index"):
+                            if existing_tc.get("index") == tcc.get("index"):
                                 existing = existing_tc
                                 break
                         if existing:
-                            existing["args"] = existing.get("args", "") + (tc.get("args") or "")
+                            existing["args"] = str(existing.get("args") or "") + str(tcc.get("args") or "")
                         else:
                             tool_calls.append({
-                                "index": tc.get("index"),
-                                "id": tc.get("id"),
-                                "name": tc.get("name"),
-                                "args": tc.get("args") or "",
+                                "index": tcc.get("index"),
+                                "id": tcc.get("id"),
+                                "name": tcc.get("name"),
+                                "args": tcc.get("args") or "",
                             })
 
         # If no tool calls, we're done
@@ -527,13 +533,11 @@ async def run_agent_stream(
             yield {"type": "status", "content": collected_content.strip()}
 
         # Execute tool calls
-        from langchain_core.messages import AIMessage, ToolMessage
-
         # Add the AI message with tool calls to conversation
         ai_msg = AIMessage(
             content=collected_content,
             tool_calls=[
-                {"id": tc["id"], "name": tc["name"], "args": json.loads(tc["args"]) if tc["args"] else {}}
+                {"id": str(tc["id"]), "name": str(tc["name"]), "args": json.loads(str(tc["args"])) if tc["args"] else {}}
                 for tc in tool_calls if tc.get("id") and tc.get("name")
             ],
         )
@@ -544,13 +548,13 @@ async def run_agent_stream(
         for tc in tool_calls:
             if not tc.get("name") or not tc.get("id"):
                 continue
-            tool_fn = tool_map.get(tc["name"])
+            tool_fn = tool_map.get(str(tc["name"]))
             if not tool_fn:
-                messages.append(ToolMessage(content=f"Unknown tool: {tc['name']}", tool_call_id=tc["id"]))
+                messages.append(ToolMessage(content=f"Unknown tool: {tc['name']}", tool_call_id=str(tc["id"])))
                 continue
 
             try:
-                args = json.loads(tc["args"]) if tc["args"] else {}
+                args = json.loads(str(tc["args"])) if tc["args"] else {}
                 result = tool_fn.invoke(args)
                 tool_calls_made += 1
 
@@ -585,11 +589,11 @@ async def run_agent_stream(
                     except (json.JSONDecodeError, KeyError):
                         pass
 
-                messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
+                messages.append(ToolMessage(content=result, tool_call_id=str(tc["id"])))
 
             except Exception as e:
                 logger.error(f"Tool {tc['name']} failed: {e}")
-                messages.append(ToolMessage(content="Tool encountered an error. Try a different approach.", tool_call_id=tc["id"]))
+                messages.append(ToolMessage(content="Tool encountered an error. Try a different approach.", tool_call_id=str(tc["id"])))
 
         # Emit sites after tool calls
         if all_sites:

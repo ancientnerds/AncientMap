@@ -43,7 +43,7 @@ BRAND_COLOR = (255, 215, 0)  # Gold
 async def fetch_wikipedia_image(site_name: str) -> Image.Image | None:
     """Fetch hero image from Wikipedia for the site."""
     search_url = "https://en.wikipedia.org/w/api.php"
-    params = {
+    params: dict[str, str | int] = {
         "action": "query",
         "titles": site_name,
         "prop": "pageimages",
@@ -167,11 +167,11 @@ def get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
             continue
 
     logger.warning("No suitable font found, using default")
-    return ImageFont.load_default()
+    return ImageFont.load_default()  # type: ignore[return-value]
 
 
 def draw_text_with_shadow(
-    draw: ImageDraw.Draw,
+    draw: ImageDraw.ImageDraw,
     position: tuple,
     text: str,
     font: ImageFont.FreeTypeFont,

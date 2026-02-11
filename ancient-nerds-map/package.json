@@ -7,10 +7,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@types/three": "^0.182.0",
     "earcut": "^3.0.2",
     "html2canvas": "^1.4.1",
     "idb": "^8.0.3",
@@ -25,6 +25,7 @@
   },
   "devDependencies": {
     "@types/earcut": "^3.0.0",
+    "@types/three": "^0.182.0",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",

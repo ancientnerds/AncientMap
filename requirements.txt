@@ -16,8 +16,6 @@ fastapi>=0.109.0            # Web framework
 uvicorn[standard]>=0.27.0   # ASGI server
 pydantic>=2.5.0             # Data validation
 pydantic-settings>=2.1.0    # Settings management
-python-jose[cryptography]>=3.3.0  # JWT tokens
-passlib[bcrypt]>=1.7.4      # Password hashing
 slowapi>=0.1.9              # Rate limiting
 python-multipart>=0.0.6     # Form data parsing
 
