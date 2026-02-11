@@ -801,6 +801,7 @@ class NewsItem(Base):
     site_match_tried: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     significance: Mapped[int | None] = mapped_column(Integer, nullable=True)
     news_category: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    speculative_tag: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # RAG enrichment fields
     transcript_segment: Mapped[str | None] = mapped_column(Text, nullable=True)

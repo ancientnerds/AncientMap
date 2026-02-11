@@ -163,6 +163,7 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
               publishedAt={item.video.published_at}
               significance={item.significance}
               newsCategory={item.news_category}
+              speculativeTag={item.speculative_tag}
               screenshotUrl={screenshotSrc}
               deepLink={deepLink}
               videoTitle={item.video.title}

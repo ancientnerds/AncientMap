@@ -97,6 +97,7 @@ class NewsItemResponse(BaseModel):
     site_name_extracted: str | None = None
     significance: int | None = None
     news_category: str | None = None
+    speculative_tag: str | None = None
 
 
 class NewsFeedResponse(BaseModel):
@@ -143,6 +144,7 @@ class NewsFiltersResponse(BaseModel):
     periods: list[str]
     countries: list[str]
     news_categories: list[str] = []
+    speculative_tags: list[str] = []
 
 
 # =============================================================================
@@ -161,12 +163,13 @@ async def get_news_feed(
     country: str | None = None,
     min_significance: int | None = Query(None, ge=1, le=10),
     news_category: str | None = None,
+    speculative_tag: str | None = None,
     sort: str | None = None,
     include_speculative: bool = Query(False),
     db: Session = Depends(get_db),
 ):
     """Get paginated news feed items, newest first."""
-    cache_key = f"news:feed:{page}:{page_size}:{channel_id or 'all'}:{site_id or 'all'}:{category or 'all'}:{period or 'all'}:{country or 'all'}:{min_significance or 'all'}:{news_category or 'all'}:{sort or 'default'}:{include_speculative}"
+    cache_key = f"news:feed:{page}:{page_size}:{channel_id or 'all'}:{site_id or 'all'}:{category or 'all'}:{period or 'all'}:{country or 'all'}:{min_significance or 'all'}:{news_category or 'all'}:{speculative_tag or 'all'}:{sort or 'default'}:{include_speculative}"
     cached = cache_get(cache_key)
     if cached:
         return cached
@@ -208,6 +211,9 @@ async def get_news_feed(
 
     if min_significance:
         query = query.filter(NewsItem.significance >= min_significance)
+
+    if speculative_tag:
+        query = query.filter(NewsItem.speculative_tag == speculative_tag)
 
     if news_category:
         query = query.filter(NewsItem.news_category == news_category)
@@ -267,6 +273,7 @@ async def get_news_feed(
             site_name_extracted=item.site_name_extracted if not site else None,
             significance=item.significance,
             news_category=item.news_category,
+            speculative_tag=item.speculative_tag,
         ))
 
     response = NewsFeedResponse(
@@ -357,6 +364,19 @@ async def get_news_filters(db: Session = Depends(get_db)):
     )
     news_categories = sorted([row[0] for row in news_cat_rows if row[0] != "speculative"])
 
+    # Speculative tags: distinct speculative_tag values from speculative items
+    spec_tag_rows = (
+        db.query(NewsItem.speculative_tag)
+        .filter(
+            NewsItem.post_text.isnot(None),
+            NewsItem.news_category == "speculative",
+            NewsItem.speculative_tag.isnot(None),
+        )
+        .distinct()
+        .all()
+    )
+    speculative_tags = sorted([row[0] for row in spec_tag_rows])
+
     result = NewsFiltersResponse(
         channels=channels,
         sites=sites,
@@ -364,6 +384,7 @@ async def get_news_filters(db: Session = Depends(get_db)):
         periods=period_labels,
         countries=countries,
         news_categories=news_categories,
+        speculative_tags=speculative_tags,
     )
 
     cache_set(cache_key, result.model_dump(), ttl=600)  # 10 min cache

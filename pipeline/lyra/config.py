@@ -10,6 +10,11 @@ VALID_CATEGORIES = {
     "speculative",
 }
 
+VALID_SPECULATIVE_TAGS = {
+    "ancient_astronauts", "annunaki", "lost_civilization",
+    "giants", "supernatural", "conspiracy",
+}
+
 
 class LyraSettings(BaseSettings):
     """Lyra pipeline settings loaded from LYRA_* environment variables."""

@@ -29,6 +29,14 @@ extraterrestrial explanations for real artifacts or sites, classify it as catego
 Score its significance honestly based on the underlying archaeology discussed — do not
 automatically score 1.
 
+When classifying as speculative, also set speculative_tag to the best-fit subcategory:
+- ancient_astronauts: aliens, ancient astronaut theory, extraterrestrial contact
+- annunaki: Sumerian Annunaki, Nibiru, Sitchin-style claims
+- lost_civilization: Atlantis, Mu, Lemuria, advanced pre-ice-age civilization
+- giants: Nephilim, giant skeletons, cover-up claims
+- supernatural: curses, paranormal, mystical energy, ley lines
+- conspiracy: cover-ups, suppressed archaeology, hidden history
+
 Do NOT classify as speculative:
 - Legitimate archaeological debates (pre-Clovis, Younger Dryas impact)
 - Unconventional dating theories supported by evidence
