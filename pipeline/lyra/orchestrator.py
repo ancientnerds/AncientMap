@@ -615,6 +615,9 @@ def _run_migrations(engine) -> None:
         # v14: Fix garbled site names in news_items text fields.
         # Replace site_name_extracted with canonical unified_sites.name
         # in headline, post_text, and summary for already-matched items.
+        # IMPORTANT: skip when extracted name is a substring of canonical name,
+        # otherwise REPLACE expands on every restart (e.g. "Calico" inside
+        # "Calico Early Man Site" causes exponential growth).
         conn.execute(text("""
             UPDATE news_items ni
             SET headline = REPLACE(ni.headline, ni.site_name_extracted, us.name),
@@ -624,6 +627,7 @@ def _run_migrations(engine) -> None:
             WHERE ni.site_id = us.id
               AND ni.site_name_extracted IS NOT NULL
               AND ni.site_name_extracted != us.name
+              AND us.name NOT LIKE '%' || ni.site_name_extracted || '%'
               AND (ni.headline LIKE '%' || ni.site_name_extracted || '%'
                    OR ni.post_text LIKE '%' || ni.site_name_extracted || '%'
                    OR ni.summary LIKE '%' || ni.site_name_extracted || '%')
@@ -641,9 +645,51 @@ def _run_migrations(engine) -> None:
             WHERE ni.site_id = us.id
               AND ni.site_name_extracted IS NOT NULL
               AND ni.site_name_extracted != us.name
+              AND us.name NOT LIKE '%' || ni.site_name_extracted || '%'
               AND ni.facts IS NOT NULL
               AND ni.facts::text LIKE '%' || ni.site_name_extracted || '%'
         """))
+
+        # v14b: Repair items corrupted by v14's substring expansion bug.
+        # When site_name_extracted was a substring of us.name, REPLACE ran
+        # on every restart, producing e.g. "Calico Early Man Site Early Man Site Early Man Site".
+        # Python loop: find affected items, collapse repeated suffixes, update.
+        import json as _json
+
+        corrupted = conn.execute(text("""
+            SELECT ni.id, us.name AS cname,
+                   SUBSTRING(us.name FROM LENGTH(ni.site_name_extracted) + 1) AS suffix,
+                   ni.headline, ni.post_text, ni.summary, ni.facts
+            FROM news_items ni
+            JOIN unified_sites us ON ni.site_id = us.id
+            WHERE ni.site_name_extracted IS NOT NULL
+              AND us.name LIKE ni.site_name_extracted || ' %'
+        """)).fetchall()
+        for row in corrupted:
+            bloated = row.cname + row.suffix
+            fields = {"headline": row.headline, "post_text": row.post_text, "summary": row.summary}
+            if not any(bloated in (v or "") for v in fields.values()):
+                if not (row.facts and bloated in str(row.facts)):
+                    continue
+            updates = {}
+            for col, val in fields.items():
+                if val and bloated in val:
+                    while bloated in val:
+                        val = val.replace(bloated, row.cname)
+                    updates[col] = val
+            if row.facts:
+                facts_str = str(row.facts)
+                if bloated in facts_str:
+                    fixed = [f.replace(bloated, row.cname) if bloated in f else f for f in row.facts]
+                    while any(bloated in f for f in fixed):
+                        fixed = [f.replace(bloated, row.cname) for f in fixed]
+                    updates["facts"] = _json.dumps(fixed)
+            if updates:
+                sets = ", ".join(f"{k} = :{k}" for k in updates)
+                if "facts" in updates:
+                    sets = sets.replace("facts = :facts", "facts = :facts::jsonb")
+                updates["id"] = row.id
+                conn.execute(text(f"UPDATE news_items SET {sets} WHERE id = :id"), updates)
 
         conn.commit()
 
