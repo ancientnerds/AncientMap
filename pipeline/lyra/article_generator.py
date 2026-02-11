@@ -9,7 +9,7 @@ from pathlib import Path
 import anthropic
 
 from pipeline.database import NewsArticle, NewsItem, NewsVideo, get_session
-from pipeline.lyra.config import LyraSettings, get_anthropic_client
+from pipeline.lyra.config import LyraSettings, call_api, get_anthropic_client
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,8 @@ def _generate_paragraphs(
         prompt = prompt_template.format(content=summary_text)
 
         try:
-            response = client.messages.create(
+            response = call_api(
+                client,
                 model=model,
                 max_tokens=1024,
                 system=[{
@@ -85,7 +86,8 @@ def _fact_check_paragraph(
     prompt = prompt_template.format(paragraph=paragraph)
 
     try:
-        response = client.messages.create(
+        response = call_api(
+            client,
             model=model,
             max_tokens=1024,
             system=[{
@@ -119,7 +121,8 @@ def _generate_headline(
     prompt = prompt_template.format(content=content)
 
     try:
-        response = client.messages.create(
+        response = call_api(
+            client,
             model=model,
             max_tokens=1024,
             system=[{

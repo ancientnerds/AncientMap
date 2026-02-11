@@ -1,7 +1,12 @@
 """Configuration for the Lyra news pipeline."""
 
+import logging
+import time
+
 import anthropic
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 VALID_CATEGORIES = {
     "excavation", "artifact", "architecture", "bioarchaeology", "dating",
@@ -76,7 +81,30 @@ def get_anthropic_client(settings: "LyraSettings") -> anthropic.Anthropic:
     global _cached_client, _cached_client_key
     if _cached_client is None or _cached_client_key != settings.anthropic_api_key:
         _cached_client = anthropic.Anthropic(
-            api_key=settings.anthropic_api_key, timeout=120.0
+            api_key=settings.anthropic_api_key, timeout=120.0, max_retries=5,
         )
         _cached_client_key = settings.anthropic_api_key
     return _cached_client
+
+
+# Rate throttle: minimum 1.3s between API calls (~46 RPM, under 50 RPM Tier 1 limit)
+_MIN_CALL_GAP = 1.3
+_last_call_time = 0.0
+
+
+def call_api(client: anthropic.Anthropic, **kwargs) -> anthropic.types.Message:
+    """Throttled wrapper around client.messages.create().
+
+    Enforces a minimum gap between calls to stay under rate limits.
+    The SDK's built-in retry (max_retries=5) handles transient 429/500/529.
+    """
+    global _last_call_time
+    now = time.monotonic()
+    elapsed = now - _last_call_time
+    if elapsed < _MIN_CALL_GAP:
+        sleep_time = _MIN_CALL_GAP - elapsed
+        logger.debug(f"Rate throttle: sleeping {sleep_time:.2f}s")
+        time.sleep(sleep_time)
+    response = client.messages.create(**kwargs)
+    _last_call_time = time.monotonic()
+    return response

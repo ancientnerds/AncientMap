@@ -17,6 +17,7 @@ from pipeline.lyra.config import (
     VALID_CATEGORIES,
     VALID_SPECULATIVE_TAGS,
     LyraSettings,
+    call_api,
     get_anthropic_client,
 )
 
@@ -159,7 +160,8 @@ def _rescore_item(
     )
 
     try:
-        response = client.messages.create(
+        response = call_api(
+            client,
             model=settings.model_rescore,
             max_tokens=256,
             temperature=0.0,
