@@ -117,7 +117,7 @@ def identify_and_enrich_sites(settings: LyraSettings) -> int:
         # Get pending candidates ordered by mention count (best data first)
         contributions = session.query(UserContribution).filter(
             UserContribution.source == "lyra",
-            UserContribution.enrichment_status.in_(["pending", "enriched", "enriching", "rejected"]),
+            UserContribution.enrichment_status.in_(["pending", "enriched", "enriching", "rejected", "failed"]),
             UserContribution.promoted_site_id.is_(None),
         ).order_by(
             UserContribution.mention_count.desc()
