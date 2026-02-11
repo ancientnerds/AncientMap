@@ -152,9 +152,12 @@ def _rescore_item(
     """Call Haiku to re-score a single item. Returns parsed result or None."""
     facts_text = "\n".join(f"- {f}" for f in (item.facts or []))
 
+    pub_date = video.published_at.strftime("%Y-%m-%d") if video.published_at else "Unknown"
+
     user_content = (
         f"VIDEO: {video.title}\n"
         f"CHANNEL: {channel_name}\n"
+        f"PUBLISHED: {pub_date}\n"
         f"FACTS:\n{facts_text}\n"
         f"POST: {item.post_text}"
     )

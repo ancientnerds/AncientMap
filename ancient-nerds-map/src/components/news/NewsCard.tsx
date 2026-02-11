@@ -23,7 +23,7 @@ import {
   getSignificanceLabel,
   getSignificanceCardStyle,
   getNewsCategoryLabel,
-  getSpeculativeTagLabel,
+  getTopicColor,
 } from './significance'
 import type { SiteData } from '../../data/sites'
 import type { NewsHighlight } from '../../types/ai'
@@ -122,13 +122,19 @@ export default function NewsCard({
       onMouseEnter={() => hasMatchedSite && onSiteHover?.(true)}
       onMouseLeave={() => hasMatchedSite && onSiteHover?.(false)}
     >
-      {newsCategory === 'speculative' ? (
-        <span className="news-category-badge speculative">
-          {speculativeTag ? getSpeculativeTagLabel(speculativeTag) : 'Speculative'}
-        </span>
-      ) : newsCategory && newsCategory !== 'general' ? (
-        <span className="news-category-badge">{getNewsCategoryLabel(newsCategory)}</span>
-      ) : null}
+      {(() => {
+        const topic = speculativeTag || (newsCategory && newsCategory !== 'general' ? newsCategory : null)
+        if (!topic) return null
+        const color = getTopicColor(topic)
+        return (
+          <span
+            className="news-category-badge"
+            style={{ color, background: `${color}18`, borderLeftColor: `${color}40`, borderBottomColor: `${color}40` }}
+          >
+            {getNewsCategoryLabel(topic)}
+          </span>
+        )
+      })()}
 
       <div className="news-card-meta">
         <span className="news-card-channel">{channelName}</span>
