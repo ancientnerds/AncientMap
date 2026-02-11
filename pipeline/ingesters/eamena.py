@@ -12,7 +12,7 @@ API Key: Required for bulk access (apply through EAMENA)
 import json
 import time
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -174,7 +174,7 @@ class EAMENAIngester(BaseIngester):
             "results": all_results,
             "metadata": {
                 "source": "EAMENA",
-                "fetched_at": datetime.utcnow().isoformat(),
+                "fetched_at": datetime.now(UTC).isoformat(),
                 "total_fetched": len(all_results),
             }
         }

@@ -12,7 +12,7 @@ API Key: Not required
 import json
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -173,7 +173,7 @@ class MetMuseumIngester(BaseIngester):
                 "source": "Metropolitan Museum of Art",
                 "source_url": "https://www.metmuseum.org/",
                 "api_url": "https://metmuseum.github.io/",
-                "fetched_at": datetime.utcnow().isoformat(),
+                "fetched_at": datetime.now(UTC).isoformat(),
                 "total_objects": len(all_objects),
                 "departments": list(self.DEPARTMENTS.values()),
                 "license": "CC0 (Public Domain)",

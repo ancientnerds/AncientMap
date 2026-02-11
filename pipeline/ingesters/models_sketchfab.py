@@ -12,7 +12,7 @@ API Key: Required for full access
 
 import time
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from loguru import logger
@@ -214,7 +214,7 @@ class SketchfabIngester(BaseIngester):
                 "source": "Sketchfab",
                 "source_url": "https://sketchfab.com/",
                 "api_docs": "https://docs.sketchfab.com/data-api/v3/",
-                "fetched_at": datetime.utcnow().isoformat(),
+                "fetched_at": datetime.now(UTC).isoformat(),
                 "total_models": len(all_models),
                 "data_type": "3d_models",
                 "license": "Varies per model",

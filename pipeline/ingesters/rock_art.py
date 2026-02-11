@@ -11,7 +11,7 @@ API Key: Not required
 
 import json
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -130,7 +130,7 @@ class RockArtIngester(BaseIngester):
             "metadata": {
                 "source": "Global Rock Art Sites",
                 "source_url": "https://rockartdatabase.com/",
-                "fetched_at": datetime.utcnow().isoformat(),
+                "fetched_at": datetime.now(UTC).isoformat(),
                 "total_sites": len(features),
                 "note": "Curated list of major rock art sites worldwide",
             }

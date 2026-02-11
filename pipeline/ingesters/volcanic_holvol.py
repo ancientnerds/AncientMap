@@ -14,7 +14,7 @@ import csv
 import io
 import json
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from loguru import logger
@@ -133,7 +133,7 @@ class HolVolIngester(BaseIngester):
                 "source": "HolVol / Smithsonian GVP",
                 "source_url": "https://doi.org/10.1594/PANGAEA.928646",
                 "gvp_url": "https://volcano.si.edu/",
-                "fetched_at": datetime.utcnow().isoformat(),
+                "fetched_at": datetime.now(UTC).isoformat(),
                 "total_eruptions": len(all_eruptions),
                 "data_type": "volcanic_eruptions",
                 "license": "CC BY 4.0",

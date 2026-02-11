@@ -11,7 +11,7 @@ API Key: Not required
 
 import time
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from loguru import logger
@@ -195,7 +195,7 @@ class DavidRumseyIngester(BaseIngester):
             "metadata": {
                 "source": "David Rumsey Map Collection",
                 "source_url": "https://www.davidrumsey.com/",
-                "fetched_at": datetime.utcnow().isoformat(),
+                "fetched_at": datetime.now(UTC).isoformat(),
                 "total_maps": len(all_maps),
                 "data_type": "historical_maps",
                 "license": "CC-BY-NC",

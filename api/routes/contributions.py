@@ -10,7 +10,7 @@ import logging
 import os
 import re
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -203,7 +203,7 @@ def load_contributions() -> list[dict]:
 
 
 def save_contribution(contribution: dict) -> None:
-    """Append a contribution to the JSON file (thread-safe)."""
+    """Append a contribution to the JSON file."""
     # Ensure data directory exists
     CONTRIBUTIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
 
@@ -298,7 +298,7 @@ async def create_contribution(
         "site_type": contribution.site_type,
         "source_url": contribution.source_url.strip() if contribution.source_url else None,
         "status": "pending",  # pending, approved, rejected
-        "submitted_at": datetime.utcnow().isoformat() + "Z",
+        "submitted_at": datetime.now(UTC).isoformat(),
         "submitter_ip": client_ip,
     }
 

@@ -9,7 +9,7 @@ import json
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -279,7 +279,7 @@ class BaseIngester(ABC):
             existing.precision_reason = site.precision_reason
             existing.source_url = site.source_url
             existing.raw_data = site.raw_data
-            existing.retrieved_at = datetime.utcnow()
+            existing.retrieved_at = datetime.now(UTC)
             return existing
 
         # Create new record
@@ -295,7 +295,7 @@ class BaseIngester(ABC):
             license=self.source_info.get("license"),
             attribution=self.source_info.get("attribution", f"Data from {self.source_name}"),
             raw_data=site.raw_data,
-            retrieved_at=datetime.utcnow(),
+            retrieved_at=datetime.now(UTC),
         )
 
         self.session.add(record)
@@ -332,7 +332,7 @@ class BaseIngester(ABC):
         result = IngesterResult(
             source_id=self.source_id,
             success=False,
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(UTC),
         )
 
         try:
@@ -392,7 +392,7 @@ class BaseIngester(ABC):
             # Update source database metadata
             source_db = self.session.query(SourceDatabase).filter_by(id=self.source_id).first()
             if source_db:
-                source_db.last_sync = datetime.utcnow()
+                source_db.last_sync = datetime.now(UTC)
                 source_db.record_count = result.records_saved
                 self.session.commit()
 
@@ -405,7 +405,7 @@ class BaseIngester(ABC):
             raise
 
         finally:
-            result.completed_at = datetime.utcnow()
+            result.completed_at = datetime.now(UTC)
             logger.info(
                 f"Ingestion complete: {result.records_saved} saved, "
                 f"{result.records_failed} failed, "

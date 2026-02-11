@@ -53,7 +53,8 @@ jobs:
         run: ruff check api/ pipeline/
 
       - name: Type check with mypy
-        run: mypy api/ --ignore-missing-imports --no-error-summary || true
+        continue-on-error: true
+        run: mypy api/ --ignore-missing-imports --no-error-summary
 
   security-scan:
     name: Security Scan
@@ -70,7 +71,8 @@ jobs:
         run: pip install pip-audit
 
       - name: Scan Python dependencies
-        run: pip-audit -r requirements.txt --ignore-vuln GHSA-xxxx || true
+        continue-on-error: true
+        run: pip-audit -r requirements.txt
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -78,8 +80,9 @@ jobs:
           node-version: '20'
 
       - name: Scan npm dependencies
+        continue-on-error: true
         working-directory: ancient-nerds-map
-        run: npm audit --audit-level=high || true
+        run: npm audit --audit-level=high
 
   docker-build:
     name: Docker Build Test

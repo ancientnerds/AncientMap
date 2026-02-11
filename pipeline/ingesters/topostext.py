@@ -12,7 +12,7 @@ API Key: Not required
 
 import json
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -107,7 +107,7 @@ class ToposTextIngester(BaseIngester):
                 "source": "ToposText",
                 "source_url": "https://topostext.org/",
                 "download_url": self.GEOJSON_URL,
-                "fetched_at": datetime.utcnow().isoformat(),
+                "fetched_at": datetime.now(UTC).isoformat(),
                 "total_places": len(all_places),
                 "license": "CC BY-NC-SA 4.0 (attribution required)",
                 "description": "Index of ancient Greek and Latin texts with geographic references",

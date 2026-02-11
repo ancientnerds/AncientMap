@@ -13,7 +13,7 @@ API Key: Not required
 import json
 import time
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from loguru import logger
@@ -226,7 +226,7 @@ LIMIT 5000
             "metadata": {
                 "source": "Nomisma.org",
                 "source_url": "http://nomisma.org/",
-                "fetched_at": datetime.utcnow().isoformat(),
+                "fetched_at": datetime.now(UTC).isoformat(),
                 "total_mints": len(all_data["mints"]),
                 "total_hoards": len(all_data["hoards"]),
                 "total_finds": len(all_data["finds"]),

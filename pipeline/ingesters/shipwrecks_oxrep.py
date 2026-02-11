@@ -13,7 +13,7 @@ API Key: Not required
 import json
 import re
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from loguru import logger
@@ -113,7 +113,7 @@ class OXREPShipwrecksIngester(BaseIngester):
                 "source": "OXREP Shipwrecks Database",
                 "source_url": "https://oxrep.classics.ox.ac.uk/databases/shipwrecks_database/",
                 "download_url": self.EXCEL_URL,
-                "fetched_at": datetime.utcnow().isoformat(),
+                "fetched_at": datetime.now(UTC).isoformat(),
                 "total_records": len(all_wrecks),
                 "data_type": "shipwrecks",
                 "license": "Academic - cite Strauss 2013",

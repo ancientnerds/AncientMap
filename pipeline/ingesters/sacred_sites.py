@@ -11,7 +11,7 @@ API Key: Not required
 
 import json
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -165,7 +165,7 @@ class SacredSitesIngester(BaseIngester):
             "metadata": {
                 "source": "Sacred Sites Curated Dataset",
                 "source_url": "https://sacredsites.com/",
-                "fetched_at": datetime.utcnow().isoformat(),
+                "fetched_at": datetime.now(UTC).isoformat(),
                 "total_sites": len(features),
                 "note": "Curated list of major sacred and pilgrimage sites",
             }

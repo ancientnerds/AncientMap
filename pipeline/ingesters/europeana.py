@@ -13,7 +13,7 @@ API Key: Required (free registration)
 import json
 import time
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -145,7 +145,7 @@ class EuropeanaIngester(BaseIngester):
                 "source": "Europeana",
                 "source_url": "https://www.europeana.eu/",
                 "api_url": "https://pro.europeana.eu/page/search",
-                "fetched_at": datetime.utcnow().isoformat(),
+                "fetched_at": datetime.now(UTC).isoformat(),
                 "total_items": len(all_items),
                 "queries": self.SEARCH_QUERIES,
                 "license": "Varies by item",

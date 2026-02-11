@@ -8,7 +8,7 @@ the required abstract methods for search and retrieval.
 import asyncio
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import UTC, datetime
 
 import httpx
 from loguru import logger
@@ -545,6 +545,6 @@ class BaseConnector(ABC):
             content_type=content_type,
             title=title,
             url=url,
-            fetched_at=datetime.utcnow(),
+            fetched_at=datetime.now(UTC),
             **kwargs,
         )

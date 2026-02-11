@@ -15,7 +15,7 @@ Usage:
 """
 
 import argparse
-from datetime import datetime
+from datetime import UTC, datetime
 
 from loguru import logger
 from sqlalchemy import text
@@ -123,7 +123,7 @@ def get_comprehensive_stats(session: Session) -> dict:
     """)).fetchall()
 
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "overall": {
             "total": overall[0],
             "with_image": overall[1],

@@ -145,7 +145,7 @@ services:
   # pgAdmin for database management (optional, for development)
   # ==========================================================================
   pgadmin:
-    image: dpage/pgadmin4:latest
+    image: dpage/pgadmin4:8.14.0
     container_name: ancient_nerds_pgadmin
     restart: unless-stopped
     environment:
