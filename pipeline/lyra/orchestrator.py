@@ -185,6 +185,19 @@ def _run_migrations(engine) -> None:
         conn.execute(text(
             "ALTER TABLE news_items ADD COLUMN IF NOT EXISTS speculative_tag VARCHAR(50)"
         ))
+        # One-time backfill: re-rescore videos with untagged speculative items
+        # so the updated prompt assigns speculative_tag subcategories.
+        # Naturally idempotent — no-op once all speculative items have tags.
+        conn.execute(text("""
+            UPDATE news_videos SET status = 'verified'
+            WHERE status = 'rescored'
+            AND id IN (
+                SELECT DISTINCT video_id FROM news_items
+                WHERE news_category = 'speculative'
+                AND speculative_tag IS NULL
+                AND post_text IS NOT NULL
+            )
+        """))
         # Backfill any items that have post_text but no significance (e.g. from errors or old code)
         conn.execute(text("""
             UPDATE news_items SET significance = 3, news_category = 'general'
