@@ -72,7 +72,7 @@ jobs:
       - name: Scan Python dependencies
         run: |
           pip-audit -r requirements.txt
-          pip-audit -r requirements-api.txt
+          pip-audit -r requirements-api.txt --ignore-vuln CVE-2026-25990  # Pillow CVE — blocked by fastembed<12 pin
           pip-audit -r requirements.lyra.txt
 
       - name: Setup Node.js
