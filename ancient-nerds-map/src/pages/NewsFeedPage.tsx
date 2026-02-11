@@ -12,7 +12,7 @@ import type { NewsItemData, NewsStats, NewsFilters, ActiveFilters } from '../typ
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
 import { SitePopupOverlay } from '../components/SitePopupOverlay'
 import NewsCard from '../components/news/NewsCard'
-import { getNewsCategoryLabel } from '../components/news/significance'
+import { getNewsCategoryLabel, getSpeculativeTagLabel } from '../components/news/significance'
 import '../components/news/news-cards.css'
 
 const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
@@ -61,7 +61,7 @@ export default function NewsFeedPage() {
   const [filters, setFilters] = useState<NewsFilters | null>(null)
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
     channel: null, site: null, category: null, period: null, country: null,
-    min_significance: null, news_category: null, sort: null,
+    min_significance: null, news_category: null, speculative_tag: null, sort: null,
   })
   const [filtersExpanded, setFiltersExpanded] = useState(false)
   const [showSpeculative, setShowSpeculative] = useState(true)
@@ -84,6 +84,7 @@ export default function NewsFeedPage() {
       if (activeFilters.country) params.set('country', activeFilters.country)
       if (activeFilters.min_significance != null) params.set('min_significance', String(activeFilters.min_significance))
       if (activeFilters.news_category) params.set('news_category', activeFilters.news_category)
+      if (activeFilters.speculative_tag) params.set('speculative_tag', activeFilters.speculative_tag)
       if (activeFilters.sort) params.set('sort', activeFilters.sort)
       const resp = await fetch(`${config.api.baseUrl}/news/feed?${params}`)
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
@@ -506,6 +507,24 @@ export default function NewsFeedPage() {
                 </div>
               )}
 
+              {/* Speculative tags row — only visible when speculative toggle is on */}
+              {showSpeculative && filters.speculative_tags && filters.speculative_tags.length > 0 && (
+                <div className="news-page-filter-row">
+                  <span className="news-page-filter-label">Speculative</span>
+                  <div className="news-page-chips">
+                    {filters.speculative_tags.map(tag => (
+                      <button
+                        key={tag}
+                        className={`news-page-chip speculative-tag${activeFilters.speculative_tag === tag ? ' active' : ''}`}
+                        onClick={() => handleFilterToggle('speculative_tag', tag)}
+                      >
+                        {getSpeculativeTagLabel(tag)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
             </div>
           )}
         </div>
@@ -591,6 +610,7 @@ export default function NewsFeedPage() {
                       publishedAt={item.video.published_at}
                       significance={item.significance}
                       newsCategory={item.news_category}
+                      speculativeTag={item.speculative_tag}
                       screenshotUrl={screenshotSrc}
                       deepLink={deepLink}
                       videoTitle={item.video.title}

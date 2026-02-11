@@ -182,6 +182,9 @@ def _run_migrations(engine) -> None:
         conn.execute(text(
             "CREATE INDEX IF NOT EXISTS idx_news_items_news_category ON news_items (news_category)"
         ))
+        conn.execute(text(
+            "ALTER TABLE news_items ADD COLUMN IF NOT EXISTS speculative_tag VARCHAR(50)"
+        ))
         # Backfill any items that have post_text but no significance (e.g. from errors or old code)
         conn.execute(text("""
             UPDATE news_items SET significance = 3, news_category = 'general'

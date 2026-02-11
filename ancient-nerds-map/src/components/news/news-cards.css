@@ -386,6 +386,24 @@
   line-height: 1;
 }
 
+.news-category-badge.speculative {
+  color: rgba(190, 160, 220, 0.85);
+  background: rgba(140, 100, 180, 0.15);
+  border-left-color: rgba(140, 100, 180, 0.25);
+  border-bottom-color: rgba(140, 100, 180, 0.25);
+}
+
+.news-page-chip.speculative-tag {
+  border-color: rgba(140, 100, 180, 0.4);
+  color: rgba(190, 160, 220, 0.85);
+}
+
+.news-page-chip.speculative-tag.active {
+  background: rgba(140, 100, 180, 0.25);
+  border-color: rgba(190, 160, 220, 0.6);
+  color: #d4c0ee;
+}
+
 /* Scrollable filter chips row */
 .news-page-chips-scroll {
   overflow-x: auto;

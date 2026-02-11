@@ -56,3 +56,16 @@ const CATEGORY_LABELS: Record<string, string> = {
 export function getNewsCategoryLabel(cat: string): string {
   return CATEGORY_LABELS[cat] || cat
 }
+
+const SPECULATIVE_TAG_LABELS: Record<string, string> = {
+  ancient_astronauts: 'Ancient Astronauts',
+  annunaki: 'Annunaki',
+  lost_civilization: 'Lost Civilization',
+  giants: 'Giants',
+  supernatural: 'Supernatural',
+  conspiracy: 'Conspiracy',
+}
+
+export function getSpeculativeTagLabel(tag: string): string {
+  return SPECULATIVE_TAG_LABELS[tag] || tag
+}

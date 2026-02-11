@@ -13,7 +13,7 @@ from pathlib import Path
 import anthropic
 
 from pipeline.database import NewsItem, NewsVideo, get_session
-from pipeline.lyra.config import VALID_CATEGORIES, LyraSettings, get_anthropic_client
+from pipeline.lyra.config import VALID_CATEGORIES, VALID_SPECULATIVE_TAGS, LyraSettings, get_anthropic_client
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,10 @@ RESCORE_SCHEMA = {
         "news_category": {
             "type": "string",
             "enum": sorted(VALID_CATEGORIES),
+        },
+        "speculative_tag": {
+            "type": "string",
+            "enum": sorted(VALID_SPECULATIVE_TAGS),
         },
         "reason": {"type": "string"},
     },
@@ -96,6 +100,13 @@ def rescore_pending_items(settings: LyraSettings) -> int:
                 old_sig = item.significance
                 item.significance = new_sig
                 item.news_category = new_cat
+
+                # Save speculative subcategory tag (only when category is speculative)
+                if new_cat == "speculative":
+                    tag = result.get("speculative_tag")
+                    item.speculative_tag = tag if tag in VALID_SPECULATIVE_TAGS else None
+                else:
+                    item.speculative_tag = None
 
                 if new_sig == 1:
                     # Not archaeology — remove from feed

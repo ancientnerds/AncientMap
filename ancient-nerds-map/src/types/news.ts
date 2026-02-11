@@ -32,6 +32,7 @@ export interface NewsItemData {
   site_name_extracted: string | null
   significance: number | null
   news_category: string | null
+  speculative_tag: string | null
 }
 
 export interface NewsFeedResponse {
@@ -67,6 +68,7 @@ export interface NewsFilters {
   periods: string[]
   countries: string[]
   news_categories: string[]
+  speculative_tags: string[]
 }
 
 export interface ActiveFilters {
@@ -77,5 +79,6 @@ export interface ActiveFilters {
   country: string | null
   min_significance: number | null
   news_category: string | null
+  speculative_tag: string | null
   sort: string | null
 }

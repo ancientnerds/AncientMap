@@ -23,6 +23,7 @@ import {
   getSignificanceLabel,
   getSignificanceCardStyle,
   getNewsCategoryLabel,
+  getSpeculativeTagLabel,
 } from './significance'
 import type { SiteData } from '../../data/sites'
 import type { NewsHighlight } from '../../types/ai'
@@ -35,6 +36,7 @@ export interface NewsCardProps {
   publishedAt?: string
   significance?: number | null
   newsCategory?: string | null
+  speculativeTag?: string | null
   screenshotUrl?: string | null
   deepLink: string
   videoTitle?: string
@@ -72,6 +74,7 @@ export default function NewsCard({
   publishedAt,
   significance,
   newsCategory,
+  speculativeTag,
   screenshotUrl,
   deepLink,
   videoTitle,
@@ -119,9 +122,13 @@ export default function NewsCard({
       onMouseEnter={() => hasMatchedSite && onSiteHover?.(true)}
       onMouseLeave={() => hasMatchedSite && onSiteHover?.(false)}
     >
-      {newsCategory && newsCategory !== 'general' && (
+      {newsCategory === 'speculative' ? (
+        <span className="news-category-badge speculative">
+          {speculativeTag ? getSpeculativeTagLabel(speculativeTag) : 'Speculative'}
+        </span>
+      ) : newsCategory && newsCategory !== 'general' ? (
         <span className="news-category-badge">{getNewsCategoryLabel(newsCategory)}</span>
-      )}
+      ) : null}
 
       <div className="news-card-meta">
         <span className="news-card-channel">{channelName}</span>
