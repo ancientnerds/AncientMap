@@ -130,7 +130,7 @@ jobs:
         if: steps.filter.outputs.docker == 'true'
 
       - name: Validate docker-compose
-        run: POSTGRES_PASSWORD=ci-validation docker compose config
+        run: POSTGRES_PASSWORD=ci-validation PGADMIN_PASSWORD=ci-validation docker compose config
 
   deploy:
     name: Deploy to Production

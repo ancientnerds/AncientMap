@@ -301,7 +301,7 @@ async def _extract_news_filters(query: str) -> dict:
             return {}
         # Validate: only keep known keys with correct types
         valid_keys = {"site_names", "country", "category", "period", "site_type", "channel", "min_significance", "max_year", "min_year"}
-        result = {}
+        result: dict[str, object] = {}
         for k, v in filters.items():
             if k not in valid_keys or v is None:
                 continue
