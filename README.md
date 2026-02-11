@@ -117,6 +117,8 @@ AncientMap/
 │   └── utils/             # Shared utilities
 ├── ancient-nerds-map/      # React + TypeScript frontend
 │   └── src/
+│       ├── components/    # React components (22 top-level + subfolders)
+│       └── pages/         # Route pages (Lyra, Radar, NewsFeed)
 ├── docs/                  # Technical documentation
 ├── scripts/               # Utility scripts
 ├── docker-compose.yml     # Docker services

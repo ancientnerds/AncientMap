@@ -119,8 +119,7 @@ source .venv/bin/activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Install development dependencies
-pip install -r requirements-dev.txt  # if available
+# Install development dependencies (included in requirements.txt)
 
 # Run tests
 pytest
@@ -164,7 +163,7 @@ docker compose up -d
 python scripts/init_db.py
 
 # Load sample data
-python -m pipeline.unified_loader --source ancient_nerds
+python -m pipeline.main ingest ancient_nerds
 ```
 
 ## Pull Request Process
@@ -293,7 +292,7 @@ export function SiteMarker({ id, name, coordinates }: SiteProps) {
 
 5. **Update documentation**:
    - Add to `ATTRIBUTION.md`
-   - Update `data_sources_research.md` if applicable
+   - Update `connectors.md` if applicable
 
 ### Data Quality Standards
 

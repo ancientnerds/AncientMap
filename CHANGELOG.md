@@ -45,6 +45,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Planned
+- Timeline animation feature
+- User accounts and saved searches
+- Mobile native apps
+
+## [2.0.0] - 2026-02-11
+
 ### Added
 - Lyra News Pipeline: fully automated 9-step archaeological news discovery from 18+ YouTube channels
 - AI-powered site identification via Claude Haiku with extended thinking for garbled caption names
@@ -78,8 +85,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed stale "tweeted" video status filter in article generator
 - Fixed all datetime.utcnow() calls to datetime.now(UTC)
 - Deleted dead code: _format_attribution, ESCALATION_SCHEMA, _parse_identification
-
-### Planned
-- Timeline animation feature
-- User accounts and saved searches
-- Mobile native apps
