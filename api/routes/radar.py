@@ -171,8 +171,33 @@ async def get_radar(
     if cached:
         return cached
 
-    # Query user_contributions, excluding matched/not_a_site/failed
-    contributions_query = text("""
+    # ── Status filter → SQL WHERE clause ───────────────────────────
+    status_clause = "COALESCE(uc.enrichment_status, 'pending') NOT IN ('failed', 'not_a_site', 'matched')"
+    if status == "enriched":
+        status_clause = "uc.enrichment_status = 'enriched'"
+    elif status == "pending":
+        status_clause = "COALESCE(uc.enrichment_status, 'pending') IN ('pending', 'enriching')"
+    elif status == "added":
+        status_clause = "uc.enrichment_status = 'promoted'"
+    elif status == "rejected":
+        status_clause = "uc.enrichment_status = 'rejected'"
+
+    # For mentions/recency: push sort + pagination into SQL
+    # For score: fetch all rows, sort in Python (score is computed post-query)
+    sql_paginated = sort_by in ("mentions", "recency")
+    offset = (page - 1) * page_size
+
+    if sort_by == "mentions":
+        order_clause = "c.mention_count DESC, c.id"
+    elif sort_by == "recency":
+        order_clause = "va.last_mentioned DESC NULLS LAST, c.mention_count DESC, c.id"
+    else:
+        order_clause = "c.mention_count DESC, c.id"
+
+    limit_clause = "LIMIT :limit OFFSET :offset" if sql_paginated else ""
+    count_col = "COUNT(*) OVER() AS _total_count," if sql_paginated else ""
+
+    contributions_query = text(f"""
         WITH contrib AS (
             SELECT
                 uc.id,
@@ -195,10 +220,9 @@ async def get_radar(
                 uc.wikidata_id
             FROM user_contributions uc
             WHERE uc.source = 'lyra'
-              AND COALESCE(uc.enrichment_status, 'pending') NOT IN ('failed', 'not_a_site', 'matched')
+              AND {status_clause}
               AND uc.mention_count >= :min_mentions
         ),
-        -- Aggregate video references per contribution
         video_agg AS (
             SELECT
                 c.id AS contrib_id,
@@ -218,6 +242,7 @@ async def get_radar(
             GROUP BY c.id
         )
         SELECT
+            {count_col}
             c.id::text,
             COALESCE(c.corrected_name, c.name) AS display_name,
             CASE WHEN c.corrected_name IS NOT NULL AND c.corrected_name != c.name
@@ -243,28 +268,20 @@ async def get_radar(
             va.all_facts
         FROM contrib c
         LEFT JOIN video_agg va ON va.contrib_id = c.id
+        ORDER BY {order_clause}
+        {limit_clause}
     """)
 
-    contrib_rows = db.execute(contributions_query, {
-        "min_mentions": min_mentions,
-    }).fetchall()
+    params = {"min_mentions": min_mentions}
+    if sql_paginated:
+        params["limit"] = page_size
+        params["offset"] = offset
 
-    items = []
+    contrib_rows = db.execute(contributions_query, params).fetchall()
 
-    for row in contrib_rows:
+    def _row_to_item(row) -> dict:
         enrichment_status = row.enrichment_status
 
-        # Apply status filter
-        if status == "enriched" and enrichment_status != "enriched":
-            continue
-        if status == "pending" and enrichment_status not in ("pending", "enriching"):
-            continue
-        if status == "added" and enrichment_status != "promoted":
-            continue
-        if status == "rejected" and enrichment_status != "rejected":
-            continue
-
-        # Extract rejection reason from enrichment_data if rejected
         rejection_reason = None
         if enrichment_status == "rejected" and row.enrichment_data:
             rejected = row.enrichment_data.get("rejected_match", {})
@@ -275,12 +292,10 @@ async def get_radar(
                     f"but video context indicates {rejected.get('contribution_country', '?')}"
                 )
 
-        # Normalize period: prefer canonical bucket from period_start
         period_name = row.period_name
         if row.period_start is not None:
             period_name = categorize_period(row.period_start)
 
-        # Extract external sources from enrichment_data (set by site_identifier for external DB matches)
         external_sources = []
         if row.enrichment_data and isinstance(row.enrichment_data, dict):
             external_sources = row.enrichment_data.get("external_sources", [])
@@ -313,20 +328,18 @@ async def get_radar(
             "external_sources": external_sources,
         }
         item["enrichment_score"] = _compute_display_score(item)
-        items.append(item)
+        return item
 
-    # ── Sort ────────────────────────────────────────────────────────
-    if sort_by == "score":
+    if sql_paginated:
+        # SQL already sorted and paginated; total comes from window function
+        total_count = contrib_rows[0]._total_count if contrib_rows else 0
+        page_items = [_row_to_item(row) for row in contrib_rows]
+    else:
+        # score sort: build all items, sort in Python, then slice
+        items = [_row_to_item(row) for row in contrib_rows]
         items.sort(key=lambda x: x["enrichment_score"], reverse=True)
-    elif sort_by == "mentions":
-        items.sort(key=lambda x: x["mention_count"], reverse=True)
-    elif sort_by == "recency":
-        items.sort(key=lambda x: x["last_mentioned"] or "", reverse=True)
-
-    # ── Paginate ────────────────────────────────────────────────────
-    total_count = len(items)
-    offset = (page - 1) * page_size
-    page_items = items[offset:offset + page_size]
+        total_count = len(items)
+        page_items = items[offset:offset + page_size]
 
     # ── Fuzzy suggestions for pending/enriching items only ──────────
     # Wrapped in try/except: suggestions are optional, a pg_trgm or

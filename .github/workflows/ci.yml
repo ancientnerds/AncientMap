@@ -71,7 +71,6 @@ jobs:
         run: pip install pip-audit
 
       - name: Scan Python dependencies
-        continue-on-error: true
         run: pip-audit -r requirements.txt
 
       - name: Setup Node.js
@@ -80,7 +79,6 @@ jobs:
           node-version: '20'
 
       - name: Scan npm dependencies
-        continue-on-error: true
         working-directory: ancient-nerds-map
         run: npm audit --audit-level=high
 
@@ -197,7 +195,7 @@ jobs:
               echo "==> No Docker changes"
             fi
             sleep 5
-            curl -sf http://localhost:8000/ || echo "WARNING: Health check failed"
+            curl -sf http://localhost:8000/ || { echo "ERROR: Health check failed!"; exit 1; }
 
             echo "==> Restarting log streaming..."
             [ -f scripts/follow_logs.sh ] && chmod +x scripts/follow_logs.sh

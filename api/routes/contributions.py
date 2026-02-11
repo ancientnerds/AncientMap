@@ -7,7 +7,6 @@ Later, approved contributions can be integrated into the main database.
 
 import json
 import logging
-import os
 import re
 import uuid
 from datetime import UTC, datetime
@@ -20,6 +19,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from api.services.admin_auth import get_client_ip
+from api.services.rate_limiter import RateLimiter
 from api.services.turnstile import verify_turnstile as _verify_turnstile_shared
 from pipeline.database import get_db
 
@@ -123,72 +123,7 @@ async def get_lyra_contributions(
 # Contributions JSON file path
 CONTRIBUTIONS_FILE = Path(__file__).parent.parent.parent / "data" / "contributions.json"
 
-# Rate limiting: max 25 submissions per IP per hour
-RATE_LIMIT_MAX = 25
-RATE_LIMIT_WINDOW = 3600  # 1 hour in seconds
-
-# Try to use Redis for rate limiting if available
-_redis_client = None
-try:
-    import redis
-    redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-    _redis_client = redis.from_url(redis_url, decode_responses=True)
-    _redis_client.ping()  # Test connection
-    logger.info("Redis connected for rate limiting")
-except Exception as e:
-    logger.warning(f"Redis not available, falling back to in-memory rate limiting: {e}")
-    _redis_client = None
-
-# Fallback in-memory store (with automatic cleanup)
-_rate_limit_store: dict[str, list[float]] = {}
-_last_cleanup = 0
-
-
-def check_rate_limit(ip: str) -> bool:
-    """Check if IP has exceeded rate limit. Returns True if allowed."""
-    import time
-    now = time.time()
-
-    if _redis_client:
-        # Use Redis for distributed rate limiting with TTL
-        try:
-            key = f"rate_limit:{ip}"
-            count = _redis_client.incr(key)
-            if count == 1:
-                _redis_client.expire(key, RATE_LIMIT_WINDOW)
-            return count <= RATE_LIMIT_MAX
-        except redis.RedisError as e:
-            logger.error(f"Redis rate limit error: {e}")
-            # Fall through to in-memory
-
-    # In-memory fallback with periodic cleanup
-    global _last_cleanup
-    if now - _last_cleanup > 300:  # Cleanup every 5 minutes
-        _cleanup_old_entries(now)
-        _last_cleanup = now
-
-    if ip not in _rate_limit_store:
-        _rate_limit_store[ip] = []
-
-    # Clean old entries for this IP
-    _rate_limit_store[ip] = [t for t in _rate_limit_store[ip] if now - t < RATE_LIMIT_WINDOW]
-
-    if len(_rate_limit_store[ip]) >= RATE_LIMIT_MAX:
-        return False
-
-    _rate_limit_store[ip].append(now)
-    return True
-
-
-def _cleanup_old_entries(now: float) -> None:
-    """Remove expired entries to prevent memory growth."""
-    expired_ips = []
-    for ip, timestamps in _rate_limit_store.items():
-        _rate_limit_store[ip] = [t for t in timestamps if now - t < RATE_LIMIT_WINDOW]
-        if not _rate_limit_store[ip]:
-            expired_ips.append(ip)
-    for ip in expired_ips:
-        del _rate_limit_store[ip]
+_rate_limiter = RateLimiter(max_requests=25, window_seconds=3600)
 
 
 def load_contributions() -> list[dict]:
@@ -278,7 +213,7 @@ async def create_contribution(
     client_ip = get_client_ip(request)
 
     # Rate limiting check (before Turnstile to save API calls)
-    if client_ip and not check_rate_limit(client_ip):
+    if client_ip and not _rate_limiter.check(client_ip):
         raise HTTPException(status_code=429, detail="Too many submissions. Please try again later.")
 
     # Verify Turnstile token
@@ -334,21 +269,7 @@ async def get_site_types(db: Session = Depends(get_db)):
         return {"site_types": types}
     except SQLAlchemyError as e:
         logger.error(f"Database error fetching site types: {e}")
-        # Return some default types if query fails
-        return {
-            "site_types": [
-                "Archaeological Site",
-                "Ancient City",
-                "Temple",
-                "Tomb",
-                "Monument",
-                "Fortress",
-                "Settlement",
-                "Religious Site",
-                "Historic Building",
-                "Other",
-            ]
-        }
+        raise HTTPException(status_code=500, detail="Database error fetching site types")
 
 
 @router.get("/countries")

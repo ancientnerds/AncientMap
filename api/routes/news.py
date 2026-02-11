@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from api.cache import cache_get, cache_set
 from pipeline.database import NewsArticle, NewsChannel, NewsItem, NewsVideo, UnifiedSite, get_db
+from pipeline.utils.text import categorize_period
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -38,12 +39,7 @@ _PERIOD_ORDER = {label: i for i, (label, _, _) in enumerate(_PERIOD_BUCKETS)}
 
 
 def _categorize_period(start: int | None) -> str:
-    if start is None:
-        return "Unknown"
-    for label, lo, hi in _PERIOD_BUCKETS:
-        if lo <= start < hi:
-            return label
-    return "Unknown"
+    return categorize_period(start) or "Unknown"
 
 
 def _period_label_to_range(label: str) -> tuple[int, int] | None:

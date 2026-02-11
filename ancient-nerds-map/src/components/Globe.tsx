@@ -1711,7 +1711,6 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       const isLoading = isLoadingLayers[layerKey]
 
       if (isEnabled && !isLoaded && !isLoading) {
-        console.log(`[Loading] Starting ${layerKey} load...`)
         // Load back layer (low detail for performance) if not already loaded
         if (!backLayersLoadedRef.current[layerKey]) {
           loadBackLayer(layerKey)
