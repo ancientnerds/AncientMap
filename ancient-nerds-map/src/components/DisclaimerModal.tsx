@@ -240,6 +240,7 @@ function DisclaimerModal({ isOpen, onClose }: DisclaimerModalProps) {
               <li>Always verify information by watching the <strong>original video</strong> (linked on each item).</li>
               <li>Summaries may contain inaccuracies — the original video is always the authoritative source.</li>
               <li>We work with featured channels to ensure proper attribution and link back to every video.</li>
+              <li>We highly encourage you to <strong>like, subscribe, and support</strong> the creators whose content appears here — they are the ones doing the incredible work of bringing archaeology and ancient history to life.</li>
             </ul>
 
             <h4>YouTube Creator Opt-Out</h4>
