@@ -685,9 +685,10 @@ def _run_migrations(engine) -> None:
                         fixed = [f.replace(bloated, row.cname) for f in fixed]
                     updates["facts"] = _json.dumps(fixed)
             if updates:
-                sets = ", ".join(f"{k} = :{k}" for k in updates)
-                if "facts" in updates:
-                    sets = sets.replace("facts = :facts", "facts = :facts::jsonb")
+                sets = ", ".join(
+                    f"{k} = CAST(:{k} AS jsonb)" if k == "facts" else f"{k} = :{k}"
+                    for k in updates
+                )
                 updates["id"] = row.id
                 conn.execute(text(f"UPDATE news_items SET {sets} WHERE id = :id"), updates)
 
