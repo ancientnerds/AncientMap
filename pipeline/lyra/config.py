@@ -87,8 +87,11 @@ def get_anthropic_client(settings: "LyraSettings") -> anthropic.Anthropic:
     return _cached_client
 
 
-# Rate throttle: minimum 1.3s between API calls (~46 RPM, under 50 RPM Tier 1 limit)
-_MIN_CALL_GAP = 1.3
+# Rate throttle — auto-tunes from API response headers.
+# Conservative default until the first response reveals the actual RPM limit.
+_DEFAULT_RPM = 50  # Tier 1 minimum, safe starting point
+_SAFETY_MARGIN = 0.9  # Use 90% of the limit
+_min_call_gap = 60.0 / (_DEFAULT_RPM * _SAFETY_MARGIN)
 _last_call_time = 0.0
 
 
@@ -96,15 +99,31 @@ def call_api(client: anthropic.Anthropic, **kwargs) -> anthropic.types.Message:
     """Throttled wrapper around client.messages.create().
 
     Enforces a minimum gap between calls to stay under rate limits.
+    Auto-reads `anthropic-ratelimit-requests-limit` from response headers
+    and adjusts the gap for the actual tier (Tier 1 = 50, Tier 2 = 1000, etc.).
     The SDK's built-in retry (max_retries=5) handles transient 429/500/529.
     """
-    global _last_call_time
+    global _last_call_time, _min_call_gap
     now = time.monotonic()
     elapsed = now - _last_call_time
-    if elapsed < _MIN_CALL_GAP:
-        sleep_time = _MIN_CALL_GAP - elapsed
+    if elapsed < _min_call_gap:
+        sleep_time = _min_call_gap - elapsed
         logger.debug(f"Rate throttle: sleeping {sleep_time:.2f}s")
         time.sleep(sleep_time)
-    response = client.messages.create(**kwargs)
+
+    raw = client.messages.with_raw_response.create(**kwargs)
     _last_call_time = time.monotonic()
-    return response
+
+    # Auto-tune gap from actual RPM limit reported by the API
+    rpm_header = raw.headers.get("anthropic-ratelimit-requests-limit")
+    if rpm_header:
+        try:
+            rpm = int(rpm_header)
+            new_gap = 60.0 / (rpm * _SAFETY_MARGIN)
+            if new_gap != _min_call_gap:
+                logger.info(f"Rate limit detected: {rpm} RPM → min gap {new_gap:.3f}s")
+                _min_call_gap = new_gap
+        except (ValueError, ZeroDivisionError):
+            pass
+
+    return raw.parse()
