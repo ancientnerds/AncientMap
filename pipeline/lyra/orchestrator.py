@@ -651,39 +651,54 @@ def _run_migrations(engine) -> None:
         """))
 
         # v14b: Repair items corrupted by v14's substring expansion bug.
-        # When site_name_extracted was a substring of us.name, REPLACE ran
-        # on every restart, producing e.g. "Calico Early Man Site Early Man Site Early Man Site".
-        # Python loop: find affected items, collapse repeated suffixes, update.
+        # The v14 REPLACE(text, extracted, canonical) runs on every restart.
+        # When extracted is a substring of canonical, each restart expands:
+        #   Prefix case: "Calico" in "Calico Early Man Site" → suffix repeats
+        #   Suffix case: "Fajada Butte" in "Chaco Culture NHP- Fajada Butte" → prefix repeats
+        # Fix: collapse by replacing (prefix + canonical) and (canonical + suffix)
+        # with canonical until stable.
         import json as _json
 
         corrupted = conn.execute(text("""
-            SELECT ni.id, us.name AS cname,
-                   SUBSTRING(us.name FROM LENGTH(ni.site_name_extracted) + 1) AS suffix,
+            SELECT ni.id, us.name AS cname, ni.site_name_extracted AS extracted,
                    ni.headline, ni.post_text, ni.summary, ni.facts
             FROM news_items ni
             JOIN unified_sites us ON ni.site_id = us.id
             WHERE ni.site_name_extracted IS NOT NULL
-              AND us.name LIKE ni.site_name_extracted || ' %'
+              AND ni.site_name_extracted != us.name
+              AND us.name LIKE '%' || ni.site_name_extracted || '%'
         """)).fetchall()
         for row in corrupted:
-            bloated = row.cname + row.suffix
+            idx = row.cname.index(row.extracted)
+            prefix = row.cname[:idx]                         # e.g. "Chaco Culture NHP- "
+            suffix = row.cname[idx + len(row.extracted):]    # e.g. " Early Man Site"
+            # Build the two bloated patterns to collapse
+            patterns = []
+            if prefix:
+                patterns.append((prefix + row.cname, row.cname))
+            if suffix:
+                patterns.append((row.cname + suffix, row.cname))
+            if not patterns:
+                continue
+
+            def _collapse(val: str) -> str:
+                for bloated, clean in patterns:
+                    while bloated in val:
+                        val = val.replace(bloated, clean)
+                return val
+
             fields = {"headline": row.headline, "post_text": row.post_text, "summary": row.summary}
-            if not any(bloated in (v or "") for v in fields.values()):
-                if not (row.facts and bloated in str(row.facts)):
-                    continue
             updates = {}
             for col, val in fields.items():
-                if val and bloated in val:
-                    while bloated in val:
-                        val = val.replace(bloated, row.cname)
-                    updates[col] = val
+                if not val:
+                    continue
+                fixed = _collapse(val)
+                if fixed != val:
+                    updates[col] = fixed
             if row.facts:
-                facts_str = str(row.facts)
-                if bloated in facts_str:
-                    fixed = [f.replace(bloated, row.cname) if bloated in f else f for f in row.facts]
-                    while any(bloated in f for f in fixed):
-                        fixed = [f.replace(bloated, row.cname) for f in fixed]
-                    updates["facts"] = _json.dumps(fixed)
+                fixed_facts = [_collapse(f) for f in row.facts]
+                if fixed_facts != list(row.facts):
+                    updates["facts"] = _json.dumps(fixed_facts)
             if updates:
                 sets = ", ".join(
                     f"{k} = CAST(:{k} AS jsonb)" if k == "facts" else f"{k} = :{k}"
