@@ -12845,6 +12845,13 @@ body.news-feed-open .empire-borders-window {
   line-height: 1;
 }
 
+.news-page-result-count {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  margin-left: 4px;
+  white-space: nowrap;
+}
+
 .news-page-filters-body {
   display: flex;
   flex-direction: column;

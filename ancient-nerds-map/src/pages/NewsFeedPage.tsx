@@ -3,7 +3,7 @@
  * Accessed via /news.html (separate Vite entry point).
  */
 
-import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import { config } from '../config'
 import { getCategoryColor, getPeriodColor } from '../data/sites'
 import { DataStore } from '../data/DataStore'
@@ -18,10 +18,12 @@ import '../components/news/news-cards.css'
 const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
 
 export default function NewsFeedPage() {
-  const [allItems, setAllItems] = useState<NewsItemData[]>([])
+  const [items, setItems] = useState<NewsItemData[]>([])
   const [loading, setLoading] = useState(true)
-  const [visibleCount, setVisibleCount] = useState(30)
   const [error, setError] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(false)
+  const [totalCount, setTotalCount] = useState(0)
   const [showLyraProfile, setShowLyraProfile] = useState(false)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
@@ -65,52 +67,37 @@ export default function NewsFeedPage() {
   const [showSpeculative, setShowSpeculative] = useState(true)
 
 
-  const fetchAll = useCallback(async () => {
+  const PAGE_SIZE = 50
+
+  const fetchPage = useCallback(async (pageNum: number, append: boolean) => {
     try {
       setLoading(true)
       setError(null)
-      const allFetched: NewsItemData[] = []
-      let page = 1
-      let hasMore = true
-      while (hasMore) {
-        const resp = await fetch(`${config.api.baseUrl}/news/feed?page=${page}&page_size=100&include_speculative=true`)
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-        const data: { items: NewsItemData[]; has_more: boolean } = await resp.json()
-        allFetched.push(...data.items)
-        hasMore = data.has_more
-        page++
-      }
-      setAllItems(allFetched)
+      const params = new URLSearchParams()
+      params.set('page', String(pageNum))
+      params.set('page_size', String(PAGE_SIZE))
+      params.set('include_speculative', String(showSpeculative))
+      if (activeFilters.channel) params.set('channel_id', activeFilters.channel)
+      if (activeFilters.site) params.set('site_id', activeFilters.site)
+      if (activeFilters.category) params.set('category', activeFilters.category)
+      if (activeFilters.period) params.set('period', activeFilters.period)
+      if (activeFilters.country) params.set('country', activeFilters.country)
+      if (activeFilters.min_significance != null) params.set('min_significance', String(activeFilters.min_significance))
+      if (activeFilters.news_category) params.set('news_category', activeFilters.news_category)
+      if (activeFilters.sort) params.set('sort', activeFilters.sort)
+      const resp = await fetch(`${config.api.baseUrl}/news/feed?${params}`)
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+      const data: { items: NewsItemData[]; has_more: boolean; total_count: number; page: number } = await resp.json()
+      setItems(prev => append ? [...prev, ...data.items] : data.items)
+      setHasMore(data.has_more)
+      setTotalCount(data.total_count)
+      setPage(data.page)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load')
     } finally {
       setLoading(false)
     }
-  }, [])
-
-  // Client-side filter + sort — instant, no API round-trip
-  const filteredItems = useMemo(() => {
-    let result = allItems
-    if (!showSpeculative) result = result.filter(i => i.news_category !== 'speculative')
-    const f = activeFilters
-    if (f.channel) result = result.filter(i => i.video.channel_id === f.channel)
-    if (f.site) result = result.filter(i => i.site_id === f.site)
-    if (f.category) result = result.filter(i => i.site_type === f.category)
-    if (f.period) result = result.filter(i => i.site_period_name === f.period)
-    if (f.country) result = result.filter(i => i.site_country === f.country)
-    if (f.min_significance) result = result.filter(i => i.significance != null && i.significance >= f.min_significance!)
-    if (f.news_category) result = result.filter(i => i.news_category === f.news_category)
-    if (f.sort === 'significance') {
-      result = [...result].sort((a, b) => {
-        const diff = (b.significance ?? 0) - (a.significance ?? 0)
-        return diff !== 0 ? diff : new Date(b.video.published_at).getTime() - new Date(a.video.published_at).getTime()
-      })
-    }
-    return result
-  }, [allItems, activeFilters, showSpeculative])
-
-  const displayItems = filteredItems.slice(0, visibleCount)
-  const hasMore = visibleCount < filteredItems.length
+  }, [activeFilters, showSpeculative])
 
   const PULL_THRESHOLD = 70
 
@@ -119,7 +106,7 @@ export default function NewsFeedPage() {
     setPullPhase('refreshing')
     refreshingRef.current = true
     const t0 = Date.now()
-    await fetchAll()
+    await fetchPage(1, false)
     fetch(`${config.api.baseUrl}/news/stats`)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setStats(d) })
@@ -131,15 +118,15 @@ export default function NewsFeedPage() {
       setPullPhase('idle')
       refreshingRef.current = false   // unlock AFTER done phase ends
     }, 900)
-  }, [fetchAll])
+  }, [fetchPage])
 
   const doRefreshRef = useRef(doRefresh)
   doRefreshRef.current = doRefresh
 
-  // Fetch all items once on mount
+  // Fetch page 1 on mount and whenever filters/sort change
   useEffect(() => {
-    fetchAll()
-  }, [fetchAll])
+    fetchPage(1, false)
+  }, [fetchPage])
 
   // Load source metadata on mount (for SitePopup display names)
   useEffect(() => { DataStore.loadSources() }, [])
@@ -173,20 +160,20 @@ export default function NewsFeedPage() {
       .catch(() => {})
   }, [])
 
-  // Infinite scroll — purely client-side, just reveals more from filteredItems
+  // Infinite scroll — fetch next page from server when sentinel enters viewport
   useEffect(() => {
     if (!sentinelRef.current || !hasMore || loading) return
     const observer = new IntersectionObserver(
       entries => {
         if (entries[0].isIntersecting) {
-          setVisibleCount(prev => prev + 30)
+          fetchPage(page + 1, true)
         }
       },
       { rootMargin: '200px' }
     )
     observer.observe(sentinelRef.current)
     return () => observer.disconnect()
-  }, [hasMore, loading])
+  }, [hasMore, loading, page, fetchPage])
 
   // Pull-to-refresh: touch (mobile) + wheel/trackpad (desktop)
   useEffect(() => {
@@ -289,7 +276,6 @@ export default function NewsFeedPage() {
       ...prev,
       [dimension]: prev[dimension] === value ? null : value,
     }))
-    setVisibleCount(30)
   }
 
 
@@ -352,6 +338,9 @@ export default function NewsFeedPage() {
                 <span className="news-page-filters-count">{activeFilterCount}</span>
               )}
             </button>
+            {!loading && totalCount > 0 && (
+              <span className="news-page-result-count">{totalCount} result{totalCount !== 1 ? 's' : ''}</span>
+            )}
             <div className="news-page-filters-bar-actions">
               <button
                 className={`news-page-chip${activeFilters.sort == null ? ' active' : ''}`}
@@ -568,23 +557,24 @@ export default function NewsFeedPage() {
       {error && (
         <div className="news-page-error">
           {error}
-          <button onClick={() => fetchAll()}>Retry</button>
+          <button onClick={() => fetchPage(1, false)}>Retry</button>
         </div>
       )}
 
       {/* Empty state */}
-      {!error && !loading && allItems.length === 0 && (
-        <div className="news-page-empty">No news items yet. Check back soon.</div>
-      )}
-      {!error && !loading && allItems.length > 0 && filteredItems.length === 0 && (
-        <div className="news-page-empty">No items match the current filters.</div>
+      {!error && !loading && items.length === 0 && (
+        <div className="news-page-empty">
+          {Object.values(activeFilters).some(Boolean) || !showSpeculative
+            ? 'No items match the current filters.'
+            : 'No news items yet. Check back soon.'}
+        </div>
       )}
 
       {/* Grid */}
       <div className="news-page-grid" ref={gridRef}>
         {Array.from({ length: columnCount }, (_, colIdx) => (
           <div key={colIdx} className="news-page-column">
-            {displayItems.filter((_, i) => i % columnCount === colIdx).map(item => {
+            {items.filter((_, i) => i % columnCount === colIdx).map(item => {
               const screenshotSrc = item.screenshot_url
                 ? `${config.api.baseUrl}${item.screenshot_url.replace('/api', '')}`
                 : item.video.thumbnail_url
