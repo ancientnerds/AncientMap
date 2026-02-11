@@ -1,6 +1,6 @@
 # Lyra News Pipeline
 
-Fully-automated AI-powered archaeological news discovery system. Runs on a 1-hour cycle inside the `ancient_nerds_api` Docker container. Transforms raw YouTube video content into curated Radar cards through 9 sequential stages.
+Fully-automated AI-powered archaeological news discovery system. Runs on a 1-hour cycle inside the `ancient_nerds_lyra` Docker container. Transforms raw YouTube video content into curated Radar cards through 9 sequential stages.
 
 ---
 

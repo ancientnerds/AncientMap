@@ -9,10 +9,10 @@ This document describes the high-level architecture of the Ancient Nerds Map pla
 │                              FRONTEND                                        │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
 │  │                    React + TypeScript + Vite                         │    │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌────────────┐  │    │
-│  │  │  Globe.tsx  │  │ FilterPanel │  │  SitePopup  │  │  AIChat    │  │    │
-│  │  │  (Three.js) │  │             │  │             │  │  Modal     │  │    │
-│  │  └─────────────┘  └─────────────┘  └─────────────┘  └────────────┘  │    │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌──────────────────┐  ┌────────────┐  │    │
+│  │  │  Globe.tsx  │  │ FilterPanel │  │SitePopupOverlay│  │ LyraChat   │  │    │
+│  │  │  (Three.js) │  │             │  │                │  │  Modal     │  │    │
+│  │  └─────────────┘  └─────────────┘  └──────────────────┘  └────────────┘  │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
@@ -22,13 +22,13 @@ This document describes the high-level architecture of the Ancient Nerds Map pla
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
 │  │                    FastAPI + Python 3.11+                            │    │
 │  │  ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌───────────────────┐ │    │
-│  │  │  /sites   │  │  /sources │  │    /ai    │  │  /contributions   │ │    │
+│  │  │  /sites   │  │  /sources │  │  /lyra    │  │  /contributions   │ │    │
 │  │  │  routes   │  │  routes   │  │  routes   │  │     routes        │ │    │
 │  │  └───────────┘  └───────────┘  └───────────┘  └───────────────────┘ │    │
 │  │                         │                                            │    │
 │  │  ┌─────────────────────────────────────────────────────────────┐    │    │
 │  │  │                    Services Layer                            │    │    │
-│  │  │  access_control.py │ rag_service.py │ cache.py              │    │    │
+│  │  │  admin_auth.py │ lyra_agent.py │ lyra_embeddings.py │ turnstile.py │    │
 │  │  └─────────────────────────────────────────────────────────────┘    │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -46,7 +46,7 @@ This document describes the high-level architecture of the Ancient Nerds Map pla
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                            DATA PIPELINE                                     │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │                    unified_loader.py                                 │    │
+│  │                    pipeline.main + ingesters                         │    │
 │  │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐   │    │
 │  │  │Pleiades │  │  DARE   │  │ UNESCO  │  │Wikidata │  │ 30+ more│   │    │
 │  │  │ingester │  │ingester │  │ingester │  │ingester │  │ingesters│   │    │
@@ -63,7 +63,6 @@ AncientMap/
 │   ├── main.py              # Application entry point
 │   ├── cache.py             # Redis caching utilities
 │   ├── config/              # Configuration modules
-│   │   └── ai_modes.py      # AI mode configurations
 │   ├── routes/              # API endpoint handlers
 │   │   ├── lyra.py          # Lyra AI chat (SSE streaming)
 │   │   ├── radar.py         # Lyra Radar (discovered sites)
@@ -114,8 +113,14 @@ AncientMap/
 │   │   ├── components/      # React components
 │   │   │   ├── Globe.tsx    # 3D globe (Three.js)
 │   │   │   ├── FilterPanel.tsx
-│   │   │   ├── SitePopup.tsx
-│   │   │   └── AIAgentChatModal.tsx
+│   │   │   ├── SitePopupOverlay.tsx
+│   │   │   ├── LyraChatModal.tsx
+│   │   │   ├── NewsFeedPanel.tsx
+│   │   │   └── ...          # 22 component files total
+│   │   ├── pages/           # Route pages
+│   │   │   ├── LyraPage.tsx
+│   │   │   ├── LyraRadarPage.tsx
+│   │   │   └── NewsFeedPage.tsx
 │   │   ├── hooks/           # Custom React hooks
 │   │   ├── services/        # API client services
 │   │   ├── types/           # TypeScript definitions
@@ -125,14 +130,12 @@ AncientMap/
 │
 ├── scripts/                  # Utility scripts
 │   ├── init_db.py           # Database initialization
-│   ├── build_ai_index.py    # Build vector search index
+│   ├── build_lyra_index.py   # Build vector search index
 │   ├── download_all.py      # Download all data sources
 │   └── vps_backup.sh        # Backup scripts
 │
 ├── data/                     # Data storage
-│   ├── raw/                 # Raw downloaded data
-│   ├── processed/           # Processed data
-│   └── cache/               # Cache files
+│   └── raw/                 # Raw downloaded data
 │
 └── docker-compose.yml        # Container orchestration
 ```
@@ -234,7 +237,7 @@ AncientMap/
 ### Data Ingestion
 
 ```
-1. python -m pipeline.unified_loader --source pleiades
+1. python -m pipeline.main ingest pleiades
 2. Ingester fetches raw data
 3. Parser extracts records
 4. Normalizer standardizes fields
@@ -255,29 +258,37 @@ AncientMap/
                     │   proxy)    │
                     └──────┬──────┘
                            │
-           ┌───────────────┼───────────────┐
-           ▼               ▼               ▼
-    ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
-    │   Static    │ │   FastAPI   │ │  Anthropic  │
-    │   Files     │ │   (API)     │ │  Claude API │
-    │   (Vite)    │ │             │ │  (external) │
-    └─────────────┘ └─────────────┘ └─────────────┘
-                           │
-           ┌───────────────┼───────────────┐
-           ▼               ▼               ▼
-    ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
-    │ PostgreSQL  │ │    Redis    │ │   Qdrant    │
-    │  + PostGIS  │ │             │ │             │
-    └─────────────┘ └─────────────┘ └─────────────┘
+       ┌────────────────┼────────────────┐
+       ▼                ▼                ▼
+┌─────────────┐ ┌──────────────┐ ┌─────────────┐
+│   Static    │ │   FastAPI    │ │  Anthropic  │
+│   Files     │ │   (API)      │ │  Claude API │
+│   (Vite)    │ │              │ │  (external) │
+└─────────────┘ └──────────────┘ └─────────────┘
+                        │                ▲
+                        │                │
+                ┌───────┴──────┐  ┌──────┴──────┐
+                │              │  │    Lyra     │
+                │              │  │  Pipeline   │
+                │              │  │  (hourly)   │
+                │              │  └──────┬──────┘
+                │              │         │
+       ┌────────┼────────┐     └────┬────┘
+       ▼        ▼        ▼         ▼
+┌─────────────┐ ┌──────────────┐ ┌─────────────┐
+│ PostgreSQL  │ │    Redis     │ │   Qdrant    │
+│  + PostGIS  │ │              │ │             │
+└─────────────┘ └──────────────┘ └─────────────┘
 ```
 
 ### Docker Services
 
 | Service    | Image                    | Port  | Purpose                           |
 |------------|--------------------------|-------|-----------------------------------|
-| api        | custom (Dockerfile)      | 8000  | FastAPI + Lyra pipeline           |
+| api        | custom (Dockerfile)      | 8000  | FastAPI backend                   |
+| lyra       | custom (Dockerfile.lyra) | -     | Lyra news pipeline (hourly cycle) |
 | db         | postgis/postgis:16-3.4   | 5432  | Primary database (PostGIS)        |
-| redis      | redis:7-alpine           | 6379  | API response caching              |
+| redis      | redis:7.2.4-alpine       | 6379  | API response caching              |
 | qdrant     | qdrant/qdrant            | 6333  | Vector search (self-hosted)       |
 | pgadmin    | dpage/pgadmin4           | 5050  | DB admin (dev only)               |
 
