@@ -358,6 +358,7 @@ export default function NewsFeedPage() {
               <button
                 className={`news-page-chip${showSpeculative ? ' active' : ''}`}
                 onClick={() => setShowSpeculative(prev => !prev)}
+                title="Toggle speculative content — alternative theories not supported by mainstream archaeology"
               >
                 Speculative
               </button>
@@ -517,7 +518,6 @@ export default function NewsFeedPage() {
                         key={tag}
                         className={`news-page-chip speculative-tag${activeFilters.speculative_tag === tag ? ' active' : ''}`}
                         onClick={() => handleFilterToggle('speculative_tag', tag)}
-                        title={`Filter by ${getSpeculativeTagLabel(tag)} — speculative content not supported by mainstream archaeology`}
                       >
                         {getSpeculativeTagLabel(tag)}
                       </button>
