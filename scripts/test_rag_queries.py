@@ -30,7 +30,7 @@ if sys.platform == "win32":
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from api.services.lyra_agent import _hybrid_search
+from api.services.lyra_tools import _hybrid_search
 
 # ─── Test queries: easy → medium → hard → impossible ───────────────────────
 

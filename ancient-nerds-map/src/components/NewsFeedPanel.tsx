@@ -169,7 +169,7 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
               videoTitle={item.video.title}
               durationMinutes={item.video.duration_minutes}
               timestampSeconds={item.timestamp_seconds}
-              siteName={item.site_name}
+              siteName={item.site_name || item.site_name_extracted}
               siteNameExtracted={item.site_name_extracted}
               siteId={item.site_id}
               siteCountry={item.site_country}
@@ -178,7 +178,7 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
               sitePeriodStart={item.site_period_start}
               facts={item.facts}
               onSiteLoaded={(site) => onSiteClick?.(site.title, site.coordinates[1], site.coordinates[0])}
-              onSiteHover={(hovering) => onSiteHover?.(hovering ? item.site_id! : null)}
+              onSiteHover={(hovering) => onSiteHover?.(hovering && item.site_id ? item.site_id : null)}
               onAskLyra={onAskLyra ? () => onAskLyra(item.id) : undefined}
             />
           )

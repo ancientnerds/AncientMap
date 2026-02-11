@@ -11,13 +11,13 @@ import logging
 import os
 import secrets
 import time
-from collections import defaultdict
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from api.services.admin_auth import get_client_ip
+from api.services.rate_limiter import RateLimiter
 from api.services.turnstile import verify_turnstile
 
 logger = logging.getLogger(__name__)
@@ -29,32 +29,9 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 
 LYRA_ADMIN_KEY = os.getenv("LYRA_ADMIN_KEY", "")
-RATE_LIMIT = int(os.getenv("LYRA_RATE_LIMIT", "20"))  # requests per hour per IP
 SSE_MAX_DURATION = 300  # Max SSE stream duration in seconds (5 minutes)
 
-# ---------------------------------------------------------------------------
-# Rate limiting (in-memory, per IP)
-# ---------------------------------------------------------------------------
-
-_rate_buckets: dict[str, list[float]] = defaultdict(list)
-
-
-def _check_rate_limit(ip: str) -> bool:
-    """Check if IP is within rate limit. Returns True if allowed."""
-    now = time.time()
-    window = 3600  # 1 hour
-
-    # Clean old entries
-    _rate_buckets[ip] = [t for t in _rate_buckets[ip] if now - t < window]
-
-    if not _rate_buckets[ip]:
-        del _rate_buckets[ip]
-
-    if len(_rate_buckets.get(ip, [])) >= RATE_LIMIT:
-        return False
-
-    _rate_buckets[ip].append(now)
-    return True
+_rate_limiter = RateLimiter(max_requests=int(os.getenv("LYRA_RATE_LIMIT", "20")))
 
 
 # ---------------------------------------------------------------------------
@@ -100,10 +77,10 @@ async def lyra_chat(request: LyraChatRequest, req: Request):
         raise HTTPException(status_code=403, detail="Turnstile verification failed")
 
     # 2. Rate limit
-    if not _check_rate_limit(ip):
+    if not _rate_limiter.check(ip):
         raise HTTPException(
             status_code=429,
-            detail=f"Rate limit exceeded ({RATE_LIMIT} requests/hour). Try again later.",
+            detail=f"Rate limit exceeded ({_rate_limiter.max_requests} requests/hour). Try again later.",
         )
 
     return _stream_response(
