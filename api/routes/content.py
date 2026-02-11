@@ -602,7 +602,7 @@ async def verify_refresh(request: AdminPinRequest, req: Request):
     if result.verified:
         # Evict oldest entries if dict exceeds cap (DoS protection)
         if len(_refresh_timestamps) >= _MAX_REFRESH_ENTRIES:
-            oldest_ip = min(_refresh_timestamps, key=_refresh_timestamps.get)
+            oldest_ip = min(_refresh_timestamps, key=lambda k: _refresh_timestamps[k])
             del _refresh_timestamps[oldest_ip]
         _refresh_timestamps[ip] = now
         logger.info(f"Connector refresh authorized for {ip}")

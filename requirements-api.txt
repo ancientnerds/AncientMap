@@ -31,7 +31,7 @@ voyageai>=0.3
 anthropic>=0.40
 
 # --- Image processing ---
-Pillow>=10.0.0
+Pillow>=12.1.1
 
 # --- Utilities ---
 python-dotenv>=1.0.0

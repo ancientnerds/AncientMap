@@ -55,7 +55,7 @@ aiofiles>=23.2.0            # Async file operations
 # =============================================================================
 # IMAGE PROCESSING
 # =============================================================================
-Pillow>=10.0.0              # Image manipulation for OG image generation
+Pillow>=12.1.1              # Image manipulation for OG image generation
 
 # =============================================================================
 # UTILITIES
