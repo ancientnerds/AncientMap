@@ -123,7 +123,7 @@ export default function NewsCard({
       onMouseLeave={() => hasMatchedSite && onSiteHover?.(false)}
     >
       {newsCategory === 'speculative' ? (
-        <span className="news-category-badge speculative">
+        <span className="news-category-badge speculative" title="This content presents speculative or alternative theories not supported by mainstream archaeology">
           {speculativeTag ? getSpeculativeTagLabel(speculativeTag) : 'Speculative'}
         </span>
       ) : newsCategory && newsCategory !== 'general' ? (

@@ -142,7 +142,7 @@ export default function LyraProfileModal({ onClose }: Props) {
         </div>
       </div>
 
-      <span className={`lyra-poster-led${lyraStatus !== 'online' ? ' offline' : ''}`} title={lyraStatus === 'online' ? 'Online' : 'Offline'} />
+      <span className={`lyra-poster-led${lyraStatus !== 'online' ? ' offline' : ''}`} title={lyraStatus === 'online' ? 'Lyra is online — monitoring YouTube archaeology channels and extracting discoveries' : 'Lyra is offline — pipeline not currently running'} />
 
       {/* Three-column body */}
       <div className="lyra-poster-body">
