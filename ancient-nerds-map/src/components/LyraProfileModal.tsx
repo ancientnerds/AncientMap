@@ -142,6 +142,8 @@ export default function LyraProfileModal({ onClose }: Props) {
         </div>
       </div>
 
+      <span className={`lyra-poster-led${lyraStatus !== 'online' ? ' offline' : ''}`} title={lyraStatus === 'online' ? 'Online' : 'Offline'} />
+
       {/* Three-column body */}
       <div className="lyra-poster-body">
         {/* LEFT: portrait + NFT link */}
@@ -149,7 +151,6 @@ export default function LyraProfileModal({ onClose }: Props) {
           <div className="lyra-poster-banner">AGENT DOSSIER</div>
           <a className="lyra-poster-portrait" href={NFT_URL} target="_blank" rel="noopener noreferrer">
             <img src="/lyra.gif" alt="Lyra Wiskerbyte" />
-            <span className={`lyra-poster-led${lyraStatus !== 'online' ? ' offline' : ''}`} title={lyraStatus === 'online' ? 'Online' : 'Offline'} />
             <span className="lyra-poster-nft-badge">NFT #001</span>
           </a>
           <div className="lyra-poster-name">

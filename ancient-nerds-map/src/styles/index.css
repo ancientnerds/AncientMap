@@ -13185,10 +13185,11 @@ body.news-feed-open .empire-borders-window {
 
 .lyra-poster-led {
   position: absolute;
-  bottom: 6px;
-  right: 6px;
+  top: 8px;
+  right: 8px;
   width: 10px;
   height: 10px;
+  z-index: 2;
   border-radius: 50%;
   background: #00e060;
   border: 1.5px solid rgba(0, 0, 0, 0.6);
