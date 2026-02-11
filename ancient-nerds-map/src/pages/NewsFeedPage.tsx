@@ -309,7 +309,7 @@ export default function NewsFeedPage() {
             </div>
           )}
         </div>
-        <div className={`news-page-live${online ? '' : ' offline'}`}>
+        <div className={`news-page-live${online ? '' : ' offline'}`} title={online ? 'Lyra is online — monitoring YouTube archaeology channels and extracting discoveries' : 'Lyra is offline — pipeline not currently running'}>
           <span className="news-page-live-dot" />
           <span className="news-page-live-text">{online ? 'LIVE' : 'OFFLINE'}</span>
         </div>
@@ -517,6 +517,7 @@ export default function NewsFeedPage() {
                         key={tag}
                         className={`news-page-chip speculative-tag${activeFilters.speculative_tag === tag ? ' active' : ''}`}
                         onClick={() => handleFilterToggle('speculative_tag', tag)}
+                        title={`Filter by ${getSpeculativeTagLabel(tag)} — speculative content not supported by mainstream archaeology`}
                       >
                         {getSpeculativeTagLabel(tag)}
                       </button>
