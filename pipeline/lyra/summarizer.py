@@ -9,7 +9,7 @@ import anthropic
 from sqlalchemy import func
 
 from pipeline.database import NewsItem, NewsVideo, get_session
-from pipeline.lyra.config import LyraSettings, get_anthropic_client
+from pipeline.lyra.config import LyraSettings, call_api, get_anthropic_client
 from pipeline.lyra.transcript_fetcher import parse_timestamp_to_seconds
 
 logger = logging.getLogger(__name__)
@@ -112,7 +112,8 @@ def _check_relevance(
     system_prompt = relevance_prompt or _load_relevance_prompt()
     user_content = "\n".join(context_parts)
 
-    response = client.messages.create(
+    response = call_api(
+        client,
         model=settings.model_relevance,
         max_tokens=256,
         temperature=0.0,
@@ -230,7 +231,8 @@ def summarize_video(
     )
 
     try:
-        response = client.messages.create(
+        response = call_api(
+            client,
             model=settings.model_summarize,
             max_tokens=4096,
             temperature=0.0,

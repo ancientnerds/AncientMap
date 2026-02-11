@@ -27,7 +27,7 @@ from pipeline.database import (
     UserContribution,
     get_session,
 )
-from pipeline.lyra.config import LyraSettings, get_anthropic_client
+from pipeline.lyra.config import LyraSettings, call_api, get_anthropic_client
 from pipeline.lyra.site_matcher import fill_contrib_from_site
 from pipeline.normalizers.dates import passes_date_cutoff
 from pipeline.normalizers.site_type import normalize_site_type
@@ -330,7 +330,7 @@ def _call_ai(
     create_kwargs.update(kwargs)
 
     try:
-        response = client.messages.create(**create_kwargs)
+        response = call_api(client, **create_kwargs)
     except anthropic.APIError as e:
         logger.error(f"Anthropic API error: {e}")
         return None
@@ -567,7 +567,8 @@ def _pick_wikidata_entity(
     logger.info(f"  [{site_name}] Asking Haiku to pick from {len(with_wiki)} Wikipedia candidates")
 
     try:
-        response = client.messages.create(
+        response = call_api(
+            client,
             model=model,
             max_tokens=32,
             temperature=0.0,
@@ -842,7 +843,8 @@ def _escalate_to_sonnet(
     )
 
     try:
-        response = client.messages.create(
+        response = call_api(
+            client,
             model=settings.model_identify_escalation,
             max_tokens=1024,
             temperature=0.0,
