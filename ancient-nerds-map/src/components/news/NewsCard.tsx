@@ -12,7 +12,7 @@
  * - size — 'sm' | 'md' | 'lg'
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { config } from '../../config'
 import { apiDetailToSiteData } from '../../utils/siteApi'
 import { formatDuration, formatRelativeDate } from '../../utils/formatters'
@@ -98,6 +98,24 @@ export default function NewsCard({
   const [expanded, setExpanded] = useState(false)
   const [loading, setLoading] = useState(false)
   const [playing, setPlaying] = useState(false)
+  const [showEmbedHint, setShowEmbedHint] = useState(false)
+
+  // Show help hint after a delay when embed is active
+  useEffect(() => {
+    if (!playing) { setShowEmbedHint(false); return }
+    const timer = setTimeout(() => setShowEmbedHint(true), 3000)
+    return () => clearTimeout(timer)
+  }, [playing])
+
+  // Pause this card when another card starts playing
+  useEffect(() => {
+    if (!playing) return
+    const handler = (e: Event) => {
+      if ((e as CustomEvent).detail !== videoId) setPlaying(false)
+    }
+    window.addEventListener('newscard-play', handler)
+    return () => window.removeEventListener('newscard-play', handler)
+  }, [playing, videoId])
 
   const playSize = PLAY_SIZE[size]
   const pinSize = PIN_SIZE[size]
@@ -201,6 +219,12 @@ export default function NewsCard({
               referrerPolicy="strict-origin-when-cross-origin"
               allowFullScreen
             />
+            {showEmbedHint && (
+              <div className="news-card-embed-hint">
+                Not loading? Disable VPN or{' '}
+                <a href={deepLink} target="_blank" rel="noopener noreferrer">watch on YouTube</a>
+              </div>
+            )}
           </div>
         ) : (
           <a
@@ -208,7 +232,7 @@ export default function NewsCard({
             href={videoId ? undefined : deepLink}
             target={videoId ? undefined : '_blank'}
             rel={videoId ? undefined : 'noopener noreferrer'}
-            onClick={e => { e.stopPropagation(); if (videoId) { e.preventDefault(); setPlaying(true) } }}
+            onClick={e => { e.stopPropagation(); if (videoId) { e.preventDefault(); window.dispatchEvent(new CustomEvent('newscard-play', { detail: videoId })); setPlaying(true) } }}
           >
             <LazyImage src={screenshotUrl} alt="" />
             <svg className="news-card-play" width={playSize} height={playSize} viewBox="0 0 24 24" fill="currentColor">
