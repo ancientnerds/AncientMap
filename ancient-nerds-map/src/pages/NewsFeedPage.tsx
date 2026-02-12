@@ -301,7 +301,9 @@ export default function NewsFeedPage() {
             <div className="news-page-stats">
               <span className="news-page-stats-item"><strong>{stats.total_videos}</strong> videos processed</span>
               <span className="news-page-stats-sep">→</span>
-              <span className="news-page-stats-item"><strong>{stats.total_items}</strong> stories</span>
+              <span className="news-page-stats-item"
+                title={stats.rejected ? `Filtered out: ${stats.rejected.low_significance} low significance, ${stats.rejected.duplicate} duplicates, ${stats.rejected.verified_rejected} verification failures` : undefined}
+              ><strong>{stats.total_items}</strong> stories</span>
               <span className="news-page-stats-sep">·</span>
               <span className="news-page-stats-item"><strong>{stats.total_channels}</strong> channels</span>
             </div>

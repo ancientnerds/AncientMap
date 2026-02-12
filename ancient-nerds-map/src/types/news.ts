@@ -42,6 +42,13 @@ export interface NewsFeedResponse {
   has_more: boolean
 }
 
+export interface RejectionBreakdown {
+  verified_rejected: number
+  low_significance: number
+  duplicate: number
+  unmatched: number
+}
+
 export interface NewsStats {
   total_items: number
   total_videos: number
@@ -49,6 +56,7 @@ export interface NewsStats {
   total_articles: number
   total_duration_hours: number
   latest_item_date: string | null
+  rejected?: RejectionBreakdown
 }
 
 export interface NewsChannel {
