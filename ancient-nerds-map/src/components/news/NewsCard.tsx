@@ -196,7 +196,7 @@ export default function NewsCard({
         playing && videoId ? (
           <div className="news-card-embed" onClick={e => e.stopPropagation()}>
             <iframe
-              src={`https://www.youtube.com/embed/${videoId}?start=${timestampSeconds || 0}&autoplay=1`}
+              src={`https://www.youtube-nocookie.com/embed/${videoId}?start=${timestampSeconds || 0}&autoplay=1`}
               allow="autoplay; encrypted-media"
               allowFullScreen
             />
