@@ -114,6 +114,13 @@ class NewsArticleResponse(BaseModel):
     published_at: str | None = None
 
 
+class RejectionBreakdown(BaseModel):
+    verified_rejected: int = 0
+    low_significance: int = 0
+    duplicate: int = 0
+    unmatched: int = 0
+
+
 class NewsStatsResponse(BaseModel):
     total_items: int
     total_videos: int
@@ -121,6 +128,7 @@ class NewsStatsResponse(BaseModel):
     total_articles: int
     total_duration_hours: float = 0
     latest_item_date: str | None = None
+    rejected: RejectionBreakdown | None = None
 
 
 class LyraStatusResponse(BaseModel):
@@ -455,7 +463,9 @@ async def get_news_stats(db: Session = Depends(get_db)):
         return cached
 
     try:
-        total_items = db.query(func.count(NewsItem.id)).scalar() or 0
+        total_items = db.query(func.count(NewsItem.id)).filter(
+            NewsItem.post_text.isnot(None)
+        ).scalar() or 0
         total_videos = db.query(func.count(distinct(NewsItem.video_id))).scalar() or 0
         total_channels = db.query(func.count(NewsChannel.id)).filter(
             NewsChannel.enabled.is_(True)
@@ -465,6 +475,22 @@ async def get_news_stats(db: Session = Depends(get_db)):
         total_duration_hours = round(total_mins / 60, 1) if total_mins else 0
         latest = db.query(func.max(NewsItem.created_at)).scalar()
         latest_str = latest.isoformat() if latest else None
+
+        # Rejection breakdown
+        null_items = db.query(
+            NewsItem.news_category, func.count(NewsItem.id)
+        ).filter(NewsItem.post_text.is_(None)).group_by(NewsItem.news_category).all()
+
+        breakdown = RejectionBreakdown()
+        for category, count in null_items:
+            if category == "rejected":
+                breakdown.verified_rejected = count
+            elif category == "duplicate":
+                breakdown.duplicate = count
+            else:
+                # Significance=1 rescored items keep their old category (usually "general")
+                # and items that never got a post matched also land here
+                breakdown.low_significance += count
     except Exception:
         db.rollback()
         total_items = 0
@@ -473,6 +499,7 @@ async def get_news_stats(db: Session = Depends(get_db)):
         total_articles = 0
         total_duration_hours = 0
         latest_str = None
+        breakdown = None
 
     result = NewsStatsResponse(
         total_items=total_items,
@@ -481,6 +508,7 @@ async def get_news_stats(db: Session = Depends(get_db)):
         total_articles=total_articles,
         total_duration_hours=total_duration_hours,
         latest_item_date=latest_str,
+        rejected=breakdown,
     )
 
     cache_set(cache_key, result.model_dump(), ttl=300)  # 5 min cache

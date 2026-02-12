@@ -4,6 +4,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { config } from '../config'
+import type { NewsStats } from '../types/news'
 
 const NFT_URL = 'https://opensea.io/item/ethereum/0xe2bddad5584a0c1929a793161829714ce21dac0d/1'
 
@@ -18,7 +19,7 @@ interface Props {
 
 export default function LyraProfileModal({ onClose }: Props) {
   const panelRef = useRef<HTMLDivElement>(null)
-  const [stats, setStats] = useState<{ total_items: number; total_videos: number; total_channels: number; latest_item_date: string | null } | null>(null)
+  const [stats, setStats] = useState<NewsStats | null>(null)
   const [discoveryStats, setDiscoveryStats] = useState<{ total_discoveries: number; total_sites_known: number; total_name_variants: number } | null>(null)
   const [lyraStatus, setLyraStatus] = useState<'online' | 'offline' | 'error'>('offline')
   const [channels, setChannels] = useState<{ id: string; name: string }[]>([])
@@ -184,6 +185,14 @@ export default function LyraProfileModal({ onClose }: Props) {
                 <span className="lyra-poster-status-val">{discoveryStats?.total_discoveries ?? 0}</span>
                 <span className="lyra-poster-status-label">sites discovered</span>
               </div>
+              {stats?.rejected && (
+                <div className="lyra-poster-status-row" style={{ marginTop: 8, opacity: 0.6 }}>
+                  <span className="lyra-poster-status-val">
+                    {stats.rejected.low_significance + stats.rejected.duplicate + stats.rejected.verified_rejected}
+                  </span>
+                  <span className="lyra-poster-status-label">filtered out</span>
+                </div>
+              )}
             </div>
             <a className="lyra-poster-discoveries-btn" href="/radar.html" target="_blank" rel="noopener noreferrer">
               View Radar
