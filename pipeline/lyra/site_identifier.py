@@ -396,7 +396,7 @@ def _compute_facts_hash(facts: list[str], video_contexts: list[dict] | None = No
             if ctx.get("description"):
                 parts.append(ctx["description"][:500])
             if ctx.get("tags"):
-                parts.append(",".join(ctx["tags"]))
+                parts.append(",".join(t for t in ctx["tags"] if t))
     content = "||".join(parts)
     return hashlib.sha256(content.encode()).hexdigest()
 
