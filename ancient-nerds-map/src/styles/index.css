@@ -12845,6 +12845,29 @@ body.news-feed-open .empire-borders-window {
   line-height: 1;
 }
 
+.news-page-filters-reset {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.news-page-filters-reset:hover {
+  color: var(--primary-red, #c02023);
+  border-color: rgba(192, 32, 35, 0.4);
+}
+
 .news-page-result-count {
   font-size: 11px;
   color: rgba(255, 255, 255, 0.45);
