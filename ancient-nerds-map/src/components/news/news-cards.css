@@ -44,6 +44,22 @@
   transition: color 0.3s ease;
 }
 
+.news-card-embed {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.news-card-embed iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
 .news-card-thumb {
   display: block;
   position: relative;
