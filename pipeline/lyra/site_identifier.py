@@ -799,7 +799,7 @@ def _build_user_prompt(
         if ctx.get("description"):
             part += f"\n  Description: {ctx['description']}"
         if ctx.get("tags"):
-            part += f"\n  Tags: {', '.join(ctx['tags'])}"
+            part += f"\n  Tags: {', '.join(t for t in ctx['tags'] if t)}"
         video_text_parts.append(part)
     video_text = "\n".join(video_text_parts) if video_text_parts else "(no video context)"
 
