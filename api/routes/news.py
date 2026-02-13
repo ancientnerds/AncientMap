@@ -493,13 +493,7 @@ async def get_news_stats(db: Session = Depends(get_db)):
                 breakdown.low_significance += count
     except Exception:
         db.rollback()
-        total_items = 0
-        total_videos = 0
-        total_channels = 0
-        total_articles = 0
-        total_duration_hours = 0
-        latest_str = None
-        breakdown = None
+        raise
 
     result = NewsStatsResponse(
         total_items=total_items,
@@ -527,8 +521,9 @@ async def get_lyra_status(db: Session = Depends(get_db)):
         row = db.execute(
             text("SELECT last_heartbeat, status, last_error FROM pipeline_heartbeats WHERE pipeline_name = 'lyra'")
         ).fetchone()
-    except Exception:
+    except Exception as exc:
         db.rollback()
+        logger.warning(f"Lyra heartbeat query failed: {exc}")
         row = None
 
     if not row:

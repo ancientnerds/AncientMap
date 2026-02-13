@@ -16,7 +16,7 @@ import secrets
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -123,7 +123,7 @@ class SiteUpdateRequest(BaseModel):
     period: str
     description: str | None = None
     sourceUrl: str | None = None
-    coordinates: list[float]  # [lng, lat]
+    coordinates: list[float] = Field(..., min_length=2, max_length=2, description="[lng, lat]")
 
 
 def _period_to_year(period: str) -> int | None:
@@ -216,7 +216,7 @@ async def get_all_sites(
     site_type: str | None = Query(None, description="Filter by site type"),
     period_max: int | None = Query(None, description="Max period year"),
     skip: int = Query(0, ge=0, description="Number of records to skip (pagination)"),
-    limit: int = Query(100000, ge=1, le=100000, description="Max results"),
+    limit: int = Query(10000, ge=1, le=50000, description="Max results"),
 ):
     """
     Get all sites as compact JSON for globe rendering.
@@ -459,6 +459,7 @@ async def get_clustered_sites(
             primary_source as source_id
         FROM clusters
         ORDER BY count DESC
+        LIMIT 50000
     """)
 
     result = db.execute(query, params)
@@ -496,7 +497,10 @@ async def search_sites(
     if not normalized or len(normalized) < 2:
         return {"count": 0, "sites": []}
 
+    # Escape SQL LIKE wildcards in user input
+    normalized_escaped = normalized.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     spaceless = normalized.replace(" ", "")
+    spaceless_escaped = spaceless.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
     # Exact + spaceless match on name_normalized
     query = text("""
@@ -550,15 +554,15 @@ async def search_sites(
                 id::text, name, lat, lon, source_id, site_type,
                 period_start, period_name, description, country, source_url
             FROM unified_sites
-            WHERE (name_normalized ILIKE :pattern
-                   OR replace(name_normalized, ' ', '') ILIKE :spaceless_pattern)
+            WHERE (name_normalized ILIKE :pattern ESCAPE '\\'
+                   OR replace(name_normalized, ' ', '') ILIKE :spaceless_pattern ESCAPE '\\')
               AND id::text != ALL(:seen)
             ORDER BY name
             LIMIT :limit
         """)
         result2 = db.execute(ilike_query, {
-            "pattern": f"%{normalized}%",
-            "spaceless_pattern": f"%{spaceless}%",
+            "pattern": f"%{normalized_escaped}%",
+            "spaceless_pattern": f"%{spaceless_escaped}%",
             "seen": list(seen_ids),
             "limit": remaining,
         })

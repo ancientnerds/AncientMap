@@ -1,6 +1,7 @@
 """Extract video frame screenshots at news item timestamps using yt-dlp + ffmpeg."""
 
 import logging
+import re
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -12,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 SCREENSHOTS_DIR = Path("public/data/news/screenshots")
 SCREENSHOT_OFFSET = 2  # Grab frame 2 seconds after the timestamp
+_VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 
 
 def get_proxy_url(settings: LyraSettings) -> str | None:
@@ -31,6 +33,9 @@ def _extract_frame(video_id: str, timestamp: int, output_path: Path, proxy_url: 
     timestamp (DASH-aware, only fetches the needed segments — minimal bandwidth).
     Step 2: ffmpeg extracts one frame from the local clip (no network needed).
     """
+    if not _VIDEO_ID_RE.match(video_id):
+        logger.warning(f"Invalid video_id format: {video_id!r}")
+        return False
     yt_url = f"https://www.youtube.com/watch?v={video_id}"
     clip_path = output_path.with_suffix(".clip.mp4")
 

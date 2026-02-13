@@ -40,7 +40,7 @@ def find_similar_sites_batch(
         return {}
 
     # Set threshold so <% operator filters at 0.3 similarity
-    db.execute(text("SET pg_trgm.word_similarity_threshold = 0.3"))
+    db.execute(text("SET LOCAL pg_trgm.word_similarity_threshold = 0.3"))
 
     per_name_query = text("""
         SELECT usn.site_id, us.name AS site_name, us.thumbnail_url,
