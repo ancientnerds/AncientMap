@@ -763,6 +763,30 @@ def _run_migrations(engine) -> None:
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v_research_reset'))
         """))
 
+        # v_an_dedup: re-enrich contributions that share a normalized name
+        # with AN Originals sites — the new name-based AN check will match them
+        conn.execute(text("""
+            UPDATE user_contributions uc
+            SET enrichment_status = 'pending', last_facts_hash = NULL
+            FROM unified_sites us
+            WHERE uc.source = 'lyra'
+              AND uc.enrichment_status NOT IN ('matched', 'failed', 'not_a_site')
+              AND uc.promoted_site_id IS NULL
+              AND us.source_id = 'ancient_nerds'
+              AND us.name_normalized = lower(trim(COALESCE(uc.corrected_name, uc.name)))
+              AND (uc.enrichment_data IS NULL OR NOT (uc.enrichment_data ? 'v_an_dedup'))
+        """))
+        conn.execute(text("""
+            UPDATE user_contributions uc
+            SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v_an_dedup": true}'::jsonb
+            FROM unified_sites us
+            WHERE uc.source = 'lyra'
+              AND uc.promoted_site_id IS NULL
+              AND us.source_id = 'ancient_nerds'
+              AND us.name_normalized = lower(trim(COALESCE(uc.corrected_name, uc.name)))
+              AND (uc.enrichment_data IS NULL OR NOT (uc.enrichment_data ? 'v_an_dedup'))
+        """))
+
         # Fix wikipedia_url / wikidata_id swap: rows where wikipedia_url
         # points to wikidata.org should have the QID in wikidata_id instead
         conn.execute(text("""
