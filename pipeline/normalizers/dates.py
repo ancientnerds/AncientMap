@@ -4,7 +4,6 @@ Date parsing and normalization utilities.
 
 import re
 
-
 # Global date cutoffs - defines the project scope: Ancient History
 # Americas: Pre-Columbian (up to 1500 AD)
 # Rest of World: Classical/Ancient (up to 500 AD)
