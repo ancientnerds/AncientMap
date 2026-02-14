@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 LLM_PROVIDER = os.getenv("LYRA_LLM_PROVIDER", "anthropic")
-LLM_MODEL = os.getenv("LYRA_LLM_MODEL", "claude-haiku-4-5-20251001")
+LLM_MODEL = os.getenv("LYRA_LLM_MODEL", "MiniMax-M2.5")
 
 # ---------------------------------------------------------------------------
 # Seshat polity data (loaded once from bundled JSON)

@@ -1,4 +1,4 @@
-"""Claude AI summarization of video transcripts -> news items."""
+"""LLM summarization of video transcripts -> news items."""
 
 import json
 import logging
@@ -9,7 +9,7 @@ import anthropic
 from sqlalchemy import func
 
 from pipeline.database import NewsItem, NewsVideo, get_session
-from pipeline.lyra.config import LyraSettings, call_api, get_anthropic_client
+from pipeline.lyra.config import LyraSettings, call_api, get_anthropic_client, parse_json_response
 from pipeline.lyra.transcript_fetcher import parse_timestamp_to_seconds
 
 logger = logging.getLogger(__name__)
@@ -97,7 +97,7 @@ def _check_relevance(
     settings: LyraSettings,
     relevance_prompt: str | None = None,
 ) -> bool:
-    """Quick Haiku check: is this video about real archaeology?
+    """Quick LLM check: is this video about real archaeology?
 
     Returns True if the video passes the relevance gate.
     """
@@ -140,7 +140,7 @@ def _check_relevance(
         logger.warning(f"Relevance gate: empty response for {video.id}")
         return True
 
-    result = json.loads(text_block)
+    result = parse_json_response(text_block)
     if not result["is_archaeology"]:
         logger.info(f"Relevance gate: {video.title!r} -> NO ({result['reason']})")
     return result["is_archaeology"]
@@ -194,7 +194,7 @@ def summarize_video(
     summary_prompt: str | None = None,
     relevance_prompt: str | None = None,
 ) -> bool:
-    """Summarize a single video's transcript using Claude AI.
+    """Summarize a single video's transcript using an LLM.
 
     Creates NewsItem records for each key topic. Returns True on success.
     """
@@ -203,7 +203,7 @@ def summarize_video(
         return False
 
     if not settings.anthropic_api_key:
-        logger.error("No Anthropic API key configured")
+        logger.error("No LLM API key configured")
         return False
 
     client = get_anthropic_client(settings)
@@ -259,14 +259,14 @@ def summarize_video(
             },
         )
     except anthropic.APIError as e:
-        logger.error(f"Anthropic API error for {video.id}: {e}")
+        logger.error(f"LLM API error for {video.id}: {e}")
         return False
 
     text_block = next((b.text for b in response.content if hasattr(b, "text")), None)
     if not text_block:
         logger.warning(f"Empty response content for {video.id}")
         return False
-    summary_data = json.loads(text_block)
+    summary_data = parse_json_response(text_block)
 
     key_topics = summary_data.get("key_topics", [])
     if not key_topics:

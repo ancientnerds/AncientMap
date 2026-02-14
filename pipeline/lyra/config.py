@@ -1,5 +1,6 @@
 """Configuration for the Lyra news pipeline."""
 
+import json
 import logging
 import time
 
@@ -31,16 +32,18 @@ class LyraSettings(BaseSettings):
         extra="ignore",
     )
 
-    # Anthropic API
+    # LLM API (Anthropic-compatible)
     anthropic_api_key: str = ""
-    model_summarize: str = "claude-haiku-4-5-20251001"
-    model_post: str = "claude-sonnet-4-5-20250929"
-    model_verify: str = "claude-haiku-4-5-20251001"
-    model_article: str = "claude-sonnet-4-5-20250929"
-    model_identify: str = "claude-haiku-4-5-20251001"
-    model_identify_escalation: str = "claude-sonnet-4-5-20250929"
-    model_rescore: str = "claude-haiku-4-5-20251001"
-    model_relevance: str = "claude-haiku-4-5-20251001"
+    anthropic_base_url: str = "https://api.minimax.io/anthropic"
+    temperature_min: float = 0.01
+    model_summarize: str = "MiniMax-M2.5"
+    model_post: str = "MiniMax-M2.5"
+    model_verify: str = "MiniMax-M2.5"
+    model_article: str = "MiniMax-M2.5"
+    model_identify: str = "MiniMax-M2.5"
+    model_identify_escalation: str = "MiniMax-M2.5"
+    model_rescore: str = "MiniMax-M2.5"
+    model_relevance: str = "MiniMax-M2.5"
 
     # Site identification settings
     min_score_for_promotion: int = 55
@@ -76,15 +79,35 @@ _cached_client: anthropic.Anthropic | None = None
 _cached_client_key: str = ""
 
 
+def _is_native_anthropic(settings: "LyraSettings") -> bool:
+    """Check if we're using the native Anthropic API (vs a compatible provider)."""
+    return not settings.anthropic_base_url or "anthropic.com" in settings.anthropic_base_url
+
+
 def get_anthropic_client(settings: "LyraSettings") -> anthropic.Anthropic:
     """Return a module-level cached Anthropic client for connection reuse."""
     global _cached_client, _cached_client_key
-    if _cached_client is None or _cached_client_key != settings.anthropic_api_key:
-        _cached_client = anthropic.Anthropic(
-            api_key=settings.anthropic_api_key, timeout=120.0, max_retries=5,
-        )
-        _cached_client_key = settings.anthropic_api_key
+    cache_key = f"{settings.anthropic_api_key}:{settings.anthropic_base_url}"
+    if _cached_client is None or _cached_client_key != cache_key:
+        kwargs: dict = {
+            "api_key": settings.anthropic_api_key,
+            "timeout": 120.0,
+            "max_retries": 5,
+        }
+        if settings.anthropic_base_url:
+            kwargs["base_url"] = settings.anthropic_base_url
+        _cached_client = anthropic.Anthropic(**kwargs)
+        _cached_client_key = cache_key
     return _cached_client
+
+
+def parse_json_response(text: str) -> dict:
+    """Parse JSON from an LLM response, stripping markdown fences if present."""
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+        cleaned = cleaned.rsplit("```", 1)[0].strip()
+    return json.loads(cleaned)
 
 
 # Rate throttle — auto-tunes from API response headers.
@@ -102,8 +125,35 @@ def call_api(client: anthropic.Anthropic, **kwargs) -> anthropic.types.Message:
     Auto-reads `anthropic-ratelimit-requests-limit` from response headers
     and adjusts the gap for the actual tier (Tier 1 = 50, Tier 2 = 1000, etc.).
     The SDK's built-in retry (max_retries=5) handles transient 429/500/529.
+
+    When using a non-Anthropic base_url (e.g. MiniMax), automatically:
+    - Clamps temperature to settings.temperature_min (MiniMax rejects 0.0)
+    - Strips output_config (not supported by MiniMax)
+    - Strips cache_control from system messages (not supported by MiniMax)
     """
     global _last_call_time, _min_call_gap
+
+    # Load settings for compatibility guards
+    settings = LyraSettings()
+    native = _is_native_anthropic(settings)
+
+    # Guard 1: Clamp temperature (MiniMax rejects temperature=0.0)
+    if "temperature" in kwargs:
+        kwargs["temperature"] = max(settings.temperature_min, kwargs["temperature"])
+
+    if not native:
+        # Guard 2: Strip output_config (not supported by non-Anthropic providers)
+        kwargs.pop("output_config", None)
+
+        # Guard 3: Strip cache_control from system messages
+        system = kwargs.get("system")
+        if isinstance(system, list):
+            kwargs["system"] = [
+                {k: v for k, v in msg.items() if k != "cache_control"}
+                if isinstance(msg, dict) else msg
+                for msg in system
+            ]
+
     now = time.monotonic()
     elapsed = now - _last_call_time
     if elapsed < _min_call_gap:

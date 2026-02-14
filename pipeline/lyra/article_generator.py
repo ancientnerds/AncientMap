@@ -177,7 +177,7 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
     Returns True if an article was created.
     """
     if not settings.anthropic_api_key:
-        logger.error("No Anthropic API key configured")
+        logger.error("No LLM API key configured")
         return False
 
     week_start, week_end = _get_week_range()
