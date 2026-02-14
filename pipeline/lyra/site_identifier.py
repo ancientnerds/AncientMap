@@ -1650,65 +1650,29 @@ def _validate_period_start(contribution: UserContribution) -> None:
 
 
 def _apply_pre_research(contribution: UserContribution, research) -> None:
-    """Apply pre-research knowledge to a contribution (fill-if-missing)."""
-    pr = research.pre_research if research else None
-    if not pr:
-        return
-    if pr.get("country") and not contribution.country:
-        contribution.country = pr["country"]
-    if pr.get("site_type") and pr["site_type"] != "Unknown" and not contribution.site_type:
-        contribution.site_type = normalize_site_type(pr["site_type"])
-    if pr.get("approximate_period") and pr["approximate_period"] != "Unknown" and contribution.period_start is None:
-        period_start = extract_period_from_text(pr["approximate_period"])
-        if period_start is not None:
-            contribution.period_start = period_start
-            contribution.period_name = categorize_period(period_start)
-    if pr.get("brief_description") and not contribution.description:
-        contribution.description = clean_description(pr["brief_description"])
-    _validate_period_start(contribution)
+    """Apply pre-research knowledge to a contribution.
+
+    Pre-research generates alternative search names (useful for finding
+    Wikidata/GeoNames matches) but its guessed country/period/type/description
+    come from AI training data, not verified sources. We do NOT apply those
+    fields — only verified sources (Wikidata, Wikipedia, GeoNames, DB match)
+    should populate the contribution record.
+    """
+    # Pre-research alternative_names are used for search in site_researcher.py.
+    # No fields are applied here — AI guesses are not authoritative data.
 
 
 def _apply_gap_fill(contribution: UserContribution, research) -> None:
-    """Apply gap-fill knowledge to a contribution (fill-if-missing).
+    """Gap-fill is disabled — AI-guessed metadata is not applied.
 
-    Step 9 cross-validation: Wikidata structured data is always applied first
-    (in _handle_wikidata_match), so gap-fill only fills empty fields. When AI
-    provides data that conflicts with already-set Wikidata values, we log the
-    discrepancy but keep the Wikidata value (more reliable than LLM guesses).
+    Gap-fill asks the AI to fill missing fields from its training data.
+    This produces unreliable data (wrong periods, wrong coordinates, wrong
+    countries) that pollutes the database. Only verified sources (Wikidata,
+    Wikipedia, GeoNames, DB matches) should populate contribution fields.
+
+    The gap-fill data is still stored in enrichment_data.research.gap_fill
+    for diagnostic purposes, but nothing is written to the contribution.
     """
-    gf = research.gap_fill if research else None
-    if not gf:
-        return
-
-    name = contribution.corrected_name or contribution.name
-
-    if gf.get("country") and gf["country"] != "Unknown":
-        if not contribution.country:
-            contribution.country = gf["country"]
-        elif gf["country"].lower() != contribution.country.lower():
-            logger.debug(
-                f"  [{name}] AI/Wikidata discrepancy: country AI='{gf['country']}' vs existing='{contribution.country}'"
-            )
-    if gf.get("site_type") and gf["site_type"] != "Unknown":
-        normalized_gf_type = normalize_site_type(gf["site_type"])
-        if not contribution.site_type or contribution.site_type in _GENERIC_SITE_TYPES:
-            contribution.site_type = normalized_gf_type
-        elif normalized_gf_type.lower() != contribution.site_type.lower():
-            logger.debug(
-                f"  [{name}] AI/Wikidata discrepancy: type AI='{gf['site_type']}' vs existing='{contribution.site_type}'"
-            )
-    if gf.get("period") and gf["period"] != "Unknown" and contribution.period_start is None:
-        period_start = extract_period_from_text(gf["period"])
-        if period_start is not None:
-            contribution.period_start = period_start
-            contribution.period_name = categorize_period(period_start)
-    if gf.get("brief_description") and not contribution.description:
-        contribution.description = clean_description(gf["brief_description"])
-    if gf.get("approximate_lat") and gf.get("approximate_lon") and contribution.lat is None:
-        if gf.get("coordinate_confidence") in ("exact", "approximate"):
-            contribution.lat = gf["approximate_lat"]
-            contribution.lon = gf["approximate_lon"]
-    _validate_period_start(contribution)
 
 
 def _handle_ai_enriched_site(

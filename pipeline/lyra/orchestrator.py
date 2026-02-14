@@ -763,6 +763,28 @@ def _run_migrations(engine) -> None:
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v_research_reset'))
         """))
 
+        # v_no_ai_guess: re-enrich AI-path items that got gap-fill/pre-research
+        # data applied (now disabled). Clear AI-guessed fields so only verified
+        # sources (Wikidata, Wikipedia, GeoNames, DB match) populate them.
+        # Only affects items without Wikidata enrichment (AI-only path).
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET enrichment_status = 'pending', last_facts_hash = NULL
+            WHERE source = 'lyra'
+              AND enrichment_status IN ('enriched', 'enriching')
+              AND promoted_site_id IS NULL
+              AND wikidata_id IS NULL
+              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v_no_ai_guess'))
+        """))
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v_no_ai_guess": true}'::jsonb
+            WHERE source = 'lyra'
+              AND promoted_site_id IS NULL
+              AND wikidata_id IS NULL
+              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v_no_ai_guess'))
+        """))
+
         # v_an_dedup: re-enrich contributions that share a normalized name
         # with AN Originals sites — the new name-based AN check will match them
         conn.execute(text("""
