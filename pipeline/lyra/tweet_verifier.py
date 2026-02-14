@@ -1,4 +1,4 @@
-"""Fact verification for generated posts using Claude AI."""
+"""Fact verification for generated posts using an LLM."""
 
 import json
 import logging
@@ -7,7 +7,7 @@ from pathlib import Path
 import anthropic
 
 from pipeline.database import NewsItem, NewsVideo, get_session
-from pipeline.lyra.config import LyraSettings, call_api, get_anthropic_client
+from pipeline.lyra.config import LyraSettings, call_api, get_anthropic_client, parse_json_response
 from pipeline.lyra.transcript_fetcher import extract_transcript_segment, parse_timestamp_to_seconds
 
 logger = logging.getLogger(__name__)
@@ -102,7 +102,7 @@ def verify_single_post(
     if not text_block:
         logger.warning(f"Empty verification response for item {item.id}")
         return None
-    return json.loads(text_block)
+    return parse_json_response(text_block)
 
 
 def verify_video_posts(

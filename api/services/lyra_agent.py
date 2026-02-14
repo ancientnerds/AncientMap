@@ -225,7 +225,7 @@ def _get_related_news(
 
 
 # ---------------------------------------------------------------------------
-# News filter extraction (Haiku-powered)
+# News filter extraction (LLM-powered)
 # ---------------------------------------------------------------------------
 
 _NEWS_FILTER_EXTRACTION_PROMPT_TEMPLATE = """You are a filter extractor for an archaeology news database. Given a user query, extract structured filters to find relevant news items.
@@ -265,22 +265,26 @@ _filter_llm = None
 
 
 def _get_filter_llm():
-    """Get a cached Haiku instance for news filter extraction."""
+    """Get a cached LLM instance for news filter extraction."""
     global _filter_llm
     if _filter_llm is None:
         from langchain_anthropic import ChatAnthropic
         api_key = os.getenv("LYRA_ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
-        _filter_llm = ChatAnthropic(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=150,
-            temperature=0,
-            api_key=api_key,
-        )
+        base_url = os.getenv("LYRA_ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
+        kwargs: dict = {
+            "model": LLM_MODEL,
+            "max_tokens": 150,
+            "temperature": 0.01,
+            "api_key": api_key,
+        }
+        if base_url:
+            kwargs["anthropic_api_url"] = base_url
+        _filter_llm = ChatAnthropic(**kwargs)
     return _filter_llm
 
 
 async def _extract_news_filters(query: str) -> dict:
-    """Use Haiku to extract structured news filters from the user's query.
+    """Use the LLM to extract structured news filters from the user's query.
 
     Returns a dict of filter kwargs suitable for _get_related_news().
     """
@@ -294,7 +298,7 @@ async def _extract_news_filters(query: str) -> dict:
 
     try:
         raw = response.content.strip()
-        # Strip markdown code fences if Haiku wrapped the JSON
+        # Strip markdown code fences if LLM wrapped the JSON
         if raw.startswith("```"):
             raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
             raw = raw.rsplit("```", 1)[0].strip()
@@ -337,7 +341,14 @@ def _get_llm():
     if LLM_PROVIDER == "anthropic":
         from langchain_anthropic import ChatAnthropic
         api_key = os.getenv("LYRA_ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
-        _llm = ChatAnthropic(model=LLM_MODEL, max_tokens=1024, streaming=True, stream_usage=True, api_key=api_key)
+        base_url = os.getenv("LYRA_ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
+        is_native = not base_url or "anthropic.com" in base_url
+        kwargs: dict = {"model": LLM_MODEL, "max_tokens": 1024, "streaming": True, "api_key": api_key}
+        if is_native:
+            kwargs["stream_usage"] = True
+        if base_url:
+            kwargs["anthropic_api_url"] = base_url
+        _llm = ChatAnthropic(**kwargs)
     elif LLM_PROVIDER == "ollama":
         from langchain_ollama import ChatOllama
         _llm = ChatOllama(model=LLM_MODEL, streaming=True)
@@ -459,7 +470,7 @@ async def run_agent_stream(
         # Site-specific news (by ID and name — always works, no LLM needed)
         all_news = _get_related_news(site_ids=site_ids, site_names=site_names) if (site_ids or site_names) else []
 
-        # Filter-based news (uses Haiku to extract filters including site names — catches site queries even when Qdrant is down)
+        # Filter-based news (uses LLM to extract filters including site names — catches site queries even when Qdrant is down)
         try:
             news_filters = await _extract_news_filters(message)
             if news_filters:

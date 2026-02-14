@@ -1,4 +1,4 @@
-"""Re-score significance of news items using a dedicated Haiku call.
+"""Re-score significance of news items using a dedicated LLM call.
 
 Runs after the verify step. Each item gets an independent significance score
 based on full video context (title, channel, facts, post text), not just
@@ -19,6 +19,7 @@ from pipeline.lyra.config import (
     LyraSettings,
     call_api,
     get_anthropic_client,
+    parse_json_response,
 )
 
 logger = logging.getLogger(__name__)
@@ -54,7 +55,7 @@ def rescore_pending_items(settings: LyraSettings) -> int:
     Returns number of items rescored.
     """
     if not settings.anthropic_api_key:
-        logger.error("No Anthropic API key configured")
+        logger.error("No LLM API key configured")
         return 0
 
     # Find verified videos that haven't been rescored yet
@@ -149,7 +150,7 @@ def _rescore_item(
     system_prompt: str,
     settings: LyraSettings,
 ) -> dict | None:
-    """Call Haiku to re-score a single item. Returns parsed result or None."""
+    """Call the LLM to re-score a single item. Returns parsed result or None."""
     facts_text = "\n".join(f"- {f}" for f in (item.facts or []))
 
     pub_date = video.published_at.strftime("%Y-%m-%d") if video.published_at else "Unknown"
@@ -189,4 +190,4 @@ def _rescore_item(
     if not text_block:
         logger.warning(f"Empty rescore response for item {item.id}")
         return None
-    return json.loads(text_block)
+    return parse_json_response(text_block)

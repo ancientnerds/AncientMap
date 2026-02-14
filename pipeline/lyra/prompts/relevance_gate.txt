@@ -24,3 +24,5 @@ with no connection to real archaeological sites or discoveries.
 
 A video that DISCUSSES real archaeology while playing a game is still NO.
 The archaeology must be the primary content, not a tangent.
+
+Respond with ONLY a JSON object: {"is_archaeology": bool, "is_speculative": bool (optional), "reason": "string"}
