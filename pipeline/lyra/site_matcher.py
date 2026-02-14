@@ -278,6 +278,9 @@ def _upsert_lyra_suggestion(
             _lyra_contrib_cache[normalized] = contrib
 
 
+_GENERIC_TYPES = {"Archaeological Site", "Ruin", "Unknown", None, ""}
+
+
 def fill_contrib_from_site(contrib: UserContribution, site: UnifiedSite) -> None:
     """Copy metadata from a matched site into a contribution (fill-if-missing).
 
@@ -285,8 +288,10 @@ def fill_contrib_from_site(contrib: UserContribution, site: UnifiedSite) -> None
     """
     if not contrib.country and site.country:
         contrib.country = site.country
-    if not contrib.site_type and site.site_type:
-        contrib.site_type = site.site_type
+    if site.site_type:
+        if not contrib.site_type or contrib.site_type in _GENERIC_TYPES:
+            contrib.site_type = site.site_type
+        # Never downgrade: if contrib has specific type, keep it even if site has generic
     if not contrib.period_name and site.period_name:
         contrib.period_name = site.period_name
     if contrib.period_start is None and site.period_start is not None:

@@ -405,10 +405,19 @@ def _process_single(
                     if disambiguated:
                         best = disambiguated
 
-                return _handle_db_match(
+                result = _handle_db_match(
                     session, contribution, best, identification, settings,
                     facts, video_contexts, all_candidates=alt_candidates, promoted_ids=promoted_ids,
                 )
+                # Store research aliases for the matched site
+                if result and contribution.enrichment_data:
+                    db_match = contribution.enrichment_data.get("db_match", {})
+                    matched_site_id = db_match.get("site_id")
+                    if matched_site_id:
+                        _store_research_aliases(
+                            session, uuid.UUID(matched_site_id), research, search_name,
+                        )
+                return result
 
     # If research found a Wikidata candidate with a QID, try the existing
     # Wikidata enrichment path (which fetches coordinates, Wikipedia, etc.)
@@ -458,6 +467,7 @@ def _process_single(
         _maybe_promote(session, contribution, search_name, settings)
         if contribution.promoted_site_id:
             _store_garble_alias(session, contribution.promoted_site_id, contribution.name, search_name)
+            _store_research_aliases(session, contribution.promoted_site_id, research, search_name)
         return result
 
     # If research found a GeoNames or Wikipedia match but no Wikidata QID
@@ -1200,6 +1210,45 @@ def _store_garble_alias(session: Session, site_id: uuid.UUID, garbled_name: str,
     logger.info(f"  Stored garble alias: '{garbled_name}' -> site {site_id}")
 
 
+def _check_spatial_an_match(session: Session, lat: float, lon: float, threshold_km: float = 2.0) -> UnifiedSite | None:
+    """Find AN Originals site within threshold_km of given coordinates."""
+    # ~0.018 degrees per km at equator (conservative)
+    delta = threshold_km / 111.0
+    return session.query(UnifiedSite).filter(
+        UnifiedSite.source_id == "ancient_nerds",
+        UnifiedSite.lat.between(lat - delta, lat + delta),
+        UnifiedSite.lon.between(lon - delta, lon + delta),
+    ).first()
+
+
+def _store_research_aliases(
+    session: Session, site_id: uuid.UUID, research, canonical_name: str,
+) -> None:
+    """Store AI-generated alternative names as site aliases for future matching."""
+    if not research or not research.pre_research:
+        return
+    alt_names = research.pre_research.get("alternative_names", [])
+    canonical_norm = normalize_name(canonical_name)
+    for alt in alt_names:
+        if not alt or len(alt) < 3:
+            continue
+        alt_norm = normalize_name(alt)
+        if not alt_norm or alt_norm == canonical_norm:
+            continue
+        existing = session.query(UnifiedSiteName).filter(
+            UnifiedSiteName.site_id == site_id,
+            UnifiedSiteName.name_normalized == alt_norm,
+        ).first()
+        if not existing:
+            session.add(UnifiedSiteName(
+                site_id=site_id,
+                name=alt,
+                name_normalized=alt_norm,
+                name_type="research_alias",
+            ))
+            logger.info(f"  Stored research alias: '{alt}' -> site {site_id}")
+
+
 def _handle_db_match(
     session: Session,
     contribution: UserContribution,
@@ -1457,10 +1506,29 @@ def _handle_wikidata_match(
                     if metadata.get("site_type") and metadata["site_type"] != "Unknown" and not contribution.site_type:
                         contribution.site_type = normalize_site_type(metadata["site_type"])
 
+    _validate_period_start(contribution)
+
     # Apply coordinates
     if enrichment.get("lat") and enrichment.get("lon"):
         contribution.lat = enrichment["lat"]
         contribution.lon = enrichment["lon"]
+
+    # Spatial dedup: check if an AN Originals site is within 2km
+    if contribution.lat is not None and contribution.lon is not None:
+        an_match = _check_spatial_an_match(session, contribution.lat, contribution.lon)
+        if an_match:
+            logger.info(
+                f"  [{site_name}] Spatial match to AN '{an_match.name}' — matching instead of enriching"
+            )
+            contribution.enrichment_status = "matched"
+            fill_contrib_from_site(contribution, an_match)
+            contribution.enrichment_data = {
+                "identification": identification,
+                "wikidata": enrichment,
+                "spatial_match": {"an_site_id": str(an_match.id), "an_site_name": an_match.name},
+            }
+            contribution.score = _compute_score(contribution)
+            return True
 
     # Country from coordinates (not AI)
     if contribution.lat and contribution.lon and not contribution.country:
@@ -1500,6 +1568,32 @@ def _handle_wikidata_match(
     return True
 
 
+_ANCIENT_TYPES = {
+    "Temple", "Megalithic", "Tomb", "Settlement", "Fortification",
+    "Amphitheatre", "Theatre", "Stadium", "Infrastructure", "Rock Art",
+}
+
+_GENERIC_SITE_TYPES = {"Archaeological Site", "Ruin", "Unknown", None, ""}
+
+
+def _validate_period_start(contribution: UserContribution) -> None:
+    """Flag suspect modern dates on ancient site types (audit P1 tier).
+
+    Wikidata P571 inception dates are often discovery/excavation dates.
+    E.g. Troy getting period_start=1870 (Schliemann's dig) instead of -3000.
+    """
+    if (
+        contribution.period_start is not None
+        and contribution.period_start > 1500
+        and contribution.site_type in _ANCIENT_TYPES
+    ):
+        logger.warning(
+            f"  [{contribution.name}] Suspect modern date: period_start={contribution.period_start} "
+            f"with type={contribution.site_type} — likely discovery/excavation date, clearing"
+        )
+        contribution.period_start = None
+        contribution.period_name = None
+
 
 def _apply_pre_research(contribution: UserContribution, research) -> None:
     """Apply pre-research knowledge to a contribution (fill-if-missing)."""
@@ -1517,6 +1611,7 @@ def _apply_pre_research(contribution: UserContribution, research) -> None:
             contribution.period_name = categorize_period(period_start)
     if pr.get("brief_description") and not contribution.description:
         contribution.description = clean_description(pr["brief_description"])
+    _validate_period_start(contribution)
 
 
 def _apply_gap_fill(contribution: UserContribution, research) -> None:
@@ -1541,9 +1636,10 @@ def _apply_gap_fill(contribution: UserContribution, research) -> None:
                 f"  [{name}] AI/Wikidata discrepancy: country AI='{gf['country']}' vs existing='{contribution.country}'"
             )
     if gf.get("site_type") and gf["site_type"] != "Unknown":
-        if not contribution.site_type:
-            contribution.site_type = normalize_site_type(gf["site_type"])
-        elif normalize_site_type(gf["site_type"]).lower() != contribution.site_type.lower():
+        normalized_gf_type = normalize_site_type(gf["site_type"])
+        if not contribution.site_type or contribution.site_type in _GENERIC_SITE_TYPES:
+            contribution.site_type = normalized_gf_type
+        elif normalized_gf_type.lower() != contribution.site_type.lower():
             logger.debug(
                 f"  [{name}] AI/Wikidata discrepancy: type AI='{gf['site_type']}' vs existing='{contribution.site_type}'"
             )
@@ -1558,6 +1654,7 @@ def _apply_gap_fill(contribution: UserContribution, research) -> None:
         if gf.get("coordinate_confidence") in ("exact", "approximate"):
             contribution.lat = gf["approximate_lat"]
             contribution.lon = gf["approximate_lon"]
+    _validate_period_start(contribution)
 
 
 def _handle_ai_enriched_site(
@@ -1593,6 +1690,23 @@ def _handle_ai_enriched_site(
     if contribution.lat and contribution.lon and not contribution.country:
         contribution.country = lookup_country(contribution.lat, contribution.lon)
 
+    # Spatial dedup: check if an AN Originals site is within 2km
+    if contribution.lat is not None and contribution.lon is not None:
+        an_match = _check_spatial_an_match(session, contribution.lat, contribution.lon)
+        if an_match:
+            logger.info(
+                f"  [{contribution.name}] Spatial match to AN '{an_match.name}' — matching instead of enriching"
+            )
+            contribution.enrichment_status = "matched"
+            fill_contrib_from_site(contribution, an_match)
+            contribution.enrichment_data = {
+                "identification": identification,
+                "research": research.to_dict() if research else None,
+                "spatial_match": {"an_site_id": str(an_match.id), "an_site_name": an_match.name},
+            }
+            contribution.score = _compute_score(contribution)
+            return True
+
     # Step 7: Synthetic description when no source provided one
     if not contribution.description:
         contribution.description = _generate_synthetic_description(
@@ -1614,9 +1728,10 @@ def _handle_ai_enriched_site(
 
     _maybe_promote(session, contribution, search_name, settings)
 
-    # Store garble alias for the promoted site (if promoted)
+    # Store garble alias and research aliases for the promoted site (if promoted)
     if contribution.promoted_site_id:
         _store_garble_alias(session, contribution.promoted_site_id, contribution.name, search_name)
+        _store_research_aliases(session, contribution.promoted_site_id, research, search_name)
 
     return True
 
@@ -1628,24 +1743,57 @@ def _maybe_promote(
     settings: LyraSettings,
 ) -> None:
     """Promote a contribution to unified_sites if it meets the threshold."""
-    if (
-        contribution.score >= settings.min_score_for_promotion
-        and contribution.lat is not None
-        and contribution.lon is not None
-    ):
-        record = {
-            "period_start": contribution.period_start,
-            "period_end": contribution.period_end,
-            "lon": contribution.lon,
-        }
-        if passes_date_cutoff(record):
-            site_id = _promote_to_unified_sites(session, contribution, site_name)
-            if site_id:
-                contribution.promoted_site_id = site_id
-                contribution.enrichment_status = "promoted"
-                logger.info(f"Promoted '{contribution.name}' to unified_sites ({site_id})")
-        else:
-            logger.info(f"Skipping promotion for '{contribution.name}' — outside date cutoff")
+    if contribution.score < settings.min_score_for_promotion:
+        return
+    if contribution.lat is None or contribution.lon is None:
+        return
+
+    record = {
+        "period_start": contribution.period_start,
+        "period_end": contribution.period_end,
+        "lon": contribution.lon,
+    }
+    if not passes_date_cutoff(record):
+        logger.info(f"Skipping promotion for '{contribution.name}' — outside date cutoff")
+        return
+
+    # Audit-style quality checks before promotion
+
+    # 1. Normalize site_type to canonical form
+    if contribution.site_type:
+        contribution.site_type = normalize_site_type(contribution.site_type)
+
+    # 2. Ensure period_name consistency
+    if contribution.period_start is not None:
+        contribution.period_name = categorize_period(contribution.period_start)
+
+    # 3. Verify country matches coordinates
+    geo_country = lookup_country(contribution.lat, contribution.lon)
+    if geo_country and contribution.country:
+        if normalize_country(contribution.country) != normalize_country(geo_country):
+            logger.warning(
+                f"  [{contribution.name}] Country mismatch at promotion: "
+                f"'{contribution.country}' vs geo '{geo_country}' — using geo"
+            )
+            contribution.country = geo_country
+    elif geo_country and not contribution.country:
+        contribution.country = geo_country
+
+    # 4. Spatial dedup against AN Originals
+    an_match = _check_spatial_an_match(session, contribution.lat, contribution.lon)
+    if an_match:
+        logger.info(
+            f"  [{contribution.name}] Spatial match to AN '{an_match.name}' — matching instead of promoting"
+        )
+        contribution.enrichment_status = "matched"
+        fill_contrib_from_site(contribution, an_match)
+        return
+
+    site_id = _promote_to_unified_sites(session, contribution, site_name)
+    if site_id:
+        contribution.promoted_site_id = site_id
+        contribution.enrichment_status = "promoted"
+        logger.info(f"Promoted '{contribution.name}' to unified_sites ({site_id})")
 
 
 def _compute_score(contribution: UserContribution) -> int:
