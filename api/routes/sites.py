@@ -216,7 +216,7 @@ async def get_all_sites(
     site_type: str | None = Query(None, description="Filter by site type"),
     period_max: int | None = Query(None, description="Max period year"),
     skip: int = Query(0, ge=0, description="Number of records to skip (pagination)"),
-    limit: int = Query(10000, ge=1, le=50000, description="Max results"),
+    limit: int = Query(100000, ge=1, le=100000, description="Max results"),
 ):
     """
     Get all sites as compact JSON for globe rendering.
