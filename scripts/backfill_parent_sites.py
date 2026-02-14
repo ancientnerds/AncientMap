@@ -413,10 +413,13 @@ def _run_metadata_validation(conn, rows, site_qids, claims_map, apply: bool) -> 
             if wd_country_name:
                 db_iso = normalize_country(row.country) if row.country else ""
                 wd_iso = normalize_country(wd_country_name)
-                if not row.country:
-                    fixes.append((site_id_str, "country", None, wd_country_name, name))
-                elif db_iso != wd_iso:
-                    fixes.append((site_id_str, "country", row.country, wd_country_name, name))
+                # Only accept if Wikidata country resolves to a real modern ISO code
+                # (rejects historical polities like "Ancient Carthage", "Babylonia")
+                if len(wd_iso) == 2:
+                    if not row.country:
+                        fixes.append((site_id_str, "country", None, wd_country_name, name))
+                    elif db_iso != wd_iso:
+                        fixes.append((site_id_str, "country", row.country, wd_country_name, name))
 
         # ── Coordinates ──────────────────────────────────────────
         wd_lat = data.get("lat")
@@ -431,8 +434,9 @@ def _run_metadata_validation(conn, rows, site_qids, claims_map, apply: bool) -> 
                         f"  COORDS  {name}: DB=({row.lat:.4f}, {row.lon:.4f}) "
                         f"WD=({wd_lat:.4f}, {wd_lon:.4f}) [{dist_km:.0f}km off]"
                     )
-                    # Only auto-fix if clearly wrong (>50km off)
-                    if dist_km > 50:
+                    # Auto-fix 50-500km range; >500km is likely WD pointing
+                    # to a museum/replica (e.g. Pergamon Altar -> Berlin)
+                    if 50 < dist_km < 500:
                         fixes.append((site_id_str, "lat", row.lat, wd_lat, name))
                         fixes.append((site_id_str, "lon", row.lon, wd_lon, name))
 
@@ -440,10 +444,13 @@ def _run_metadata_validation(conn, rows, site_qids, claims_map, apply: bool) -> 
         wd_year = data.get("inception_year")
         if wd_year is not None:
             if row.period_start is None:
-                wd_period_name = categorize_period(wd_year)
-                fixes.append((site_id_str, "period_start", None, wd_year, name))
-                if wd_period_name and not row.period_name:
-                    fixes.append((site_id_str, "period_name", None, wd_period_name, name))
+                # Skip museum/modern founding dates (e.g. Ephesus Museum: 1964)
+                # Exception: allow if DB already has a post-1500 period_start
+                if wd_year <= 1500:
+                    wd_period_name = categorize_period(wd_year)
+                    fixes.append((site_id_str, "period_start", None, wd_year, name))
+                    if wd_period_name and not row.period_name:
+                        fixes.append((site_id_str, "period_name", None, wd_period_name, name))
             else:
                 # Flag if Wikidata says a very different period
                 db_bucket = categorize_period(row.period_start)
