@@ -33,7 +33,6 @@ interface RadarMapProps {
 
 const SWEEP_MS = 12000 // 12 seconds per full rotation
 const GLOW_MS = 1200
-const TRAIL_DEG = 10   // trailing band width in degrees
 
 function buildGeoJSON(items: RadarMapItem[]): GeoJSON.FeatureCollection {
   return {
@@ -124,36 +123,23 @@ export default function RadarMap({ items, onHoverItem, onPinItem, children }: Ra
         paint: {
           'circle-radius': ['case', ['boolean', ['feature-state', 'glow'], false], 7, 5],
           'circle-color': ['get', 'color'],
-          'circle-stroke-width': 1,
-          'circle-stroke-color': ['case', ['boolean', ['feature-state', 'glow'], false], 'rgba(255,255,255,0.6)', 'rgba(255,255,255,0.3)'],
           'circle-opacity': 0.85,
         },
       })
 
-      // ── Scan line + trail (Mapbox layers on the globe) ──
-      const emptyLine: GeoJSON.Feature = {
+      // ── Scan ring (two opposite meridians = full great circle) ──
+      const emptyRing: GeoJSON.Feature = {
         type: 'Feature',
-        geometry: { type: 'LineString', coordinates: [[0, -85], [0, 85]] },
+        geometry: {
+          type: 'MultiLineString',
+          coordinates: [[[0, -85], [0, 85]], [[180, -85], [180, 85]]],
+        },
         properties: {},
       }
-      const emptyPoly: GeoJSON.Feature = {
-        type: 'Feature',
-        geometry: { type: 'Polygon', coordinates: [[[0, -85], [0, -85], [0, 85], [0, 85], [0, -85]]] },
-        properties: {},
-      }
 
-      map.addSource('scan-line', { type: 'geojson', data: emptyLine })
-      map.addSource('scan-trail', { type: 'geojson', data: emptyPoly })
+      map.addSource('scan-line', { type: 'geojson', data: emptyRing })
 
-      // Trail fill — semi-transparent band behind the scan line
-      map.addLayer({
-        id: 'scan-trail-fill',
-        type: 'fill',
-        source: 'scan-trail',
-        paint: { 'fill-color': 'rgba(78, 205, 196, 0.06)' },
-      }, 'radar-glow')
-
-      // Scan line glow (wide + blurry)
+      // Ring glow (wide + blurry)
       map.addLayer({
         id: 'scan-line-glow',
         type: 'line',
@@ -161,7 +147,7 @@ export default function RadarMap({ items, onHoverItem, onPinItem, children }: Ra
         paint: { 'line-color': 'rgba(78, 205, 196, 0.25)', 'line-width': 6, 'line-blur': 4 },
       }, 'radar-glow')
 
-      // Scan line bright (thin + sharp)
+      // Ring bright (thin + sharp)
       map.addLayer({
         id: 'scan-line-bright',
         type: 'line',
@@ -213,41 +199,45 @@ export default function RadarMap({ items, onHoverItem, onPinItem, children }: Ra
         // 0-360 degree space → -180..180 longitude
         const scanDeg = progress * 360
         const scanLon = scanDeg <= 180 ? scanDeg : scanDeg - 360
+        const oppLon = scanLon > 0 ? scanLon - 180 : scanLon + 180
 
-        // Update scan line meridian
+        // Update scan ring (two opposite meridians)
         const lineSrc = m.getSource('scan-line') as mapboxgl.GeoJSONSource
         if (lineSrc) {
           lineSrc.setData({
             type: 'Feature',
-            geometry: { type: 'LineString', coordinates: [[scanLon, -85], [scanLon, 85]] },
-            properties: {},
-          })
-        }
-
-        // Update trail polygon (band behind the line)
-        const trailSrc = m.getSource('scan-trail') as mapboxgl.GeoJSONSource
-        if (trailSrc) {
-          const ts = scanLon - TRAIL_DEG
-          trailSrc.setData({
-            type: 'Feature',
             geometry: {
-              type: 'Polygon',
-              coordinates: [[[ts, -85], [scanLon, -85], [scanLon, 85], [ts, 85], [ts, -85]]],
+              type: 'MultiLineString',
+              coordinates: [
+                [[scanLon, -85], [scanLon, 85]],
+                [[oppLon, -85], [oppLon, 85]],
+              ],
             },
             properties: {},
           })
         }
 
-        // Hit detection in longitude space (0-360)
+        // Hit detection — check both the primary and opposite meridian
         const prevDeg = prevScanDegRef.current
+        const oppScanDeg = (scanDeg + 180) % 360
+        const oppPrevDeg = (prevDeg + 180) % 360
+
         for (const feat of geojsonRef.current.features) {
           const lon = (feat.geometry as GeoJSON.Point).coordinates[0]
           const siteDeg = lonToDeg(lon)
           const id = feat.properties!.id as string
 
-          const hit = scanDeg >= prevDeg
-            ? siteDeg >= prevDeg && siteDeg < scanDeg       // normal
-            : siteDeg >= prevDeg || siteDeg < scanDeg       // wrapped past 360
+          // Primary line
+          let hit = scanDeg >= prevDeg
+            ? siteDeg >= prevDeg && siteDeg < scanDeg
+            : siteDeg >= prevDeg || siteDeg < scanDeg
+
+          // Opposite line
+          if (!hit) {
+            hit = oppScanDeg >= oppPrevDeg
+              ? siteDeg >= oppPrevDeg && siteDeg < oppScanDeg
+              : siteDeg >= oppPrevDeg || siteDeg < oppScanDeg
+          }
 
           if (hit && !glowTimers.current.has(id)) {
             m.setFeatureState({ source: 'radar-sites', id }, { glow: true })
