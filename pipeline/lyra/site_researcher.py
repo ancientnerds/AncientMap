@@ -371,7 +371,7 @@ def _search_wikipedia_opensearch(name: str, limit: int = 5) -> list[dict]:
 
     return [
         {"title": t, "description": d, "url": u, "source": "wikipedia"}
-        for t, d, u in zip(data[1], data[2], data[3])
+        for t, d, u in zip(data[1], data[2], data[3], strict=False)
     ]
 
 
