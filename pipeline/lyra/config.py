@@ -158,6 +158,11 @@ def call_api(client: anthropic.Anthropic, **kwargs) -> anthropic.types.Message:
         # Guard 2: Strip output_config (not supported by non-Anthropic providers)
         kwargs.pop("output_config", None)
 
+        # Guard 3: Enforce min max_tokens (MiniMax thinks by default, eating
+        # the token budget; calls under 1024 produce empty/truncated responses)
+        if "max_tokens" in kwargs and "thinking" not in kwargs:
+            kwargs["max_tokens"] = max(1024, kwargs["max_tokens"])
+
     now = time.monotonic()
     elapsed = now - _last_call_time
     if elapsed < _min_call_gap:
