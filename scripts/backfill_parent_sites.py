@@ -363,8 +363,11 @@ def _run_parent_backfill(conn, rows, site_qids, claims_map, apply: bool) -> None
 # ── Metadata validation ──────────────────────────────────────────────
 
 
-def _run_metadata_validation(conn, rows, site_qids, claims_map, apply: bool) -> None:
-    """Validate and optionally fix metadata for ancient_nerds + lyra sites."""
+def _run_metadata_validation(conn, rows, site_qids, claims_map, apply: bool) -> list:
+    """Validate and optionally fix metadata for ancient_nerds + lyra sites.
+
+    Returns the list of fixes (for the gaps report to account for).
+    """
     from pipeline.normalizers.site_type import normalize_site_type
     from pipeline.utils.country_lookup import normalize_country
     from pipeline.utils.text import categorize_period
@@ -477,7 +480,7 @@ def _run_metadata_validation(conn, rows, site_qids, claims_map, apply: bool) -> 
     total_fixes = len(fixes)
     if not total_fixes:
         print("\n  No metadata fixes needed!")
-        return
+        return fixes
 
     print(f"\n  Fixes to apply: {total_fixes}")
     for field, items in sorted(fix_types.items()):
@@ -491,7 +494,7 @@ def _run_metadata_validation(conn, rows, site_qids, claims_map, apply: bool) -> 
             print(f"    ... and {len(items) - 30} more")
 
     if not apply:
-        return
+        return fixes
 
     # Apply fixes
     applied = 0
@@ -502,6 +505,93 @@ def _run_metadata_validation(conn, rows, site_qids, claims_map, apply: bool) -> 
         )
         applied += 1
     print(f"\n  Applied {applied} metadata fixes.")
+    return fixes
+
+
+# ── Gaps report ──────────────────────────────────────────────────────
+
+
+def _run_gaps_report(rows, site_qids, claims_map, fixes_applied: list | None) -> None:
+    """Report sites still missing key metadata after backfill.
+
+    These are candidates for LLM research (MiniMax).
+    """
+    print("\n" + "=" * 60)
+    print("REMAINING GAPS (candidates for AI research)")
+    print("=" * 60)
+
+    # If fixes were applied, simulate the new state
+    applied_fixes: dict[str, dict] = {}  # site_id -> {field: new_value}
+    if fixes_applied:
+        for site_id_str, field, _old, new, _name in fixes_applied:
+            applied_fixes.setdefault(site_id_str, {})[field] = new
+
+    fields = ["country", "period_start", "site_type"]
+    no_qid = []
+    no_wikidata_data = []
+    gaps: dict[str, list] = {f: [] for f in fields}
+
+    for row in rows:
+        sid = str(row.id)
+
+        # Effective values: DB value overridden by pending fix
+        effective = {}
+        for f in fields:
+            db_val = getattr(row, f)
+            fix_val = applied_fixes.get(sid, {}).get(f)
+            effective[f] = fix_val if fix_val is not None else db_val
+
+        # Sites we couldn't even resolve to a QID
+        if sid not in site_qids:
+            missing = [f for f in fields if not effective[f]]
+            if missing:
+                no_qid.append((row.name, row.source_id, missing))
+            continue
+
+        # Sites where Wikidata had no data
+        qid = site_qids[sid]
+        if qid not in claims_map:
+            missing = [f for f in fields if not effective[f]]
+            if missing:
+                no_wikidata_data.append((row.name, row.source_id, missing))
+            continue
+
+        # Sites still missing fields after Wikidata backfill
+        for f in fields:
+            if not effective[f]:
+                gaps[f].append((row.name, row.source_id))
+
+    # Print report
+    total_gaps = sum(len(v) for v in gaps.values()) + len(no_qid) + len(no_wikidata_data)
+
+    if not total_gaps:
+        print("  All sites fully populated!")
+        return
+
+    if no_qid:
+        print(f"\n  NO WIKIDATA QID ({len(no_qid)} sites — no Wikipedia URL):")
+        for name, source, missing in no_qid[:20]:
+            print(f"    [{source}] {name}  missing: {', '.join(missing)}")
+        if len(no_qid) > 20:
+            print(f"    ... and {len(no_qid) - 20} more")
+
+    if no_wikidata_data:
+        print(f"\n  QID RESOLVED BUT NO CLAIMS ({len(no_wikidata_data)} sites):")
+        for name, source, missing in no_wikidata_data[:20]:
+            print(f"    [{source}] {name}  missing: {', '.join(missing)}")
+        if len(no_wikidata_data) > 20:
+            print(f"    ... and {len(no_wikidata_data) - 20} more")
+
+    for field, items in gaps.items():
+        if items:
+            print(f"\n  STILL MISSING {field.upper()} ({len(items)} sites — Wikidata has no value):")
+            for name, source in items[:20]:
+                print(f"    [{source}] {name}")
+            if len(items) > 20:
+                print(f"    ... and {len(items) - 20} more")
+
+    print(f"\n  Total gaps: {total_gaps}")
+    print("  These sites need AI research (MiniMax) to fill remaining fields.")
 
 
 # ── Main ─────────────────────────────────────────────────────────────
@@ -547,9 +637,9 @@ def main() -> None:
         print(f"  Got data for {len(claims_map)} entities")
 
         # Step 4: Run requested operations
+        metadata_fixes = []
+
         if do_parents:
-            # Filter to sites that don't already have parent_site_id
-            parent_rows = [r for r in rows if r.parent_site_id is None]
             parent_qids = {
                 sid: qid for sid, qid in site_qids.items()
                 if any(str(r.id) == sid and r.parent_site_id is None for r in rows)
@@ -557,7 +647,10 @@ def main() -> None:
             _run_parent_backfill(conn, rows, parent_qids, claims_map, args.apply)
 
         if do_metadata:
-            _run_metadata_validation(conn, rows, site_qids, claims_map, args.apply)
+            metadata_fixes = _run_metadata_validation(conn, rows, site_qids, claims_map, args.apply)
+
+        # Step 5: Gaps report — what's still missing after Wikidata?
+        _run_gaps_report(rows, site_qids, claims_map, metadata_fixes)
 
         if args.apply:
             conn.commit()
