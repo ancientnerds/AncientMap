@@ -69,6 +69,9 @@ interface RadarItem {
   suggestions: SuggestionMatch[]
   best_match: SuggestionMatch | null
   external_sources: ExternalSource[]
+  confidence: string | null
+  data_sources: string[]
+  nearby_an_site: { name: string; distance_km: number } | null
 }
 
 interface RadarResponse {
@@ -124,6 +127,31 @@ function StatusPill({ status }: { status: string }) {
   return <span className={`lyra-status-pill ${cls}`} title={hint}>{label}</span>
 }
 
+function ConfidenceBadge({ level }: { level: string }) {
+  let cls: string
+  switch (level) {
+    case 'high':
+      cls = 'lyra-confidence-high'
+      break
+    case 'medium':
+      cls = 'lyra-confidence-medium'
+      break
+    case 'low':
+      cls = 'lyra-confidence-low'
+      break
+    default:
+      return null
+  }
+  return <span className={`lyra-status-pill ${cls}`} title={`AI confidence: ${level}`}>{level}</span>
+}
+
+const DATA_SOURCE_LABELS: Record<string, { abbr: string; title: string }> = {
+  wikidata: { abbr: 'W', title: 'Wikidata' },
+  wikipedia: { abbr: 'WP', title: 'Wikipedia' },
+  ai_research: { abbr: 'AI', title: 'AI Research' },
+  db_match: { abbr: 'DB', title: 'Database Match' },
+}
+
 const SCORE_WEIGHTS = [
   { key: 'name', label: 'Name', points: 25, check: () => true },
   { key: 'coords', label: 'Coords', points: 20, check: (d: RadarItem) => d.lat != null && d.lon != null },
@@ -156,6 +184,7 @@ function ScoreBreakdown({ item }: { item: RadarItem }) {
         <span className="lyra-score-sublabel">enrichment score</span>
         <span className="lyra-score-badges">
           <StatusPill status={item.enrichment_status} />
+          {item.confidence && <ConfidenceBadge level={item.confidence} />}
           {item.mention_count > 1 && (
             <span className="lyra-discovery-mentions" title={`Mentioned in ${item.mention_count} news items`}>
               {item.mention_count}x
@@ -174,6 +203,16 @@ function ScoreBreakdown({ item }: { item: RadarItem }) {
           )
         })}
       </div>
+      {item.data_sources.length > 0 && (
+        <div className="lyra-score-sources">
+          <span className="lyra-score-sources-label">Sources:</span>
+          {item.data_sources.map(src => {
+            const info = DATA_SOURCE_LABELS[src]
+            if (!info) return null
+            return <span key={src} className="lyra-source-tag" title={info.title}>{info.abbr}</span>
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -222,6 +261,13 @@ function RadarCard({ item, onViewSite }: { item: RadarItem; onViewSite?: (site: 
       {item.rejection_reason && (
         <div className="lyra-discovery-rejection">
           {item.rejection_reason}
+        </div>
+      )}
+
+      {/* Nearby AN site proximity warning */}
+      {item.nearby_an_site && (
+        <div className="lyra-discovery-nearby-an">
+          Near AN site: {item.nearby_an_site.name} ({item.nearby_an_site.distance_km} km)
         </div>
       )}
 

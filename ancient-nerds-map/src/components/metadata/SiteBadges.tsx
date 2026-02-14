@@ -10,6 +10,11 @@ interface SiteBadgesProps {
   size?: BadgeSize
 }
 
+function formatPeriodYear(year: number): string {
+  if (year < 0) return `${Math.abs(year)} BC`
+  return `${year} AD`
+}
+
 export function SiteBadges({ category, period, periodStart, size = 'sm' }: SiteBadgesProps) {
   const isGenericType = !category || ['site', 'unknown'].includes(category.toLowerCase())
 
@@ -32,7 +37,15 @@ export function SiteBadges({ category, period, periodStart, size = 'sm' }: SiteB
   return (
     <div className="meta-badges">
       {categoryColor && <MetadataBadge label={category!} color={categoryColor} size={size} />}
-      {periodColor && <MetadataBadge label={resolvedPeriod!} color={periodColor} size={size} />}
+      {periodColor && (
+        <MetadataBadge
+          label={periodStart != null
+            ? `${resolvedPeriod!} (${formatPeriodYear(periodStart)})`
+            : resolvedPeriod!}
+          color={periodColor}
+          size={size}
+        />
+      )}
     </div>
   )
 }
