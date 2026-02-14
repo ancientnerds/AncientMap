@@ -735,6 +735,40 @@
   }
 }
 
+/* Map container */
+.radar-map-container {
+  width: 100%;
+  height: 350px;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 1.2rem;
+  border: 1px solid rgba(78, 205, 196, 0.15);
+}
+
+/* Card highlight animation on map click */
+.lyra-card-highlight {
+  animation: radar-card-pulse 1.5s ease-out;
+}
+
+@keyframes radar-card-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(78, 205, 196, 0.5); }
+  50% { box-shadow: 0 0 12px 4px rgba(78, 205, 196, 0.3); }
+  100% { box-shadow: none; }
+}
+
+/* Mapbox popup overrides for dark theme */
+.radar-map-popup .mapboxgl-popup-content {
+  background: #1a2332;
+  color: #e0e0e0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  border: 1px solid rgba(78, 205, 196, 0.2);
+}
+.radar-map-popup .mapboxgl-popup-tip {
+  border-top-color: #1a2332;
+}
+
 /* Scroll to top button */
 .lyra-scroll-top {
   position: fixed;

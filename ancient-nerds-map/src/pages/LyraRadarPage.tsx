@@ -17,6 +17,7 @@ import type { SiteData } from '../data/sites'
 import './LyraRadarPage.css'
 
 const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
+const RadarMap = lazy(() => import('../components/RadarMap'))
 
 interface VideoReference {
   video_id: string
@@ -545,6 +546,7 @@ export default function LyraRadarPage() {
   const gridRef = useRef<HTMLDivElement>(null)
   const [columnCount, setColumnCount] = useState(3)
   const [showScrollTop, setShowScrollTop] = useState(false)
+  const [showMap, setShowMap] = useState(false)
 
   useEffect(() => {
     const onScroll = () => setShowScrollTop(window.scrollY > 400)
@@ -637,6 +639,14 @@ export default function LyraRadarPage() {
     setHasMore(false)
   }
 
+  const scrollToCard = useCallback((id: string) => {
+    const el = document.querySelector(`[data-radar-id="${id}"]`)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.classList.add('lyra-card-highlight')
+    setTimeout(() => el.classList.remove('lyra-card-highlight'), 1500)
+  }, [])
+
   return (
     <div className="lyra-discoveries-page">
       {/* Header */}
@@ -721,12 +731,29 @@ export default function LyraRadarPage() {
             </button>
           </div>
         </div>
+        <div className="lyra-filter-group">
+          <button
+            className={`news-page-chip${showMap ? ' active' : ''}`}
+            onClick={() => setShowMap(v => !v)}
+          >
+            Map
+          </button>
+        </div>
       </div>
 
       {/* AI disclosure */}
       <div className="news-page-ai-notice">
         Content is AI-generated from YouTube video content. Always verify with original sources.
       </div>
+
+      {/* Map */}
+      {showMap && (
+        <div style={{ padding: '0 20px' }}>
+          <Suspense fallback={<div style={{ height: 350 }} />}>
+            <RadarMap items={items} onSelectItem={scrollToCard} />
+          </Suspense>
+        </div>
+      )}
 
       {/* Error state */}
       {error && (
@@ -747,7 +774,9 @@ export default function LyraRadarPage() {
           <div key={colIdx} className="lyra-discoveries-column">
             {/* Radar cards */}
             {items.filter((_, i) => i % columnCount === colIdx).map(item => (
-              <RadarCard key={item.id} item={item} onViewSite={setSelectedSite} />
+              <div key={item.id} data-radar-id={item.id}>
+                <RadarCard item={item} onViewSite={setSelectedSite} />
+              </div>
             ))}
           </div>
         ))}
