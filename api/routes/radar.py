@@ -152,6 +152,24 @@ def _flatten_facts(all_facts: list | None) -> list[str]:
     return sorted(unique)
 
 
+def _find_nearest_an_site(db: Session, lat: float, lon: float, max_km: float = 10.0):
+    """Find closest AN Originals site within max_km. Returns dict or None."""
+    delta = max_km / 111.0
+    row = db.execute(text("""
+        SELECT name,
+               SQRT(POW((:lat - lat) * 111.0, 2) + POW((:lon - lon) * 111.0 * COS(RADIANS(:lat)), 2)) AS dist_km
+        FROM unified_sites
+        WHERE source_id = 'ancient_nerds'
+          AND lat BETWEEN :lat - :delta AND :lat + :delta
+          AND lon BETWEEN :lon - :delta AND :lon + :delta
+        ORDER BY dist_km
+        LIMIT 1
+    """), {"lat": lat, "lon": lon, "delta": delta}).fetchone()
+    if row and row.dist_km <= max_km:
+        return {"name": row.name, "distance_km": round(row.dist_km, 1)}
+    return None
+
+
 @router.get("/list")
 async def get_radar(
     page: int = Query(1, ge=1),
@@ -296,9 +314,22 @@ async def get_radar(
         if row.period_start is not None:
             period_name = categorize_period(row.period_start)
 
+        confidence = None
+        data_sources = []
         external_sources = []
         if row.enrichment_data and isinstance(row.enrichment_data, dict):
             external_sources = row.enrichment_data.get("external_sources", [])
+            ident = row.enrichment_data.get("identification", {})
+            if isinstance(ident, dict):
+                confidence = ident.get("confidence")
+            if row.enrichment_data.get("wikidata"):
+                data_sources.append("wikidata")
+                if isinstance(row.enrichment_data["wikidata"], dict) and row.enrichment_data["wikidata"].get("wikipedia"):
+                    data_sources.append("wikipedia")
+            if row.enrichment_data.get("research"):
+                data_sources.append("ai_research")
+            if row.enrichment_data.get("db_match"):
+                data_sources.append("db_match")
 
         item = {
             "id": row.id,
@@ -326,8 +357,13 @@ async def get_radar(
             "suggestions": [],
             "best_match": None,
             "external_sources": external_sources,
+            "confidence": confidence,
+            "data_sources": data_sources,
+            "nearby_an_site": None,
         }
         item["enrichment_score"] = _compute_display_score(item)
+        if row.lat is not None and row.lon is not None:
+            item["nearby_an_site"] = _find_nearest_an_site(db, row.lat, row.lon)
         return item
 
     if sql_paginated:
