@@ -78,6 +78,20 @@ class LyraSettings(BaseSettings):
 _cached_client: anthropic.Anthropic | None = None
 _cached_client_key: str = ""
 
+_cached_settings: LyraSettings | None = None
+
+
+def _get_settings() -> LyraSettings:
+    """Return a module-level cached LyraSettings instance.
+
+    Safe because env vars don't change during a pipeline run.
+    Avoids re-reading .env + env vars on every call_api() invocation.
+    """
+    global _cached_settings
+    if _cached_settings is None:
+        _cached_settings = LyraSettings()
+    return _cached_settings
+
 
 def _is_native_anthropic(settings: "LyraSettings") -> bool:
     """Check if we're using the native Anthropic API (vs a compatible provider)."""
@@ -129,12 +143,11 @@ def call_api(client: anthropic.Anthropic, **kwargs) -> anthropic.types.Message:
     When using a non-Anthropic base_url (e.g. MiniMax), automatically:
     - Clamps temperature to settings.temperature_min (MiniMax rejects 0.0)
     - Strips output_config (not supported by MiniMax)
-    - Strips cache_control from system messages (not supported by MiniMax)
     """
     global _last_call_time, _min_call_gap
 
     # Load settings for compatibility guards
-    settings = LyraSettings()
+    settings = _get_settings()
     native = _is_native_anthropic(settings)
 
     # Guard 1: Clamp temperature (MiniMax rejects temperature=0.0)
@@ -144,15 +157,6 @@ def call_api(client: anthropic.Anthropic, **kwargs) -> anthropic.types.Message:
     if not native:
         # Guard 2: Strip output_config (not supported by non-Anthropic providers)
         kwargs.pop("output_config", None)
-
-        # Guard 3: Strip cache_control from system messages
-        system = kwargs.get("system")
-        if isinstance(system, list):
-            kwargs["system"] = [
-                {k: v for k, v in msg.items() if k != "cache_control"}
-                if isinstance(msg, dict) else msg
-                for msg in system
-            ]
 
     now = time.monotonic()
     elapsed = now - _last_call_time
