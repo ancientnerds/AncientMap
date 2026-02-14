@@ -70,6 +70,88 @@ EXTRACT_METADATA_SCHEMA = {
     "additionalProperties": False,
 }
 
+def _resolve_site_type_from_p31(instance_of_qids: list[str]) -> str | None:
+    """Resolve P31 QIDs to a site_type by fetching their labels from Wikidata.
+
+    Fetches the English labels for the given QIDs, then passes each through
+    normalize_site_type() which already has comprehensive keyword→type mapping.
+    This is sustainable — no hardcoded QID map needed.
+    """
+    if not instance_of_qids:
+        return None
+
+    labels = _fetch_qid_labels(instance_of_qids)
+    for qid in instance_of_qids:
+        label = labels.get(qid)
+        if label:
+            normalized = normalize_site_type(label)
+            # normalize_site_type returns title-cased original if no mapping found,
+            # which means it didn't recognize it. Only use if it mapped to a known type.
+            if normalized != label.replace("_", " ").title():
+                return normalized
+    return None
+
+
+def _resolve_country_from_qid(country_qid: str) -> str | None:
+    """Resolve a country QID to its English name via Wikidata API."""
+    labels = _fetch_qid_labels([country_qid])
+    return labels.get(country_qid)
+
+
+def _fetch_qid_labels(qids: list[str]) -> dict[str, str]:
+    """Fetch English labels for a list of Wikidata QIDs.
+
+    Single API call to wbgetentities with props=labels&languages=en.
+    Returns {qid: label} dict.
+    """
+    if not qids:
+        return {}
+
+    try:
+        resp = fetch_with_retry(
+            "https://www.wikidata.org/w/api.php",
+            params={
+                "action": "wbgetentities",
+                "ids": "|".join(qids[:50]),  # API limit
+                "props": "labels",
+                "languages": "en",
+                "format": "json",
+            },
+        )
+        data = resp.json()
+    except Exception as e:
+        logger.warning(f"Wikidata label fetch failed for {qids[:3]}: {e}")
+        return {}
+
+    result = {}
+    for qid in qids:
+        entity = data.get("entities", {}).get(qid, {})
+        label = entity.get("labels", {}).get("en", {}).get("value")
+        if label:
+            result[qid] = label
+    return result
+
+
+def _parse_wikidata_time(time_str: str) -> int | None:
+    """Parse Wikidata ISO time format to year integer.
+
+    Wikidata uses formats like:
+    - "+2023-01-01T00:00:00Z" (positive year = CE)
+    - "-0500-01-01T00:00:00Z" (negative year = BCE)
+    - "+00000002023-01-01T00:00:00Z" (padded)
+    """
+    if not time_str:
+        return None
+    match = re.match(r"^([+-])0*(\d+)-", time_str)
+    if not match:
+        return None
+    sign = -1 if match.group(1) == "-" else 1
+    year = int(match.group(2))
+    if year == 0:
+        return None
+    return sign * year
+
+
 WIKIDATA_ENTITY_URL = "https://www.wikidata.org/w/api.php"
 WIKIPEDIA_SUMMARY_URL = "https://en.wikipedia.org/api/rest_v1/page/summary/{title}"
 WIKIPEDIA_LEAD_URL = "https://en.wikipedia.org/api/rest_v1/page/mobile-sections-lead/{title}"
@@ -297,6 +379,37 @@ def _process_single(
         facts=facts, video_contexts=video_contexts,
     )
 
+    # Step 3a: Re-search local DB with AI-generated alternative names
+    # The pre-research may have generated better spellings (e.g. "Seab Birch" → "Sayburç")
+    # that match records in our 20,000+ site DB from 25+ academic sources.
+    if research.pre_research and research.pre_research.get("alternative_names"):
+        for alt_name in research.pre_research["alternative_names"]:
+            if not alt_name or alt_name.lower().strip() == search_name.lower().strip():
+                continue
+            alt_candidates = _fetch_db_candidates(session, alt_name, threshold=settings.pg_trgm_threshold)
+            if alt_candidates and alt_candidates[0]["similarity"] >= settings.pg_trgm_threshold:
+                logger.info(
+                    f"  [{contribution.name}] DB match via alternative name '{alt_name}': "
+                    f"{alt_candidates[0]['name']} (sim={alt_candidates[0]['similarity']})"
+                )
+                # Disambiguate if needed
+                best = alt_candidates[0]
+                if (
+                    len(alt_candidates) >= 2
+                    and alt_candidates[1]["similarity"] >= settings.pg_trgm_threshold
+                    and abs(best["similarity"] - alt_candidates[1]["similarity"]) <= 0.1
+                ):
+                    disambiguated = _disambiguate_db_candidates(
+                        client, settings, alt_name, alt_candidates[:5], facts, video_contexts,
+                    )
+                    if disambiguated:
+                        best = disambiguated
+
+                return _handle_db_match(
+                    session, contribution, best, identification, settings,
+                    facts, video_contexts, all_candidates=alt_candidates, promoted_ids=promoted_ids,
+                )
+
     # If research found a Wikidata candidate with a QID, try the existing
     # Wikidata enrichment path (which fetches coordinates, Wikipedia, etc.)
     if research.best_match and research.best_match.get("qid"):
@@ -315,6 +428,27 @@ def _process_single(
         # Apply gap-fill on top of Wikidata enrichment
         _apply_gap_fill(contribution, research)
         _apply_pre_research(contribution, research)
+
+        # Step 6: GeoNames coordinate fallback — if Wikidata enrichment
+        # lacked coordinates, use GeoNames results from the research step
+        if contribution.lat is None and research.all_candidates.get("geonames"):
+            geo_best = research.all_candidates["geonames"][0]
+            if geo_best.get("lat") and geo_best.get("lon"):
+                contribution.lat = geo_best["lat"]
+                contribution.lon = geo_best["lon"]
+                logger.info(
+                    f"  [{contribution.name}] GeoNames coord fallback: "
+                    f"({geo_best['lat']}, {geo_best['lon']})"
+                )
+                if not contribution.country:
+                    contribution.country = lookup_country(contribution.lat, contribution.lon)
+
+        # Step 7: Synthetic description if still empty
+        if not contribution.description:
+            contribution.description = _generate_synthetic_description(
+                search_name, contribution.site_type, contribution.country, contribution.period_name,
+            )
+
         # Re-score after gap-fill
         contribution.score = _compute_score(contribution)
         contribution.enrichment_data = {
@@ -720,12 +854,15 @@ def _enrich_from_wikidata(qid: str) -> dict:
             result["lat"] = coords["latitude"]
             result["lon"] = coords["longitude"]
 
-    # P17: country
+    # P17: country (resolve QID to name via Wikidata API)
     p17 = claims.get("P17", [])
     if p17:
         country_id = p17[0].get("mainsnak", {}).get("datavalue", {}).get("value", {}).get("id")
         if country_id:
             result["country_qid"] = country_id
+            country_name = _resolve_country_from_qid(country_id)
+            if country_name:
+                result["country"] = country_name
 
     # P31: instance of (for type classification)
     p31 = claims.get("P31", [])
@@ -743,6 +880,20 @@ def _enrich_from_wikidata(qid: str) -> dict:
         time_val = p571[0].get("mainsnak", {}).get("datavalue", {}).get("value", {})
         if time_val.get("time"):
             result["inception_time"] = time_val["time"]
+
+    # P580: start time (often more populated than P571 for archaeological sites)
+    p580 = claims.get("P580", [])
+    if p580:
+        time_val = p580[0].get("mainsnak", {}).get("datavalue", {}).get("value", {})
+        if time_val.get("time"):
+            result["start_time"] = time_val["time"]
+
+    # P582: end time
+    p582 = claims.get("P582", [])
+    if p582:
+        time_val = p582[0].get("mainsnak", {}).get("datavalue", {}).get("value", {})
+        if time_val.get("time"):
+            result["end_time"] = time_val["time"]
 
     # P18: image
     p18 = claims.get("P18", [])
@@ -979,6 +1130,35 @@ def _escalate_to_sonnet(
     return result
 
 
+def _generate_synthetic_description(
+    name: str,
+    site_type: str | None,
+    country: str | None,
+    period_name: str | None,
+) -> str | None:
+    """Generate a description from structured data when Wikipedia text is missing.
+
+    Only generates if we have at least country + one of (site_type, period_name).
+    Returns None if insufficient data.
+    """
+    if not country:
+        return None
+    if not site_type and not period_name:
+        return None
+
+    parts = [f"{name} is"]
+    if site_type and site_type != "Unknown":
+        article = "an" if site_type[0].lower() in "aeiou" else "a"
+        parts.append(f"{article} {site_type.lower()}")
+    else:
+        parts.append("an archaeological site")
+    parts.append(f"located in {country}")
+    if period_name:
+        parts.append(f", dating to approximately {period_name}")
+    parts.append(".")
+    return " ".join(parts)
+
+
 def _store_garble_alias(session: Session, site_id: uuid.UUID, garbled_name: str, canonical_name: str) -> None:
     """Store a garbled caption name as an alias for faster future matching.
 
@@ -1196,10 +1376,41 @@ def _handle_wikidata_match(
         pick_entity_prompt,
     )
 
+    # Step 5: Relax Wikipedia gate — if no candidates have Wikipedia,
+    # still use the first QID for structured Wikidata enrichment
+    if not best_qid and wikidata_candidates:
+        best_qid = wikidata_candidates[0]["qid"]
+        logger.info(f"  [{site_name}] No Wikipedia candidates — using {best_qid} for structured enrichment only")
+
     enrichment = {}
     if best_qid:
         contribution.wikidata_id = best_qid
         enrichment = _enrich_from_wikidata(best_qid)
+
+        # Step 3: Apply P31 (instance-of) → site_type mapping
+        if enrichment.get("instance_of") and not contribution.site_type:
+            resolved_type = _resolve_site_type_from_p31(enrichment["instance_of"])
+            if resolved_type:
+                contribution.site_type = resolved_type
+                logger.info(f"  [{site_name}] P31 resolved site_type: {resolved_type}")
+
+        # Step 4: Apply P580/P582 date properties
+        if contribution.period_start is None:
+            for time_key in ("inception_time", "start_time"):
+                parsed_year = _parse_wikidata_time(enrichment.get(time_key, ""))
+                if parsed_year is not None:
+                    contribution.period_start = parsed_year
+                    contribution.period_name = categorize_period(parsed_year)
+                    logger.info(f"  [{site_name}] Wikidata {time_key} → period_start={parsed_year}")
+                    break
+        if enrichment.get("end_time"):
+            parsed_end = _parse_wikidata_time(enrichment["end_time"])
+            if parsed_end is not None and contribution.period_end is None:
+                contribution.period_end = parsed_end
+
+        # Step 4: Apply country from QID resolution
+        if enrichment.get("country") and not contribution.country:
+            contribution.country = enrichment["country"]
 
         wiki_title = enrichment.get("wikipedia_title")
         if wiki_title:
@@ -1224,12 +1435,12 @@ def _handle_wikidata_match(
                     client, settings.model_identify, site_name, wiki_text, extract_metadata_prompt
                 )
                 if metadata:
-                    if metadata.get("period") and metadata["period"] != "Unknown":
+                    if metadata.get("period") and metadata["period"] != "Unknown" and contribution.period_start is None:
                         period_start = extract_period_from_text(metadata["period"])
                         if period_start is not None:
                             contribution.period_start = period_start
                             contribution.period_name = categorize_period(period_start)
-                    if metadata.get("site_type") and metadata["site_type"] != "Unknown":
+                    if metadata.get("site_type") and metadata["site_type"] != "Unknown" and not contribution.site_type:
                         contribution.site_type = normalize_site_type(metadata["site_type"])
 
     # Apply coordinates
@@ -1244,6 +1455,12 @@ def _handle_wikidata_match(
     # Apply thumbnail
     if enrichment.get("thumbnail_url"):
         contribution.thumbnail_url = enrichment["thumbnail_url"]
+
+    # Step 7: Synthetic description when Wikipedia text is missing
+    if not contribution.description:
+        contribution.description = _generate_synthetic_description(
+            site_name, contribution.site_type, contribution.country, contribution.period_name,
+        )
 
     # Store full enrichment data
     contribution.enrichment_data = {
@@ -1289,14 +1506,33 @@ def _apply_pre_research(contribution: UserContribution, research) -> None:
 
 
 def _apply_gap_fill(contribution: UserContribution, research) -> None:
-    """Apply gap-fill knowledge to a contribution (fill-if-missing)."""
+    """Apply gap-fill knowledge to a contribution (fill-if-missing).
+
+    Step 9 cross-validation: Wikidata structured data is always applied first
+    (in _handle_wikidata_match), so gap-fill only fills empty fields. When AI
+    provides data that conflicts with already-set Wikidata values, we log the
+    discrepancy but keep the Wikidata value (more reliable than LLM guesses).
+    """
     gf = research.gap_fill if research else None
     if not gf:
         return
-    if gf.get("country") and gf["country"] != "Unknown" and not contribution.country:
-        contribution.country = gf["country"]
-    if gf.get("site_type") and gf["site_type"] != "Unknown" and not contribution.site_type:
-        contribution.site_type = normalize_site_type(gf["site_type"])
+
+    name = contribution.corrected_name or contribution.name
+
+    if gf.get("country") and gf["country"] != "Unknown":
+        if not contribution.country:
+            contribution.country = gf["country"]
+        elif gf["country"].lower() != contribution.country.lower():
+            logger.debug(
+                f"  [{name}] AI/Wikidata discrepancy: country AI='{gf['country']}' vs existing='{contribution.country}'"
+            )
+    if gf.get("site_type") and gf["site_type"] != "Unknown":
+        if not contribution.site_type:
+            contribution.site_type = normalize_site_type(gf["site_type"])
+        elif normalize_site_type(gf["site_type"]).lower() != contribution.site_type.lower():
+            logger.debug(
+                f"  [{name}] AI/Wikidata discrepancy: type AI='{gf['site_type']}' vs existing='{contribution.site_type}'"
+            )
     if gf.get("period") and gf["period"] != "Unknown" and contribution.period_start is None:
         period_start = extract_period_from_text(gf["period"])
         if period_start is not None:
@@ -1342,6 +1578,12 @@ def _handle_ai_enriched_site(
     # Resolve country from coordinates if still missing
     if contribution.lat and contribution.lon and not contribution.country:
         contribution.country = lookup_country(contribution.lat, contribution.lon)
+
+    # Step 7: Synthetic description when no source provided one
+    if not contribution.description:
+        contribution.description = _generate_synthetic_description(
+            search_name, contribution.site_type, contribution.country, contribution.period_name,
+        )
 
     contribution.enrichment_data = {
         "identification": identification,

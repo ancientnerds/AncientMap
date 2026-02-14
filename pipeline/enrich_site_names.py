@@ -240,6 +240,119 @@ def extract_dare_names() -> int:
     return inserted
 
 
+def extract_edh_names() -> int:
+    """Extract alternate names from EDH raw_data (ancient_place, modern_place, find_spot)."""
+    logger.info("Extracting EDH alternate names from raw_data...")
+    inserted = 0
+
+    with get_session() as session:
+        rows = session.execute(text(
+            "SELECT id, name, raw_data FROM unified_sites "
+            "WHERE source_id = 'edh' AND raw_data IS NOT NULL"
+        )).fetchall()
+
+        for row in rows:
+            raw = row.raw_data or {}
+            primary_normalized = normalize_name(row.name)
+
+            for field in ("ancient_place", "modern_place", "find_spot"):
+                alt = raw.get(field, "")
+                if not alt:
+                    continue
+                normalized = normalize_name(alt)
+                if normalized == primary_normalized:
+                    continue
+                if _insert_name(session, str(row.id), alt, None, f"edh_{field}"):
+                    inserted += 1
+
+        session.commit()
+
+    logger.info(f"Inserted {inserted:,} EDH name variants")
+    return inserted
+
+
+def extract_unesco_names() -> int:
+    """Extract alternate names from UNESCO raw_data.
+
+    UNESCO sometimes has multiple site name variants in the raw name field,
+    separated by slashes or semicolons (e.g. "Memphis / Mit Rahina").
+    """
+    logger.info("Extracting UNESCO alternate names from raw_data...")
+    inserted = 0
+
+    with get_session() as session:
+        rows = session.execute(text(
+            "SELECT id, name, raw_data FROM unified_sites "
+            "WHERE source_id = 'unesco' AND raw_data IS NOT NULL"
+        )).fetchall()
+
+        for row in rows:
+            raw = row.raw_data or {}
+            primary_normalized = normalize_name(row.name)
+
+            # UNESCO raw name field may contain "/" or ";" separated variants
+            raw_name = raw.get("name", "")
+            if raw_name:
+                for sep in ("/", ";"):
+                    if sep in raw_name:
+                        for part in raw_name.split(sep):
+                            part = part.strip()
+                            if not part:
+                                continue
+                            normalized = normalize_name(part)
+                            if normalized == primary_normalized:
+                                continue
+                            if _insert_name(session, str(row.id), part, None, "unesco_name_variant"):
+                                inserted += 1
+
+        session.commit()
+
+    logger.info(f"Inserted {inserted:,} UNESCO name variants")
+    return inserted
+
+
+def extract_topostext_names() -> int:
+    """Extract alternate names from ToposText raw_data (greek, latin, modern names)."""
+    logger.info("Extracting ToposText alternate names from raw_data...")
+    inserted = 0
+
+    with get_session() as session:
+        rows = session.execute(text(
+            "SELECT id, name, raw_data FROM unified_sites "
+            "WHERE source_id = 'topostext' AND raw_data IS NOT NULL"
+        )).fetchall()
+
+        for row in rows:
+            raw = row.raw_data or {}
+            primary_normalized = normalize_name(row.name)
+
+            # ToposText stores greek_name, latin_name, modern_name, alternate_names
+            for field in ("greek_name", "latin_name", "modern_name"):
+                alt = raw.get(field, "")
+                if not alt:
+                    continue
+                normalized = normalize_name(alt)
+                if normalized == primary_normalized:
+                    continue
+                if _insert_name(session, str(row.id), alt, None, f"topostext_{field}"):
+                    inserted += 1
+
+            # alternate_names is a list
+            for alt in raw.get("alternate_names", []):
+                if not alt:
+                    continue
+                normalized = normalize_name(alt)
+                if normalized == primary_normalized:
+                    continue
+                if _insert_name(session, str(row.id), alt, None, "topostext_alt"):
+                    inserted += 1
+
+        session.commit()
+
+    logger.info(f"Inserted {inserted:,} ToposText name variants")
+    return inserted
+
+
 def insert_primary_names() -> int:
     """Insert primary names from unified_sites into unified_site_names.
 
@@ -311,6 +424,9 @@ def main():
         extract_pleiades_names()
         extract_geonames_names()
         extract_dare_names()
+        extract_edh_names()
+        extract_unesco_names()
+        extract_topostext_names()
 
         # Final count
         with get_session() as session:
