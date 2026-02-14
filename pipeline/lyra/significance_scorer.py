@@ -167,7 +167,7 @@ def _rescore_item(
         response = call_api(
             client,
             model=settings.model_rescore,
-            max_tokens=256,
+            max_tokens=512,
             temperature=0.0,
             system=[{
                 "type": "text",
@@ -188,6 +188,10 @@ def _rescore_item(
 
     text_block = next((b.text for b in response.content if hasattr(b, "text")), None)
     if not text_block:
-        logger.warning(f"Empty rescore response for item {item.id}")
+        logger.warning(
+            f"Empty rescore response for item {item.id}: "
+            f"stop_reason={response.stop_reason}, "
+            f"blocks={[type(b).__name__ for b in response.content]}"
+        )
         return None
     return parse_json_response(text_block)

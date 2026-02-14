@@ -537,7 +537,14 @@ def normalize_country(name: str) -> str:
     if not name:
         return ""
     lower = name.strip().lower()
-    return NAME_TO_ISO.get(lower, lower)
+    if lower in NAME_TO_ISO:
+        return NAME_TO_ISO[lower]
+    # Handle compound names like "Chile, Easter Island"
+    for part in lower.split(","):
+        part = part.strip()
+        if part in NAME_TO_ISO:
+            return NAME_TO_ISO[part]
+    return lower
 
 
 def country_name_variants(name: str) -> list[str]:
