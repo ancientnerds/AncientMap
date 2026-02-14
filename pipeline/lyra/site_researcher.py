@@ -83,6 +83,12 @@ GAP_FILL_SCHEMA = {
     "additionalProperties": False,
 }
 
+# --- System prompts ---
+
+PRE_RESEARCH_SYSTEM = "You are an archaeological research agent. Respond with JSON only."
+SYNTHESIS_SYSTEM = "You are an archaeological site research agent. Pick the best match from the candidates. Respond with JSON only."
+GAP_FILL_SYSTEM = "You are an archaeological metadata enrichment agent. Fill missing fields from your knowledge. Respond with JSON only."
+
 # --- API URLs ---
 
 WIKIPEDIA_OPENSEARCH_URL = "https://en.wikipedia.org/w/api.php"
@@ -204,7 +210,7 @@ def _pre_research(
             messages=[{"role": "user", "content": prompt}],
             system=[{
                 "type": "text",
-                "text": "You are an archaeological research agent. Respond with JSON only.",
+                "text": PRE_RESEARCH_SYSTEM,
                 "cache_control": {"type": "ephemeral"},
             }],
             thinking={"type": "enabled", "budget_tokens": settings.research_thinking_budget},
@@ -244,12 +250,20 @@ def _search_all_sources(
     }
 
     for name in names:
-        all_candidates["wikidata"].extend(_search_wikidata_entities(name))
+        all_candidates["wikidata"].extend(_search_wikidata(name))
         all_candidates["wikipedia"].extend(_search_wikipedia_opensearch(name))
         if settings.geonames_username:
             all_candidates["geonames"].extend(
                 _search_geonames(name, settings.geonames_username)
             )
+
+    # SPARQL fallback: if basic wbsearchentities found nothing, try
+    # the more specific archaeological-site-filtered SPARQL query
+    if not all_candidates["wikidata"] and names:
+        sparql_results = _search_wikidata_sparql(names[0])
+        if sparql_results:
+            all_candidates["wikidata"].extend(sparql_results)
+            logger.info(f"  SPARQL fallback found {len(sparql_results)} candidates for '{names[0]}'")
 
     # Deduplicate within each source
     all_candidates["wikidata"] = _dedupe_by_key(all_candidates["wikidata"], "qid")
@@ -271,7 +285,8 @@ def _dedupe_by_key(items: list[dict], key: str) -> list[dict]:
     return result
 
 
-def _search_wikidata_entities(name: str) -> list[dict]:
+
+def _search_wikidata(name: str) -> list[dict]:
     """Search Wikidata via wbsearchentities API."""
     try:
         resp = fetch_with_retry(
@@ -286,7 +301,11 @@ def _search_wikidata_entities(name: str) -> list[dict]:
         )
         data = resp.json()
     except Exception as e:
-        logger.warning(f"Wikidata entity search failed for '{name}': {e}")
+        logger.warning(f"Wikidata search failed for '{name}': {e}")
+        return []
+
+    if data.get("error"):
+        logger.warning(f"Wikidata search error for '{name}': {data['error']}")
         return []
 
     return [
@@ -478,7 +497,7 @@ def _select_best_candidate(
             messages=[{"role": "user", "content": prompt}],
             system=[{
                 "type": "text",
-                "text": "You are an archaeological site research agent. Pick the best match from the candidates. Respond with JSON only.",
+                "text": SYNTHESIS_SYSTEM,
                 "cache_control": {"type": "ephemeral"},
             }],
         )
@@ -576,7 +595,7 @@ def _gap_fill(
             messages=[{"role": "user", "content": prompt}],
             system=[{
                 "type": "text",
-                "text": "You are an archaeological metadata enrichment agent. Fill missing fields from your knowledge. Respond with JSON only.",
+                "text": GAP_FILL_SYSTEM,
                 "cache_control": {"type": "ephemeral"},
             }],
         )
