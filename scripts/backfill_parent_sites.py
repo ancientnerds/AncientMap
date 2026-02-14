@@ -17,8 +17,8 @@ Usage:
 
 import re
 import sys
-import time
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -37,6 +37,9 @@ BATCH_SIZE = 50
 
 # Coordinate tolerance for flagging discrepancies (~1km at mid-latitudes)
 COORD_TOLERANCE = 0.01
+
+# Max concurrent API requests (respects Wikidata/Wikipedia rate limits)
+MAX_WORKERS = 3
 
 
 # ── Wikidata helpers ─────────────────────────────────────────────────
@@ -69,29 +72,25 @@ def _resolve_titles_to_qids(titles: list[str]) -> dict[str, str]:
 
     Returns {title: qid} for successfully resolved titles.
     """
-    result = {}
-    for i in range(0, len(titles), BATCH_SIZE):
-        batch = titles[i : i + BATCH_SIZE]
-        try:
-            resp = fetch_with_retry(
-                "https://en.wikipedia.org/w/api.php",
-                params={
-                    "action": "query",
-                    "titles": "|".join(batch),
-                    "prop": "pageprops",
-                    "ppprop": "wikibase_item",
-                    "format": "json",
-                },
-            )
-            data = resp.json()
-        except Exception as e:
-            print(f"  Wikipedia API error: {e}")
-            continue
+    batches = [titles[i : i + BATCH_SIZE] for i in range(0, len(titles), BATCH_SIZE)]
 
+    def fetch_batch(batch):
+        resp = fetch_with_retry(
+            "https://en.wikipedia.org/w/api.php",
+            params={
+                "action": "query",
+                "titles": "|".join(batch),
+                "prop": "pageprops",
+                "ppprop": "wikibase_item",
+                "format": "json",
+            },
+        )
+        data = resp.json()
         pages = data.get("query", {}).get("pages", {})
         normalized = data.get("query", {}).get("normalized", [])
         norm_map = {n["to"]: n["from"] for n in normalized}
 
+        batch_result = {}
         for page in pages.values():
             if page.get("missing") is not None:
                 continue
@@ -99,44 +98,52 @@ def _resolve_titles_to_qids(titles: list[str]) -> dict[str, str]:
             if qid:
                 page_title = page["title"]
                 original = norm_map.get(page_title, page_title)
-                result[original] = qid
+                batch_result[original] = qid
+        return batch_result
 
-        if i + BATCH_SIZE < len(titles):
-            time.sleep(0.5)
-
+    result = {}
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+        futures = [pool.submit(fetch_batch, b) for b in batches]
+        for future in as_completed(futures):
+            try:
+                result.update(future.result())
+            except Exception as e:
+                print(f"  Wikipedia API error: {e}")
     return result
 
 
 def _fetch_qid_labels(qids: list[str]) -> dict[str, str]:
     """Fetch English labels for Wikidata QIDs. Returns {qid: label}."""
-    result = {}
-    for i in range(0, len(qids), BATCH_SIZE):
-        batch = qids[i : i + BATCH_SIZE]
-        try:
-            resp = fetch_with_retry(
-                WIKIDATA_API,
-                params={
-                    "action": "wbgetentities",
-                    "ids": "|".join(batch),
-                    "props": "labels",
-                    "languages": "en",
-                    "format": "json",
-                },
-            )
-            data = resp.json()
-        except Exception as e:
-            print(f"  Wikidata labels error: {e}")
-            continue
+    batches = [qids[i : i + BATCH_SIZE] for i in range(0, len(qids), BATCH_SIZE)]
 
+    def fetch_batch(batch):
+        resp = fetch_with_retry(
+            WIKIDATA_API,
+            params={
+                "action": "wbgetentities",
+                "ids": "|".join(batch),
+                "props": "labels",
+                "languages": "en",
+                "format": "json",
+            },
+        )
+        data = resp.json()
+        batch_result = {}
         for qid in batch:
             entity = data.get("entities", {}).get(qid, {})
             label = entity.get("labels", {}).get("en", {}).get("value")
             if label:
-                result[qid] = label
+                batch_result[qid] = label
+        return batch_result
 
-        if i + BATCH_SIZE < len(qids):
-            time.sleep(0.3)
-
+    result = {}
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+        futures = [pool.submit(fetch_batch, b) for b in batches]
+        for future in as_completed(futures):
+            try:
+                result.update(future.result())
+            except Exception as e:
+                print(f"  Wikidata labels error: {e}")
     return result
 
 
@@ -151,23 +158,20 @@ def _fetch_wikidata_claims(qids: list[str]) -> dict[str, dict]:
     - end_year: int | None        (P582)
     - instance_of: list[str]      (P31 QIDs)
     """
-    result = {}
-    for i in range(0, len(qids), BATCH_SIZE):
-        batch = qids[i : i + BATCH_SIZE]
-        try:
-            resp = fetch_with_retry(
-                WIKIDATA_API,
-                params={
-                    "action": "wbgetentities",
-                    "ids": "|".join(batch),
-                    "props": "claims",
-                    "format": "json",
-                },
-            )
-            data = resp.json()
-        except Exception as e:
-            print(f"  Wikidata API error: {e}")
-            continue
+    batches = [qids[i : i + BATCH_SIZE] for i in range(0, len(qids), BATCH_SIZE)]
+
+    def fetch_batch(batch):
+        resp = fetch_with_retry(
+            WIKIDATA_API,
+            params={
+                "action": "wbgetentities",
+                "ids": "|".join(batch),
+                "props": "claims",
+                "format": "json",
+            },
+        )
+        data = resp.json()
+        batch_result = {}
 
         for qid, entity in data.get("entities", {}).items():
             claims = entity.get("claims", {})
@@ -223,11 +227,18 @@ def _fetch_wikidata_claims(qids: list[str]) -> dict[str, dict]:
                 parsed["instance_of"] = instance_ids
 
             if parsed:
-                result[qid] = parsed
+                batch_result[qid] = parsed
 
-        if i + BATCH_SIZE < len(qids):
-            time.sleep(0.5)
+        return batch_result
 
+    result = {}
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+        futures = [pool.submit(fetch_batch, b) for b in batches]
+        for future in as_completed(futures):
+            try:
+                result.update(future.result())
+            except Exception as e:
+                print(f"  Wikidata API error: {e}")
     return result
 
 
@@ -292,20 +303,20 @@ def _resolve_site_qids(conn, rows) -> dict[str, str]:
 
 def _resolve_parent_qids_to_site_ids(conn, parent_qids: set[str]) -> dict[str, str]:
     """Look up parent Wikidata QIDs in unified_sites. Returns {qid: site_id}."""
-    result = {}
-    for qid in parent_qids:
-        row = conn.execute(
-            text("""
-                SELECT id FROM unified_sites
-                WHERE raw_data->'wikidata'->>'qid' = :qid
-                   OR raw_data->>'wikidata_id' = :qid
-                LIMIT 1
-            """),
-            {"qid": qid},
-        ).fetchone()
-        if row:
-            result[qid] = row[0]
-    return result
+    if not parent_qids:
+        return {}
+    qid_list = list(parent_qids)
+    rows = conn.execute(
+        text("""
+            SELECT COALESCE(raw_data->'wikidata'->>'qid', raw_data->>'wikidata_id'),
+                   id
+            FROM unified_sites
+            WHERE raw_data->'wikidata'->>'qid' = ANY(CAST(:qids AS text[]))
+               OR raw_data->>'wikidata_id' = ANY(CAST(:qids AS text[]))
+        """),
+        {"qids": qid_list},
+    ).fetchall()
+    return {row[0]: row[1] for row in rows}
 
 
 def _run_parent_backfill(conn, rows, site_qids, claims_map, apply: bool) -> None:
@@ -363,7 +374,7 @@ def _run_parent_backfill(conn, rows, site_qids, claims_map, apply: bool) -> None
 # ── Metadata validation ──────────────────────────────────────────────
 
 
-def _run_metadata_validation(conn, rows, site_qids, claims_map, apply: bool) -> list:
+def _run_metadata_validation(conn, rows, site_qids, claims_map, labels: dict, apply: bool) -> list:
     """Validate and optionally fix metadata for ancient_nerds + lyra sites.
 
     Returns the list of fixes (for the gaps report to account for).
@@ -375,20 +386,6 @@ def _run_metadata_validation(conn, rows, site_qids, claims_map, apply: bool) -> 
     print("\n" + "=" * 60)
     print("METADATA VALIDATION")
     print("=" * 60)
-
-    # Collect all country QIDs + instance-of QIDs that need label resolution
-    country_qids = set()
-    instance_qids = set()
-    for data in claims_map.values():
-        if "country_qid" in data:
-            country_qids.add(data["country_qid"])
-        for qid in data.get("instance_of", []):
-            instance_qids.add(qid)
-
-    # Batch-resolve labels
-    all_label_qids = list(country_qids | instance_qids)
-    print(f"  Resolving {len(all_label_qids)} QID labels (countries + types)...")
-    labels = _fetch_qid_labels(all_label_qids) if all_label_qids else {}
 
     rows_by_id = {str(r.id): r for r in rows}
 
@@ -643,18 +640,35 @@ def main() -> None:
         claims_map = _fetch_wikidata_claims(unique_qids)
         print(f"  Got data for {len(claims_map)} entities")
 
-        # Step 4: Run requested operations
+        # Step 4: Pre-compute label QIDs, then overlap label fetch with parent backfill
         metadata_fixes = []
 
-        if do_parents:
-            parent_qids = {
-                sid: qid for sid, qid in site_qids.items()
-                if any(str(r.id) == sid and r.parent_site_id is None for r in rows)
-            }
-            _run_parent_backfill(conn, rows, parent_qids, claims_map, args.apply)
+        # Collect QIDs that need label resolution (countries + instance-of types)
+        label_qids = set()
+        for data in claims_map.values():
+            if "country_qid" in data:
+                label_qids.add(data["country_qid"])
+            for qid in data.get("instance_of", []):
+                label_qids.add(qid)
+
+        label_qid_list = list(label_qids)
+        print(f"\n  Resolving {len(label_qid_list)} QID labels (countries + types)...")
+
+        # Kick off label fetch in background while parent backfill runs
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            label_future = pool.submit(_fetch_qid_labels, label_qid_list) if label_qid_list else None
+
+            if do_parents:
+                parent_qids = {
+                    sid: qid for sid, qid in site_qids.items()
+                    if any(str(r.id) == sid and r.parent_site_id is None for r in rows)
+                }
+                _run_parent_backfill(conn, rows, parent_qids, claims_map, args.apply)
+
+            labels = label_future.result() if label_future else {}
 
         if do_metadata:
-            metadata_fixes = _run_metadata_validation(conn, rows, site_qids, claims_map, args.apply)
+            metadata_fixes = _run_metadata_validation(conn, rows, site_qids, claims_map, labels, args.apply)
 
         # Step 5: Gaps report — what's still missing after Wikidata?
         _run_gaps_report(rows, site_qids, claims_map, metadata_fixes)
