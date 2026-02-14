@@ -544,6 +544,9 @@ def normalize_country(name: str) -> str:
         part = part.strip()
         if part in NAME_TO_ISO:
             return NAME_TO_ISO[part]
+    # Already an ISO code (e.g. "tr" from DB) — uppercase for consistent comparison
+    if len(lower) == 2 and lower.isalpha():
+        return lower.upper()
     return lower
 
 
