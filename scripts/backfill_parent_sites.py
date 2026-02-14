@@ -267,7 +267,7 @@ def _resolve_site_qids(conn, rows) -> dict[str, str]:
         contrib_rows = conn.execute(text("""
             SELECT promoted_site_id, wikidata_id
             FROM user_contributions
-            WHERE promoted_site_id = ANY(:ids)
+            WHERE promoted_site_id = ANY(:ids::uuid[])
               AND wikidata_id IS NOT NULL
         """), {"ids": lyra_missing}).fetchall()
         for crow in contrib_rows:
