@@ -15,6 +15,7 @@ from typing import Any
 from loguru import logger
 
 from pipeline.ingesters.base import BaseIngester, ParsedSite, atomic_write_bytes
+from pipeline.normalizers.dates import parse_year
 from pipeline.utils.http import fetch_with_retry
 
 
@@ -34,6 +35,7 @@ class AncientNerdsOriginalIngester(BaseIngester):
 
     # Period mapping from text to numeric years
     PERIOD_MAPPING = {
+        "< 4500 BC": (-10000, -4500),
         "before 4500 BC": (-10000, -4500),
         "4500 - 3000 BC": (-4500, -3000),
         "3000 - 1500 BC": (-3000, -1500),
@@ -42,6 +44,7 @@ class AncientNerdsOriginalIngester(BaseIngester):
         "1 - 500 AD": (1, 500),
         "500 - 1000 AD": (500, 1000),
         "1000 - 1500 AD": (1000, 1500),
+        "> 1500 AD": (1500, 2100),
     }
 
     # Category typo fixes - preserve original compound names but fix data quality issues
@@ -160,8 +163,12 @@ class AncientNerdsOriginalIngester(BaseIngester):
         # Get location (country)
         location = properties.get("Location", "")
 
-        # Get year text
+        # Get year text — use it as period_start when Period bucket didn't give one
         year_text = properties.get("Year", "")
+        if period_start is None and year_text:
+            parsed = parse_year(year_text)
+            if parsed is not None:
+                period_start = parsed
 
         # Get source URL (Wikipedia)
         source_url = properties.get("Source", "")

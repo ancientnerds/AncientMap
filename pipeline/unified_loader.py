@@ -45,6 +45,7 @@ from pipeline.utils import (
 from pipeline.utils import (
     parse_wkt_point as _parse_wkt_point,
 )
+from pipeline.normalizers.dates import parse_year
 from pipeline.utils.country_lookup import lookup_country
 
 # =============================================================================
@@ -547,20 +548,6 @@ def extract_id_from_uri(uri: str) -> str:
     return uri.rstrip("/").split("/")[-1]
 
 
-def parse_year(value) -> int | None:
-    """Parse year value, handling various formats."""
-    if value is None or value == "":
-        return None
-    try:
-        year = int(float(value))
-        # Sanity check: years should be reasonable
-        if -10000 <= year <= 2100:
-            return year
-    except (ValueError, TypeError):
-        pass
-    return None
-
-
 def get_centroid(geometry: dict) -> tuple[float | None, float | None]:
     """Get centroid from GeoJSON geometry -> (lat, lon).
 
@@ -1015,6 +1002,7 @@ class UnifiedLoader:
         """Parse Ancient Nerds original GeoJSON format with rich descriptions."""
         # Period mapping from text to numeric years
         PERIOD_MAPPING = {
+            "< 4500 BC": (-10000, -4500),
             "before 4500 BC": (-10000, -4500),
             "4500 - 3000 BC": (-4500, -3000),
             "3000 - 1500 BC": (-3000, -1500),
@@ -1023,6 +1011,7 @@ class UnifiedLoader:
             "1 - 500 AD": (1, 500),
             "500 - 1000 AD": (500, 1000),
             "1000 - 1500 AD": (1000, 1500),
+            "> 1500 AD": (1500, 2100),
         }
 
         with open(path, encoding="utf-8") as f:
@@ -1056,6 +1045,14 @@ class UnifiedLoader:
             # Get period and parse to years
             period_name = props.get("Period", "")
             period_start, period_end = PERIOD_MAPPING.get(period_name, (None, None))
+
+            # Fallback: parse Year field when Period bucket didn't give a start date
+            if period_start is None:
+                year_text = props.get("Year", "")
+                if year_text:
+                    parsed = parse_year(year_text)
+                    if parsed is not None:
+                        period_start = parsed
 
             # Get category/site type - preserve original compound category names
             category = props.get("Category", "")

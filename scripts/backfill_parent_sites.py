@@ -27,6 +27,7 @@ import argparse
 from sqlalchemy import text
 
 from pipeline.database import engine
+from pipeline.normalizers.dates import extract_year_from_wikidata_time
 from pipeline.utils.http import fetch_with_retry
 
 WIKIDATA_API = "https://www.wikidata.org/w/api.php"
@@ -41,16 +42,9 @@ MAX_WORKERS = 3
 # ── Wikidata helpers ─────────────────────────────────────────────────
 
 
-def _parse_wikidata_time(time_str: str) -> int | None:
-    """Parse Wikidata ISO time format to year integer."""
-    if not time_str:
-        return None
-    match = re.match(r"^([+-])0*(\d+)-", time_str)
-    if not match:
-        return None
-    sign = -1 if match.group(1) == "-" else 1
-    year = int(match.group(2))
-    return sign * year if year != 0 else None
+def _parse_wikidata_time(time_str: str, precision: int = 9) -> int | None:
+    """Parse Wikidata ISO time format to year integer. Delegates to shared implementation."""
+    return extract_year_from_wikidata_time(time_str, precision)
 
 
 def _wikipedia_url_to_title(url: str) -> str | None:
@@ -200,7 +194,8 @@ def _fetch_wikidata_claims(qids: list[str]) -> dict[str, dict]:
                 entries = claims.get(prop, [])
                 if entries and "inception_year" not in parsed:
                     time_val = entries[0].get("mainsnak", {}).get("datavalue", {}).get("value", {})
-                    year = _parse_wikidata_time(time_val.get("time", ""))
+                    precision = time_val.get("precision", 9)
+                    year = _parse_wikidata_time(time_val.get("time", ""), precision)
                     if year is not None:
                         parsed["inception_year"] = year
 
@@ -208,7 +203,8 @@ def _fetch_wikidata_claims(qids: list[str]) -> dict[str, dict]:
             p582 = claims.get("P582", [])
             if p582:
                 time_val = p582[0].get("mainsnak", {}).get("datavalue", {}).get("value", {})
-                year = _parse_wikidata_time(time_val.get("time", ""))
+                precision = time_val.get("precision", 9)
+                year = _parse_wikidata_time(time_val.get("time", ""), precision)
                 if year is not None:
                     parsed["end_year"] = year
 
