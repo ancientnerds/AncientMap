@@ -167,7 +167,7 @@ def _rescore_item(
         response = call_api(
             client,
             model=settings.model_rescore,
-            max_tokens=512,
+            max_tokens=256,
             temperature=0.0,
             system=[{
                 "type": "text",
@@ -194,4 +194,8 @@ def _rescore_item(
             f"blocks={[type(b).__name__ for b in response.content]}"
         )
         return None
-    return parse_json_response(text_block)
+    try:
+        return parse_json_response(text_block)
+    except (json.JSONDecodeError, KeyError, ValueError) as e:
+        logger.warning(f"Bad rescore JSON for item {item.id}: {e}")
+        return None
