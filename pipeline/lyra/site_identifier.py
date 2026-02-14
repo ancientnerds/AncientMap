@@ -902,6 +902,13 @@ def _enrich_from_wikidata(qid: str) -> dict:
         if time_val.get("time"):
             result["end_time"] = time_val["time"]
 
+    # P361: part of (e.g. Great Sphinx → Giza pyramid complex)
+    p361 = claims.get("P361", [])
+    if p361:
+        parent_id = p361[0].get("mainsnak", {}).get("datavalue", {}).get("value", {}).get("id")
+        if parent_id:
+            result["part_of_qid"] = parent_id
+
     # P18: image
     p18 = claims.get("P18", [])
     if p18:
@@ -1237,7 +1244,7 @@ def _handle_db_match(
             # Compare ISO codes so "United States" == "United States of America"
             if normalize_country(contrib_country) != site_iso:
                 reject_reason = contrib_country
-        elif db_candidate["similarity"] < 0.9:
+        elif db_candidate["similarity"] < 0.9 or contribution.corrected_name:
             # AI no longer provides country — check video context for validation.
             # Build text blob from facts + video titles/descriptions/tags.
             context_parts = list(facts or [])
@@ -1683,6 +1690,24 @@ def _compute_score(contribution: UserContribution) -> int:
     return score
 
 
+def _resolve_parent_site(session: Session, parent_qid: str) -> uuid.UUID | None:
+    """Look up a Wikidata QID in unified_sites and return its ID if found.
+
+    Checks raw_data->'wikidata'->'qid' (lyra sites) and
+    raw_data->'wikidata_id' (wikidata-ingested sites).
+    """
+    row = session.execute(
+        text("""
+            SELECT id FROM unified_sites
+            WHERE raw_data->'wikidata'->>'qid' = :qid
+               OR raw_data->>'wikidata_id' = :qid
+            LIMIT 1
+        """),
+        {"qid": parent_qid},
+    ).fetchone()
+    return row[0] if row else None
+
+
 def _promote_to_unified_sites(
     session: Session,
     contribution: UserContribution,
@@ -1715,6 +1740,14 @@ def _promote_to_unified_sites(
     site_id = uuid.uuid4()
     source_record_id = f"lyra-{contribution.id}"
 
+    # Resolve parent site from Wikidata P361 (part-of) if available
+    parent_site_id = None
+    part_of_qid = (contribution.enrichment_data or {}).get("wikidata", {}).get("part_of_qid")
+    if part_of_qid:
+        parent_site_id = _resolve_parent_site(session, part_of_qid)
+        if parent_site_id:
+            logger.info(f"  [{site_name}] Parent site resolved from P361 ({part_of_qid})")
+
     site = UnifiedSite(
         id=site_id,
         source_id="lyra",
@@ -1732,6 +1765,7 @@ def _promote_to_unified_sites(
         thumbnail_url=contribution.thumbnail_url,
         source_url=contribution.wikipedia_url,
         raw_data=contribution.enrichment_data,
+        parent_site_id=parent_site_id,
     )
     session.add(site)
 
