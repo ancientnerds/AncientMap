@@ -10,7 +10,7 @@ from sqlalchemy import func
 
 from pipeline.database import NewsItem, NewsVideo, get_session
 from pipeline.lyra.config import LyraSettings, call_api, get_anthropic_client, parse_json_response
-from pipeline.lyra.transcript_fetcher import parse_timestamp_to_seconds
+from pipeline.lyra.transcript_fetcher import extract_transcript_segment, parse_timestamp_to_seconds
 
 logger = logging.getLogger(__name__)
 
@@ -306,8 +306,15 @@ def summarize_video(
             primary_site = topic.get("primary_site")
             if primary_site and isinstance(primary_site, dict):
                 confidence = primary_site.get("confidence", "")
-                if confidence == "high" and primary_site.get("name"):
+                if confidence in ("high", "medium") and primary_site.get("name"):
                     site_name = primary_site["name"][:500]
+
+            # Extract raw transcript segment around the topic timestamp
+            transcript_segment = None
+            if ts_range and video.transcript_text:
+                segment = extract_transcript_segment(video.transcript_text, ts_range, buffer_seconds=60)
+                if segment and len(segment) > 20:
+                    transcript_segment = segment[:500]
 
             item = NewsItem(
                 video_id=video.id,
@@ -317,6 +324,7 @@ def summarize_video(
                 timestamp_range=ts_range,
                 timestamp_seconds=ts_seconds,
                 site_name_extracted=site_name,
+                transcript_segment=transcript_segment,
             )
             session.add(item)
 

@@ -29,6 +29,7 @@ from pipeline.database import (
 )
 from pipeline.lyra.config import LyraSettings, call_api, get_anthropic_client, parse_json_response
 from pipeline.lyra.site_matcher import fill_contrib_from_site
+from pipeline.lyra.site_researcher import research_site
 from pipeline.normalizers.dates import passes_date_cutoff
 from pipeline.normalizers.site_type import normalize_site_type
 from pipeline.utils.country_lookup import country_name_variants, lookup_country, normalize_country
@@ -45,6 +46,7 @@ logger = logging.getLogger(__name__)
 PROMPT_PATH = Path(__file__).parent / "prompts" / "identify_site.txt"
 PICK_ENTITY_PROMPT_PATH = Path(__file__).parent / "prompts" / "pick_wikidata_entity.txt"
 EXTRACT_METADATA_PROMPT_PATH = Path(__file__).parent / "prompts" / "extract_metadata.txt"
+DISAMBIGUATE_PROMPT_PATH = Path(__file__).parent / "prompts" / "disambiguate_candidates.txt"
 
 IDENTIFY_SITE_SCHEMA = {
     "type": "object",
@@ -192,7 +194,7 @@ def _process_single(
     Returns True if the contribution was meaningfully updated.
     """
     # Aggregate facts from all related NewsItems
-    facts, video_contexts = _aggregate_facts(session, contribution)
+    facts, video_contexts, transcript_segments = _aggregate_facts(session, contribution)
     facts_hash = _compute_facts_hash(facts, video_contexts)
     logger.info(
         f"  [{contribution.name}] facts={len(facts)}, videos={len(video_contexts)}, "
@@ -221,7 +223,7 @@ def _process_single(
     contribution.last_facts_hash = facts_hash
 
     # Step 1: AI identifies the site
-    user_prompt = _build_user_prompt(contribution, facts, video_contexts)
+    user_prompt = _build_user_prompt(contribution, facts, video_contexts, transcript_segments)
 
     identification = _call_ai(
         client, settings.model_identify, user_prompt,
@@ -268,6 +270,18 @@ def _process_single(
 
         best = db_candidates[0]
         if best["similarity"] >= settings.pg_trgm_threshold:
+            # Disambiguate if top 2+ candidates have very close scores
+            if (
+                len(db_candidates) >= 2
+                and db_candidates[1]["similarity"] >= settings.pg_trgm_threshold
+                and abs(best["similarity"] - db_candidates[1]["similarity"]) <= 0.1
+            ):
+                disambiguated = _disambiguate_db_candidates(
+                    client, settings, search_name, db_candidates[:5], facts, video_contexts,
+                )
+                if disambiguated:
+                    best = disambiguated
+
             return _handle_db_match(session, contribution, best, identification, settings, facts, video_contexts, all_candidates=db_candidates, promoted_ids=promoted_ids)
 
     # Also try with original name if different
@@ -277,15 +291,48 @@ def _process_single(
             logger.info(f"  [{contribution.name}] DB match via original name: {orig_candidates[0]['name']}")
             return _handle_db_match(session, contribution, orig_candidates[0], identification, settings, facts, video_contexts, all_candidates=orig_candidates, promoted_ids=promoted_ids)
 
-    # Step 3: Code searches Wikidata for enrichment
-    wikidata_candidates = _search_wikidata(search_name)
-    if wikidata_candidates:
-        top3 = ", ".join(c['label'] for c in wikidata_candidates[:3])
-        logger.info(f"  [{contribution.name}] Wikidata candidates: {len(wikidata_candidates)} (top: {top3})")
-        return _handle_wikidata_match(session, contribution, identification, wikidata_candidates, client, settings, pick_entity_prompt, extract_metadata_prompt)
+    # Step 3: Full research protocol (replaces simple Wikidata-only path)
+    logger.info(f"  [{contribution.name}] No DB match — starting deep research for '{search_name}'")
+    research = research_site(
+        search_name, client, settings,
+        facts=facts, video_contexts=video_contexts,
+    )
 
-    # Step 4: Neither DB nor Wikidata → new site
-    return _handle_new_site(session, contribution, identification, settings)
+    # If research found a Wikidata candidate with a QID, try the existing
+    # Wikidata enrichment path (which fetches coordinates, Wikipedia, etc.)
+    if research.best_match and research.best_match.get("qid"):
+        qid = research.best_match["qid"]
+        # Build a wikidata_candidates list for the existing handler
+        wikidata_candidates = [{
+            "qid": qid,
+            "label": research.best_match.get("label", ""),
+            "description": research.best_match.get("description", ""),
+        }]
+        logger.info(f"  [{contribution.name}] Research found Wikidata match: {qid}")
+        result = _handle_wikidata_match(
+            session, contribution, identification, wikidata_candidates,
+            client, settings, pick_entity_prompt, extract_metadata_prompt,
+        )
+        # Apply gap-fill on top of Wikidata enrichment
+        _apply_gap_fill(contribution, research)
+        _apply_pre_research(contribution, research)
+        # Re-score after gap-fill
+        contribution.score = _compute_score(contribution)
+        contribution.enrichment_data = {
+            **(contribution.enrichment_data or {}),
+            "research": research.to_dict(),
+        }
+        _maybe_promote(session, contribution, search_name, settings)
+        if contribution.promoted_site_id:
+            _store_garble_alias(session, contribution.promoted_site_id, contribution.name, search_name)
+        return result
+
+    # If research found a GeoNames or Wikipedia match but no Wikidata QID
+    if research.best_match:
+        logger.info(f"  [{contribution.name}] Research found non-Wikidata match: {research.best_match.get('source')}")
+
+    # Apply all knowledge from research (pre-research + gap-fill)
+    return _handle_ai_enriched_site(session, contribution, identification, research, search_name, settings)
 
 
 def _call_ai(
@@ -344,12 +391,14 @@ def _call_ai(
     return None
 
 
-def _aggregate_facts(session: Session, contribution: UserContribution) -> tuple[list[str], list[dict]]:
-    """Aggregate facts and video context for a candidate from all related NewsItems.
+def _aggregate_facts(session: Session, contribution: UserContribution) -> tuple[list[str], list[dict], list[str]]:
+    """Aggregate facts, video context, and transcript segments for a candidate.
 
     Uses func.lower() for matching — same approach as site_matcher._upsert_lyra_suggestion
     which stores names via func.lower(UserContribution.name). Do NOT use normalize_name()
     here because that strips diacritics/parentheses which func.lower() does not.
+
+    Returns (facts, video_contexts, transcript_segments).
     """
     name_lower = contribution.name.lower().strip()
     items = session.query(NewsItem).filter(
@@ -358,14 +407,17 @@ def _aggregate_facts(session: Session, contribution: UserContribution) -> tuple[
 
     all_facts: list[str] = []
     video_contexts = []
+    transcript_segments: list[str] = []
 
-    # Collect facts and unique video IDs
+    # Collect facts, transcript segments, and unique video IDs
     video_ids = set()
     for item in items:
         if item.facts:
             all_facts.extend(item.facts)
         if item.video_id:
             video_ids.add(item.video_id)
+        if item.transcript_segment:
+            transcript_segments.append(item.transcript_segment)
 
     # Batch-load videos instead of N+1 queries
     if video_ids:
@@ -380,7 +432,7 @@ def _aggregate_facts(session: Session, contribution: UserContribution) -> tuple[
 
     # Deduplicate facts while preserving order
     all_facts = list(dict.fromkeys(all_facts))
-    return all_facts, video_contexts
+    return all_facts, video_contexts, transcript_segments
 
 
 def _compute_facts_hash(facts: list[str], video_contexts: list[dict] | None = None) -> str:
@@ -445,6 +497,65 @@ def _fetch_db_candidates(session: Session, name: str, limit: int = 10, threshold
             break
 
     return candidates
+
+
+DISAMBIGUATE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "chosen_index": {"type": "integer"},
+        "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
+        "reasoning": {"type": "string"},
+    },
+    "required": ["chosen_index", "confidence", "reasoning"],
+    "additionalProperties": False,
+}
+
+
+def _disambiguate_db_candidates(
+    client: anthropic.Anthropic,
+    settings: LyraSettings,
+    name: str,
+    candidates: list[dict],
+    facts: list[str],
+    video_contexts: list[dict],
+) -> dict | None:
+    """Ask MiniMax to pick between close DB matches."""
+    prompt_template = DISAMBIGUATE_PROMPT_PATH.read_text(encoding="utf-8")
+
+    formatted_parts = []
+    for i, c in enumerate(candidates):
+        country_str = f" [{c['country']}]" if c.get("country") else ""
+        formatted_parts.append(
+            f"  {i+1}. {c['name']}{country_str} (source: {c['source']}, similarity: {c['similarity']})"
+        )
+
+    facts_text = "\n".join(f"- {f}" for f in facts[:15]) if facts else "(none)"
+    video_text = ""
+    for ctx in video_contexts[:3]:
+        video_text += f"  Title: {ctx.get('title', '')}\n"
+    video_text = video_text.strip() or "(none)"
+
+    prompt = prompt_template.format(
+        name=name,
+        facts=facts_text,
+        video_context=video_text,
+        formatted_candidates="\n".join(formatted_parts),
+    )
+
+    result = _call_ai(client, settings.model_identify, prompt, schema=DISAMBIGUATE_SCHEMA)
+    if not result:
+        return None
+
+    chosen_idx = result.get("chosen_index")
+    if chosen_idx is not None and isinstance(chosen_idx, int) and 1 <= chosen_idx <= len(candidates):
+        chosen = candidates[chosen_idx - 1]
+        logger.info(
+            f"  [{name}] AI disambiguated: picked #{chosen_idx} '{chosen['name']}' "
+            f"(confidence: {result.get('confidence')})"
+        )
+        return chosen
+
+    return None
 
 
 def _search_wikidata(name: str) -> list[dict]:
@@ -789,6 +900,7 @@ def _build_user_prompt(
     contribution: UserContribution,
     facts: list[str],
     video_contexts: list[dict],
+    transcript_segments: list[str] | None = None,
 ) -> str:
     """Build the variable user content for identification."""
     facts_text = "\n".join(f"- {f}" for f in facts[:30]) if facts else "(no facts extracted)"
@@ -803,11 +915,19 @@ def _build_user_prompt(
         video_text_parts.append(part)
     video_text = "\n".join(video_text_parts) if video_text_parts else "(no video context)"
 
-    return (
+    prompt = (
         f'Extracted Name: "{contribution.name}" (mentioned in {contribution.mention_count} video(s))\n\n'
         f"<video_facts>\n{facts_text}\n</video_facts>\n\n"
         f"<video_metadata>\n{video_text}\n</video_metadata>"
     )
+
+    # Add raw transcript context if available (helps decode phonetic garbling)
+    if transcript_segments:
+        segments_text = "\n---\n".join(s for s in transcript_segments[:3] if s)
+        if segments_text:
+            prompt += f"\n\n<transcript_context>\n{segments_text}\n</transcript_context>"
+
+    return prompt
 
 
 ESCALATION_SYSTEM_PROMPT = """You are a senior archaeological site identification reviewer.
@@ -890,6 +1010,33 @@ def _escalate_to_sonnet(
         logger.info(f"Review model confirmed initial answer (confidence: {sonnet_confidence})")
 
     return result
+
+
+def _store_garble_alias(session: Session, site_id: uuid.UUID, garbled_name: str, canonical_name: str) -> None:
+    """Store a garbled caption name as an alias for faster future matching.
+
+    Only stores if the garbled name differs from the canonical name and
+    the alias doesn't already exist (unique constraint handles races).
+    """
+    garbled_normalized = normalize_name(garbled_name)
+    canonical_normalized = normalize_name(canonical_name)
+    if not garbled_normalized or garbled_normalized == canonical_normalized:
+        return
+
+    existing = session.query(UnifiedSiteName).filter(
+        UnifiedSiteName.site_id == site_id,
+        UnifiedSiteName.name_normalized == garbled_normalized,
+    ).first()
+    if existing:
+        return
+
+    session.add(UnifiedSiteName(
+        site_id=site_id,
+        name=garbled_name,
+        name_normalized=garbled_normalized,
+        name_type="caption_garble",
+    ))
+    logger.info(f"  Stored garble alias: '{garbled_name}' -> site {site_id}")
 
 
 def _handle_db_match(
@@ -1048,6 +1195,9 @@ def _handle_db_match(
             f"'{site.name}' ({updated} items linked, {len(external_sources)} ext sources)"
         )
 
+    # Store garbled caption name as alias for faster future matching
+    _store_garble_alias(session, site_uuid, contribution.name, site.name)
+
     contribution.score = _compute_score(contribution)
     return True
 
@@ -1145,6 +1295,10 @@ def _handle_wikidata_match(
     # Promote if score is high enough and has coordinates
     _maybe_promote(session, contribution, site_name, settings)
 
+    # Store garble alias for the promoted site (if promoted)
+    if contribution.promoted_site_id:
+        _store_garble_alias(session, contribution.promoted_site_id, contribution.name, site_name)
+
     return True
 
 
@@ -1168,6 +1322,101 @@ def _handle_new_site(
 
     # Promote if score is high enough and has coordinates
     _maybe_promote(session, contribution, site_name, settings)
+
+    return True
+
+
+def _apply_pre_research(contribution: UserContribution, research) -> None:
+    """Apply pre-research knowledge to a contribution (fill-if-missing)."""
+    pr = research.pre_research if research else None
+    if not pr:
+        return
+    if pr.get("country") and not contribution.country:
+        contribution.country = pr["country"]
+    if pr.get("site_type") and pr["site_type"] != "Unknown" and not contribution.site_type:
+        contribution.site_type = normalize_site_type(pr["site_type"])
+    if pr.get("approximate_period") and pr["approximate_period"] != "Unknown" and contribution.period_start is None:
+        period_start = extract_period_from_text(pr["approximate_period"])
+        if period_start is not None:
+            contribution.period_start = period_start
+            contribution.period_name = categorize_period(period_start)
+    if pr.get("brief_description") and not contribution.description:
+        contribution.description = clean_description(pr["brief_description"])
+
+
+def _apply_gap_fill(contribution: UserContribution, research) -> None:
+    """Apply gap-fill knowledge to a contribution (fill-if-missing)."""
+    gf = research.gap_fill if research else None
+    if not gf:
+        return
+    if gf.get("country") and gf["country"] != "Unknown" and not contribution.country:
+        contribution.country = gf["country"]
+    if gf.get("site_type") and gf["site_type"] != "Unknown" and not contribution.site_type:
+        contribution.site_type = normalize_site_type(gf["site_type"])
+    if gf.get("period") and gf["period"] != "Unknown" and contribution.period_start is None:
+        period_start = extract_period_from_text(gf["period"])
+        if period_start is not None:
+            contribution.period_start = period_start
+            contribution.period_name = categorize_period(period_start)
+    if gf.get("brief_description") and not contribution.description:
+        contribution.description = clean_description(gf["brief_description"])
+    if gf.get("approximate_lat") and gf.get("approximate_lon") and contribution.lat is None:
+        if gf.get("coordinate_confidence") in ("exact", "approximate"):
+            contribution.lat = gf["approximate_lat"]
+            contribution.lon = gf["approximate_lon"]
+
+
+def _handle_ai_enriched_site(
+    session: Session,
+    contribution: UserContribution,
+    identification: dict,
+    research,
+    search_name: str,
+    settings: LyraSettings,
+) -> bool:
+    """Handle a site enriched from AI research (no external DB match)."""
+    # Apply pre-research knowledge
+    _apply_pre_research(contribution, research)
+
+    # Apply gap-fill knowledge
+    _apply_gap_fill(contribution, research)
+
+    # Apply GeoNames coordinates from best_match if available
+    if research and research.best_match:
+        bm = research.best_match
+        if bm.get("lat") and bm.get("lon") and contribution.lat is None:
+            contribution.lat = bm["lat"]
+            contribution.lon = bm["lon"]
+        if bm.get("country") and not contribution.country:
+            contribution.country = bm["country"]
+        if bm.get("wikipedia_url") and not contribution.wikipedia_url:
+            wp_url = bm["wikipedia_url"]
+            if not wp_url.startswith("http"):
+                wp_url = f"https://{wp_url}"
+            contribution.wikipedia_url = wp_url
+
+    # Resolve country from coordinates if still missing
+    if contribution.lat and contribution.lon and not contribution.country:
+        contribution.country = lookup_country(contribution.lat, contribution.lon)
+
+    contribution.enrichment_data = {
+        "identification": identification,
+        "research": research.to_dict() if research else None,
+    }
+    contribution.score = _compute_score(contribution)
+    contribution.enrichment_status = "enriched"
+
+    logger.info(
+        f"  [{contribution.name}] AI-enriched site: score={contribution.score}, "
+        f"country={contribution.country}, type={contribution.site_type}, "
+        f"coords=({contribution.lat}, {contribution.lon})"
+    )
+
+    _maybe_promote(session, contribution, search_name, settings)
+
+    # Store garble alias for the promoted site (if promoted)
+    if contribution.promoted_site_id:
+        _store_garble_alias(session, contribution.promoted_site_id, contribution.name, search_name)
 
     return True
 

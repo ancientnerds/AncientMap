@@ -99,6 +99,58 @@ def clean_description(description: str | None, max_length: int = 1000) -> str | 
     return text if text else None
 
 
+_TRANSLITERATION_MAP = {
+    "ph": "f",
+    "kh": "ch",
+    "ae": "a",
+    "oe": "o",
+    "sch": "sh",
+    "tch": "ch",
+    "qu": "k",
+    "ck": "k",
+    "th": "t",
+    "dh": "d",
+    "gh": "g",
+    "bh": "b",
+    "ue": "u",
+    "ie": "i",
+    "ey": "i",
+    "ay": "i",
+    "ou": "u",
+    "oo": "u",
+    "ee": "i",
+    "ts": "s",
+    "tz": "s",
+    "dj": "j",
+    "zh": "z",
+}
+
+
+def normalize_transliteration(name: str) -> str:
+    """Aggressive phonetic normalization for matching transliterated names.
+
+    Handles common archaeological name transliteration variants:
+    ph↔f, kh↔ch, ae↔a, doubled consonants, etc.
+    """
+    if not name:
+        return ""
+
+    # Start with standard normalization
+    result = normalize_name(name)
+
+    # Apply transliteration substitutions (longer patterns first)
+    for old, new in sorted(_TRANSLITERATION_MAP.items(), key=lambda x: -len(x[0])):
+        result = result.replace(old, new)
+
+    # Remove doubled consonants (e.g. "ll" -> "l", "ss" -> "s")
+    result = re.sub(r"([bcdfghjklmnpqrstvwxyz])\1+", r"\1", result)
+
+    # Remove spaces and hyphens for pure phonetic comparison
+    result = result.replace(" ", "").replace("-", "")
+
+    return result
+
+
 PERIOD_BUCKET_TO_YEAR = {
     "< 4500 BC": -4500,
     "4500 - 3000 BC": -4500,
