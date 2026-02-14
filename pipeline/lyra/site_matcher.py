@@ -305,4 +305,10 @@ def fill_contrib_from_site(contrib: UserContribution, site: UnifiedSite) -> None
     if not contrib.thumbnail_url and site.thumbnail_url:
         contrib.thumbnail_url = site.thumbnail_url
     if not contrib.wikipedia_url and site.source_url:
-        contrib.wikipedia_url = site.source_url
+        url = site.source_url
+        if "wikidata.org" in url:
+            qid_match = re.search(r"Q\d+", url)
+            if qid_match and not contrib.wikidata_id:
+                contrib.wikidata_id = qid_match.group()
+        elif "wikipedia.org" in url:
+            contrib.wikipedia_url = url

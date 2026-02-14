@@ -301,6 +301,8 @@
   border-radius: 3px;
   text-decoration: none;
   transition: all 0.15s;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .lyra-suggestion-chip:hover {
@@ -553,11 +555,6 @@
   font-weight: 700;
 }
 
-.lyra-score-sublabel {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.35);
-}
-
 .lyra-score-breakdown {
   display: flex;
   flex-wrap: wrap;
@@ -665,6 +662,12 @@
 .lyra-score-sources-label {
   font-size: 10px;
   color: rgba(255, 255, 255, 0.35);
+}
+
+.lyra-source-empty {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.2);
+  font-style: italic;
 }
 
 .lyra-source-tag {

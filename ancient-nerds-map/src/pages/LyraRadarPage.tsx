@@ -71,6 +71,7 @@ interface RadarItem {
   external_sources: ExternalSource[]
   confidence: string | null
   data_sources: string[]
+  commons_url: string | null
   nearby_an_site: { name: string; distance_km: number } | null
 }
 
@@ -181,7 +182,6 @@ function ScoreBreakdown({ item }: { item: RadarItem }) {
     <div className="lyra-score-section">
       <div className="lyra-score-header" title={`Data completeness: ${earned}/100 points. Higher scores mean more metadata (coordinates, period, category, description, images) was found for this site.`}>
         <span className="lyra-discovery-percentage" style={{ color: scoreColor(pct) }}>{pct}%</span>
-        <span className="lyra-score-sublabel">enrichment score</span>
         <span className="lyra-score-badges">
           <StatusPill status={item.enrichment_status} />
           {item.confidence && <ConfidenceBadge level={item.confidence} />}
@@ -203,16 +203,18 @@ function ScoreBreakdown({ item }: { item: RadarItem }) {
           )
         })}
       </div>
-      {item.data_sources.length > 0 && (
-        <div className="lyra-score-sources">
-          <span className="lyra-score-sources-label">Sources:</span>
-          {item.data_sources.map(src => {
+      <div className="lyra-score-sources">
+        <span className="lyra-score-sources-label">Sources:</span>
+        {item.data_sources.length > 0 ? (
+          item.data_sources.map(src => {
             const info = DATA_SOURCE_LABELS[src]
             if (!info) return null
             return <span key={src} className="lyra-source-tag" title={info.title}>{info.abbr}</span>
-          })}
-        </div>
-      )}
+          })
+        ) : (
+          <span className="lyra-source-empty">&mdash;</span>
+        )}
+      </div>
     </div>
   )
 }
@@ -229,6 +231,21 @@ function radarItemToSiteData(item: RadarItem): SiteData {
     description: item.description || '',
     sourceId: 'lyra',
     sourceUrl: item.wikipedia_url || undefined,
+  }
+}
+
+function suggestionToSiteData(suggestion: SuggestionMatch, itemName: string): SiteData {
+  return {
+    id: suggestion.site_id,
+    title: suggestion.name || itemName,
+    coordinates: [NaN, NaN],
+    category: 'Unknown',
+    period: 'Unknown',
+    location: suggestion.country || '',
+    description: '',
+    sourceId: suggestion.source_id || 'unknown',
+    sourceUrl: suggestion.wikipedia_url || undefined,
+    image: suggestion.thumbnail_url || undefined,
   }
 }
 
@@ -325,7 +342,7 @@ function RadarCard({ item, onViewSite }: { item: RadarItem; onViewSite?: (site: 
       )}
 
       {/* 7. External links row */}
-      {(item.wikipedia_url || item.wikidata_id) && (
+      {(item.wikipedia_url || item.wikidata_id || item.commons_url) && (
         <div className="lyra-wiki-links-row">
           {item.wikipedia_url && (
             <a
@@ -347,6 +364,17 @@ function RadarCard({ item, onViewSite }: { item: RadarItem; onViewSite?: (site: 
             >
               <img src="https://www.google.com/s2/favicons?domain=wikidata.org&sz=32" alt="" className="lyra-link-favicon" />
               Wikidata
+            </a>
+          )}
+          {item.commons_url && (
+            <a
+              href={item.commons_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="lyra-wiki-link lyra-wikidata-link"
+            >
+              <img src="https://www.google.com/s2/favicons?domain=commons.wikimedia.org&sz=32" alt="" className="lyra-link-favicon" />
+              Commons
             </a>
           )}
         </div>
@@ -456,12 +484,10 @@ function RadarCard({ item, onViewSite }: { item: RadarItem; onViewSite?: (site: 
       {item.best_match && (
         <div className="lyra-discovery-best-match">
           <span className="lyra-best-match-label">Strong match:</span>
-          <a
-            href={`/?site=${item.best_match.site_id}`}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
             className="lyra-suggestion-chip lyra-best-match-chip"
             title={`${Math.round(item.best_match.similarity * 100)}% match`}
+            onClick={() => onViewSite?.(suggestionToSiteData(item.best_match!, item.display_name))}
           >
             {item.best_match.name}
             <span className="lyra-best-match-pct">{Math.round(item.best_match.similarity * 100)}%</span>
@@ -472,7 +498,7 @@ function RadarCard({ item, onViewSite }: { item: RadarItem; onViewSite?: (site: 
                 className="lyra-suggestion-flag"
               />
             )}
-          </a>
+          </button>
         </div>
       )}
 
@@ -481,13 +507,11 @@ function RadarCard({ item, onViewSite }: { item: RadarItem; onViewSite?: (site: 
         <div className="lyra-discovery-suggestions">
           <span className="lyra-suggestions-label">Similar sites:</span>
           {item.suggestions.filter(s => s.site_id !== item.best_match?.site_id).slice(0, 3).map((s) => (
-            <a
+            <button
               key={s.site_id}
-              href={`/?site=${s.site_id}`}
-              target="_blank"
-              rel="noopener noreferrer"
               className="lyra-suggestion-chip"
               title={`${Math.round(s.similarity * 100)}% match`}
+              onClick={() => onViewSite?.(suggestionToSiteData(s, item.display_name))}
             >
               {s.name}
               {s.country && (
@@ -497,7 +521,7 @@ function RadarCard({ item, onViewSite }: { item: RadarItem; onViewSite?: (site: 
                   className="lyra-suggestion-flag"
                 />
               )}
-            </a>
+            </button>
           ))}
         </div>
       )}

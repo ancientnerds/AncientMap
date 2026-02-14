@@ -31,7 +31,7 @@ class WikimediaConnector(BaseConnector):
     connector_name = "Wikimedia Commons"
     description = "Images and historical maps from Wikimedia Commons"
 
-    content_types = [ContentType.PHOTO, ContentType.MAP, ContentType.ARTWORK]
+    content_types = [ContentType.PHOTO, ContentType.MAP, ContentType.ARTWORK, ContentType.VIDEO]
 
     base_url = "https://commons.wikimedia.org/w/api.php"
     website_url = "https://commons.wikimedia.org"
@@ -81,6 +81,12 @@ class WikimediaConnector(BaseConnector):
                         query=query,
                         limit=limit,
                     )
+                elif content_type == ContentType.VIDEO:
+                    results = await self.mediawiki.search_images(
+                        query=query,
+                        limit=limit,
+                        file_type="video",
+                    )
                 else:
                     results = await self.mediawiki.search_images(
                         query=query,
@@ -93,7 +99,7 @@ class WikimediaConnector(BaseConnector):
                 if item:
                     items.append(item)
 
-            logger.info(f"Wikimedia: Returning {len(items)} images for '{query}'")
+            logger.info(f"Wikimedia: Returning {len(items)} items for '{query}'")
             return items
 
         except Exception as e:
@@ -203,15 +209,19 @@ class WikimediaConnector(BaseConnector):
         if not url or not title:
             return None
 
-        # Determine content type from title if not specified
+        # Determine content type from MIME/title if not specified
         if content_type is None:
-            title_lower = title.lower()
-            if "map" in title_lower or "carte" in title_lower:
-                content_type = ContentType.MAP
-            elif any(word in title_lower for word in ["painting", "portrait", "art"]):
-                content_type = ContentType.ARTWORK
+            mime = result.get("mime", "")
+            if mime.startswith("video/"):
+                content_type = ContentType.VIDEO
             else:
-                content_type = ContentType.PHOTO
+                title_lower = title.lower()
+                if "map" in title_lower or "carte" in title_lower:
+                    content_type = ContentType.MAP
+                elif any(word in title_lower for word in ["painting", "portrait", "art"]):
+                    content_type = ContentType.ARTWORK
+                else:
+                    content_type = ContentType.PHOTO
 
         # Build Commons page URL
         page_id = result.get("pageid")
