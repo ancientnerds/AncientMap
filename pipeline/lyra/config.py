@@ -128,9 +128,9 @@ def parse_json_response(text: str) -> dict:
 
 
 # Rate throttle — auto-tunes from API response headers.
-# Conservative default until the first response reveals the actual RPM limit.
-_DEFAULT_RPM = 50  # Tier 1 minimum, safe starting point
-_SAFETY_MARGIN = 0.9  # Use 90% of the limit
+# MiniMax M2.5 text models: 500 RPM, 20M TPM (shared across news, radar, chat).
+_DEFAULT_RPM = 500
+_SAFETY_MARGIN = 0.85  # Use 85% — budget shared across services
 _min_call_gap = 60.0 / (_DEFAULT_RPM * _SAFETY_MARGIN)
 _last_call_time = 0.0
 
