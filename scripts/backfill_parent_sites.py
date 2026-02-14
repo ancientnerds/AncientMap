@@ -410,25 +410,27 @@ def _run_metadata_validation(conn, rows, site_qids, claims_map, labels: dict, ap
                     if wd_period_name and not row.period_name:
                         fixes.append((site_id_str, "period_name", None, wd_period_name, name))
             else:
-                # Flag if Wikidata says a very different period
-                db_bucket = categorize_period(row.period_start)
-                wd_bucket = categorize_period(wd_year)
-                if db_bucket != wd_bucket:
-                    info_lines.append(
-                        f"  PERIOD  {name}: DB={row.period_start} ({db_bucket}) "
-                        f"WD={wd_year} ({wd_bucket})"
-                    )
+                # Correct wrong periods when Wikidata clearly disagrees
+                if wd_year <= 1500:
+                    db_bucket = categorize_period(row.period_start)
+                    wd_bucket = categorize_period(wd_year)
+                    if db_bucket != wd_bucket:
+                        fixes.append((site_id_str, "period_start", row.period_start, wd_year, name))
+                        wd_period_name = categorize_period(wd_year)
+                        if wd_period_name != row.period_name:
+                            fixes.append((site_id_str, "period_name", row.period_name, wd_period_name, name))
 
         # ── Site type ────────────────────────────────────────────
         instance_ids = data.get("instance_of", [])
-        if instance_ids and not row.site_type:
+        if instance_ids:
             for inst_qid in instance_ids:
                 label = labels.get(inst_qid)
                 if label:
                     resolved = normalize_site_type(label)
                     # normalize_site_type returns title-cased original if unmapped
                     if resolved != label.replace("_", " ").title():
-                        fixes.append((site_id_str, "site_type", None, resolved, name))
+                        if resolved != row.site_type:
+                            fixes.append((site_id_str, "site_type", row.site_type, resolved, name))
                         break
 
     # ── Report ───────────────────────────────────────────────────
