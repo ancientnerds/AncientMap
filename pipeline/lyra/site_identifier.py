@@ -518,7 +518,14 @@ def _call_ai(
     # With extended thinking, the text block may not be the first content block
     for block in response.content:
         if hasattr(block, "text"):
-            return parse_json_response(block.text)
+            if not block.text or not block.text.strip():
+                logger.warning(f"Empty text block from AI (model={model})")
+                return None
+            try:
+                return parse_json_response(block.text)
+            except json.JSONDecodeError:
+                logger.warning(f"Non-JSON AI response (model={model}): {block.text[:200]}")
+                return None
 
     logger.warning("No text block in AI response")
     return None
