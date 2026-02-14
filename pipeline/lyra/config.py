@@ -54,7 +54,7 @@ class LyraSettings(BaseSettings):
     # Pipeline settings
     channel_balance_factor: float = 2.0  # Throttle channels with >Nx average item count
     lookup_days: int = 14
-    retry_delay_hours: int = 12  # Hours between retry attempts for failed transcripts
+    retry_delay_hours: int = 4  # Hours between retry attempts for failed transcripts
     min_video_minutes: float = 5.0  # Skip videos shorter than this (filters out Shorts)
     transcript_trim_start: int = 120  # Skip first 2 minutes of videos
 
