@@ -34,7 +34,7 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
     try {
       setLoading(true)
       setError(null)
-      const resp = await fetch(`${config.api.baseUrl}/news/feed?page=${pageNum}&page_size=20`)
+      const resp = await fetch(`${config.api.baseUrl}/news/feed?page=${pageNum}&page_size=20&include_speculative=true`)
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const data: NewsFeedResponse = await resp.json()
       setItems(prev => append ? [...prev, ...data.items] : data.items)
