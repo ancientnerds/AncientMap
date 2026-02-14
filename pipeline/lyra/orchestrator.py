@@ -745,6 +745,24 @@ def _run_migrations(engine) -> None:
               )
         """))
 
+        # v_research: re-process ALL non-promoted items through the new deep
+        # research pipeline (pre-research + multi-source search + gap-fill)
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET enrichment_status = 'pending', last_facts_hash = NULL
+            WHERE source = 'lyra'
+              AND enrichment_status IN ('enriched', 'failed')
+              AND promoted_site_id IS NULL
+              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v_research_reset'))
+        """))
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v_research_reset": true}'::jsonb
+            WHERE source = 'lyra'
+              AND promoted_site_id IS NULL
+              AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v_research_reset'))
+        """))
+
         conn.commit()
 
 

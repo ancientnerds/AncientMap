@@ -50,6 +50,9 @@ class LyraSettings(BaseSettings):
     max_identifications_per_cycle: int = 20
     pg_trgm_threshold: float = 0.35
     identify_thinking_budget: int = 4096
+    research_thinking_budget: int = 4096
+    max_research_names: int = 5
+    geonames_username: str = "ancientnerds"
 
     # Pipeline settings
     channel_balance_factor: float = 2.0  # Throttle channels with >Nx average item count
