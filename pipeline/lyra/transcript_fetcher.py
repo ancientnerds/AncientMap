@@ -261,10 +261,16 @@ def retry_failed_videos(settings: LyraSettings) -> int:
             transcript_text, duration = fetch_transcript(video.id, settings)
 
             if transcript_text:
-                video.status = "transcribed"
-                video.transcript_text = transcript_text
                 video.duration_minutes = duration
                 video.last_attempted_at = datetime.now(UTC)
+
+                if duration is not None and duration < settings.min_video_minutes:
+                    video.status = "skipped"
+                    logger.info(f"    -> skipped ({duration:.1f} min < {settings.min_video_minutes} min minimum)")
+                    continue
+
+                video.status = "transcribed"
+                video.transcript_text = transcript_text
                 retried += 1
                 logger.info(f"    -> transcribed ({duration:.1f} min)" if duration else "    -> transcribed")
             else:
