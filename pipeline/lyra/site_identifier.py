@@ -236,7 +236,7 @@ def _process_single(
 
     # Escalate low/medium confidence to review model
     confidence = identification.get("confidence", "unknown")
-    if confidence in ("low", "medium"):
+    if confidence in ("low", "medium") and settings.model_identify != settings.model_identify_escalation:
         sonnet_result = _escalate_to_sonnet(client, settings, user_prompt, json.dumps(identification), identification)
         if sonnet_result:
             identification = sonnet_result
