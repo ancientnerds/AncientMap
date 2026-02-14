@@ -1228,6 +1228,44 @@ def _check_spatial_an_match(session: Session, lat: float, lon: float, threshold_
     ).first()
 
 
+def _check_name_an_match(session: Session, site_name: str) -> UnifiedSite | None:
+    """Find AN Originals site by normalized name (exact or spaceless)."""
+    normalized = normalize_name(site_name)
+    if not normalized or len(normalized) < 3:
+        return None
+
+    # Exact normalized match
+    match = session.query(UnifiedSite).filter(
+        UnifiedSite.source_id == "ancient_nerds",
+        UnifiedSite.name_normalized == normalized,
+    ).first()
+    if match:
+        return match
+
+    # Spaceless match (e.g. "table des marchand" vs "tabledesmarchand")
+    spaceless = normalized.replace(" ", "")
+    match = session.query(UnifiedSite).filter(
+        UnifiedSite.source_id == "ancient_nerds",
+        func.replace(UnifiedSite.name_normalized, ' ', '') == spaceless,
+    ).first()
+    if match:
+        return match
+
+    # Also check alternate names table
+    alt = session.query(UnifiedSiteName).filter(
+        UnifiedSiteName.name_normalized == normalized,
+    ).first()
+    if alt:
+        site = session.query(UnifiedSite).filter(
+            UnifiedSite.id == alt.site_id,
+            UnifiedSite.source_id == "ancient_nerds",
+        ).first()
+        if site:
+            return site
+
+    return None
+
+
 def _store_research_aliases(
     session: Session, site_id: uuid.UUID, research, canonical_name: str,
 ) -> None:
@@ -1465,14 +1503,19 @@ def _handle_wikidata_match(
                 logger.info(f"  [{site_name}] P31 resolved site_type: {resolved_type}")
 
         # Step 4: Apply P580/P582 date properties
-        if contribution.period_start is None:
-            for time_key in ("inception_time", "start_time"):
-                parsed_year = _parse_wikidata_time(enrichment.get(time_key, ""))
-                if parsed_year is not None:
-                    contribution.period_start = parsed_year
-                    contribution.period_name = categorize_period(parsed_year)
-                    logger.info(f"  [{site_name}] Wikidata {time_key} → period_start={parsed_year}")
-                    break
+        # Wikidata dates are authoritative — always override AI/video guesses
+        for time_key in ("inception_time", "start_time"):
+            parsed_year = _parse_wikidata_time(enrichment.get(time_key, ""))
+            if parsed_year is not None:
+                if contribution.period_start is not None and contribution.period_start != parsed_year:
+                    logger.info(
+                        f"  [{site_name}] Wikidata {time_key} overriding period_start: "
+                        f"{contribution.period_start} → {parsed_year}"
+                    )
+                contribution.period_start = parsed_year
+                contribution.period_name = categorize_period(parsed_year)
+                logger.info(f"  [{site_name}] Wikidata {time_key} → period_start={parsed_year}")
+                break
         if enrichment.get("end_time"):
             parsed_end = _parse_wikidata_time(enrichment["end_time"])
             if parsed_end is not None and contribution.period_end is None:
@@ -1520,22 +1563,26 @@ def _handle_wikidata_match(
         contribution.lat = enrichment["lat"]
         contribution.lon = enrichment["lon"]
 
-    # Spatial dedup: check if an AN Originals site is within 2km
+    # Dedup: check if an AN Originals site matches (spatial + name)
+    an_match = None
     if contribution.lat is not None and contribution.lon is not None:
         an_match = _check_spatial_an_match(session, contribution.lat, contribution.lon)
-        if an_match:
-            logger.info(
-                f"  [{site_name}] Spatial match to AN '{an_match.name}' — matching instead of enriching"
-            )
-            contribution.enrichment_status = "matched"
-            fill_contrib_from_site(contribution, an_match)
-            contribution.enrichment_data = {
-                "identification": identification,
-                "wikidata": enrichment,
-                "spatial_match": {"an_site_id": str(an_match.id), "an_site_name": an_match.name},
-            }
-            contribution.score = _compute_score(contribution)
-            return True
+    if not an_match:
+        an_match = _check_name_an_match(session, site_name)
+    if an_match:
+        match_type = "spatial" if contribution.lat is not None else "name"
+        logger.info(
+            f"  [{site_name}] {match_type.title()} match to AN '{an_match.name}' — matching instead of enriching"
+        )
+        contribution.enrichment_status = "matched"
+        fill_contrib_from_site(contribution, an_match)
+        contribution.enrichment_data = {
+            "identification": identification,
+            "wikidata": enrichment,
+            "an_match": {"an_site_id": str(an_match.id), "an_site_name": an_match.name, "match_type": match_type},
+        }
+        contribution.score = _compute_score(contribution)
+        return True
 
     # Country from coordinates (not AI)
     if contribution.lat and contribution.lon and not contribution.country:
@@ -1702,22 +1749,28 @@ def _handle_ai_enriched_site(
     if contribution.lat and contribution.lon and not contribution.country:
         contribution.country = lookup_country(contribution.lat, contribution.lon)
 
-    # Spatial dedup: check if an AN Originals site is within 2km
+    # Dedup: check if an AN Originals site matches (spatial + name)
+    an_match = None
+    match_type = "name"
     if contribution.lat is not None and contribution.lon is not None:
         an_match = _check_spatial_an_match(session, contribution.lat, contribution.lon)
         if an_match:
-            logger.info(
-                f"  [{contribution.name}] Spatial match to AN '{an_match.name}' — matching instead of enriching"
-            )
-            contribution.enrichment_status = "matched"
-            fill_contrib_from_site(contribution, an_match)
-            contribution.enrichment_data = {
-                "identification": identification,
-                "research": research.to_dict() if research else None,
-                "spatial_match": {"an_site_id": str(an_match.id), "an_site_name": an_match.name},
-            }
-            contribution.score = _compute_score(contribution)
-            return True
+            match_type = "spatial"
+    if not an_match:
+        an_match = _check_name_an_match(session, search_name)
+    if an_match:
+        logger.info(
+            f"  [{contribution.name}] {match_type.title()} match to AN '{an_match.name}' — matching instead of enriching"
+        )
+        contribution.enrichment_status = "matched"
+        fill_contrib_from_site(contribution, an_match)
+        contribution.enrichment_data = {
+            "identification": identification,
+            "research": research.to_dict() if research else None,
+            "an_match": {"an_site_id": str(an_match.id), "an_site_name": an_match.name, "match_type": match_type},
+        }
+        contribution.score = _compute_score(contribution)
+        return True
 
     # Step 7: Synthetic description when no source provided one
     if not contribution.description:
