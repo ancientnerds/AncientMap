@@ -36,6 +36,7 @@ from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert
 
 from pipeline.database import SourceMeta, UnifiedSite, get_session
+from pipeline.normalizers.dates import parse_year
 from pipeline.utils import (
     get_centroid as _get_centroid,
 )
@@ -45,7 +46,6 @@ from pipeline.utils import (
 from pipeline.utils import (
     parse_wkt_point as _parse_wkt_point,
 )
-from pipeline.normalizers.dates import parse_year
 from pipeline.utils.country_lookup import lookup_country
 
 # =============================================================================
