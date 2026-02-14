@@ -26,6 +26,9 @@ SITE_TYPE_MAPPING = {
     "stone_circle": "Megalithic",
     "megalith": "Megalithic",
     "standing_stone": "Megalithic",
+    "megalithic_temple": "Megalithic",
+    "megalithic_structure": "Megalithic",
+    "stone_monument": "Megalithic",
 
     # Fortifications
     "fort": "Fortification",
