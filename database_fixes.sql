@@ -206,11 +206,4 @@ WHERE id = 'd6d44645-a99b-4826-85b3-eb0123faadd2';
 UPDATE unified_sites SET period_start = -3500, period_name = '4500 - 3000 BC'
 WHERE name = 'Devil''s Arrows' AND source_id = 'ancient_nerds';
 
--- ============================================================
--- BLOCK 7: Audit log indexes for resumability & dedup queries
--- ============================================================
-
-CREATE INDEX IF NOT EXISTS idx_audit_log_site_id ON database_audit_log(site_id);
-CREATE INDEX IF NOT EXISTS idx_audit_log_changed_at ON database_audit_log(changed_at DESC);
-
 COMMIT;
