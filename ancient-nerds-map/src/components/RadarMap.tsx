@@ -1,5 +1,6 @@
 /**
  * RadarMap - Mapbox 2D map showing Lyra radar sites as colored dots.
+ * A green scanning bar sweeps left-to-right; dots glow when the bar passes.
  * Hover shows tooltip, click scrolls to the corresponding radar card.
  */
 
@@ -33,13 +34,11 @@ const STATUS_COLORS: Record<string, string> = {
   rejected: '#ef5350',
 }
 
-export default function RadarMap({ items, onSelectItem }: RadarMapProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const mapRef = useRef<mapboxgl.Map | null>(null)
-  const popupRef = useRef<mapboxgl.Popup | null>(null)
+const SWEEP_MS = 8000  // 8 seconds per sweep
+const GLOW_MS = 1200   // 1.2 seconds glow duration
 
-  // Build GeoJSON from items
-  const geojson: GeoJSON.FeatureCollection = {
+function buildGeoJSON(items: RadarMapItem[]): GeoJSON.FeatureCollection {
+  return {
     type: 'FeatureCollection',
     features: items
       .filter(it => it.lat != null && it.lon != null)
@@ -59,8 +58,22 @@ export default function RadarMap({ items, onSelectItem }: RadarMapProps) {
         },
       })),
   }
+}
 
-  // Initialize map once
+export default function RadarMap({ items, onSelectItem }: RadarMapProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const mapRef = useRef<mapboxgl.Map | null>(null)
+  const popupRef = useRef<mapboxgl.Popup | null>(null)
+  const scanLineRef = useRef<HTMLDivElement>(null)
+  const scanAnimRef = useRef<number>(0)
+  const glowTimers = useRef<Map<string, number>>(new Map())
+  const prevScanXRef = useRef(0)
+  const geojsonRef = useRef<GeoJSON.FeatureCollection>(buildGeoJSON(items))
+
+  // Keep geojson ref in sync
+  geojsonRef.current = buildGeoJSON(items)
+
+  // Initialize map
   useEffect(() => {
     if (!containerRef.current || !MAPBOX.ACCESS_TOKEN) return
 
@@ -82,21 +95,53 @@ export default function RadarMap({ items, onSelectItem }: RadarMapProps) {
       applyDarkTealTheme(map)
       mapRef.current = map
 
-      // Add source + layer
+      // Source with promoteId so setFeatureState works with string IDs
       map.addSource('radar-sites', {
         type: 'geojson',
-        data: geojson,
+        data: geojsonRef.current,
+        promoteId: 'id',
       })
 
+      // Glow layer (underneath dots) — driven by feature state
+      map.addLayer({
+        id: 'radar-glow',
+        type: 'circle',
+        source: 'radar-sites',
+        paint: {
+          'circle-radius': [
+            'case',
+            ['boolean', ['feature-state', 'glow'], false],
+            14, 0,
+          ],
+          'circle-color': ['get', 'color'],
+          'circle-opacity': [
+            'case',
+            ['boolean', ['feature-state', 'glow'], false],
+            0.35, 0,
+          ],
+          'circle-blur': 1,
+        },
+      })
+
+      // Main dots layer — slightly enlarges when glowing
       map.addLayer({
         id: 'radar-dots',
         type: 'circle',
         source: 'radar-sites',
         paint: {
-          'circle-radius': 5,
+          'circle-radius': [
+            'case',
+            ['boolean', ['feature-state', 'glow'], false],
+            7, 5,
+          ],
           'circle-color': ['get', 'color'],
           'circle-stroke-width': 1,
-          'circle-stroke-color': 'rgba(255,255,255,0.3)',
+          'circle-stroke-color': [
+            'case',
+            ['boolean', ['feature-state', 'glow'], false],
+            'rgba(255,255,255,0.6)',
+            'rgba(255,255,255,0.3)',
+          ],
           'circle-opacity': 0.85,
         },
       })
@@ -139,6 +184,9 @@ export default function RadarMap({ items, onSelectItem }: RadarMapProps) {
         const id = feature.properties?.id
         if (id) onSelectItem(id)
       })
+
+      // Start scan animation
+      startScan()
     })
 
     map.scrollZoom.enable()
@@ -150,7 +198,64 @@ export default function RadarMap({ items, onSelectItem }: RadarMapProps) {
     })
     resizeObserver.observe(containerRef.current)
 
+    function startScan() {
+      const scanLine = scanLineRef.current
+      const container = containerRef.current
+      if (!scanLine || !container) return
+
+      let sweepStart = performance.now()
+      prevScanXRef.current = 0
+
+      const tick = (now: number) => {
+        if (!mapRef.current) return
+        const progress = ((now - sweepStart) % SWEEP_MS) / SWEEP_MS
+        const w = container.offsetWidth
+        const h = container.offsetHeight
+        const scanX = progress * w
+
+        // Position scan line (right edge = bright line at scanX)
+        scanLine.style.transform = `translateX(${scanX - 60}px)`
+
+        // Range-based hit detection: check points between prevScanX and scanX
+        const prev = prevScanXRef.current
+
+        // Skip detection on wrap-around (scan jumped from right back to left)
+        if (scanX >= prev) {
+          const features = geojsonRef.current.features
+          for (const feat of features) {
+            const coords = (feat.geometry as GeoJSON.Point).coordinates as [number, number]
+            const pt = mapRef.current.project(coords as mapboxgl.LngLatLike)
+            const id = feat.properties!.id as string
+
+            if (pt.x >= prev && pt.x < scanX && pt.y >= 0 && pt.y <= h && !glowTimers.current.has(id)) {
+              mapRef.current.setFeatureState(
+                { source: 'radar-sites', id },
+                { glow: true },
+              )
+              glowTimers.current.set(id, window.setTimeout(() => {
+                if (mapRef.current) {
+                  mapRef.current.setFeatureState(
+                    { source: 'radar-sites', id },
+                    { glow: false },
+                  )
+                }
+                glowTimers.current.delete(id)
+              }, GLOW_MS))
+            }
+          }
+        }
+
+        prevScanXRef.current = scanX
+        scanAnimRef.current = requestAnimationFrame(tick)
+      }
+
+      scanAnimRef.current = requestAnimationFrame(tick)
+    }
+
     return () => {
+      cancelAnimationFrame(scanAnimRef.current)
+      glowTimers.current.forEach(t => clearTimeout(t))
+      glowTimers.current.clear()
       resizeObserver.disconnect()
       popupRef.current?.remove()
       mapRef.current = null
@@ -165,13 +270,14 @@ export default function RadarMap({ items, onSelectItem }: RadarMapProps) {
 
     const source = map.getSource('radar-sites') as mapboxgl.GeoJSONSource
     if (source) {
-      source.setData(geojson)
+      source.setData(geojsonRef.current)
     }
   }, [items]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="radar-map-container">
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+      <div ref={scanLineRef} className="radar-scan-line" />
     </div>
   )
 }
