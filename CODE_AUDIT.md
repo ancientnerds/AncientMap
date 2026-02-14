@@ -23,6 +23,9 @@ Report it as an [INFO] D7-DOC finding: "File not in audit Key Files table — ad
 Run the grep-based checks from the Scanning Strategy section across all files in scope (see Audit Modes table for scope directories per mode).
 Record every hit as a candidate finding.
 
+**Step 1.5 — Contract check before fixing.**
+Before changing any API endpoint parameter (default value, min/max constraint, type), grep the frontend for callers that send hardcoded values for that parameter. If callers exist, either update them too or do not change the constraint. This prevents 422 validation errors that silently break the globe.
+
 **Step 2 — Deep review.**
 For every file marked "deep" in the Key Files table (plus new files from Step 0.5):
 1. Read the entire file.
@@ -379,6 +382,8 @@ These rules are derived from `CLAUDE.md`, `MEMORY.md`, and observed project patt
 | P6 | Use `datetime.now(UTC)` not `datetime.utcnow()` | `utcnow()` is deprecated in Python 3.12+ |
 | P7 | New DB columns need ALTER TABLE migrations in orchestrator | `create_all_tables()` won't add columns to existing tables |
 | P8 | Never push to main without explicit user permission | Deployment safety |
+| P9 | Never change API query parameter defaults/limits without updating all frontend callers | Frontend sends hardcoded values (e.g. `limit=100000`) — changing the API constraint causes 422 errors and breaks the globe |
+| P10 | Never alter DB schema (column types, constraints, table names) without checking all queries that reference them | Schema changes can silently break API routes and pipeline code |
 
 ---
 
@@ -449,11 +454,13 @@ The audit passes only if ALL conditions are met:
 | Critical findings | 0 |
 | Major security findings (D2) | 0 |
 | Hardcoded secrets | 0 |
-| New anti-patterns (P1–P8 violations) | 0 |
+| New anti-patterns (P1–P10 violations) | 0 |
 | Docker images pinned | All |
 | LLM prompts have injection guards | All (currently 11) |
 | Deprecated API usage (P6) | 0 (no `datetime.utcnow()`, no removed stdlib) |
 | No `eval()`/`exec()`/`ast.literal_eval()` on external data | 0 |
+| API contract preserved (P9) | No changed defaults/limits without frontend update |
+| DB schema compatible (P10) | No broken queries from schema changes |
 
 A failing quality gate means the code should not be deployed until findings are resolved.
 
@@ -469,6 +476,11 @@ Use this for fast scanning. Each item maps to a dimension above.
 - [ ] No mutable default arguments
 - [ ] React hook dependencies complete
 - [ ] Type assertions match actual runtime types
+
+### API Contract Safety (P9/P10)
+- [ ] No API query parameter defaults, limits, or constraints changed without updating all frontend callers (`DataStore.ts`, `SourceLoader.ts`, `DownloadManager.tsx`)
+- [ ] No DB column types, constraints, or table names changed without checking all queries that reference them
+- [ ] Grep frontend for any hardcoded API parameter values before tightening backend validation
 
 ### Security (D2)
 - [ ] SQL queries use parameterized binding (`:param`, not f-strings)
