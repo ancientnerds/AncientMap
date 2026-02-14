@@ -191,7 +191,10 @@ export default function LyraChatModal({
   }, [])
 
   // Sort news by relevance (highest first)
-  const sortedNews = [...sidebarNews].sort((a, b) => (b.relevance ?? 0) - (a.relevance ?? 0))
+  const sortedNews = useMemo(
+    () => [...sidebarNews].sort((a, b) => (b.relevance ?? 0) - (a.relevance ?? 0)),
+    [sidebarNews],
+  )
 
   const hasSiteSidebar = sidebarSites.length > 0
   const hasNews = sortedNews.length > 0

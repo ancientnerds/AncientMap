@@ -111,6 +111,10 @@ export default function ContributeModal({
       })
     }
 
+    // Track timers for cleanup
+    let pollId: ReturnType<typeof setInterval> | null = null
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
+
     // Load script if needed
     if (!document.getElementById('turnstile-script')) {
       const script = document.createElement('script')
@@ -123,16 +127,19 @@ export default function ContributeModal({
       setTimeout(initTurnstile, 100)
     } else {
       // Script loading, wait for it
-      const checkInterval = setInterval(() => {
+      pollId = setInterval(() => {
         if (window.turnstile) {
-          clearInterval(checkInterval)
+          clearInterval(pollId!)
+          pollId = null
           initTurnstile()
         }
       }, 100)
-      setTimeout(() => clearInterval(checkInterval), 10000)
+      timeoutId = setTimeout(() => { if (pollId) { clearInterval(pollId); pollId = null } }, 10000)
     }
 
     return () => {
+      if (pollId) clearInterval(pollId)
+      if (timeoutId) clearTimeout(timeoutId)
       if (turnstileWidgetId.current && window.turnstile) {
         try {
           window.turnstile.remove(turnstileWidgetId.current)
@@ -160,7 +167,8 @@ export default function ContributeModal({
       }
     }
     wasPickerActive.current = isMapPickerActive
-  }, [isMapPickerActive, formData.coordinates, wasMapPickerCancelled, validCoords])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- only trigger on picker state transitions, not on coordinate changes during hover
+  }, [isMapPickerActive, wasMapPickerCancelled])
 
   // Update coordinates when map picker provides them (live hover - like proximity)
   useEffect(() => {

@@ -40,7 +40,7 @@ export default function NewsFeedPage() {
   const [selectedSite, setSelectedSite] = useState<SiteData | null>(null)
 
   // Live updates
-  const [online, setOnline] = useState(true)
+  const [online, setOnline] = useState(false)
 
   useEffect(() => {
     const el = gridRef.current

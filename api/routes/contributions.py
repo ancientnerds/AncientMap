@@ -292,4 +292,4 @@ async def get_countries(db: Session = Depends(get_db)):
         return {"countries": countries}
     except SQLAlchemyError as e:
         logger.error(f"Database error fetching countries: {e}")
-        return {"countries": []}
+        raise HTTPException(status_code=500, detail="Database error fetching countries") from e
