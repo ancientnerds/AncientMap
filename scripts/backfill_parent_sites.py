@@ -3,10 +3,9 @@
 Targets ancient_nerds and lyra sources only.
 
 For each site with a resolvable Wikidata QID:
-1. Fetch claims: P361 (part-of), P625 (coords), P17 (country),
-   P571/P580/P582 (dates), P31 (instance-of)
-2. Compare metadata against what's in the DB
-3. Report discrepancies and optionally fix them
+1. Fetch claims: P361 (part-of), P571/P580/P582 (dates), P31 (instance-of)
+2. Fill missing period and site_type from Wikidata
+3. Link child sites to parents via P361
 
 Usage:
     python scripts/backfill_parent_sites.py                    # dry-run (default)
@@ -34,9 +33,6 @@ WIKIDATA_API = "https://www.wikidata.org/w/api.php"
 
 # Max QIDs per wbgetentities call (Wikidata limit is 50)
 BATCH_SIZE = 50
-
-# Coordinate tolerance for flagging discrepancies (~1km at mid-latitudes)
-COORD_TOLERANCE = 0.01
 
 # Max concurrent API requests (respects Wikidata/Wikipedia rate limits)
 MAX_WORKERS = 3
@@ -380,7 +376,6 @@ def _run_metadata_validation(conn, rows, site_qids, claims_map, labels: dict, ap
     Returns the list of fixes (for the gaps report to account for).
     """
     from pipeline.normalizers.site_type import normalize_site_type
-    from pipeline.utils.country_lookup import normalize_country
     from pipeline.utils.text import categorize_period
 
     print("\n" + "=" * 60)
@@ -402,40 +397,6 @@ def _run_metadata_validation(conn, rows, site_qids, claims_map, labels: dict, ap
             continue
 
         name = row.name
-
-        # ── Country ──────────────────────────────────────────────
-        wd_country_qid = data.get("country_qid")
-        if wd_country_qid:
-            wd_country_name = labels.get(wd_country_qid)
-            if wd_country_name:
-                db_iso = normalize_country(row.country) if row.country else ""
-                wd_iso = normalize_country(wd_country_name)
-                # Only accept if Wikidata country resolves to a real modern ISO code
-                # (rejects historical polities like "Ancient Carthage", "Babylonia")
-                if len(wd_iso) == 2:
-                    if not row.country:
-                        fixes.append((site_id_str, "country", None, wd_country_name, name))
-                    elif db_iso != wd_iso:
-                        fixes.append((site_id_str, "country", row.country, wd_country_name, name))
-
-        # ── Coordinates ──────────────────────────────────────────
-        wd_lat = data.get("lat")
-        wd_lon = data.get("lon")
-        if wd_lat is not None and wd_lon is not None:
-            if row.lat is not None and row.lon is not None:
-                lat_diff = abs(row.lat - wd_lat)
-                lon_diff = abs(row.lon - wd_lon)
-                if lat_diff > COORD_TOLERANCE or lon_diff > COORD_TOLERANCE:
-                    dist_km = ((lat_diff ** 2 + lon_diff ** 2) ** 0.5) * 111
-                    info_lines.append(
-                        f"  COORDS  {name}: DB=({row.lat:.4f}, {row.lon:.4f}) "
-                        f"WD=({wd_lat:.4f}, {wd_lon:.4f}) [{dist_km:.0f}km off]"
-                    )
-                    # Auto-fix 50-500km range; >500km is likely WD pointing
-                    # to a museum/replica (e.g. Pergamon Altar -> Berlin)
-                    if 50 < dist_km < 500:
-                        fixes.append((site_id_str, "lat", row.lat, wd_lat, name))
-                        fixes.append((site_id_str, "lon", row.lon, wd_lon, name))
 
         # ── Period ───────────────────────────────────────────────
         wd_year = data.get("inception_year")
@@ -643,16 +604,14 @@ def main() -> None:
         # Step 4: Pre-compute label QIDs, then overlap label fetch with parent backfill
         metadata_fixes = []
 
-        # Collect QIDs that need label resolution (countries + instance-of types)
+        # Collect QIDs that need label resolution (instance-of types for site_type)
         label_qids = set()
         for data in claims_map.values():
-            if "country_qid" in data:
-                label_qids.add(data["country_qid"])
             for qid in data.get("instance_of", []):
                 label_qids.add(qid)
 
         label_qid_list = list(label_qids)
-        print(f"\n  Resolving {len(label_qid_list)} QID labels (countries + types)...")
+        print(f"\n  Resolving {len(label_qid_list)} QID labels (instance-of types)...")
 
         # Kick off label fetch in background while parent backfill runs
         with ThreadPoolExecutor(max_workers=1) as pool:
