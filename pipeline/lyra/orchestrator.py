@@ -763,6 +763,12 @@ def _run_migrations(engine) -> None:
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v_research_reset'))
         """))
 
+        # Site hierarchy: parent_site_id for "part of" relationships
+        # (e.g. Great Sphinx → Giza Necropolis)
+        conn.execute(text(
+            "ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS parent_site_id UUID REFERENCES unified_sites(id) ON DELETE SET NULL"
+        ))
+
         conn.commit()
 
 

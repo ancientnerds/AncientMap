@@ -436,10 +436,20 @@ class UnifiedSite(Base):
     # Full original data
     raw_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
+    # Hierarchy (e.g. Great Sphinx → Giza Necropolis)
+    parent_site_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("unified_sites.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     # Relationships
+    parent_site: Mapped["UnifiedSite | None"] = relationship(
+        "UnifiedSite", remote_side="UnifiedSite.id", foreign_keys=[parent_site_id],
+    )
     content_links: Mapped[list["SiteContentLink"]] = relationship(
         "SiteContentLink", back_populates="site", cascade="all, delete-orphan"
     )
