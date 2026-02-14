@@ -140,10 +140,14 @@ def _check_relevance(
         logger.warning(f"Relevance gate: empty response for {video.id}")
         return True
 
-    result = parse_json_response(text_block)
-    if not result["is_archaeology"]:
-        logger.info(f"Relevance gate: {video.title!r} -> NO ({result['reason']})")
-    return result["is_archaeology"]
+    try:
+        result = parse_json_response(text_block)
+    except (json.JSONDecodeError, KeyError, ValueError) as e:
+        logger.warning(f"Relevance gate: bad JSON for {video.id}: {e}")
+        return True  # pass through on parse failure
+    if not result.get("is_archaeology", True):
+        logger.info(f"Relevance gate: {video.title!r} -> NO ({result.get('reason', '')})")
+    return result.get("is_archaeology", True)
 
 
 def _calculate_topic_limit(
