@@ -6,7 +6,7 @@
  * and rejected items. Matched items are excluded (already in DB).
  */
 
-import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
 import { config } from '../config'
 import { formatCoord, timeAgo } from '../utils/formatters'
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
@@ -547,6 +547,49 @@ export default function LyraRadarPage() {
   const [columnCount, setColumnCount] = useState(3)
   const [showScrollTop, setShowScrollTop] = useState(false)
   const [showMap, setShowMap] = useState(false)
+  const [mapHoveredId, setMapHoveredId] = useState<string | null>(null)
+  const [mapPinnedId, setMapPinnedId] = useState<string | null>(null)
+  const hoverTimeoutRef = useRef<number>(0)
+
+  const itemsById = useMemo(() => {
+    const map = new Map<string, RadarItem>()
+    for (const item of items) map.set(item.id, item)
+    return map
+  }, [items])
+
+  // Hovered item takes priority (preview), pinned is fallback
+  const mapActiveItem = useMemo(() => {
+    const id = mapHoveredId || mapPinnedId
+    return id ? itemsById.get(id) || null : null
+  }, [mapHoveredId, mapPinnedId, itemsById])
+
+  const handleMapHover = useCallback((id: string | null) => {
+    clearTimeout(hoverTimeoutRef.current)
+    if (id) {
+      setMapHoveredId(id)
+    } else {
+      // 300ms grace period so user can reach the card overlay
+      hoverTimeoutRef.current = window.setTimeout(() => setMapHoveredId(null), 300)
+    }
+  }, [])
+
+  const handleMapPin = useCallback((id: string | null) => {
+    if (id && id === mapPinnedId) {
+      setMapPinnedId(null)  // toggle off
+    } else {
+      setMapPinnedId(id)
+    }
+  }, [mapPinnedId])
+
+  const handleCardEnter = useCallback(() => {
+    clearTimeout(hoverTimeoutRef.current)
+  }, [])
+
+  const handleCardLeave = useCallback(() => {
+    if (!mapPinnedId) {
+      hoverTimeoutRef.current = window.setTimeout(() => setMapHoveredId(null), 300)
+    }
+  }, [mapPinnedId])
 
   useEffect(() => {
     const onScroll = () => setShowScrollTop(window.scrollY > 400)
@@ -638,14 +681,6 @@ export default function LyraRadarPage() {
     setPage(1)
     setHasMore(false)
   }
-
-  const scrollToCard = useCallback((id: string) => {
-    const el = document.querySelector(`[data-radar-id="${id}"]`)
-    if (!el) return
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    el.classList.add('lyra-card-highlight')
-    setTimeout(() => el.classList.remove('lyra-card-highlight'), 1500)
-  }, [])
 
   return (
     <div className="lyra-discoveries-page">
@@ -748,9 +783,22 @@ export default function LyraRadarPage() {
 
       {/* Map */}
       {showMap && (
-        <div style={{ padding: '0 20px' }}>
-          <Suspense fallback={<div style={{ height: 350 }} />}>
-            <RadarMap items={items} onSelectItem={scrollToCard} />
+        <div className="radar-map-wrapper">
+          <Suspense fallback={<div style={{ height: 'calc(100vh - 180px)' }} />}>
+            <RadarMap items={items} onHoverItem={handleMapHover} onPinItem={handleMapPin}>
+              {mapActiveItem && (
+                <div
+                  className={`radar-map-card-overlay${mapPinnedId ? ' pinned' : ''}`}
+                  onMouseEnter={handleCardEnter}
+                  onMouseLeave={handleCardLeave}
+                >
+                  {mapPinnedId && (
+                    <button className="radar-map-card-close" onClick={() => setMapPinnedId(null)} aria-label="Close">×</button>
+                  )}
+                  <RadarCard item={mapActiveItem} onViewSite={setSelectedSite} />
+                </div>
+              )}
+            </RadarMap>
           </Suspense>
         </div>
       )}
