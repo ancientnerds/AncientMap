@@ -16,6 +16,7 @@ import anthropic
 
 from pipeline.lyra.config import LyraSettings, call_api, parse_json_response
 from pipeline.utils.http import fetch_with_retry
+from pipeline.utils.text import normalize_transliteration
 
 logger = logging.getLogger(__name__)
 
@@ -265,10 +266,17 @@ def _search_all_sources(
             all_candidates["wikidata"].extend(sparql_results)
             logger.info(f"  SPARQL fallback found {len(sparql_results)} candidates for '{names[0]}'")
 
-    # Deduplicate within each source
+    # Deduplicate within each source (by ID, then phonetically)
     all_candidates["wikidata"] = _dedupe_by_key(all_candidates["wikidata"], "qid")
     all_candidates["wikipedia"] = _dedupe_by_key(all_candidates["wikipedia"], "title")
     all_candidates["geonames"] = _dedupe_by_key(all_candidates["geonames"], "geoname_id")
+
+    # Cross-source phonetic dedup: if same transliterated name appears in
+    # multiple sources, keep the richest entry (wikidata > wikipedia > geonames)
+    all_candidates["geonames"] = _dedupe_by_transliteration(
+        all_candidates["geonames"],
+        all_candidates["wikidata"] + all_candidates["wikipedia"],
+    )
 
     return all_candidates
 
@@ -282,6 +290,27 @@ def _dedupe_by_key(items: list[dict], key: str) -> list[dict]:
         if val and val not in seen:
             seen.add(val)
             result.append(item)
+    return result
+
+
+def _dedupe_by_transliteration(
+    candidates: list[dict], higher_priority: list[dict],
+) -> list[dict]:
+    """Remove candidates whose transliterated name already exists in higher_priority list."""
+    priority_translits = set()
+    for c in higher_priority:
+        label = c.get("label") or c.get("title") or c.get("name") or ""
+        t = normalize_transliteration(label)
+        if t:
+            priority_translits.add(t)
+
+    result = []
+    for c in candidates:
+        label = c.get("label") or c.get("title") or c.get("name") or ""
+        t = normalize_transliteration(label)
+        if t and t in priority_translits:
+            continue  # Skip — higher-priority source already has this name
+        result.append(c)
     return result
 
 
@@ -441,10 +470,11 @@ def _select_best_candidate(
     all_candidates: dict[str, list[dict]],
 ) -> dict | None:
     """Ask MiniMax to pick the best candidate from multi-source results."""
-    # Build formatted candidates string
+    # Build formatted candidates string with transliteration similarity
     formatted_parts = []
     candidate_index = {}
     idx = 1
+    name_translit = normalize_transliteration(name)
 
     for source, candidates in all_candidates.items():
         for c in candidates[:5]:
@@ -453,7 +483,16 @@ def _select_best_candidate(
             cid = c.get("qid") or c.get("url") or str(c.get("geoname_id", ""))
             country = c.get("country") or ""
             country_str = f" [{country}]" if country else ""
-            formatted_parts.append(f"  {idx}. [{source}] {label}{country_str}: {desc} (id: {cid})")
+
+            # Compute transliteration similarity and annotate if close match
+            cand_translit = normalize_transliteration(label)
+            translit_tag = ""
+            if name_translit and cand_translit and name_translit == cand_translit:
+                translit_tag = " [PHONETIC MATCH]"
+
+            formatted_parts.append(
+                f"  {idx}. [{source}] {label}{country_str}: {desc} (id: {cid}){translit_tag}"
+            )
             candidate_index[str(idx)] = {"source": source, "id": cid, **c}
             idx += 1
 
