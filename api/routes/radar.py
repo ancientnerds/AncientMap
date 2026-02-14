@@ -170,6 +170,30 @@ def _find_nearest_an_site(db: Session, lat: float, lon: float, max_km: float = 1
     return None
 
 
+@router.get("/map")
+async def get_radar_map_data(db: Session = Depends(get_db)):
+    """Lightweight endpoint for map pins — just coords + display fields."""
+    cache_key = "radar:map"
+    cached = cache_get(cache_key)
+    if cached:
+        return cached
+
+    rows = db.execute(text("""
+        SELECT id::text, COALESCE(corrected_name, name) AS display_name,
+               COALESCE(enrichment_status, 'pending') AS enrichment_status,
+               country, site_type, period_name, lat, lon,
+               score AS enrichment_score, mention_count
+        FROM user_contributions
+        WHERE source = 'lyra'
+          AND COALESCE(enrichment_status, 'pending') NOT IN ('matched', 'not_a_site', 'failed')
+          AND lat IS NOT NULL AND lon IS NOT NULL
+    """)).fetchall()
+
+    result = [dict(r._mapping) for r in rows]
+    cache_set(cache_key, result, ttl=CACHE_TTL)
+    return result
+
+
 @router.get("/list")
 async def get_radar(
     page: int = Query(1, ge=1),
