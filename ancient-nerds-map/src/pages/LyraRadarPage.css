@@ -770,6 +770,63 @@
   box-shadow: 0 0 8px 2px rgba(78, 205, 196, 0.4), 0 0 20px 4px rgba(78, 205, 196, 0.15);
 }
 
+/* Map wrapper — positions the card overlay relative to the map */
+.radar-map-wrapper {
+  position: relative;
+  padding: 0 20px;
+}
+
+/* Card overlay — floats on right side of the map */
+.radar-map-card-overlay {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 320px;
+  max-height: calc(100% - 20px);
+  overflow-y: auto;
+  z-index: 2;
+  opacity: 0.92;
+  transition: opacity 0.2s;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(78, 205, 196, 0.3) transparent;
+}
+
+.radar-map-card-overlay.pinned {
+  opacity: 1;
+}
+
+/* Disable the lift/scale hover effect inside the overlay */
+.radar-map-card-overlay .lyra-discovery-card:hover {
+  transform: none;
+}
+
+/* Close button for pinned card */
+.radar-map-card-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 3;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(10, 26, 31, 0.85);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.radar-map-card-close:hover {
+  border-color: rgba(78, 205, 196, 0.5);
+  color: #fff;
+  background: rgba(78, 205, 196, 0.15);
+}
+
 /* Card highlight animation on map click */
 .lyra-card-highlight {
   animation: radar-card-pulse 1.5s ease-out;
