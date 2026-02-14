@@ -331,6 +331,27 @@ async def get_radar(
             if row.enrichment_data.get("db_match"):
                 data_sources.append("db_match")
 
+        # Add wikidata source if wikidata_id is present (even without enrichment_data)
+        if row.wikidata_id and "wikidata" not in data_sources:
+            data_sources.append("wikidata")
+
+        # Derive commons_url from enrichment data
+        commons_url = None
+        if row.enrichment_data and isinstance(row.enrichment_data, dict):
+            wd = row.enrichment_data.get("wikidata", {})
+            if isinstance(wd, dict):
+                cc = wd.get("commons_category")
+                if cc:
+                    commons_url = f"https://commons.wikimedia.org/wiki/Category:{cc.replace(' ', '_')}"
+                elif wd.get("thumbnail_url"):
+                    thumb = wd["thumbnail_url"]
+                    # Extract filename from Wikimedia Commons thumbnail URL
+                    # Format: .../thumb/a/ab/Filename.jpg/300px-Filename.jpg
+                    parts = thumb.split("/")
+                    if len(parts) >= 2:
+                        # The filename is the second-to-last path segment
+                        commons_url = f"https://commons.wikimedia.org/wiki/File:{parts[-2]}"
+
         item = {
             "id": row.id,
             "display_name": row.display_name,
@@ -359,6 +380,7 @@ async def get_radar(
             "external_sources": external_sources,
             "confidence": confidence,
             "data_sources": data_sources,
+            "commons_url": commons_url,
             "nearby_an_site": None,
         }
         item["enrichment_score"] = _compute_display_score(item)

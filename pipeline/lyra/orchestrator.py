@@ -763,6 +763,16 @@ def _run_migrations(engine) -> None:
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v_research_reset'))
         """))
 
+        # Fix wikipedia_url / wikidata_id swap: rows where wikipedia_url
+        # points to wikidata.org should have the QID in wikidata_id instead
+        conn.execute(text("""
+            UPDATE user_contributions
+            SET wikidata_id = substring(wikipedia_url from 'Q\\d+'),
+                wikipedia_url = NULL
+            WHERE wikipedia_url LIKE '%wikidata.org%'
+              AND (wikidata_id IS NULL OR wikidata_id = '')
+        """))
+
         # Site hierarchy: parent_site_id for "part of" relationships
         # (e.g. Great Sphinx → Giza Necropolis)
         conn.execute(text(

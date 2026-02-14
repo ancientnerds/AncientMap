@@ -935,6 +935,13 @@ def _enrich_from_wikidata(qid: str) -> dict:
                 f"{md5[0]}/{md5[0:2]}/{encoded_name}/300px-{thumb_suffix}"
             )
 
+    # P373: Commons category
+    p373 = claims.get("P373", [])
+    if p373:
+        category_name = p373[0].get("mainsnak", {}).get("datavalue", {}).get("value")
+        if category_name:
+            result["commons_category"] = category_name
+
     # enwiki sitelink → Wikipedia URL
     enwiki = sitelinks.get("enwiki", {})
     if enwiki.get("title"):
@@ -1684,7 +1691,12 @@ def _handle_ai_enriched_site(
             wp_url = bm["wikipedia_url"]
             if not wp_url.startswith("http"):
                 wp_url = f"https://{wp_url}"
-            contribution.wikipedia_url = wp_url
+            if "wikidata.org" in wp_url:
+                qid_match = re.search(r"Q\d+", wp_url)
+                if qid_match and not contribution.wikidata_id:
+                    contribution.wikidata_id = qid_match.group()
+            elif "wikipedia.org" in wp_url:
+                contribution.wikipedia_url = wp_url
 
     # Resolve country from coordinates if still missing
     if contribution.lat and contribution.lon and not contribution.country:
