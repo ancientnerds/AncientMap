@@ -5,9 +5,6 @@
  * - panels/ - Control panels (ZoomControls, SocialLinks, OptionsPanel, etc.)
  * - overlays/ - HUD overlays (CoordinateDisplay, ScaleBar, TooltipOverlay, etc.)
  * - controls/ - Interactive controls (ScreenshotControls)
- *
- * The main Globe component is still in components/Globe.tsx for now.
- * TODO: Move main component here when refactoring is complete.
  */
 
 export * from './panels'

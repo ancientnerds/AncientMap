@@ -673,9 +673,6 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   })
   const [labelReloadTrigger, setLabelReloadTrigger] = useState(0)
   const totalLabelsCountRef = refs.totalLabelsCount
-  // Reserved: skipped labels for on-demand loading when user enables them
-  // const skippedLabelsRef = useRef<GeoLabel[]>([])
-  // const skippedLabelsLoadedTypesRef = useRef<Set<string>>(new Set())
 
   // Zoom ref for geo label system (defined earlier with other refs)
   zoomRef.current = zoom

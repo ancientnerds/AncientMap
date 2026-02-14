@@ -307,10 +307,6 @@ export function createModeSwitchEffect(
     const view = getThreeJsView(camera)
     const mapboxCamera = viewToMapbox(view)
 
-    console.log('[SYNC] === ENTERING MAPBOX ===')
-    console.log('[SYNC] GlobeView:', view)
-    console.log('[SYNC] → Mapbox camera:', mapboxCamera)
-
     mapboxService.setCamera(mapboxCamera.lat, mapboxCamera.lng, mapboxCamera.zoom)
 
     // Store the base zoom percent for the Mapbox zoom effect to use
@@ -318,7 +314,6 @@ export function createModeSwitchEffect(
     const MAPBOX_FULL_ZOOM_MIN = 0.7
     const MAPBOX_FULL_ZOOM_MAX = 18
     deps.mapboxBaseZoomRef.current = ((mapboxCamera.zoom - MAPBOX_FULL_ZOOM_MIN) / (MAPBOX_FULL_ZOOM_MAX - MAPBOX_FULL_ZOOM_MIN)) * 100
-    console.log('[SYNC] Base Mapbox zoom percent:', deps.mapboxBaseZoomRef.current)
 
     // Slider position is already correct since user dragged it to trigger mode switch
     // No need to update it here (would cause feedback loop)
@@ -502,7 +497,6 @@ export function createModeSwitchEffect(
           }
 
           const snapTarget = mapboxService.findSnapTarget(screenX, screenY, 25, measurementPoints)
-          console.log('[Mapbox Click] Snap check:', { snapEnabled: true, measurementPoints: measurementPoints.length, snapTarget })
           if (snapTarget) {
             finalLng = snapTarget[0]
             finalLat = snapTarget[1]
@@ -510,7 +504,6 @@ export function createModeSwitchEffect(
           }
         }
 
-        console.log('[Mapbox Click] Adding point:', { finalLng, finalLat, snapped })
         deps.onMeasurePointAddRef.current([finalLng, finalLat], snapped)
       } else {
         // Not in measure/proximity mode - clicking on empty space deselects all sites
@@ -561,10 +554,6 @@ export function createModeSwitchEffect(
     // The Three.js zoom effect will set the proper camera distance based on slider value
     const mapboxCamera = mapboxService.getCamera()
 
-    console.log('[SYNC] === EXITING MAPBOX ===')
-    console.log('[SYNC] Mapbox camera:', mapboxCamera)
-    console.log('[SYNC] Current zoom slider:', deps.zoomRef.current)
-
     if (mapboxCamera) {
       // Get camera direction from Mapbox lat/lng (where user is looking)
       const centerPoint = latLngToCartesian(mapboxCamera.lat, mapboxCamera.lng, 1.0)
@@ -582,7 +571,6 @@ export function createModeSwitchEffect(
       camera.lookAt(0, 0, 0)
       controls.update()
 
-      console.log('[SYNC] Three.js camera positioned at distance:', targetDist, 'for slider:', currentSliderZoom)
     }
 
     // Clear isManualZoom after a delay (let React settle)

@@ -112,12 +112,9 @@ async function apiRequest<T>(
     }
   }
 
-  console.log('[contentService] Fetching:', url.toString())
   const response = await fetch(url.toString(), {
     headers: { Accept: 'application/json' },
   })
-
-  console.log('[contentService] Response status:', response.status)
 
   if (!response.ok) {
     const text = await response.text()
@@ -125,9 +122,7 @@ async function apiRequest<T>(
     throw new Error(`API error: ${response.status} ${response.statusText}`)
   }
 
-  const data = await response.json()
-  console.log('[contentService] Response data:', data)
-  return data
+  return await response.json()
 }
 
 /**

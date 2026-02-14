@@ -228,9 +228,9 @@ def _get_related_news(
 # News filter extraction (Haiku-powered)
 # ---------------------------------------------------------------------------
 
-_NEWS_FILTER_EXTRACTION_PROMPT = """You are a filter extractor for an archaeology news database. Given a user query, extract structured filters to find relevant news items.
+_NEWS_FILTER_EXTRACTION_PROMPT_TEMPLATE = """You are a filter extractor for an archaeology news database. Given a user query, extract structured filters to find relevant news items.
 
-The current year is 2026. The database stores period_start as an integer year (negative = BCE, positive = CE).
+The current year is {current_year}. The database stores period_start as an integer year (negative = BCE, positive = CE).
 
 Return a JSON object with ONLY the fields that apply (omit fields that don't apply):
 
@@ -285,8 +285,10 @@ async def _extract_news_filters(query: str) -> dict:
     Returns a dict of filter kwargs suitable for _get_related_news().
     """
     llm = _get_filter_llm()
+    from datetime import datetime
+    prompt = _NEWS_FILTER_EXTRACTION_PROMPT_TEMPLATE.format(current_year=datetime.now().year)
     response = await llm.ainvoke([
-        SystemMessage(content=_NEWS_FILTER_EXTRACTION_PROMPT),
+        SystemMessage(content=prompt),
         HumanMessage(content=query),
     ])
 

@@ -600,10 +600,12 @@ async def verify_refresh(request: AdminPinRequest, req: Request):
     result = await verify_admin_pin(request.pin, request.turnstile_token, ip)
 
     if result.verified:
-        # Evict oldest entries if dict exceeds cap (DoS protection)
+        # Purge expired entries before adding new one
         if len(_refresh_timestamps) >= _MAX_REFRESH_ENTRIES:
-            oldest_ip = min(_refresh_timestamps, key=lambda k: _refresh_timestamps[k])
-            del _refresh_timestamps[oldest_ip]
+            cutoff = now - REFRESH_COOLDOWN_SECONDS
+            expired = [k for k, v in _refresh_timestamps.items() if v < cutoff]
+            for k in expired:
+                del _refresh_timestamps[k]
         _refresh_timestamps[ip] = now
         logger.info(f"Connector refresh authorized for {ip}")
 

@@ -157,8 +157,8 @@ async def get_radar(
     page: int = Query(1, ge=1),
     page_size: int = Query(24, ge=1, le=100),
     min_mentions: int = Query(1, ge=1),
-    sort_by: str = Query("score", regex="^(score|mentions|recency)$"),
-    status: str = Query("all", regex="^(all|enriched|pending|added|rejected)$"),
+    sort_by: str = Query("score", pattern="^(score|mentions|recency)$"),
+    status: str = Query("all", pattern="^(all|enriched|pending|added|rejected)$"),
     db: Session = Depends(get_db),
 ):
     """
