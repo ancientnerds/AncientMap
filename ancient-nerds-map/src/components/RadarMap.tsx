@@ -1,6 +1,7 @@
 /**
  * RadarMap - Mapbox 2D map showing Lyra radar sites as colored dots.
- * A green scanning bar sweeps left-to-right; dots glow when the bar passes.
+ * A scan line sweeps around the globe (longitude-based); dots glow when hit.
+ * Dots are colored by period (age) matching the main globe's color scheme.
  * Hover calls onHoverItem, click calls onPinItem (parent renders the card).
  */
 
@@ -10,6 +11,7 @@ import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { MAPBOX } from '../config/mapboxConstants'
 import { applyDarkTealTheme, setupDarkFog } from '../utils/mapboxTheme'
+import { getPeriodColor } from '../constants/colors'
 
 interface RadarMapItem {
   id: string
@@ -29,16 +31,9 @@ interface RadarMapProps {
   children?: ReactNode
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  enriched: '#4ecdc4',
-  pending: '#f9a825',
-  enriching: '#f9a825',
-  promoted: '#66bb6a',
-  rejected: '#ef5350',
-}
-
-const SWEEP_MS = 8000
+const SWEEP_MS = 12000 // 12 seconds per full rotation
 const GLOW_MS = 1200
+const TRAIL_DEG = 10   // trailing band width in degrees
 
 function buildGeoJSON(items: RadarMapItem[]): GeoJSON.FeatureCollection {
   return {
@@ -57,21 +52,24 @@ function buildGeoJSON(items: RadarMapItem[]): GeoJSON.FeatureCollection {
           status: it.enrichment_status,
           country: it.country || '',
           period: it.period_name || '',
-          color: STATUS_COLORS[it.enrichment_status] || '#f9a825',
+          color: getPeriodColor(it.period_name || 'Unknown'),
         },
       })),
   }
 }
 
+/** Convert longitude (-180..180) to 0..360 for wrap-safe comparisons */
+function lonToDeg(lon: number): number {
+  return lon < 0 ? lon + 360 : lon
+}
+
 export default function RadarMap({ items, onHoverItem, onPinItem, children }: RadarMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
-  const scanLineRef = useRef<HTMLDivElement>(null)
   const scanAnimRef = useRef<number>(0)
   const glowTimers = useRef<Map<string, number>>(new Map())
-  const prevScanXRef = useRef(0)
+  const prevScanDegRef = useRef(0)
   const geojsonRef = useRef<GeoJSON.FeatureCollection>(buildGeoJSON(items))
-  // Keep refs for latest callbacks so the map event closures always call the latest version
   const onHoverItemRef = useRef(onHoverItem)
   const onPinItemRef = useRef(onPinItem)
   onHoverItemRef.current = onHoverItem
@@ -79,7 +77,6 @@ export default function RadarMap({ items, onHoverItem, onPinItem, children }: Ra
 
   geojsonRef.current = buildGeoJSON(items)
 
-  // Initialize map
   useEffect(() => {
     if (!containerRef.current || !MAPBOX.ACCESS_TOKEN) return
 
@@ -101,57 +98,78 @@ export default function RadarMap({ items, onHoverItem, onPinItem, children }: Ra
       applyDarkTealTheme(map)
       mapRef.current = map
 
+      // ── Sites ──
       map.addSource('radar-sites', {
         type: 'geojson',
         data: geojsonRef.current,
         promoteId: 'id',
       })
 
-      // Glow layer (underneath dots) — driven by feature state
       map.addLayer({
         id: 'radar-glow',
         type: 'circle',
         source: 'radar-sites',
         paint: {
-          'circle-radius': [
-            'case',
-            ['boolean', ['feature-state', 'glow'], false],
-            14, 0,
-          ],
+          'circle-radius': ['case', ['boolean', ['feature-state', 'glow'], false], 14, 0],
           'circle-color': ['get', 'color'],
-          'circle-opacity': [
-            'case',
-            ['boolean', ['feature-state', 'glow'], false],
-            0.35, 0,
-          ],
+          'circle-opacity': ['case', ['boolean', ['feature-state', 'glow'], false], 0.35, 0],
           'circle-blur': 1,
         },
       })
 
-      // Main dots layer
       map.addLayer({
         id: 'radar-dots',
         type: 'circle',
         source: 'radar-sites',
         paint: {
-          'circle-radius': [
-            'case',
-            ['boolean', ['feature-state', 'glow'], false],
-            7, 5,
-          ],
+          'circle-radius': ['case', ['boolean', ['feature-state', 'glow'], false], 7, 5],
           'circle-color': ['get', 'color'],
           'circle-stroke-width': 1,
-          'circle-stroke-color': [
-            'case',
-            ['boolean', ['feature-state', 'glow'], false],
-            'rgba(255,255,255,0.6)',
-            'rgba(255,255,255,0.3)',
-          ],
+          'circle-stroke-color': ['case', ['boolean', ['feature-state', 'glow'], false], 'rgba(255,255,255,0.6)', 'rgba(255,255,255,0.3)'],
           'circle-opacity': 0.85,
         },
       })
 
-      // Hover → notify parent
+      // ── Scan line + trail (Mapbox layers on the globe) ──
+      const emptyLine: GeoJSON.Feature = {
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: [[0, -85], [0, 85]] },
+        properties: {},
+      }
+      const emptyPoly: GeoJSON.Feature = {
+        type: 'Feature',
+        geometry: { type: 'Polygon', coordinates: [[[0, -85], [0, -85], [0, 85], [0, 85], [0, -85]]] },
+        properties: {},
+      }
+
+      map.addSource('scan-line', { type: 'geojson', data: emptyLine })
+      map.addSource('scan-trail', { type: 'geojson', data: emptyPoly })
+
+      // Trail fill — semi-transparent band behind the scan line
+      map.addLayer({
+        id: 'scan-trail-fill',
+        type: 'fill',
+        source: 'scan-trail',
+        paint: { 'fill-color': 'rgba(78, 205, 196, 0.06)' },
+      }, 'radar-glow')
+
+      // Scan line glow (wide + blurry)
+      map.addLayer({
+        id: 'scan-line-glow',
+        type: 'line',
+        source: 'scan-line',
+        paint: { 'line-color': 'rgba(78, 205, 196, 0.25)', 'line-width': 6, 'line-blur': 4 },
+      }, 'radar-glow')
+
+      // Scan line bright (thin + sharp)
+      map.addLayer({
+        id: 'scan-line-bright',
+        type: 'line',
+        source: 'scan-line',
+        paint: { 'line-color': 'rgba(78, 205, 196, 0.7)', 'line-width': 1.5 },
+      }, 'radar-glow')
+
+      // ── Interaction ──
       map.on('mouseenter', 'radar-dots', (e) => {
         map.getCanvas().style.cursor = 'pointer'
         const id = e.features?.[0]?.properties?.id
@@ -163,7 +181,6 @@ export default function RadarMap({ items, onHoverItem, onPinItem, children }: Ra
         onHoverItemRef.current?.(null)
       })
 
-      // Click → pin/unpin
       map.on('click', (e) => {
         const features = map.queryRenderedFeatures(e.point, { layers: ['radar-dots'] })
         if (features.length > 0) {
@@ -181,55 +198,69 @@ export default function RadarMap({ items, onHoverItem, onPinItem, children }: Ra
     map.dragPan.enable()
     map.doubleClickZoom.enable()
 
-    const resizeObserver = new ResizeObserver(() => {
-      map.resize()
-    })
+    const resizeObserver = new ResizeObserver(() => map.resize())
     resizeObserver.observe(containerRef.current)
 
     function startScan() {
-      const scanLine = scanLineRef.current
-      const container = containerRef.current
-      if (!scanLine || !container) return
-
       let sweepStart = performance.now()
-      prevScanXRef.current = 0
+      prevScanDegRef.current = 0
 
       const tick = (now: number) => {
         if (!mapRef.current) return
+        const m = mapRef.current
         const progress = ((now - sweepStart) % SWEEP_MS) / SWEEP_MS
-        const w = container.offsetWidth
-        const h = container.offsetHeight
-        const scanX = progress * w
 
-        scanLine.style.transform = `translateX(${scanX - 60}px)`
+        // 0-360 degree space → -180..180 longitude
+        const scanDeg = progress * 360
+        const scanLon = scanDeg <= 180 ? scanDeg : scanDeg - 360
 
-        const prev = prevScanXRef.current
-        if (scanX >= prev) {
-          const features = geojsonRef.current.features
-          for (const feat of features) {
-            const coords = (feat.geometry as GeoJSON.Point).coordinates as [number, number]
-            const pt = mapRef.current.project(coords as mapboxgl.LngLatLike)
-            const id = feat.properties!.id as string
+        // Update scan line meridian
+        const lineSrc = m.getSource('scan-line') as mapboxgl.GeoJSONSource
+        if (lineSrc) {
+          lineSrc.setData({
+            type: 'Feature',
+            geometry: { type: 'LineString', coordinates: [[scanLon, -85], [scanLon, 85]] },
+            properties: {},
+          })
+        }
 
-            if (pt.x >= prev && pt.x < scanX && pt.y >= 0 && pt.y <= h && !glowTimers.current.has(id)) {
-              mapRef.current.setFeatureState(
-                { source: 'radar-sites', id },
-                { glow: true },
-              )
-              glowTimers.current.set(id, window.setTimeout(() => {
-                if (mapRef.current) {
-                  mapRef.current.setFeatureState(
-                    { source: 'radar-sites', id },
-                    { glow: false },
-                  )
-                }
-                glowTimers.current.delete(id)
-              }, GLOW_MS))
-            }
+        // Update trail polygon (band behind the line)
+        const trailSrc = m.getSource('scan-trail') as mapboxgl.GeoJSONSource
+        if (trailSrc) {
+          const ts = scanLon - TRAIL_DEG
+          trailSrc.setData({
+            type: 'Feature',
+            geometry: {
+              type: 'Polygon',
+              coordinates: [[[ts, -85], [scanLon, -85], [scanLon, 85], [ts, 85], [ts, -85]]],
+            },
+            properties: {},
+          })
+        }
+
+        // Hit detection in longitude space (0-360)
+        const prevDeg = prevScanDegRef.current
+        for (const feat of geojsonRef.current.features) {
+          const lon = (feat.geometry as GeoJSON.Point).coordinates[0]
+          const siteDeg = lonToDeg(lon)
+          const id = feat.properties!.id as string
+
+          const hit = scanDeg >= prevDeg
+            ? siteDeg >= prevDeg && siteDeg < scanDeg       // normal
+            : siteDeg >= prevDeg || siteDeg < scanDeg       // wrapped past 360
+
+          if (hit && !glowTimers.current.has(id)) {
+            m.setFeatureState({ source: 'radar-sites', id }, { glow: true })
+            glowTimers.current.set(id, window.setTimeout(() => {
+              if (mapRef.current) {
+                mapRef.current.setFeatureState({ source: 'radar-sites', id }, { glow: false })
+              }
+              glowTimers.current.delete(id)
+            }, GLOW_MS))
           }
         }
 
-        prevScanXRef.current = scanX
+        prevScanDegRef.current = scanDeg
         scanAnimRef.current = requestAnimationFrame(tick)
       }
 
@@ -246,21 +277,16 @@ export default function RadarMap({ items, onHoverItem, onPinItem, children }: Ra
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Update data when items change
   useEffect(() => {
     const map = mapRef.current
     if (!map || !map.isStyleLoaded()) return
-
     const source = map.getSource('radar-sites') as mapboxgl.GeoJSONSource
-    if (source) {
-      source.setData(geojsonRef.current)
-    }
+    if (source) source.setData(geojsonRef.current)
   }, [items]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="radar-map-container">
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
-      <div ref={scanLineRef} className="radar-scan-line" />
       {children}
     </div>
   )
