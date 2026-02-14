@@ -70,7 +70,6 @@ EXTRACT_METADATA_SCHEMA = {
     "additionalProperties": False,
 }
 
-WIKIDATA_SEARCH_URL = "https://www.wikidata.org/w/api.php"
 WIKIDATA_ENTITY_URL = "https://www.wikidata.org/w/api.php"
 WIKIPEDIA_SUMMARY_URL = "https://en.wikipedia.org/api/rest_v1/page/summary/{title}"
 WIKIPEDIA_LEAD_URL = "https://en.wikipedia.org/api/rest_v1/page/mobile-sections-lead/{title}"
@@ -557,38 +556,6 @@ def _disambiguate_db_candidates(
 
     return None
 
-
-def _search_wikidata(name: str) -> list[dict]:
-    """Search Wikidata for entity candidates matching a site name."""
-    try:
-        resp = fetch_with_retry(
-            WIKIDATA_SEARCH_URL,
-            params={
-                "action": "wbsearchentities",
-                "search": name,
-                "language": "en",
-                "limit": "5",
-                "format": "json",
-            },
-        )
-        data = resp.json()
-    except Exception as e:
-        logger.warning(f"Wikidata search failed for '{name}': {e}")
-        return []
-
-    if data.get("error"):
-        logger.warning(f"Wikidata search error for '{name}': {data['error']}")
-        return []
-
-    candidates = []
-    for result in data.get("search", []):
-        candidates.append({
-            "qid": result.get("id"),
-            "label": result.get("label"),
-            "description": result.get("description", ""),
-        })
-
-    return candidates
 
 
 def _check_enwiki_sitelinks(qids: list[str]) -> dict[str, bool]:
@@ -1301,29 +1268,6 @@ def _handle_wikidata_match(
 
     return True
 
-
-def _handle_new_site(
-    session: Session,
-    contribution: UserContribution,
-    identification: dict,
-    settings: LyraSettings,
-) -> bool:
-    """Handle a site with no DB or Wikidata match: store what we have."""
-    site_name = identification.get("site_name", contribution.name)
-
-    contribution.enrichment_data = {"identification": identification}
-    contribution.score = _compute_score(contribution)
-    contribution.enrichment_status = "enriched"
-
-    logger.info(
-        f"New site '{contribution.name}' (corrected: '{site_name}'): "
-        f"score={contribution.score}, coords=({contribution.lat}, {contribution.lon})"
-    )
-
-    # Promote if score is high enough and has coordinates
-    _maybe_promote(session, contribution, site_name, settings)
-
-    return True
 
 
 def _apply_pre_research(contribution: UserContribution, research) -> None:
