@@ -289,7 +289,6 @@ const CATEGORY_TO_GROUP: Record<string, CategoryGroup> = {
 
   // Megalithic - Blues & Cyans
   'megalithic': 'Megalithic',
-  'standing_stone': 'Megalithic',
   'megalithic stones': 'Megalithic',
   'megalithic structures': 'Megalithic',
   'megalithic statues': 'Megalithic',
@@ -303,7 +302,6 @@ const CATEGORY_TO_GROUP: Record<string, CategoryGroup> = {
 
   // Rock & Cave - Greens
   'cave': 'Rock & Cave',
-  'rock_art': 'Rock & Cave',
   'rock art': 'Rock & Cave',
   'cave structures': 'Rock & Cave',
   'rock relief/carving': 'Rock & Cave',
@@ -427,6 +425,30 @@ export const UI_COLORS = {
 const CATEGORY_COLORS_NORMALIZED = new Map<string, string>()
 for (const [key, value] of Object.entries(CATEGORY_COLORS)) {
   CATEGORY_COLORS_NORMALIZED.set(key.toLowerCase(), value)
+}
+
+// Build canonical key lookup: lowercased+space-normalized → exact CATEGORY_COLORS key
+// First entry wins, so lowercase keys ('monument') beat later Title keys ('Monument')
+const CANONICAL_TYPE_LOOKUP = new Map<string, string>()
+for (const key of Object.keys(CATEGORY_COLORS)) {
+  const norm = key.toLowerCase().replace(/_/g, ' ')
+  if (!CANONICAL_TYPE_LOOKUP.has(norm)) CANONICAL_TYPE_LOOKUP.set(norm, key)
+  const normUs = key.toLowerCase().replace(/ /g, '_')
+  if (normUs !== norm && !CANONICAL_TYPE_LOOKUP.has(normUs)) CANONICAL_TYPE_LOOKUP.set(normUs, key)
+}
+
+/**
+ * Normalize a site type string to its canonical CATEGORY_COLORS key.
+ * 'rock_art', 'Rock_Art', 'ROCK ART' all → 'Rock art'
+ */
+export function normalizeSiteType(siteType: string | undefined | null): string {
+  if (!siteType || !siteType.trim()) return 'unknown'
+  const cleaned = siteType.trim()
+  // Exact match
+  if (CATEGORY_COLORS[cleaned]) return cleaned
+  // Case+underscore insensitive
+  const norm = cleaned.toLowerCase().replace(/_/g, ' ')
+  return CANONICAL_TYPE_LOOKUP.get(norm) || CANONICAL_TYPE_LOOKUP.get(cleaned.toLowerCase().replace(/ /g, '_')) || cleaned
 }
 
 /**

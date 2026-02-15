@@ -10,11 +10,12 @@ import {
   getCategoryGroup,
   CATEGORY_GROUP_ORDER,
   type CategoryGroup,
+  normalizeSiteType,
 } from '../constants/colors'
 
 // Re-export color helpers and constants from centralized constants
 export { getCategoryColor, getPeriodColor, getSourceColor, SOURCE_COLORS, CATEGORY_COLORS, PERIOD_COLORS }
-export { getCategoryGroup, CATEGORY_GROUP_ORDER, type CategoryGroup }
+export { getCategoryGroup, CATEGORY_GROUP_ORDER, type CategoryGroup, normalizeSiteType }
 
 export interface ImageAttribution {
   photographer?: string
@@ -74,7 +75,7 @@ export async function fetchSites(): Promise<SiteData[]> {
     id: site.id,
     title: site.name,
     location: site.location || '',
-    category: site.type || 'Unknown',
+    category: normalizeSiteType(site.type),
     period: resolvePeriod(site.period, site.periodStart),
     periodStart: site.periodStart,
     description: site.description || '',
@@ -124,7 +125,7 @@ export function getCurrentSites(): SiteData[] {
     id: site.id,
     title: site.name,
     location: site.location || '',
-    category: site.type || 'Unknown',
+    category: normalizeSiteType(site.type),
     period: resolvePeriod(site.period, site.periodStart),
     periodStart: site.periodStart,
     description: site.description || '',
