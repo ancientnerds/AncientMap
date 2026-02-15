@@ -203,12 +203,15 @@ async def verify_turnstile(token: str, ip: str) -> bool:
 async def create_contribution(
     contribution: ContributionCreate,
     request: Request,
+    db: Session = Depends(get_db),
 ):
     """
     Submit a new site contribution.
 
     Requires Cloudflare Turnstile verification.
-    All submissions are saved to a JSON file for admin review.
+    Writes directly to unified_sites (source_id='ancient_nerds_community')
+    so the site appears on the globe and in the audit page immediately.
+    Also saves to JSON file as a backup log.
     """
     client_ip = get_client_ip(request)
 
@@ -221,26 +224,51 @@ async def create_contribution(
     if not is_valid:
         raise HTTPException(status_code=400, detail="Bot verification failed. Please try again.")
 
-    # Create contribution record
     contribution_id = str(uuid.uuid4())
+    name = contribution.name.strip()
+    description = contribution.description.strip() if contribution.description else None
+    country = contribution.country.strip() if contribution.country else None
+    source_url = contribution.source_url.strip() if contribution.source_url else None
+
+    # Write to unified_sites so it shows up everywhere immediately
+    db.execute(text("""
+        INSERT INTO unified_sites (
+            id, source_id, source_record_id, name, lat, lon,
+            site_type, country, description, source_url, edited_by
+        ) VALUES (
+            :id, 'ancient_nerds_community', :source_record_id, :name,
+            :lat, :lon, :site_type, :country, :description,
+            :source_url, 'user'
+        )
+    """), {
+        "id": contribution_id,
+        "source_record_id": contribution_id,
+        "name": name,
+        "lat": contribution.lat or 0,
+        "lon": contribution.lon or 0,
+        "site_type": contribution.site_type,
+        "country": country,
+        "description": description,
+        "source_url": source_url,
+    })
+    db.commit()
+
+    # Also save to JSON file as backup log
     contribution_data = {
         "id": contribution_id,
-        "name": contribution.name.strip(),
+        "name": name,
         "lat": contribution.lat,
         "lon": contribution.lon,
-        "description": contribution.description.strip() if contribution.description else None,
-        "country": contribution.country.strip() if contribution.country else None,
+        "description": description,
+        "country": country,
         "site_type": contribution.site_type,
-        "source_url": contribution.source_url.strip() if contribution.source_url else None,
-        "status": "pending",  # pending, approved, rejected
+        "source_url": source_url,
         "submitted_at": datetime.now(UTC).isoformat(),
         "submitter_ip": client_ip,
     }
-
-    # Save to JSON file
     save_contribution(contribution_data)
 
-    logger.info(f"New submission: {contribution_data['name']} (ID: {contribution_id})")
+    logger.info(f"New submission: {name} (ID: {contribution_id})")
 
     return {
         "success": True,
