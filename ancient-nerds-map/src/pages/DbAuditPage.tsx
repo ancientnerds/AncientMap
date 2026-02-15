@@ -318,9 +318,11 @@ export default function DbAuditPage() {
   useEffect(() => { refreshDbSnapshots() }, [refreshDbSnapshots])
 
   // Fetch sites (per-source: live or from snapshot)
+  const hasFetched = useRef(false)
   useEffect(() => {
     (async () => {
-      setLoading(true)
+      // Only show full-page spinner on initial load, not on snapshot switches
+      if (!hasFetched.current) setLoading(true)
       setError('')
       try {
         const allSites: AuditSite[] = []
@@ -355,7 +357,8 @@ export default function DbAuditPage() {
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : 'Failed to load sites')
       } finally {
-        setLoading(false)
+        if (!hasFetched.current) setLoading(false)
+        hasFetched.current = true
       }
     })()
   }, [sourceVersions])
@@ -958,7 +961,7 @@ export default function DbAuditPage() {
       {/* Per-source version selectors */}
       {snapshots.length > 0 && (
         <div className="db-version-selectors">
-          <span className="db-version-selectors-label">Versions</span>
+          <span className="db-version-selectors-label">Snapshots</span>
           {Object.entries(SOURCE_CONFIG).map(([sid, cfg]) => {
             const ver = sourceVersions[sid] || 'latest'
             const pin = activePins[sid]
