@@ -270,7 +270,8 @@ async def get_all_sites(
                 thumbnail_url,
                 country,
                 source_url,
-                edited_by
+                edited_by,
+                updated_at
             FROM unified_sites
             WHERE {where_clause}
             OFFSET :skip
@@ -306,6 +307,8 @@ async def get_all_sites(
                 site["u"] = row.source_url
             if row.edited_by and row.edited_by != "initial":
                 site["eb"] = row.edited_by
+            if row.updated_at:
+                site["ea"] = row.updated_at.isoformat()
             sites.append(site)
 
         if sites:
@@ -810,7 +813,8 @@ async def update_site(
             period_name = :period_name,
             period_start = :period_start,
             source_url = :source_url,
-            edited_by = :edited_by
+            edited_by = :edited_by,
+            updated_at = NOW()
         WHERE id::text = :site_id
     """)
 

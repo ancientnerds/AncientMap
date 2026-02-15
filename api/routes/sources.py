@@ -27,6 +27,7 @@ DEFAULT_SOURCE_COLORS = {
     # PRIMARY SOURCES
     "ancient_nerds": "#FFD700",   # Gold - Primary source (manually curated)
     "lyra": "#8b5cf6",            # Purple - Lyra auto-discoveries
+    "ancient_nerds_community": "#22c55e",  # Green - Community contributions
 
     # Core ancient world
     "pleiades": "#e74c3c",        # Red - ancient places
