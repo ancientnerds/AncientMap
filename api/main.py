@@ -48,8 +48,15 @@ async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
     import time
 
-    # Startup: warm up database connection pool and Redis
+    # Startup: ensure new tables exist + warm up connections
     logger.info("Starting Ancient Nerds Map API...")
+    try:
+        from pipeline.database import Base, engine
+        Base.metadata.create_all(bind=engine)
+        logger.info("[STARTUP] Database tables verified")
+    except Exception as e:
+        logger.warning(f"[STARTUP] Table creation check failed: {e}")
+
     get_redis_client()  # Initialize Redis connection
 
     # Pre-warm cache with default sites query (so first user gets instant response)
