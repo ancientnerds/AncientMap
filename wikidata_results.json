@@ -1,0 +1,3526 @@
+{
+  "summary": {
+    "total_wikipedia": 4619,
+    "qids_resolved": 4562,
+    "verified": 164,
+    "discrepancies": 406,
+    "missing_period_found": 0
+  },
+  "missing_period": [],
+  "discrepancies": [
+    {
+      "id": "8a091738-3689-48f4-8e8b-565a3197c5d5",
+      "name": "Abdera, Spain",
+      "field": "country",
+      "db_value": "Spain",
+      "wd_value": "Ancient Carthage",
+      "qid": "Q576408"
+    },
+    {
+      "id": "cafcb3e7-fc61-4867-98ba-0a5f3cf68d6e",
+      "name": "Abu Salabikh",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-3400",
+      "wd_precision": 9,
+      "qid": "Q195128"
+    },
+    {
+      "id": "392bcf2d-257f-4be6-bde4-36a26a1dbc9c",
+      "name": "Abu Simbel Temples",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-1274",
+      "wd_precision": 9,
+      "qid": "Q134140"
+    },
+    {
+      "id": "c72fb36a-0726-4975-9d7a-edc5bd59a66f",
+      "name": "Acaray",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-200",
+      "wd_precision": 9,
+      "qid": "Q2822644"
+    },
+    {
+      "id": "fe9d2d34-c026-44cd-9883-86b23c96c962",
+      "name": "Northern Avenue Petroglyph Site",
+      "field": "country",
+      "db_value": "USA",
+      "wd_value": "United States",
+      "qid": "Q16999397"
+    },
+    {
+      "id": "74145e9b-76a6-48de-a902-08ecb2f1f7bb",
+      "name": "Achladia",
+      "field": "country",
+      "db_value": "Germany",
+      "wd_value": "Greece",
+      "qid": "Q28791168"
+    },
+    {
+      "id": "ca60cec6-9909-4285-bc0f-0fe3f063546d",
+      "name": "Acontisma",
+      "field": "country",
+      "db_value": "Greece",
+      "wd_value": "Macedonia",
+      "qid": "Q60790595"
+    },
+    {
+      "id": "f6d1da2a-f957-47fb-9ccf-58f2197eacc8",
+      "name": "Acrocorinth",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-700",
+      "wd_precision": 7,
+      "qid": "Q420810"
+    },
+    {
+      "id": "ac46cdfd-877f-47d4-8403-90d21983364f",
+      "name": "Acropolis of Athens",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-500",
+      "wd_precision": 7,
+      "qid": "Q131013"
+    },
+    {
+      "id": "0349db41-4fca-4804-b614-e075164512b3",
+      "name": "Adulis",
+      "field": "period_start",
+      "db_value": "-2000",
+      "wd_value": "-1450",
+      "wd_precision": 9,
+      "qid": "Q378940"
+    },
+    {
+      "id": "ae64dd4f-971f-4fd7-8540-08af5649e67a",
+      "name": "Aeclanum",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-300",
+      "wd_precision": 9,
+      "qid": "Q380497"
+    },
+    {
+      "id": "74ea7fff-37dd-46f5-a3ca-2df0fdd65068",
+      "name": "Aghanaglack",
+      "field": "country",
+      "db_value": "Ireland",
+      "wd_value": "United Kingdom",
+      "qid": "Q3986285"
+    },
+    {
+      "id": "786cada5-1feb-4c5c-9e79-b8ffdf8aacc6",
+      "name": "Ahin Posh Tape",
+      "field": "country",
+      "db_value": "Afghanistan",
+      "wd_value": "Pakistan",
+      "qid": "Q4695118"
+    },
+    {
+      "id": "b8aedc17-2215-44c3-b89c-8125050efbd5",
+      "name": "Ahuila Gencha Machay",
+      "field": "country",
+      "db_value": "Pakistan",
+      "wd_value": "Peru",
+      "qid": "Q16888286"
+    },
+    {
+      "id": "64752fae-36cc-4f71-8732-80d5fe9b22e3",
+      "name": "Aiadava",
+      "field": "country",
+      "db_value": "Serbia",
+      "wd_value": "Bulgaria",
+      "qid": "Q4696526"
+    },
+    {
+      "id": "17fb93ad-3368-478b-ab8a-0541e8a0400c",
+      "name": "A'en Darah",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-1300",
+      "wd_precision": 9,
+      "qid": "Q1807968"
+    },
+    {
+      "id": "ec0a83d5-737e-48de-a79c-d709ad794e60",
+      "name": "Ajanta Caves",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-200",
+      "wd_precision": 7,
+      "qid": "Q184427"
+    },
+    {
+      "id": "13120650-2e61-45af-976c-b2e0665c49af",
+      "name": "Alba Fucens",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-304",
+      "wd_precision": 9,
+      "qid": "Q944515"
+    },
+    {
+      "id": "b25977e0-0c67-4b01-96e4-d720919676ac",
+      "name": "Alicante",
+      "field": "period_start",
+      "db_value": "-1000",
+      "wd_value": "-231",
+      "wd_precision": 9,
+      "qid": "Q11959"
+    },
+    {
+      "id": "5fc47cd7-e750-44fe-bb29-da865affed4d",
+      "name": "Amphitheatre Alba Fucens",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "-304",
+      "wd_precision": 9,
+      "qid": "Q944515"
+    },
+    {
+      "id": "6f6cebaa-d125-4f80-8625-a9f7dfdf3864",
+      "name": "Altar Stone - Stonehenge",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-2600",
+      "wd_precision": 7,
+      "qid": "Q4736171"
+    },
+    {
+      "id": "2ce50a62-f812-4204-bbb6-892a581fee52",
+      "name": "Amelungsburg, S\u00fcntel",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "300",
+      "wd_precision": 9,
+      "qid": "Q461892"
+    },
+    {
+      "id": "9b998265-3719-4901-97b4-40275ec38f4e",
+      "name": "America's Stonehenge",
+      "field": "country",
+      "db_value": "USA",
+      "wd_value": "United States",
+      "qid": "Q2060780"
+    },
+    {
+      "id": "a6f77e08-62c7-4b5c-87bc-d2c48b20f727",
+      "name": "Amluk-Dara Stupa",
+      "field": "coords",
+      "db_value": "(34.6476, 72.2899)",
+      "wd_value": "(35.2220, 72.2850)",
+      "qid": "Q104880747"
+    },
+    {
+      "id": "8a4ea255-abed-47fe-9c37-636756e90450",
+      "name": "Amphipolis",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-437",
+      "wd_precision": 9,
+      "qid": "Q217414"
+    },
+    {
+      "id": "0e3698c6-006c-4161-a8c3-8dfac5bdf2cc",
+      "name": "Ameny Qemau Pyramid",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-1745",
+      "wd_precision": 9,
+      "qid": "Q462453"
+    },
+    {
+      "id": "c62411bd-d3cb-4d12-af56-39488288dd40",
+      "name": "Amsa-dong",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-5000",
+      "wd_precision": 6,
+      "qid": "Q2647314"
+    },
+    {
+      "id": "e2f8cf43-f499-4363-8fcb-af93e79ea756",
+      "name": "Ancient Corinth",
+      "field": "period_start",
+      "db_value": "-6500",
+      "wd_value": "-900",
+      "wd_precision": 9,
+      "qid": "Q1363688"
+    },
+    {
+      "id": "068a88b3-505e-4998-add2-6b985b255371",
+      "name": "Ancient Theatre of Fourvi\u00e8re",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-15",
+      "wd_precision": 9,
+      "qid": "Q1510"
+    },
+    {
+      "id": "1ae9f44c-ebe7-454c-8c55-58efe28c0376",
+      "name": "Anemospilia",
+      "field": "period_start",
+      "db_value": "-4500",
+      "wd_value": "-1700",
+      "wd_precision": 7,
+      "qid": "Q529246"
+    },
+    {
+      "id": "40e48fb3-769d-47c5-ac69-995bcd9e86b8",
+      "name": "Ancient Babylon",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-1894",
+      "wd_precision": 9,
+      "qid": "Q5684"
+    },
+    {
+      "id": "40e48fb3-769d-47c5-ac69-995bcd9e86b8",
+      "name": "Ancient Babylon",
+      "field": "country",
+      "db_value": "Iraq",
+      "wd_value": "Babylonia",
+      "qid": "Q5684"
+    },
+    {
+      "id": "d120ca9a-703b-49e2-b333-ad6dfe508953",
+      "name": "Ancient Kourion",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-1050",
+      "wd_precision": 8,
+      "qid": "Q1785592"
+    },
+    {
+      "id": "6da6eaa8-4d63-48cb-8c9e-c9eac12f1d04",
+      "name": "Ancient City of Pergamon",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-800",
+      "wd_precision": 7,
+      "qid": "Q18986"
+    },
+    {
+      "id": "2e53c7cf-072e-465a-a53a-ba2128f50c08",
+      "name": "Ancient Sparta",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-900",
+      "wd_precision": 8,
+      "qid": "Q5690"
+    },
+    {
+      "id": "0576c316-4e26-4342-bc7e-42ae84bdc36e",
+      "name": "Ancient City of Troy",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-3000",
+      "wd_precision": 9,
+      "qid": "Q22647"
+    },
+    {
+      "id": "7d45e357-77ff-40f6-a4b4-7e16e015996a",
+      "name": "Anacopia Fortress",
+      "field": "country",
+      "db_value": "Georgia (country)",
+      "wd_value": "Republic of Abkhazia",
+      "qid": "Q2026789"
+    },
+    {
+      "id": "5b541553-60c7-469e-93f2-a0759ea72435",
+      "name": "Annadorn Dolmen",
+      "field": "country",
+      "db_value": "Ireland",
+      "wd_value": "United Kingdom",
+      "qid": "Q4767769"
+    },
+    {
+      "id": "cd307f24-5170-4cb1-acb0-0e7ba7e276d7",
+      "name": "Antonine Wall",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "142",
+      "wd_precision": 9,
+      "qid": "Q210957"
+    },
+    {
+      "id": "61ae1b37-1703-4754-880a-f7277504a829",
+      "name": "Apamea",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-300",
+      "wd_precision": 9,
+      "qid": "Q617550"
+    },
+    {
+      "id": "f336bdb9-c53b-4eed-91d2-353e9e1b4566",
+      "name": "Appleby Logboat",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-1500",
+      "wd_precision": 9,
+      "qid": "Q98069975"
+    },
+    {
+      "id": "cb659fbe-0f1c-43dc-9c40-4517c0974a79",
+      "name": "Aquae Helveticae",
+      "field": "country",
+      "db_value": "Sweden",
+      "wd_value": "Switzerland",
+      "qid": "Q622983"
+    },
+    {
+      "id": "57fa22f7-4aec-42ad-a776-19566dba8adc",
+      "name": "Aqueduct of Segovia",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "200",
+      "wd_precision": 7,
+      "qid": "Q244947"
+    },
+    {
+      "id": "cac95409-52f9-4a26-bf59-fd7af98d054e",
+      "name": "Anim Synagogue",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "400",
+      "wd_precision": 7,
+      "qid": "Q4764711"
+    },
+    {
+      "id": "42f11dde-ad7e-46e0-ab7b-37a7add49986",
+      "name": "Ara trium Galliarum",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-12",
+      "wd_precision": 9,
+      "qid": "Q623602"
+    },
+    {
+      "id": "94141d8e-4482-4c1c-a5f0-79fc8fc2ca76",
+      "name": "Arch of Cabanes",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "-198",
+      "wd_precision": 7,
+      "qid": "Q930753"
+    },
+    {
+      "id": "748277a0-62bc-4628-b2a1-606f65a547f1",
+      "name": "Arch of the Sergii",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-27",
+      "wd_precision": 9,
+      "qid": "Q952381"
+    },
+    {
+      "id": "d996c0de-78d1-4966-9ace-3f40a9c6ed2d",
+      "name": "Arkadiko Bridge",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-1300",
+      "wd_precision": 7,
+      "qid": "Q254087"
+    },
+    {
+      "id": "21660e33-c3b7-462f-aaec-cbaded7b4a8d",
+      "name": "Armazi",
+      "field": "country",
+      "db_value": "Georgia (country)",
+      "wd_value": "Kingdom of Iberia",
+      "qid": "Q1280770"
+    },
+    {
+      "id": "55a670ec-c7c5-4f52-98ea-b25211aedd4e",
+      "name": "Archaeological Site of Kition",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-450",
+      "wd_precision": 9,
+      "qid": "Q1743884"
+    },
+    {
+      "id": "1cf32c46-3536-4e00-9b54-90a0203ff628",
+      "name": "Arkheologicheskiy Muzey-Zapovednik \"Tanais\"",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-300",
+      "wd_precision": 7,
+      "qid": "Q1153416"
+    },
+    {
+      "id": "1cf32c46-3536-4e00-9b54-90a0203ff628",
+      "name": "Arkheologicheskiy Muzey-Zapovednik \"Tanais\"",
+      "field": "country",
+      "db_value": "Russia",
+      "wd_value": "Bosporan Kingdom",
+      "qid": "Q1153416"
+    },
+    {
+      "id": "aa6925fe-a0a4-48ba-b4f0-9c8d4acff015",
+      "name": "Archaeological Site of Idalion",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-1200",
+      "wd_precision": 7,
+      "qid": "Q1656624"
+    },
+    {
+      "id": "3cb65471-1fc1-4055-9cfa-63d7514aeaee",
+      "name": "A\u0161\u0161ur",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-2500",
+      "wd_precision": 9,
+      "qid": "Q200200"
+    },
+    {
+      "id": "98c794a6-57b5-4783-b38d-3693bb60b91b",
+      "name": "Athenian Treasury, Delphi",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-507",
+      "wd_precision": 9,
+      "qid": "Q478011"
+    },
+    {
+      "id": "c0d78581-207b-4223-bcdf-680bd82bce83",
+      "name": "Audleystown Court Tomb",
+      "field": "country",
+      "db_value": "Ireland",
+      "wd_value": "United Kingdom",
+      "qid": "Q758951"
+    },
+    {
+      "id": "8f34775c-ca69-41e8-9517-35005cdc21b8",
+      "name": "Aughlish",
+      "field": "country",
+      "db_value": "Ireland",
+      "wd_value": "United Kingdom",
+      "qid": "Q3629535"
+    },
+    {
+      "id": "1886172a-83a7-4dfb-b5e5-4c3978571e48",
+      "name": "Augusta Emerita",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-25",
+      "wd_precision": 9,
+      "qid": "Q1583842"
+    },
+    {
+      "id": "1886172a-83a7-4dfb-b5e5-4c3978571e48",
+      "name": "Augusta Emerita",
+      "field": "country",
+      "db_value": "Spain",
+      "wd_value": "Ancient Rome",
+      "qid": "Q1583842"
+    },
+    {
+      "id": "3ccc24a7-a41a-4c7b-91e2-246b6b81ef05",
+      "name": "Augusta Raurica",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-44",
+      "wd_precision": 9,
+      "qid": "Q610371"
+    },
+    {
+      "id": "0371ed0a-82f5-4578-b7bf-10dc40faf580",
+      "name": "Baalbek",
+      "field": "period_start",
+      "db_value": "-7000",
+      "wd_value": "1000",
+      "wd_precision": 9,
+      "qid": "Q178835"
+    },
+    {
+      "id": "1c18de52-3783-41cb-a3dd-ade50498a974",
+      "name": "Babilonie",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "300",
+      "wd_precision": 9,
+      "qid": "Q797692"
+    },
+    {
+      "id": "83711b0a-71a6-4022-88f9-060aada84ea6",
+      "name": "Ballinran Court Tomb",
+      "field": "country",
+      "db_value": "Ireland",
+      "wd_value": "United Kingdom",
+      "qid": "Q4851763"
+    },
+    {
+      "id": "50f3f5c5-fcc1-443e-b516-9aaf6ca13d0c",
+      "name": "Ballyalton Court Cairn",
+      "field": "country",
+      "db_value": "Ireland",
+      "wd_value": "United Kingdom",
+      "qid": "Q4851980"
+    },
+    {
+      "id": "f4e3fdef-07f1-4327-b0db-c01c671bfafc",
+      "name": "Ballykeel Dolmen",
+      "field": "country",
+      "db_value": "Ireland",
+      "wd_value": "United Kingdom",
+      "qid": "Q805410"
+    },
+    {
+      "id": "3dd0bac8-4618-4f61-a2b2-4dd229a76e45",
+      "name": "Ballylumford Dolmen",
+      "field": "country",
+      "db_value": "Ireland",
+      "wd_value": "United Kingdom",
+      "qid": "Q1235913"
+    },
+    {
+      "id": "f6b6e039-36f1-4107-b730-dc2aa34b7a92",
+      "name": "Ballymacaldrack Court Tomb",
+      "field": "country",
+      "db_value": "Ireland",
+      "wd_value": "United Kingdom",
+      "qid": "Q1242421"
+    },
+    {
+      "id": "ed559418-30ca-4d1b-b0d0-9e13982d5949",
+      "name": "Ballymacdermott Court Tomb",
+      "field": "country",
+      "db_value": "Ireland",
+      "wd_value": "United Kingdom",
+      "qid": "Q39088713"
+    },
+    {
+      "id": "ac2c74ff-d861-4609-8589-67a8c3eceb3c",
+      "name": "Ballynoe Stone Circle",
+      "field": "country",
+      "db_value": "Ireland",
+      "wd_value": "United Kingdom",
+      "qid": "Q1286044"
+    },
+    {
+      "id": "ae2ca7b1-89da-46cb-8924-f9d04dd5da2e",
+      "name": "Banias",
+      "field": "country",
+      "db_value": "Syria",
+      "wd_value": "Golan Heights",
+      "qid": "Q606295"
+    },
+    {
+      "id": "782afd80-c3e6-4678-99b0-adc7c3074b7f",
+      "name": "Beaghmore",
+      "field": "country",
+      "db_value": "Ireland",
+      "wd_value": "United Kingdom",
+      "qid": "Q812903"
+    },
+    {
+      "id": "2094fe27-b71c-4059-82d0-3891880600a5",
+      "name": "Behistun Inscription",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-600",
+      "wd_precision": 7,
+      "qid": "Q180012"
+    },
+    {
+      "id": "033b359c-dc2e-4fea-a61e-cd2ad0ca9bbe",
+      "name": "Belgrade Fortress",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "100",
+      "wd_precision": 7,
+      "qid": "Q1409017"
+    },
+    {
+      "id": "06f66762-c2a9-465c-bc9e-a31052ec7ce6",
+      "name": "Beul\u00e9 Gate",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "300",
+      "wd_precision": 7,
+      "qid": "Q3398897"
+    },
+    {
+      "id": "3c56c4c5-f5a8-48bb-8b93-9e3a92feac09",
+      "name": "Bibracte",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-200",
+      "wd_precision": 7,
+      "qid": "Q650053"
+    },
+    {
+      "id": "b60c114a-7ee2-4f67-b3ff-a3d3d3e55d15",
+      "name": "Billingsgate Roman House and Baths",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "201",
+      "wd_precision": 7,
+      "qid": "Q16932293"
+    },
+    {
+      "id": "a1441245-1be1-457c-8de6-ae331f12007e",
+      "name": "Bishapur Ancient City",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "226",
+      "wd_precision": 9,
+      "qid": "Q477898"
+    },
+    {
+      "id": "5e7bedef-ef5e-44b4-b479-ec462b3ba954",
+      "name": "Black Mountain (Pima County, Arizona)",
+      "field": "country",
+      "db_value": "USA",
+      "wd_value": "United States",
+      "qid": "Q16241928"
+    },
+    {
+      "id": "7fe4bb17-d008-4886-a097-c03c66b43f76",
+      "name": "Blackhammer Chambered Cairn",
+      "field": "period_start",
+      "db_value": "-4500",
+      "wd_value": "-3000",
+      "wd_precision": 9,
+      "qid": "Q880846"
+    },
+    {
+      "id": "b46b6969-3160-4cbd-a574-8727ee7c53c5",
+      "name": "Bishop's Basilica of Philippopolis",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "401",
+      "wd_precision": 7,
+      "qid": "Q20500169"
+    },
+    {
+      "id": "1b69bb27-aebb-4675-8ee0-e9d6007a4cee",
+      "name": "Blythe Intaglios",
+      "field": "country",
+      "db_value": "USA",
+      "wd_value": "United States",
+      "qid": "Q2460316"
+    },
+    {
+      "id": "037e3715-f5f7-4345-8216-8aa26f404009",
+      "name": "Boa Island",
+      "field": "country",
+      "db_value": "Ireland",
+      "wd_value": "United Kingdom",
+      "qid": "Q887472"
+    },
+    {
+      "id": "44354857-115b-44d3-b155-cae373565602",
+      "name": "Brauroneion",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-430",
+      "wd_precision": 9,
+      "qid": "Q902329"
+    },
+    {
+      "id": "ceff34a3-d6a5-4d8c-8c58-4a8cc27460a5",
+      "name": "Bull-Leaping Fresco",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-1550",
+      "wd_precision": 9,
+      "qid": "Q3566545"
+    },
+    {
+      "id": "1be281ba-d8dd-4260-85c9-39aa02b15567",
+      "name": "Burrough Hill",
+      "field": "period_start",
+      "db_value": "-1000",
+      "wd_value": "500",
+      "wd_precision": 6,
+      "qid": "Q5000477"
+    },
+    {
+      "id": "8fed20ca-19ed-4876-b286-0fb23e0fbc90",
+      "name": "Cahokia Mounds State Historic Site",
+      "field": "country",
+      "db_value": "USA",
+      "wd_value": "United States",
+      "qid": "Q333661"
+    },
+    {
+      "id": "bc28c81f-db22-46a5-bc4e-18cb8c2ecbec",
+      "name": "Calakmul",
+      "field": "coords",
+      "db_value": "(19.2432, -98.3400)",
+      "wd_value": "(18.1050, -89.8106)",
+      "qid": "Q272771"
+    },
+    {
+      "id": "9ceb5947-c91f-4a1f-8c8f-6a67dbb88de2",
+      "name": "C\u00e1diz",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-1100",
+      "wd_precision": 7,
+      "qid": "Q15682"
+    },
+    {
+      "id": "c7994816-1b61-4c2b-a82b-513380825948",
+      "name": "Carn Euny",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-200",
+      "wd_precision": 9,
+      "qid": "Q1043847"
+    },
+    {
+      "id": "8a9ece01-983b-4bca-bb70-5f7d8f756781",
+      "name": "Cartagena, Spain",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-227",
+      "wd_precision": 9,
+      "qid": "Q162615"
+    },
+    {
+      "id": "504bf30a-c4a0-48e7-8bbc-378b585b59b5",
+      "name": "Carteia",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-940",
+      "wd_precision": 9,
+      "qid": "Q97616842"
+    },
+    {
+      "id": "53e3bad0-669e-4cbf-8aef-031dd53e84df",
+      "name": "Casa Grande Ruins National Monument",
+      "field": "country",
+      "db_value": "USA",
+      "wd_value": "United States",
+      "qid": "Q1435779"
+    },
+    {
+      "id": "6848b0cc-552a-4e7d-b767-281d3658a5ac",
+      "name": "Castlestrange Stone",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-100",
+      "wd_precision": 7,
+      "qid": "Q1049676"
+    },
+    {
+      "id": "e149d164-394f-4528-a19b-19dd92991b03",
+      "name": "Castro de A Cid\u00e1",
+      "field": "coords",
+      "db_value": "(43.3715, -8.3960)",
+      "wd_value": "(42.5614, -9.0136)",
+      "qid": "Q2513720"
+    },
+    {
+      "id": "da54a7f3-948a-4da4-a775-68b7d1831d29",
+      "name": "Castle of Kirk\u00fbk",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "-800",
+      "wd_precision": 7,
+      "qid": "Q1144137"
+    },
+    {
+      "id": "670b00cb-aa1a-48d7-a4df-3ee2bb5c2237",
+      "name": "Catacombs of Kom el Shoqafa",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "200",
+      "wd_precision": 7,
+      "qid": "Q2671839"
+    },
+    {
+      "id": "1abe781b-81a3-4aff-af66-3a4359970d72",
+      "name": "Catacombs of San Gennaro",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "300",
+      "wd_precision": 7,
+      "qid": "Q3663206"
+    },
+    {
+      "id": "af78d851-5a24-4bd6-a1ad-1df1f29f9526",
+      "name": "Cave di Cusa",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-559",
+      "wd_precision": 9,
+      "qid": "Q3663959"
+    },
+    {
+      "id": "cf47a988-bf08-4482-93d3-2a051e83a2ff",
+      "name": "Caverna da Pedra Pintada",
+      "field": "coords",
+      "db_value": "(-2.0400, -54.1698)",
+      "wd_value": "(-5.6667, -52.7333)",
+      "qid": "Q5055053"
+    },
+    {
+      "id": "9d230dae-1f9b-4d16-a2a0-cce28ff32c56",
+      "name": "Cetina",
+      "field": "coords",
+      "db_value": "(43.4400, 16.6864)",
+      "wd_value": "(43.9767, 16.4297)",
+      "qid": "Q522100"
+    },
+    {
+      "id": "55ce644f-cbfa-4aab-9f3f-e7cca251f3ad",
+      "name": "Chan Chan",
+      "field": "period_start",
+      "db_value": "500",
+      "wd_value": "850",
+      "wd_precision": 9,
+      "qid": "Q277540"
+    },
+    {
+      "id": "31ee7df0-cf14-4c97-8d88-697625e5b913",
+      "name": "Chanquillo",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-300",
+      "wd_precision": 9,
+      "qid": "Q1062357"
+    },
+    {
+      "id": "f2046843-60ed-4081-8bbe-95cde34ec6a7",
+      "name": "Chellah",
+      "field": "period_start",
+      "db_value": "-1000",
+      "wd_value": "-700",
+      "wd_precision": 9,
+      "qid": "Q2314811"
+    },
+    {
+      "id": "10704e44-182a-4fdd-8d78-9060e204db5a",
+      "name": "Chersonesus",
+      "field": "country",
+      "db_value": "Ukraine",
+      "wd_value": "Russia",
+      "qid": "Q638445"
+    },
+    {
+      "id": "fe252099-6b31-4704-bb59-2b03b02252f5",
+      "name": "Chesterfield, Derbyshire",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "1204",
+      "wd_precision": 9,
+      "qid": "Q823600"
+    },
+    {
+      "id": "0cc14106-b80b-4e75-87fe-faac0b446b29",
+      "name": "Chesters Bridge",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "122",
+      "wd_precision": 9,
+      "qid": "Q5093849"
+    },
+    {
+      "id": "3842aca5-13d3-4166-80cf-92f8dac3514f",
+      "name": "Choquepuquio",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "-400",
+      "wd_precision": 9,
+      "qid": "Q5103701"
+    },
+    {
+      "id": "9789696d-6670-42d8-a76a-bd73fd3ca2c0",
+      "name": "Church of Saint George, Sofia",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "330",
+      "wd_precision": 7,
+      "qid": "Q2598073"
+    },
+    {
+      "id": "5db5e2c0-081a-4c69-a8c6-6105ac870e5f",
+      "name": "Church of the Holy Apostles Peter and Paul, Ras",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "601",
+      "wd_precision": 7,
+      "qid": "Q1559411"
+    },
+    {
+      "id": "911287cb-672e-4d84-bc52-e0d26546f834",
+      "name": "Chysauster Ancient Village",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-100",
+      "wd_precision": 9,
+      "qid": "Q1090235"
+    },
+    {
+      "id": "ddd829b1-fdad-4487-a284-35bae4539928",
+      "name": "Cit\u00e2nia de Briteiros",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-2",
+      "wd_precision": 9,
+      "qid": "Q1094262"
+    },
+    {
+      "id": "e8a07988-7219-449d-8cd1-612761502bfd",
+      "name": "Cocoraque Butte Archaeological District",
+      "field": "country",
+      "db_value": "USA",
+      "wd_value": "United States",
+      "qid": "Q16949635"
+    },
+    {
+      "id": "9ae31b41-d78d-44da-824d-43487ec611f0",
+      "name": "Combe Hill, East Sussex",
+      "field": "period_start",
+      "db_value": "-4500",
+      "wd_value": "-3001",
+      "wd_precision": 6,
+      "qid": "Q17674926"
+    },
+    {
+      "id": "a9c41392-165e-46fb-96e4-a9c2ea7ae8f3",
+      "name": "Corick",
+      "field": "country",
+      "db_value": "Ireland",
+      "wd_value": "United Kingdom",
+      "qid": "Q3312161"
+    },
+    {
+      "id": "cf82ed54-d7e1-4a86-9b24-2abfdb6ff881",
+      "name": "Cornalvo Dam",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "200",
+      "wd_precision": 6,
+      "qid": "Q1133155"
+    },
+    {
+      "id": "fa245dcb-9b81-40b2-b221-b670d983549c",
+      "name": "Craigs Dolmen",
+      "field": "country",
+      "db_value": "Ireland",
+      "wd_value": "United Kingdom",
+      "qid": "Q1235918"
+    },
+    {
+      "id": "1739eaea-9d1a-41c1-97a6-cea5820bca28",
+      "name": "Crypta Neapolitana",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-37",
+      "wd_precision": 9,
+      "qid": "Q977606"
+    },
+    {
+      "id": "17cf019a-913c-4967-b17c-ceabe8d1ba3b",
+      "name": "Damascus Gate",
+      "field": "country",
+      "db_value": "Israel",
+      "wd_value": "Palestine",
+      "qid": "Q947597"
+    },
+    {
+      "id": "e5d1f9a5-86b9-41d5-a258-8f21cd1e83e6",
+      "name": "Danebury",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-550",
+      "wd_precision": 9,
+      "qid": "Q677333"
+    },
+    {
+      "id": "ca8a1e9e-20ee-45a2-8e4b-e2519f94605e",
+      "name": "Danube - Iller - Rhine Limes",
+      "field": "country",
+      "db_value": "Germany",
+      "wd_value": "Austria",
+      "qid": "Q1240786"
+    },
+    {
+      "id": "3746f91f-e0e5-4494-9ea6-0261ba241fe1",
+      "name": "Debdieba",
+      "field": "period_start",
+      "db_value": "-4500",
+      "wd_value": "-3000",
+      "wd_precision": 6,
+      "qid": "Q109381488"
+    },
+    {
+      "id": "2c36db5a-566a-4bda-ad03-f14936f83eb8",
+      "name": "Deer Valley Petroglyph Preserve",
+      "field": "country",
+      "db_value": "USA",
+      "wd_value": "United States",
+      "qid": "Q16242066"
+    },
+    {
+      "id": "6c18df63-d9a4-4866-84cc-657a061bb46d",
+      "name": "Demetrias",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-294",
+      "wd_precision": 9,
+      "qid": "Q1150349"
+    },
+    {
+      "id": "0151be4b-c7d5-487f-8844-27e110594270",
+      "name": "Derby Racecourse Roman Settlement",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "120",
+      "wd_precision": 9,
+      "qid": "Q776765"
+    },
+    {
+      "id": "24b5da43-0a0d-45b4-b23e-7ca3fa4cd41a",
+      "name": "Derventio Coritanorum",
+      "field": "country",
+      "db_value": "England",
+      "wd_value": "Roman Britain",
+      "qid": "Q1241254"
+    },
+    {
+      "id": "dfbfac1e-3995-459f-ba76-761dcdafeb1a",
+      "name": "Devil's Highway - Roman Britain",
+      "field": "country",
+      "db_value": "England",
+      "wd_value": "Ancient Rome",
+      "qid": "Q19461336"
+    },
+    {
+      "id": "f6825042-70ed-4d70-8e17-42575be53b67",
+      "name": "Dighton Rock",
+      "field": "country",
+      "db_value": "USA",
+      "wd_value": "United States",
+      "qid": "Q3098851"
+    },
+    {
+      "id": "4e78a6c5-1811-46d3-8e62-8c613ec3afbe",
+      "name": "Diocletian's Palace",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "293",
+      "wd_precision": 9,
+      "qid": "Q322287"
+    },
+    {
+      "id": "97a2bde9-0352-465a-94ca-745bcec77e7d",
+      "name": "Dobrovody",
+      "field": "coords",
+      "db_value": "(48.7662, 30.3897)",
+      "wd_value": "(49.7200, 25.6314)",
+      "qid": "Q2043218"
+    },
+    {
+      "id": "0784c790-17b2-4450-9a95-286c1d9ef2f2",
+      "name": "Domus De Janas Torre Argentina",
+      "field": "coords",
+      "db_value": "(40.3203, 8.4460)",
+      "wd_value": "(40.0850, 8.9510)",
+      "qid": "Q1238775"
+    },
+    {
+      "id": "70a0244e-de85-46e2-9515-c7ca202868b9",
+      "name": "Domvs Romana",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-100",
+      "wd_precision": 9,
+      "qid": "Q5291392"
+    },
+    {
+      "id": "f5ca382a-3725-4cbb-961a-6afbf5c21507",
+      "name": "Dooey's Cairn",
+      "field": "country",
+      "db_value": "Ireland",
+      "wd_value": "United Kingdom",
+      "qid": "Q1242421"
+    },
+    {
+      "id": "18f993a6-2922-432f-b795-4ef914cffcd4",
+      "name": "Dos Pilas",
+      "field": "period_start",
+      "db_value": "1000",
+      "wd_value": "629",
+      "wd_precision": 9,
+      "qid": "Q909286"
+    },
+    {
+      "id": "aaeff3cd-427c-4c89-83d6-c884495c0380",
+      "name": "Drumskinny",
+      "field": "country",
+      "db_value": "Ireland",
+      "wd_value": "United Kingdom",
+      "qid": "Q1261327"
+    },
+    {
+      "id": "f9d17ed5-eb41-4332-a2c1-42d7d9b57a56",
+      "name": "Drususstein",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "1",
+      "wd_precision": 7,
+      "qid": "Q565736"
+    },
+    {
+      "id": "cc8c8638-cb77-4b61-a248-5c0f8e19cb66",
+      "name": "Dur-Sharrukin",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-706",
+      "wd_precision": 9,
+      "qid": "Q253208"
+    },
+    {
+      "id": "86c101ad-fcdb-413a-8aec-6aad2d1574e7",
+      "name": "Dykyi Sad Archaeological Site",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-1250",
+      "wd_precision": 9,
+      "qid": "Q4161504"
+    },
+    {
+      "id": "5f8ce412-3bb0-4aa3-aff3-cd1d825273a6",
+      "name": "East Bay Walls",
+      "field": "country",
+      "db_value": "USA",
+      "wd_value": "United States",
+      "qid": "Q12056853"
+    },
+    {
+      "id": "e5efe12c-25a8-423f-8974-98fc23e299e9",
+      "name": "Echo Stoa",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "-350",
+      "wd_precision": 9,
+      "qid": "Q19611482"
+    },
+    {
+      "id": "62e7aef7-f914-4080-ae06-b4c347600d6d",
+      "name": "El Jem Amphitheatre",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "238",
+      "wd_precision": 9,
+      "qid": "Q2914326"
+    },
+    {
+      "id": "cfd8864a-f9c2-47e8-aab1-5dbe86522c38",
+      "name": "El Argar",
+      "field": "coords",
+      "db_value": "(37.7613, -1.5603)",
+      "wd_value": "(37.2521, -1.9175)",
+      "qid": "Q1323802"
+    },
+    {
+      "id": "58bdf3b7-f210-49b4-bc02-f060c120737a",
+      "name": "El Cerrito",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-300",
+      "wd_precision": 9,
+      "qid": "Q5350993"
+    },
+    {
+      "id": "c1c984e7-1391-4153-b140-f9bcd446d759",
+      "name": "Elche",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-500",
+      "wd_precision": 7,
+      "qid": "Q10509"
+    },
+    {
+      "id": "696624d4-3f88-4175-a4cd-fd145d00174a",
+      "name": "Ennigaldi-Nanna's Museum",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-530",
+      "wd_precision": 9,
+      "qid": "Q3014063"
+    },
+    {
+      "id": "c2628a93-7c87-4a98-8d13-8301f7063403",
+      "name": "Er-Grah Tumulus",
+      "field": "period_start",
+      "db_value": "-4500",
+      "wd_value": "-5000",
+      "wd_precision": 6,
+      "qid": "Q508651"
+    },
+    {
+      "id": "fad5c73f-8725-47d0-b13c-372fefba62ea",
+      "name": "Foso e Interior Citadelle De Victoria",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "1500",
+      "wd_precision": 9,
+      "qid": "Q867647"
+    },
+    {
+      "id": "edfde098-e28e-4206-83d9-bb2846ba735d",
+      "name": "Flevum",
+      "field": "country",
+      "db_value": "Germany",
+      "wd_value": "Ancient Rome",
+      "qid": "Q615397"
+    },
+    {
+      "id": "edfde098-e28e-4206-83d9-bb2846ba735d",
+      "name": "Flevum",
+      "field": "coords",
+      "db_value": "(53.4833, 7.5667)",
+      "wd_value": "(52.4519, 4.6694)",
+      "qid": "Q615397"
+    },
+    {
+      "id": "77127fe3-8116-4567-9b04-aebbe719e5a7",
+      "name": "Fortifications of Chania",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "1336",
+      "wd_precision": 9,
+      "qid": "Q20948944"
+    },
+    {
+      "id": "359860c8-9f39-49d7-8834-1651987c8c1e",
+      "name": "Funerary Naiskos of Aristonautes",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-320",
+      "wd_precision": 9,
+      "qid": "Q1540923"
+    },
+    {
+      "id": "3d801ecb-4453-4ce3-85db-dce392c67c9d",
+      "name": "Ganjnameh Ancient Inscriptions",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-500",
+      "wd_precision": 7,
+      "qid": "Q426225"
+    },
+    {
+      "id": "2f68e3c4-6af8-40f0-833e-00602e7fe639",
+      "name": "Geghard Monastery",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "1215",
+      "wd_precision": 9,
+      "qid": "Q499285"
+    },
+    {
+      "id": "07ca1c0c-550e-41ab-ab5d-5563fce29d90",
+      "name": "\u0120gantija",
+      "field": "period_start",
+      "db_value": "-4500",
+      "wd_value": "-3600",
+      "wd_precision": 9,
+      "qid": "Q216862"
+    },
+    {
+      "id": "e0d56737-6459-4329-9ef5-1a46e8d75f10",
+      "name": "Giant's Ring",
+      "field": "country",
+      "db_value": "Ireland",
+      "wd_value": "United Kingdom",
+      "qid": "Q822992"
+    },
+    {
+      "id": "c35b1649-9442-4195-9604-4481ce65ffbf",
+      "name": "Golden Gate - Diocletian's Palace",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "293",
+      "wd_precision": 9,
+      "qid": "Q3908683"
+    },
+    {
+      "id": "630f8251-632b-4924-8ec9-3cacec046732",
+      "name": "Govurqala, A\u011fdam",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "300",
+      "wd_precision": 7,
+      "qid": "Q11208359"
+    },
+    {
+      "id": "355d25f2-d08d-44d5-8462-0238791d5c92",
+      "name": "Goward Dolmen",
+      "field": "country",
+      "db_value": "Ireland",
+      "wd_value": "United Kingdom",
+      "qid": "Q1422260"
+    },
+    {
+      "id": "d953e9b3-de33-4c7d-9357-bbc5d94d2a16",
+      "name": "G\u00f6bekli Tepe",
+      "field": "period_start",
+      "db_value": "-7000",
+      "wd_value": "-9999",
+      "wd_precision": 6,
+      "qid": "Q214944"
+    },
+    {
+      "id": "891ad351-7985-4c16-b6a6-830c26bc268f",
+      "name": "Great Basilica, Plovdiv",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "401",
+      "wd_precision": 7,
+      "qid": "Q20500169"
+    },
+    {
+      "id": "4599daa4-93cc-4c55-872c-41e9c7875a59",
+      "name": "Great Sphinx of Giza",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-2559",
+      "wd_precision": 7,
+      "qid": "Q130958"
+    },
+    {
+      "id": "8f256d92-11a1-4310-90e2-be5cebfc350e",
+      "name": "Great Serpent Mound",
+      "field": "country",
+      "db_value": "USA",
+      "wd_value": "United States",
+      "qid": "Q968802"
+    },
+    {
+      "id": "4ab1bd6e-a7fd-41c3-b341-9959d77d5a6e",
+      "name": "Great Ziggurat of Ur",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-2100",
+      "wd_precision": 7,
+      "qid": "Q202927"
+    },
+    {
+      "id": "8a66f7db-94df-45d9-919f-760b966192be",
+      "name": "Gunung Padang Megalithic Site",
+      "field": "period_start",
+      "db_value": "100",
+      "wd_value": "500",
+      "wd_precision": 9,
+      "qid": "Q3120910"
+    },
+    {
+      "id": "27330a46-8900-4b3b-9094-1910364284bf",
+      "name": "Guyaju Caves",
+      "field": "coords",
+      "db_value": "(39.8808, 116.3272)",
+      "wd_value": "(40.4624, 115.7685)",
+      "qid": "Q10913277"
+    },
+    {
+      "id": "f7a88213-58c1-4ee4-b791-4babfa0cd67a",
+      "name": "Hadrian's Wall",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "122",
+      "wd_precision": 9,
+      "qid": "Q57357"
+    },
+    {
+      "id": "d9436555-2b92-49fd-b4d7-605aeda17684",
+      "name": "Hadrianopolis (Epirus)",
+      "field": "country",
+      "db_value": "Albania",
+      "wd_value": "Ancient Rome",
+      "qid": "Q11904209"
+    },
+    {
+      "id": "fffac2f9-3115-47be-9830-f5969cce734b",
+      "name": "H\u00e5ga Mound",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-1100",
+      "wd_precision": 7,
+      "qid": "Q1540834"
+    },
+    {
+      "id": "097bd79b-a0d9-40d1-832d-c8a0671f7ab3",
+      "name": "Hathial",
+      "field": "country",
+      "db_value": "Pakistan",
+      "wd_value": "Mongolia",
+      "qid": "Q28163484"
+    },
+    {
+      "id": "eef7317f-a250-434f-b34d-7933fd546da7",
+      "name": "Haughey's Fort",
+      "field": "country",
+      "db_value": "Ireland",
+      "wd_value": "United Kingdom",
+      "qid": "Q5682429"
+    },
+    {
+      "id": "296ed0f4-1ad0-4929-b019-196c80e547be",
+      "name": "Hemet Maze Stone",
+      "field": "country",
+      "db_value": "USA",
+      "wd_value": "United States",
+      "qid": "Q5711367"
+    },
+    {
+      "id": "dc51894b-cc2c-4d5d-81ae-955eb846326f",
+      "name": "Heraclea Sintica",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-356",
+      "wd_precision": 9,
+      "qid": "Q1607763"
+    },
+    {
+      "id": "feb1899e-d74e-4f5f-b22e-1fe3ff5c1f8e",
+      "name": "Herculaneum",
+      "field": "country",
+      "db_value": "Italy",
+      "wd_value": "Ancient Rome",
+      "qid": "Q178813"
+    },
+    {
+      "id": "fdc3a783-3b1a-473a-bf22-8510308e0054",
+      "name": "Herodion National Park",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-15",
+      "wd_precision": 9,
+      "qid": "Q913099"
+    },
+    {
+      "id": "fdc3a783-3b1a-473a-bf22-8510308e0054",
+      "name": "Herodion National Park",
+      "field": "country",
+      "db_value": "Israel",
+      "wd_value": "West Bank",
+      "qid": "Q913099"
+    },
+    {
+      "id": "5c4b2afd-f915-4625-a841-790460fddef5",
+      "name": "Himera",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-648",
+      "wd_precision": 9,
+      "qid": "Q1111219"
+    },
+    {
+      "id": "51e6e482-0301-4200-9719-17e8b548a8db",
+      "name": "Historic Site Tipasa",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-600",
+      "wd_precision": 7,
+      "qid": "Q3529269"
+    },
+    {
+      "id": "4cb532e1-c831-463e-b9bf-a43bcbebeb02",
+      "name": "Honanki Heritage Site",
+      "field": "country",
+      "db_value": "USA",
+      "wd_value": "United States",
+      "qid": "Q16242292"
+    },
+    {
+      "id": "b803b66a-768d-4040-bdac-6176611241da",
+      "name": "Horgen",
+      "field": "period_start",
+      "db_value": "-4500",
+      "wd_value": "-3400",
+      "wd_precision": 9,
+      "qid": "Q68286"
+    },
+    {
+      "id": "45ac8925-95ec-476a-9a36-9bbb650add84",
+      "name": "House of Taga",
+      "field": "country",
+      "db_value": "Northern Mariana Islands",
+      "wd_value": "United States",
+      "qid": "Q15226028"
+    },
+    {
+      "id": "5752ff6c-ce00-4b78-aad7-f80a4d61c4e7",
+      "name": "House of the Faun, Pompeii",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-200",
+      "wd_precision": 7,
+      "qid": "Q1547308"
+    },
+    {
+      "id": "f69c8107-a8fe-45ae-a8d8-d5ab8e618e33",
+      "name": "Hypostyle Hall",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-1200",
+      "wd_precision": 7,
+      "qid": "Q3775633"
+    },
+    {
+      "id": "db227639-34b4-45db-817c-95092b4a916a",
+      "name": "Huaca Huallamarca",
+      "field": "period_start",
+      "db_value": "500",
+      "wd_value": "-200",
+      "wd_precision": 9,
+      "qid": "Q9005094"
+    },
+    {
+      "id": "7e97d2a5-3f87-44fc-9ad0-f0d5a2d84cab",
+      "name": "Huerfano Butte (Arizona)",
+      "field": "country",
+      "db_value": "USA",
+      "wd_value": "United States",
+      "qid": "Q16242315"
+    },
+    {
+      "id": "abddd18e-797b-42ca-88b6-a588daf5f8f3",
+      "name": "Icknield Street",
+      "field": "coords",
+      "db_value": "(51.8881, -1.7671)",
+      "wd_value": "(52.5717, -1.8760)",
+      "qid": "Q1238821"
+    },
+    {
+      "id": "9adffc6f-a7ef-4809-96db-60b43fe3bf33",
+      "name": "Icknield Way",
+      "field": "coords",
+      "db_value": "(50.7253, -2.9400)",
+      "wd_value": "(51.8445, -0.6034)",
+      "qid": "Q1656432"
+    },
+    {
+      "id": "069e0320-14f7-497f-8239-4ffb969049c1",
+      "name": "Idaean Cave",
+      "field": "coords",
+      "db_value": "(35.2084, 24.8290)",
+      "wd_value": "(35.1629, 25.4451)",
+      "qid": "Q1643807"
+    },
+    {
+      "id": "b306540a-ea4d-4cd9-8ad1-04a57629f65b",
+      "name": "Intihuatana Archaeological Complex",
+      "field": "coords",
+      "db_value": "(-13.5964, -74.0142)",
+      "wd_value": "(-13.1631, -72.5456)",
+      "qid": "Q76737966"
+    },
+    {
+      "id": "15f3ae9f-86e9-4198-97c9-e67b42c034dc",
+      "name": "Ishtar Gate",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-575",
+      "wd_precision": 9,
+      "qid": "Q26082"
+    },
+    {
+      "id": "15f3ae9f-86e9-4198-97c9-e67b42c034dc",
+      "name": "Ishtar Gate",
+      "field": "country",
+      "db_value": "Iraq",
+      "wd_value": "Germany",
+      "qid": "Q26082"
+    },
+    {
+      "id": "1be6202f-f47a-40f8-8b07-9fe22cc95000",
+      "name": "Iskuqucha",
+      "field": "coords",
+      "db_value": "(-11.5219, -75.9100)",
+      "wd_value": "(-12.5010, -74.9971)",
+      "qid": "Q25044834"
+    },
+    {
+      "id": "c8a346a9-bed2-4420-83db-3a6fcca051e4",
+      "name": "Italica",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-206",
+      "wd_precision": 9,
+      "qid": "Q658893"
+    },
+    {
+      "id": "c932b4f9-283e-4756-b9aa-cc5491aaddf8",
+      "name": "Jaffa Gate",
+      "field": "country",
+      "db_value": "Israel",
+      "wd_value": "Palestine",
+      "qid": "Q312812"
+    },
+    {
+      "id": "01f3d961-e2cf-4a3d-bc36-7e9976efe93e",
+      "name": "Jisk'a Iru Muqu",
+      "field": "period_start",
+      "db_value": "-4500",
+      "wd_value": "-3000",
+      "wd_precision": 9,
+      "qid": "Q1496143"
+    },
+    {
+      "id": "6cb8a98b-4816-4879-9de7-84095b4c0989",
+      "name": "Judaculla Rock",
+      "field": "country",
+      "db_value": "USA",
+      "wd_value": "United States",
+      "qid": "Q6302064"
+    },
+    {
+      "id": "14c0c237-0ece-4124-ada8-8ec56b431b08",
+      "name": "Karnak Temple Complex",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-1900",
+      "wd_precision": 9,
+      "qid": "Q522862"
+    },
+    {
+      "id": "ac5c3d55-1122-4aad-bcee-90a514c56f4b",
+      "name": "Kerch",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-610",
+      "wd_precision": 9,
+      "qid": "Q157065"
+    },
+    {
+      "id": "ac5c3d55-1122-4aad-bcee-90a514c56f4b",
+      "name": "Kerch",
+      "field": "country",
+      "db_value": "Ukraine",
+      "wd_value": "Ottoman Empire",
+      "qid": "Q157065"
+    },
+    {
+      "id": "6e1f996c-be31-4337-bd80-7a94b03a3d05",
+      "name": "Khoit Tsenkher Cave Rock Art",
+      "field": "coords",
+      "db_value": "(47.3474, 91.9567)",
+      "wd_value": "(48.3333, 92.0167)",
+      "qid": "Q3123692"
+    },
+    {
+      "id": "2c780872-8603-4ff7-b740-147b3cd5f22f",
+      "name": "King Ezana's Stele",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "400",
+      "wd_precision": 7,
+      "qid": "Q2259366"
+    },
+    {
+      "id": "47c37ef9-98ee-41d8-879b-e78db06295da",
+      "name": "Kition",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-450",
+      "wd_precision": 9,
+      "qid": "Q1743884"
+    },
+    {
+      "id": "87cc7367-7c4d-4b5b-ae73-9cf41c550e9c",
+      "name": "Knap of Howar",
+      "field": "period_start",
+      "db_value": "-4500",
+      "wd_value": "-3700",
+      "wd_precision": 9,
+      "qid": "Q1776885"
+    },
+    {
+      "id": "ef7d92df-a76b-4c2c-8160-32ad83100a71",
+      "name": "Knockmany Passage Tomb",
+      "field": "country",
+      "db_value": "Ireland",
+      "wd_value": "United Kingdom",
+      "qid": "Q1777348"
+    },
+    {
+      "id": "c345810f-7f8d-4845-88c7-64c652fa34d1",
+      "name": "Knossos",
+      "field": "period_start",
+      "db_value": "-8000",
+      "wd_value": "-7000",
+      "wd_precision": 9,
+      "qid": "Q173527"
+    },
+    {
+      "id": "c207499d-5adf-4758-a902-09c031c6aad8",
+      "name": "Kot Bala",
+      "field": "coords",
+      "db_value": "(33.4835, 72.4833)",
+      "wd_value": "(25.4625, 66.7083)",
+      "qid": "Q6433728"
+    },
+    {
+      "id": "9983bdce-9f35-47a3-a570-4021cfa41b97",
+      "name": "Kourion",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-1050",
+      "wd_precision": 8,
+      "qid": "Q1785592"
+    },
+    {
+      "id": "2f8f4a6f-2480-49a1-ae22-23ad1102f77d",
+      "name": "Kutaisi",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-300",
+      "wd_precision": 7,
+      "qid": "Q172415"
+    },
+    {
+      "id": "ec838509-a1e6-4f6a-b216-3f1791c16d67",
+      "name": "Legananny Dolmen",
+      "field": "period_start",
+      "db_value": "-4500",
+      "wd_value": "-3000",
+      "wd_precision": 9,
+      "qid": "Q6517664"
+    },
+    {
+      "id": "ec838509-a1e6-4f6a-b216-3f1791c16d67",
+      "name": "Legananny Dolmen",
+      "field": "country",
+      "db_value": "Ireland",
+      "wd_value": "United Kingdom",
+      "qid": "Q6517664"
+    },
+    {
+      "id": "e20a253e-63e2-4423-9852-c05615206f93",
+      "name": "Lepenski Vir",
+      "field": "period_start",
+      "db_value": "-10000",
+      "wd_value": "-7500",
+      "wd_precision": 7,
+      "qid": "Q906669"
+    },
+    {
+      "id": "2dcaaefa-e48b-4eab-993e-982418c3c8eb",
+      "name": "Le\u00f3n, Spain",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-29",
+      "wd_precision": 9,
+      "qid": "Q15699"
+    },
+    {
+      "id": "bad314d6-47c3-457f-ab77-9600fe9b04d2",
+      "name": "Library of Ashurbanipal",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-700",
+      "wd_precision": 7,
+      "qid": "Q856544"
+    },
+    {
+      "id": "21f76b39-07bd-40cc-8506-116019eac196",
+      "name": "Libyco-Punic Mausoleum of Dougga",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-200",
+      "wd_precision": 7,
+      "qid": "Q1146714"
+    },
+    {
+      "id": "86066b6b-c86e-48ad-90b7-9099ca1e5e58",
+      "name": "Limes Germanicus",
+      "field": "coords",
+      "db_value": "(50.3001, 7.8000)",
+      "wd_value": "(49.5000, 9.5000)",
+      "qid": "Q707801"
+    },
+    {
+      "id": "f5e7956b-9aa4-47b0-b88a-3ed159f451d1",
+      "name": "Llansteffan Castle",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "1192",
+      "wd_precision": 9,
+      "qid": "Q1936320"
+    },
+    {
+      "id": "3e634b8b-68d6-4601-80d9-f795a6fa217f",
+      "name": "Ll\u00edria",
+      "field": "period_start",
+      "db_value": "-1000",
+      "wd_value": "-2000",
+      "wd_precision": 9,
+      "qid": "Q23067"
+    },
+    {
+      "id": "75e685c6-e246-425d-8a2b-e1bf69d6af19",
+      "name": "London Mithraeum",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "300",
+      "wd_precision": 7,
+      "qid": "Q1408799"
+    },
+    {
+      "id": "cb3fa612-c066-4646-ba63-ec80fa8c57c2",
+      "name": "Lugdunum",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-43",
+      "wd_precision": 9,
+      "qid": "Q665"
+    },
+    {
+      "id": "cb3fa612-c066-4646-ba63-ec80fa8c57c2",
+      "name": "Lugdunum",
+      "field": "country",
+      "db_value": "France",
+      "wd_value": "Gaul",
+      "qid": "Q665"
+    },
+    {
+      "id": "f8c28568-017a-4b61-903c-bed2ba67bce0",
+      "name": "Madera Caves",
+      "field": "coords",
+      "db_value": "(29.5501, -108.1657)",
+      "wd_value": "(28.9946, -108.2088)",
+      "qid": "Q5192640"
+    },
+    {
+      "id": "77c38659-cde8-4de5-9c1a-5a2d4d2125eb",
+      "name": "Lutetia",
+      "field": "country",
+      "db_value": "France",
+      "wd_value": "Ancient Rome",
+      "qid": "Q270273"
+    },
+    {
+      "id": "505bd44a-9fec-4324-a414-4ee080bf37fa",
+      "name": "Macedonian Tombs, Katerini",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-350",
+      "wd_precision": 7,
+      "qid": "Q48966455"
+    },
+    {
+      "id": "4f366f34-983c-42e1-a89d-7e8f5f77cdce",
+      "name": "Machu Picchu",
+      "field": "period_start",
+      "db_value": "1000",
+      "wd_value": "1450",
+      "wd_precision": 9,
+      "qid": "Q676203"
+    },
+    {
+      "id": "39a50b0a-cc96-4e76-967c-fd1a1946aa2c",
+      "name": "Maiden Castle, Dorset",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-600",
+      "wd_precision": 9,
+      "qid": "Q1232816"
+    },
+    {
+      "id": "e6eab365-fb0c-4851-94f9-8fcc35f1238d",
+      "name": "Mamai-Hora",
+      "field": "period_start",
+      "db_value": "-4000",
+      "wd_value": "-600",
+      "wd_precision": 7,
+      "qid": "Q51471736"
+    },
+    {
+      "id": "7c20f481-787e-44b6-b7f3-973e8d87c6d4",
+      "name": "Marion, Cyprus",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-449",
+      "wd_precision": 9,
+      "qid": "Q1466831"
+    },
+    {
+      "id": "fa26417b-eb7c-49d0-aaf7-adcd4909e78a",
+      "name": "Mausoleum at Halicarnassus",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-351",
+      "wd_precision": 9,
+      "qid": "Q45368"
+    },
+    {
+      "id": "c3c19561-b4fc-48a8-9fd4-187fdc27f42b",
+      "name": "Medicine Wheel/Medicine Mountain National Historic Landmark",
+      "field": "country",
+      "db_value": "USA",
+      "wd_value": "United States",
+      "qid": "Q6806755"
+    },
+    {
+      "id": "63220a54-b953-4e72-a914-8f564b8f3e11",
+      "name": "Mellor Hill Fort",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-500",
+      "wd_precision": 6,
+      "qid": "Q6813180"
+    },
+    {
+      "id": "f8f6d3e9-c012-4fac-a562-cfbb592a3263",
+      "name": "Minoan Palace of Knossos",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-7000",
+      "wd_precision": 9,
+      "qid": "Q173527"
+    },
+    {
+      "id": "bc058dac-5a3f-45db-8959-ba1df10920c4",
+      "name": "Mesembria",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-600",
+      "wd_precision": 7,
+      "qid": "Q1317936"
+    },
+    {
+      "id": "5945ab7d-4240-4c77-8eba-3761949713f1",
+      "name": "Messene",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-371",
+      "wd_precision": 9,
+      "qid": "Q1022117"
+    },
+    {
+      "id": "bbb89876-9bbf-47fa-853a-8ca7465f176e",
+      "name": "Miami Circle",
+      "field": "country",
+      "db_value": "USA",
+      "wd_value": "United States",
+      "qid": "Q6827290"
+    },
+    {
+      "id": "d91a6d50-451d-42b1-9276-35b97c52bf5d",
+      "name": "Milefortlet - Hadrians Wall",
+      "field": "country",
+      "db_value": "England",
+      "wd_value": "Ancient Rome",
+      "qid": "Q1568283"
+    },
+    {
+      "id": "95bc3d88-46db-4ee3-a5a2-4d1d04a50488",
+      "name": "Montegrande Archaeological Site",
+      "field": "period_start",
+      "db_value": "-4500",
+      "wd_value": "-3100",
+      "wd_precision": 7,
+      "qid": "Q28147528"
+    },
+    {
+      "id": "0eaedf34-031e-4b8f-8fff-2db84a3e6da6",
+      "name": "Moylehid",
+      "field": "country",
+      "db_value": "Ireland",
+      "wd_value": "United Kingdom",
+      "qid": "Q4279488"
+    },
+    {
+      "id": "40ce67f7-1961-49cd-beff-33c03f702a17",
+      "name": "Mycenae",
+      "field": "period_start",
+      "db_value": "-2000",
+      "wd_value": "-3000",
+      "wd_precision": 7,
+      "qid": "Q132564"
+    },
+    {
+      "id": "71b5fca6-6ce4-43f0-bddd-6b3c15ca3f0e",
+      "name": "Naveta d'Es Tudons",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-1000",
+      "wd_precision": 9,
+      "qid": "Q1972356"
+    },
+    {
+      "id": "0060e6c0-8388-4762-bf51-9a3f88807899",
+      "name": "Nekresi",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-200",
+      "wd_precision": 7,
+      "qid": "Q995736"
+    },
+    {
+      "id": "2d89e6d4-8fa0-4258-a70a-bc42ad3c47bf",
+      "name": "Neuch\u00e2tel",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "1011",
+      "wd_precision": 9,
+      "qid": "Q69345"
+    },
+    {
+      "id": "cc775c2a-7c42-4cb9-a9ac-0bc6e3fbc0ec",
+      "name": "Nebi Samuel National Park",
+      "field": "country",
+      "db_value": "Israel",
+      "wd_value": "Palestine",
+      "qid": "Q2907254"
+    },
+    {
+      "id": "7054234a-ec07-477d-afe0-df191dbca303",
+      "name": "Newspaper Rock State Historic Monument",
+      "field": "country",
+      "db_value": "USA",
+      "wd_value": "United States",
+      "qid": "Q2908031"
+    },
+    {
+      "id": "6069036e-08d0-48dc-b808-ba568efe707f",
+      "name": "Nijmegen",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "1230",
+      "wd_precision": 9,
+      "qid": "Q47887"
+    },
+    {
+      "id": "a621b66e-1fda-41b4-9c34-d1a3e7486bd5",
+      "name": "Nokalakevi",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-1000",
+      "wd_precision": 6,
+      "qid": "Q2586542"
+    },
+    {
+      "id": "d53238e1-cad3-4f42-bfb0-bf072e4aebd3",
+      "name": "Nubian Pyramids",
+      "field": "country",
+      "db_value": "Sudan",
+      "wd_value": "Kingdom of Kush",
+      "qid": "Q511686"
+    },
+    {
+      "id": "250714e7-df78-444d-bfc0-303dfd6a3a03",
+      "name": "Nymphaion, Crimea",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-560",
+      "wd_precision": 9,
+      "qid": "Q287522"
+    },
+    {
+      "id": "250714e7-df78-444d-bfc0-303dfd6a3a03",
+      "name": "Nymphaion, Crimea",
+      "field": "country",
+      "db_value": "Ukraine",
+      "wd_value": "Russia",
+      "qid": "Q287522"
+    },
+    {
+      "id": "a50cf939-77f1-489c-82f7-93b07b2bc5ae",
+      "name": "Obelisk of Axum",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "300",
+      "wd_precision": 9,
+      "qid": "Q2308606"
+    },
+    {
+      "id": "54dead1c-8dc0-4cdd-a581-47d2e033fdab",
+      "name": "Obelisk Of Theodosius",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "-1500",
+      "wd_precision": 7,
+      "qid": "Q763854"
+    },
+    {
+      "id": "2cabb7a1-0596-457c-b37f-c041440b4fe2",
+      "name": "Odeon of Herodes Atticus",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "161",
+      "wd_precision": 9,
+      "qid": "Q1328165"
+    },
+    {
+      "id": "50fdb577-af39-425e-a038-a0f8205f66fc",
+      "name": "Old Temple of Athena",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-500",
+      "wd_precision": 9,
+      "qid": "Q683988"
+    },
+    {
+      "id": "ad600526-95f6-434d-9440-38ce0688b441",
+      "name": "Odessus",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-575",
+      "wd_precision": 9,
+      "qid": "Q6506"
+    },
+    {
+      "id": "6eabe5c3-03f4-4155-8b7d-dbd5616f5d59",
+      "name": "Paestum",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-600",
+      "wd_precision": 9,
+      "qid": "Q329967"
+    },
+    {
+      "id": "cfcd2e8b-5e36-4a05-9bda-6893f5021ac6",
+      "name": "Painted Rock Petroglyph Site",
+      "field": "country",
+      "db_value": "USA",
+      "wd_value": "United States",
+      "qid": "Q4385590"
+    },
+    {
+      "id": "dc025c66-9391-4ad3-95d5-77a2006c529b",
+      "name": "Palatki Heritage Site",
+      "field": "country",
+      "db_value": "USA",
+      "wd_value": "United States",
+      "qid": "Q4342465"
+    },
+    {
+      "id": "14ca23b2-2208-4930-99f7-632db64ca953",
+      "name": "Pamplona",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-74",
+      "wd_precision": 9,
+      "qid": "Q10282"
+    },
+    {
+      "id": "db85cd62-288f-4142-9cad-f15532e4fe26",
+      "name": "Pannonian Limes",
+      "field": "country",
+      "db_value": "Croatia",
+      "wd_value": "Austria",
+      "qid": "Q471153"
+    },
+    {
+      "id": "ba020c96-afeb-452a-8dbc-faf14155c96c",
+      "name": "Pant-y-Saer Burial Chamber",
+      "field": "period_start",
+      "db_value": "-5000",
+      "wd_value": "-3000",
+      "wd_precision": 9,
+      "qid": "Q13130575"
+    },
+    {
+      "id": "8e116b0a-fbaa-4375-a211-ba18767ed1e5",
+      "name": "Paphos",
+      "field": "period_start",
+      "db_value": "-1000",
+      "wd_value": "-300",
+      "wd_precision": 9,
+      "qid": "Q180918"
+    },
+    {
+      "id": "29245d49-3e8c-4c31-baf4-a3cdd54a8964",
+      "name": "Patara",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-800",
+      "wd_precision": 7,
+      "qid": "Q233121"
+    },
+    {
+      "id": "29245d49-3e8c-4c31-baf4-a3cdd54a8964",
+      "name": "Patara",
+      "field": "country",
+      "db_value": "Turkey",
+      "wd_value": "Lycia",
+      "qid": "Q233121"
+    },
+    {
+      "id": "3ec1f730-53d8-4e3e-a932-c0cd91bb27a3",
+      "name": "Pentre Ifan",
+      "field": "period_start",
+      "db_value": "-4000",
+      "wd_value": "-3500",
+      "wd_precision": 9,
+      "qid": "Q1738425"
+    },
+    {
+      "id": "0a0e276c-19cf-442b-9104-b27d57d09d1b",
+      "name": "Perga",
+      "field": "period_start",
+      "db_value": "-4000",
+      "wd_value": "-1000",
+      "wd_precision": 9,
+      "qid": "Q719815"
+    },
+    {
+      "id": "45c83a06-69a6-46f3-bb7a-eea482b9767c",
+      "name": "Pergamon Altar",
+      "field": "country",
+      "db_value": "Turkey",
+      "wd_value": "Germany",
+      "qid": "Q158058"
+    },
+    {
+      "id": "45c83a06-69a6-46f3-bb7a-eea482b9767c",
+      "name": "Pergamon Altar",
+      "field": "coords",
+      "db_value": "(39.1329, 27.1846)",
+      "wd_value": "(52.5211, 13.3969)",
+      "qid": "Q158058"
+    },
+    {
+      "id": "e00a1e45-3c66-48f4-8cac-3169146aad21",
+      "name": "Persepolis",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-510",
+      "wd_precision": 8,
+      "qid": "Q129072"
+    },
+    {
+      "id": "a06a95d0-35b4-44bb-a0c1-716cbf972b19",
+      "name": "Petra",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-800",
+      "wd_precision": 9,
+      "qid": "Q5788"
+    },
+    {
+      "id": "8c39badd-8113-4a71-a041-21d68f47bf58",
+      "name": "Petroglyph Beach State Historic Park",
+      "field": "country",
+      "db_value": "USA",
+      "wd_value": "United States",
+      "qid": "Q7178910"
+    },
+    {
+      "id": "8c39badd-8113-4a71-a041-21d68f47bf58",
+      "name": "Petroglyph Beach State Historic Park",
+      "field": "coords",
+      "db_value": "(56.4829, -132.3935)",
+      "wd_value": "(58.3011, -134.4131)",
+      "qid": "Q7178910"
+    },
+    {
+      "id": "b801d712-8e04-4b96-86dd-cf1b4bb9db11",
+      "name": "Petroglyphs of Arpa-Uzen",
+      "field": "coords",
+      "db_value": "(42.8910, 69.9808)",
+      "wd_value": "(43.8333, 68.8333)",
+      "qid": "Q7178914"
+    },
+    {
+      "id": "fb563088-580b-4d87-8c51-8934659a5d31",
+      "name": "Phaistos",
+      "field": "period_start",
+      "db_value": "-4000",
+      "wd_value": "-3000",
+      "wd_precision": 7,
+      "qid": "Q249707"
+    },
+    {
+      "id": "3e9107fa-e54c-407c-aaa7-a6f198e48c0f",
+      "name": "Phanagoria",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-543",
+      "wd_precision": 9,
+      "qid": "Q1344411"
+    },
+    {
+      "id": "966f26e0-c2ae-4a0f-ac46-8a481ad80b19",
+      "name": "Phaselis",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-700",
+      "wd_precision": 9,
+      "qid": "Q595329"
+    },
+    {
+      "id": "72b1b9e1-8e84-402b-b1bd-a7161527bca5",
+      "name": "Pirwayuq",
+      "field": "coords",
+      "db_value": "(-12.5610, -75.0368)",
+      "wd_value": "(-12.9002, -75.7860)",
+      "qid": "Q17102871"
+    },
+    {
+      "id": "7a43d34c-2051-48b6-b598-d4482adb4623",
+      "name": "Pompeii",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-600",
+      "wd_precision": 7,
+      "qid": "Q43332"
+    },
+    {
+      "id": "5fc3dde6-5284-41ba-af51-d91420bd0299",
+      "name": "Pont du Gard",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "50",
+      "wd_precision": 7,
+      "qid": "Q189764"
+    },
+    {
+      "id": "27781284-7698-46ff-b6aa-096800327282",
+      "name": "Pontic Olbia",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-700",
+      "wd_precision": 7,
+      "qid": "Q1143233"
+    },
+    {
+      "id": "a8333fc8-7376-4362-b1e5-194d7475ab02",
+      "name": "Port Way",
+      "field": "coords",
+      "db_value": "(51.3531, -1.1010)",
+      "wd_value": "(51.1700, -1.6338)",
+      "qid": "Q15267939"
+    },
+    {
+      "id": "d4714397-6e73-432d-add3-c01e22cb055f",
+      "name": "Porta Gemina",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "200",
+      "wd_precision": 7,
+      "qid": "Q12630293"
+    },
+    {
+      "id": "c9755577-6815-411d-bb1e-f96330776818",
+      "name": "Porta Nigra",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "180",
+      "wd_precision": 9,
+      "qid": "Q152339"
+    },
+    {
+      "id": "d622c812-d34b-4e3d-8005-978fb0e51079",
+      "name": "Portus Adurni",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "300",
+      "wd_precision": 7,
+      "qid": "Q762664"
+    },
+    {
+      "id": "da488c94-540b-4fdc-8d3a-0d5aba57b372",
+      "name": "Pozzuoli",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-521",
+      "wd_precision": 9,
+      "qid": "Q72425"
+    },
+    {
+      "id": "c0526e60-577b-4f28-9a07-e3c5739984bd",
+      "name": "Praetorium Agrippinae",
+      "field": "country",
+      "db_value": "Netherlands",
+      "wd_value": "Roman Empire",
+      "qid": "Q584285"
+    },
+    {
+      "id": "74ef6000-7bfa-4e7c-a745-b29b55f35030",
+      "name": "Prehistoric Rock Art Sites in the C\u00f4a Valley and Siega Verde",
+      "field": "country",
+      "db_value": "Spain",
+      "wd_value": "Portugal",
+      "qid": "Q552106"
+    },
+    {
+      "id": "972ded7c-665e-4ca6-98cc-af4dff9ac8f3",
+      "name": "Priene Ruins",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "-1000",
+      "wd_precision": 9,
+      "qid": "Q142819"
+    },
+    {
+      "id": "e4631001-b923-4f36-be7f-c961f9e287ba",
+      "name": "Prince of the Lilies",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-1550",
+      "wd_precision": 9,
+      "qid": "Q1961034"
+    },
+    {
+      "id": "676dbe65-abbf-4e30-8e56-70cae048f1e0",
+      "name": "Pula",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-177",
+      "wd_precision": 9,
+      "qid": "Q4656"
+    },
+    {
+      "id": "7661e2ac-0a20-46be-9069-961b36db4ac7",
+      "name": "Pula Arena",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-27",
+      "wd_precision": 9,
+      "qid": "Q474998"
+    },
+    {
+      "id": "64c9b400-5cab-45f2-8662-03c24c4367ce",
+      "name": "Pyramid of Amenemhat I",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-1990",
+      "wd_precision": 9,
+      "qid": "Q462160"
+    },
+    {
+      "id": "872b05b1-618b-4618-b3ae-6c69f3177911",
+      "name": "Pyramid of Caius Cestius",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-12",
+      "wd_precision": 9,
+      "qid": "Q725404"
+    },
+    {
+      "id": "2b2812a6-63d4-4985-b334-ebb80f2ddd90",
+      "name": "Pyramid of Djoser",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-2640",
+      "wd_precision": 9,
+      "qid": "Q192418"
+    },
+    {
+      "id": "70e08059-7e26-4fa2-885f-31bb426f182d",
+      "name": "Pyramid of Sahure",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-2480",
+      "wd_precision": 8,
+      "qid": "Q131820"
+    },
+    {
+      "id": "9b3eed6b-54e2-4321-8e84-9b204819879a",
+      "name": "Pyramid of Senusret I",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-1990",
+      "wd_precision": 9,
+      "qid": "Q206610"
+    },
+    {
+      "id": "b0e8cb34-7b53-4900-a440-cc3c3b9c62bf",
+      "name": "Pyramid of Unas",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-2360",
+      "wd_precision": 9,
+      "qid": "Q1478801"
+    },
+    {
+      "id": "9c3e1746-6da1-412c-aeb3-eb61cb3cafbb",
+      "name": "Qalagah",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "1401",
+      "wd_precision": 7,
+      "qid": "Q7265921"
+    },
+    {
+      "id": "d1720193-07a3-495c-ba7e-823426aa4f17",
+      "name": "Quiahuiztlan",
+      "field": "coords",
+      "db_value": "(19.6696, -96.4144)",
+      "wd_value": "(19.3257, -98.2384)",
+      "qid": "Q135276278"
+    },
+    {
+      "id": "657dbfe1-7b3f-4548-93c6-99be8674a6ff",
+      "name": "Quoyness Chambered Cairn",
+      "field": "period_start",
+      "db_value": "-4500",
+      "wd_value": "-3000",
+      "wd_precision": 7,
+      "qid": "Q7272906"
+    },
+    {
+      "id": "31203a3c-220a-41a8-87ff-befc4263c8d4",
+      "name": "Q\u02bcumarkaj",
+      "field": "period_start",
+      "db_value": "1000",
+      "wd_value": "1400",
+      "wd_precision": 9,
+      "qid": "Q15063939"
+    },
+    {
+      "id": "d48e920c-f57c-4f20-8bdf-df646d31029b",
+      "name": "Red Pyramid",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-2590",
+      "wd_precision": 9,
+      "qid": "Q135332"
+    },
+    {
+      "id": "2207dced-e1db-4547-bac5-2d90984550a3",
+      "name": "Regensburg",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "1245",
+      "wd_precision": 9,
+      "qid": "Q2978"
+    },
+    {
+      "id": "3df5f75c-51c1-45a7-bf4c-fdb80f9f585d",
+      "name": "Rhamnous",
+      "field": "country",
+      "db_value": "Greece",
+      "wd_value": "Classical Athens",
+      "qid": "Q1768553"
+    },
+    {
+      "id": "5cc613ff-ad80-4906-9103-6d1035eaea3e",
+      "name": "Roman Bridge over the Ribeira de Odivelas",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "500",
+      "wd_precision": 7,
+      "qid": "Q10351496"
+    },
+    {
+      "id": "591cee00-2570-4cf4-94d8-a141cf6e9854",
+      "name": "Roman Dam of Belas",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "300",
+      "wd_precision": 7,
+      "qid": "Q2885454"
+    },
+    {
+      "id": "a71bf02d-0df6-4b15-8436-be73a43950f4",
+      "name": "Roman Theatre, Tarraco",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "1",
+      "wd_precision": 7,
+      "qid": "Q3079841"
+    },
+    {
+      "id": "8de309a1-1291-4878-8f63-694b2276b934",
+      "name": "Roman Theatre of Orange",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "-100",
+      "wd_precision": 7,
+      "qid": "Q958961"
+    },
+    {
+      "id": "e056946d-fd09-43f2-8d45-648121ace99d",
+      "name": "Roman Temple of Vic",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "-400",
+      "wd_precision": 7,
+      "qid": "Q2294240"
+    },
+    {
+      "id": "32008339-d027-4578-b76a-915e5464f6c0",
+      "name": "Roman Villa of Santo Andr\u00e9 de Almo\u00e7ageme",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "300",
+      "wd_precision": 7,
+      "qid": "Q66814458"
+    },
+    {
+      "id": "fa2075b9-ae78-4ce0-b00f-673d0139f0ff",
+      "name": "Saguaro National Park",
+      "field": "country",
+      "db_value": "USA",
+      "wd_value": "United States",
+      "qid": "Q676206"
+    },
+    {
+      "id": "f064d736-e58e-4505-b634-b5f18052e293",
+      "name": "Salamis Ancient City",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-1100",
+      "wd_precision": 7,
+      "qid": "Q767089"
+    },
+    {
+      "id": "a0736505-9ca5-4361-bc0a-f0a47b6fed7e",
+      "name": "S'Argamassa Roman Fish Farm",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-146",
+      "wd_precision": 9,
+      "qid": "Q7667707"
+    },
+    {
+      "id": "43d64ea4-8c7e-4bca-bcfe-04b4e6e6b437",
+      "name": "Samshvilde",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-300",
+      "wd_precision": 7,
+      "qid": "Q12868759"
+    },
+    {
+      "id": "9fadbce6-f8cc-4db8-ba65-c15f6f82dbdf",
+      "name": "San Bartolo",
+      "field": "coords",
+      "db_value": "(15.0836, -91.4546)",
+      "wd_value": "(17.5517, -89.4089)",
+      "qid": "Q795599"
+    },
+    {
+      "id": "f29afd0d-6fb8-4405-bee8-c1b17a6989e3",
+      "name": "San Estevan",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-300",
+      "wd_precision": 9,
+      "qid": "Q3947025"
+    },
+    {
+      "id": "e3cf8ea1-6146-400c-a642-6f855dd88031",
+      "name": "Sanghao Cave",
+      "field": "coords",
+      "db_value": "(34.0565, 71.5456)",
+      "wd_value": "(34.4727, 72.2043)",
+      "qid": "Q17113866"
+    },
+    {
+      "id": "03d28afb-c252-423e-9b4f-2815cfaed6c5",
+      "name": "Serapeum of Alexandria and Pompey's Pillar",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-287",
+      "wd_precision": 9,
+      "qid": "Q521646"
+    },
+    {
+      "id": "a694497b-30ab-4283-be76-d1570d7c90ad",
+      "name": "Sesklo",
+      "field": "period_start",
+      "db_value": "-8000",
+      "wd_value": "-7000",
+      "wd_precision": 6,
+      "qid": "Q38281192"
+    },
+    {
+      "id": "2ed572b3-bf48-4f8d-a638-387b6484c962",
+      "name": "Shaji-ki-Dheri",
+      "field": "country",
+      "db_value": "Pakistan",
+      "wd_value": "Mongolia",
+      "qid": "Q28163493"
+    },
+    {
+      "id": "dbbef6f8-f2bb-4ea3-9691-90c09205f678",
+      "name": "Siega Verde",
+      "field": "country",
+      "db_value": "Spain",
+      "wd_value": "Portugal",
+      "qid": "Q552106"
+    },
+    {
+      "id": "21d63980-32dc-43cc-baa1-06c9e2f15335",
+      "name": "Silbury Hill",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-2390",
+      "wd_precision": 9,
+      "qid": "Q225896"
+    },
+    {
+      "id": "fdafef27-24a2-4939-b2b0-7f3852676e82",
+      "name": "Singidunum",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-6000",
+      "wd_precision": 6,
+      "qid": "Q1309687"
+    },
+    {
+      "id": "f6b5aa36-d662-4490-a83b-1e5d857afdd5",
+      "name": "Sinuessa",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-296",
+      "wd_precision": 9,
+      "qid": "Q1349926"
+    },
+    {
+      "id": "ef1ee8c0-f6bd-4886-bd66-8a6106ac5ca4",
+      "name": "Shengavit Settlement",
+      "field": "period_start",
+      "db_value": "-4500",
+      "wd_value": "-3000",
+      "wd_precision": 9,
+      "qid": "Q7494260"
+    },
+    {
+      "id": "2cbc1c11-5750-4b96-973b-7f1f8c847003",
+      "name": "Skara Brae",
+      "field": "period_start",
+      "db_value": "-4000",
+      "wd_value": "-3180",
+      "wd_precision": 9,
+      "qid": "Q816437"
+    },
+    {
+      "id": "f69cf72f-d7b2-48d8-996d-82e19c289eee",
+      "name": "Soli, Cyprus",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-1100",
+      "wd_precision": 7,
+      "qid": "Q1757296"
+    },
+    {
+      "id": "9c64a3f6-8874-4441-b6c8-52428a1d45e5",
+      "name": "Spirit Cave, Thailand",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-9000",
+      "wd_precision": 6,
+      "qid": "Q372696"
+    },
+    {
+      "id": "d7a107f8-b228-48a7-97c5-081dc67c0469",
+      "name": "Square Peristyle",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-300",
+      "wd_precision": 9,
+      "qid": "Q24204688"
+    },
+    {
+      "id": "0e7825f5-26f0-483e-8cd0-687a9228a894",
+      "name": "Stabiae",
+      "field": "country",
+      "db_value": "Italy",
+      "wd_value": "Ancient Rome",
+      "qid": "Q547910"
+    },
+    {
+      "id": "403e3c53-6a70-49cc-81b8-2014542e53d3",
+      "name": "Stadium at Olympia",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-500",
+      "wd_precision": 7,
+      "qid": "Q4357227"
+    },
+    {
+      "id": "e2f2dee4-9e70-41b8-a7f5-be7aa07ea807",
+      "name": "Stele of Aristion",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-510",
+      "wd_precision": 9,
+      "qid": "Q1540996"
+    },
+    {
+      "id": "6d84eb20-870b-43b1-ba78-25e3a0e4954f",
+      "name": "Stone Spheres of Costa Rica",
+      "field": "coords",
+      "db_value": "(10.0002, -84.0000)",
+      "wd_value": "(8.9114, -83.4775)",
+      "qid": "Q282275"
+    },
+    {
+      "id": "21b2278e-c3f2-4723-ae40-fa8a6161e3fb",
+      "name": "Stonehenge",
+      "field": "period_start",
+      "db_value": "-4500",
+      "wd_value": "-3000",
+      "wd_precision": 7,
+      "qid": "Q39671"
+    },
+    {
+      "id": "a627df4e-f241-478e-b8ab-273e67f52441",
+      "name": "Sweet Track",
+      "field": "period_start",
+      "db_value": "-4500",
+      "wd_value": "-3807",
+      "wd_precision": 9,
+      "qid": "Q2736549"
+    },
+    {
+      "id": "322cd09d-45f7-4cea-aaac-d1d973910935",
+      "name": "Svingerud Runestone",
+      "field": "coords",
+      "db_value": "(59.9141, 10.7467)",
+      "wd_value": "(60.1027, 10.2291)",
+      "qid": "Q116233388"
+    },
+    {
+      "id": "57ded976-9874-4832-8716-2b54c1fee102",
+      "name": "Table des Marchand",
+      "field": "period_start",
+      "db_value": "-4500",
+      "wd_value": "-5000",
+      "wd_precision": 6,
+      "qid": "Q508651"
+    },
+    {
+      "id": "991bd627-65d9-40d3-a97d-dfa879756da0",
+      "name": "Sybaris",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-720",
+      "wd_precision": 9,
+      "qid": "Q220583"
+    },
+    {
+      "id": "592c7bd0-4cff-4910-a55e-b50ea0e59897",
+      "name": "Takht-e Rostam",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "400",
+      "wd_precision": 7,
+      "qid": "Q2593345"
+    },
+    {
+      "id": "e9d94ed6-b8f1-489a-baa3-0934e14fff08",
+      "name": "Taksai Kurgans",
+      "field": "coords",
+      "db_value": "(51.2011, 52.1773)",
+      "wd_value": "(43.3373, 76.8684)",
+      "qid": "Q48807767"
+    },
+    {
+      "id": "c947e9b6-41c7-4c94-81c3-d79fc9e601b2",
+      "name": "Tambo Colorado",
+      "field": "period_start",
+      "db_value": "1000",
+      "wd_value": "1470",
+      "wd_precision": 9,
+      "qid": "Q1513848"
+    },
+    {
+      "id": "7759e372-b62e-424a-a726-d078a5a49e54",
+      "name": "Tempio di Zeus, Selinunte",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-628",
+      "wd_precision": 9,
+      "qid": "Q952173"
+    },
+    {
+      "id": "7759e372-b62e-424a-a726-d078a5a49e54",
+      "name": "Tempio di Zeus, Selinunte",
+      "field": "country",
+      "db_value": "Greece",
+      "wd_value": "Italy",
+      "qid": "Q952173"
+    },
+    {
+      "id": "caf19500-efd7-4258-b429-2b41bec64d3e",
+      "name": "Temple of Atargatis",
+      "field": "country",
+      "db_value": "Lebanon",
+      "wd_value": "Syria",
+      "qid": "Q109375494"
+    },
+    {
+      "id": "caf19500-efd7-4258-b429-2b41bec64d3e",
+      "name": "Temple of Atargatis",
+      "field": "coords",
+      "db_value": "(33.9976, 35.8083)",
+      "wd_value": "(34.7467, 40.7311)",
+      "qid": "Q109375494"
+    },
+    {
+      "id": "0e12027e-9a65-470f-aca7-2cb1eb408120",
+      "name": "Temple of Athena, Paestum",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-500",
+      "wd_precision": 9,
+      "qid": "Q3983228"
+    },
+    {
+      "id": "8d8753ae-9935-4ffb-b578-de5907999f68",
+      "name": "Temple of Athena Nike",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-425",
+      "wd_precision": 8,
+      "qid": "Q384813"
+    },
+    {
+      "id": "39e49c72-4037-487c-8402-409d00f7026e",
+      "name": "Temple of Ramesses II- Abu Simbel",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-1274",
+      "wd_precision": 9,
+      "qid": "Q134140"
+    },
+    {
+      "id": "860263d7-1a2f-43d7-b739-fc7145caacf9",
+      "name": "Temple of Ptah - Garf Hussien",
+      "field": "coords",
+      "db_value": "(23.9603, 32.8674)",
+      "wd_value": "(23.2833, 32.9000)",
+      "qid": "Q267700"
+    },
+    {
+      "id": "4c7f6521-241f-48c0-93da-f8d7893f5446",
+      "name": "Temple of Hera, Olympia",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-600",
+      "wd_precision": 7,
+      "qid": "Q633572"
+    },
+    {
+      "id": "100ab5ea-fdf9-4d78-9f65-961ee8190b7b",
+      "name": "Temple of Poseidon, Sounion",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-500",
+      "wd_precision": 7,
+      "qid": "Q21705206"
+    },
+    {
+      "id": "349e080c-0b4f-4708-8744-d1b1c6a0b83e",
+      "name": "Temple of Zeus, Olympia",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-400",
+      "wd_precision": 7,
+      "qid": "Q197019"
+    },
+    {
+      "id": "6a28da7c-1e74-4f45-b49c-03c2af224c86",
+      "name": "Tenochtitlan - Templo Mayor",
+      "field": "period_start",
+      "db_value": "1000",
+      "wd_value": "1325",
+      "wd_precision": 9,
+      "qid": "Q774021"
+    },
+    {
+      "id": "50873aa8-b4da-4b2c-99a9-b9e7859bf44b",
+      "name": "Tenam Puente",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "300",
+      "wd_precision": 9,
+      "qid": "Q2867454"
+    },
+    {
+      "id": "852f3856-ecaa-4bab-82c8-a0ab2d11f94f",
+      "name": "Tenayuca",
+      "field": "period_start",
+      "db_value": "1000",
+      "wd_value": "1224",
+      "wd_precision": 9,
+      "qid": "Q647989"
+    },
+    {
+      "id": "6313cd62-456d-4a85-8782-57613c7fc0e1",
+      "name": "The Great Pyramid of Giza",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-2560",
+      "wd_precision": 9,
+      "qid": "Q37200"
+    },
+    {
+      "id": "a965d140-d212-45f5-a269-1945fc8432b3",
+      "name": "The Archaeological Site Nitzana",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-1",
+      "wd_precision": 6,
+      "qid": "Q2909861"
+    },
+    {
+      "id": "76cd8b60-c373-4f26-85ac-2827b0797b15",
+      "name": "Thebes",
+      "field": "period_start",
+      "db_value": "-4500",
+      "wd_value": "-3200",
+      "wd_precision": 9,
+      "qid": "Q101583"
+    },
+    {
+      "id": "ce14b760-db1b-4b4d-93eb-8654952d9450",
+      "name": "Thebes, Greece",
+      "field": "period_start",
+      "db_value": "-4000",
+      "wd_value": "-2000",
+      "wd_precision": 6,
+      "qid": "Q5760"
+    },
+    {
+      "id": "e60fc487-9fb9-4e37-b590-4a035e591c7e",
+      "name": "The Temple of Artemis-Sel\u00e7uk",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-323",
+      "wd_precision": 9,
+      "qid": "Q43018"
+    },
+    {
+      "id": "f4955fe7-d4e9-4de7-9812-0fc7e94c0620",
+      "name": "The Unfinished Obelisk",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-1500",
+      "wd_precision": 7,
+      "qid": "Q735438"
+    },
+    {
+      "id": "fd94d469-92a0-4796-a7a8-64f925f01773",
+      "name": "Tievebulliagh",
+      "field": "country",
+      "db_value": "Ireland",
+      "wd_value": "United Kingdom",
+      "qid": "Q1141583"
+    },
+    {
+      "id": "b1e7b190-e66c-49da-8df8-2b1345fa68fd",
+      "name": "Tiwanaku",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "400",
+      "wd_precision": 9,
+      "qid": "Q61750"
+    },
+    {
+      "id": "695ddb9f-70cb-4e8a-9020-4bebf0b06227",
+      "name": "Tomb of Cyrus the Great",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-530",
+      "wd_precision": 9,
+      "qid": "Q2635530"
+    },
+    {
+      "id": "d9ad0ebd-039e-4cc6-990a-41f690e94795",
+      "name": "Tower of David",
+      "field": "country",
+      "db_value": "Israel",
+      "wd_value": "Palestine",
+      "qid": "Q1177765"
+    },
+    {
+      "id": "8797faec-8590-4716-9763-310be93ef6ea",
+      "name": "Tower of Elahbel",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "103",
+      "wd_precision": 9,
+      "qid": "Q20975604"
+    },
+    {
+      "id": "787c014a-347b-4426-ab01-fd3eefe61aa8",
+      "name": "Trajan's Forum",
+      "field": "coords",
+      "db_value": "(39.9962, 8.8075)",
+      "wd_value": "(41.8954, 12.4859)",
+      "qid": "Q211295"
+    },
+    {
+      "id": "a0aec173-1e85-4832-8be6-99ebcdfeb247",
+      "name": "Tsarskyi Kurgan (Royal Kurgan)",
+      "field": "country",
+      "db_value": "Ukraine",
+      "wd_value": "Russia",
+      "qid": "Q11689408"
+    },
+    {
+      "id": "0259ff6b-ef34-4a7e-93ef-78e2729e45a6",
+      "name": "Trialeti Petroglyphs",
+      "field": "period_start",
+      "db_value": "-4500",
+      "wd_value": "-10000",
+      "wd_precision": 5,
+      "qid": "Q83144981"
+    },
+    {
+      "id": "6d2ffc46-f990-4ec7-9d69-94029e8e98ed",
+      "name": "Triumphal Arch of Orange",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-100",
+      "wd_precision": 7,
+      "qid": "Q1777218"
+    },
+    {
+      "id": "56f3ec0c-0610-4701-8a4e-727b7d3a2512",
+      "name": "Tumamoc Hill",
+      "field": "country",
+      "db_value": "USA",
+      "wd_value": "United States",
+      "qid": "Q7852481"
+    },
+    {
+      "id": "e3ac6021-f7ef-464d-a6d0-e0df9e91f553",
+      "name": "Turkistan - City",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "401",
+      "wd_precision": 7,
+      "qid": "Q848638"
+    },
+    {
+      "id": "e48a661d-c148-4a0f-abff-f862d61524b7",
+      "name": "T\u00facume",
+      "field": "period_start",
+      "db_value": "500",
+      "wd_value": "800",
+      "wd_precision": 9,
+      "qid": "Q1677131"
+    },
+    {
+      "id": "4d446438-7613-43d2-b95e-c6f1acf9109d",
+      "name": "Tsagaan Salaa Rock Paintings",
+      "field": "coords",
+      "db_value": "(48.4934, 88.7308)",
+      "wd_value": "(49.3340, 88.3954)",
+      "qid": "Q7849290"
+    },
+    {
+      "id": "f5df832e-ab5e-4e9c-b6c9-037441011945",
+      "name": "Twin Gates of Pula",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "200",
+      "wd_precision": 7,
+      "qid": "Q12630293"
+    },
+    {
+      "id": "7244b9b6-0f20-413f-b646-06a60f11b23c",
+      "name": "Tutuveni",
+      "field": "country",
+      "db_value": "USA",
+      "wd_value": "United States",
+      "qid": "Q48970398"
+    },
+    {
+      "id": "88821924-cf89-499a-956d-55214bf9882c",
+      "name": "Ucanal",
+      "field": "coords",
+      "db_value": "(16.3169, -90.0999)",
+      "wd_value": "(16.8667, -89.3500)",
+      "qid": "Q4002533"
+    },
+    {
+      "id": "81724be4-6588-41b1-8efc-364637456cdf",
+      "name": "Uffington White Horse",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-1000",
+      "wd_precision": 6,
+      "qid": "Q1056493"
+    },
+    {
+      "id": "6b9aa503-6d6a-44b1-a9d0-c165294808df",
+      "name": "Upp\u00e5kra Temple",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "600",
+      "wd_precision": 7,
+      "qid": "Q17150274"
+    },
+    {
+      "id": "3dbbef3c-4605-4a1f-b04f-cadd63462673",
+      "name": "Ur",
+      "field": "period_start",
+      "db_value": "-4500",
+      "wd_value": "-3800",
+      "wd_precision": 9,
+      "qid": "Q5699"
+    },
+    {
+      "id": "d0b9e72f-73a8-4671-a01f-5cafa6e53bf8",
+      "name": "Uruk",
+      "field": "period_start",
+      "db_value": "-4500",
+      "wd_value": "-3200",
+      "wd_precision": 9,
+      "qid": "Q168518"
+    },
+    {
+      "id": "f7dc20d6-aa71-46fa-8e27-19779a1187fb",
+      "name": "Valley of the Caves, Chihuahua",
+      "field": "period_start",
+      "db_value": "500",
+      "wd_value": "1300",
+      "wd_precision": 7,
+      "qid": "Q1142826"
+    },
+    {
+      "id": "aaeb620b-8363-45e2-b9f5-4dc46320aff5",
+      "name": "V Bar V Heritage Site",
+      "field": "country",
+      "db_value": "USA",
+      "wd_value": "United States",
+      "qid": "Q7905802"
+    },
+    {
+      "id": "86a32957-57c8-424d-bc27-78c2d3ebaedc",
+      "name": "Valencia",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-138",
+      "wd_precision": 9,
+      "qid": "Q8818"
+    },
+    {
+      "id": "ed78d548-5409-4909-abc0-793390dfed1c",
+      "name": "Valley of the Kings",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-1500",
+      "wd_precision": 9,
+      "qid": "Q133423"
+    },
+    {
+      "id": "d70dd131-fac7-4c7e-b367-95c2ac945339",
+      "name": "Valley of the Queens",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-1295",
+      "wd_precision": 9,
+      "qid": "Q260386"
+    },
+    {
+      "id": "e5558c53-90b5-42ca-aa79-ba2d05d56eac",
+      "name": "Varna, Bulgaria",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-575",
+      "wd_precision": 9,
+      "qid": "Q6506"
+    },
+    {
+      "id": "8c44a3a9-c945-44e8-8dc2-1baab82890ea",
+      "name": "Velia",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-538",
+      "wd_precision": 9,
+      "qid": "Q272968"
+    },
+    {
+      "id": "1ac1779a-749a-4726-a671-d49a3d1b16e2",
+      "name": "Vescia",
+      "field": "coords",
+      "db_value": "(42.9835, 12.7334)",
+      "wd_value": "(41.1907, 13.9292)",
+      "qid": "Q2254425"
+    },
+    {
+      "id": "feccbb16-9c3a-4d0e-9aac-ca8cf3d370d8",
+      "name": "Via Egnatia",
+      "field": "country",
+      "db_value": "Albania",
+      "wd_value": "Turkey",
+      "qid": "Q273783"
+    },
+    {
+      "id": "6a7ed782-d72d-4eeb-8df6-634a27140019",
+      "name": "Vix Grave",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-550",
+      "wd_precision": 7,
+      "qid": "Q1483632"
+    },
+    {
+      "id": "b7e6747e-9081-404a-b294-f53ea0b8e3f3",
+      "name": "Wajxaklajun",
+      "field": "coords",
+      "db_value": "(15.3147, -91.4758)",
+      "wd_value": "(15.8333, -91.4833)",
+      "qid": "Q16628473"
+    },
+    {
+      "id": "41552c37-9349-4c1d-a6e6-a7493f8b16bf",
+      "name": "Watling Street",
+      "field": "coords",
+      "db_value": "(51.5388, -0.1376)",
+      "wd_value": "(51.2758, 1.0808)",
+      "qid": "Q1434239"
+    },
+    {
+      "id": "ba452543-f3d8-436b-bef5-4329382d234e",
+      "name": "Western Wall",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-19",
+      "wd_precision": 9,
+      "qid": "Q134821"
+    },
+    {
+      "id": "ba452543-f3d8-436b-bef5-4329382d234e",
+      "name": "Western Wall",
+      "field": "country",
+      "db_value": "Israel",
+      "wd_value": "Palestine",
+      "qid": "Q134821"
+    },
+    {
+      "id": "290410a4-c7ed-4fe7-842d-bfe7ab97e899",
+      "name": "White Tank Mountain Regional Park",
+      "field": "country",
+      "db_value": "USA",
+      "wd_value": "United States",
+      "qid": "Q7995461"
+    },
+    {
+      "id": "f8beb699-0b16-4b18-b322-bdf7ca612ac9",
+      "name": "Woodchester Roman Villa",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "150",
+      "wd_precision": 7,
+      "qid": "Q1690886"
+    },
+    {
+      "id": "0c00d8bd-d6b3-4237-b4c9-9a86748ee5ab",
+      "name": "\u039aourion Ancient Amphitheatre",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-1050",
+      "wd_precision": 8,
+      "qid": "Q1785592"
+    },
+    {
+      "id": "85a6ae2e-6f62-44f2-9dfd-fd81b229d56d",
+      "name": "Yaz\u0131l\u0131kkaya",
+      "field": "period_start",
+      "db_value": "-3000",
+      "wd_value": "-1300",
+      "wd_precision": 7,
+      "qid": "Q529923"
+    },
+    {
+      "id": "d6d44645-a99b-4826-85b3-eb0123faadd2",
+      "name": "Yenikale Ruins",
+      "field": "coords",
+      "db_value": "(37.9503, 38.6535)",
+      "wd_value": "(45.3494, 36.6046)",
+      "qid": "Q772781"
+    },
+    {
+      "id": "8f0bd6a2-46b6-46cb-afbb-efd18b2471d8",
+      "name": "Yereruyk Archaeological Site",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "401",
+      "wd_precision": 7,
+      "qid": "Q2463289"
+    },
+    {
+      "id": "be2bb871-ba24-49cf-9172-d20d673a2c3d",
+      "name": "Zadar",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-384",
+      "wd_precision": 9,
+      "qid": "Q3370"
+    },
+    {
+      "id": "1fe816f4-f921-45ff-97b7-0ca7d1d0d009",
+      "name": "Zerzevan Castle",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "400",
+      "wd_precision": 7,
+      "qid": "Q28806346"
+    },
+    {
+      "id": "7bbee517-515c-4fe4-9271-036ea36791e1",
+      "name": "Pen\u00ednsula de Kola",
+      "field": "coords",
+      "db_value": "(67.2998, 37.5509)",
+      "wd_value": "(68.0000, 36.0000)",
+      "qid": "Q165608"
+    },
+    {
+      "id": "e06caf0a-2a7c-44d5-8cdb-5473d995f896",
+      "name": "Templo de la Luna",
+      "field": "coords",
+      "db_value": "(-13.5057, -71.9638)",
+      "wd_value": "(-13.1522, -72.5469)",
+      "qid": "Q634026"
+    },
+    {
+      "id": "da9530ed-5945-4970-a041-333b782fc208",
+      "name": "Arc de Triomphe Septime S\u00e9v\u00e8re",
+      "field": "period_start",
+      "db_value": "1",
+      "wd_value": "205",
+      "wd_precision": 9,
+      "qid": "Q2091585"
+    },
+    {
+      "id": "4132d835-b56c-4117-93b9-26296695832e",
+      "name": "Ayanis Kalesi",
+      "field": "country",
+      "db_value": "Turkey",
+      "wd_value": "Urartu",
+      "qid": "Q54571"
+    },
+    {
+      "id": "908d6a9b-6032-4fd4-84c7-72896374778b",
+      "name": "Pergamon Amfitiyatrosu",
+      "field": "period_start",
+      "db_value": "-500",
+      "wd_value": "-800",
+      "wd_precision": 7,
+      "qid": "Q18986"
+    },
+    {
+      "id": "c9cca1f6-9117-40f3-b830-605b144baf90",
+      "name": "Colosso di Ramses II",
+      "field": "period_start",
+      "db_value": "-1500",
+      "wd_value": "-1213",
+      "wd_precision": 9,
+      "qid": "Q3554935"
+    },
+    {
+      "id": "c9cca1f6-9117-40f3-b830-605b144baf90",
+      "name": "Colosso di Ramses II",
+      "field": "coords",
+      "db_value": "(25.7188, 32.6575)",
+      "wd_value": "(29.8495, 31.2543)",
+      "qid": "Q3554935"
+    }
+  ],
+  "verified_count": 164
+}
