@@ -837,6 +837,10 @@ def _run_migrations(engine) -> None:
               AND (wikidata_id IS NULL OR wikidata_id = '')
         """))
 
+        # Missing columns on unified_sites that models define but were never migrated
+        conn.execute(text("ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS raw_data JSONB"))
+        conn.execute(text("ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS period_end INTEGER"))
+
         # Site hierarchy: parent_site_id for "part of" relationships
         # (e.g. Great Sphinx → Giza Necropolis)
         conn.execute(text(

@@ -53,6 +53,11 @@ async def lifespan(app: FastAPI):
     try:
         from pipeline.database import Base, engine
         Base.metadata.create_all(bind=engine)
+        # Add columns that models define but create_all won't add to existing tables
+        with engine.begin() as conn:
+            from sqlalchemy import text as _text
+            conn.execute(_text("ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS raw_data JSONB"))
+            conn.execute(_text("ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS period_end INTEGER"))
         logger.info("[STARTUP] Database tables verified")
     except Exception as e:
         logger.warning(f"[STARTUP] Table creation check failed: {e}")
