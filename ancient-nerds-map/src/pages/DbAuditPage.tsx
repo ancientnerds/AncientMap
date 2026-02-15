@@ -53,6 +53,12 @@ const PERIOD_ORDER: Record<string, number> = {
 // Sort periods chronologically (oldest first)
 const SORTED_PERIODS = Object.keys(PERIOD_COLORS).sort((a, b) => (PERIOD_ORDER[a] ?? 99) - (PERIOD_ORDER[b] ?? 99))
 
+interface SnapshotEntry {
+  date: string
+  file: string
+  sites: number
+}
+
 const SOURCE_CONFIG: Record<string, { name: string; color: string }> = {
   ancient_nerds: { name: 'ANCIENT NERDS Original', color: '#FFD700' },
   lyra: { name: 'ANCIENT NERDS Radar', color: '#8b5cf6' },
@@ -214,13 +220,41 @@ export default function DbAuditPage() {
   // Source filter
   const [sourceFilter, setSourceFilter] = useState('all')
 
-  // Fetch all sites
+  // Version snapshots
+  const [snapshots, setSnapshots] = useState<SnapshotEntry[]>([])
+  const [selectedVersion, setSelectedVersion] = useState('latest')
+
+  // Fetch snapshot manifest on mount
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${config.api.baseUrl}/sites/all?source=ancient_nerds&source=lyra&source=ancient_nerds_community&limit=100000&${CACHE_BUSTER}`)
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = await res.json()
+        const res = await fetch(`${config.api.baseUrl}/snapshots/?${CACHE_BUSTER}`)
+        if (res.ok) {
+          const data = await res.json()
+          setSnapshots(data.snapshots || [])
+        }
+      } catch {
+        // Snapshots are optional — if endpoint is unavailable, just show "Latest"
+      }
+    })()
+  }, [])
+
+  // Fetch sites (live or from snapshot)
+  useEffect(() => {
+    (async () => {
+      setLoading(true)
+      setError('')
+      try {
+        let data: { sites?: AuditSite[] }
+        if (selectedVersion === 'latest') {
+          const res = await fetch(`${config.api.baseUrl}/sites/all?source=ancient_nerds&source=lyra&source=ancient_nerds_community&limit=100000&${CACHE_BUSTER}`)
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          data = await res.json()
+        } else {
+          const res = await fetch(`/data/snapshots/${selectedVersion}.json`)
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          data = await res.json()
+        }
         setSites(data.sites || [])
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : 'Failed to load sites')
@@ -228,7 +262,7 @@ export default function DbAuditPage() {
         setLoading(false)
       }
     })()
-  }, [])
+  }, [selectedVersion])
 
   // Compute stats
   const stats = useMemo(() => {
@@ -571,6 +605,24 @@ export default function DbAuditPage() {
               ))}
             </select>
           </div>
+          {snapshots.length > 0 && (
+            <div className="db-version-badge" style={selectedVersion !== 'latest' ? {
+              borderColor: '#22d3ee',
+              background: 'rgba(34, 211, 238, 0.08)',
+            } : undefined}>
+              <span className="db-version-dot" style={{
+                background: selectedVersion !== 'latest' ? '#22d3ee' : 'var(--text-secondary)'
+              }} />
+              <select value={selectedVersion} onChange={e => setSelectedVersion(e.target.value)}>
+                <option value="latest">Latest (live)</option>
+                {snapshots.map(s => (
+                  <option key={s.date} value={s.date}>
+                    {new Date(s.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} ({s.sites.toLocaleString()} sites)
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
         <div className="db-header-right">
           {isAuthenticated ? (

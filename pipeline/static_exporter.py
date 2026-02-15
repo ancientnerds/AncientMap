@@ -99,6 +99,9 @@ class StaticExporter:
             # Export content data
             self._export_content()
 
+        # Save dated audit snapshot for version history
+        self._save_audit_snapshot()
+
         self._print_summary()
 
     def _export_sources(self):
@@ -412,6 +415,90 @@ class StaticExporter:
                 save_json(content_dir / f"{content_type}s.json", output)
                 self.stats[f"content_{content_type}"] = len(items)
                 logger.info(f"  {content_type}: {len(items):,} items")
+
+    def _save_audit_snapshot(self):
+        """Save a dated snapshot of audit-source sites for version history."""
+        logger.info("\nSaving audit snapshot...")
+
+        snapshot_dir = self.output_dir / "snapshots"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
+        snapshot_time = datetime.now(UTC).isoformat()
+
+        with get_session() as session:
+            result = session.execute(text("""
+                SELECT
+                    id, name, lat, lon, source_id, site_type,
+                    period_start, period_end, period_name, country,
+                    description, thumbnail_url, source_url, edited_by,
+                    created_at
+                FROM unified_sites
+                WHERE source_id IN ('ancient_nerds', 'lyra', 'ancient_nerds_community')
+                ORDER BY source_id, name
+            """))
+
+            sites = []
+            source_counts = defaultdict(int)
+
+            for row in result:
+                site: dict[str, Any] = {
+                    "id": str(row.id),
+                    "n": row.name[:100] if row.name else "",
+                    "la": round(row.lat, 5),
+                    "lo": round(row.lon, 5),
+                    "s": row.source_id,
+                }
+                if row.site_type:
+                    site["t"] = row.site_type
+                if row.period_start is not None:
+                    site["p"] = row.period_start
+                if row.period_name:
+                    site["pn"] = row.period_name
+                if row.country:
+                    site["c"] = row.country
+                if row.description:
+                    site["d"] = row.description[:500]
+                if row.thumbnail_url:
+                    site["i"] = row.thumbnail_url
+                if row.source_url:
+                    site["u"] = row.source_url
+                if row.edited_by and row.edited_by != "initial":
+                    site["eb"] = row.edited_by
+                if row.created_at:
+                    site["ea"] = row.created_at.isoformat()
+
+                sites.append(site)
+                source_counts[row.source_id] += 1
+
+        snapshot_data = {
+            "snapshot_date": snapshot_time,
+            "sites": sites,
+            "count": len(sites),
+            "by_source": dict(source_counts),
+        }
+
+        snapshot_file = f"{today}.json"
+        save_json(snapshot_dir / snapshot_file, snapshot_data)
+
+        # Update manifest
+        manifest_path = snapshot_dir / "manifest.json"
+        manifest = {"snapshots": []}
+        if manifest_path.exists():
+            with open(manifest_path, encoding="utf-8") as f:
+                manifest = json.load(f)
+
+        # Replace existing entry for today or append
+        snapshots = [s for s in manifest["snapshots"] if s["date"] != today]
+        snapshots.append({"date": today, "file": snapshot_file, "sites": len(sites)})
+        snapshots.sort(key=lambda s: s["date"], reverse=True)
+        manifest["snapshots"] = snapshots
+
+        save_json(manifest_path, manifest, compress=False)
+
+        logger.info(f"  Snapshot {today}: {len(sites):,} sites")
+        for source, count in sorted(source_counts.items(), key=lambda x: -x[1]):
+            logger.info(f"    {source}: {count:,}")
 
     def _print_summary(self):
         """Print export summary."""
