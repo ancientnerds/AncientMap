@@ -27,7 +27,7 @@ interface AuditSite {
   eb?: string      // edited_by
 }
 
-type IssueFilter = 'all' | 'no_period' | 'no_type' | 'no_country' | 'suspect_modern'
+type IssueFilter = 'all' | 'no_period' | 'no_type' | 'no_country' | 'suspect_modern' | 'no_desc' | 'no_source' | 'no_image' | 'no_coords'
 type SortColumn = 'name' | 'type' | 'period' | 'country'
 type SortDir = 'asc' | 'desc'
 
@@ -38,6 +38,10 @@ function hasPeriodIssue(s: AuditSite) { return !s.pn && s.p == null }
 function hasTypeIssue(s: AuditSite) { return !s.t }
 function hasCountryIssue(s: AuditSite) { return !s.c }
 function isSuspectModern(s: AuditSite) { return s.p != null && s.p > 1500 }
+function hasDescIssue(s: AuditSite) { return !s.d }
+function hasSourceIssue(s: AuditSite) { return !s.u }
+function hasImageIssue(s: AuditSite) { return !s.i }
+function hasCoordsIssue(s: AuditSite) { return s.la === 0 && s.lo === 0 }
 
 export default function DbAuditPage() {
   const [sites, setSites] = useState<AuditSite[]>([])
@@ -47,7 +51,10 @@ export default function DbAuditPage() {
   // Filters & sort
   const [searchQuery, setSearchQuery] = useState('')
   const [activeIssue, setActiveIssue] = useState<IssueFilter>('all')
-  const [sourceFilter, setSourceFilter] = useState('all')
+  const [typeFilter, setTypeFilter] = useState('all')
+  const [countryFilter, setCountryFilter] = useState('all')
+  const [periodFilter, setPeriodFilter] = useState('all')
+  const [editedByFilter, setEditedByFilter] = useState('all')
   const [sortColumn, setSortColumn] = useState<SortColumn>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
 
@@ -97,14 +104,36 @@ export default function DbAuditPage() {
     const no_type = sites.filter(hasTypeIssue).length
     const no_country = sites.filter(hasCountryIssue).length
     const suspect_modern = sites.filter(isSuspectModern).length
-    return { total, no_period, no_type, no_country, suspect_modern }
+    const no_desc = sites.filter(hasDescIssue).length
+    const no_source = sites.filter(hasSourceIssue).length
+    const no_image = sites.filter(hasImageIssue).length
+    const no_coords = sites.filter(hasCoordsIssue).length
+    return { total, no_period, no_type, no_country, suspect_modern, no_desc, no_source, no_image, no_coords }
   }, [sites])
 
-  // Unique sources
-  const sources = useMemo(() => {
-    const set = new Set(sites.map(s => s.s))
-    return Array.from(set).sort()
+  // Source display name for header
+  const SOURCE_DISPLAY: Record<string, string> = { ancient_nerds: 'ANCIENT NERDS Original' }
+  const sourceDisplay = useMemo(() => {
+    const ids = Array.from(new Set(sites.map(s => s.s))).sort()
+    return ids.map(id => SOURCE_DISPLAY[id] || id).join(', ')
   }, [sites])
+
+  // Unique filter values
+  const uniqueTypes = useMemo(() =>
+    Array.from(new Set(sites.map(s => s.t).filter(Boolean) as string[])).sort()
+  , [sites])
+
+  const uniqueCountries = useMemo(() =>
+    Array.from(new Set(sites.map(s => s.c).filter(Boolean) as string[])).sort()
+  , [sites])
+
+  const uniquePeriods = useMemo(() =>
+    Array.from(new Set(sites.map(s => resolvePeriod(s.pn, s.p)).filter(v => v && v !== 'Unknown'))).sort()
+  , [sites])
+
+  const uniqueEditedBy = useMemo(() =>
+    Array.from(new Set(sites.map(s => s.eb || 'initial'))).sort()
+  , [sites])
 
   // Filtered & sorted sites
   const filteredSites = useMemo(() => {
@@ -115,9 +144,16 @@ export default function DbAuditPage() {
     else if (activeIssue === 'no_type') result = result.filter(hasTypeIssue)
     else if (activeIssue === 'no_country') result = result.filter(hasCountryIssue)
     else if (activeIssue === 'suspect_modern') result = result.filter(isSuspectModern)
+    else if (activeIssue === 'no_desc') result = result.filter(hasDescIssue)
+    else if (activeIssue === 'no_source') result = result.filter(hasSourceIssue)
+    else if (activeIssue === 'no_image') result = result.filter(hasImageIssue)
+    else if (activeIssue === 'no_coords') result = result.filter(hasCoordsIssue)
 
-    // Source filter
-    if (sourceFilter !== 'all') result = result.filter(s => s.s === sourceFilter)
+    // Dropdown filters
+    if (typeFilter !== 'all') result = result.filter(s => (s.t || '') === typeFilter)
+    if (countryFilter !== 'all') result = result.filter(s => (s.c || '') === countryFilter)
+    if (periodFilter !== 'all') result = result.filter(s => resolvePeriod(s.pn, s.p) === periodFilter)
+    if (editedByFilter !== 'all') result = result.filter(s => (s.eb || 'initial') === editedByFilter)
 
     // Search
     if (searchQuery) {
@@ -139,7 +175,7 @@ export default function DbAuditPage() {
     })
 
     return result
-  }, [sites, activeIssue, sourceFilter, searchQuery, sortColumn, sortDir])
+  }, [sites, activeIssue, typeFilter, countryFilter, periodFilter, editedByFilter, searchQuery, sortColumn, sortDir])
 
   // Auth gate
   const requireAuth = useCallback((cb: () => void) => {
@@ -359,7 +395,7 @@ export default function DbAuditPage() {
           <span className="db-logo">ANCIENT NERDS</span>
           <span className="db-header-sep">&middot;</span>
           <span className="db-header-title">Database Audit</span>
-          <span className="db-header-db">({sources.join(', ')})</span>
+          <span className="db-header-db">({sourceDisplay})</span>
         </div>
         <div className="db-header-right">
           {isAuthenticated ? (
@@ -409,25 +445,79 @@ export default function DbAuditPage() {
           <span className="db-stat-value">{stats.suspect_modern}</span>
           <span className="db-stat-label">Suspect Modern</span>
         </button>
+        <button
+          className={`db-stat-card issue ${activeIssue === 'no_desc' ? 'active' : ''}`}
+          onClick={() => setActiveIssue(activeIssue === 'no_desc' ? 'all' : 'no_desc')}
+        >
+          <span className="db-stat-value">{stats.no_desc}</span>
+          <span className="db-stat-label">No Desc</span>
+        </button>
+        <button
+          className={`db-stat-card issue ${activeIssue === 'no_source' ? 'active' : ''}`}
+          onClick={() => setActiveIssue(activeIssue === 'no_source' ? 'all' : 'no_source')}
+        >
+          <span className="db-stat-value">{stats.no_source}</span>
+          <span className="db-stat-label">No Source URL</span>
+        </button>
+        <button
+          className={`db-stat-card issue ${activeIssue === 'no_image' ? 'active' : ''}`}
+          onClick={() => setActiveIssue(activeIssue === 'no_image' ? 'all' : 'no_image')}
+        >
+          <span className="db-stat-value">{stats.no_image}</span>
+          <span className="db-stat-label">No Image</span>
+        </button>
+        <button
+          className={`db-stat-card issue ${activeIssue === 'no_coords' ? 'active' : ''}`}
+          onClick={() => setActiveIssue(activeIssue === 'no_coords' ? 'all' : 'no_coords')}
+        >
+          <span className="db-stat-value">{stats.no_coords}</span>
+          <span className="db-stat-label">No Coords</span>
+        </button>
       </div>
 
       {/* Filters */}
       <div className="db-filters">
         <div className="db-filter-group">
-          <label>Source:</label>
-          <select value={sourceFilter} onChange={e => setSourceFilter(e.target.value)}>
+          <label>Type:</label>
+          <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
             <option value="all">All</option>
-            {sources.map(s => <option key={s} value={s}>{s}</option>)}
+            {uniqueTypes.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <div className="db-filter-group">
+          <label>Country:</label>
+          <select value={countryFilter} onChange={e => setCountryFilter(e.target.value)}>
+            <option value="all">All</option>
+            {uniqueCountries.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <div className="db-filter-group">
+          <label>Period:</label>
+          <select value={periodFilter} onChange={e => setPeriodFilter(e.target.value)}>
+            <option value="all">All</option>
+            {uniquePeriods.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
+        <div className="db-filter-group">
+          <label>Edited By:</label>
+          <select value={editedByFilter} onChange={e => setEditedByFilter(e.target.value)}>
+            <option value="all">All</option>
+            {uniqueEditedBy.map(e => <option key={e} value={e}>{e}</option>)}
           </select>
         </div>
         <div className="db-filter-group">
           <label>Search:</label>
-          <input
-            type="text"
-            placeholder="Filter by name..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-          />
+          <div className="db-search-wrap">
+            <input
+              type="text"
+              placeholder="Filter by name..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button className="db-search-clear" onClick={() => setSearchQuery('')}>&times;</button>
+            )}
+          </div>
         </div>
         <div className="db-filter-count">{filteredSites.length} sites</div>
       </div>
@@ -604,8 +694,11 @@ export default function DbAuditPage() {
       {/* Footer */}
       <div className="db-footer">
         Showing {filteredSites.length} of {sites.length} sites
-        {activeIssue !== 'all' && ` \u2014 filtered: ${activeIssue.replace('_', ' ')}`}
-        {sourceFilter !== 'all' && ` \u2014 source: ${sourceFilter}`}
+        {activeIssue !== 'all' && ` \u2014 filtered: ${activeIssue.replace(/_/g, ' ')}`}
+        {typeFilter !== 'all' && ` \u2014 type: ${typeFilter}`}
+        {countryFilter !== 'all' && ` \u2014 country: ${countryFilter}`}
+        {periodFilter !== 'all' && ` \u2014 period: ${periodFilter}`}
+        {editedByFilter !== 'all' && ` \u2014 edited by: ${editedByFilter}`}
         {searchQuery && ` \u2014 search: "${searchQuery}"`}
       </div>
 
