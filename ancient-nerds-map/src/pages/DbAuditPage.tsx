@@ -324,6 +324,29 @@ export default function DbAuditPage() {
     })()
   }, [selectedVersion])
 
+  // Poll for live updates every 30s when viewing latest
+  useEffect(() => {
+    if (selectedVersion !== 'latest') return
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`${config.api.baseUrl}/sites/all?source=ancient_nerds&source=lyra&source=ancient_nerds_community&limit=100000&${CACHE_BUSTER}`)
+        if (!res.ok) return
+        const data = await res.json()
+        const newSites: AuditSite[] = data.sites || []
+        // Update if count changed or latest edit timestamp differs
+        if (newSites.length !== sites.length) {
+          setSites(newSites)
+        } else {
+          const maxEa = (arr: AuditSite[]) => arr.reduce((max, s) => s.ea && s.ea > max ? s.ea : max, '')
+          if (maxEa(newSites) !== maxEa(sites)) {
+            setSites(newSites)
+          }
+        }
+      } catch { /* silent — next poll will retry */ }
+    }, 30_000)
+    return () => clearInterval(interval)
+  }, [selectedVersion, sites])
+
   // Compute stats (respect source filter)
   const stats = useMemo(() => {
     const base = sourceFilter !== 'all' ? sites.filter(s => s.s === sourceFilter) : sites
