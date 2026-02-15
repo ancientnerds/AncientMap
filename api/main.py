@@ -15,12 +15,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+import traceback
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from api.cache import cache_get, cache_set, get_redis_client
@@ -162,6 +164,15 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Return actual error detail for 500s instead of generic message."""
+    tb = traceback.format_exception(type(exc), exc, exc.__traceback__)
+    logger.error(f"Unhandled error on {request.method} {request.url.path}: {exc}\n{''.join(tb)}")
+    return JSONResponse(status_code=500, content={"detail": str(exc)})
+
 
 # CORS - allow frontend to connect (configured via API_CORS_ORIGINS env var)
 settings = get_settings()
