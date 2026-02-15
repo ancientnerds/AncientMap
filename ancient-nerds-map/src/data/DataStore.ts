@@ -18,6 +18,9 @@ import { offlineFetch } from '../services/OfflineFetch'
 /** API Base URL - from environment config */
 const API_BASE_URL = config.api.baseUrl
 
+/** Cache buster: changes per deploy so SW/browser caches don't serve stale data */
+const CACHE_BUSTER = `_v=${__BUILD_HASH__}`
+
 // =============================================================================
 // DataStore Class
 // =============================================================================
@@ -67,8 +70,8 @@ class DataStoreClass {
     const DEFAULT_SOURCE = 'ancient_nerds'
 
     const [sourcesResponse, sitesResponse] = await Promise.all([
-      offlineFetch(`${API_BASE_URL}/sources/`),
-      offlineFetch(`${API_BASE_URL}/sites/all?limit=100000&source=${DEFAULT_SOURCE}`)
+      offlineFetch(`${API_BASE_URL}/sources/?${CACHE_BUSTER}`),
+      offlineFetch(`${API_BASE_URL}/sites/all?limit=100000&source=${DEFAULT_SOURCE}&${CACHE_BUSTER}`)
     ])
 
     if (!sourcesResponse.ok) {
@@ -294,7 +297,7 @@ class DataStoreClass {
    */
   async loadSources(): Promise<void> {
     if (this.sources.size > 0) return
-    const resp = await fetch(`${API_BASE_URL}/sources/`)
+    const resp = await fetch(`${API_BASE_URL}/sources/?${CACHE_BUSTER}`)
     if (!resp.ok) return
     const data = await resp.json()
     for (const source of data.sources) {
