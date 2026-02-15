@@ -31,7 +31,6 @@ export const SOURCE_COLORS: Record<string, string> = {
   open_context: '#00bcd4',   // Cyan
   megalithic_portal: '#795548', // Brown
   eamena: '#ff5722',         // Deep Orange
-  dinaa: '#607d8b',          // Blue Grey
 
   // Content sources
   inscriptions_edh: '#673ab7', // Deep Purple

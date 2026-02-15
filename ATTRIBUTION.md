@@ -101,11 +101,6 @@ attribution to the original data sources as specified below.
 - **Citation**: Arachne - Central Object Database of the DAI
 - **Data**: Archaeological objects and contexts
 
-### DINAA (Digital Index of North American Archaeology)
-- **Website**: https://www.dinaa.net/
-- **License**: Contact for terms
-- **Data**: North American archaeological sites
-
 ### Open Context
 - **Website**: https://opencontext.org/
 - **License**: Various (per dataset, mostly CC)

@@ -43,7 +43,6 @@ from pipeline.ingesters.ireland_nms import IrelandNMSIngester
 from pipeline.ingesters.arachne import ArachneIngester
 from pipeline.ingesters.eamena import EAMENAIngester
 from pipeline.ingesters.maeasam import MAEASaMIngester
-from pipeline.ingesters.dinaa import DINAAIngester
 
 INGESTERS = {
     "pleiades": (PleiadesIngester, "Pleiades - Mediterranean (38K sites)"),
@@ -58,7 +57,6 @@ INGESTERS = {
     "arachne": (ArachneIngester, "Arachne/iDAI German (~200K records)"),
     "eamena": (EAMENAIngester, "EAMENA Middle East (338K sites) - MAY NEED API KEY"),
     "maeasam": (MAEASaMIngester, "MAEASaM Africa (~10K sites)"),
-    "dinaa": (DINAAIngester, "DINAA North America (900K sites) - VERY SLOW"),
 }
 
 # Quick test sources (smaller, faster)

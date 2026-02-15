@@ -52,8 +52,7 @@ DEFAULT_SOURCE_COLORS = {
     "shipwrecks_oxrep": "#0066ff", # Ocean Blue - shipwrecks
     "volcanic_holvol": "#ff0000", # Bright Red - volcanoes
 
-    # Americas & MENA
-    "dinaa": "#cd853f",           # Peru brown - Americas
+    # MENA
     "eamena": "#d35400",          # Dark orange - MENA
     "open_context": "#2980b9",    # Strong blue - Open Context
 
