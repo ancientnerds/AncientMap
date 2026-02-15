@@ -2,16 +2,26 @@
 
 import json
 import re
+import time
 from functools import lru_cache
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from api.cache import cache_delete_pattern
+from pipeline.database import get_db
 
 router = APIRouter()
 
 SNAPSHOTS_DIR = Path("public/data/snapshots")
 MANIFEST_PATH = SNAPSHOTS_DIR / "manifest.json"
+
+# Valid source IDs for pinning
+VALID_SOURCES = {"ancient_nerds", "lyra", "ancient_nerds_community"}
 
 # Compact key → display name for diff comparison
 FIELD_MAP = {
@@ -30,6 +40,32 @@ FIELD_MAP = {
 
 # Fields to skip in comparison (metadata, not content)
 SKIP_FIELDS = {"id", "s", "ea"}
+
+# In-memory pins cache (shared with sites.py via getter)
+_pins_cache: dict[str, str | None] | None = None
+_pins_cache_ts: float = 0
+_PINS_CACHE_TTL = 60  # seconds
+
+
+def get_active_pins(db: Session) -> dict[str, str | None]:
+    """Return active pins as {source_id: snapshot_date}. Cached 60s."""
+    global _pins_cache, _pins_cache_ts
+    now = time.time()
+    if _pins_cache is not None and now - _pins_cache_ts < _PINS_CACHE_TTL:
+        return _pins_cache
+    rows = db.execute(text(
+        "SELECT source_id, snapshot_date FROM source_version_pins"
+    )).fetchall()
+    _pins_cache = {r.source_id: r.snapshot_date for r in rows}
+    _pins_cache_ts = now
+    return _pins_cache
+
+
+def clear_pins_cache():
+    """Clear the in-memory pins cache (called after pin changes)."""
+    global _pins_cache, _pins_cache_ts
+    _pins_cache = None
+    _pins_cache_ts = 0
 
 
 @router.get("/")
@@ -144,6 +180,75 @@ async def get_snapshot_diff(
 
     result = _compute_diff(resolved_from, resolved_to)
     return JSONResponse(result)
+
+
+# =============================================================================
+# Version Pins (per-source snapshot pinning for public globe)
+# =============================================================================
+
+
+class PinRequest(BaseModel):
+    snapshot_date: str | None = None
+
+
+@router.get("/pins")
+async def get_pins(db: Session = Depends(get_db)):
+    """Return active version pins per source."""
+    pins = get_active_pins(db)
+    result = {}
+    for source_id, snap_date in pins.items():
+        if snap_date is not None:
+            result[source_id] = {"snapshot_date": snap_date}
+    return {"pins": result}
+
+
+@router.put("/pins/{source_id}")
+async def set_pin(
+    source_id: str,
+    body: PinRequest,
+    authorization: str | None = Header(None),
+    x_admin_pin: str | None = Header(None, alias="X-Admin-Pin"),
+    db: Session = Depends(get_db),
+):
+    """Pin or unpin a source to a specific snapshot version."""
+    from api.routes.sites import _verify_admin
+
+    edited_by = _verify_admin(authorization, x_admin_pin)
+
+    if source_id not in VALID_SOURCES:
+        raise HTTPException(status_code=400, detail=f"Unknown source: {source_id}")
+
+    snap_date = body.snapshot_date
+
+    # If pinning, validate the snapshot file exists
+    if snap_date is not None:
+        path = SNAPSHOTS_DIR / f"{snap_date}.json"
+        if not path.exists():
+            raise HTTPException(status_code=404, detail=f"Snapshot not found: {snap_date}")
+
+    # Upsert
+    if snap_date is None:
+        # Unpin: delete the row
+        db.execute(text(
+            "DELETE FROM source_version_pins WHERE source_id = :sid"
+        ), {"sid": source_id})
+    else:
+        db.execute(text("""
+            INSERT INTO source_version_pins (source_id, snapshot_date, pinned_at, pinned_by)
+            VALUES (:sid, :snap, NOW(), :by)
+            ON CONFLICT (source_id) DO UPDATE SET
+                snapshot_date = EXCLUDED.snapshot_date,
+                pinned_at = EXCLUDED.pinned_at,
+                pinned_by = EXCLUDED.pinned_by
+        """), {"sid": source_id, "snap": snap_date, "by": edited_by})
+
+    db.commit()
+
+    # Clear caches
+    clear_pins_cache()
+    cache_delete_pattern("sites:*")
+
+    return {"success": True, "source_id": source_id, "snapshot_date": snap_date}
 
 
 @router.get("/{date}.json")

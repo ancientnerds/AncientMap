@@ -817,6 +817,16 @@ def _run_migrations(engine) -> None:
               AND (uc.enrichment_data IS NULL OR NOT (uc.enrichment_data ? 'v_an_dedup'))
         """))
 
+        # Source version pins table (per-source snapshot pinning for public globe)
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS source_version_pins (
+                source_id VARCHAR(50) PRIMARY KEY,
+                snapshot_date VARCHAR(30),
+                pinned_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                pinned_by VARCHAR(50) NOT NULL
+            )
+        """))
+
         # Fix wikipedia_url / wikidata_id swap: rows where wikipedia_url
         # points to wikidata.org should have the QID in wikidata_id instead
         conn.execute(text("""

@@ -490,7 +490,7 @@ class StaticExporter:
                 manifest = json.load(f)
 
         snapshots = manifest["snapshots"]
-        snapshots.append({"date": snapshot_key, "file": snapshot_file, "sites": len(sites)})
+        snapshots.append({"date": snapshot_key, "file": snapshot_file, "sites": len(sites), "by_source": dict(source_counts)})
         snapshots.sort(key=lambda s: s["date"], reverse=True)
         manifest["snapshots"] = snapshots
 
