@@ -285,7 +285,7 @@ export default function DbAuditPage() {
           if (!res.ok) throw new Error(`HTTP ${res.status}`)
           data = await res.json()
         } else {
-          const res = await fetch(`/data/snapshots/${selectedVersion}.json`)
+          const res = await fetch(`${config.api.baseUrl}/snapshots/${selectedVersion}.json`)
           if (!res.ok) throw new Error(`HTTP ${res.status}`)
           data = await res.json()
         }
