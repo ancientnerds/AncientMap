@@ -61,6 +61,21 @@ interface SnapshotEntry {
   sites: number
 }
 
+interface FieldChange { from: string; to: string }
+interface ChangedSite { id: string; n: string; fields: Record<string, FieldChange> }
+interface DiffSummary {
+  added: number; removed: number; changed: number
+  fields: Record<string, number>
+}
+interface DiffResponse {
+  from_date: string; to_date: string
+  from_count: number; to_count: number
+  summary: DiffSummary
+  added: AuditSite[]
+  removed: AuditSite[]
+  changed: ChangedSite[]
+}
+
 interface PendingEdit {
   siteId: string
   siteName: string
@@ -244,6 +259,17 @@ export default function DbAuditPage() {
   const [uploadFileName, setUploadFileName] = useState('')
   const [uploadTarget, setUploadTarget] = useState('ancient_nerds')
   const [uploading, setUploading] = useState(false)
+
+  // Diff viewer
+  const [showDiffModal, setShowDiffModal] = useState(false)
+  const [diffData, setDiffData] = useState<DiffResponse | null>(null)
+  const [diffLoading, setDiffLoading] = useState(false)
+  const [diffError, setDiffError] = useState('')
+  const [diffFrom, setDiffFrom] = useState('')
+  const [diffTo, setDiffTo] = useState('')
+  const [expandedDiffRows, setExpandedDiffRows] = useState<Set<string>>(new Set())
+  const [diffAddedExpanded, setDiffAddedExpanded] = useState(false)
+  const [diffRemovedExpanded, setDiffRemovedExpanded] = useState(false)
 
   // Fetch snapshot manifest on mount
   useEffect(() => {
@@ -723,6 +749,52 @@ export default function DbAuditPage() {
     }
   }, [adminPin, discardAllEdits, refreshDbSnapshots])
 
+  // Diff: open compare modal with defaults
+  const openDiffModal = useCallback(() => {
+    if (snapshots.length < 2) return
+    setDiffFrom(snapshots[1].date) // second most recent
+    setDiffTo(snapshots[0].date)   // most recent
+    setDiffData(null)
+    setDiffError('')
+    setExpandedDiffRows(new Set())
+    setDiffAddedExpanded(false)
+    setDiffRemovedExpanded(false)
+    setShowDiffModal(true)
+  }, [snapshots])
+
+  // Diff: fetch comparison data
+  const fetchDiff = useCallback(async () => {
+    if (!diffFrom || !diffTo) return
+    setDiffLoading(true)
+    setDiffError('')
+    try {
+      const res = await fetch(`${config.api.baseUrl}/snapshots/diff?from=${diffFrom}&to=${diffTo}`)
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.detail || `HTTP ${res.status}`)
+      }
+      const data: DiffResponse = await res.json()
+      setDiffData(data)
+      setExpandedDiffRows(new Set())
+      setDiffAddedExpanded(false)
+      setDiffRemovedExpanded(false)
+    } catch (e: unknown) {
+      setDiffError(e instanceof Error ? e.message : 'Failed to load diff')
+    } finally {
+      setDiffLoading(false)
+    }
+  }, [diffFrom, diffTo])
+
+  // Toggle a changed row's expansion
+  const toggleDiffRow = useCallback((id: string) => {
+    setExpandedDiffRows(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
   // Open site popup
   const openPopup = useCallback((s: AuditSite) => {
     setPopupSite({
@@ -802,6 +874,9 @@ export default function DbAuditPage() {
                 })}
               </select>
             </div>
+          )}
+          {snapshots.length >= 2 && (
+            <button className="db-compare-btn" onClick={openDiffModal}>Compare</button>
           )}
         </div>
         <div className="db-header-right">
@@ -1279,6 +1354,218 @@ export default function DbAuditPage() {
             ))}
           </div>
         </details>
+      )}
+
+      {/* Diff Modal */}
+      {showDiffModal && (
+        <div className="db-modal-overlay" onClick={() => !diffLoading && setShowDiffModal(false)}>
+          <div className="db-modal db-diff-modal" onClick={e => e.stopPropagation()}>
+            <div className="db-modal-header">
+              <h2>Snapshot Diff</h2>
+              <button className="db-modal-close" onClick={() => setShowDiffModal(false)}>&times;</button>
+            </div>
+            <div className="db-modal-body db-diff-body">
+              {/* Selector row */}
+              <div className="db-diff-selectors">
+                <div className="db-diff-select-group">
+                  <label>From</label>
+                  <select value={diffFrom} onChange={e => setDiffFrom(e.target.value)}>
+                    {snapshots.map(s => (
+                      <option key={s.date} value={s.date}>
+                        {s.date} ({s.sites.toLocaleString()} sites)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <span className="db-diff-arrow">&rarr;</span>
+                <div className="db-diff-select-group">
+                  <label>To</label>
+                  <select value={diffTo} onChange={e => setDiffTo(e.target.value)}>
+                    {snapshots.map(s => (
+                      <option key={s.date} value={s.date}>
+                        {s.date} ({s.sites.toLocaleString()} sites)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  className="db-btn db-btn-save"
+                  onClick={fetchDiff}
+                  disabled={diffLoading || diffFrom === diffTo}
+                >
+                  {diffLoading ? 'Loading...' : 'Compare'}
+                </button>
+              </div>
+
+              {diffError && <div className="db-diff-error">{diffError}</div>}
+
+              {diffData && (
+                <>
+                  {/* Header summary */}
+                  <div className="db-diff-header">
+                    <span>{diffData.from_count.toLocaleString()} sites</span>
+                    <span className="db-diff-arrow">&rarr;</span>
+                    <span>{diffData.to_count.toLocaleString()} sites</span>
+                  </div>
+
+                  {/* Summary pills */}
+                  <div className="db-diff-summary">
+                    <span className="db-diff-pill db-diff-pill-added">+{diffData.summary.added} added</span>
+                    <span className="db-diff-pill db-diff-pill-removed">&minus;{diffData.summary.removed} removed</span>
+                    <span className="db-diff-pill db-diff-pill-changed">~{diffData.summary.changed} changed</span>
+                  </div>
+
+                  {/* Field breakdown */}
+                  {Object.keys(diffData.summary.fields).length > 0 && (
+                    <div className="db-diff-fields-bar">
+                      {Object.entries(diffData.summary.fields)
+                        .sort(([, a], [, b]) => b - a)
+                        .map(([field, count]) => (
+                          <span key={field} className="db-diff-field-tag">{field}: {count}</span>
+                        ))}
+                    </div>
+                  )}
+
+                  {/* Changed section */}
+                  {diffData.changed.length > 0 && (
+                    <div className="db-diff-section">
+                      <div className="db-diff-section-header db-diff-section-changed">
+                        CHANGED ({diffData.changed.length})
+                      </div>
+                      <div className="db-diff-section-body">
+                        {diffData.changed.map(site => {
+                          const isExpanded = expandedDiffRows.has(site.id)
+                          return (
+                            <div key={site.id} className={`db-diff-row ${isExpanded ? 'db-diff-row-expanded' : ''}`}>
+                              <div className="db-diff-row-header" onClick={() => toggleDiffRow(site.id)}>
+                                <span className="db-diff-row-arrow">{isExpanded ? '\u25BC' : '\u25B6'}</span>
+                                <span className="db-diff-row-name">{site.n}</span>
+                                <span className="db-diff-row-fields">
+                                  {Object.keys(site.fields).join(', ')}
+                                </span>
+                              </div>
+                              {isExpanded && (
+                                <div className="db-diff-row-details">
+                                  <table className="db-diff-field-table">
+                                    <thead>
+                                      <tr>
+                                        <th>Field</th>
+                                        <th>Old</th>
+                                        <th>New</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {Object.entries(site.fields).map(([field, change]) => (
+                                        <tr key={field}>
+                                          <td className="db-diff-field-name">{field}</td>
+                                          <td className="db-diff-old">{change.from || '(empty)'}</td>
+                                          <td className="db-diff-new">{change.to || '(empty)'}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Added section */}
+                  {diffData.added.length > 0 && (
+                    <div className="db-diff-section">
+                      <div
+                        className="db-diff-section-header db-diff-section-added"
+                        onClick={() => diffData.added.length > 20 && setDiffAddedExpanded(v => !v)}
+                        style={diffData.added.length > 20 ? { cursor: 'pointer' } : undefined}
+                      >
+                        ADDED ({diffData.added.length})
+                        {diffData.added.length > 20 && (
+                          <span className="db-diff-section-toggle">
+                            {diffAddedExpanded ? 'Collapse' : 'Show all'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="db-diff-section-body">
+                        <table className="db-diff-list-table">
+                          <thead>
+                            <tr>
+                              <th>Name</th><th>Type</th><th>Period</th><th>Country</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(diffAddedExpanded ? diffData.added : diffData.added.slice(0, 20)).map(site => (
+                              <tr key={site.id} className="db-diff-added-row">
+                                <td>{site.n}</td>
+                                <td>{site.t || ''}</td>
+                                <td>{site.pn || ''}</td>
+                                <td>{site.c || ''}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {!diffAddedExpanded && diffData.added.length > 20 && (
+                          <button className="db-diff-show-all" onClick={() => setDiffAddedExpanded(true)}>
+                            Show all {diffData.added.length} added sites
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Removed section */}
+                  {diffData.removed.length > 0 && (
+                    <div className="db-diff-section">
+                      <div
+                        className="db-diff-section-header db-diff-section-removed"
+                        onClick={() => diffData.removed.length > 20 && setDiffRemovedExpanded(v => !v)}
+                        style={diffData.removed.length > 20 ? { cursor: 'pointer' } : undefined}
+                      >
+                        REMOVED ({diffData.removed.length})
+                        {diffData.removed.length > 20 && (
+                          <span className="db-diff-section-toggle">
+                            {diffRemovedExpanded ? 'Collapse' : 'Show all'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="db-diff-section-body">
+                        <table className="db-diff-list-table">
+                          <thead>
+                            <tr>
+                              <th>Name</th><th>Type</th><th>Period</th><th>Country</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(diffRemovedExpanded ? diffData.removed : diffData.removed.slice(0, 20)).map(site => (
+                              <tr key={site.id} className="db-diff-removed-row">
+                                <td>{site.n}</td>
+                                <td>{site.t || ''}</td>
+                                <td>{site.pn || ''}</td>
+                                <td>{site.c || ''}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {!diffRemovedExpanded && diffData.removed.length > 20 && (
+                          <button className="db-diff-show-all" onClick={() => setDiffRemovedExpanded(true)}>
+                            Show all {diffData.removed.length} removed sites
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Empty state */}
+                  {diffData.summary.added === 0 && diffData.summary.removed === 0 && diffData.summary.changed === 0 && (
+                    <div className="db-diff-empty">No differences found between these snapshots.</div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Edit Modal */}
