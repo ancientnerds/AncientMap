@@ -94,6 +94,39 @@
   outline: none;
 }
 
+/* Version snapshot badge */
+.db-version-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px 3px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  margin-left: 4px;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.db-version-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.db-version-badge select {
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-family: inherit;
+  cursor: pointer;
+  padding-right: 4px;
+}
+
+.db-version-badge select:focus {
+  outline: none;
+}
+
 .db-unlock-btn {
   background: transparent;
   border: 1px solid var(--border-color);

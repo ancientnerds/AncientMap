@@ -34,6 +34,7 @@ from api.routes import (
     radar,
     sitemap,
     sites,
+    snapshots,
     sources,
     streetview,
 )
@@ -128,6 +129,7 @@ app.include_router(content.router, prefix="/api/content", tags=["content"])
 app.include_router(news.router, prefix="/api/news", tags=["news"])
 app.include_router(radar.router, prefix="/api/radar", tags=["radar"])
 app.include_router(public_v1.router, prefix="/api/v1", tags=["Public API"])
+app.include_router(snapshots.router, prefix="/api/snapshots", tags=["snapshots"])
 
 # Serve news screenshots as static files
 _screenshots_dir = Path("public/data/news/screenshots")

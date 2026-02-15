@@ -480,10 +480,12 @@ Output using the Report Format (see below). Group findings by phase and confiden
 
 ### Step 8 — Apply approved fixes
 
+**Rule: Every audit UPDATE must include `edited_by = 'audit'`.** This marks the row as audit-touched, distinguishing it from untouched rows (`edited_by = 'initial'`) and user edits (`edited_by = 'admin'`). Omitting this makes future audits unable to tell which rows were already reviewed.
+
 For each approved fix, UPDATE the local database and log the change:
 ```sql
--- Fix the field
-UPDATE unified_sites SET period_start = -9500, period_name = '< 4500 BC'
+-- Fix the field (always include edited_by = 'audit')
+UPDATE unified_sites SET period_start = -9500, period_name = '< 4500 BC', edited_by = 'audit'
 WHERE id = '<site-uuid>';
 
 -- Log the fix
@@ -492,8 +494,12 @@ VALUES ('<site-uuid>', 'Gobekli Tepe', 'fix', 'period_start', NULL, '-9500', 'hi
         'Wikipedia, UNESCO — earliest known temple, c. 9500 BC');
 ```
 
-For verified-correct sites, log the verification:
+For verified-correct sites, mark as audit-verified and log:
 ```sql
+-- Mark as reviewed even if no value changed
+UPDATE unified_sites SET edited_by = 'audit'
+WHERE id = '<site-uuid>' AND edited_by = 'initial';
+
 INSERT INTO database_audit_log (site_id, site_name, action, field_changed, old_value, new_value, confidence, evidence_source)
 VALUES ('<site-uuid>', 'Gobekli Tepe', 'verify', NULL, NULL, NULL, 'high',
         'Wikidata P625/P17/P31 match DB values');

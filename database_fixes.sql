@@ -1524,3 +1524,19 @@ FROM unified_sites WHERE name = 'Göbekli Tepe' AND source_id = 'ancient_nerds';
 
 -- Block 6: Flag coord discrepancies for manual review
 -- Per audit rules: do NOT auto-fix coordinates. Flag all 42 coord discrepancies.
+
+-- ============================================================
+-- Block 7: edited_by column migration + backfill audit rows
+-- Applied: 2026-02-15
+-- ============================================================
+
+-- Ensure column exists (idempotent)
+ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS edited_by VARCHAR(20) NOT NULL DEFAULT 'initial';
+
+-- Backfill: mark rows that were fixed by the audit as 'audit'
+-- Only touches rows still at 'initial' that have a corresponding 'fix' entry in the audit log
+UPDATE unified_sites SET edited_by = 'audit'
+FROM database_audit_log
+WHERE unified_sites.id = database_audit_log.site_id
+  AND database_audit_log.action = 'fix'
+  AND unified_sites.edited_by = 'initial';
