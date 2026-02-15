@@ -292,10 +292,8 @@ def _verify_article(
             ),
             "cache_control": {"type": "ephemeral"},
         }],
-        messages=[
-            {"role": "user", "content": prompt},
-            {"role": "assistant", "content": "[START_VERIFIED]\n"},
-        ],
+        messages=[{"role": "user", "content": prompt}],
+        prefill="[START_VERIFIED]\n",
     )
     text = next((b.text for b in response.content if hasattr(b, "text")), "")
 
@@ -330,10 +328,8 @@ def _generate_headline_tldr(
             ),
             "cache_control": {"type": "ephemeral"},
         }],
-        messages=[
-            {"role": "user", "content": prompt},
-            {"role": "assistant", "content": "[HEADLINE]\n"},
-        ],
+        messages=[{"role": "user", "content": prompt}],
+        prefill="[HEADLINE]\n",
     )
     text = next((b.text for b in response.content if hasattr(b, "text")), "")
 

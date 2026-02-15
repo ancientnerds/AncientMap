@@ -130,6 +130,7 @@ def _check_relevance(
                     "schema": RELEVANCE_SCHEMA,
                 },
             },
+            prefill="{",
         )
     except anthropic.APIError as e:
         logger.error(f"Relevance gate API error for {video.id}: {e}")
@@ -141,7 +142,7 @@ def _check_relevance(
         return True
 
     try:
-        result = parse_json_response(text_block)
+        result = parse_json_response("{" + text_block)
     except (json.JSONDecodeError, KeyError, ValueError) as e:
         logger.warning(f"Relevance gate: bad JSON for {video.id}: {e}")
         return True  # pass through on parse failure
@@ -261,6 +262,7 @@ def summarize_video(
                     "schema": SUMMARY_SCHEMA,
                 },
             },
+            prefill="{",
         )
     except anthropic.APIError as e:
         logger.error(f"LLM API error for {video.id}: {e}")
@@ -270,7 +272,7 @@ def summarize_video(
     if not text_block:
         logger.warning(f"Empty response content for {video.id}")
         return False
-    summary_data = parse_json_response(text_block)
+    summary_data = parse_json_response("{" + text_block)
 
     key_topics = summary_data.get("key_topics", [])
     if not key_topics:

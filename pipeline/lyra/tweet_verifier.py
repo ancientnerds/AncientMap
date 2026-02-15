@@ -93,6 +93,7 @@ def verify_single_post(
                     "schema": VERIFY_SCHEMA,
                 },
             },
+            prefill="{",
         )
     except anthropic.APIError as e:
         logger.warning(f"Verification API error for item {item.id}: {e}")
@@ -102,7 +103,7 @@ def verify_single_post(
     if not text_block:
         logger.warning(f"Empty verification response for item {item.id}")
         return None
-    return parse_json_response(text_block)
+    return parse_json_response("{" + text_block)
 
 
 def verify_video_posts(
