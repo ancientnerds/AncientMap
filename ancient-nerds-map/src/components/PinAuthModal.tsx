@@ -19,7 +19,7 @@ const DISCORD_URL = 'https://discord.gg/8bAjKKCue4'
 interface PinAuthModalProps {
   isOpen: boolean
   onClose: () => void
-  onSuccess: (sessionToken: string) => void
+  onSuccess: (sessionToken: string, pin?: string) => void
   variant?: 'lyra' | 'admin'
 }
 
@@ -173,7 +173,7 @@ export default function PinAuthModal({ isOpen, onClose, onSuccess, variant = 'ly
 
       if (data.verified) {
         // Successfully verified
-        onSuccess(isAdminMode ? 'admin_authorized' : data.session_token)
+        onSuccess(isAdminMode ? 'admin_authorized' : data.session_token, isAdminMode ? pinCode : undefined)
       } else {
         // Handle different error types
         if (data.error === 'ip_locked') {

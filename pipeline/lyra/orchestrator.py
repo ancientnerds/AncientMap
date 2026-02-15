@@ -825,6 +825,30 @@ def _run_migrations(engine) -> None:
             "ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS parent_site_id UUID REFERENCES unified_sites(id) ON DELETE SET NULL"
         ))
 
+        # Normalize ALL site_type values through the canonical normalizer.
+        # Runs every startup but only UPDATEs rows where the value actually changes.
+        from pipeline.normalizers.site_type import normalize_site_type as _norm_type
+
+        _raw_types = conn.execute(text(
+            "SELECT DISTINCT site_type FROM unified_sites WHERE site_type IS NOT NULL"
+        )).fetchall()
+        for (raw,) in _raw_types:
+            canonical = _norm_type(raw)
+            if canonical != raw:
+                conn.execute(text(
+                    "UPDATE unified_sites SET site_type = :canonical WHERE site_type = :raw"
+                ), {"canonical": canonical, "raw": raw})
+
+        _raw_types_uc = conn.execute(text(
+            "SELECT DISTINCT site_type FROM user_contributions WHERE site_type IS NOT NULL"
+        )).fetchall()
+        for (raw,) in _raw_types_uc:
+            canonical = _norm_type(raw)
+            if canonical != raw:
+                conn.execute(text(
+                    "UPDATE user_contributions SET site_type = :canonical WHERE site_type = :raw"
+                ), {"canonical": canonical, "raw": raw})
+
         conn.commit()
 
 

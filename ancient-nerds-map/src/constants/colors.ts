@@ -124,14 +124,13 @@ export const CATEGORY_COLORS: Record<string, string> = {
   // MEGALITHIC - Blues & Cyans (ancient, mysterious)
   // -------------------------------------------------------------------------
   'megalithic': '#0099ff',               // Azure Blue
-  'standing_stone': '#0077cc',           // Ocean Blue
   'Megalithic stones': '#0088ee',        // Bright Blue
   'Megalithic structures': '#0066bb',    // Strong Blue
   'Megalithic statues': '#3399ff',       // Sky Blue
   'Megalithic walls': '#0055aa',         // Steel Blue
   'Stone circle': '#00aaff',             // Cyan Blue
   'Dolmen': '#0077dd',                   // Deep Sky Blue
-  'Standing stone': '#0088cc',           // Teal Blue
+  'Standing stone': '#0077cc',           // Ocean Blue
   'Henge': '#00bbff',                    // Light Cyan
   'Timber circle': '#3388dd',            // Soft Blue
   'Polygonal masonry': '#4499cc',        // Slate Blue
@@ -141,10 +140,9 @@ export const CATEGORY_COLORS: Record<string, string> = {
   // ROCK & CAVE - Greens (nature, earth)
   // -------------------------------------------------------------------------
   'cave': '#22bb55',                     // Emerald Green
-  'rock_art': '#44aa44',                 // Forest Green
   'Cave Structures': '#33cc66',          // Spring Green
   'Rock relief/carving': '#55aa33',      // Lime Green
-  'Rock art': '#66bb44',                 // Grass Green
+  'Rock art': '#44aa44',                 // Forest Green
   'Petroglyphs': '#449933',              // Dark Green
   'Sculptured stone': '#55bb55',         // Medium Green
   'Cave Structures, Rock art': '#44cc55', // Sea Green
