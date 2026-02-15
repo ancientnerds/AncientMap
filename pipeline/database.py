@@ -448,6 +448,7 @@ class UnifiedSite(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Relationships
     parent_site: Mapped["UnifiedSite | None"] = relationship(

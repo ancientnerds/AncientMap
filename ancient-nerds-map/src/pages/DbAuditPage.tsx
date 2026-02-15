@@ -25,14 +25,38 @@ interface AuditSite {
   u?: string       // source_url
   i?: string       // thumbnail_url
   eb?: string      // edited_by
+  ea?: string      // edited_at (ISO timestamp)
 }
 
 type IssueFilter = 'all' | 'no_period' | 'no_type' | 'no_country' | 'suspect_modern' | 'no_desc' | 'no_source' | 'no_image' | 'no_coords'
-type SortColumn = 'name' | 'type' | 'period' | 'country'
+type SortColumn = 'name' | 'type' | 'period' | 'country' | 'edited_at'
 type SortDir = 'asc' | 'desc'
 
 const CATEGORY_OPTIONS = Object.keys(CATEGORY_COLORS)
-const PERIOD_OPTIONS = Object.keys(PERIOD_COLORS)
+const ROWS_PER_PAGE = 500
+
+// Chronological order for period sorting (oldest first, index 0 = oldest)
+const PERIOD_ORDER: Record<string, number> = {
+  '< 4500 BC': 0,
+  '4500 - 3000 BC': 1,
+  '3000 - 1500 BC': 2,
+  '1500 - 500 BC': 3,
+  '500 BC - 1 AD': 4,
+  '1 - 500 AD': 5,
+  '500 - 1000 AD': 6,
+  '1000 - 1500 AD': 7,
+  '1500+ AD': 8,
+  'Unknown': 9,
+}
+
+// Sort periods chronologically (oldest first)
+const SORTED_PERIODS = Object.keys(PERIOD_COLORS).sort((a, b) => (PERIOD_ORDER[a] ?? 99) - (PERIOD_ORDER[b] ?? 99))
+
+const SOURCE_CONFIG: Record<string, { name: string; color: string }> = {
+  ancient_nerds: { name: 'ANCIENT NERDS Original', color: '#FFD700' },
+  lyra: { name: 'ANCIENT NERDS Radar', color: '#8b5cf6' },
+  ancient_nerds_community: { name: 'ANCIENT NERDS Community', color: '#22c55e' },
+}
 
 function hasPeriodIssue(s: AuditSite) { return !s.pn && s.p == null }
 function hasTypeIssue(s: AuditSite) { return !s.t }
@@ -43,6 +67,108 @@ function hasSourceIssue(s: AuditSite) { return !s.u }
 function hasImageIssue(s: AuditSite) { return !s.i }
 function hasCoordsIssue(s: AuditSite) { return s.la === 0 && s.lo === 0 }
 
+function formatRelativeDate(iso: string): string {
+  const d = new Date(iso)
+  const now = new Date()
+  const diffMs = now.getTime() - d.getTime()
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 1) return 'just now'
+  if (diffMin < 60) return `${diffMin}m ago`
+  const diffHr = Math.floor(diffMin / 60)
+  if (diffHr < 24) return `${diffHr}h ago`
+  const diffDays = Math.floor(diffHr / 24)
+  if (diffDays < 30) return `${diffDays}d ago`
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined })
+}
+
+// ─── Multi-select dropdown ───────────────────────────────────────────────────
+function MultiSelect({ label, options, selected, onChange, colorFn }: {
+  label: string
+  options: string[]
+  selected: Set<string>
+  onChange: (s: Set<string>) => void
+  colorFn?: (v: string) => string | undefined
+}) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const ref = useRef<HTMLDivElement>(null)
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const filtered = search
+    ? options.filter(o => o.toLowerCase().includes(search.toLowerCase()))
+    : options
+
+  const allSelected = selected.size === 0
+  const count = selected.size
+
+  const toggle = (val: string) => {
+    const next = new Set(selected)
+    if (next.has(val)) next.delete(val)
+    else next.add(val)
+    onChange(next)
+  }
+
+  return (
+    <div className="db-multiselect" ref={ref}>
+      <button
+        className={`db-multiselect-trigger ${count > 0 ? 'has-selection' : ''}`}
+        onClick={() => setOpen(!open)}
+      >
+        <span className="db-multiselect-label">{label}:</span>
+        <span className="db-multiselect-value">
+          {allSelected ? 'All' : count === 1 ? [...selected][0] : `${count} selected`}
+        </span>
+        <span className="db-multiselect-arrow">{open ? '\u25B4' : '\u25BE'}</span>
+      </button>
+      {open && (
+        <div className="db-multiselect-panel">
+          {options.length > 6 && (
+            <input
+              className="db-multiselect-search"
+              placeholder="Search..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              autoFocus
+            />
+          )}
+          <div className="db-multiselect-actions">
+            <button onClick={() => onChange(new Set())}>All</button>
+            <button onClick={() => onChange(new Set(options))}>Select All</button>
+            {count > 0 && <button onClick={() => onChange(new Set())}>Clear</button>}
+          </div>
+          <div className="db-multiselect-list">
+            {filtered.map(opt => {
+              const color = colorFn?.(opt)
+              return (
+                <label key={opt} className="db-multiselect-item">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(opt)}
+                    onChange={() => toggle(opt)}
+                  />
+                  {color && <span className="db-multiselect-dot" style={{ background: color }} />}
+                  <span>{opt}</span>
+                </label>
+              )
+            })}
+            {filtered.length === 0 && <div className="db-multiselect-empty">No matches</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Main component ──────────────────────────────────────────────────────────
 export default function DbAuditPage() {
   const [sites, setSites] = useState<AuditSite[]>([])
   const [loading, setLoading] = useState(true)
@@ -51,12 +177,15 @@ export default function DbAuditPage() {
   // Filters & sort
   const [searchQuery, setSearchQuery] = useState('')
   const [activeIssue, setActiveIssue] = useState<IssueFilter>('all')
-  const [typeFilter, setTypeFilter] = useState('all')
-  const [countryFilter, setCountryFilter] = useState('all')
-  const [periodFilter, setPeriodFilter] = useState('all')
-  const [editedByFilter, setEditedByFilter] = useState('all')
+  const [typeFilters, setTypeFilters] = useState<Set<string>>(new Set())
+  const [countryFilters, setCountryFilters] = useState<Set<string>>(new Set())
+  const [periodFilters, setPeriodFilters] = useState<Set<string>>(new Set())
+  const [editedByFilters, setEditedByFilters] = useState<Set<string>>(new Set())
   const [sortColumn, setSortColumn] = useState<SortColumn>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
+
+  // Pagination
+  const [visibleRows, setVisibleRows] = useState(ROWS_PER_PAGE)
 
   // Auth
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -81,11 +210,14 @@ export default function DbAuditPage() {
   // Site popup
   const [popupSite, setPopupSite] = useState<SiteData | null>(null)
 
+  // Source filter
+  const [sourceFilter, setSourceFilter] = useState('all')
+
   // Fetch all sites
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${config.api.baseUrl}/sites/all?source=ancient_nerds&source=ancient_nerds_radar&limit=100000&${CACHE_BUSTER}`)
+        const res = await fetch(`${config.api.baseUrl}/sites/all?source=ancient_nerds&source=lyra&source=ancient_nerds_community&limit=100000&${CACHE_BUSTER}`)
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
         setSites(data.sites || [])
@@ -111,13 +243,6 @@ export default function DbAuditPage() {
     return { total, no_period, no_type, no_country, suspect_modern, no_desc, no_source, no_image, no_coords }
   }, [sites])
 
-  // Source display name for header
-  const SOURCE_DISPLAY: Record<string, string> = { ancient_nerds: 'ANCIENT NERDS Original' }
-  const sourceDisplay = useMemo(() => {
-    const ids = Array.from(new Set(sites.map(s => s.s))).sort()
-    return ids.map(id => SOURCE_DISPLAY[id] || id).join(', ')
-  }, [sites])
-
   // Unique filter values
   const uniqueTypes = useMemo(() =>
     Array.from(new Set(sites.map(s => s.t).filter(Boolean) as string[])).sort()
@@ -128,16 +253,34 @@ export default function DbAuditPage() {
   , [sites])
 
   const uniquePeriods = useMemo(() =>
-    Array.from(new Set(sites.map(s => resolvePeriod(s.pn, s.p)).filter(v => v && v !== 'Unknown'))).sort()
+    Array.from(new Set(sites.map(s => resolvePeriod(s.pn, s.p)).filter(v => v && v !== 'Unknown')))
+      .sort((a, b) => (PERIOD_ORDER[a] ?? 99) - (PERIOD_ORDER[b] ?? 99))
   , [sites])
 
   const uniqueEditedBy = useMemo(() =>
     Array.from(new Set(sites.map(s => s.eb || 'initial'))).sort()
   , [sites])
 
+  // Are any filters active?
+  const hasActiveFilters = activeIssue !== 'all' || typeFilters.size > 0 || countryFilters.size > 0 ||
+    periodFilters.size > 0 || editedByFilters.size > 0 || searchQuery !== '' || sourceFilter !== 'all'
+
+  const clearAllFilters = useCallback(() => {
+    setActiveIssue('all')
+    setTypeFilters(new Set())
+    setCountryFilters(new Set())
+    setPeriodFilters(new Set())
+    setEditedByFilters(new Set())
+    setSearchQuery('')
+    setSourceFilter('all')
+  }, [])
+
   // Filtered & sorted sites
   const filteredSites = useMemo(() => {
     let result = sites
+
+    // Source filter
+    if (sourceFilter !== 'all') result = result.filter(s => s.s === sourceFilter)
 
     // Issue filter
     if (activeIssue === 'no_period') result = result.filter(hasPeriodIssue)
@@ -149,11 +292,11 @@ export default function DbAuditPage() {
     else if (activeIssue === 'no_image') result = result.filter(hasImageIssue)
     else if (activeIssue === 'no_coords') result = result.filter(hasCoordsIssue)
 
-    // Dropdown filters
-    if (typeFilter !== 'all') result = result.filter(s => (s.t || '') === typeFilter)
-    if (countryFilter !== 'all') result = result.filter(s => (s.c || '') === countryFilter)
-    if (periodFilter !== 'all') result = result.filter(s => resolvePeriod(s.pn, s.p) === periodFilter)
-    if (editedByFilter !== 'all') result = result.filter(s => (s.eb || 'initial') === editedByFilter)
+    // Multi-select dropdown filters
+    if (typeFilters.size > 0) result = result.filter(s => typeFilters.has(s.t || ''))
+    if (countryFilters.size > 0) result = result.filter(s => countryFilters.has(s.c || ''))
+    if (periodFilters.size > 0) result = result.filter(s => periodFilters.has(resolvePeriod(s.pn, s.p)))
+    if (editedByFilters.size > 0) result = result.filter(s => editedByFilters.has(s.eb || 'initial'))
 
     // Search
     if (searchQuery) {
@@ -163,25 +306,35 @@ export default function DbAuditPage() {
 
     // Sort
     result = [...result].sort((a, b) => {
-      let av = '', bv = ''
+      let cmp = 0
       switch (sortColumn) {
-        case 'name': av = a.n; bv = b.n; break
-        case 'type': av = a.t || ''; bv = b.t || ''; break
-        case 'period': av = resolvePeriod(a.pn, a.p); bv = resolvePeriod(b.pn, b.p); break
-        case 'country': av = a.c || ''; bv = b.c || ''; break
+        case 'name': cmp = a.n.localeCompare(b.n); break
+        case 'type': cmp = (a.t || '').localeCompare(b.t || ''); break
+        case 'period': cmp = (PERIOD_ORDER[resolvePeriod(a.pn, a.p)] ?? 99) - (PERIOD_ORDER[resolvePeriod(b.pn, b.p)] ?? 99); break
+        case 'country': cmp = (a.c || '').localeCompare(b.c || ''); break
+        case 'edited_at': {
+          const ta = a.ea ? new Date(a.ea).getTime() : 0
+          const tb = b.ea ? new Date(b.ea).getTime() : 0
+          cmp = ta - tb
+          break
+        }
       }
-      const cmp = av.localeCompare(bv)
       return sortDir === 'asc' ? cmp : -cmp
     })
 
     return result
-  }, [sites, activeIssue, typeFilter, countryFilter, periodFilter, editedByFilter, searchQuery, sortColumn, sortDir])
+  }, [sites, sourceFilter, activeIssue, typeFilters, countryFilters, periodFilters, editedByFilters, searchQuery, sortColumn, sortDir])
+
+  // Reset pagination when filters change
+  useEffect(() => { setVisibleRows(ROWS_PER_PAGE) }, [filteredSites])
+
+  const displayedSites = useMemo(() => filteredSites.slice(0, visibleRows), [filteredSites, visibleRows])
+  const hasMore = visibleRows < filteredSites.length
 
   // Auth gate
   const requireAuth = useCallback((cb: () => void) => {
     if (isAuthenticated) { cb(); return }
     setShowPinModal(true)
-    // Store the callback intent — we'll call it after auth succeeds
     pendingAuthAction.current = cb
   }, [isAuthenticated])
 
@@ -262,9 +415,10 @@ export default function DbAuditPage() {
     })
 
     if (ok) {
+      const now = new Date().toISOString()
       setSites(prev => prev.map(s => {
         if (s.id !== site.id) return s
-        const updated = { ...s }
+        const updated = { ...s, ea: now }
         if (field === 'type') updated.t = editValue
         else if (field === 'period') updated.pn = editValue
         else updated.c = editValue
@@ -309,6 +463,7 @@ export default function DbAuditPage() {
     })
 
     if (ok) {
+      const now = new Date().toISOString()
       setSites(prev => prev.map(s => {
         if (s.id !== editModalSite.id) return s
         return {
@@ -319,9 +474,10 @@ export default function DbAuditPage() {
           lo: lon,
           t: modalForm.category || undefined,
           pn: modalForm.period,
-          c: s.c, // country not in modal
+          c: s.c,
           u: modalForm.sourceUrl || undefined,
           eb: 'audit',
+          ea: now,
         }
       }))
       setEditModalSite(null)
@@ -331,7 +487,7 @@ export default function DbAuditPage() {
   // Sort handler
   const handleSort = useCallback((col: SortColumn) => {
     if (sortColumn === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortColumn(col); setSortDir('asc') }
+    else { setSortColumn(col); setSortDir(col === 'edited_at' ? 'desc' : 'asc') }
   }, [sortColumn])
 
   const sortArrow = (col: SortColumn) =>
@@ -395,7 +551,20 @@ export default function DbAuditPage() {
           <span className="db-logo">ANCIENT NERDS</span>
           <span className="db-header-sep">&middot;</span>
           <span className="db-header-title">Database Audit</span>
-          <span className="db-header-db">({sourceDisplay})</span>
+          <div className="db-source-badge" style={sourceFilter !== 'all' ? {
+            borderColor: SOURCE_CONFIG[sourceFilter]?.color,
+            background: SOURCE_CONFIG[sourceFilter]?.color + '15',
+          } : undefined}>
+            <span className="db-source-dot" style={{
+              background: sourceFilter !== 'all' ? SOURCE_CONFIG[sourceFilter]?.color : 'var(--text-secondary)'
+            }} />
+            <select value={sourceFilter} onChange={e => setSourceFilter(e.target.value)}>
+              <option value="all">All Databases</option>
+              {Object.entries(SOURCE_CONFIG).map(([id, cfg]) => (
+                <option key={id} value={id}>{cfg.name}</option>
+              ))}
+            </select>
+          </div>
         </div>
         <div className="db-header-right">
           {isAuthenticated ? (
@@ -477,40 +646,37 @@ export default function DbAuditPage() {
 
       {/* Filters */}
       <div className="db-filters">
+        <MultiSelect
+          label="Type"
+          options={uniqueTypes}
+          selected={typeFilters}
+          onChange={setTypeFilters}
+          colorFn={v => getCategoryColor(v)}
+        />
+        <MultiSelect
+          label="Country"
+          options={uniqueCountries}
+          selected={countryFilters}
+          onChange={setCountryFilters}
+        />
+        <MultiSelect
+          label="Period"
+          options={uniquePeriods}
+          selected={periodFilters}
+          onChange={setPeriodFilters}
+          colorFn={v => getPeriodColor(v)}
+        />
+        <MultiSelect
+          label="Edited By"
+          options={uniqueEditedBy}
+          selected={editedByFilters}
+          onChange={setEditedByFilters}
+        />
         <div className="db-filter-group">
-          <label>Type:</label>
-          <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
-            <option value="all">All</option>
-            {uniqueTypes.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </div>
-        <div className="db-filter-group">
-          <label>Country:</label>
-          <select value={countryFilter} onChange={e => setCountryFilter(e.target.value)}>
-            <option value="all">All</option>
-            {uniqueCountries.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </div>
-        <div className="db-filter-group">
-          <label>Period:</label>
-          <select value={periodFilter} onChange={e => setPeriodFilter(e.target.value)}>
-            <option value="all">All</option>
-            {uniquePeriods.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
-        </div>
-        <div className="db-filter-group">
-          <label>Edited By:</label>
-          <select value={editedByFilter} onChange={e => setEditedByFilter(e.target.value)}>
-            <option value="all">All</option>
-            {uniqueEditedBy.map(e => <option key={e} value={e}>{e}</option>)}
-          </select>
-        </div>
-        <div className="db-filter-group">
-          <label>Search:</label>
           <div className="db-search-wrap">
             <input
               type="text"
-              placeholder="Filter by name..."
+              placeholder="Search by name..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
@@ -519,7 +685,14 @@ export default function DbAuditPage() {
             )}
           </div>
         </div>
-        <div className="db-filter-count">{filteredSites.length} sites</div>
+        <div className="db-filter-right">
+          {hasActiveFilters && (
+            <button className="db-clear-filters" onClick={clearAllFilters}>
+              Clear All
+            </button>
+          )}
+          <span className="db-filter-count">{filteredSites.length} sites</span>
+        </div>
       </div>
 
       {/* Table */}
@@ -536,11 +709,12 @@ export default function DbAuditPage() {
               <th className="db-th db-th-nosort">URL</th>
               <th className="db-th db-th-nosort">Img</th>
               <th className="db-th db-th-nosort">Edited</th>
+              <th className="db-th" onClick={() => handleSort('edited_at')}>Last Edited{sortArrow('edited_at')}</th>
               {isAuthenticated && <th className="db-th db-th-edit">Edit</th>}
             </tr>
           </thead>
           <tbody>
-            {filteredSites.map(site => {
+            {displayedSites.map(site => {
               const period = resolvePeriod(site.pn, site.p)
               const isEditingType = editingCell?.id === site.id && editingCell.field === 'type'
               const isEditingPeriod = editingCell?.id === site.id && editingCell.field === 'period'
@@ -549,12 +723,12 @@ export default function DbAuditPage() {
 
               return (
                 <tr key={site.id} className="db-row">
-                  {/* Name — clickable → popup */}
+                  {/* Name */}
                   <td className="db-td db-td-name" title={site.id} onClick={() => openPopup(site)}>
                     {site.n}
                   </td>
 
-                  {/* Coordinates — click to copy */}
+                  {/* Coordinates */}
                   <td className="db-td db-td-coords" onClick={() => copyCoords(site.la, site.lo, site.id)}>
                     {site.la.toFixed(4)}, {site.lo.toFixed(4)}
                     {copiedId === site.id && <span className="db-copied-toast">Copied!</span>}
@@ -602,7 +776,7 @@ export default function DbAuditPage() {
                         autoFocus
                       >
                         <option value="Unknown">Unknown</option>
-                        {PERIOD_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                        {SORTED_PERIODS.filter(p => p !== 'Unknown').map(p => <option key={p} value={p}>{p}</option>)}
                       </select>
                     ) : (
                       <span
@@ -614,7 +788,7 @@ export default function DbAuditPage() {
                     )}
                   </td>
 
-                  {/* Country cell — flag + text */}
+                  {/* Country cell */}
                   <td
                     className={`db-td db-td-country db-td-editable ${isEditingCountry ? 'editing' : ''}`}
                     onClick={() => !isEditingCountry && isAuthenticated && startInlineEdit(site, 'country')}
@@ -638,7 +812,7 @@ export default function DbAuditPage() {
                     )}
                   </td>
 
-                  {/* Description — truncated, click to expand */}
+                  {/* Description */}
                   <td className="db-td db-td-desc">
                     {site.d ? (
                       expandedRows.has(site.id) ? (
@@ -676,6 +850,11 @@ export default function DbAuditPage() {
                     {site.eb || 'initial'}
                   </td>
 
+                  {/* Last edited (timestamp) */}
+                  <td className="db-td db-td-timestamp" title={site.ea || ''}>
+                    {site.ea ? formatRelativeDate(site.ea) : <span className="db-muted">&mdash;</span>}
+                  </td>
+
                   {/* Edit button */}
                   {isAuthenticated && (
                     <td className="db-td db-td-edit">
@@ -689,17 +868,20 @@ export default function DbAuditPage() {
             })}
           </tbody>
         </table>
+        {hasMore && (
+          <div className="db-load-more">
+            <button onClick={() => setVisibleRows(v => v + ROWS_PER_PAGE)}>
+              Load more ({filteredSites.length - visibleRows} remaining)
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Footer */}
       <div className="db-footer">
-        Showing {filteredSites.length} of {sites.length} sites
-        {activeIssue !== 'all' && ` \u2014 filtered: ${activeIssue.replace(/_/g, ' ')}`}
-        {typeFilter !== 'all' && ` \u2014 type: ${typeFilter}`}
-        {countryFilter !== 'all' && ` \u2014 country: ${countryFilter}`}
-        {periodFilter !== 'all' && ` \u2014 period: ${periodFilter}`}
-        {editedByFilter !== 'all' && ` \u2014 edited by: ${editedByFilter}`}
-        {searchQuery && ` \u2014 search: "${searchQuery}"`}
+        Showing {displayedSites.length} of {filteredSites.length} sites
+        {filteredSites.length < sites.length && ` (${sites.length} total)`}
+        {sourceFilter !== 'all' && ` \u2014 source: ${SOURCE_CONFIG[sourceFilter]?.name}`}
       </div>
 
       {/* Site Popup Overlay */}
@@ -750,7 +932,7 @@ export default function DbAuditPage() {
               <div className="db-field">
                 <label>Period</label>
                 <select value={modalForm.period} onChange={e => setModalForm(f => ({ ...f, period: e.target.value }))}>
-                  {PERIOD_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                  {SORTED_PERIODS.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
               </div>
               <div className="db-field">

@@ -269,6 +269,9 @@ def _run_migrations(engine) -> None:
         conn.execute(text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS entities JSONB"))
         conn.execute(text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS tags JSONB"))
 
+        # Add updated_at column to unified_sites for edit tracking
+        conn.execute(text("ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP"))
+
         # Rename sources for branding
         conn.execute(text("""
             UPDATE source_meta SET name = 'ANCIENT NERDS Originals'
@@ -278,6 +281,11 @@ def _run_migrations(engine) -> None:
             UPDATE source_meta SET name = 'ANCIENT NERDS Radar',
                 category = 'Primary', priority = 1, is_primary = true
             WHERE id = 'lyra'
+        """))
+        conn.execute(text("""
+            UPDATE source_meta SET name = 'ANCIENT NERDS Community',
+                category = 'Primary', priority = 2, is_primary = true
+            WHERE id = 'ancient_nerds_community'
         """))
 
         # Deduplicate lyra contributions: merge rows with same lower(name)
@@ -881,6 +889,23 @@ def main() -> None:
     # Seed Lyra source for auto-discovered sites
     from pipeline.lyra.site_identifier import seed_lyra_source
     seed_lyra_source()
+
+    # Seed Community source for user contributions
+    from pipeline.database import get_session, SourceMeta
+    with get_session() as session:
+        if not session.get(SourceMeta, "ancient_nerds_community"):
+            session.add(SourceMeta(
+                id="ancient_nerds_community",
+                name="ANCIENT NERDS Community",
+                color="#22c55e",
+                category="Primary",
+                priority=2,
+                enabled=True,
+                enabled_by_default=False,
+                is_primary=True,
+                record_count=0,
+            ))
+            session.commit()
 
     # --once or --step: run and exit
     if args.once or args.step:

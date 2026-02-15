@@ -995,7 +995,7 @@ function FilterPanel({
             {/* Source Legend - Interactive */}
         {filterMode === 'source' && sources.length > 0 && (() => {
           // Split into primary (ancient_nerds + lyra) and secondary sources
-          const PRIMARY_IDS = new Set(['ancient_nerds', 'lyra'])
+          const PRIMARY_IDS = new Set(['ancient_nerds', 'lyra', 'ancient_nerds_community'])
           const primarySources = sources.filter(s => PRIMARY_IDS.has(s.id))
           const secondarySources = sources.filter(s => !PRIMARY_IDS.has(s.id))
 

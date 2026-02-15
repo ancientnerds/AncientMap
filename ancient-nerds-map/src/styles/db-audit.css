@@ -62,11 +62,36 @@
   color: var(--text-secondary);
 }
 
-.db-header-db {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  opacity: 0.7;
-  margin-left: 4px;
+.db-source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px 3px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  margin-left: 8px;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.db-source-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.db-source-badge select {
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-family: inherit;
+  cursor: pointer;
+  padding-right: 4px;
+}
+
+.db-source-badge select:focus {
+  outline: none;
 }
 
 .db-unlock-btn {
@@ -152,13 +177,13 @@
   letter-spacing: 1px;
 }
 
-/* Filters */
+/* ─── Filters bar ─────────────────────────────────────────────────────────── */
 .db-filters {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 16px 20px;
-  padding: 12px 24px;
+  gap: 8px 12px;
+  padding: 10px 24px;
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
 }
@@ -169,13 +194,6 @@
   gap: 8px;
 }
 
-.db-filter-group label {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
 .db-filter-group select,
 .db-filter-group input {
   background: var(--bg-card);
@@ -183,7 +201,7 @@
   color: var(--text-primary);
   padding: 6px 12px;
   border-radius: 6px;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-family: inherit;
   min-width: 160px;
 }
@@ -201,7 +219,19 @@
 }
 
 .db-search-wrap input {
-  padding-right: 28px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 6px 28px 6px 12px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-family: inherit;
+  min-width: 160px;
+}
+
+.db-search-wrap input:focus {
+  outline: none;
+  border-color: var(--primary-red);
 }
 
 .db-search-clear {
@@ -222,13 +252,184 @@
   color: var(--text-primary);
 }
 
-.db-filter-count {
+.db-filter-right {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.db-filter-count {
   font-size: 0.8rem;
   color: var(--text-secondary);
 }
 
-/* Table */
+.db-clear-filters {
+  background: transparent;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #ef4444;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.db-clear-filters:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: #ef4444;
+}
+
+/* ─── Multi-select dropdown ───────────────────────────────────────────────── */
+.db-multiselect {
+  position: relative;
+}
+
+.db-multiselect-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  white-space: nowrap;
+}
+
+.db-multiselect-trigger:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.db-multiselect-trigger.has-selection {
+  border-color: var(--primary-red);
+  background: rgba(192, 32, 35, 0.08);
+}
+
+.db-multiselect-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-secondary);
+}
+
+.db-multiselect-value {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.db-multiselect-arrow {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  margin-left: 2px;
+}
+
+.db-multiselect-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 200;
+  min-width: 220px;
+  max-height: 320px;
+  background: rgba(0, 15, 20, 0.97);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.db-multiselect-search {
+  margin: 8px 8px 0;
+  padding: 6px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-family: inherit;
+}
+
+.db-multiselect-search:focus {
+  outline: none;
+  border-color: var(--primary-red);
+}
+
+.db-multiselect-actions {
+  display: flex;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.db-multiselect-actions button {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.db-multiselect-actions button:hover {
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.db-multiselect-list {
+  overflow-y: auto;
+  padding: 4px 0;
+  max-height: 240px;
+}
+
+.db-multiselect-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  transition: background 0.1s;
+}
+
+.db-multiselect-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.db-multiselect-item input[type="checkbox"] {
+  accent-color: var(--primary-red);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.db-multiselect-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.db-multiselect-empty {
+  padding: 12px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+/* ─── Table ───────────────────────────────────────────────────────────────── */
 .db-table-wrap {
   flex: 1;
   overflow: auto;
@@ -331,6 +532,11 @@
 
 .db-missing {
   color: rgba(239, 68, 68, 0.6);
+}
+
+.db-muted {
+  color: var(--text-secondary);
+  opacity: 0.4;
 }
 
 /* Coordinates */
@@ -451,6 +657,13 @@
   color: #f59e0b;
 }
 
+/* Last edited (timestamp) column */
+.db-td-timestamp {
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+
 /* Badges */
 .db-badge {
   display: inline-block;
@@ -504,6 +717,30 @@
 .db-edit-btn:hover {
   border-color: var(--primary-red);
   color: var(--primary-red);
+}
+
+/* Load more button */
+.db-load-more {
+  text-align: center;
+  padding: 16px 0;
+}
+
+.db-load-more button {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  padding: 8px 24px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+
+.db-load-more button:hover {
+  border-color: var(--primary-red);
+  color: var(--text-primary);
+  background: rgba(192, 32, 35, 0.08);
 }
 
 /* Footer bar */
@@ -673,7 +910,7 @@
   .db-filters {
     flex-wrap: wrap;
     padding: 12px 16px;
-    gap: 12px;
+    gap: 8px;
   }
 
   .db-header {
@@ -686,5 +923,9 @@
 
   .db-td-name {
     max-width: 160px;
+  }
+
+  .db-multiselect-panel {
+    min-width: 180px;
   }
 }
