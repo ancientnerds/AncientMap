@@ -205,11 +205,53 @@ These fixes require **no research** — they are deterministic corrections based
 | Self-referencing `parent_site_id` *(skip if column not migrated)* | `WHERE parent_site_id = id` | Set `parent_site_id = NULL` |
 | Orphan parent references *(skip if column not migrated)* | `LEFT JOIN` where parent doesn't exist | Set `parent_site_id = NULL` |
 | Invalid `site_type` values | Value not in canonical list (see Valid Site Types) | Map via `normalize_site_type()` or flag |
+| Non-canonical `site_type` variants | Value differs from `normalize_site_type(site_type)` — catches case drift (`Rock ART` vs `Rock art`), separator drift (`rock_art` vs `Rock art`), synonym drift (`ruins` vs `ruin`, `mausoleum` vs `tomb`), plural drift (`Petroglyph` vs `Petroglyphs`) | Replace with `normalize_site_type(site_type)`. Detection query below. |
 | `name_normalized` drift | Compare against `normalize_name(name)` | Recompute `name_normalized` |
 | Same-source exact duplicates | `GROUP BY source_id, name_normalized HAVING COUNT(*) > 1` | Flag for merge — do NOT auto-delete |
 | Non-archaeological entries | `site_type IN ('museum', 'geological interest', 'wildlife sanctuary')` OR `name ILIKE '%museum%'` AND not a site-museum composite | Flag for review — museums, geological formations, pseudoarchaeology, and wildlife sanctuaries are not archaeological sites |
 
 > **Note:** `parent_site_id` exists in the SQLAlchemy model but has never been migrated to the actual DB table. Run `SELECT column_name FROM information_schema.columns WHERE table_name = 'unified_sites' AND column_name = 'parent_site_id';` to check before running parent-related queries. Skip parent checks if the column doesn't exist.
+
+**Detecting non-canonical `site_type` variants:**
+
+This is the most common data hygiene issue. The canonical forms are defined in `pipeline/normalizers/site_type.py` (CANONICAL_TYPES list) and must match `CATEGORY_COLORS` keys in `ancient-nerds-map/src/constants/colors.ts`. Variants slip in when data is ingested without normalization, manually edited, or backfilled from external sources.
+
+```sql
+-- Find all site_type values that differ from their normalized form.
+-- Run normalize_site_type() from Python against each distinct value.
+-- Any mismatch = non-canonical variant that needs fixing.
+SELECT site_type, COUNT(*) AS sites
+FROM unified_sites
+WHERE source_id IN ('ancient_nerds', 'ancient_nerds_radar')
+  AND site_type IS NOT NULL
+GROUP BY site_type
+ORDER BY site_type;
+```
+
+Then in Python, compare each value against `normalize_site_type()`:
+```python
+from pipeline.normalizers.site_type import normalize_site_type
+# For each distinct site_type from the query above:
+# if normalize_site_type(raw) != raw → it's non-canonical, needs UPDATE
+```
+
+Common variant classes to watch for:
+| Variant class | Example (wrong → right) | How it happens |
+|---------------|------------------------|----------------|
+| Case drift | `Rock ART` → `Rock art`, `TEMPLE` → `temple` | Manual edits, CSV imports |
+| Underscore/space | `rock_art` → `Rock art`, `standing_stone` → `Standing stone` | Legacy data, API responses |
+| Plural mismatch | `Petroglyph` → `Petroglyphs`, `ruins` → `ruin` | Source-specific naming |
+| Synonym | `mausoleum` → `tomb`, `hillfort` → `fort`, `thermae` → `bath` | Different naming conventions per source |
+| Title-case drift | `Monument` → `monument`, `Unknown` → `unknown` | Multiple case forms in CATEGORY_COLORS where lowercase is canonical |
+
+The bulk fix is a single UPDATE per variant:
+```sql
+-- Example: Fix all underscore variants
+UPDATE unified_sites SET site_type = 'Rock art'
+WHERE site_type = 'rock_art' AND source_id IN ('ancient_nerds', 'ancient_nerds_radar');
+```
+
+The orchestrator auto-migration (`pipeline/lyra/orchestrator.py`) already runs `normalize_site_type()` across all rows on every startup. But the audit should verify no new variants crept in since last deploy.
 
 For each mechanical fix, log with `action = 'fix'`, `confidence = 'high'`, `evidence_source = 'internal_consistency'`.
 
@@ -468,13 +510,27 @@ If the VPS DB is not synced and someone re-runs the static exporter on VPS, it w
 
 ## Valid Site Types
 
-Canonical output values from `normalize_site_type()` (`pipeline/normalizers/site_type.py:99`):
+Canonical site types are defined in **two places that must stay in sync**:
 
-Archaeological Site, Ruin, Tomb, Megalithic, Fortification, Temple, Settlement,
-Amphitheatre, Theatre, Stadium, Infrastructure, Rock Art, Volcanic Event,
-Earthquake, Tsunami, Impact Crater, Shipwreck, Port, Inscription, Monument, Unknown
+| Source of truth | File | What it defines |
+|----------------|------|-----------------|
+| Python normalizer | `pipeline/normalizers/site_type.py` — `CANONICAL_TYPES` list | All valid DB values + synonym mappings |
+| Frontend colors | `ancient-nerds-map/src/constants/colors.ts` — `CATEGORY_COLORS` keys | All valid display values + colors |
 
-The DB may also contain composite types from raw source data (e.g., "city/town/settlement", "fortress/citadel", "necropolis/tombs complex"). These are valid — the frontend handles display. But verify the underlying classification is accurate.
+**Do NOT hardcode a type list in this document.** Always reference the canonical sources above. If you add a type to one, add it to the other.
+
+The canonical types include both simple forms (`city`, `temple`, `cave`) and compound forms from structured sources (`City/town/settlement`, `Fortress/citadel`, `Necropolis/tombs complex`, `Cave Structures, Rock art`). Both are valid — the frontend groups them via `CATEGORY_GROUPS`.
+
+**Normalization rules** (`normalize_site_type()` in `pipeline/normalizers/site_type.py`):
+1. Case-insensitive + underscore/space-insensitive lookup against CANONICAL_TYPES
+2. First match wins — lowercase forms (`monument`) take priority over title-case (`Monument`)
+3. Synonym resolution — `ruins` → `ruin`, `mausoleum` → `tomb`, `hillfort` → `fort`, etc.
+4. Unknown input → pass-through as-is (no guessing, no title-casing)
+
+**Frontend normalization** (`normalizeSiteType()` in `ancient-nerds-map/src/constants/colors.ts`):
+- Mirrors the Python normalizer at the data load layer
+- Ensures any variant that slips past the backend still displays correctly
+- Applied in `src/data/sites.ts` when mapping API data to UI models
 
 ---
 
@@ -487,6 +543,7 @@ Used in Step 2 to order the work queue.
 | P1 | `period_start > 1500` + ancient type — likely Wikidata false positives | `WHERE period_start > 1500 AND site_type IN ('Temple','Megalithic','Tomb','Settlement','Fortification','Amphitheatre','Theatre','Stadium','Infrastructure','Rock Art')` |
 | P2 | `period_start IS NULL` — dots have no color on globe | `WHERE period_start IS NULL` |
 | P3 | `site_type IS NULL OR site_type = 'Unknown'` — can't be filtered | `WHERE site_type IS NULL OR site_type = 'Unknown'` |
+| P3.5 | Non-canonical `site_type` variants — causes duplicate badges and broken filtering | Compare each distinct `site_type` against `normalize_site_type()` output. Any mismatch is a variant that needs fixing. See Phase A detection query. |
 | P4 | `country IS NULL` — can't be filtered by region | `WHERE country IS NULL` |
 | P5 | `period_name` inconsistent or non-canonical | Two sub-queries: **(a)** `WHERE period_start IS NOT NULL AND period_name IS NOT NULL AND period_name != CASE WHEN period_start < -4500 THEN '< 4500 BC' WHEN period_start < -3000 THEN '4500 - 3000 BC' WHEN period_start < -1500 THEN '3000 - 1500 BC' WHEN period_start < -500 THEN '1500 - 500 BC' WHEN period_start < 1 THEN '500 BC - 1 AD' WHEN period_start < 500 THEN '1 - 500 AD' WHEN period_start < 1000 THEN '500 - 1000 AD' WHEN period_start < 1500 THEN '1000 - 1500 AD' ELSE '1500+ AD' END` **(b)** Non-canonical labels or orphan period_name: `WHERE period_name IS NOT NULL AND period_name NOT IN ('< 4500 BC','4500 - 3000 BC','3000 - 1500 BC','1500 - 500 BC','500 BC - 1 AD','1 - 500 AD','500 - 1000 AD','1000 - 1500 AD','1500+ AD')` |
 | P6 | Duplicate candidates — same `name_normalized` across sources, or <1km apart | `SELECT name_normalized, COUNT(*) FROM unified_sites GROUP BY name_normalized HAVING COUNT(*) > 1` |
@@ -510,6 +567,8 @@ These are explicit "do NOT" rules. Violating any of these was the problem with t
 10. **Do NOT skip the raw_data cross-reference.** The `raw_data` JSONB column contains original source data. If a backfill changed a value, compare against raw_data to determine if the change was an improvement or corruption.
 11. **Do NOT trust `raw_period` when `raw_year` exists.** The `raw_data->>'period'` field is a pre-computed bucket label from the original source. It is frequently WRONG — especially when the raw_year uses formats the source's own parser couldn't handle (e.g., millennium patterns). Always parse `raw_year` first; only fall back to `raw_period` when `raw_year` is NULL.
 12. **Do NOT modify sites from sources outside the audit scope.** A `source <id>` or `full` audit of `ancient_nerds` must NEVER touch sites from `lyra`, `pleiades`, `wikidata`, etc. Always include `AND source_id = '<target>'` in every UPDATE and INSERT statement. Forgetting this filter can corrupt curated academic data.
+13. **Do NOT write raw strings for `site_type` — always run through `normalize_site_type()`.** Every ingestion path (connectors, API PUT, manual SQL) must normalize before writing. If you find non-canonical variants in the DB (`rock_art` instead of `Rock art`, `Monument` instead of `monument`), fix them AND find which ingestion path skipped normalization. Fixing the data without fixing the source is fighting symptoms — the variants will return on the next import.
+14. **Do NOT add a site type to one canonical source without the other.** `CANONICAL_TYPES` in `pipeline/normalizers/site_type.py` and `CATEGORY_COLORS` in `ancient-nerds-map/src/constants/colors.ts` must stay in sync. A type that exists in the DB but not in `CATEGORY_COLORS` will render with the default gray color. A type in `CATEGORY_COLORS` but not in `CANONICAL_TYPES` won't be normalized and can drift into variants.
 
 ---
 
@@ -527,6 +586,7 @@ The audit targets **100% coverage** for all fields. The audit passes when all co
 | No orphan parent references *(skip if column not migrated)* | 0 |
 | No same-source duplicates | 0 |
 | All `site_type` values in valid list | 100% |
+| All `site_type` values in canonical form (no case/underscore/synonym variants) | 0 non-canonical |
 | P1 critical findings remaining | 0 |
 
 "100%" means every site is either **fixed**, **verified correct**, or **flagged MANUAL** in the audit log. No site should be left unaccounted for in the audited scope.
@@ -575,7 +635,7 @@ Normalization functions — audit values must be consistent with their output.
 | Function | File | Line |
 |----------|------|------|
 | `categorize_period(year)` | `pipeline/utils/text.py` | 219 |
-| `normalize_site_type(type)` | `pipeline/normalizers/site_type.py` | 99 |
+| `normalize_site_type(type)` | `pipeline/normalizers/site_type.py` | 120 |
 | `normalize_name(name)` | `pipeline/utils/text.py` | 7 |
 | `normalize_country(country)` | `pipeline/utils/country_lookup.py` | 532 |
 | `lookup_country(lat, lon)` | `pipeline/utils/country_lookup.py` | 271 |
