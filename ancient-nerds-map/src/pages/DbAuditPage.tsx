@@ -59,6 +59,7 @@ interface SnapshotEntry {
   date: string
   file: string
   sites: number
+  by_source?: Record<string, number>
 }
 
 interface FieldChange { from: string; to: string }
@@ -241,9 +242,13 @@ export default function DbAuditPage() {
   // Source filter
   const [sourceFilter, setSourceFilter] = useState('all')
 
-  // Version snapshots
+  // Version snapshots (per-source)
   const [snapshots, setSnapshots] = useState<SnapshotEntry[]>([])
-  const [selectedVersion, setSelectedVersion] = useState('latest')
+  const [sourceVersions, setSourceVersions] = useState<Record<string, string>>({
+    ancient_nerds: 'latest', lyra: 'latest', ancient_nerds_community: 'latest',
+  })
+  const [activePins, setActivePins] = useState<Record<string, string | null>>({})
+  const [pinLoading, setPinLoading] = useState<string | null>(null)
 
   // DB Snapshots (from API)
   const [dbSnapshots, setDbSnapshots] = useState<{ id: string; created_at: string; description: string; row_count: number }[]>([])
@@ -271,7 +276,7 @@ export default function DbAuditPage() {
   const [diffAddedExpanded, setDiffAddedExpanded] = useState(false)
   const [diffRemovedExpanded, setDiffRemovedExpanded] = useState(false)
 
-  // Fetch snapshot manifest on mount
+  // Fetch snapshot manifest + active pins on mount
   useEffect(() => {
     (async () => {
       try {
@@ -281,7 +286,20 @@ export default function DbAuditPage() {
           setSnapshots(data.snapshots || [])
         }
       } catch {
-        // Snapshots are optional — if endpoint is unavailable, just show "Latest"
+        // Snapshots are optional
+      }
+      try {
+        const res = await fetch(`${config.api.baseUrl}/snapshots/pins?${CACHE_BUSTER}`)
+        if (res.ok) {
+          const data = await res.json()
+          const pins: Record<string, string | null> = {}
+          for (const [sid, info] of Object.entries(data.pins || {})) {
+            pins[sid] = (info as { snapshot_date: string }).snapshot_date
+          }
+          setActivePins(pins)
+        }
+      } catch {
+        // Pins are optional
       }
     })()
   }, [])
@@ -299,53 +317,78 @@ export default function DbAuditPage() {
 
   useEffect(() => { refreshDbSnapshots() }, [refreshDbSnapshots])
 
-  // Fetch sites (live or from snapshot)
+  // Fetch sites (per-source: live or from snapshot)
   useEffect(() => {
     (async () => {
       setLoading(true)
       setError('')
       try {
-        let data: { sites?: AuditSite[] }
-        if (selectedVersion === 'latest') {
-          const res = await fetch(`${config.api.baseUrl}/sites/all?source=ancient_nerds&source=lyra&source=ancient_nerds_community&limit=100000&${CACHE_BUSTER}`)
-          if (!res.ok) throw new Error(`HTTP ${res.status}`)
-          data = await res.json()
-        } else {
-          const res = await fetch(`${config.api.baseUrl}/snapshots/${selectedVersion}.json`)
-          if (!res.ok) throw new Error(`HTTP ${res.status}`)
-          data = await res.json()
+        const allSites: AuditSite[] = []
+
+        // Group sources by their selected version to avoid duplicate snapshot fetches
+        const byVersion: Record<string, string[]> = {}
+        for (const [sid, ver] of Object.entries(sourceVersions)) {
+          if (!byVersion[ver]) byVersion[ver] = []
+          byVersion[ver].push(sid)
         }
-        setSites(data.sites || [])
+
+        for (const [ver, sources] of Object.entries(byVersion)) {
+          if (ver === 'latest') {
+            // Fetch live from API
+            const params = sources.map(s => `source=${s}`).join('&')
+            const res = await fetch(`${config.api.baseUrl}/sites/all?${params}&limit=100000&${CACHE_BUSTER}`)
+            if (!res.ok) throw new Error(`HTTP ${res.status}`)
+            const data = await res.json()
+            allSites.push(...(data.sites || []))
+          } else {
+            // Fetch from snapshot, filter by source
+            const res = await fetch(`${config.api.baseUrl}/snapshots/${ver}.json`)
+            if (!res.ok) throw new Error(`HTTP ${res.status}`)
+            const data = await res.json()
+            const snapSites = (data.sites || []) as AuditSite[]
+            const sourceSet = new Set(sources)
+            allSites.push(...snapSites.filter(s => sourceSet.has(s.s)))
+          }
+        }
+
+        setSites(allSites)
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : 'Failed to load sites')
       } finally {
         setLoading(false)
       }
     })()
-  }, [selectedVersion])
+  }, [sourceVersions])
 
-  // Poll for live updates every 30s when viewing latest
+  // Poll for live updates every 30s (only sources set to 'latest')
   useEffect(() => {
-    if (selectedVersion !== 'latest') return
+    const liveSources = Object.entries(sourceVersions)
+      .filter(([, ver]) => ver === 'latest')
+      .map(([sid]) => sid)
+    if (liveSources.length === 0) return
+
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`${config.api.baseUrl}/sites/all?source=ancient_nerds&source=lyra&source=ancient_nerds_community&limit=100000&${CACHE_BUSTER}`)
+        const params = liveSources.map(s => `source=${s}`).join('&')
+        const res = await fetch(`${config.api.baseUrl}/sites/all?${params}&limit=100000&${CACHE_BUSTER}`)
         if (!res.ok) return
         const data = await res.json()
-        const newSites: AuditSite[] = data.sites || []
-        // Update if count changed or latest edit timestamp differs
-        if (newSites.length !== sites.length) {
-          setSites(newSites)
-        } else {
+        const freshLive: AuditSite[] = data.sites || []
+        // Replace only live-source sites, keep snapshot-sourced sites intact
+        const liveSet = new Set(liveSources)
+        setSites(prev => {
+          const snapshotSites = prev.filter(s => !liveSet.has(s.s))
+          const merged = [...snapshotSites, ...freshLive]
+          // Check if anything actually changed
+          if (merged.length !== prev.length) return merged
           const maxEa = (arr: AuditSite[]) => arr.reduce((max, s) => s.ea && s.ea > max ? s.ea : max, '')
-          if (maxEa(newSites) !== maxEa(sites)) {
-            setSites(newSites)
-          }
-        }
+          if (maxEa(freshLive) !== maxEa(prev.filter(s => liveSet.has(s.s)))) return merged
+          return prev
+        })
       } catch { /* silent — next poll will retry */ }
     }, 30_000)
     return () => clearInterval(interval)
-  }, [selectedVersion, sites])
+  }, [sourceVersions])
 
   // Compute stats (respect source filter)
   const stats = useMemo(() => {
@@ -631,20 +674,39 @@ export default function DbAuditPage() {
   // Discard all pending edits — reload from server
   const discardAllEdits = useCallback(() => {
     setPendingEdits(new Map())
-    // Re-fetch to reset optimistic updates
-    setSelectedVersion(v => v === 'latest' ? 'latest' : v)
-    // Force re-fetch
-    setLoading(true)
-    ;(async () => {
-      try {
-        const res = await fetch(`${config.api.baseUrl}/sites/all?source=ancient_nerds&source=lyra&source=ancient_nerds_community&limit=100000&${CACHE_BUSTER}`)
-        if (res.ok) {
-          const data = await res.json()
-          setSites(data.sites || [])
-        }
-      } finally { setLoading(false) }
-    })()
+    // Force re-fetch by toggling sourceVersions identity
+    setSourceVersions(v => ({ ...v }))
   }, [])
+
+  // Pin/unpin a source to a snapshot version
+  const handleSetPin = useCallback(async (sourceId: string, snapDate: string | null) => {
+    if (!adminPin) return
+    const action = snapDate ? `Pin ${sourceId} to ${snapDate}?` : `Unpin ${sourceId} to live?`
+    if (!confirm(`${action}\n\nThis affects the public globe — all visitors will see this version.`)) return
+    setPinLoading(sourceId)
+    try {
+      const res = await fetch(`${config.api.baseUrl}/snapshots/pins/${sourceId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': adminPin },
+        body: JSON.stringify({ snapshot_date: snapDate }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.detail || `HTTP ${res.status}`)
+      }
+      // Update local pins state
+      setActivePins(prev => {
+        const next = { ...prev }
+        if (snapDate) next[sourceId] = snapDate
+        else delete next[sourceId]
+        return next
+      })
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Pin failed')
+    } finally {
+      setPinLoading(null)
+    }
+  }, [adminPin])
 
   // Commit all pending edits via batch-update
   const commitAllEdits = useCallback(async () => {
@@ -873,31 +935,6 @@ export default function DbAuditPage() {
               ))}
             </select>
           </div>
-          {snapshots.length > 0 && (
-            <div className="db-version-badge" style={selectedVersion !== 'latest' ? {
-              borderColor: '#22d3ee',
-              background: 'rgba(34, 211, 238, 0.08)',
-            } : undefined}>
-              <span className="db-version-dot" style={{
-                background: selectedVersion !== 'latest' ? '#22d3ee' : 'var(--text-secondary)'
-              }} />
-              <select value={selectedVersion} onChange={e => setSelectedVersion(e.target.value)}>
-                <option value="latest">Latest (live)</option>
-                {snapshots.map(s => {
-                  // date can be "2026-02-15" or "2026-02-15_193000"
-                  const parts = s.date.split('_')
-                  const d = new Date(parts[0] + 'T' + (parts[1] ? `${parts[1].slice(0,2)}:${parts[1].slice(2,4)}:${parts[1].slice(4,6)}Z` : '00:00:00Z'))
-                  const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                    + (parts[1] ? ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '')
-                  return (
-                    <option key={s.date} value={s.date}>
-                      {label} ({s.sites.toLocaleString()} sites)
-                    </option>
-                  )
-                })}
-              </select>
-            </div>
-          )}
           {snapshots.length >= 2 && (
             <button className="db-compare-btn" onClick={openDiffModal}>Compare</button>
           )}
@@ -917,6 +954,84 @@ export default function DbAuditPage() {
           )}
         </div>
       </div>
+
+      {/* Per-source version selectors */}
+      {snapshots.length > 0 && (
+        <div className="db-version-selectors">
+          <span className="db-version-selectors-label">Versions</span>
+          {Object.entries(SOURCE_CONFIG).map(([sid, cfg]) => {
+            const ver = sourceVersions[sid] || 'latest'
+            const pin = activePins[sid]
+            const isPinned = pin != null
+            const isPinnedToThis = isPinned && pin === ver
+            const isViewingPinned = isPinned && ver === pin
+
+            return (
+              <div
+                key={sid}
+                className="db-version-selector"
+                style={{ borderColor: cfg.color + '55' }}
+              >
+                <span
+                  className="db-source-abbr-badge"
+                  style={{ background: cfg.color + '25', color: cfg.color }}
+                >
+                  {cfg.abbr}
+                </span>
+                <select
+                  value={ver}
+                  onChange={e => setSourceVersions(prev => ({ ...prev, [sid]: e.target.value }))}
+                >
+                  <option value="latest">Latest (live)</option>
+                  {snapshots.map(s => {
+                    const parts = s.date.split('_')
+                    const d = new Date(parts[0] + 'T' + (parts[1] ? `${parts[1].slice(0,2)}:${parts[1].slice(2,4)}:${parts[1].slice(4,6)}Z` : '00:00:00Z'))
+                    const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                      + (parts[1] ? ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '')
+                    const count = s.by_source?.[sid]
+                    return (
+                      <option key={s.date} value={s.date}>
+                        {label} ({count != null ? count.toLocaleString() : '?'})
+                      </option>
+                    )
+                  })}
+                </select>
+                {isPinned && isViewingPinned && (
+                  <span className="db-pin-indicator">PUBLIC</span>
+                )}
+                {isAuthenticated && ver !== 'latest' && (
+                  isPinnedToThis ? (
+                    <button
+                      className="db-pin-btn db-pin-btn-active"
+                      onClick={() => handleSetPin(sid, null)}
+                      disabled={pinLoading === sid}
+                    >
+                      {pinLoading === sid ? '...' : 'Unpin'}
+                    </button>
+                  ) : (
+                    <button
+                      className="db-pin-btn"
+                      onClick={() => handleSetPin(sid, ver)}
+                      disabled={pinLoading === sid}
+                    >
+                      {pinLoading === sid ? '...' : 'Set as Public'}
+                    </button>
+                  )
+                )}
+                {isAuthenticated && ver === 'latest' && isPinned && (
+                  <button
+                    className="db-pin-btn db-pin-btn-active"
+                    onClick={() => handleSetPin(sid, null)}
+                    disabled={pinLoading === sid}
+                  >
+                    {pinLoading === sid ? '...' : 'Unpin'}
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* Stats */}
       <div className="db-stats">

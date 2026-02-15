@@ -898,6 +898,24 @@ class SnapshotRow(Base):
 
 
 # =============================================================================
+# Source Version Pins (Per-Source Snapshot Pinning for Public Globe)
+# =============================================================================
+
+
+class SourceVersionPin(Base):
+    """Pin a specific snapshot version as the publicly served data for a source."""
+    __tablename__ = "source_version_pins"
+
+    source_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    snapshot_date: Mapped[str | None] = mapped_column(String(30), nullable=True)  # null = serve live DB
+    pinned_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    pinned_by: Mapped[str] = mapped_column(String(50), nullable=False)
+
+    def __repr__(self) -> str:
+        return f"<SourceVersionPin {self.source_id} → {self.snapshot_date}>"
+
+
+# =============================================================================
 # Helper Functions
 # =============================================================================
 

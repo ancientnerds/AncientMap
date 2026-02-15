@@ -1660,6 +1660,107 @@
   font-size: 0.9rem;
 }
 
+/* Per-source version selectors */
+.db-version-selectors {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 24px;
+  background: rgba(0, 10, 15, 0.6);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.db-version-selectors-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+.db-version-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 0.78rem;
+}
+
+.db-version-selector select {
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  cursor: pointer;
+  outline: none;
+  max-width: 200px;
+}
+
+.db-version-selector select option {
+  background: var(--bg-dark);
+  color: var(--text-primary);
+}
+
+.db-source-abbr-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.db-pin-indicator {
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.db-pin-btn {
+  font-size: 0.68rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.db-pin-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  border-color: var(--text-tertiary);
+}
+
+.db-pin-btn-active {
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+  border-color: rgba(34, 197, 94, 0.4);
+}
+
+.db-pin-btn-active:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.db-pin-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 /* Mobile */
 @media (max-width: 768px) {
   .db-stats {
@@ -1722,5 +1823,20 @@
 
   .db-snapshots-panel {
     margin: 0 8px 12px;
+  }
+
+  .db-version-selectors {
+    flex-wrap: wrap;
+    padding: 6px 12px;
+    gap: 6px;
+  }
+
+  .db-version-selector {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .db-version-selector select {
+    max-width: 140px;
   }
 }

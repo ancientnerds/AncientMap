@@ -210,6 +210,28 @@ def _update_static_json(site_id: str, site_update: 'SiteUpdateRequest'):
 
 
 
+def _load_pinned_sites(
+    source_id: str,
+    snap_date: str,
+    site_type: str | None = None,
+    period_max: int | None = None,
+) -> list[dict]:
+    """Load sites for a pinned source from a snapshot JSON file."""
+    from api.routes.snapshots import SNAPSHOTS_DIR
+    path = SNAPSHOTS_DIR / f"{snap_date}.json"
+    if not path.exists():
+        logger.warning(f"Pinned snapshot not found: {snap_date}")
+        return []
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    sites = [s for s in data.get("sites", []) if s.get("s") == source_id]
+    if site_type:
+        sites = [s for s in sites if s.get("t") == site_type]
+    if period_max is not None:
+        sites = [s for s in sites if s.get("p") is None or s["p"] <= period_max]
+    return sites
+
+
 @router.get("/all")
 async def get_all_sites(
     db: Session = Depends(get_db),
@@ -225,119 +247,132 @@ async def get_all_sites(
     Returns minimal data for fast transfer:
     - id, name, lat, lon, source_id, site_type, period_start
 
+    Respects version pins: if a source is pinned to a snapshot, data for that
+    source comes from the snapshot file instead of the live database.
+
     Falls back to static JSON if database is empty.
     """
-    # Build cache key from parameters
-    source_key = ",".join(sorted(source)) if source else "all"
-    cache_key = f"sites:all:{source_key}:{site_type or 'all'}:{period_max or 'all'}:{skip}:{limit}"
+    # Check active pins
+    from api.routes.snapshots import get_active_pins
+    pins = get_active_pins(db)
+
+    # Determine which requested sources are pinned vs live
+    requested_sources = set(source) if source else {"ancient_nerds", "lyra", "ancient_nerds_community"}
+    pinned_sources = {sid: pins[sid] for sid in requested_sources if sid in pins and pins[sid] is not None}
+    live_sources = [sid for sid in requested_sources if sid not in pinned_sources]
+
+    # Include pin fingerprint in cache key so pinned vs unpinned don't collide
+    pin_fp = ",".join(f"{k}={v}" for k, v in sorted(pinned_sources.items())) if pinned_sources else "none"
+    source_key = ",".join(sorted(requested_sources))
+    cache_key = f"sites:all:{source_key}:{site_type or 'all'}:{period_max or 'all'}:{skip}:{limit}:pin={pin_fp}"
 
     # Try cache first (30 min TTL)
     cached = cache_get(cache_key)
     if cached:
         return cached
 
-    # Try database first
-    try:
-        # Build query with filters
-        conditions = []
-        params: dict[str, object] = {"limit": limit, "skip": skip}
+    all_sites: list[dict] = []
 
-        if source:
-            conditions.append("source_id = ANY(:sources)")
-            params["sources"] = source
+    # Load pinned sources from snapshot files
+    for sid, snap_date in pinned_sources.items():
+        all_sites.extend(_load_pinned_sites(sid, snap_date, site_type, period_max))
 
-        if site_type:
-            conditions.append("site_type = :site_type")
-            params["site_type"] = site_type
+    # Load live sources from database
+    if live_sources:
+        try:
+            conditions = ["source_id = ANY(:sources)"]
+            params: dict[str, object] = {"limit": limit, "skip": skip, "sources": live_sources}
 
-        if period_max is not None:
-            conditions.append("(period_start IS NULL OR period_start <= :period_max)")
-            params["period_max"] = period_max
+            if site_type:
+                conditions.append("site_type = :site_type")
+                params["site_type"] = site_type
 
-        where_clause = " AND ".join(conditions) if conditions else "1=1"
+            if period_max is not None:
+                conditions.append("(period_start IS NULL OR period_start <= :period_max)")
+                params["period_max"] = period_max
 
-        query = text(f"""
-            SELECT
-                id::text,
-                name,
-                lat,
-                lon,
-                source_id,
-                site_type,
-                period_start,
-                period_name,
-                description,
-                thumbnail_url,
-                country,
-                source_url,
-                edited_by,
-                updated_at
-            FROM unified_sites
-            WHERE {where_clause}
-            OFFSET :skip
-            LIMIT :limit
-        """)
+            where_clause = " AND ".join(conditions)
 
-        result = db.execute(query, params)
+            query = text(f"""
+                SELECT
+                    id::text,
+                    name,
+                    lat,
+                    lon,
+                    source_id,
+                    site_type,
+                    period_start,
+                    period_name,
+                    description,
+                    thumbnail_url,
+                    country,
+                    source_url,
+                    edited_by,
+                    updated_at
+                FROM unified_sites
+                WHERE {where_clause}
+                OFFSET :skip
+                LIMIT :limit
+            """)
 
-        # Return as compact array of arrays for minimal JSON size
-        sites = []
-        images_found = 0
-        for row in result:
-            site = {
-                "id": row.id,
-                "n": row.name,  # Short keys for smaller JSON
-                "la": row.lat,
-                "lo": row.lon,
-                "s": row.source_id,
-                "t": row.site_type,
-                "p": row.period_start,
-            }
-            # Only include optional fields if present (saves bandwidth)
-            if row.period_name:
-                site["pn"] = row.period_name
-            if row.description:
-                site["d"] = row.description
-            if row.thumbnail_url:
-                site["i"] = row.thumbnail_url
-                images_found += 1
-            if row.country:
-                site["c"] = row.country
-            if row.source_url:
-                site["u"] = row.source_url
-            if row.edited_by and row.edited_by != "initial":
-                site["eb"] = row.edited_by
-            if row.updated_at:
-                site["ea"] = row.updated_at.isoformat()
-            sites.append(site)
+            result = db.execute(query, params)
 
-        if sites:
-            response = {
-                "count": len(sites),
-                "sites": sites,
-                "dataSource": "postgres",
-            }
-            # Cache for 30 minutes
-            cache_set(cache_key, response, ttl=1800)
-            return response
+            for row in result:
+                site = {
+                    "id": row.id,
+                    "n": row.name,
+                    "la": row.lat,
+                    "lo": row.lon,
+                    "s": row.source_id,
+                    "t": row.site_type,
+                    "p": row.period_start,
+                }
+                if row.period_name:
+                    site["pn"] = row.period_name
+                if row.description:
+                    site["d"] = row.description
+                if row.thumbnail_url:
+                    site["i"] = row.thumbnail_url
+                if row.country:
+                    site["c"] = row.country
+                if row.source_url:
+                    site["u"] = row.source_url
+                if row.edited_by and row.edited_by != "initial":
+                    site["eb"] = row.edited_by
+                if row.updated_at:
+                    site["ea"] = row.updated_at.isoformat()
+                all_sites.append(site)
+        except Exception as e:
+            logger.warning(f"Database query failed for live sources: {e}")
+            # Fall back to static JSON for live sources
+            static_sites = _load_static_sites()
+            if static_sites:
+                filtered = _filter_static_sites(static_sites, live_sources, site_type, period_max, skip, limit)
+                all_sites.extend(_convert_static_site(s) for s in filtered)
 
-        logger.info("Database returned no sites, falling back to static JSON")
-    except Exception as e:
-        logger.warning(f"Database query failed, falling back to static files: {e}")
-
-    # Fall back to static JSON
-    static_sites = _load_static_sites()
-    if static_sites:
-        filtered = _filter_static_sites(static_sites, source, site_type, period_max, skip, limit)
-        converted = [_convert_static_site(s) for s in filtered]
-        logger.info(f"Returning {len(converted)} sites from static JSON")
-        return {
-            "count": len(converted),
-            "sites": converted,
-            "dataSource": "json",
+    if all_sites:
+        response = {
+            "count": len(all_sites),
+            "sites": all_sites,
+            "dataSource": "postgres" if live_sources else "snapshot",
         }
+        cache_set(cache_key, response, ttl=1800)
+        return response
 
-    # No data available
+    # If no live sources were requested (all pinned) and no pinned sites found,
+    # or if DB was empty — try static JSON as final fallback
+    if not pinned_sources:
+        static_sites = _load_static_sites()
+        if static_sites:
+            filtered = _filter_static_sites(static_sites, source, site_type, period_max, skip, limit)
+            converted = [_convert_static_site(s) for s in filtered]
+            logger.info(f"Returning {len(converted)} sites from static JSON")
+            return {
+                "count": len(converted),
+                "sites": converted,
+                "dataSource": "json",
+            }
+
     return {
         "count": 0,
         "sites": [],
