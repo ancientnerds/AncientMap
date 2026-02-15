@@ -631,6 +631,43 @@ async def search_sites(
     return {"count": len(sites), "sites": sites}
 
 
+# =============================================================================
+# Snapshot Endpoints (must be above /{site_id} catch-all to avoid shadowing)
+# =============================================================================
+
+
+@router.get("/snapshots")
+async def get_snapshots(
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """List recent database snapshots."""
+    from api.services.snapshots import list_snapshots
+    return {"snapshots": list_snapshots(db, limit)}
+
+
+@router.post("/snapshots/{snapshot_id}/restore")
+async def restore_snapshot_endpoint(
+    snapshot_id: str,
+    authorization: str | None = Header(None),
+    x_admin_pin: str | None = Header(None, alias="X-Admin-Pin"),
+    db: Session = Depends(get_db),
+):
+    """Restore all rows from a snapshot."""
+    from api.services.snapshots import restore_snapshot
+
+    _verify_admin(authorization, x_admin_pin)
+
+    count = restore_snapshot(db, snapshot_id)
+    if count == 0:
+        raise HTTPException(status_code=404, detail="Snapshot not found or empty")
+
+    global _static_sites_cache
+    _static_sites_cache = None
+
+    return {"restored": count, "snapshot_id": snapshot_id}
+
+
 @router.get("/{site_id}/alternates")
 async def get_site_alternates(
     site_id: str,
@@ -1171,40 +1208,3 @@ async def batch_upload_sites(
         "updated": updated,
         "errors": errors,
     }
-
-
-# =============================================================================
-# Snapshot Endpoints
-# =============================================================================
-
-
-@router.get("/snapshots")
-async def get_snapshots(
-    limit: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db),
-):
-    """List recent database snapshots."""
-    from api.services.snapshots import list_snapshots
-    return {"snapshots": list_snapshots(db, limit)}
-
-
-@router.post("/snapshots/{snapshot_id}/restore")
-async def restore_snapshot_endpoint(
-    snapshot_id: str,
-    authorization: str | None = Header(None),
-    x_admin_pin: str | None = Header(None, alias="X-Admin-Pin"),
-    db: Session = Depends(get_db),
-):
-    """Restore all rows from a snapshot."""
-    from api.services.snapshots import restore_snapshot
-
-    _verify_admin(authorization, x_admin_pin)
-
-    count = restore_snapshot(db, snapshot_id)
-    if count == 0:
-        raise HTTPException(status_code=404, detail="Snapshot not found or empty")
-
-    global _static_sites_cache
-    _static_sites_cache = None
-
-    return {"restored": count, "snapshot_id": snapshot_id}
