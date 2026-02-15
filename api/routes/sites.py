@@ -258,7 +258,7 @@ async def get_all_sites(
 
     # Determine which requested sources are pinned vs live
     requested_sources = set(source) if source else {"ancient_nerds", "lyra", "ancient_nerds_community"}
-    pinned_sources = {sid: pins[sid] for sid in requested_sources if sid in pins and pins[sid] is not None}
+    pinned_sources: dict[str, str] = {sid: pins[sid] for sid in requested_sources if sid in pins and pins[sid] is not None}  # type: ignore[misc]
     live_sources = [sid for sid in requested_sources if sid not in pinned_sources]
 
     # Include pin fingerprint in cache key so pinned vs unpinned don't collide
