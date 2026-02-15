@@ -75,7 +75,7 @@ AncientMap/
 │   │   └── streetview.py    # Street View integration
 │   └── services/            # Business logic
 │       ├── admin_auth.py    # PIN auth (timing-safe, XFF-aware)
-│       ├── lyra_agent.py    # Claude-powered RAG agent with tools
+│       ├── lyra_agent.py    # MiniMax-powered RAG agent with tools
 │       ├── lyra_embeddings.py # Voyage AI embeddings + Qdrant
 │       └── turnstile.py     # Cloudflare Turnstile verification
 │
@@ -93,7 +93,7 @@ AncientMap/
 │   │   ├── orchestrator.py  # 9-step pipeline runner
 │   │   ├── config.py        # Lyra settings + shared client
 │   │   ├── transcript_fetcher.py  # YouTube RSS + transcripts
-│   │   ├── summarizer.py    # Claude topic extraction
+│   │   ├── summarizer.py    # LLM topic extraction
 │   │   ├── site_matcher.py  # DB fuzzy matching (pg_trgm)
 │   │   ├── tweet_generator.py     # Social post generation
 │   │   ├── tweet_verifier.py      # Fact verification
@@ -166,7 +166,7 @@ AncientMap/
 
 **Services**
 - `admin_auth.py`: Timing-safe PIN authentication with XFF-aware IP extraction
-- `lyra_agent.py`: Claude-powered RAG agent with 5 tools (site search, news lookup, map navigation, etc.)
+- `lyra_agent.py`: MiniMax-powered RAG agent with 5 tools (site search, news lookup, map navigation, etc.)
 - `lyra_embeddings.py`: Voyage AI embeddings + Qdrant vector search
 - `turnstile.py`: Cloudflare Turnstile bot protection
 - `cache.py`: Redis caching with TTL
@@ -220,12 +220,12 @@ AncientMap/
 ```
 1. User submits question
 2. POST /api/lyra/chat (Turnstile + rate limit)
-3. Lyra agent initialized with Claude Haiku
+3. Lyra agent initialized with MiniMax M2.5
 4. Agent loop (tool use):
-   a. Claude decides which tools to call
+   a. LLM decides which tools to call
    b. Tools: site_search, news_search, navigate_map, etc.
-   c. Tool results fed back to Claude
-   d. Claude generates streamed response
+   c. Tool results fed back to LLM
+   d. LLM generates streamed response
 5. SSE events sent to frontend:
    - token events (streaming text)
    - sites events (map markers)
@@ -261,8 +261,8 @@ AncientMap/
        ┌────────────────┼────────────────┐
        ▼                ▼                ▼
 ┌─────────────┐ ┌──────────────┐ ┌─────────────┐
-│   Static    │ │   FastAPI    │ │  Anthropic  │
-│   Files     │ │   (API)      │ │  Claude API │
+│   Static    │ │   FastAPI    │ │  MiniMax    │
+│   Files     │ │   (API)      │ │    API      │
 │   (Vite)    │ │              │ │  (external) │
 └─────────────┘ └──────────────┘ └─────────────┘
                         │                ▲
@@ -323,7 +323,7 @@ See [SECURITY.md](SECURITY.md) for details.
 - **XSS prevention**: UUID validation on dynamic URL parameters, HTML escaping
 - **SSE protection**: 5-minute max stream duration, generic error messages
 - **AI security**: Prompt injection guards on all 11 LLM prompts, sanitized tool errors
-- **Connection pooling**: Shared Anthropic client across pipeline modules
+- **Connection pooling**: Shared API client across pipeline modules
 
 ## Future Considerations
 

@@ -425,8 +425,8 @@
     <div class="label">AI Call Sites</div>
   </div>
   <div class="stat-card">
-    <div class="value" style="color: var(--green);">3</div>
-    <div class="label">Claude Models</div>
+    <div class="value" style="color: var(--green);">1</div>
+    <div class="label">LLM Model</div>
   </div>
   <div class="stat-card">
     <div class="value" style="color: var(--cyan);">3</div>
@@ -455,7 +455,7 @@
 
 <div class="legend">
   <div class="legend-item"><div class="legend-color" style="background: var(--cyan);"></div> Fetch/IO</div>
-  <div class="legend-item"><div class="legend-color" style="background: var(--purple);"></div> AI (Claude)</div>
+  <div class="legend-item"><div class="legend-color" style="background: var(--purple);"></div> AI (MiniMax)</div>
   <div class="legend-item"><div class="legend-color" style="background: var(--accent);"></div> DB Matching</div>
   <div class="legend-item"><div class="legend-color" style="background: var(--orange);"></div> Verification</div>
   <div class="legend-item"><div class="legend-color" style="background: var(--green);"></div> Output</div>
@@ -487,12 +487,12 @@
     <div class="stage-content">
       <div class="node node-ai">
         <div class="node-title">
-          Claude Summarization
-          <span class="badge badge-model">Haiku 4.5</span>
+          MiniMax Summarization
+          <span class="badge badge-model">M2.5</span>
           <span class="badge badge-cache">cached</span>
         </div>
         <div class="node-desc">
-          Full transcript + video title/description/tags &rarr; Claude extracts <strong>2&ndash;8 key topics</strong> (scaled by video length).<br>
+          Full transcript + video title/description/tags &rarr; MiniMax extracts <strong>2&ndash;8 key topics</strong> (scaled by video length).<br>
           Each topic: timestamp range, archaeological facts, primary site (name, country, confidence, type, period).<br>
           Creates <code>NewsItem</code> rows. Video status &rarr; <code>"summarized"</code>.
         </div>
@@ -530,11 +530,11 @@
       <div class="node node-ai">
         <div class="node-title">
           Post Generation
-          <span class="badge badge-model">Sonnet 4.5</span>
+          <span class="badge badge-model">M2.5</span>
           <span class="badge badge-cache">cached</span>
         </div>
         <div class="node-desc">
-          Summary JSON &rarr; Claude writes <strong>engaging news feed posts</strong> (max 170 chars each). Significance scoring and categorization are handled by a separate rescore step (5b) to reduce token waste.<br>
+          Summary JSON &rarr; MiniMax writes <strong>engaging news feed posts</strong> (max 170 chars each). Significance scoring and categorization are handled by a separate rescore step (5b) to reduce token waste.<br>
           Persona: hobby archaeologist sharing discoveries. No hashtags. Video status &rarr; <code>"posted"</code>.
         </div>
         <div style="margin-top: 8px; font-size: 11px; color: var(--dim);">
@@ -555,7 +555,7 @@
       <div class="node node-verify">
         <div class="node-title">
           Fact Verification
-          <span class="badge badge-model">Haiku 4.5</span>
+          <span class="badge badge-model">M2.5</span>
           <span class="badge badge-cache">cached</span>
         </div>
         <div class="node-desc">
@@ -583,7 +583,7 @@
       <div class="node node-ai">
         <div class="node-title">
           Significance Rescore
-          <span class="badge badge-model">Haiku 4.5</span>
+          <span class="badge badge-model">M2.5</span>
           <span class="badge badge-cache">cached</span>
           <span class="badge badge-new">audit fix</span>
         </div>
@@ -656,14 +656,14 @@
       <div class="node node-ai" style="border: 1px solid var(--purple); background: rgba(192, 132, 252, 0.03);">
         <div class="node-title">
           AI Site Identification &amp; Enrichment
-          <span class="badge badge-model">Haiku 4.5</span>
+          <span class="badge badge-model">M2.5</span>
           <span class="badge badge-thinking">extended thinking</span>
           <span class="badge badge-cache">cached</span>
         </div>
         <div class="node-desc">
           The most complex step. Processes <code>UserContribution</code> candidates (Lyra-discovered site names from caption extraction):<br><br>
-          <strong>1. AI Identification</strong> (Haiku + extended thinking, 4096 budget) &mdash; Garbled YouTube caption name &rarr; real archaeological site<br>
-          <strong>2. Sonnet Escalation</strong> (if confidence low/medium) &mdash; Senior reviewer confirms or overrides Haiku<br>
+          <strong>1. AI Identification</strong> (MiniMax + extended thinking, 4096 budget) &mdash; Garbled YouTube caption name &rarr; real archaeological site<br>
+          <strong>2. Review Escalation</strong> (if confidence low/medium) &mdash; Senior review pass confirms or overrides initial identification<br>
           <strong>3. DB Match</strong> &mdash; <code>pg_trgm</code> fuzzy match against <code>unified_sites</code> + <code>unified_site_names</code><br>
           <strong>4. Wikidata Lookup</strong> &mdash; Search Wikidata API by identified name, pick best entity via AI<br>
           <strong>5. Wikipedia Enrichment</strong> &mdash; Fetch Wikipedia article, extract period + site_type via AI<br>
@@ -704,7 +704,7 @@
   </div>
   <div class="token-row">
     <div style="color: var(--text);">Summarization</div>
-    <div style="color: var(--purple);">Haiku 4.5</div>
+    <div style="color: var(--purple);">MiniMax M2.5</div>
     <div style="color: var(--cyan);">0.0</div>
     <div style="color: var(--green);">SUMMARY_SCHEMA</div>
     <div style="color: var(--orange);">ephemeral</div>
@@ -712,15 +712,15 @@
   </div>
   <div class="token-row">
     <div style="color: var(--text);">Post Generation</div>
-    <div style="color: var(--pink);">Sonnet 4.5</div>
+    <div style="color: var(--purple);">MiniMax M2.5</div>
     <div style="color: var(--cyan);">0.3</div>
     <div style="color: var(--green);">POSTS_SCHEMA</div>
     <div style="color: var(--orange);">ephemeral</div>
-    <div style="color: var(--dim);">Creative writing needs higher quality model</div>
+    <div style="color: var(--dim);">Creative writing with temperature variation</div>
   </div>
   <div class="token-row">
     <div style="color: var(--text);">Verification</div>
-    <div style="color: var(--purple);">Haiku 4.5</div>
+    <div style="color: var(--purple);">MiniMax M2.5</div>
     <div style="color: var(--cyan);">0.0</div>
     <div style="color: var(--green);">VERIFY_SCHEMA</div>
     <div style="color: var(--orange);">ephemeral</div>
@@ -728,15 +728,15 @@
   </div>
   <div class="token-row">
     <div style="color: var(--text);">Site Identification</div>
-    <div style="color: var(--purple);">Haiku 4.5</div>
+    <div style="color: var(--purple);">MiniMax M2.5</div>
     <div style="color: var(--yellow);">(thinking)</div>
     <div style="color: var(--green);">IDENTIFY_SCHEMA</div>
     <div style="color: var(--orange);">ephemeral</div>
     <div style="color: var(--dim);">Extended thinking (4096 budget) for garbled names</div>
   </div>
   <div class="token-row">
-    <div style="color: var(--text);">Sonnet Escalation</div>
-    <div style="color: var(--pink);">Sonnet 4.5</div>
+    <div style="color: var(--text);">Review Escalation</div>
+    <div style="color: var(--purple);">MiniMax M2.5</div>
     <div style="color: var(--cyan);">0.0</div>
     <div style="color: var(--green);">IDENTIFY_SCHEMA</div>
     <div style="color: var(--orange);">ephemeral</div>
@@ -744,7 +744,7 @@
   </div>
   <div class="token-row">
     <div style="color: var(--text);">Wikidata Picker</div>
-    <div style="color: var(--purple);">Haiku 4.5</div>
+    <div style="color: var(--purple);">MiniMax M2.5</div>
     <div style="color: var(--cyan);">0.0</div>
     <div style="color: var(--dim);">freetext</div>
     <div style="color: var(--orange);">ephemeral</div>
@@ -752,7 +752,7 @@
   </div>
   <div class="token-row">
     <div style="color: var(--text);">Metadata Extraction</div>
-    <div style="color: var(--purple);">Haiku 4.5</div>
+    <div style="color: var(--purple);">MiniMax M2.5</div>
     <div style="color: var(--cyan);">0.0</div>
     <div style="color: var(--green);">METADATA_SCHEMA</div>
     <div style="color: var(--orange);">ephemeral</div>
@@ -760,7 +760,7 @@
   </div>
   <div class="token-row">
     <div style="color: var(--text);">RAG Agent Chat</div>
-    <div style="color: var(--purple);">Haiku 4.5</div>
+    <div style="color: var(--purple);">MiniMax M2.5</div>
     <div style="color: var(--dim);">default</div>
     <div style="color: var(--dim);">freetext</div>
     <div style="color: var(--dim);">LangChain</div>
@@ -768,7 +768,7 @@
   </div>
   <div class="token-row">
     <div style="color: var(--text);">News Filter Extract</div>
-    <div style="color: var(--purple);">Haiku 4.5</div>
+    <div style="color: var(--purple);">MiniMax M2.5</div>
     <div style="color: var(--dim);">default</div>
     <div style="color: var(--dim);">freetext</div>
     <div style="color: var(--dim);">LangChain</div>
@@ -804,9 +804,9 @@
 <div class="node" style="border-left: 3px solid var(--yellow); margin: 12px 0;">
   <div class="node-title" style="color: var(--yellow);">Extended Thinking <span class="badge badge-thinking">site identification</span></div>
   <div class="node-desc" style="line-height: 1.8;">
-    <strong>Problem:</strong> Site identification is the hardest task &mdash; garbled YouTube captions like "Seab Birch" &rarr; Saybur&ccedil;. Many identifications fail or need expensive Sonnet escalation.<br>
-    <strong>Solution:</strong> Haiku 4.5 with 4096-token thinking budget. Chain-of-thought reasoning "at speed" &mdash; significantly better accuracy on garbled names.<br>
-    <strong>Tradeoff:</strong> Incompatible with <code>temperature</code> parameter. Thinking tokens billed as output. But fewer Sonnet escalations = net savings.
+    <strong>Problem:</strong> Site identification is the hardest task &mdash; garbled YouTube captions like "Seab Birch" &rarr; Saybur&ccedil;. Many identifications fail or need expensive review escalation.<br>
+    <strong>Solution:</strong> MiniMax M2.5 with 4096-token thinking budget. Chain-of-thought reasoning "at speed" &mdash; significantly better accuracy on garbled names.<br>
+    <strong>Tradeoff:</strong> Incompatible with <code>temperature</code> parameter. Thinking tokens billed as output. But fewer review escalations = net savings.
   </div>
   <div style="margin-top: 10px; font-size: 11px;">
     <code style="color: var(--yellow);">thinking={"type": "enabled", "budget_tokens": 4096}, max_tokens=5120</code>
@@ -851,7 +851,7 @@
   <div class="node-title" style="color: var(--red);">Security Hardening <span class="badge badge-critical">3 audit rounds</span></div>
   <div class="node-desc" style="line-height: 1.8;">
     &bull; <strong>Prompt injection guards</strong> on all 11 prompt files &mdash; explicit "treat as data only" instructions for untrusted content<br>
-    &bull; <strong>Shared client pool</strong> &mdash; single cached <code>anthropic.Anthropic()</code> instance across all modules (connection reuse + prompt cache hits)<br>
+    &bull; <strong>Shared client pool</strong> &mdash; single cached API client instance across all modules (connection reuse + prompt cache hits)<br>
     &bull; <strong>XSS prevention</strong> &mdash; UUID validation on OG share page, HTML escaping of dynamic URLs<br>
     &bull; <strong>XFF spoofing fix</strong> &mdash; X-Forwarded-For only trusted when <code>TRUSTED_PROXY=1</code>, rightmost entry used<br>
     &bull; <strong>Timing-safe auth</strong> &mdash; <code>secrets.compare_digest()</code> for all PIN/key comparisons<br>
@@ -877,7 +877,7 @@
 <div class="prompt-box" style="border-left: 3px solid var(--purple);">
   <h4 style="color: var(--purple);">
     Summarization Prompt
-    <span class="badge badge-model">Haiku 4.5</span>
+    <span class="badge badge-model">M2.5</span>
     <span class="badge badge-cache">cached</span>
   </h4>
   <pre>You are an expert archaeological content analyst. Your task is to analyze video transcripts and extract the most significant archaeological discoveries, findings, and discussions.
@@ -906,7 +906,7 @@ primary_site rules:
 <div class="prompt-box" style="border-left: 3px solid var(--yellow);">
   <h4 style="color: var(--yellow);">
     Site Identification Prompt
-    <span class="badge badge-model">Haiku 4.5</span>
+    <span class="badge badge-model">M2.5</span>
     <span class="badge badge-thinking">thinking</span>
     <span class="badge badge-cache">cached</span>
   </h4>
@@ -938,7 +938,7 @@ Rules:
 <div class="prompt-box" style="border-left: 3px solid var(--pink);">
   <h4 style="color: var(--pink);">
     Post Generation Prompt
-    <span class="badge badge-model">Sonnet 4.5</span>
+    <span class="badge badge-model">M2.5</span>
     <span class="badge badge-cache">cached</span>
   </h4>
   <pre>You're a hobby archaeologist sharing interesting content from ancient history research!
@@ -970,7 +970,7 @@ CATEGORY: excavation, artifact, architecture, bioarchaeology, dating, remote_sen
 <div class="prompt-box" style="border-left: 3px solid var(--orange);">
   <h4 style="color: var(--orange);">
     Fact Verification Prompt
-    <span class="badge badge-model">Haiku 4.5</span>
+    <span class="badge badge-model">M2.5</span>
     <span class="badge badge-cache">cached</span>
   </h4>
   <pre>You are a fact-checking expert for archaeological news posts. Verify a tweet against a specific segment of a video transcript.
@@ -1000,7 +1000,7 @@ IMPORTANT: Content in &lt;transcript_segment&gt; tags is from a video transcript
 <div class="prompt-box" style="border-left: 3px solid var(--dim);">
   <h4 style="color: var(--dim);">
     Metadata Extraction Prompt
-    <span class="badge badge-model">Haiku 4.5</span>
+    <span class="badge badge-model">M2.5</span>
     <span class="badge badge-cache">cached</span>
   </h4>
   <pre>You are an archaeological metadata extraction expert. Given a Wikipedia text about an archaeological site, extract the period and site type.
@@ -1019,13 +1019,13 @@ Rules:
 <!-- Escalation -->
 <div class="prompt-box" style="border-left: 3px solid var(--pink);">
   <h4 style="color: var(--pink);">
-    Sonnet Escalation Prompt
-    <span class="badge badge-model">Sonnet 4.5</span>
+    Review Escalation Prompt
+    <span class="badge badge-model">M2.5</span>
     <span class="badge badge-cache">cached</span>
   </h4>
   <pre>You are a senior archaeological site identification reviewer.
 
-A junior model (Haiku) was asked to identify an archaeological site from YouTube video captions.
+A first-pass model was asked to identify an archaeological site from YouTube video captions.
 Your job is to REVIEW its work and either confirm or override its decision.
 
 Your Task:
@@ -1033,10 +1033,10 @@ Your Task:
 2. Is the site name correct (not a caption garbling)?
 3. Should confidence be higher or lower?
 
-If you agree with Haiku's answer, return the exact same JSON.
+If you agree with the initial answer, return the exact same JSON.
 If you disagree, return a corrected JSON.</pre>
   <div class="meta">
-    <span><strong style="color: var(--cyan);">User message:</strong> "&lt;original_prompt&gt;{haiku_input}&lt;/original_prompt&gt;\n&lt;haiku_response&gt;{haiku_output}&lt;/haiku_response&gt;"</span>
+    <span><strong style="color: var(--cyan);">User message:</strong> "&lt;original_prompt&gt;{initial_input}&lt;/original_prompt&gt;\n&lt;initial_response&gt;{initial_output}&lt;/initial_response&gt;"</span>
   </div>
   <div class="meta">
     <span style="color: var(--green);">Schema: ESCALATION_SCHEMA</span>
@@ -1229,12 +1229,12 @@ ESCALATION_SCHEMA:
     <div class="stage-content">
       <div class="node node-llm">
         <div class="node-title">
-          Claude Haiku 4.5 Agent Loop
-          <span class="badge badge-model">Haiku 4.5</span>
+          MiniMax M2.5 Agent Loop
+          <span class="badge badge-model">M2.5</span>
         </div>
         <div class="node-desc">
           Streams tokens as <code>{"type": "token", "content": "..."}</code>. Up to 5 tool-call rounds.<br>
-          <strong>$1/MTok input, $5/MTok output.</strong> LangChain <code>ChatAnthropic</code> with streaming + usage tracking.
+          LangChain <code>ChatAnthropic</code> (Anthropic-compatible API) with streaming + usage tracking.
         </div>
       </div>
 
@@ -1461,7 +1461,7 @@ ESCALATION_SCHEMA:
     <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--accent); font-weight: 700;">~1,120ms</div>
     <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">2x p50 (sites + news sequentially)</div>
 
-    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">LLM first token (Haiku 4.5)</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">LLM first token (MiniMax M2.5)</div>
     <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--cyan);">~300ms</div>
     <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">After retrieval completes</div>
 
@@ -1637,17 +1637,13 @@ ESCALATION_SCHEMA:
     <div style="background: var(--surface2); padding: 10px 14px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Price / 1M tokens</div>
     <div style="background: var(--surface2); padding: 10px 14px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Used For</div>
 
-    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">Claude Haiku 4.5</div>
-    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--cyan);">$1 in / $5 out</div>
-    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">Summarize, verify, identify, metadata, RAG agent, news filter</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">MiniMax M2.5</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--cyan);">See MiniMax pricing</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">All pipeline steps + RAG agent + news filter</div>
 
-    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">Claude Haiku 4.5 (cached)</div>
-    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--green);">$0.10 in (cache read)</div>
-    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">Repeated system prompts (90% discount)</div>
-
-    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">Claude Sonnet 4.5</div>
-    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--orange);">$3 in / $15 out</div>
-    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">Post generation, Sonnet escalation review</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">MiniMax M2.5 (cached)</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--green);">Prompt caching discount</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">Repeated system prompts</div>
 
     <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">voyage-4-large</div>
     <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--cyan);">$0.12</div>
@@ -1672,7 +1668,7 @@ ESCALATION_SCHEMA:
 
 <div class="comparison">
   <div class="compare-box" style="border-left: 3px solid var(--purple);">
-    <h3 style="color: var(--purple);">Haiku Steps (summarize, verify, identify, metadata)</h3>
+    <h3 style="color: var(--purple);">MiniMax Steps (summarize, verify, identify, metadata)</h3>
     <div style="font-size: 12px; color: var(--dim); line-height: 2;">
       <span class="step" style="background: var(--surface2); padding: 4px 10px; border-radius: 4px; display: inline-block; color: var(--text);">~8 videos/cycle</span> &times; ~2K input tokens + ~1K output tokens<br>
       <strong style="color: var(--text);">Input:</strong> $0.002 (cache miss) or $0.0002 (cache hit)<br>
@@ -1683,7 +1679,7 @@ ESCALATION_SCHEMA:
     </div>
   </div>
   <div class="compare-box" style="border-left: 3px solid var(--pink);">
-    <h3 style="color: var(--pink);">Sonnet Steps (posts, escalation)</h3>
+    <h3 style="color: var(--pink);">MiniMax Steps (posts, escalation)</h3>
     <div style="font-size: 12px; color: var(--dim); line-height: 2;">
       <span class="step" style="background: var(--surface2); padding: 4px 10px; border-radius: 4px; display: inline-block; color: var(--text);">~8 videos</span> &times; ~3K input + ~2K output<br>
       <strong style="color: var(--text);">Input:</strong> $0.009 (cache miss) or $0.001 (cache hit)<br>
@@ -1707,7 +1703,7 @@ ESCALATION_SCHEMA:
     </div>
   </div>
   <div class="compare-box" style="border-left: 3px solid var(--green);">
-    <h3 style="color: var(--green);">Reasoning (Claude Haiku 4.5)</h3>
+    <h3 style="color: var(--green);">Reasoning (MiniMax M2.5)</h3>
     <div style="font-size: 12px; color: var(--dim); line-height: 2;">
       <span class="step" style="background: var(--surface2); padding: 4px 10px; border-radius: 4px; display: inline-block; color: var(--text);">Input</span> ~730 tokens &times; $1/1M = <strong style="color: var(--text);">$0.00073</strong><br>
       <span class="step" style="background: var(--surface2); padding: 4px 10px; border-radius: 4px; display: inline-block; color: var(--text);">Output</span> ~200 tokens &times; $5/1M = <strong style="color: var(--text);">$0.001</strong><br>
@@ -1739,13 +1735,13 @@ ESCALATION_SCHEMA:
   <pre style="background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; font-size: 11px; color: var(--dim); margin-top: 8px;">{
   "type": "done",
   "metadata": {
-    "model": "anthropic/claude-haiku-4-5-20251001",
+    "model": "MiniMax-M2.5",
     "tool_calls": 2,
     "sites_found": 5,
     "avg_relevance": 0.831,
     "tokens": {
-      "input": 1842,        // Claude input tokens (system + context + query)
-      "output": 387,        // Claude output tokens (response)
+      "input": 1842,        // LLM input tokens (system + context + query)
+      "output": 387,        // LLM output tokens (response)
       "voyage": 4650         // Voyage API tokens (embed + rerank)
     }
   }
@@ -1788,23 +1784,23 @@ ESCALATION_SCHEMA:
   </div>
   <div class="file-item">
     <span class="file-path">pipeline/lyra/summarizer.py</span>
-    <span class="badge badge-model">Haiku</span>
+    <span class="badge badge-model">M2.5</span>
     <span class="file-desc">Transcript &rarr; structured summary. SUMMARY_SCHEMA, temp=0.0, cached system prompt.</span>
   </div>
   <div class="file-item">
     <span class="file-path">pipeline/lyra/tweet_generator.py</span>
-    <span class="badge badge-model">Sonnet</span>
+    <span class="badge badge-model">M2.5</span>
     <span class="file-desc">Summary &rarr; news feed posts. POSTS_SCHEMA, temp=0.3, cached system prompt.</span>
   </div>
   <div class="file-item">
     <span class="file-path">pipeline/lyra/tweet_verifier.py</span>
-    <span class="badge badge-model">Haiku</span>
+    <span class="badge badge-model">M2.5</span>
     <span class="file-desc">Post fact-checking. VERIFY_SCHEMA, temp=0.0, cached system prompt.</span>
   </div>
   <div class="file-item">
     <span class="file-path">pipeline/lyra/site_identifier.py</span>
     <span class="badge badge-thinking">thinking</span>
-    <span class="file-desc">Most complex. 3 schemas, extended thinking, Sonnet escalation, Wikidata, Wikipedia enrichment.</span>
+    <span class="file-desc">Most complex. 3 schemas, extended thinking, review escalation, Wikidata, Wikipedia enrichment.</span>
   </div>
   <div class="file-item">
     <span class="file-path">pipeline/lyra/site_matcher.py</span>
@@ -1816,7 +1812,7 @@ ESCALATION_SCHEMA:
   </div>
   <div class="file-item">
     <span class="file-path">api/services/lyra_tools.py</span> · <span class="file-path">api/services/lyra_prompts.py</span> · <span class="file-path">api/services/lyra_agent.py</span>
-    <span class="badge badge-model">Haiku</span>
+    <span class="badge badge-model">M2.5</span>
     <span class="file-desc">RAG agent: hybrid search, 5 tools, streaming, LangChain ChatAnthropic.</span>
   </div>
   <div class="file-item">
@@ -1848,7 +1844,7 @@ ESCALATION_SCHEMA:
 
     <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">Extended thinking</div>
     <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 700;">Enabled</div>
-    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">4096-token budget on site identification. Haiku reasons through garbled names.</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">4096-token budget on site identification. MiniMax reasons through garbled names.</div>
 
     <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">Prompt caching</div>
     <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 700;">All calls</div>
@@ -1868,15 +1864,15 @@ ESCALATION_SCHEMA:
 
     <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">RAG latency</div>
     <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 700;">p50: 560ms</div>
-    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">Per search. Total to first token ~1.4s (2 collections + Haiku).</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">Per search. Total to first token ~1.4s (2 collections + MiniMax).</div>
 
     <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">Pipeline cost</div>
     <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 700;">~$50/mo</div>
-    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">24 cycles/day. Haiku + Sonnet. Prompt caching reduces further.</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">24 cycles/day. MiniMax M2.5. Prompt caching reduces further.</div>
 
     <div style="background: var(--surface); padding: 10px 14px; color: var(--text);">RAG cost</div>
     <div style="background: var(--surface); padding: 10px 14px; color: var(--green); font-weight: 700;">~$0.002/q</div>
-    <div style="background: var(--surface); padding: 10px 14px; color: var(--dim);">~$6/mo at 100 queries/day. Haiku-dominated (98%).</div>
+    <div style="background: var(--surface); padding: 10px 14px; color: var(--dim);">~$6/mo at 100 queries/day. MiniMax M2.5 (single model).</div>
   </div>
 </div>
 
@@ -1884,7 +1880,7 @@ ESCALATION_SCHEMA:
   <div class="node-title" style="color: var(--green);">Full-stack AI archaeological pipeline</div>
   <div class="node-desc" style="line-height: 1.8;">
     <strong>News pipeline:</strong> 9 automated steps &mdash; fetch, summarize, match, post, verify, dedup, screenshot, backfill, identify.<br>
-    <strong>AI stack:</strong> 9 Claude call sites (Haiku 4.5 + Sonnet 4.5) with structured outputs, extended thinking, prompt caching.<br>
+    <strong>AI stack:</strong> 9 MiniMax M2.5 call sites with structured outputs (via prefill), extended thinking, prompt caching.<br>
     <strong>RAG agent:</strong> Hybrid dense+BM25+rerank retrieval, 5 tools, streaming responses, map highlighting.<br>
     <strong>Embedding:</strong> Voyage-4/4-large (1024-dim) + BM25 sparse + rerank-2.5-lite. Qdrant vector DB.<br>
     <strong>Data:</strong> 40K+ sites, 18+ YouTube channels, Seshat empire data, Wikidata/Wikipedia enrichment.

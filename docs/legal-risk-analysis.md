@@ -10,7 +10,7 @@
 1. [Executive Summary](#1-executive-summary)
 2. [YouTube Terms of Service & Transcript Scraping](#2-youtube-terms-of-service--transcript-scraping)
 3. [AI-Generated Content Copyright](#3-ai-generated-content-copyright)
-4. [Anthropic Commercial Use & Indemnification](#4-anthropic-commercial-use--indemnification)
+4. [MiniMax M2.5 Commercial Use & Data Sovereignty](#4-minimax-m25-commercial-use--data-sovereignty)
 5. [Derivative Works & Fair Use](#5-derivative-works--fair-use)
 6. [Wikipedia & Wikidata Licensing](#6-wikipedia--wikidata-licensing)
 7. [YouTube Creator Rights](#7-youtube-creator-rights)
@@ -31,7 +31,7 @@ This analysis identifies **ten distinct legal risk areas** for the AncientMap Ly
 
 **Lowest risks:**
 - Wikidata (CC0, no restrictions)
-- Anthropic API commercial use (explicitly permitted with indemnification)
+- MiniMax API commercial use (permitted, but weaker protections than Anthropic)
 - Voyage AI embedding (technical processing, minimal legal surface)
 
 ---
@@ -120,49 +120,87 @@ This is more of a **business risk** (inability to protect own content) than a **
 
 ---
 
-## 4. Anthropic Commercial Use & Indemnification
+## 4. MiniMax M2.5 Commercial Use & Data Sovereignty
 
-### 4.1 Commercial Terms of Service
+> **Migration note (Feb 2026):** The Lyra pipeline migrated from Anthropic Claude (Haiku/Sonnet) to MiniMax M2.5 via the Anthropic-compatible API at `api.minimax.io`. The Anthropic SDK is still used as the client library. This section replaces the previous Anthropic analysis; see CHANGELOG.md for historical context.
 
-Anthropic's Commercial Terms (effective January 1, 2024) provide:
+### 4.1 Company Background
 
-**Output Ownership:** "As between the customer and Anthropic, customers own the outputs." Anthropic does not claim ownership of prompts or outputs. Commercial use is explicitly permitted.
+| Detail | Information |
+|--------|-------------|
+| **Company** | MiniMax (founded Dec 2021, Shanghai, China) |
+| **International entity** | Nanonoble Pte. Ltd. (Singapore, est. 2024) |
+| **IPO** | Hong Kong Stock Exchange, Jan 2026, raised HK$4.8B (~$620M) |
+| **Key investors** | Alibaba, Tencent, MiHoYo, Hillhouse, Abu Dhabi Investment Authority |
+| **US Entity List** | Added in 2025 as part of export controls targeting Chinese AI companies |
+| **Active litigation** | Disney, Warner Bros., Universal, and 8 other studios sued MiniMax (Sep 2025) for "willful and brazen" copyright infringement via Hailuo AI video generator |
 
-**Copyright Indemnification:** Anthropic will "defend customers from any copyright infringement claim made against them for their authorized use of the services or their outputs, and will pay for any approved settlements or judgments that result."
+### 4.2 Terms of Service Analysis
 
-### 4.2 Indemnification Carve-Outs (Critical)
+**Output Ownership:** "As between you and us, and to the extent permitted by applicable laws, you retain your ownership rights in Client input and generated content." Commercial use of outputs is permitted.
 
-The indemnification does NOT cover claims arising from:
+**Data Usage for Training (Critical):** MiniMax's ToS state:
 
-1. **Customer prompts or uses that violate use restrictions** in the Terms
-2. **Willful misconduct or violations of law**
-3. **Modifications made by Customer to the Services or Outputs**
-4. **Combination of Services or Outputs with technology or content not provided by Anthropic** -- this is relevant because the pipeline combines Claude outputs with YouTube transcripts, Wikipedia data, and Voyage AI embeddings
-5. **Prompts or other data provided by Customer** -- this is significant because the YouTube transcripts sent as prompts could themselves be infringing content
-6. **Use of Services or Outputs that Customer knows or reasonably should know violates rights of others**
+> "We may use the input and generated content to provide, maintain, develop, and improve our Services."
 
-### 4.3 The Bartz v. Anthropic Settlement (August 2025)
+> "Our use or disclosure of Confidential Information for the purpose of improving algorithms or enhancing services does not constitute a breach of confidentiality obligations."
 
-Anthropic settled the landmark class-action for $1.5 billion over training on pirated books from LibGen. Key implications:
+**Translation:** MiniMax explicitly reserves the right to use API inputs and outputs to train/improve their models, and has structured the ToS so this cannot be challenged as a confidentiality breach. Third-party reviews suggest a zero-retention opt-out may exist, but it is **not described in the published legal terms**.
 
-- The settlement only covers past training activities before August 25, 2025
-- It does NOT cover infringing outputs -- meaning if Claude produces output that infringes copyright, the indemnification terms (not the settlement) would apply
-- Judge Alsup's pre-settlement ruling established that training on lawfully acquired content IS fair use, but using pirated sources is not
+**Deep synthesis marking:** The ToS requires users to "place a prominent mark in reasonable positions to inform the public of the use of deep synthesis technology" — a Chinese regulatory requirement included in the international ToS.
 
-### 4.4 Risk Analysis for Lyra Pipeline
+**Governing law:** Singapore law, with mandatory arbitration at the Singapore International Arbitration Centre (SIAC).
 
-The Anthropic indemnification provides meaningful protection, but with important gaps:
+### 4.3 Indemnification (Comparison with Anthropic)
 
-- **If a YouTube creator claims the summary infringes their video content**, Anthropic's indemnification likely WOULD NOT cover this because:
-  - The YouTube transcript (customer-provided data) is the basis of the claim
-  - The project combines outputs with non-Anthropic content
-  - The project arguably knows or should know that transcript access may violate YouTube ToS
+MiniMax does **not** offer copyright indemnification comparable to Anthropic's Copyright Shield:
 
-- **If someone claims the AI output itself infringes (e.g., hallucinated verbatim text)**, Anthropic's indemnification WOULD likely cover this for authorized use.
+| Protection | Anthropic (previous) | MiniMax (current) |
+|------------|---------------------|-------------------|
+| Output ownership | Customer owns outputs | Customer owns outputs |
+| Training on API data | Never (default policy) | **ToS allows it** |
+| Copyright Shield | Yes — covers authorized use | **No** |
+| IP indemnification | Yes — defends against infringement claims | Narrow — only for MiniMax's own service IP |
+| Data retention | 7 days, then auto-deleted | **Not disclosed** |
+| DPA available | Yes (auto-included) | **Not published** |
+| Certifications (public) | SOC 2 Type II, ISO 27001 | Claimed but **NDA-only** |
 
-### 4.5 Risk Rating: LOW
+**MiniMax's indemnification is asymmetric:**
+- **You indemnify MiniMax** against all claims related to your content, applications, or service use
+- **MiniMax's limited indemnity** covers only claims that their service itself infringes IP — not claims about outputs generated from your data
+- **Excluded from even this narrow indemnity:** claims involving your data, combining the service with third-party products, or continued use after receiving a cease notice
 
-Anthropic's terms are favorable for commercial use. The main gap is that the indemnification won't help with the upstream YouTube content issues.
+### 4.4 Data Sovereignty Concerns
+
+**Data location:** MiniMax states API data is processed on servers in the United States. The operating entity is a Singapore company (Nanonoble Pte. Ltd.). However:
+
+1. **Chinese parent company:** MiniMax is headquartered in Shanghai. The privacy policy does not explicitly guarantee data is not shared with Chinese affiliates.
+
+2. **China's National Intelligence Law (2017):** Article 7 obliges Chinese companies and citizens to "support, assist, and cooperate with national intelligence efforts." While the scope is debated by legal scholars, this law could theoretically compel MiniMax to provide access to data.
+
+3. **US Entity List:** MiniMax was added to the U.S. Department of Commerce Entity List in 2025. While this primarily restricts technology exports TO MiniMax, it signals US government concern about the company's ties to China's military-industrial ecosystem.
+
+4. **Corporate structure opacity:** Nanonoble Pte. Ltd. was established in 2024 specifically for international operations. The degree of operational independence from the Shanghai parent is unclear.
+
+### 4.5 Risk Analysis for Lyra Pipeline
+
+The migration from Anthropic to MiniMax introduces several new risk vectors:
+
+- **Training risk:** YouTube transcripts (copyrighted third-party content) may be used by MiniMax to train future models. This creates potential downstream copyright liability that Anthropic's "never train on API data" policy previously eliminated.
+
+- **No copyright shield:** If a YouTube creator or rights holder files a copyright claim related to AI-generated summaries, MiniMax provides no defensive coverage. Under Anthropic, at least claims about the AI output itself (not customer-provided data) were covered.
+
+- **Data sovereignty:** The involvement of a Chinese parent company may concern users, particularly those in government, academic, or defense-adjacent archaeology. The content processed (YouTube transcripts about archaeology) is low-sensitivity, but the principle matters for transparency.
+
+- **Active copyright litigation:** Disney and 10 other major studios are currently suing MiniMax for copyright infringement. While this involves a different product (Hailuo AI video generator, not the M2.5 API), it reflects on the company's copyright compliance posture.
+
+### 4.6 Risk Rating: MODERATE
+
+The migration from Anthropic to MiniMax significantly weakens the project's legal protections:
+- **Was LOW** under Anthropic (explicit no-training policy, copyright indemnification, GDPR DPA, public certifications)
+- **Now MODERATE** under MiniMax (ToS allow training, no copyright shield, Chinese parent company, Entity List designation, unverified certifications)
+
+The elevated risk is partially mitigated by: the low-sensitivity nature of archaeological content, the educational/non-commercial purpose of the project, and the fact that the content being processed (YouTube transcripts about ancient sites) is unlikely to be a target for data sovereignty concerns.
 
 ---
 
@@ -249,7 +287,7 @@ Wikipedia article text is licensed under CC BY-SA 3.0. The Lyra pipeline fetches
 
 The fetched text is used in two ways:
 - **Stored as site descriptions** in `contribution.description` (line 1106)
-- **Processed by Claude** to extract period and site_type metadata (line 1118)
+- **Processed by the LLM** to extract period and site_type metadata (line 1118)
 
 ### 6.3 CC BY-SA Compliance Analysis
 
@@ -334,7 +372,7 @@ When fully applicable (August 2026), Article 50 requires:
 
 Current status of the project:
 - The DisclaimerModal mentions AI processing but does NOT explicitly label individual news items as AI-generated
-- The PRIVACY.md mentions Claude AI usage but focuses on data processing, not content labeling
+- The PRIVACY.md mentions MiniMax AI usage but focuses on data processing, not content labeling
 
 ### 8.4 Risk Rating: LOW (currently), MODERATE (from August 2026)
 
@@ -388,7 +426,7 @@ Every news item derived from a YouTube video should include:
 - Language like "Based on content from [Channel Name]"
 
 **C. Ensure summaries extract facts, not creative expression.**
-Review the summarization prompts (`prompts/summary.txt`, `prompts/tweet_template.txt`) to ensure they instruct Claude to extract factual archaeological information, not to paraphrase or reproduce the creator's narrative style. Add explicit instructions like: "Extract only verifiable archaeological facts. Do not reproduce the speaker's distinctive phrasing, narrative structure, or creative expression."
+Review the summarization prompts (`prompts/summary.txt`, `prompts/tweet_template.txt`) to ensure they instruct the LLM to extract factual archaeological information, not to paraphrase or reproduce the creator's narrative style. Add explicit instructions like: "Extract only verifiable archaeological facts. Do not reproduce the speaker's distinctive phrasing, narrative structure, or creative expression."
 
 **D. Add a robots.txt respect mechanism.**
 While the project uses RSS feeds (which are intended for machine consumption), the transcript and metadata fetching should respect any rate limits and include appropriate delays.
@@ -427,13 +465,13 @@ If the project scales significantly, using the paid Wikimedia Enterprise API wou
 | YouTube ToS violation (transcript scraping) | Medium | High | **MODERATE-HIGH** | Small scale, educational use, public data, no CFAA liability |
 | AI summary copyright (Cohere precedent) | High | Low | **MODERATE** | Factual extraction, different medium, attribution, no market substitution |
 | AI-generated content copyrightability | Low | N/A | **LOW** | Business risk only (cannot protect own content) |
-| Anthropic commercial use | Low | Very Low | **LOW** | Explicit permission, indemnification |
+| MiniMax commercial use & data sovereignty | Medium | Medium | **MODERATE** | ToS allow training on data, Chinese parent co., no copyright shield |
 | YouTube creator lawsuits | Medium | Very Low | **LOW-MODERATE** | Educational purpose, attribution, drives traffic to originals |
 | Wikipedia CC BY-SA compliance | Low | Low | **LOW** | Attribution present, compatible license, factual extraction |
 | Wikidata licensing | None | None | **NONE** | CC0 public domain |
 | EU AI Act (from Aug 2026) | Medium | High | **MODERATE** | Clear compliance path, 6 months to prepare |
 | Voyage AI data concerns | Low | Very Low | **VERY LOW** | Opt-out enabled, embeddings are not copies |
-| Anthropic indemnification gaps | Medium | Low | **LOW-MODERATE** | Customer-provided content exclusion applies |
+| MiniMax indemnification gaps | Medium | Medium | **MODERATE** | No copyright shield; all IP liability on customer |
 
 ### Overall Project Risk: MODERATE
 
@@ -442,12 +480,13 @@ The project's strongest legal protections are:
 2. Extraction of non-copyrightable facts (archaeological sites, dates, locations)
 3. Transformative use that serves a different market than the original videos
 4. Attribution to original sources
-5. Anthropic's commercial indemnification for authorized use
+5. Low-sensitivity nature of archaeological content processed through AI
 
 The project's biggest vulnerabilities are:
 1. Technical violation of YouTube's ToS through automated transcript access
 2. Evolving case law on AI-generated summaries (the Cohere precedent)
-3. Indemnification gaps for customer-provided content (YouTube transcripts)
+3. No copyright indemnification from LLM provider (MiniMax offers no copyright shield)
+4. MiniMax data sovereignty concerns (Chinese parent company, US Entity List, ToS allow training on API data)
 
 ---
 
@@ -479,7 +518,16 @@ The project's biggest vulnerabilities are:
 - [Thomson Reuters v. ROSS - Carlton Fields](https://www.carltonfields.com/insights/publications/2025/use-of-copyrighted-works-in-ai-training-is-not-fair-use)
 - [NYT v. Microsoft/OpenAI - BakerHostetler](https://www.bakerlaw.com/new-york-times-v-microsoft/)
 
-### Anthropic Terms & Indemnification
+### MiniMax Terms & Data Sovereignty
+- [MiniMax Open Platform Terms of Service](https://platform.minimax.io/protocol/terms-of-service)
+- [MiniMax API Privacy Policy](https://platform.minimax.io/protocol/privacy-policy)
+- [MiniMax M2 Security Privacy Data Safety Guide 2025 - Skywork AI](https://skywork.ai/blog/llm/minimax-m2-security-privacy-data-safety-guide-2025/)
+- [Disney, WBD, NBCU Sue AI Firm MiniMax - Variety](https://variety.com/2025/digital/news/disney-warner-bros-discovery-nbcu-lawsuit-minimax-chinese-ai-company-1236520395/)
+- [U.S. Blacklists Over 50 Chinese AI Companies - CNBC](https://www.cnbc.com/2025/03/26/us-blacklists-50-chinese-companies-in-bid-to-curb-beijings-ai-chip-capabilities.html)
+- [MiniMax Hong Kong IPO - CNBC](https://www.cnbc.com/2026/01/09/minimax-hong-kong-ipo-ai-tigers-zhipu.html)
+- [China's National Intelligence Law - China Law Translate](https://www.chinalawtranslate.com/en/what-the-national-intelligence-law-says-and-why-it-doesnt-matter/)
+
+### Anthropic Terms & Indemnification (Historical — previous LLM provider)
 - [Anthropic Expanded Legal Protections](https://www.anthropic.com/news/expanded-legal-protections-api-improvements)
 - [Anthropic Copyright Shield - Proskauer](https://www.proskauer.com/blog/anthropic-joins-the-party-offers-copyright-shield-to-enterprise-ai-customers)
 - [Anthropic Landmark Settlement - Ropes & Gray](https://www.ropesgray.com/en/insights/alerts/2025/09/anthropics-landmark-copyright-settlement-implications-for-ai-developers-and-enterprise-users)
