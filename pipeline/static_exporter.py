@@ -61,7 +61,7 @@ def save_json(path: Path, data: Any, compress: bool = True):
     if compress and GZIP_OUTPUT:
         gz_path = path.with_suffix(path.suffix + ".gz")
         with open(path, "rb") as f_in:
-            with gzip.open(gz_path, "wb", compresslevel=9) as f_out:
+            with gzip.open(str(gz_path), "wb", compresslevel=9) as f_out:
                 shutil.copyfileobj(f_in, f_out)
         gz_size = gz_path.stat().st_size
         logger.info(f"  Saved {gz_path.name}: {gz_size / 1024:.1f} KB (gzip)")
