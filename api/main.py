@@ -57,6 +57,53 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"[STARTUP] Table creation check failed: {e}")
 
+    # Migrate any existing JSON contributions into unified_sites
+    try:
+        from api.routes.contributions import load_contributions
+        from pipeline.database import get_session
+
+        contributions = load_contributions()
+        if contributions:
+            with get_session() as session:
+                from sqlalchemy import text as sql_text
+                migrated = 0
+                for c in contributions:
+                    cid = c.get("id")
+                    if not cid:
+                        continue
+                    # Skip if already in DB
+                    exists = session.execute(
+                        sql_text("SELECT 1 FROM unified_sites WHERE id = :id"),
+                        {"id": cid},
+                    ).fetchone()
+                    if exists:
+                        continue
+                    session.execute(sql_text("""
+                        INSERT INTO unified_sites (
+                            id, source_id, source_record_id, name, lat, lon,
+                            site_type, country, description, source_url, edited_by
+                        ) VALUES (
+                            :id, 'ancient_nerds_community', :id, :name,
+                            :lat, :lon, :site_type, :country, :description,
+                            :source_url, 'user'
+                        )
+                    """), {
+                        "id": cid,
+                        "name": c.get("name", "Unknown"),
+                        "lat": c.get("lat") or 0,
+                        "lon": c.get("lon") or 0,
+                        "site_type": c.get("site_type"),
+                        "country": c.get("country"),
+                        "description": c.get("description"),
+                        "source_url": c.get("source_url"),
+                    })
+                    migrated += 1
+                session.commit()
+                if migrated:
+                    logger.info(f"[STARTUP] Migrated {migrated} JSON contributions to unified_sites")
+    except Exception as e:
+        logger.warning(f"[STARTUP] Contribution migration failed (non-fatal): {e}")
+
     get_redis_client()  # Initialize Redis connection
 
     # Pre-warm cache with default sites query (so first user gets instant response)
