@@ -15110,3 +15110,220 @@ body.news-feed-open .empire-borders-window {
   background: rgba(192, 32, 35, 0.15);
 }
 
+/* ── Articles Page ── */
+
+.articles-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--bg-main, #0a1520);
+  color: var(--text-primary, #e8e8e8);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.articles-page-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 20px;
+  background: var(--bg-main, #0a1520);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.articles-page-brand {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.articles-page-logo {
+  width: 22px;
+  height: 22px;
+}
+
+.articles-page-brand-text {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--primary-red, #c02023);
+}
+
+.articles-page-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--border-color, rgba(0, 180, 180, 0.12));
+  flex-shrink: 0;
+}
+
+.articles-page-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.articles-page-content {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 24px 20px 60px;
+}
+
+.articles-page-loading,
+.articles-page-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-secondary, #94a3b8);
+  font-size: 14px;
+}
+
+.articles-page-error {
+  text-align: center;
+  padding: 24px;
+  color: var(--primary-red, #c02023);
+  font-size: 14px;
+}
+
+.articles-page-error button {
+  margin-left: 12px;
+  padding: 4px 14px;
+  border: 1px solid var(--primary-red, #c02023);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--primary-red, #c02023);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.articles-page-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.articles-page-card {
+  background: var(--bg-surface, #0f1f2a);
+  border: 1px solid var(--border-color, rgba(0, 180, 180, 0.12));
+  border-radius: 8px;
+  padding: 20px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.articles-page-card:hover {
+  border-color: rgba(0, 180, 180, 0.3);
+  background: var(--bg-hover, #132530);
+}
+
+.articles-page-card.expanded {
+  border-color: rgba(0, 180, 180, 0.25);
+  cursor: default;
+}
+
+.articles-page-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.articles-page-card-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0;
+  color: var(--text-primary, #e8e8e8);
+}
+
+.articles-page-card-date {
+  font-size: 12px;
+  color: var(--text-secondary, #94a3b8);
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding-top: 4px;
+}
+
+.articles-page-card-summary {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary, #94a3b8);
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.articles-page-card-content {
+  margin-top: 12px;
+  border-top: 1px solid var(--border-color, rgba(0, 180, 180, 0.12));
+  padding-top: 16px;
+}
+
+.articles-page-card-content p {
+  font-size: 15px;
+  line-height: 1.75;
+  margin: 0 0 12px;
+  color: var(--text-primary, #e8e8e8);
+}
+
+.articles-page-card-content p:last-child {
+  margin-bottom: 0;
+}
+
+.articles-page-card-expand {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-tertiary, #64748b);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+@media (max-width: 600px) {
+  .articles-page-header {
+    padding: 6px 10px;
+    gap: 6px;
+  }
+
+  .articles-page-logo {
+    width: 18px;
+    height: 18px;
+  }
+
+  .articles-page-brand-text {
+    font-size: 10px;
+    letter-spacing: 1.5px;
+  }
+
+  .articles-page-divider {
+    height: 20px;
+  }
+
+  .articles-page-title {
+    font-size: 12px;
+  }
+
+  .articles-page-content {
+    padding: 16px 12px 40px;
+  }
+
+  .articles-page-card {
+    padding: 14px;
+  }
+
+  .articles-page-card-header {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .articles-page-card-title {
+    font-size: 18px;
+  }
+}
+

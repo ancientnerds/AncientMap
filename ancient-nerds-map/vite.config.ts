@@ -21,6 +21,7 @@ export default defineConfig({
         radar: resolve(__dirname, 'radar.html'),
         lyra: resolve(__dirname, 'lyra.html'),
         db: resolve(__dirname, 'db.html'),
+        articles: resolve(__dirname, 'articles.html'),
       },
     },
   },
