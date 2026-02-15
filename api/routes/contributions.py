@@ -18,6 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from api.cache import cache_delete_pattern
 from api.services.admin_auth import get_client_ip
 from api.services.rate_limiter import RateLimiter
 from api.services.turnstile import verify_turnstile as _verify_turnstile_shared
@@ -252,6 +253,9 @@ async def create_contribution(
         "source_url": source_url,
     })
     db.commit()
+
+    # Invalidate Redis cache so the new site appears immediately
+    cache_delete_pattern("sites:*")
 
     # Also save to JSON file as backup log
     contribution_data = {
