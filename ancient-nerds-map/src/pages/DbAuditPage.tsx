@@ -67,7 +67,8 @@ export default function DbAuditPage() {
         const res = await fetch(`${config.api.baseUrl}/sites/all?limit=100000&${CACHE_BUSTER}`)
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
-        setSites(data.sites || [])
+        const OUR_SOURCES = ['ancient_nerds', 'ancient_nerds_radar']
+        setSites((data.sites || []).filter((s: AuditSite) => OUR_SOURCES.includes(s.s)))
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : 'Failed to load sites')
       } finally {
