@@ -121,10 +121,10 @@ SELECT
   COUNT(*) FILTER (WHERE period_start IS NULL) AS no_period,
   COUNT(*) FILTER (WHERE site_type IS NULL OR site_type ILIKE 'Unknown') AS no_type,
   COUNT(*) FILTER (WHERE country IS NULL) AS no_country,
-  COUNT(*) FILTER (WHERE period_start > 1500 AND site_type IN (
-    'Temple','Megalithic','Tomb','Settlement','Fortification',
-    'Amphitheatre','Theatre','Stadium','Infrastructure','Rock Art'
-  )) AS suspect_modern
+  COUNT(*) FILTER (WHERE period_start > 1500
+    AND site_type NOT IN ('museum', 'Museum', 'geological interest')
+    AND site_type NOT ILIKE '%museum%'
+  ) AS suspect_modern
 FROM unified_sites
 GROUP BY source_id
 ORDER BY total DESC;
@@ -206,6 +206,23 @@ Common patterns and how to parse them:
 
 **Any pattern with >10 unfixed sites should get a bulk SQL fix in Phase A**, not per-site research in Phase C.
 
+**Re-validate existing period_start against raw_year:**
+
+Sites that already have a `period_start` may have gotten it from `raw_period` (the pre-computed bucket) instead of `raw_year` (the actual year string). This is a common ingestion error — re-parsing `raw_year` and comparing is a **bulk Phase A fix**, not per-site Phase C research.
+
+```sql
+-- Find sites where period_start may have been set from raw_period instead of raw_year
+-- Compare parsed raw_year against current period_start
+SELECT id, name, period_start, raw_data->>'year' as raw_year, raw_data->>'period' as raw_period
+FROM unified_sites
+WHERE source_id = 'ancient_nerds'
+  AND raw_data->>'year' IS NOT NULL
+  AND period_start IS NOT NULL
+ORDER BY name;
+```
+
+Parse each `raw_year` string using the pattern table above and compare against `period_start`. If they differ by >5% or >100 years, the site likely got its period from `raw_period` instead. Fix these in bulk during Phase A — do not send them to Phase C research.
+
 **Trust hierarchy for period data:**
 1. `raw_data->>'year'` (most specific — original source's year string)
 2. Wikidata P571/P580 (cross-referenced, not blind)
@@ -225,9 +242,28 @@ These fixes require **no research** — they are deterministic corrections based
 | Orphan parent references *(skip if column not migrated)* | `LEFT JOIN` where parent doesn't exist | Set `parent_site_id = NULL` |
 | Invalid `site_type` values | Value not in canonical list (see Valid Site Types) | Map via `normalize_site_type()` or flag |
 | Non-canonical `site_type` variants | Value differs from `normalize_site_type(site_type)` — catches case drift (`Rock ART` vs `Rock art`), separator drift (`rock_art` vs `Rock art`), synonym drift (`ruins` vs `ruin`, `mausoleum` vs `tomb`), plural drift (`Petroglyph` vs `Petroglyphs`) | Replace with `normalize_site_type(site_type)`. Detection query below. |
+| Compound type capitalization | Compound types stored lowercase when canonical form has first letter capitalized: `city/town/settlement` → `City/town/settlement`. Detection: `WHERE site_type ~ '^[a-z].*/'` | Capitalize first letter, keep rest as-is. Detection query below. |
 | `name_normalized` drift | Compare against `normalize_name(name)` | Recompute `name_normalized` |
 | Same-source exact duplicates | `GROUP BY source_id, name_normalized HAVING COUNT(*) > 1` | Flag for merge — do NOT auto-delete |
-| Non-archaeological entries | `site_type IN ('museum', 'geological interest', 'wildlife sanctuary')` OR `name ILIKE '%museum%'` AND not a site-museum composite | Flag for review — museums, geological formations, pseudoarchaeology, and wildlife sanctuaries are not archaeological sites |
+| Non-archaeological entries | See comprehensive detection query below | Flag for review — museums, geological formations, pseudoarchaeology, wildlife sanctuaries, national parks, and paleontological sites are not archaeological sites |
+
+**Detecting non-archaeological entries:**
+
+```sql
+-- Comprehensive non-archaeological detection
+SELECT id, name, site_type FROM unified_sites WHERE source_id = 'ancient_nerds' AND (
+  site_type IN ('museum', 'Museum', 'geological interest')
+  OR name ILIKE '%museum%'
+  OR name ILIKE '%wildlife sanctuary%'
+  OR name ILIKE '%national park%'
+  OR name ILIKE '%bosnian pyramid%'       -- pseudoarchaeology
+  OR name ILIKE '%yonaguni monument%'     -- debated geological
+  OR name ILIKE '%elongated skull%'       -- museum display
+  OR name ILIKE '%lemminkainen%'          -- pseudoarchaeology
+);
+```
+
+Categories to check: museums, geological formations, pseudoarchaeology (Bosnian pyramids, Temple of Lemminkainen), wildlife sanctuaries, national parks, paleontological sites. Do NOT auto-delete — flag for review, as some site-museum composites (e.g., "Acropolis Museum" at the Acropolis) may be legitimate.
 
 > **Note:** `parent_site_id` exists in the SQLAlchemy model but has never been migrated to the actual DB table. Run `SELECT column_name FROM information_schema.columns WHERE table_name = 'unified_sites' AND column_name = 'parent_site_id';` to check before running parent-related queries. Skip parent checks if the column doesn't exist.
 
@@ -247,6 +283,19 @@ GROUP BY site_type
 ORDER BY site_type;
 ```
 
+**Detecting compound type capitalization:**
+
+This is a high-volume issue — the Feb 2026 audit found **4,791** instances. Compound types like `city/town/settlement` are ingested lowercase but the canonical form capitalizes the first letter.
+
+```sql
+-- Find all compound types starting with lowercase
+SELECT site_type, COUNT(*) FROM unified_sites
+WHERE source_id = 'ancient_nerds' AND site_type ~ '^[a-z].*/'
+GROUP BY site_type ORDER BY COUNT(*) DESC;
+```
+
+Fix with: `UPDATE unified_sites SET site_type = INITCAP(LEFT(site_type, 1)) || SUBSTRING(site_type FROM 2) WHERE site_type ~ '^[a-z].*/' AND source_id = 'ancient_nerds';`
+
 Then in Python, compare each value against `normalize_site_type()`:
 ```python
 from pipeline.normalizers.site_type import normalize_site_type
@@ -262,6 +311,7 @@ Common variant classes to watch for:
 | Plural mismatch | `Petroglyph` → `Petroglyphs`, `ruins` → `ruin` | Source-specific naming |
 | Synonym | `mausoleum` → `tomb`, `hillfort` → `fort`, `thermae` → `bath` | Different naming conventions per source |
 | Title-case drift | `Monument` → `monument`, `Unknown` → `unknown` | Multiple case forms in CATEGORY_COLORS where lowercase is canonical |
+| Compound capitalization | `city/town/settlement` → `City/town/settlement` | Ingestion without normalization — high volume (~4,791 in Feb 2026 audit) |
 
 The bulk fix is a single UPDATE per variant:
 ```sql
@@ -343,6 +393,20 @@ Unlike the backfill script (`scripts/backfill_parent_sites.py` lines 402-434), w
 | `country` | NULL | P17 = "Turkey" | High confidence, present for review |
 | `lat`/`lon` | (31.2, 29.9) | P625 = (31.2, 29.9) | **Verify** — log as confirmed correct |
 | `lat`/`lon` | (31.2, 29.9) | P625 = (40.1, 44.5) | **Flag** — do not auto-fix coords |
+
+**Country discrepancy classification:**
+
+Not all country discrepancies are genuine errors. Classify each one before acting:
+
+| Category | Example | Action | Typical share |
+|----------|---------|--------|---------------|
+| Historical/political names | "Ottoman Empire" vs "Turkey" | Reject — DB already has modern name | ~40% |
+| Naming variants | "United States of America" vs "USA" | Reject — both valid | ~25% |
+| Genuine errors | "Germany" vs "Greece" for a Cretan site | Fix — Wikidata P17 is correct | ~5% |
+| Disputed territories | Palestine/Israel, Western Sahara | Flag manual — editorial judgment | ~10% |
+| Wikidata wrong/outdated | Wikidata has old country name | Reject — DB is correct | ~20% |
+
+Only the "Genuine errors" category (~5%) should result in DB changes. The rest are noise — do not waste time on them.
 
 **4d. Cross-reference raw_data:**
 
@@ -442,6 +506,8 @@ VALUES ('<site-uuid>', 'Obscure Mound', 'flag_manual', 'period_start', NULL, NUL
         'No academic sources found. WebSearch returned only tourism blogs.');
 ```
 
+> **Log BEFORE or track old values:** When bulk-updating a column, a post-update WHERE clause (e.g., `site_type = 'monument'`) will match both previously-canonical rows AND newly-fixed rows, causing overcounts. Either: (a) INSERT audit log entries BEFORE applying the UPDATE, or (b) use `UPDATE ... RETURNING` to capture exactly which rows changed, or (c) use a subquery with the old value. Never INSERT audit logs after the UPDATE using the same WHERE clause as the UPDATE.
+
 Also append each UPDATE statement to `database_fixes.sql` (for VPS sync later).
 
 ### Step 9 — Re-export static JSON
@@ -514,6 +580,12 @@ If the VPS DB is not synced and someone re-runs the static exporter on VPS, it w
   ```
 - **psql in docker exec:** Use `<>` instead of `!=` for inequality comparisons — bash can interfere with `!` in some quoting contexts.
 
+**Windows notes:**
+- `docker cp` + `psql -f` can fail silently. Prefer piping: `cat file.sql | docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map`
+- Set `PYTHONIOENCODING=utf-8` before running Python scripts with Unicode output
+- Static exporter: use `--output` with absolute path (relative paths fail intermittently on Windows)
+- `gzip.open()` needs `str()` conversion for `Path` objects on Windows
+
 ---
 
 ## Audit Dimensions
@@ -563,7 +635,7 @@ Used in Step 2 to order the work queue.
 
 | Tier | Criteria | Query |
 |------|----------|-------|
-| P1 | `period_start > 1500` + ancient type — likely Wikidata false positives | `WHERE period_start > 1500 AND site_type IN ('Temple','Megalithic','Tomb','Settlement','Fortification','Amphitheatre','Theatre','Stadium','Infrastructure','Rock Art')` |
+| P1 | `period_start > 1500` + non-museum type — likely Wikidata false positives | `WHERE period_start > 1500 AND site_type NOT IN ('museum', 'Museum', 'geological interest') AND site_type NOT ILIKE '%museum%'` |
 | P2 | `period_start IS NULL` — dots have no color on globe | `WHERE period_start IS NULL` |
 | P3 | `site_type IS NULL OR site_type = 'Unknown'` — can't be filtered | `WHERE site_type IS NULL OR site_type = 'Unknown'` |
 | P3.5 | Non-canonical `site_type` variants — causes duplicate badges and broken filtering | Compare each distinct `site_type` against `normalize_site_type()` output. Any mismatch is a variant that needs fixing. See Phase A detection query. |
@@ -622,10 +694,10 @@ SELECT
   ROUND(100.0 * COUNT(*) FILTER (WHERE period_start IS NOT NULL) / COUNT(*), 1) AS period_pct,
   ROUND(100.0 * COUNT(*) FILTER (WHERE site_type IS NOT NULL AND site_type NOT ILIKE 'Unknown') / COUNT(*), 1) AS type_pct,
   ROUND(100.0 * COUNT(*) FILTER (WHERE country IS NOT NULL) / COUNT(*), 1) AS country_pct,
-  COUNT(*) FILTER (WHERE period_start > 1500 AND site_type IN (
-    'Temple','Megalithic','Tomb','Settlement','Fortification',
-    'Amphitheatre','Theatre','Stadium','Infrastructure','Rock Art'
-  )) AS suspect_modern
+  COUNT(*) FILTER (WHERE period_start > 1500
+    AND site_type NOT IN ('museum', 'Museum', 'geological interest')
+    AND site_type NOT ILIKE '%museum%'
+  ) AS suspect_modern
 FROM unified_sites;
 
 -- Parent link checks (only if parent_site_id column exists — see note in Phase A)
@@ -664,6 +736,18 @@ Normalization functions — audit values must be consistent with their output.
 | `normalize_country(country)` | `pipeline/utils/country_lookup.py` | 532 |
 | `lookup_country(lat, lon)` | `pipeline/utils/country_lookup.py` | 271 |
 
+### Reusable Audit Scripts
+
+Scripts generated by previous audits — reuse these instead of writing from scratch.
+
+| Script | Purpose | Usage |
+|--------|---------|-------|
+| `wikidata_verify.py` | Batch Wikipedia→QID resolution + Wikidata claims fetch + discrepancy detection | `PYTHONIOENCODING=utf-8 python wikidata_verify.py` |
+| `analyze_discrepancies.py` | Classify period discrepancies against raw_data | Reads `wikidata_results.json`, outputs `discrepancy_analysis.json` |
+| `generate_fixes.py` | Generate SQL from classified discrepancies | Reads `wikidata_results.json` + DB, outputs `phase_b_fixes.sql` |
+
+These scripts live in the project root. Check if they exist before writing new ones — they may need minor updates for a new source or scope but the core logic is reusable.
+
 Period buckets (from `categorize_period`):
 
 | Range | Label |
@@ -677,6 +761,8 @@ Period buckets (from `categorize_period`):
 | 500 to 1000 | `500 - 1000 AD` |
 | 1000 to 1500 | `1000 - 1500 AD` |
 | >= 1500 | `1500+ AD` |
+
+> **Boundary trap:** `categorize_period()` uses strict `<`, so boundary values fall into the NEXT bucket: `-3000` → "3000 - 1500 BC" (not "4500 - 3000 BC"), `500` → "500 - 1000 AD" (not "1 - 500 AD"), `1000` → "1000 - 1500 AD" (not "500 - 1000 AD"). Always verify `period_name` after setting `period_start` to a boundary value.
 
 ---
 
@@ -742,12 +828,12 @@ GROUP BY name_normalized
 HAVING COUNT(*) > 1
 ORDER BY COUNT(*) DESC;
 
--- Sites with suspect modern dates
+-- Sites with suspect modern dates (excludes museums and geological sites)
 SELECT name, site_type, period_start, source_id
 FROM unified_sites
 WHERE period_start > 1500
-AND site_type IN ('Temple','Megalithic','Tomb','Settlement','Fortification',
-                  'Amphitheatre','Theatre','Stadium','Infrastructure','Rock Art')
+AND site_type NOT IN ('museum', 'Museum', 'geological interest')
+AND site_type NOT ILIKE '%museum%'
 ORDER BY period_start DESC;
 
 -- Audit progress: what's been verified/fixed this session
@@ -862,3 +948,33 @@ Items that could not be auto-fixed. Each needs human research or expert judgment
 - Resume from: [last site audited or tier]
 - Verified sites (skip next run): N
 ```
+
+---
+
+## Lessons Learned
+
+Dated notes from past audits. Read these before starting a new audit — they capture operational surprises the framework didn't originally account for.
+
+### Feb 2026 — First full `ancient_nerds` audit (5,005 sites)
+
+**Scale surprises:**
+- Framework estimated ~65 non-canonical types. Actual: **4,791** — almost all compound type capitalizations (`city/town/settlement` → `City/town/settlement`). The compound capitalization pattern was not in the original framework.
+- 212 sites had `period_start` set from `raw_period` instead of `raw_year`. Re-parsing `raw_year` was the biggest single Phase A win after type normalization.
+- Only 4 genuine country errors out of 99 Wikidata discrepancies (~4%). The rest were historical names, naming variants, or Wikidata being wrong.
+
+**Operational failures (Windows/Docker):**
+- `docker cp` + `psql -f` silently failed. Piping via `cat file.sql | docker exec -i` works reliably.
+- Python scripts with Unicode site names crashed without `PYTHONIOENCODING=utf-8`.
+- `gzip.open()` on Windows needs `str()` for `Path` objects.
+
+**Parser lessons:**
+- The `raw_period` → `period_start` mis-parse affected sites using millennium/century notation: "9th c. AD" was parsed as `-9000` instead of `800`. Always parse `raw_year` first.
+- `categorize_period()` boundary values caused 3 separate errors: `-3000` falls into "3000 - 1500 BC", not "4500 - 3000 BC".
+
+**Phase C research results:**
+- 12/42 missing-period sites found dates via web research
+- 16/42 were non-archaeological (museums, pseudoarchaeology, wildlife sanctuaries)
+- 14/42 genuinely unfindable — flagged MANUAL
+
+**Audit log gotcha:**
+- Type normalization logged 4,791 fixes but initially overcounted because the post-UPDATE WHERE clause matched both already-canonical and newly-fixed rows. Always log BEFORE the UPDATE or use `RETURNING`.
