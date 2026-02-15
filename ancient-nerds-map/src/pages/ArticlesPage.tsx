@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import ReactMarkdown, { type Components } from 'react-markdown'
 import { config } from '../config'
 
 interface Article {
@@ -27,11 +28,36 @@ function formatDateRange(start: string, end: string): string {
   return `${s.toLocaleDateString('en-US', opts)} – ${e.toLocaleDateString('en-US', yearOpts)}`
 }
 
+/** Convert bare [1] references to clickable anchor links pointing to #sources. */
+function enrichCitations(content: string): string {
+  return content.replace(/(?<!\[)\[(\d+)\](?!\()/g, '[$1](#sources)')
+}
+
+const articleComponents: Components = {
+  img: ({ src, alt }) => (
+    <figure className="article-figure">
+      <img src={src} alt={alt || ''} loading="lazy" className="article-screenshot" />
+      {alt && <figcaption className="article-figcaption">{alt}</figcaption>}
+    </figure>
+  ),
+  a: ({ href, children }) => {
+    if (href === '#sources') {
+      return <a href={href} className="article-citation-link">{children}</a>
+    }
+    return <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+  },
+  h3: ({ children }) => {
+    const text = String(children)
+    if (text === 'Sources') return <h3 id="sources">{children}</h3>
+    return <h3>{children}</h3>
+  },
+}
+
 export default function ArticlesPage() {
   const [articles, setArticles] = useState<Article[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [selectedArticle, setSelectedArticle] = useState<Article | null>(null)
 
   useEffect(() => {
     fetch(`${config.api.baseUrl}/news/articles?limit=50`)
@@ -48,6 +74,14 @@ export default function ArticlesPage() {
         setLoading(false)
       })
   }, [])
+
+  // Lock body scroll when overlay is open
+  useEffect(() => {
+    if (selectedArticle) {
+      document.body.style.overflow = 'hidden'
+      return () => { document.body.style.overflow = '' }
+    }
+  }, [selectedArticle])
 
   return (
     <div className="articles-page">
@@ -73,41 +107,51 @@ export default function ArticlesPage() {
         )}
 
         <div className="articles-page-list">
-          {articles.map(article => {
-            const isExpanded = expandedId === article.id
-            return (
-              <article
-                key={article.id}
-                className={`articles-page-card${isExpanded ? ' expanded' : ''}`}
-                onClick={() => setExpandedId(isExpanded ? null : article.id)}
-              >
-                <div className="articles-page-card-header">
-                  <h2 className="articles-page-card-title">{article.title}</h2>
-                  <span className="articles-page-card-date">
-                    {formatDateRange(article.week_start, article.week_end)}
-                  </span>
-                </div>
-
-                {!isExpanded && article.summary && (
-                  <p className="articles-page-card-summary">{article.summary}</p>
-                )}
-
-                {isExpanded && (
-                  <div className="articles-page-card-content">
-                    {article.content.split('\n').map((paragraph, i) =>
-                      paragraph.trim() ? <p key={i}>{paragraph}</p> : null
-                    )}
-                  </div>
-                )}
-
-                <div className="articles-page-card-expand">
-                  {isExpanded ? 'Click to collapse' : 'Click to read'}
-                </div>
-              </article>
-            )
-          })}
+          {articles.map(article => (
+            <article
+              key={article.id}
+              className="articles-page-card"
+              onClick={() => setSelectedArticle(article)}
+            >
+              <div className="articles-page-card-header">
+                <h2 className="articles-page-card-title">{article.title}</h2>
+                <span className="articles-page-card-date">
+                  {formatDateRange(article.week_start, article.week_end)}
+                </span>
+              </div>
+              {article.summary && (
+                <p className="articles-page-card-summary">{article.summary}</p>
+              )}
+              <div className="articles-page-card-expand">Click to read</div>
+            </article>
+          ))}
         </div>
       </main>
+
+      {/* Full-screen reading overlay */}
+      {selectedArticle && (
+        <div className="articles-page-overlay" onClick={() => setSelectedArticle(null)}>
+          <div className="articles-page-reader" onClick={e => e.stopPropagation()}>
+            <button className="articles-page-reader-close" onClick={() => setSelectedArticle(null)}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+            <header className="articles-page-reader-header">
+              <h1 className="articles-page-reader-title">{selectedArticle.title}</h1>
+              <span className="articles-page-reader-date">
+                {formatDateRange(selectedArticle.week_start, selectedArticle.week_end)}
+              </span>
+            </header>
+            <div className="articles-page-reader-body">
+              <ReactMarkdown components={articleComponents}>
+                {enrichCitations(selectedArticle.content)}
+              </ReactMarkdown>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
