@@ -269,7 +269,8 @@ async def get_all_sites(
                 description,
                 thumbnail_url,
                 country,
-                source_url
+                source_url,
+                edited_by
             FROM unified_sites
             WHERE {where_clause}
             OFFSET :skip
@@ -303,6 +304,8 @@ async def get_all_sites(
                 site["c"] = row.country
             if row.source_url:
                 site["u"] = row.source_url
+            if row.edited_by and row.edited_by != "initial":
+                site["eb"] = row.edited_by
             sites.append(site)
 
         if sites:
@@ -779,6 +782,8 @@ async def update_site(
     else:
         raise HTTPException(status_code=401, detail="Authorization required")
 
+    edited_by = "admin" if authorization else "audit"
+
     # First check if site exists
     check_query = text("SELECT id FROM unified_sites WHERE id::text = :site_id")
     result = db.execute(check_query, {"site_id": site_id})
@@ -804,7 +809,8 @@ async def update_site(
             site_type = :site_type,
             period_name = :period_name,
             period_start = :period_start,
-            source_url = :source_url
+            source_url = :source_url,
+            edited_by = :edited_by
         WHERE id::text = :site_id
     """)
 
@@ -818,6 +824,7 @@ async def update_site(
         "period_name": site_update.period,
         "period_start": period_start,
         "source_url": site_update.sourceUrl,
+        "edited_by": edited_by,
     })
     db.commit()
 

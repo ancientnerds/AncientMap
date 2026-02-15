@@ -24,6 +24,7 @@ interface AuditSite {
   c?: string       // country
   u?: string       // source_url
   i?: string       // thumbnail_url
+  eb?: string      // edited_by
 }
 
 type IssueFilter = 'all' | 'no_period' | 'no_type' | 'no_country' | 'suspect_modern'
@@ -231,6 +232,7 @@ export default function DbAuditPage() {
         if (field === 'type') updated.t = editValue
         else if (field === 'period') updated.pn = editValue
         else updated.c = editValue
+        updated.eb = 'audit'
         return updated
       }))
     }
@@ -283,6 +285,7 @@ export default function DbAuditPage() {
           pn: modalForm.period,
           c: s.c, // country not in modal
           u: modalForm.sourceUrl || undefined,
+          eb: 'audit',
         }
       }))
       setEditModalSite(null)
@@ -442,6 +445,7 @@ export default function DbAuditPage() {
               <th className="db-th db-th-nosort">Desc</th>
               <th className="db-th db-th-nosort">URL</th>
               <th className="db-th db-th-nosort">Img</th>
+              <th className="db-th db-th-nosort">Edited</th>
               {isAuthenticated && <th className="db-th db-th-edit">Edit</th>}
             </tr>
           </thead>
@@ -575,6 +579,11 @@ export default function DbAuditPage() {
                     {site.i ? (
                       <img src={site.i} className="db-thumb" alt="" loading="lazy" />
                     ) : <span className="db-missing">&mdash;</span>}
+                  </td>
+
+                  {/* Edited by */}
+                  <td className={`db-td db-td-edited db-edited-${site.eb || 'initial'}`}>
+                    {site.eb || 'initial'}
                   </td>
 
                   {/* Edit button */}

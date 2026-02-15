@@ -825,6 +825,11 @@ def _run_migrations(engine) -> None:
             "ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS parent_site_id UUID REFERENCES unified_sites(id) ON DELETE SET NULL"
         ))
 
+        # Edit tracking: who last edited the row
+        conn.execute(text(
+            "ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS edited_by VARCHAR(20) NOT NULL DEFAULT 'initial'"
+        ))
+
         # Normalize ALL site_type values through the canonical normalizer.
         # Runs every startup but only UPDATEs rows where the value actually changes.
         from pipeline.normalizers.site_type import normalize_site_type as _norm_type
