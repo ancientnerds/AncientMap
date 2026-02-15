@@ -1058,7 +1058,7 @@ export default function DbAuditPage() {
                         <span className="db-desc-full" onClick={() => toggleExpand(site.id)}>{site.d}</span>
                       ) : (
                         <span className="db-desc-truncated" onClick={() => toggleExpand(site.id)}>
-                          {site.d.length > 80 ? site.d.slice(0, 80) + '\u2026' : site.d}
+                          {site.d.length > 40 ? site.d.slice(0, 40) + '\u2026' : site.d}
                         </span>
                       )
                     ) : <span className="db-missing">&mdash;</span>}
