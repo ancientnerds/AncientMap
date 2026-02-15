@@ -154,6 +154,47 @@ SELECT DISTINCT site_id FROM database_audit_log
 WHERE action IN ('fix', 'verify') AND changed_at > NOW() - INTERVAL '30 days';
 ```
 
+### Step 2.5 — Phase A0: Raw data pattern analysis
+
+Before any fixes, run a **pattern coverage report** on the target source's `raw_data` JSONB. This catches bulk-fixable year formats that would otherwise go to expensive per-site research.
+
+**For `ancient_nerds` source:**
+```sql
+-- Enumerate all distinct raw_data->>'year' patterns
+SELECT
+  regexp_replace(raw_data->>'year', '[0-9]+', 'N', 'g') AS year_pattern,
+  COUNT(*) AS sites,
+  COUNT(*) FILTER (WHERE period_start IS NULL) AS unfixed
+FROM unified_sites
+WHERE source_id = 'ancient_nerds'
+  AND raw_data->>'year' IS NOT NULL
+GROUP BY year_pattern
+ORDER BY unfixed DESC;
+```
+
+Common patterns and how to parse them:
+
+| Pattern | Example | Parse rule |
+|---------|---------|------------|
+| `N BC` | `48000 BC` | Negate the number |
+| `N AD` | `300 AD` | Use the number |
+| `Nth ml. BC` | `9th ml. BC` | `-(N * 1000)` — this is a millennium, not a century |
+| `Nth - Nth ml. BC` | `3rd - 2nd ml. BC` | Use the earlier (larger) millennium |
+| `N BC - N AD` | `500 BC - 200 AD` | Use the BC value (start of range) |
+| `Nth c. BC` | `5th c. BC` | `-(N * 100)` — century |
+| `Nth c. AD` | `3rd c. AD` | `N * 100` — century |
+| `N,NNN BC` | `48,000 BC` | Strip commas, negate |
+
+**Any pattern with >10 unfixed sites should get a bulk SQL fix in Phase A**, not per-site research in Phase C.
+
+**Trust hierarchy for period data:**
+1. `raw_data->>'year'` (most specific — original source's year string)
+2. Wikidata P571/P580 (cross-referenced, not blind)
+3. `raw_data->>'period'` (often a pre-computed bucket label — can be WRONG when raw_year exists)
+4. Claude's knowledge / WebSearch (last resort)
+
+> **Warning:** `raw_data->>'period'` (the pre-computed bucket) is frequently inconsistent with `raw_data->>'year'`. When both exist, ALWAYS parse `raw_year` and ignore `raw_period`. The millennium pattern miss (819 sites) happened because the parser fell through to `raw_period` which gave wrong values.
+
 ### Step 3 — Phase A: Mechanical fixes
 
 These fixes require **no research** — they are deterministic corrections based on internal consistency rules. Auto-apply all of them.
@@ -166,6 +207,7 @@ These fixes require **no research** — they are deterministic corrections based
 | Invalid `site_type` values | Value not in canonical list (see Valid Site Types) | Map via `normalize_site_type()` or flag |
 | `name_normalized` drift | Compare against `normalize_name(name)` | Recompute `name_normalized` |
 | Same-source exact duplicates | `GROUP BY source_id, name_normalized HAVING COUNT(*) > 1` | Flag for merge — do NOT auto-delete |
+| Non-archaeological entries | `site_type IN ('museum', 'geological interest', 'wildlife sanctuary')` OR `name ILIKE '%museum%'` AND not a site-museum composite | Flag for review — museums, geological formations, pseudoarchaeology, and wildlife sanctuaries are not archaeological sites |
 
 > **Note:** `parent_site_id` exists in the SQLAlchemy model but has never been migrated to the actual DB table. Run `SELECT column_name FROM information_schema.columns WHERE table_name = 'unified_sites' AND column_name = 'parent_site_id';` to check before running parent-related queries. Skip parent checks if the column doesn't exist.
 
@@ -283,6 +325,13 @@ For gaps and disputes that Phases A and B couldn't resolve.
 2. Cross-reference at least two sources for medium-confidence fixes.
 3. High-confidence fixes require universally agreed facts or multiple authoritative sources.
 
+**Parallel research:** For large batches (>30 sites), split into groups of ~60 and launch parallel research agents. Each agent independently web-searches its batch and returns SQL UPDATE statements. Consolidate results after all agents complete. This reduces a 300-site research phase from hours to ~20 minutes.
+
+**Batch research output format:** Each research batch should produce:
+- SQL UPDATE statements (one per fix)
+- `-- MANUAL:` comment lines for unfixable sites (with reason)
+- Summary count: N fixed, M manual, K already correct
+
 ### Step 6 — Classify all findings
 
 Every finding from Phases A, B, and C gets one of three confidence levels:
@@ -347,12 +396,15 @@ This regenerates `public/data/sites/index.json`, all `details/{region}.json` fil
 
 Run spot-check queries on the fixed sites to confirm values landed correctly in both the DB and the re-exported JSON. Re-run the quality gate query (see Quality Gate below) to measure progress.
 
+**Sentinel check (after Phase A):** Before proceeding to Phase C research, spot-check 3-5 well-known sites from the fixed set against their expected values. If a famous site's period is wrong (e.g., a 10th-millennium BC site showing as 500 BC), there is likely a **systematic parser failure** affecting hundreds of sites. Stop and investigate the pattern before continuing.
+
 ### Step 11 — Final report
 
 Output the final report with:
 1. **Quality gate status** — all conditions must PASS or have MANUAL items accounted for
 2. **MANUAL FIXES REQUIRED section** — every item that couldn't be auto-fixed
 3. **Resumability info** — which tiers are complete, where to pick up next session
+4. **MANUAL sites CSV export** — Export all MANUAL-flagged sites to a CSV file (`manual_sites.csv`) with columns: `id, name, site_type, country, source_url, comment`. The comment column should explain per-site why auto-fix failed (e.g., "Museum, not archaeological site", "No English-language sources", "Pseudoarchaeology — scientific consensus says natural formation"). This file is the handoff artifact for human researchers.
 
 ---
 
@@ -366,6 +418,36 @@ Output the final report with:
    ```
 
 If the VPS DB is not synced and someone re-runs the static exporter on VPS, it will overwrite the local fixes with unfixed DB values.
+
+### SQL file conventions
+
+- **Block structure:** Organize `database_fixes.sql` into numbered blocks with headers:
+  ```sql
+  -- ============================================================
+  -- Block N: [Description] ([count] fixes)
+  -- Applied: [date]
+  -- ============================================================
+  ```
+- **Idempotent WHERE clauses:** Always include the current (wrong) value in the WHERE clause to prevent double-application:
+  ```sql
+  -- GOOD: Won't re-apply if already fixed
+  UPDATE unified_sites SET period_start = -9000 WHERE id = '<uuid>' AND period_start IS NULL;
+
+  -- BAD: Will overwrite even if manually corrected later
+  UPDATE unified_sites SET period_start = -9000 WHERE id = '<uuid>';
+  ```
+- **File-based execution for large batches:** Heredocs hit OS limits (ENAMETOOLONG) for >100 statements. Always write SQL to a file and pipe it in:
+  ```bash
+  # GOOD: file-based
+  docker cp fixes.sql ancient_nerds_db:/tmp/fixes.sql
+  docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map < fixes.sql
+
+  # BAD: heredoc for large batches
+  docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map <<'EOF'
+  ... 500 statements ...
+  EOF
+  ```
+- **psql in docker exec:** Use `<>` instead of `!=` for inequality comparisons — bash can interfere with `!` in some quoting contexts.
 
 ---
 
@@ -426,6 +508,8 @@ These are explicit "do NOT" rules. Violating any of these was the problem with t
 8. **Do NOT fix `period_name` independently of `period_start`.** Always keep them consistent via `categorize_period()`. Fix `period_start` and derive `period_name`.
 9. **Do NOT downgrade site_type specificity.** If Wikidata P31 says "archaeological site" but the DB has "Temple", keep "Temple".
 10. **Do NOT skip the raw_data cross-reference.** The `raw_data` JSONB column contains original source data. If a backfill changed a value, compare against raw_data to determine if the change was an improvement or corruption.
+11. **Do NOT trust `raw_period` when `raw_year` exists.** The `raw_data->>'period'` field is a pre-computed bucket label from the original source. It is frequently WRONG — especially when the raw_year uses formats the source's own parser couldn't handle (e.g., millennium patterns). Always parse `raw_year` first; only fall back to `raw_period` when `raw_year` is NULL.
+12. **Do NOT modify sites from sources outside the audit scope.** A `source <id>` or `full` audit of `ancient_nerds` must NEVER touch sites from `lyra`, `pleiades`, `wikidata`, etc. Always include `AND source_id = '<target>'` in every UPDATE and INSERT statement. Forgetting this filter can corrupt curated academic data.
 
 ---
 
