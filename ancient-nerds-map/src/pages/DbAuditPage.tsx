@@ -676,10 +676,11 @@ export default function DbAuditPage() {
 
   // Discard all pending edits — reload from server
   const discardAllEdits = useCallback(() => {
+    if (!confirm(`Discard ${pendingEdits.size} pending change${pendingEdits.size !== 1 ? 's' : ''}? This cannot be undone.`)) return
     setPendingEdits(new Map())
     // Force re-fetch by toggling sourceVersions identity
     setSourceVersions(v => ({ ...v }))
-  }, [])
+  }, [pendingEdits.size])
 
   // Pin/unpin a source to a snapshot version
   const handleSetPin = useCallback(async (sourceId: string, snapDate: string | null) => {
