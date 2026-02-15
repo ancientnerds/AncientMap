@@ -417,6 +417,16 @@ export const UI_COLORS = {
 }
 
 // =============================================================================
+// Source Config - Display names, colors, and abbreviations for DB sources
+// =============================================================================
+
+export const SOURCE_CONFIG: Record<string, { name: string; color: string; abbr: string }> = {
+  ancient_nerds: { name: 'ANCIENT NERDS Originals', color: '#FFD700', abbr: 'AN' },
+  lyra: { name: 'ANCIENT NERDS Radar', color: '#8b5cf6', abbr: 'RAD' },
+  ancient_nerds_community: { name: 'ANCIENT NERDS Community', color: '#22c55e', abbr: 'COM' },
+}
+
+// =============================================================================
 // Helper Functions
 // =============================================================================
 

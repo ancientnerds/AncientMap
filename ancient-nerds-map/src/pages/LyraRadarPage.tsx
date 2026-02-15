@@ -11,6 +11,7 @@ import { config } from '../config'
 import { formatCoord, timeAgo } from '../utils/formatters'
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
 import { SiteBadges, CountryFlag, CopyButton } from '../components/metadata'
+import { SOURCE_CONFIG } from '../constants/colors'
 import { SitePopupOverlay } from '../components/SitePopupOverlay'
 import LazyImage from '../components/LazyImage'
 import type { SiteData } from '../data/sites'
@@ -74,6 +75,7 @@ interface RadarItem {
   data_sources: string[]
   commons_url: string | null
   nearby_an_site: { name: string; distance_km: number } | null
+  source: string | null
 }
 
 interface RadarResponse {
@@ -93,6 +95,7 @@ interface RadarStats {
 }
 
 type StatusFilter = 'all' | 'enriched' | 'pending' | 'added' | 'rejected'
+type SourceFilter = 'all' | 'lyra' | 'user'
 
 function formatTimestamp(seconds: number): string {
   if (!seconds || seconds <= 0) return ''
@@ -250,6 +253,20 @@ function suggestionToSiteData(suggestion: SuggestionMatch, itemName: string): Si
   }
 }
 
+function DbSourceBadge({ source }: { source: string | null }) {
+  const key = source === 'user' ? 'ancient_nerds_community' : 'lyra'
+  const cfg = SOURCE_CONFIG[key]
+  if (!cfg) return null
+  return (
+    <span
+      className="lyra-db-badge"
+      style={{ background: cfg.color + '25', color: cfg.color, borderColor: cfg.color + '55' }}
+    >
+      {cfg.abbr}
+    </span>
+  )
+}
+
 function RadarCard({ item, onViewSite }: { item: RadarItem; onViewSite?: (site: SiteData) => void }) {
   const [factsExpanded, setFactsExpanded] = useState(false)
   const [videosExpanded, setVideosExpanded] = useState(false)
@@ -267,6 +284,7 @@ function RadarCard({ item, onViewSite }: { item: RadarItem; onViewSite?: (site: 
         <h3 className="lyra-discovery-name">
           {item.display_name}
           <CopyButton text={item.display_name} title="Copy site name" size={14} />
+          <DbSourceBadge source={item.source} />
         </h3>
         {item.original_name && (
           <span className="lyra-discovery-original-name">
@@ -546,6 +564,7 @@ export default function LyraRadarPage() {
   const gridRef = useRef<HTMLDivElement>(null)
   const [columnCount, setColumnCount] = useState(3)
   const [showScrollTop, setShowScrollTop] = useState(false)
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
   const [showMap, setShowMap] = useState(false)
   const [mapHoveredId, setMapHoveredId] = useState<string | null>(null)
   const [mapPinnedId, setMapPinnedId] = useState<string | null>(null)
@@ -614,12 +633,13 @@ export default function LyraRadarPage() {
     append: boolean = false,
     mentions: number = minMentions,
     sort: string = sortBy,
-    statusParam: string = statusFilter
+    statusParam: string = statusFilter,
+    srcParam: string = sourceFilter
   ) => {
     try {
       setLoading(true)
       setError(null)
-      const url = `${config.api.baseUrl}/radar/list?page=${pageNum}&page_size=24&min_mentions=${mentions}&sort_by=${sort}&status=${statusParam}`
+      const url = `${config.api.baseUrl}/radar/list?page=${pageNum}&page_size=24&min_mentions=${mentions}&sort_by=${sort}&status=${statusParam}&source_filter=${srcParam}`
       const resp = await fetch(url)
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const data: RadarResponse = await resp.json()
@@ -631,12 +651,12 @@ export default function LyraRadarPage() {
     } finally {
       setLoading(false)
     }
-  }, [minMentions, sortBy, statusFilter])
+  }, [minMentions, sortBy, statusFilter, sourceFilter])
 
   // Initial load & filter changes
   useEffect(() => {
-    fetchRadar(1, false, minMentions, sortBy, statusFilter)
-  }, [minMentions, sortBy, statusFilter])
+    fetchRadar(1, false, minMentions, sortBy, statusFilter, sourceFilter)
+  }, [minMentions, sortBy, statusFilter, sourceFilter])
 
   // Fetch stats
   useEffect(() => {
@@ -652,14 +672,14 @@ export default function LyraRadarPage() {
     const observer = new IntersectionObserver(
       entries => {
         if (entries[0].isIntersecting && hasMore && !loading) {
-          fetchRadar(page + 1, true, minMentions, sortBy, statusFilter)
+          fetchRadar(page + 1, true, minMentions, sortBy, statusFilter, sourceFilter)
         }
       },
       { rootMargin: '200px' }
     )
     observer.observe(sentinelRef.current)
     return () => observer.disconnect()
-  }, [hasMore, loading, page, fetchRadar, minMentions, sortBy, statusFilter])
+  }, [hasMore, loading, page, fetchRadar, minMentions, sortBy, statusFilter, sourceFilter])
 
   const handleMinMentionsChange = (value: number) => {
     setMinMentions(value)
@@ -677,6 +697,13 @@ export default function LyraRadarPage() {
 
   const handleStatusChange = (value: StatusFilter) => {
     setStatusFilter(value)
+    setItems([])
+    setPage(1)
+    setHasMore(false)
+  }
+
+  const handleSourceChange = (value: SourceFilter) => {
+    setSourceFilter(value)
     setItems([])
     setPage(1)
     setHasMore(false)
@@ -723,6 +750,20 @@ export default function LyraRadarPage() {
                 key={val}
                 className={`news-page-chip${statusFilter === val ? ' active' : ''}`}
                 onClick={() => handleStatusChange(val)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="lyra-filter-group">
+          <span className="lyra-discoveries-filter-label">Database:</span>
+          <div className="lyra-discoveries-filter-chips">
+            {([['all', 'All'], ['lyra', 'Radar'], ['user', 'Community']] as const).map(([val, label]) => (
+              <button
+                key={val}
+                className={`news-page-chip${sourceFilter === val ? ' active' : ''}`}
+                onClick={() => handleSourceChange(val)}
               >
                 {label}
               </button>

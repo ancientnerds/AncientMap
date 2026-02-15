@@ -848,6 +848,56 @@ class NewsArticle(Base):
 
 
 # =============================================================================
+# Database Snapshots (Version Control for Audit Edits)
+# =============================================================================
+
+
+class DbSnapshot(Base):
+    """Snapshot of site rows before a batch edit or upload."""
+    __tablename__ = "db_snapshots"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_by: Mapped[str] = mapped_column(String(50), nullable=False)  # "audit", "upload", "admin"
+    description: Mapped[str] = mapped_column(String(500), nullable=False)
+    snapshot_type: Mapped[str] = mapped_column(String(20), nullable=False)  # "edit" | "upload"
+    row_count: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    rows: Mapped[list["SnapshotRow"]] = relationship(
+        "SnapshotRow", back_populates="snapshot", cascade="all, delete-orphan",
+    )
+
+    def __repr__(self) -> str:
+        return f"<DbSnapshot {self.id} ({self.snapshot_type}, {self.row_count} rows)>"
+
+
+class SnapshotRow(Base):
+    """Single row captured in a snapshot — stores pre-change state."""
+    __tablename__ = "snapshot_rows"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    snapshot_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("db_snapshots.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    site_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    old_data: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+    snapshot: Mapped["DbSnapshot"] = relationship("DbSnapshot", back_populates="rows")
+
+    __table_args__ = (
+        Index("idx_snapshot_rows_snapshot", "snapshot_id"),
+        Index("idx_snapshot_rows_site", "site_id"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<SnapshotRow snapshot={self.snapshot_id} site={self.site_id}>"
+
+
+# =============================================================================
 # Helper Functions
 # =============================================================================
 

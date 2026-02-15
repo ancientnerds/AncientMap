@@ -1,11 +1,13 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { config } from '../config'
-import { CATEGORY_COLORS, PERIOD_COLORS, getCategoryColor, getPeriodColor } from '../constants/colors'
+import { CATEGORY_COLORS, PERIOD_COLORS, getCategoryColor, getPeriodColor, SOURCE_CONFIG } from '../constants/colors'
 import { resolvePeriod } from '../data/sites'
 import type { SiteData } from '../data/sites'
 import { SitePopupOverlay } from '../components/SitePopupOverlay'
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
-import { exportCSV, exportJSON, exportGeoJSON } from '../utils/exportFormats'
+import { exportCSV, exportJSON, exportGeoJSON, parseCSV, parseJSON, parseGeoJSON } from '../utils/exportFormats'
+import type { ParsedSite } from '../utils/exportFormats'
+import { MetadataBadge } from '../components/metadata/MetadataBadge'
 import PinAuthModal from '../components/PinAuthModal'
 import '../styles/db-audit.css'
 
@@ -59,11 +61,17 @@ interface SnapshotEntry {
   sites: number
 }
 
-const SOURCE_CONFIG: Record<string, { name: string; color: string }> = {
-  ancient_nerds: { name: 'ANCIENT NERDS Original', color: '#FFD700' },
-  lyra: { name: 'ANCIENT NERDS Radar', color: '#8b5cf6' },
-  ancient_nerds_community: { name: 'ANCIENT NERDS Community', color: '#22c55e' },
+interface PendingEdit {
+  siteId: string
+  siteName: string
+  changes: Record<string, { old: string; new: string }>
+  fullUpdate: {
+    id: string; title: string; description?: string; category: string
+    period: string; coordinates: [number, number]; sourceUrl?: string
+  }
 }
+
+// SOURCE_CONFIG imported from constants/colors.ts
 
 function hasPeriodIssue(s: AuditSite) { return !s.pn && s.p == null }
 function hasTypeIssue(s: AuditSite) { return !s.t }
@@ -206,8 +214,6 @@ export default function DbAuditPage() {
   // Modal editing
   const [editModalSite, setEditModalSite] = useState<AuditSite | null>(null)
   const [modalForm, setModalForm] = useState({ title: '', description: '', lat: '', lon: '', category: '', period: '', sourceUrl: '' })
-  const [saving, setSaving] = useState(false)
-
   // Expanded descriptions
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
@@ -224,6 +230,21 @@ export default function DbAuditPage() {
   const [snapshots, setSnapshots] = useState<SnapshotEntry[]>([])
   const [selectedVersion, setSelectedVersion] = useState('latest')
 
+  // DB Snapshots (from API)
+  const [dbSnapshots, setDbSnapshots] = useState<{ id: string; created_at: string; description: string; row_count: number }[]>([])
+
+  // Pending edits (edit session)
+  const [pendingEdits, setPendingEdits] = useState<Map<string, PendingEdit>>(new Map())
+  const [showReviewModal, setShowReviewModal] = useState(false)
+  const [committing, setCommitting] = useState(false)
+
+  // Upload
+  const [showUploadModal, setShowUploadModal] = useState(false)
+  const [uploadParsed, setUploadParsed] = useState<ParsedSite[]>([])
+  const [uploadFileName, setUploadFileName] = useState('')
+  const [uploadTarget, setUploadTarget] = useState('ancient_nerds')
+  const [uploading, setUploading] = useState(false)
+
   // Fetch snapshot manifest on mount
   useEffect(() => {
     (async () => {
@@ -238,6 +259,19 @@ export default function DbAuditPage() {
       }
     })()
   }, [])
+
+  // Fetch DB snapshots
+  const refreshDbSnapshots = useCallback(async () => {
+    try {
+      const res = await fetch(`${config.api.baseUrl}/sites/snapshots?${CACHE_BUSTER}`)
+      if (res.ok) {
+        const data = await res.json()
+        setDbSnapshots(data.snapshots || [])
+      }
+    } catch { /* optional */ }
+  }, [])
+
+  useEffect(() => { refreshDbSnapshots() }, [refreshDbSnapshots])
 
   // Fetch sites (live or from snapshot)
   useEffect(() => {
@@ -264,19 +298,20 @@ export default function DbAuditPage() {
     })()
   }, [selectedVersion])
 
-  // Compute stats
+  // Compute stats (respect source filter)
   const stats = useMemo(() => {
-    const total = sites.length
-    const no_period = sites.filter(hasPeriodIssue).length
-    const no_type = sites.filter(hasTypeIssue).length
-    const no_country = sites.filter(hasCountryIssue).length
-    const suspect_modern = sites.filter(isSuspectModern).length
-    const no_desc = sites.filter(hasDescIssue).length
-    const no_source = sites.filter(hasSourceIssue).length
-    const no_image = sites.filter(hasImageIssue).length
-    const no_coords = sites.filter(hasCoordsIssue).length
+    const base = sourceFilter !== 'all' ? sites.filter(s => s.s === sourceFilter) : sites
+    const total = base.length
+    const no_period = base.filter(hasPeriodIssue).length
+    const no_type = base.filter(hasTypeIssue).length
+    const no_country = base.filter(hasCountryIssue).length
+    const suspect_modern = base.filter(isSuspectModern).length
+    const no_desc = base.filter(hasDescIssue).length
+    const no_source = base.filter(hasSourceIssue).length
+    const no_image = base.filter(hasImageIssue).length
+    const no_coords = base.filter(hasCoordsIssue).length
     return { total, no_period, no_type, no_country, suspect_modern, no_desc, no_source, no_image, no_coords }
-  }, [sites])
+  }, [sites, sourceFilter])
 
   // Unique filter values
   const uniqueTypes = useMemo(() =>
@@ -385,43 +420,6 @@ export default function DbAuditPage() {
     }
   }, [])
 
-  // Save site via PUT
-  const saveSite = useCallback(async (siteId: string, update: {
-    title: string; description?: string; category: string; period: string;
-    coordinates: [number, number]; sourceUrl?: string
-  }) => {
-    if (!adminPin) return false
-    setSaving(true)
-    try {
-      const res = await fetch(`${config.api.baseUrl}/sites/${siteId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Admin-Pin': adminPin,
-        },
-        body: JSON.stringify({
-          title: update.title,
-          location: null,
-          category: update.category,
-          period: update.period,
-          description: update.description || null,
-          sourceUrl: update.sourceUrl || null,
-          coordinates: update.coordinates,
-        }),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.detail || `HTTP ${res.status}`)
-      }
-      return true
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Save failed')
-      return false
-    } finally {
-      setSaving(false)
-    }
-  }, [adminPin])
-
   // Inline edit handlers
   const startInlineEdit = useCallback((site: AuditSite, field: 'type' | 'period' | 'country') => {
     requireAuth(() => {
@@ -432,7 +430,7 @@ export default function DbAuditPage() {
     })
   }, [requireAuth])
 
-  const commitInlineEdit = useCallback(async () => {
+  const commitInlineEdit = useCallback(() => {
     if (!editingCell) return
     const site = sites.find(s => s.id === editingCell.id)
     if (!site) return
@@ -440,29 +438,45 @@ export default function DbAuditPage() {
     const { field } = editingCell
     const newType = field === 'type' ? editValue : (site.t || 'Unknown')
     const newPeriod = field === 'period' ? editValue : resolvePeriod(site.pn, site.p)
-    const ok = await saveSite(site.id, {
-      title: site.n,
-      description: site.d,
-      category: newType,
-      period: newPeriod,
-      coordinates: [site.lo, site.la],
-      sourceUrl: site.u,
-    })
 
-    if (ok) {
-      const now = new Date().toISOString()
-      setSites(prev => prev.map(s => {
-        if (s.id !== site.id) return s
-        const updated = { ...s, ea: now }
-        if (field === 'type') updated.t = editValue
-        else if (field === 'period') updated.pn = editValue
-        else updated.c = editValue
-        updated.eb = 'audit'
-        return updated
-      }))
+    // Build change record
+    const changes: Record<string, { old: string; new: string }> = {}
+    if (field === 'type') changes['Type'] = { old: site.t || 'Unknown', new: editValue }
+    else if (field === 'period') changes['Period'] = { old: resolvePeriod(site.pn, site.p), new: editValue }
+    else changes['Country'] = { old: site.c || '', new: editValue }
+
+    // Merge with existing pending edit for this site
+    const existing = pendingEdits.get(site.id)
+    const merged = existing ? { ...existing.changes, ...changes } : changes
+
+    const edit: PendingEdit = {
+      siteId: site.id,
+      siteName: site.n,
+      changes: merged,
+      fullUpdate: {
+        id: site.id,
+        title: site.n,
+        description: site.d,
+        category: newType,
+        period: newPeriod,
+        coordinates: [site.lo, site.la],
+        sourceUrl: site.u,
+      },
     }
+
+    setPendingEdits(prev => new Map(prev).set(site.id, edit))
+
+    // Update local state optimistically
+    setSites(prev => prev.map(s => {
+      if (s.id !== site.id) return s
+      const updated = { ...s }
+      if (field === 'type') updated.t = editValue
+      else if (field === 'period') updated.pn = editValue
+      else updated.c = editValue
+      return updated
+    }))
     setEditingCell(null)
-  }, [editingCell, editValue, sites, saveSite])
+  }, [editingCell, editValue, sites, pendingEdits])
 
   const cancelInlineEdit = useCallback(() => setEditingCell(null), [])
 
@@ -482,42 +496,57 @@ export default function DbAuditPage() {
     })
   }, [requireAuth])
 
-  const saveModal = useCallback(async () => {
+  const saveModal = useCallback(() => {
     if (!editModalSite) return
     const lat = parseFloat(modalForm.lat)
     const lon = parseFloat(modalForm.lon)
     if (isNaN(lat) || isNaN(lon)) { alert('Invalid coordinates'); return }
 
-    const ok = await saveSite(editModalSite.id, {
-      title: modalForm.title,
-      description: modalForm.description,
-      category: modalForm.category,
-      period: modalForm.period,
-      coordinates: [lon, lat],
-      sourceUrl: modalForm.sourceUrl,
-    })
+    // Build change record
+    const changes: Record<string, { old: string; new: string }> = {}
+    if (modalForm.title !== editModalSite.n) changes['Name'] = { old: editModalSite.n, new: modalForm.title }
+    if (modalForm.category !== (editModalSite.t || '')) changes['Type'] = { old: editModalSite.t || '', new: modalForm.category }
+    if (modalForm.period !== resolvePeriod(editModalSite.pn, editModalSite.p)) changes['Period'] = { old: resolvePeriod(editModalSite.pn, editModalSite.p), new: modalForm.period }
+    if (modalForm.description !== (editModalSite.d || '')) changes['Description'] = { old: (editModalSite.d || '').slice(0, 50), new: modalForm.description.slice(0, 50) }
+    if (String(lat) !== String(editModalSite.la) || String(lon) !== String(editModalSite.lo)) changes['Coords'] = { old: `${editModalSite.la}, ${editModalSite.lo}`, new: `${lat}, ${lon}` }
+    if (modalForm.sourceUrl !== (editModalSite.u || '')) changes['Source URL'] = { old: editModalSite.u || '', new: modalForm.sourceUrl }
 
-    if (ok) {
-      const now = new Date().toISOString()
-      setSites(prev => prev.map(s => {
-        if (s.id !== editModalSite.id) return s
-        return {
-          ...s,
-          n: modalForm.title,
-          d: modalForm.description || undefined,
-          la: lat,
-          lo: lon,
-          t: modalForm.category || undefined,
-          pn: modalForm.period,
-          c: s.c,
-          u: modalForm.sourceUrl || undefined,
-          eb: 'audit',
-          ea: now,
-        }
-      }))
-      setEditModalSite(null)
+    if (Object.keys(changes).length === 0) { setEditModalSite(null); return }
+
+    const edit: PendingEdit = {
+      siteId: editModalSite.id,
+      siteName: modalForm.title,
+      changes,
+      fullUpdate: {
+        id: editModalSite.id,
+        title: modalForm.title,
+        description: modalForm.description,
+        category: modalForm.category,
+        period: modalForm.period,
+        coordinates: [lon, lat],
+        sourceUrl: modalForm.sourceUrl,
+      },
     }
-  }, [editModalSite, modalForm, saveSite])
+
+    setPendingEdits(prev => new Map(prev).set(editModalSite.id, edit))
+
+    // Update local state optimistically
+    setSites(prev => prev.map(s => {
+      if (s.id !== editModalSite.id) return s
+      return {
+        ...s,
+        n: modalForm.title,
+        d: modalForm.description || undefined,
+        la: lat,
+        lo: lon,
+        t: modalForm.category || undefined,
+        pn: modalForm.period,
+        c: s.c,
+        u: modalForm.sourceUrl || undefined,
+      }
+    }))
+    setEditModalSite(null)
+  }, [editModalSite, modalForm])
 
   // Sort handler
   const handleSort = useCallback((col: SortColumn) => {
@@ -549,6 +578,150 @@ export default function DbAuditPage() {
   const handleExportCSV = useCallback(() => exportCSV(filteredSites), [filteredSites])
   const handleExportJSON = useCallback(() => exportJSON(filteredSites), [filteredSites])
   const handleExportGeoJSON = useCallback(() => exportGeoJSON(filteredSites), [filteredSites])
+
+  // Discard all pending edits — reload from server
+  const discardAllEdits = useCallback(() => {
+    setPendingEdits(new Map())
+    // Re-fetch to reset optimistic updates
+    setSelectedVersion(v => v === 'latest' ? 'latest' : v)
+    // Force re-fetch
+    setLoading(true)
+    ;(async () => {
+      try {
+        const res = await fetch(`${config.api.baseUrl}/sites/all?source=ancient_nerds&source=lyra&source=ancient_nerds_community&limit=100000&${CACHE_BUSTER}`)
+        if (res.ok) {
+          const data = await res.json()
+          setSites(data.sites || [])
+        }
+      } finally { setLoading(false) }
+    })()
+  }, [])
+
+  // Commit all pending edits via batch-update
+  const commitAllEdits = useCallback(async () => {
+    if (!adminPin || pendingEdits.size === 0) return
+    setCommitting(true)
+    try {
+      const updates = Array.from(pendingEdits.values()).map(e => e.fullUpdate)
+      const res = await fetch(`${config.api.baseUrl}/sites/batch-update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': adminPin },
+        body: JSON.stringify(updates),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.detail || `HTTP ${res.status}`)
+      }
+      const result = await res.json()
+      const now = new Date().toISOString()
+      // Mark committed sites with edit tracking
+      setSites(prev => prev.map(s => {
+        if (!pendingEdits.has(s.id)) return s
+        return { ...s, eb: 'audit', ea: now }
+      }))
+      setPendingEdits(new Map())
+      setShowReviewModal(false)
+      refreshDbSnapshots()
+      alert(`Committed ${result.updated} edits. Snapshot: ${result.snapshot_id?.slice(0, 8)}`)
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Commit failed')
+    } finally {
+      setCommitting(false)
+    }
+  }, [adminPin, pendingEdits, refreshDbSnapshots])
+
+  // Upload file handler
+  const handleUploadFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadFileName(file.name)
+    const reader = new FileReader()
+    reader.onload = () => {
+      const text = reader.result as string
+      let parsed: ParsedSite[] = []
+      if (file.name.endsWith('.csv')) parsed = parseCSV(text)
+      else if (file.name.endsWith('.geojson')) parsed = parseGeoJSON(text)
+      else parsed = parseJSON(text)
+
+      // Match against existing sites by name
+      const nameIndex = new Map(sites.map(s => [s.n.toLowerCase(), s]))
+      for (const p of parsed) {
+        const existing = nameIndex.get(p.name.toLowerCase())
+        if (existing) {
+          p._status = 'update'
+          p._matchedId = existing.id
+        } else if (!p._status) {
+          p._status = 'insert'
+        }
+      }
+      setUploadParsed(parsed)
+    }
+    reader.readAsText(file)
+  }, [sites])
+
+  // Commit upload
+  const commitUpload = useCallback(async () => {
+    if (!adminPin || uploadParsed.length === 0) return
+    setUploading(true)
+    try {
+      const payload = uploadParsed
+        .filter(p => p._status !== 'error')
+        .map(p => ({
+          name: p.name, lat: p.lat, lon: p.lon,
+          site_type: p.site_type || null,
+          period_name: p.period_name || null,
+          period_start: p.period_start ?? null,
+          country: p.country || null,
+          description: p.description || null,
+          source_url: p.source_url || null,
+          thumbnail_url: p.thumbnail_url || null,
+          existing_id: p._matchedId || null,
+        }))
+      const res = await fetch(`${config.api.baseUrl}/sites/batch-upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': adminPin },
+        body: JSON.stringify({ sites: payload, target_source: uploadTarget }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.detail || `HTTP ${res.status}`)
+      }
+      const result = await res.json()
+      setShowUploadModal(false)
+      setUploadParsed([])
+      setUploadFileName('')
+      refreshDbSnapshots()
+      alert(`Upload complete: ${result.inserted} inserted, ${result.updated} updated`)
+      // Re-fetch sites
+      discardAllEdits()
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+    }
+  }, [adminPin, uploadParsed, uploadTarget, refreshDbSnapshots, discardAllEdits])
+
+  // Restore a DB snapshot
+  const restoreDbSnapshot = useCallback(async (snapshotId: string) => {
+    if (!adminPin) return
+    if (!confirm('Restore this snapshot? This will revert the affected sites to their pre-change state.')) return
+    try {
+      const res = await fetch(`${config.api.baseUrl}/sites/snapshots/${snapshotId}/restore`, {
+        method: 'POST',
+        headers: { 'X-Admin-Pin': adminPin },
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.detail || `HTTP ${res.status}`)
+      }
+      const result = await res.json()
+      alert(`Restored ${result.restored} sites`)
+      discardAllEdits()
+      refreshDbSnapshots()
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Restore failed')
+    }
+  }, [adminPin, discardAllEdits, refreshDbSnapshots])
 
   // Open site popup
   const openPopup = useCallback((s: AuditSite) => {
@@ -625,6 +798,11 @@ export default function DbAuditPage() {
           )}
         </div>
         <div className="db-header-right">
+          {isAuthenticated && (
+            <button className="db-upload-btn" onClick={() => setShowUploadModal(true)}>
+              Upload
+            </button>
+          )}
           {isAuthenticated ? (
             <span className="db-auth-badge db-auth-unlocked">Editing Unlocked</span>
           ) : (
@@ -764,6 +942,7 @@ export default function DbAuditPage() {
           <thead>
             <tr>
               <th className="db-th" onClick={() => handleSort('name')}>Name{sortArrow('name')}</th>
+              <th className="db-th db-th-nosort db-th-db">DB</th>
               <th className="db-th db-th-nosort">Coords</th>
               <th className="db-th" onClick={() => handleSort('type')}>Type{sortArrow('type')}</th>
               <th className="db-th" onClick={() => handleSort('period')}>Period{sortArrow('period')}</th>
@@ -784,11 +963,23 @@ export default function DbAuditPage() {
               const isEditingCountry = editingCell?.id === site.id && editingCell.field === 'country'
               const flagUrl = site.c ? getCountryFlatFlagUrl(site.c) : null
 
+              const isPending = pendingEdits.has(site.id)
+              const srcCfg = SOURCE_CONFIG[site.s]
+
               return (
-                <tr key={site.id} className="db-row">
+                <tr key={site.id} className={`db-row ${isPending ? 'db-row-pending' : ''}`}>
                   {/* Name */}
                   <td className="db-td db-td-name" title={site.id} onClick={() => openPopup(site)}>
                     {site.n}
+                  </td>
+
+                  {/* DB source badge */}
+                  <td className="db-td db-td-db">
+                    {srcCfg && (
+                      <span className="db-source-abbr" style={{ background: srcCfg.color + '25', color: srcCfg.color, borderColor: srcCfg.color + '55' }}>
+                        {srcCfg.abbr}
+                      </span>
+                    )}
                   </td>
 
                   {/* Coordinates */}
@@ -814,13 +1005,10 @@ export default function DbAuditPage() {
                         <option value="">-- none --</option>
                         {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
+                    ) : site.t ? (
+                      <MetadataBadge label={site.t} color={getCategoryColor(site.t)} size="sm" />
                     ) : (
-                      <span
-                        className={`db-badge ${!site.t ? 'missing' : ''}`}
-                        style={site.t ? { backgroundColor: getCategoryColor(site.t) + '33', color: getCategoryColor(site.t), borderColor: getCategoryColor(site.t) + '66' } : undefined}
-                      >
-                        {site.t || 'MISSING'}
-                      </span>
+                      <span className="db-badge missing">MISSING</span>
                     )}
                   </td>
 
@@ -841,13 +1029,10 @@ export default function DbAuditPage() {
                         <option value="Unknown">Unknown</option>
                         {SORTED_PERIODS.filter(p => p !== 'Unknown').map(p => <option key={p} value={p}>{p}</option>)}
                       </select>
+                    ) : !hasPeriodIssue(site) ? (
+                      <MetadataBadge label={period} color={getPeriodColor(period)} size="sm" />
                     ) : (
-                      <span
-                        className={`db-badge ${hasPeriodIssue(site) ? 'missing' : ''}`}
-                        style={!hasPeriodIssue(site) ? { backgroundColor: getPeriodColor(period) + '33', color: getPeriodColor(period), borderColor: getPeriodColor(period) + '66' } : undefined}
-                      >
-                        {period}
-                      </span>
+                      <span className="db-badge missing">{period}</span>
                     )}
                   </td>
 
@@ -958,13 +1143,144 @@ export default function DbAuditPage() {
         variant="admin"
       />
 
+      {/* Pending changes bar */}
+      {pendingEdits.size > 0 && (
+        <div className="db-pending-bar">
+          <span className="db-pending-count">{pendingEdits.size} pending change{pendingEdits.size !== 1 ? 's' : ''}</span>
+          <button className="db-btn db-btn-discard" onClick={discardAllEdits}>Discard All</button>
+          <button className="db-btn db-btn-commit" onClick={() => setShowReviewModal(true)}>
+            Review &amp; Commit
+          </button>
+        </div>
+      )}
+
+      {/* Review modal */}
+      {showReviewModal && (
+        <div className="db-modal-overlay" onClick={() => !committing && setShowReviewModal(false)}>
+          <div className="db-modal db-modal-review" onClick={e => e.stopPropagation()}>
+            <div className="db-modal-header">
+              <h2>Review Changes ({pendingEdits.size} edit{pendingEdits.size !== 1 ? 's' : ''})</h2>
+              <button className="db-modal-close" onClick={() => !committing && setShowReviewModal(false)}>&times;</button>
+            </div>
+            <div className="db-modal-body db-review-list">
+              {Array.from(pendingEdits.values()).map(edit => (
+                <div key={edit.siteId} className="db-review-item">
+                  <div className="db-review-name">{edit.siteName}</div>
+                  {Object.entries(edit.changes).map(([field, { old: oldVal, new: newVal }]) => (
+                    <div key={field} className="db-review-change">
+                      <span className="db-review-field">{field}:</span>
+                      <span className="db-review-old">{oldVal || '(empty)'}</span>
+                      <span className="db-review-arrow">&rarr;</span>
+                      <span className="db-review-new">{newVal || '(empty)'}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+            <div className="db-modal-footer">
+              <button className="db-btn db-btn-cancel" onClick={() => setShowReviewModal(false)} disabled={committing}>Cancel</button>
+              <button className="db-btn db-btn-commit" onClick={commitAllEdits} disabled={committing}>
+                {committing ? 'Committing...' : 'Commit All'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload modal */}
+      {showUploadModal && (
+        <div className="db-modal-overlay" onClick={() => !uploading && setShowUploadModal(false)}>
+          <div className="db-modal db-modal-upload" onClick={e => e.stopPropagation()}>
+            <div className="db-modal-header">
+              <h2>Upload Sites</h2>
+              <button className="db-modal-close" onClick={() => !uploading && setShowUploadModal(false)}>&times;</button>
+            </div>
+            <div className="db-modal-body">
+              <div className="db-field">
+                <label>Target Database</label>
+                <select value={uploadTarget} onChange={e => setUploadTarget(e.target.value)}>
+                  {Object.entries(SOURCE_CONFIG).map(([id, cfg]) => (
+                    <option key={id} value={id}>{cfg.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="db-field">
+                <label>File (CSV, JSON, or GeoJSON)</label>
+                <input type="file" accept=".csv,.json,.geojson" onChange={handleUploadFile} />
+              </div>
+              {uploadParsed.length > 0 && (
+                <>
+                  <div className="db-upload-summary">
+                    <span className="db-upload-file">{uploadFileName}</span>
+                    <span className="db-upload-stat db-upload-insert">{uploadParsed.filter(p => p._status === 'insert').length} new</span>
+                    <span className="db-upload-stat db-upload-update">{uploadParsed.filter(p => p._status === 'update').length} updates</span>
+                    <span className="db-upload-stat db-upload-error">{uploadParsed.filter(p => p._status === 'error').length} errors</span>
+                  </div>
+                  <div className="db-upload-preview">
+                    <table className="db-table">
+                      <thead>
+                        <tr>
+                          <th className="db-th db-th-nosort">Status</th>
+                          <th className="db-th db-th-nosort">Name</th>
+                          <th className="db-th db-th-nosort">Type</th>
+                          <th className="db-th db-th-nosort">Period</th>
+                          <th className="db-th db-th-nosort">Country</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {uploadParsed.slice(0, 100).map((p, i) => (
+                          <tr key={i} className={`db-row db-upload-row-${p._status}`}>
+                            <td className="db-td">
+                              <span className={`db-upload-status-pill db-upload-status-${p._status}`}>
+                                {p._status === 'insert' ? 'NEW' : p._status === 'update' ? 'UPD' : 'ERR'}
+                              </span>
+                            </td>
+                            <td className="db-td">{p.name}</td>
+                            <td className="db-td">{p.site_type || ''}</td>
+                            <td className="db-td">{p.period_name || ''}</td>
+                            <td className="db-td">{p.country || ''}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {uploadParsed.length > 100 && <div className="db-muted" style={{ padding: 8 }}>...and {uploadParsed.length - 100} more</div>}
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="db-modal-footer">
+              <button className="db-btn db-btn-cancel" onClick={() => { setShowUploadModal(false); setUploadParsed([]); setUploadFileName('') }} disabled={uploading}>Cancel</button>
+              <button className="db-btn db-btn-commit" onClick={commitUpload} disabled={uploading || uploadParsed.filter(p => p._status !== 'error').length === 0}>
+                {uploading ? 'Uploading...' : `Commit Upload (${uploadParsed.filter(p => p._status !== 'error').length})`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DB Snapshots (undo history) */}
+      {isAuthenticated && dbSnapshots.length > 0 && (
+        <details className="db-snapshots-panel">
+          <summary className="db-snapshots-summary">Undo History ({dbSnapshots.length} snapshots)</summary>
+          <div className="db-snapshots-list">
+            {dbSnapshots.map(snap => (
+              <div key={snap.id} className="db-snapshot-item">
+                <span className="db-snapshot-desc">{snap.description}</span>
+                <span className="db-snapshot-meta">{snap.row_count} rows &middot; {formatRelativeDate(snap.created_at)}</span>
+                <button className="db-btn db-btn-restore" onClick={() => restoreDbSnapshot(snap.id)}>Restore</button>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+
       {/* Edit Modal */}
       {editModalSite && (
-        <div className="db-modal-overlay" onClick={() => !saving && setEditModalSite(null)}>
+        <div className="db-modal-overlay" onClick={() => setEditModalSite(null)}>
           <div className="db-modal" onClick={e => e.stopPropagation()}>
             <div className="db-modal-header">
               <h2>Edit Site</h2>
-              <button className="db-modal-close" onClick={() => !saving && setEditModalSite(null)}>&times;</button>
+              <button className="db-modal-close" onClick={() => setEditModalSite(null)}>&times;</button>
             </div>
             <div className="db-modal-body">
               <div className="db-field">
@@ -1004,10 +1320,8 @@ export default function DbAuditPage() {
               </div>
             </div>
             <div className="db-modal-footer">
-              <button className="db-btn db-btn-cancel" onClick={() => setEditModalSite(null)} disabled={saving}>Cancel</button>
-              <button className="db-btn db-btn-save" onClick={saveModal} disabled={saving}>
-                {saving ? 'Saving...' : 'Save'}
-              </button>
+              <button className="db-btn db-btn-cancel" onClick={() => setEditModalSite(null)}>Cancel</button>
+              <button className="db-btn db-btn-save" onClick={saveModal}>Save</button>
             </div>
           </div>
         </div>
