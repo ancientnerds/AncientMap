@@ -10,6 +10,7 @@ import type { Site } from '../types/data'
 import { offlineFetch } from './OfflineFetch'
 
 const API_BASE_URL = config.api.baseUrl
+const CACHE_BUSTER = `_v=${__BUILD_HASH__}`
 
 /** Compact site format from API */
 interface CompactSite {
@@ -124,7 +125,7 @@ class SourceLoaderClass {
 
     try {
       const response = await offlineFetch(
-        `${API_BASE_URL}/sites/all?source=${sourceId}&limit=100000`
+        `${API_BASE_URL}/sites/all?source=${sourceId}&limit=100000&${CACHE_BUSTER}`
       )
 
       if (!response.ok) {
