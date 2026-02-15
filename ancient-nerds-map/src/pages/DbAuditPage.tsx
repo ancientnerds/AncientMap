@@ -64,11 +64,10 @@ export default function DbAuditPage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${config.api.baseUrl}/sites/all?limit=100000&${CACHE_BUSTER}`)
+        const res = await fetch(`${config.api.baseUrl}/sites/all?source=ancient_nerds&source=ancient_nerds_radar&limit=100000&${CACHE_BUSTER}`)
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
-        const OUR_SOURCES = ['ancient_nerds', 'ancient_nerds_radar']
-        setSites((data.sites || []).filter((s: AuditSite) => OUR_SOURCES.includes(s.s)))
+        setSites(data.sites || [])
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : 'Failed to load sites')
       } finally {
