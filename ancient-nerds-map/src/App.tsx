@@ -10,7 +10,7 @@ const DisclaimerModal = lazy(() => import('./components/DisclaimerModal'))
 const LyraChatModal = lazy(() => import('./components/LyraChatModal'))
 const DownloadManager = lazy(() => import('./components/DownloadManager'))
 const NewsFeedPanel = lazy(() => import('./components/NewsFeedPanel'))
-import { SiteData, fetchSites, getCurrentSites, addSourceSites, SOURCE_COLORS, getDefaultEnabledSourceIds, getSourceColor, getCategoryColor, getPeriodColor, setDataSourceError, categorizePeriod } from './data/sites'
+import { SiteData, fetchSites, getCurrentSites, addSourceSites, SOURCE_COLORS, getDefaultEnabledSourceIds, getSourceColor, getCategoryColor, getPeriodColor, setDataSourceError, resolvePeriod } from './data/sites'
 import { DataStore } from './data/DataStore'
 import { SourceLoader } from './services/SourceLoader'
 import { ImageCache } from './services/ImageCache'
@@ -437,7 +437,7 @@ function AppContent() {
           title: s.n,
           coordinates: [s.lo, s.la] as [number, number],
           category: s.t || 'Unknown',
-          period: s.pn || categorizePeriod(s.p),
+          period: resolvePeriod(s.pn, s.p),
           periodStart: s.p ?? null,
           location: s.c || '',
           description: s.d || '',

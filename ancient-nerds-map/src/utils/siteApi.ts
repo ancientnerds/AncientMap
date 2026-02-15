@@ -1,4 +1,4 @@
-import { categorizePeriod } from '../data/sites'
+import { resolvePeriod } from '../data/sites'
 import type { SiteData } from '../data/sites'
 
 // API response shape from /api/sites/{id}
@@ -32,7 +32,7 @@ export function apiDetailToSiteData(detail: ApiSiteDetail): SiteData {
     title: detail.name || 'Unknown Site',
     coordinates: [lon, lat],
     category: detail.type || 'Unknown',
-    period: detail.periodName || categorizePeriod(detail.periodStart),
+    period: resolvePeriod(detail.periodName, detail.periodStart),
     periodStart: detail.periodStart,
     location: detail.country || '',
     description: detail.description || '',
