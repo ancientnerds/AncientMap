@@ -433,6 +433,9 @@ class UnifiedSite(Base):
     thumbnail_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Edit tracking
+    edited_by: Mapped[str] = mapped_column(String(20), server_default="initial", nullable=False)
+
     # Full original data
     raw_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 

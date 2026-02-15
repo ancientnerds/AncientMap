@@ -401,6 +401,27 @@
   position: relative;
 }
 
+/* Edited-by column */
+.db-td-edited {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.db-edited-initial {
+  color: var(--text-secondary);
+  opacity: 0.5;
+}
+
+.db-edited-audit {
+  color: #60a5fa;
+}
+
+.db-edited-admin {
+  color: #f59e0b;
+}
+
 /* Badges */
 .db-badge {
   display: inline-block;
