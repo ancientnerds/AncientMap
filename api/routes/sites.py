@@ -1054,10 +1054,15 @@ async def batch_update_sites(
     global _static_sites_cache
     _static_sites_cache = None
 
+    # Create file-based snapshot for version history dropdown
+    from api.services.snapshots import export_file_snapshot
+    file_snapshot_key = export_file_snapshot(db)
+
     return {
         "snapshot_id": snapshot_id,
         "updated": len(updates),
         "synced_radar": total_synced,
+        "file_snapshot": file_snapshot_key,
     }
 
 
