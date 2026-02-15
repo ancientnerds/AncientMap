@@ -749,6 +749,58 @@ def _extract_bearer_token(authorization: str | None) -> str:
     return authorization[7:]  # Remove "Bearer " prefix
 
 
+def _sync_to_radar(db: Session, site_id: str, site_update: 'SiteUpdateRequest', lat: float, lon: float) -> int:
+    """Sync site changes to user_contributions via promoted_site_id FK. Returns synced count."""
+    sync_result = db.execute(
+        text("""
+            UPDATE user_contributions
+            SET corrected_name = :name,
+                description = :description,
+                lat = :lat,
+                lon = :lon,
+                site_type = :site_type,
+                period_name = :period_name,
+                thumbnail_url = (SELECT thumbnail_url FROM unified_sites WHERE id::text = :site_id),
+                wikipedia_url = :source_url
+            WHERE promoted_site_id::text = :site_id
+            RETURNING id
+        """),
+        {
+            "site_id": site_id,
+            "name": site_update.title,
+            "description": site_update.description,
+            "lat": lat,
+            "lon": lon,
+            "site_type": normalize_site_type(site_update.category),
+            "period_name": site_update.period,
+            "source_url": site_update.sourceUrl,
+        },
+    )
+    return len(sync_result.fetchall())
+
+
+def _verify_admin(authorization: str | None, x_admin_pin: str | None) -> str:
+    """Verify admin credentials. Returns edited_by label. Raises HTTPException on failure."""
+    from api.services.admin_auth import ADMIN_PIN
+
+    if authorization:
+        admin_key = _extract_bearer_token(authorization)
+        configured_admin_key = os.getenv("ADMIN_KEY", "")
+        if not configured_admin_key:
+            raise HTTPException(status_code=503, detail="Admin access not configured")
+        if not secrets.compare_digest(admin_key, configured_admin_key):
+            raise HTTPException(status_code=403, detail="Invalid admin key")
+        return "admin"
+    elif x_admin_pin:
+        if not ADMIN_PIN:
+            raise HTTPException(status_code=503, detail="Admin PIN not configured")
+        if not secrets.compare_digest(x_admin_pin, ADMIN_PIN):
+            raise HTTPException(status_code=403, detail="Invalid admin PIN")
+        return "audit"
+    else:
+        raise HTTPException(status_code=401, detail="Authorization required")
+
+
 @router.put("/{site_id}")
 async def update_site(
     site_id: str,
@@ -765,27 +817,7 @@ async def update_site(
     - Authorization: Bearer <ADMIN_KEY> header (existing)
     - X-Admin-Pin: <4-digit PIN> header (DB audit page)
     """
-    from api.services.admin_auth import ADMIN_PIN
-
-    if authorization:
-        # Existing Bearer token auth
-        admin_key = _extract_bearer_token(authorization)
-        configured_admin_key = os.getenv("ADMIN_KEY", "")
-        if not configured_admin_key:
-            logger.warning("ADMIN_KEY not configured - site update endpoint disabled")
-            raise HTTPException(status_code=503, detail="Admin access not configured")
-        if not secrets.compare_digest(admin_key, configured_admin_key):
-            raise HTTPException(status_code=403, detail="Invalid admin key")
-    elif x_admin_pin:
-        # PIN-based auth (Turnstile already verified at unlock time)
-        if not ADMIN_PIN:
-            raise HTTPException(status_code=503, detail="Admin PIN not configured")
-        if not secrets.compare_digest(x_admin_pin, ADMIN_PIN):
-            raise HTTPException(status_code=403, detail="Invalid admin PIN")
-    else:
-        raise HTTPException(status_code=401, detail="Authorization required")
-
-    edited_by = "admin" if authorization else "audit"
+    edited_by = _verify_admin(authorization, x_admin_pin)
 
     # First check if site exists
     check_query = text("SELECT id FROM unified_sites WHERE id::text = :site_id")
@@ -830,6 +862,10 @@ async def update_site(
         "source_url": site_update.sourceUrl,
         "edited_by": edited_by,
     })
+
+    # Sync changes to user_contributions (radar) where promoted_site_id matches
+    synced = _sync_to_radar(db, site_id, site_update, lat, lon)
+
     db.commit()
 
     # Also update static JSON file so both sources stay in sync
@@ -837,11 +873,303 @@ async def update_site(
 
     # Invalidate all sites caches to ensure fresh data on next request
     deleted = cache_delete_pattern("sites:*")
+    if synced > 0:
+        cache_delete_pattern("radar:*")
 
     # Clear the static sites cache so it reloads from file
     global _static_sites_cache
     _static_sites_cache = None
 
-    logger.info(f"Updated site {site_id}: {site_update.title} (DB + static JSON: {static_updated}, invalidated {deleted} cache entries)")
+    logger.info(f"Updated site {site_id}: {site_update.title} (DB + static JSON: {static_updated}, radar synced: {synced}, invalidated {deleted} cache entries)")
 
-    return {"success": True, "message": "Site updated successfully", "staticUpdated": static_updated}
+    return {"success": True, "message": "Site updated successfully", "staticUpdated": static_updated, "radarSynced": synced}
+
+
+# =============================================================================
+# Batch Update Endpoint
+# =============================================================================
+
+
+class BatchSiteUpdate(BaseModel):
+    """Single site update within a batch."""
+    id: str
+    title: str
+    location: str | None = None
+    category: str
+    period: str
+    description: str | None = None
+    sourceUrl: str | None = None
+    coordinates: list[float] = Field(..., min_length=2, max_length=2)
+
+
+@router.post("/batch-update")
+async def batch_update_sites(
+    updates: list[BatchSiteUpdate],
+    authorization: str | None = Header(None),
+    x_admin_pin: str | None = Header(None, alias="X-Admin-Pin"),
+    db: Session = Depends(get_db),
+):
+    """
+    Apply multiple site updates in a single transaction with snapshot.
+
+    Creates a snapshot of all affected rows before applying changes.
+    Syncs changes to radar (user_contributions) where applicable.
+    """
+    from api.services.snapshots import create_snapshot
+
+    edited_by = _verify_admin(authorization, x_admin_pin)
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="No updates provided")
+    if len(updates) > 500:
+        raise HTTPException(status_code=400, detail="Maximum 500 updates per batch")
+
+    site_ids = [u.id for u in updates]
+
+    # Create snapshot before changes
+    snapshot_id = create_snapshot(
+        db, site_ids,
+        created_by=edited_by,
+        description=f"Edited {len(updates)} site{'s' if len(updates) != 1 else ''}",
+        snapshot_type="edit",
+    )
+
+    total_synced = 0
+    for update in updates:
+        lon = update.coordinates[0]
+        lat = update.coordinates[1]
+        period_start = _period_to_year(update.period)
+
+        db.execute(
+            text("""
+                UPDATE unified_sites SET
+                    name = :name, description = :description,
+                    lat = :lat, lon = :lon,
+                    geom = ST_SetSRID(ST_MakePoint(:lon, :lat), 4326),
+                    site_type = :site_type, period_name = :period_name,
+                    period_start = :period_start, source_url = :source_url,
+                    edited_by = :edited_by, updated_at = NOW()
+                WHERE id::text = :site_id
+            """),
+            {
+                "site_id": update.id,
+                "name": update.title,
+                "description": update.description,
+                "lat": lat,
+                "lon": lon,
+                "site_type": normalize_site_type(update.category),
+                "period_name": update.period,
+                "period_start": period_start,
+                "source_url": update.sourceUrl,
+                "edited_by": edited_by,
+            },
+        )
+
+        # Sync to radar
+        fake_req = SiteUpdateRequest(
+            title=update.title, category=update.category,
+            period=update.period, description=update.description,
+            sourceUrl=update.sourceUrl, coordinates=update.coordinates,
+        )
+        total_synced += _sync_to_radar(db, update.id, fake_req, lat, lon)
+
+    db.commit()
+
+    cache_delete_pattern("sites:*")
+    if total_synced > 0:
+        cache_delete_pattern("radar:*")
+
+    global _static_sites_cache
+    _static_sites_cache = None
+
+    return {
+        "snapshot_id": snapshot_id,
+        "updated": len(updates),
+        "synced_radar": total_synced,
+    }
+
+
+# =============================================================================
+# Batch Upload Endpoint
+# =============================================================================
+
+
+class ParsedSitePayload(BaseModel):
+    """A site to be upserted via upload."""
+    name: str
+    lat: float
+    lon: float
+    site_type: str | None = None
+    period_name: str | None = None
+    period_start: int | None = None
+    country: str | None = None
+    description: str | None = None
+    source_url: str | None = None
+    thumbnail_url: str | None = None
+    existing_id: str | None = None  # If updating an existing site
+
+
+class BatchUploadRequest(BaseModel):
+    """Request body for batch upload."""
+    sites: list[ParsedSitePayload]
+    target_source: str
+
+
+@router.post("/batch-upload")
+async def batch_upload_sites(
+    body: BatchUploadRequest,
+    authorization: str | None = Header(None),
+    x_admin_pin: str | None = Header(None, alias="X-Admin-Pin"),
+    db: Session = Depends(get_db),
+):
+    """
+    Upload sites in bulk — inserts new sites and updates existing ones.
+
+    Creates a snapshot of all sites that will be updated before applying changes.
+    """
+    import uuid as _uuid
+
+    from api.services.snapshots import create_snapshot
+
+    edited_by = _verify_admin(authorization, x_admin_pin)
+
+    sites = body.sites
+    target_source = body.target_source
+
+    if not sites:
+        raise HTTPException(status_code=400, detail="No sites provided")
+    if len(sites) > 5000:
+        raise HTTPException(status_code=400, detail="Maximum 5000 sites per upload")
+
+    # Separate inserts from updates
+    update_ids = [s.existing_id for s in sites if s.existing_id]
+    snapshot_id = None
+    if update_ids:
+        snapshot_id = create_snapshot(
+            db, update_ids,
+            created_by=edited_by,
+            description=f"Upload to {target_source} ({len(sites)} rows, {len(update_ids)} updates)",
+            snapshot_type="upload",
+        )
+
+    inserted = 0
+    updated = 0
+    errors = []
+
+    for i, site in enumerate(sites):
+        period_start = site.period_start
+        if period_start is None and site.period_name:
+            period_start = _period_to_year(site.period_name)
+
+        if site.existing_id:
+            # Update existing
+            db.execute(
+                text("""
+                    UPDATE unified_sites SET
+                        name = :name, lat = :lat, lon = :lon,
+                        geom = ST_SetSRID(ST_MakePoint(:lon, :lat), 4326),
+                        site_type = :site_type, period_name = :period_name,
+                        period_start = :period_start, country = :country,
+                        description = :description, source_url = :source_url,
+                        thumbnail_url = :thumbnail_url,
+                        edited_by = :edited_by, updated_at = NOW()
+                    WHERE id::text = :site_id
+                """),
+                {
+                    "site_id": site.existing_id,
+                    "name": site.name, "lat": site.lat, "lon": site.lon,
+                    "site_type": normalize_site_type(site.site_type) if site.site_type else None,
+                    "period_name": site.period_name, "period_start": period_start,
+                    "country": site.country, "description": site.description,
+                    "source_url": site.source_url, "thumbnail_url": site.thumbnail_url,
+                    "edited_by": edited_by,
+                },
+            )
+            updated += 1
+        else:
+            # Insert new
+            new_id = str(_uuid.uuid4())
+            from pipeline.utils.text import normalize_name
+            name_norm = normalize_name(site.name) if site.name else site.name
+            record_id = f"upload-{new_id[:8]}"
+            try:
+                db.execute(
+                    text("""
+                        INSERT INTO unified_sites (
+                            id, source_id, source_record_id, name, name_normalized,
+                            lat, lon, geom, site_type, period_name, period_start,
+                            country, description, source_url, thumbnail_url,
+                            edited_by, created_at
+                        ) VALUES (
+                            :id, :source_id, :source_record_id, :name, :name_normalized,
+                            :lat, :lon, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326),
+                            :site_type, :period_name, :period_start,
+                            :country, :description, :source_url, :thumbnail_url,
+                            :edited_by, NOW()
+                        )
+                    """),
+                    {
+                        "id": new_id, "source_id": target_source,
+                        "source_record_id": record_id,
+                        "name": site.name, "name_normalized": name_norm,
+                        "lat": site.lat, "lon": site.lon,
+                        "site_type": normalize_site_type(site.site_type) if site.site_type else None,
+                        "period_name": site.period_name, "period_start": period_start,
+                        "country": site.country, "description": site.description,
+                        "source_url": site.source_url, "thumbnail_url": site.thumbnail_url,
+                        "edited_by": edited_by,
+                    },
+                )
+                inserted += 1
+            except Exception as e:
+                errors.append({"row": i, "name": site.name, "error": str(e)})
+
+    db.commit()
+    cache_delete_pattern("sites:*")
+
+    global _static_sites_cache
+    _static_sites_cache = None
+
+    return {
+        "snapshot_id": snapshot_id,
+        "inserted": inserted,
+        "updated": updated,
+        "errors": errors,
+    }
+
+
+# =============================================================================
+# Snapshot Endpoints
+# =============================================================================
+
+
+@router.get("/snapshots")
+async def get_snapshots(
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """List recent database snapshots."""
+    from api.services.snapshots import list_snapshots
+    return {"snapshots": list_snapshots(db, limit)}
+
+
+@router.post("/snapshots/{snapshot_id}/restore")
+async def restore_snapshot_endpoint(
+    snapshot_id: str,
+    authorization: str | None = Header(None),
+    x_admin_pin: str | None = Header(None, alias="X-Admin-Pin"),
+    db: Session = Depends(get_db),
+):
+    """Restore all rows from a snapshot."""
+    from api.services.snapshots import restore_snapshot
+
+    _verify_admin(authorization, x_admin_pin)
+
+    count = restore_snapshot(db, snapshot_id)
+    if count == 0:
+        raise HTTPException(status_code=404, detail="Snapshot not found or empty")
+
+    global _static_sites_cache
+    _static_sites_cache = None
+
+    return {"restored": count, "snapshot_id": snapshot_id}

@@ -949,6 +949,317 @@
   background: var(--primary-red-hover);
 }
 
+/* ─── Header right section ────────────────────────────────────────────────── */
+.db-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Upload button */
+.db-upload-btn {
+  background: transparent;
+  border: 1px solid rgba(139, 92, 246, 0.5);
+  color: #8b5cf6;
+  padding: 6px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-family: inherit;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.db-upload-btn:hover {
+  border-color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.1);
+}
+
+/* ─── DB column (source abbreviation badge) ──────────────────────────────── */
+.db-th-db {
+  width: 48px;
+  text-align: center;
+}
+
+.db-td-db {
+  text-align: center;
+  width: 48px;
+}
+
+.db-source-abbr {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+
+/* ─── Pending row highlight ──────────────────────────────────────────────── */
+.db-row-pending {
+  background: rgba(251, 191, 36, 0.06) !important;
+  border-left: 2px solid #fbbf24;
+}
+
+/* ─── MetadataBadge overrides for table cells ────────────────────────────── */
+.db-td .meta-badge {
+  font-size: 9px;
+  padding: 1px 6px;
+}
+
+/* ─── Pending changes bar (sticky bottom) ────────────────────────────────── */
+.db-pending-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 12px 24px;
+  background: rgba(0, 10, 15, 0.95);
+  border-top: 1px solid rgba(251, 191, 36, 0.4);
+  backdrop-filter: blur(12px);
+}
+
+.db-pending-count {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #fbbf24;
+}
+
+.db-btn-discard {
+  background: transparent;
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.db-btn-discard:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: #ef4444;
+}
+
+.db-btn-commit {
+  background: #22c55e;
+  color: #000;
+  border-color: #22c55e;
+  font-weight: 500;
+}
+
+.db-btn-commit:hover:not(:disabled) {
+  background: #16a34a;
+  border-color: #16a34a;
+}
+
+/* ─── Review modal ───────────────────────────────────────────────────────── */
+.db-modal-review {
+  max-width: 600px;
+}
+
+.db-review-list {
+  max-height: 50vh;
+  overflow-y: auto;
+  gap: 12px;
+}
+
+.db-review-item {
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+}
+
+.db-review-name {
+  font-weight: 500;
+  font-size: 0.9rem;
+  margin-bottom: 6px;
+}
+
+.db-review-change {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  padding: 2px 0;
+}
+
+.db-review-field {
+  color: var(--text-secondary);
+  min-width: 70px;
+  text-transform: capitalize;
+}
+
+.db-review-old {
+  color: #ef4444;
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.db-review-arrow {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.db-review-new {
+  color: #22c55e;
+  font-weight: 500;
+}
+
+/* ─── Upload modal ───────────────────────────────────────────────────────── */
+.db-modal-upload {
+  max-width: 700px;
+}
+
+.db-upload-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+}
+
+.db-upload-file {
+  font-weight: 500;
+  font-size: 0.85rem;
+  margin-right: auto;
+}
+
+.db-upload-stat {
+  font-size: 0.78rem;
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.db-upload-insert {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.db-upload-update {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+}
+
+.db-upload-error {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.db-upload-preview {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+
+.db-upload-preview .db-table {
+  font-size: 0.8rem;
+}
+
+.db-upload-status-pill {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.db-upload-status-insert {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+.db-upload-status-update {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+}
+
+.db-upload-status-error {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.db-upload-row-insert {
+  border-left: 2px solid rgba(34, 197, 94, 0.5);
+}
+
+.db-upload-row-update {
+  border-left: 2px solid rgba(251, 191, 36, 0.5);
+}
+
+.db-upload-row-error {
+  border-left: 2px solid rgba(239, 68, 68, 0.5);
+  opacity: 0.6;
+}
+
+/* ─── DB Snapshots (undo history) ────────────────────────────────────────── */
+.db-snapshots-panel {
+  margin: 0 24px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.db-snapshots-summary {
+  padding: 10px 16px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.02);
+  user-select: none;
+}
+
+.db-snapshots-summary:hover {
+  color: var(--text-primary);
+}
+
+.db-snapshots-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.db-snapshot-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--bg-dark);
+  font-size: 0.82rem;
+}
+
+.db-snapshot-desc {
+  flex: 1;
+  color: var(--text-primary);
+}
+
+.db-snapshot-meta {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.db-btn-restore {
+  background: transparent;
+  color: #60a5fa;
+  border-color: rgba(96, 165, 250, 0.4);
+  padding: 4px 12px;
+  font-size: 0.78rem;
+}
+
+.db-btn-restore:hover:not(:disabled) {
+  background: rgba(96, 165, 250, 0.1);
+  border-color: #60a5fa;
+}
+
 /* Mobile */
 @media (max-width: 768px) {
   .db-stats {
@@ -985,5 +1296,20 @@
 
   .db-multiselect-panel {
     min-width: 180px;
+  }
+
+  .db-pending-bar {
+    padding: 10px 16px;
+    gap: 10px;
+    font-size: 0.82rem;
+  }
+
+  .db-modal-review,
+  .db-modal-upload {
+    width: 95%;
+  }
+
+  .db-snapshots-panel {
+    margin: 0 8px 12px;
   }
 }

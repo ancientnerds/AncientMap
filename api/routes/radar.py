@@ -179,12 +179,12 @@ async def get_radar_map_data(db: Session = Depends(get_db)):
         return cached
 
     rows = db.execute(text("""
-        SELECT id::text, COALESCE(corrected_name, name) AS display_name,
+        SELECT id::text, source, COALESCE(corrected_name, name) AS display_name,
                COALESCE(enrichment_status, 'pending') AS enrichment_status,
                country, site_type, period_name, lat, lon,
                score AS enrichment_score, mention_count
         FROM user_contributions
-        WHERE source = 'lyra'
+        WHERE source IN ('lyra', 'user')
           AND COALESCE(enrichment_status, 'pending') NOT IN ('matched', 'not_a_site', 'failed')
           AND lat IS NOT NULL AND lon IS NOT NULL
     """)).fetchall()
@@ -201,14 +201,16 @@ async def get_radar(
     min_mentions: int = Query(1, ge=1),
     sort_by: str = Query("score", pattern="^(score|mentions|recency)$"),
     status: str = Query("all", pattern="^(all|enriched|pending|added|rejected)$"),
+    source_filter: str = Query("all", pattern="^(all|lyra|user)$"),
     db: Session = Depends(get_db),
 ):
     """
     Get Lyra radar items: sites found in YouTube videos that aren't in our DB.
 
     Excludes matched (already in DB), not_a_site, and failed items.
+    Supports source_filter: 'all' (default), 'lyra' (radar), 'user' (community).
     """
-    cache_key = f"radar:list:{page}:{page_size}:{min_mentions}:{sort_by}:{status}"
+    cache_key = f"radar:list:{page}:{page_size}:{min_mentions}:{sort_by}:{status}:{source_filter}"
     cached = cache_get(cache_key)
     if cached:
         return cached
@@ -243,6 +245,7 @@ async def get_radar(
         WITH contrib AS (
             SELECT
                 uc.id,
+                uc.source,
                 uc.name,
                 uc.corrected_name,
                 uc.enrichment_status,
@@ -261,7 +264,8 @@ async def get_radar(
                 uc.description,
                 uc.wikidata_id
             FROM user_contributions uc
-            WHERE uc.source = 'lyra'
+            WHERE uc.source IN ('lyra', 'user')
+              AND (:source_filter = 'all' OR uc.source = :source_filter)
               AND {status_clause}
               AND uc.mention_count >= :min_mentions
         ),
@@ -286,6 +290,7 @@ async def get_radar(
         SELECT
             {count_col}
             c.id::text,
+            c.source,
             COALESCE(c.corrected_name, c.name) AS display_name,
             CASE WHEN c.corrected_name IS NOT NULL AND c.corrected_name != c.name
                  THEN c.name ELSE NULL END AS original_name,
@@ -314,7 +319,7 @@ async def get_radar(
         {limit_clause}
     """)
 
-    params = {"min_mentions": min_mentions}
+    params = {"min_mentions": min_mentions, "source_filter": source_filter}
     if sql_paginated:
         params["limit"] = page_size
         params["offset"] = offset
@@ -378,6 +383,7 @@ async def get_radar(
 
         item = {
             "id": row.id,
+            "source": row.source,
             "display_name": row.display_name,
             "original_name": row.original_name,
             "enrichment_status": enrichment_status,
@@ -483,7 +489,7 @@ async def get_radar_stats(db: Session = Depends(get_db)):
                 WHERE enrichment_status = 'promoted'
             ) AS added_count
         FROM user_contributions
-        WHERE source = 'lyra'
+        WHERE source IN ('lyra', 'user')
     """)
 
     row = db.execute(stats_query).fetchone()
