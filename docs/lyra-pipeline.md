@@ -26,15 +26,15 @@ flowchart LR
 | Stage | File | Entry Point | AI Model |
 |-------|------|-------------|----------|
 | 1. Fetch | `transcript_fetcher.py` | `fetch_new_videos()` | - |
-| 2. Summarize | `summarizer.py` | `summarize_pending_videos()` | Haiku |
+| 2. Summarize | `summarizer.py` | `summarize_pending_videos()` | MiniMax M2.5 |
 | 3. Match | `site_matcher.py` | `match_sites_for_pending_items()` | - |
-| 4. Posts | `tweet_generator.py` | `generate_pending_posts()` | Sonnet |
-| 5. Verify | `tweet_verifier.py` | `verify_pending_posts()` | Haiku |
-| 5b. Rescore | `significance_scorer.py` | `rescore_pending_items()` | Haiku |
+| 4. Posts | `tweet_generator.py` | `generate_pending_posts()` | MiniMax M2.5 |
+| 5. Verify | `tweet_verifier.py` | `verify_pending_posts()` | MiniMax M2.5 |
+| 5b. Rescore | `significance_scorer.py` | `rescore_pending_items()` | MiniMax M2.5 |
 | 6. Dedup | `tweet_deduplicator.py` | `deduplicate_posts()` | - |
 | 7. Screenshots | `screenshot_extractor.py` | `extract_screenshots()` | - |
 | 8. Backfill | `transcript_fetcher.py` | `backfill_video_descriptions()` | - |
-| 9. Identify | `site_identifier.py` | `identify_and_enrich_sites()` | Haiku + Sonnet |
+| 9. Identify | `site_identifier.py` | `identify_and_enrich_sites()` | MiniMax M2.5 |
 
 ---
 
@@ -43,11 +43,11 @@ flowchart LR
 ```mermaid
 flowchart TD
     YT["YouTube RSS\n(18 channels)"] -->|transcripts| NV[(news_videos)]
-    NV -->|Haiku summarize| NI[(news_items)]
+    NV -->|MiniMax summarize| NI[(news_items)]
     NI -->|exact/spaceless match| US[(unified_sites\nunified_site_names)]
     NI -->|unmatched names| UC[(user_contributions\nsource='lyra')]
 
-    UC -->|Haiku identify| DB{"DB fuzzy\nsearch\n(pg_trgm)"}
+    UC -->|MiniMax identify| DB{"DB fuzzy\nsearch\n(pg_trgm)"}
     DB -->|match found| BRANCH{"AN/promoted\nor external?"}
     DB -->|no match| WD["Wikidata API"]
 
@@ -55,7 +55,7 @@ flowchart TD
     BRANCH -->|external| ENRICHED["status='enriched'\nmerge all sources\n(Radar card)"]
 
     WD -->|entity found| WP["Wikipedia API\n(summary + lead)"]
-    WP -->|Haiku extract| SCORE["Score 0-100"]
+    WP -->|MiniMax extract| SCORE["Score 0-100"]
     DB -->|no match, no Wikidata| SCORE
 
     SCORE -->|"score >= 55\n+ coords"| PROMOTE["Promote to\nunified_sites\n(source='lyra')"]
@@ -76,11 +76,11 @@ Fetches recent videos from 18 seed YouTube archaeology channels via RSS. Downloa
 
 ### 2. Summarize (`summarizer.py`)
 
-Sends full transcript to Haiku. Extracts 2-8 key archaeological topics per video (scaled by duration + queue size). Queue soft cap 32 / hard cap 48.
+Sends full transcript to MiniMax M2.5. Extracts 2-8 key archaeological topics per video (scaled by duration + queue size). Queue soft cap 32 / hard cap 48.
 
 - **Reads:** `news_videos` (status=`transcribed`)
 - **Writes:** `news_items` (headline, facts[], site_name_extracted), `news_videos.summary_json`
-- **Model:** Haiku (`prompts/summary.txt`)
+- **Model:** MiniMax M2.5 (`prompts/summary.txt`)
 
 ### 3. Match (`site_matcher.py`)
 
@@ -110,12 +110,12 @@ flowchart TD
 
 ### 4. Posts (`tweet_generator.py`)
 
-Generates short-form news feed posts (max 170 chars) from news items via Sonnet. One post per item. Includes timestamp attribution and recency note. Significance scoring and categorization are handled by the separate rescore step (5b).
+Generates short-form news feed posts (max 170 chars) from news items via MiniMax M2.5. One post per item. Includes timestamp attribution and recency note. Significance scoring and categorization are handled by the separate rescore step (5b).
 
 - **Reads:** `news_items`, `news_videos.summary_json`
 - **Writes:** `news_items.post_text`
-- **Model:** Sonnet (`prompts/tweet_template.txt`)
-- **Security:** Shared Anthropic client pool, prompt caching (ephemeral)
+- **Model:** MiniMax M2.5 (`prompts/tweet_template.txt`)
+- **Security:** Shared API client pool, prompt caching (ephemeral)
 
 ### 5. Verify (`tweet_verifier.py`)
 
@@ -124,7 +124,7 @@ Fact-checks posts against the transcript segment around the timestamp (+/-10s). 
 - **Reads:** `news_items.post_text`, `news_videos.transcript_text`
 - **Writes:** `news_items.post_text` (modifications), `news_items.timestamp_seconds` (refinements)
 - **Deletes:** rejected items (post_text set to NULL)
-- **Model:** Haiku (`prompts/verify_tweets.txt`)
+- **Model:** MiniMax M2.5 (`prompts/verify_tweets.txt`)
 - **Security:** Prompt injection guard on transcript segment
 
 ### 5b. Rescore (`significance_scorer.py`)
@@ -134,8 +134,8 @@ Independent re-scoring of each verified item's significance (1-10) and category 
 - **Reads:** `news_items` (verified videos), `news_videos`
 - **Writes:** `news_items.significance`, `news_items.news_category`, `news_items.post_text` (NULL for score=1)
 - **Video status:** `verified` → `rescored`
-- **Model:** Haiku (`prompts/rescore_significance.txt`)
-- **Security:** Shared client pool, prompt caching, injection guard
+- **Model:** MiniMax M2.5 (`prompts/rescore_significance.txt`)
+- **Security:** Shared API client pool, prompt caching, injection guard
 
 ### 6. Dedup (`tweet_deduplicator.py`)
 
@@ -166,15 +166,15 @@ The core AI discovery engine. Processes up to 20 candidates per cycle.
 flowchart TD
     START["user_contributions\n(pending/enriched/rejected)"] --> HASH{"Facts hash\nchanged?"}
     HASH -->|no| SKIP["Skip\n(already processed)"]
-    HASH -->|yes| AI["Haiku: identify site\n(name + confidence)"]
+    HASH -->|yes| AI["MiniMax: identify site\n(name + confidence)"]
 
     AI --> SITE{"is_site?"}
     SITE -->|false| NAS["status=\n'not_a_site'"]
     SITE -->|true| CONF{"confidence?"}
 
-    CONF -->|low/medium| SONNET["Escalate\nto Sonnet"]
+    CONF -->|low/medium| REVIEW["Escalate\nto review model"]
     CONF -->|high| DB
-    SONNET --> DB
+    REVIEW --> DB
 
     DB["DB fuzzy search\n(pg_trgm >= 0.35)"] --> DBMATCH{"Match\nfound?"}
 
@@ -345,9 +345,12 @@ erDiagram
 | youtube-transcript-api | Fetch | Download video captions |
 | yt-dlp | Fetch, Screenshots, Backfill | Video metadata + frame extraction |
 | ffmpeg | Screenshots | Extract WebP frame from clip |
-| Anthropic (Haiku) | Summarize, Verify, Identify, Extract Metadata, Pick Entity | AI processing |
-| Anthropic (Sonnet) | Posts, Identify (escalation) | Creative generation + review |
+| MiniMax M2.5 (via Anthropic SDK) | Summarize, Verify, Identify, Extract Metadata, Pick Entity, Posts | AI processing + creative generation |
 | Wikidata | Identify | Entity search + claims (coords, dates) |
+
+### Assistant Prefill Pattern
+
+MiniMax M2.5 does not support Anthropic's `output_config` (JSON schema enforcement). To ensure structured JSON responses without preamble text or markdown fences, `call_api()` in `config.py` strips `output_config` for non-Anthropic providers and uses **assistant prefill** (`prefill="{"`) on all 13 LLM calls. This forces the model to start its response mid-JSON, producing clean parseable output.
 | Wikipedia REST | Identify | Page summary + lead section |
 
 ---

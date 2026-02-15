@@ -7,7 +7,7 @@ The one and only platform with all ancient archaeological sites in one place for
 This project aggregates data from 30+ open-source archaeological databases into a unified dataset of 800,000+ sites, displayed on an interactive 3D globe. It includes:
 
 - **3D Globe**: Three.js + Mapbox GL interactive visualization with 800K+ site markers
-- **Lyra AI Agent**: Claude-powered research assistant with tool use (site search, news lookup, map navigation)
+- **Lyra AI Agent**: MiniMax-powered research assistant with tool use (site search, news lookup, map navigation)
 - **News Pipeline**: Automated archaeological news discovery from 18+ YouTube channels (hourly cycle)
 - **Radar**: AI-discovered archaeological sites not yet in the main database
 - **Data Pipeline**: Python ingesters for 30+ external data sources
@@ -83,7 +83,7 @@ The `.env` file controls all configuration. Key sections:
 | `MAPBOX_ACCESS_TOKEN` | For map tiles ([get free token](https://mapbox.com)) | ✅ Yes |
 | `ADMIN_PIN` | 4-digit PIN for admin features | Optional |
 | `LYRA_ADMIN_KEY` | Bearer token for Lyra admin chat | Optional |
-| `LYRA_ANTHROPIC_API_KEY` | Anthropic API key for AI features | For AI |
+| `LYRA_ANTHROPIC_API_KEY` | LLM API key for AI features (MiniMax) | For AI |
 
 See `.env.example` for all available options with descriptions.
 

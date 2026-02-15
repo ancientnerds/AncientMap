@@ -182,7 +182,7 @@ Get all available data sources.
 
 ### Lyra AI Chat
 
-Lyra is an AI research assistant powered by Claude (Anthropic). It uses a tool-based agent
+Lyra is an AI research assistant powered by MiniMax M2.5. It uses a tool-based agent
 architecture with site search, news lookup, and map navigation capabilities. Responses are
 streamed via Server-Sent Events (SSE) with a 5-minute maximum connection duration.
 
