@@ -788,11 +788,18 @@ export default function DbAuditPage() {
               }} />
               <select value={selectedVersion} onChange={e => setSelectedVersion(e.target.value)}>
                 <option value="latest">Latest (live)</option>
-                {snapshots.map(s => (
-                  <option key={s.date} value={s.date}>
-                    {new Date(s.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} ({s.sites.toLocaleString()} sites)
-                  </option>
-                ))}
+                {snapshots.map(s => {
+                  // date can be "2026-02-15" or "2026-02-15_193000"
+                  const parts = s.date.split('_')
+                  const d = new Date(parts[0] + 'T' + (parts[1] ? `${parts[1].slice(0,2)}:${parts[1].slice(2,4)}:${parts[1].slice(4,6)}Z` : '00:00:00Z'))
+                  const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                    + (parts[1] ? ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '')
+                  return (
+                    <option key={s.date} value={s.date}>
+                      {label} ({s.sites.toLocaleString()} sites)
+                    </option>
+                  )
+                })}
               </select>
             </div>
           )}
