@@ -113,6 +113,7 @@ def generate_posts_for_video(
                     "schema": POSTS_SCHEMA,
                 },
             },
+            prefill="{",
         )
     except anthropic.APIError as e:
         logger.error(f"Post generation API error for {video.id}: {e}")
@@ -122,7 +123,7 @@ def generate_posts_for_video(
     if not text_block:
         logger.warning(f"Empty response content for {video.id}")
         return 0
-    posts_data = parse_json_response(text_block).get("posts", [])
+    posts_data = parse_json_response("{" + text_block).get("posts", [])
 
     with get_session() as session:
         db_video = session.get(NewsVideo, video.id)

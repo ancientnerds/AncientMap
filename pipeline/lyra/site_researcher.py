@@ -215,6 +215,7 @@ def _pre_research(
                 "cache_control": {"type": "ephemeral"},
             }],
             thinking={"type": "enabled", "budget_tokens": settings.research_thinking_budget},
+            prefill="{",
         )
     except anthropic.APIError as e:
         logger.warning(f"  [{name}] Pre-research API error: {e}")
@@ -223,7 +224,7 @@ def _pre_research(
     for block in response.content:
         if hasattr(block, "text"):
             try:
-                result = parse_json_response(block.text)
+                result = parse_json_response("{" + block.text)
                 logger.info(
                     f"  [{name}] Pre-research: country={result.get('country')}, "
                     f"well_known={result.get('well_known')}, "
@@ -539,6 +540,7 @@ def _select_best_candidate(
                 "text": SYNTHESIS_SYSTEM,
                 "cache_control": {"type": "ephemeral"},
             }],
+            prefill="{",
         )
     except anthropic.APIError as e:
         logger.warning(f"  [{name}] Research synthesis API error: {e}")
@@ -547,7 +549,7 @@ def _select_best_candidate(
     for block in response.content:
         if hasattr(block, "text"):
             try:
-                result = parse_json_response(block.text)
+                result = parse_json_response("{" + block.text)
             except (json.JSONDecodeError, KeyError, ValueError) as e:
                 logger.warning(f"  [{name}] Research synthesis parse error: {e}")
                 return None
@@ -637,6 +639,7 @@ def _gap_fill(
                 "text": GAP_FILL_SYSTEM,
                 "cache_control": {"type": "ephemeral"},
             }],
+            prefill="{",
         )
     except anthropic.APIError as e:
         logger.warning(f"  [{name}] Gap-fill API error: {e}")
@@ -645,7 +648,7 @@ def _gap_fill(
     for block in response.content:
         if hasattr(block, "text"):
             try:
-                result = parse_json_response(block.text)
+                result = parse_json_response("{" + block.text)
                 logger.info(
                     f"  [{name}] Gap-fill: country={result.get('country')}, "
                     f"type={result.get('site_type')}, period={result.get('period')}, "

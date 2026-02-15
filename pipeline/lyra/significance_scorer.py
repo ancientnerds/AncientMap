@@ -181,6 +181,7 @@ def _rescore_item(
                     "schema": RESCORE_SCHEMA,
                 },
             },
+            prefill="{",
         )
     except anthropic.APIError as e:
         logger.warning(f"Rescore API error for item {item.id}: {e}")
@@ -195,7 +196,7 @@ def _rescore_item(
         )
         return None
     try:
-        return parse_json_response(text_block)
+        return parse_json_response("{" + text_block)
     except (json.JSONDecodeError, KeyError, ValueError) as e:
         logger.warning(f"Bad rescore JSON for item {item.id}: {e}")
         return None

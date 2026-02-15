@@ -135,7 +135,9 @@ _min_call_gap = 60.0 / (_DEFAULT_RPM * _SAFETY_MARGIN)
 _last_call_time = 0.0
 
 
-def call_api(client: anthropic.Anthropic, **kwargs) -> anthropic.types.Message:
+def call_api(
+    client: anthropic.Anthropic, *, prefill: str | None = None, **kwargs,
+) -> anthropic.types.Message:
     """Throttled wrapper around client.messages.create().
 
     Enforces a minimum gap between calls to stay under rate limits.
@@ -146,6 +148,9 @@ def call_api(client: anthropic.Anthropic, **kwargs) -> anthropic.types.Message:
     When using a non-Anthropic base_url (e.g. MiniMax), automatically:
     - Clamps temperature to settings.temperature_min (MiniMax rejects 0.0)
     - Strips output_config (not supported by MiniMax)
+
+    If prefill is set, appends an assistant message so the model continues
+    from inside the expected format (e.g. prefill="{" for JSON responses).
     """
     global _last_call_time, _min_call_gap
 
@@ -165,6 +170,12 @@ def call_api(client: anthropic.Anthropic, **kwargs) -> anthropic.types.Message:
         # the token budget; calls under 1024 produce empty/truncated responses)
         if "max_tokens" in kwargs and "thinking" not in kwargs:
             kwargs["max_tokens"] = max(1024, kwargs["max_tokens"])
+
+    # Append assistant prefill message to force structured output start
+    if prefill:
+        msgs = list(kwargs.get("messages", []))
+        msgs.append({"role": "assistant", "content": prefill})
+        kwargs["messages"] = msgs
 
     now = time.monotonic()
     elapsed = now - _last_call_time

@@ -520,7 +520,7 @@ def _call_ai(
     create_kwargs.update(kwargs)
 
     try:
-        response = call_api(client, **create_kwargs)
+        response = call_api(client, prefill="{", **create_kwargs)
     except anthropic.APIError as e:
         logger.error(f"LLM API error: {e}")
         return None
@@ -532,7 +532,7 @@ def _call_ai(
                 logger.warning(f"Empty text block from AI (model={model})")
                 return None
             try:
-                return parse_json_response(block.text)
+                return parse_json_response("{" + block.text)
             except json.JSONDecodeError:
                 logger.warning(f"Non-JSON AI response (model={model}): {block.text[:200]}")
                 return None
@@ -807,6 +807,7 @@ def _pick_wikidata_entity(
                 "cache_control": {"type": "ephemeral"},
             }],
             messages=[{"role": "user", "content": prompt}],
+            prefill="Q",
         )
     except anthropic.APIError as e:
         logger.warning(f"LLM tiebreaker API error for {site_name}: {e}")
@@ -815,7 +816,7 @@ def _pick_wikidata_entity(
     if not response.content or not hasattr(response.content[0], "text"):
         return with_wiki[0]["qid"]
 
-    reply = response.content[0].text.strip()
+    reply = ("Q" + response.content[0].text).strip()
     # Extract QID from reply (e.g. "Q115679382" or "A) Q115679382")
     qid_match = re.search(r"Q\d+", reply)
     if qid_match:
@@ -1133,6 +1134,7 @@ def _escalate_to_sonnet(
                     "schema": IDENTIFY_SITE_SCHEMA,
                 },
             },
+            prefill="{",
         )
     except anthropic.APIError as e:
         logger.error(f"Review model escalation API error: {e}")
@@ -1140,7 +1142,7 @@ def _escalate_to_sonnet(
 
     for block in response.content:
         if hasattr(block, "text"):
-            result = parse_json_response(block.text)
+            result = parse_json_response("{" + block.text)
             break
     else:
         logger.warning("Empty review model escalation response")
