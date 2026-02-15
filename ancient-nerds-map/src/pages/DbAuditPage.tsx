@@ -942,7 +942,6 @@ export default function DbAuditPage() {
           <thead>
             <tr>
               <th className="db-th" onClick={() => handleSort('name')}>Name{sortArrow('name')}</th>
-              <th className="db-th db-th-nosort db-th-db">DB</th>
               <th className="db-th db-th-nosort">Coords</th>
               <th className="db-th" onClick={() => handleSort('type')}>Type{sortArrow('type')}</th>
               <th className="db-th" onClick={() => handleSort('period')}>Period{sortArrow('period')}</th>
@@ -950,7 +949,8 @@ export default function DbAuditPage() {
               <th className="db-th db-th-nosort">Desc</th>
               <th className="db-th db-th-nosort">URL</th>
               <th className="db-th db-th-nosort">Img</th>
-              <th className="db-th db-th-nosort">Edited</th>
+              <th className="db-th db-th-nosort">User</th>
+              <th className="db-th db-th-nosort db-th-db">DB</th>
               <th className="db-th" onClick={() => handleSort('edited_at')}>Last Edited{sortArrow('edited_at')}</th>
               {isAuthenticated && <th className="db-th db-th-edit">Edit</th>}
             </tr>
@@ -971,15 +971,6 @@ export default function DbAuditPage() {
                   {/* Name */}
                   <td className="db-td db-td-name" title={site.id} onClick={() => openPopup(site)}>
                     {site.n}
-                  </td>
-
-                  {/* DB source badge */}
-                  <td className="db-td db-td-db">
-                    {srcCfg && (
-                      <span className="db-source-abbr" style={{ background: srcCfg.color + '25', color: srcCfg.color, borderColor: srcCfg.color + '55' }}>
-                        {srcCfg.abbr}
-                      </span>
-                    )}
                   </td>
 
                   {/* Coordinates */}
@@ -1093,9 +1084,18 @@ export default function DbAuditPage() {
                     ) : <span className="db-missing">&mdash;</span>}
                   </td>
 
-                  {/* Edited by */}
+                  {/* User (edited by) */}
                   <td className={`db-td db-td-edited db-edited-${site.eb || 'initial'}`}>
                     {site.eb || 'initial'}
+                  </td>
+
+                  {/* DB source badge */}
+                  <td className="db-td db-td-db">
+                    {srcCfg && (
+                      <span className="db-source-abbr" style={{ background: srcCfg.color + '25', color: srcCfg.color, borderColor: srcCfg.color + '55' }}>
+                        {srcCfg.abbr}
+                      </span>
+                    )}
                   </td>
 
                   {/* Last edited (timestamp) */}

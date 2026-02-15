@@ -81,7 +81,7 @@
 }
 
 .db-source-badge select {
-  background: transparent;
+  background: var(--bg-card);
   border: none;
   color: var(--text-primary);
   font-size: 0.78rem;
@@ -92,6 +92,11 @@
 
 .db-source-badge select:focus {
   outline: none;
+}
+
+.db-source-badge select option {
+  background: var(--bg-card-solid, #0a1a1f);
+  color: var(--text-primary);
 }
 
 /* Version snapshot badge */
@@ -114,7 +119,7 @@
 }
 
 .db-version-badge select {
-  background: transparent;
+  background: var(--bg-card);
   border: none;
   color: var(--text-primary);
   font-size: 0.78rem;
@@ -125,6 +130,11 @@
 
 .db-version-badge select:focus {
   outline: none;
+}
+
+.db-version-badge select option {
+  background: var(--bg-card-solid, #0a1a1f);
+  color: var(--text-primary);
 }
 
 .db-unlock-btn {
@@ -243,6 +253,11 @@
 .db-filter-group input:focus {
   outline: none;
   border-color: var(--primary-red);
+}
+
+.db-filter-group select option {
+  background: var(--bg-card-solid, #0a1a1f);
+  color: var(--text-primary);
 }
 
 .db-search-wrap {
@@ -466,11 +481,39 @@
 }
 
 .db-multiselect-item input[type="checkbox"] {
-  accent-color: var(--primary-red);
-  width: 14px;
-  height: 14px;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  background: rgba(0, 20, 25, 0.6);
+  border: 1px solid rgba(192, 32, 35, 0.3);
+  border-radius: 2px;
   cursor: pointer;
+  position: relative;
+  transition: background 0.2s ease, border-color 0.2s ease;
   flex-shrink: 0;
+}
+
+.db-multiselect-item input[type="checkbox"]:hover {
+  border-color: rgba(192, 32, 35, 0.6);
+}
+
+.db-multiselect-item input[type="checkbox"]:checked {
+  background: rgba(192, 32, 35, 0.2);
+  border-color: var(--primary-red);
+}
+
+.db-multiselect-item input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 0px;
+  width: 3px;
+  height: 7px;
+  border: solid var(--primary-red);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
 }
 
 .db-multiselect-dot {
