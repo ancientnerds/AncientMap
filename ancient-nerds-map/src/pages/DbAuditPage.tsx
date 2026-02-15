@@ -2,6 +2,9 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { config } from '../config'
 import { CATEGORY_COLORS, PERIOD_COLORS, getCategoryColor, getPeriodColor } from '../constants/colors'
 import { resolvePeriod } from '../data/sites'
+import type { SiteData } from '../data/sites'
+import { SitePopupOverlay } from '../components/SitePopupOverlay'
+import { getCountryFlatFlagUrl } from '../utils/countryFlags'
 import PinAuthModal from '../components/PinAuthModal'
 import '../styles/db-audit.css'
 
@@ -20,10 +23,11 @@ interface AuditSite {
   d?: string       // description
   c?: string       // country
   u?: string       // source_url
+  i?: string       // thumbnail_url
 }
 
 type IssueFilter = 'all' | 'no_period' | 'no_type' | 'no_country' | 'suspect_modern'
-type SortColumn = 'name' | 'source' | 'type' | 'period' | 'country'
+type SortColumn = 'name' | 'type' | 'period' | 'country'
 type SortDir = 'asc' | 'desc'
 
 const CATEGORY_OPTIONS = Object.keys(CATEGORY_COLORS)
@@ -59,6 +63,15 @@ export default function DbAuditPage() {
   const [editModalSite, setEditModalSite] = useState<AuditSite | null>(null)
   const [modalForm, setModalForm] = useState({ title: '', description: '', lat: '', lon: '', category: '', period: '', sourceUrl: '' })
   const [saving, setSaving] = useState(false)
+
+  // Expanded descriptions
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+
+  // Copied coords toast
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  // Site popup
+  const [popupSite, setPopupSite] = useState<SiteData | null>(null)
 
   // Fetch all sites
   useEffect(() => {
@@ -116,7 +129,6 @@ export default function DbAuditPage() {
       let av = '', bv = ''
       switch (sortColumn) {
         case 'name': av = a.n; bv = b.n; break
-        case 'source': av = a.s; bv = b.s; break
         case 'type': av = a.t || ''; bv = b.t || ''; break
         case 'period': av = resolvePeriod(a.pn, a.p); bv = resolvePeriod(b.pn, b.p); break
         case 'country': av = a.c || ''; bv = b.c || ''; break
@@ -286,6 +298,40 @@ export default function DbAuditPage() {
   const sortArrow = (col: SortColumn) =>
     sortColumn === col ? (sortDir === 'asc' ? ' \u25B2' : ' \u25BC') : ''
 
+  // Toggle expanded description
+  const toggleExpand = useCallback((id: string) => {
+    setExpandedRows(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  // Copy coords to clipboard
+  const copyCoords = useCallback((la: number, lo: number, id: string) => {
+    navigator.clipboard.writeText(`${la.toFixed(4)}, ${lo.toFixed(4)}`)
+    setCopiedId(id)
+    setTimeout(() => setCopiedId(prev => prev === id ? null : prev), 1000)
+  }, [])
+
+  // Open site popup
+  const openPopup = useCallback((s: AuditSite) => {
+    setPopupSite({
+      id: s.id,
+      title: s.n,
+      location: s.c || '',
+      category: s.t || '',
+      period: s.pn || '',
+      periodStart: s.p ?? null,
+      description: s.d || '',
+      image: s.i || undefined,
+      sourceUrl: s.u || undefined,
+      sourceId: s.s,
+      coordinates: [s.lo, s.la],
+    })
+  }, [])
+
   if (loading) {
     return (
       <div className="db-page">
@@ -310,6 +356,7 @@ export default function DbAuditPage() {
           <span className="db-logo">ANCIENT NERDS</span>
           <span className="db-header-sep">&middot;</span>
           <span className="db-header-title">Database Audit</span>
+          <span className="db-header-db">({sources.join(', ')})</span>
         </div>
         <div className="db-header-right">
           {isAuthenticated ? (
@@ -388,10 +435,13 @@ export default function DbAuditPage() {
           <thead>
             <tr>
               <th className="db-th" onClick={() => handleSort('name')}>Name{sortArrow('name')}</th>
-              <th className="db-th" onClick={() => handleSort('source')}>Source{sortArrow('source')}</th>
+              <th className="db-th db-th-nosort">Coords</th>
               <th className="db-th" onClick={() => handleSort('type')}>Type{sortArrow('type')}</th>
               <th className="db-th" onClick={() => handleSort('period')}>Period{sortArrow('period')}</th>
               <th className="db-th" onClick={() => handleSort('country')}>Country{sortArrow('country')}</th>
+              <th className="db-th db-th-nosort">Desc</th>
+              <th className="db-th db-th-nosort">URL</th>
+              <th className="db-th db-th-nosort">Img</th>
               {isAuthenticated && <th className="db-th db-th-edit">Edit</th>}
             </tr>
           </thead>
@@ -401,11 +451,20 @@ export default function DbAuditPage() {
               const isEditingType = editingCell?.id === site.id && editingCell.field === 'type'
               const isEditingPeriod = editingCell?.id === site.id && editingCell.field === 'period'
               const isEditingCountry = editingCell?.id === site.id && editingCell.field === 'country'
+              const flagUrl = site.c ? getCountryFlatFlagUrl(site.c) : null
 
               return (
                 <tr key={site.id} className="db-row">
-                  <td className="db-td db-td-name" title={site.id}>{site.n}</td>
-                  <td className="db-td">{site.s}</td>
+                  {/* Name — clickable → popup */}
+                  <td className="db-td db-td-name" title={site.id} onClick={() => openPopup(site)}>
+                    {site.n}
+                  </td>
+
+                  {/* Coordinates — click to copy */}
+                  <td className="db-td db-td-coords" onClick={() => copyCoords(site.la, site.lo, site.id)}>
+                    {site.la.toFixed(4)}, {site.lo.toFixed(4)}
+                    {copiedId === site.id && <span className="db-copied-toast">Copied!</span>}
+                  </td>
 
                   {/* Type cell */}
                   <td
@@ -461,9 +520,9 @@ export default function DbAuditPage() {
                     )}
                   </td>
 
-                  {/* Country cell */}
+                  {/* Country cell — flag + text */}
                   <td
-                    className={`db-td db-td-editable ${isEditingCountry ? 'editing' : ''}`}
+                    className={`db-td db-td-country db-td-editable ${isEditingCountry ? 'editing' : ''}`}
                     onClick={() => !isEditingCountry && isAuthenticated && startInlineEdit(site, 'country')}
                   >
                     {isEditingCountry ? (
@@ -475,11 +534,47 @@ export default function DbAuditPage() {
                         onKeyDown={e => { if (e.key === 'Escape') cancelInlineEdit(); if (e.key === 'Enter') commitInlineEdit() }}
                         autoFocus
                       />
+                    ) : site.c ? (
+                      <>
+                        {flagUrl && <img src={flagUrl} className="db-flag" alt="" />}
+                        <span>{site.c}</span>
+                      </>
                     ) : (
-                      <span className={`db-badge ${!site.c ? 'missing' : ''}`}>
-                        {site.c || 'MISSING'}
-                      </span>
+                      <span className="db-missing">MISSING</span>
                     )}
+                  </td>
+
+                  {/* Description — truncated, click to expand */}
+                  <td className="db-td db-td-desc">
+                    {site.d ? (
+                      expandedRows.has(site.id) ? (
+                        <span className="db-desc-full" onClick={() => toggleExpand(site.id)}>{site.d}</span>
+                      ) : (
+                        <span className="db-desc-truncated" onClick={() => toggleExpand(site.id)}>
+                          {site.d.length > 80 ? site.d.slice(0, 80) + '\u2026' : site.d}
+                        </span>
+                      )
+                    ) : <span className="db-missing">&mdash;</span>}
+                  </td>
+
+                  {/* URL */}
+                  <td className="db-td db-td-url">
+                    {site.u ? (
+                      <a href={site.u} target="_blank" rel="noopener noreferrer" className="db-link-icon" title={site.u}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                          <polyline points="15 3 21 3 21 9" />
+                          <line x1="10" y1="14" x2="21" y2="3" />
+                        </svg>
+                      </a>
+                    ) : <span className="db-missing">&mdash;</span>}
+                  </td>
+
+                  {/* Image thumbnail */}
+                  <td className="db-td db-td-img">
+                    {site.i ? (
+                      <img src={site.i} className="db-thumb" alt="" loading="lazy" />
+                    ) : <span className="db-missing">&mdash;</span>}
                   </td>
 
                   {/* Edit button */}
@@ -496,6 +591,17 @@ export default function DbAuditPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Footer */}
+      <div className="db-footer">
+        Showing {filteredSites.length} of {sites.length} sites
+        {activeIssue !== 'all' && ` \u2014 filtered: ${activeIssue.replace('_', ' ')}`}
+        {sourceFilter !== 'all' && ` \u2014 source: ${sourceFilter}`}
+        {searchQuery && ` \u2014 search: "${searchQuery}"`}
+      </div>
+
+      {/* Site Popup Overlay */}
+      {popupSite && <SitePopupOverlay site={popupSite} onClose={() => setPopupSite(null)} />}
 
       {/* PIN Auth Modal */}
       <PinAuthModal
