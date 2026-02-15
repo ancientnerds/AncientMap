@@ -42,7 +42,7 @@ The **only archaeology-specific aggregator** at this scale, ARIADNE integrates *
 
 ### Open Context
 
-The most developer-friendly archaeological data platform publishes **1+ million digital resources** with primary research data—excavation records, artifact analyses, field notes, zooarchaeological data, and 3D models. The **DINAA integration** alone contributes 500,000+ North American site records.
+The most developer-friendly archaeological data platform publishes **1+ million digital resources** with primary research data—excavation records, artifact analyses, field notes, zooarchaeological data, and 3D models.
 
 **API:** Full REST API with excellent documentation at `opencontext.org/about/services`, API cookbook with recipes
 **Formats:** JSON-LD (Linked Open Data), GeoJSON, CSV

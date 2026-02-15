@@ -14,9 +14,6 @@ from pipeline.ingesters.coins_nomisma import NomismaIngester
 from pipeline.ingesters.dare import DAREIngester
 from pipeline.ingesters.david_rumsey import DavidRumseyIngester
 
-# Regional ingesters - North America
-from pipeline.ingesters.dinaa import DINAAIngester
-
 # Regional ingesters - Middle East / Africa
 from pipeline.ingesters.eamena import EAMENAIngester
 from pipeline.ingesters.earth_impacts import EarthImpactsIngester
@@ -75,8 +72,6 @@ __all__ = [
     "DAREIngester",
     # Middle East / Africa
     "EAMENAIngester",
-    # North America
-    "DINAAIngester",
     # Sacred & Rock Art
     "SacredSitesIngester",
     "RockArtIngester",

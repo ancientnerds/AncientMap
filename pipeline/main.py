@@ -27,7 +27,6 @@ from pipeline.config import DATA_SOURCES
 from pipeline.database import SessionLocal, Site, SourceDatabase, SourceRecord
 from pipeline.ingesters import (
     ArachneIngester,
-    DINAAIngester,
     EAMENAIngester,
     GeoNamesIngester,
     HistoricEnglandIngester,
@@ -59,8 +58,6 @@ INGESTERS = {
     "arachne": ArachneIngester,
     # Middle East / Africa
     "eamena": EAMENAIngester,
-    # North America
-    "dinaa": DINAAIngester,
     # NCEI Hazards
     "ncei_earthquakes": NCEIEarthquakesIngester,
     "ncei_tsunamis": NCEITsunamisIngester,

@@ -327,19 +327,6 @@ SOURCE_CONFIG: dict[str, SourceConfigType] = {
         "attribution": "Seshat Databank",
     },
 
-    # Americas
-    "dinaa": {
-        "name": "DINAA",
-        "description": "North American archaeology",
-        "color": "#cd853f",  # Peru/brown
-        "icon": "teepee",
-        "category": "Americas",
-        "file_pattern": "dinaa.json",
-        "format": "json_sites",
-        "license": "CC BY 4.0",
-        "attribution": "Digital Index of North American Archaeology",
-    },
-
     # Middle East & Africa
     "eamena": {
         "name": "EAMENA",

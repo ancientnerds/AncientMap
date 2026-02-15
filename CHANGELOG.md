@@ -28,7 +28,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pleiades (ancient Mediterranean)
 - UNESCO World Heritage Sites
 - Open Context
-- DINAA (North American archaeology)
 - Historic England
 - GeoNames archaeological features
 - Wikidata archaeological sites

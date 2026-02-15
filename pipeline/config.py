@@ -188,7 +188,6 @@ SOURCE_PRIORITY = {
     "historic_england": 3,
     "ads": 4,
     "open_context": 5,
-    "dinaa": 6,
     "eamena": 7,
     "geonames": 8,
     "p3k14c": 9,

@@ -131,7 +131,7 @@ AncientMap/
 - **Pleiades** (38,000+ ancient Mediterranean places)
 - **UNESCO** World Heritage Sites
 - **Wikidata** archaeological sites
-- **Open Context**, **DINAA**, **Historic England**, **GeoNames**
+- **Open Context**, **Historic England**, **GeoNames**
 - **OSM** historic features
 - **Lyra Radar**: AI-discovered sites from YouTube archaeology channels
 - And 20+ more regional databases

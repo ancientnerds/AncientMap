@@ -62,7 +62,6 @@ SOURCES = {
     "wikidata": {"enabled": True, "priority": 3, "est": "177K", "module": "pipeline.ingesters.wikidata", "class": "WikidataIngester"},
     "open_context": {"enabled": True, "priority": 3, "est": "500K", "module": "pipeline.ingesters.open_context", "class": "OpenContextIngester", "max_records": 500000},
     "eamena": {"enabled": True, "priority": 3, "est": "50K", "module": "pipeline.ingesters.eamena", "class": "EAMENAIngester", "max_records": 50000},
-    "dinaa": {"enabled": True, "priority": 3, "est": "500K", "module": "pipeline.ingesters.dinaa", "class": "DINAAIngester", "max_records": 500000},
     "megalithic_portal": {"enabled": True, "priority": 3, "est": "60K", "module": "pipeline.ingesters.megalithic_portal", "class": "MegalithicPortalIngester"},
 
     # Priority 4: OSM Historic (parallel download, ~500K sites)
