@@ -5,6 +5,7 @@ import { resolvePeriod } from '../data/sites'
 import type { SiteData } from '../data/sites'
 import { SitePopupOverlay } from '../components/SitePopupOverlay'
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
+import { exportCSV, exportJSON, exportGeoJSON } from '../utils/exportFormats'
 import PinAuthModal from '../components/PinAuthModal'
 import '../styles/db-audit.css'
 
@@ -510,6 +511,11 @@ export default function DbAuditPage() {
     setTimeout(() => setCopiedId(prev => prev === id ? null : prev), 1000)
   }, [])
 
+  // Export handlers
+  const handleExportCSV = useCallback(() => exportCSV(filteredSites), [filteredSites])
+  const handleExportJSON = useCallback(() => exportJSON(filteredSites), [filteredSites])
+  const handleExportGeoJSON = useCallback(() => exportGeoJSON(filteredSites), [filteredSites])
+
   // Open site popup
   const openPopup = useCallback((s: AuditSite) => {
     setPopupSite({
@@ -686,6 +692,11 @@ export default function DbAuditPage() {
           </div>
         </div>
         <div className="db-filter-right">
+          <div className="db-export-group">
+            <button className="db-export-btn" onClick={handleExportCSV}>CSV</button>
+            <button className="db-export-btn" onClick={handleExportJSON}>JSON</button>
+            <button className="db-export-btn" onClick={handleExportGeoJSON}>GeoJSON</button>
+          </div>
           {hasActiveFilters && (
             <button className="db-clear-filters" onClick={clearAllFilters}>
               Clear All

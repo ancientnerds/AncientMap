@@ -30,6 +30,7 @@ from api.routes import (
     lyra,
     news,
     og,
+    public_v1,
     radar,
     sitemap,
     sites,
@@ -126,6 +127,7 @@ app.include_router(streetview.router, prefix="/api/streetview", tags=["streetvie
 app.include_router(content.router, prefix="/api/content", tags=["content"])
 app.include_router(news.router, prefix="/api/news", tags=["news"])
 app.include_router(radar.router, prefix="/api/radar", tags=["radar"])
+app.include_router(public_v1.router, prefix="/api/v1", tags=["Public API"])
 
 # Serve news screenshots as static files
 _screenshots_dir = Path("public/data/news/screenshots")

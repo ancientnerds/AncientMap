@@ -52,6 +52,16 @@ class RateLimiter:
 
         return self._check_memory(ip)
 
+    def check_with_info(self, ip: str) -> tuple[bool, int, int]:
+        """Return (allowed, remaining, reset_seconds) for rate-limit headers."""
+        if _redis_client is not None:
+            try:
+                return self._check_redis_with_info(ip)
+            except Exception as e:
+                logger.error(f"Redis rate limit error, falling back to memory: {e}")
+
+        return self._check_memory_with_info(ip)
+
     # -- Redis path --------------------------------------------------------
 
     def _check_redis(self, ip: str) -> bool:
@@ -62,6 +72,18 @@ class RateLimiter:
         pipe.expire(key, self.window_seconds)
         count, _ = pipe.execute()
         return count <= self.max_requests
+
+    def _check_redis_with_info(self, ip: str) -> tuple[bool, int, int]:
+        assert _redis_client is not None
+        key = f"rate_limit:{self.namespace}:{ip}"
+        pipe = _redis_client.pipeline(transaction=True)
+        pipe.incr(key)
+        pipe.expire(key, self.window_seconds)
+        pipe.ttl(key)
+        count, _, ttl = pipe.execute()
+        remaining = max(0, self.max_requests - count)
+        reset_seconds = max(0, ttl) if ttl > 0 else self.window_seconds
+        return (count <= self.max_requests, remaining, reset_seconds)
 
     # -- In-memory path ----------------------------------------------------
 
@@ -83,6 +105,29 @@ class RateLimiter:
         timestamps.append(now)
         self._store[ip] = timestamps
         return True
+
+    def _check_memory_with_info(self, ip: str) -> tuple[bool, int, int]:
+        now = time.time()
+
+        if now - self._last_cleanup > 300:
+            self._cleanup(now)
+            self._last_cleanup = now
+
+        timestamps = self._store.get(ip, [])
+        timestamps = [t for t in timestamps if now - t < self.window_seconds]
+
+        if len(timestamps) >= self.max_requests:
+            self._store[ip] = timestamps
+            oldest = min(timestamps) if timestamps else now
+            reset_seconds = int(self.window_seconds - (now - oldest))
+            return (False, 0, max(1, reset_seconds))
+
+        timestamps.append(now)
+        self._store[ip] = timestamps
+        remaining = self.max_requests - len(timestamps)
+        oldest = min(timestamps)
+        reset_seconds = int(self.window_seconds - (now - oldest))
+        return (True, remaining, max(1, reset_seconds))
 
     def _cleanup(self, now: float) -> None:
         expired = []
