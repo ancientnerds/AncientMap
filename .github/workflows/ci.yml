@@ -156,6 +156,24 @@ jobs:
             AFTER=$(git rev-parse HEAD)
             CHANGED=$(git diff --name-only $BEFORE $AFTER)
 
+            echo "==> Applying pending SQL migrations..."
+            docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -c \
+              "CREATE TABLE IF NOT EXISTS applied_migrations (filename TEXT PRIMARY KEY, applied_at TIMESTAMP DEFAULT NOW());"
+            for f in migrations/*.sql; do
+              [ -f "$f" ] || continue
+              fname=$(basename "$f")
+              already=$(docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -tAc \
+                "SELECT COUNT(*) FROM applied_migrations WHERE filename = '"'"'$fname'"'"'";)
+              if [ "$already" = "0" ]; then
+                echo "    Applying: $fname"
+                docker cp "$f" ancient_nerds_db:/tmp/"$fname"
+                docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -f /tmp/"$fname"
+                docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -c \
+                  "INSERT INTO applied_migrations (filename) VALUES ('"'"'$fname'"'"');"
+              fi
+            done
+            echo "==> Migrations done."
+
             # Rebuild frontend if files changed OR dist is missing key assets
             if echo "$CHANGED" | grep -q "^ancient-nerds-map/" || [ ! -f ancient-nerds-map/dist/an-logo.svg ]; then
               echo "==> Building frontend..."
