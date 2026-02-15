@@ -3,10 +3,16 @@ Snapshot service for database version control.
 
 Captures the pre-change state of unified_sites rows before batch edits
 or uploads, enabling undo/restore operations.
+
+Also creates file-based snapshots for the audit page version history.
 """
 
+import json
 import logging
 import uuid
+from collections import defaultdict
+from datetime import UTC, datetime
+from pathlib import Path
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -14,6 +20,8 @@ from sqlalchemy.orm import Session
 from api.cache import cache_delete_pattern
 
 logger = logging.getLogger(__name__)
+
+SNAPSHOTS_DIR = Path("public/data/snapshots")
 
 # Columns to capture in snapshots (everything except geom binary)
 _SNAPSHOT_COLUMNS = [
@@ -172,3 +180,93 @@ def list_snapshots(db: Session, limit: int = 20) -> list[dict]:
         }
         for row in rows
     ]
+
+
+def export_file_snapshot(db: Session) -> str:
+    """Export current DB state as a dated snapshot file for the audit page.
+
+    Queries all audit-source sites, writes a JSON file to public/data/snapshots/,
+    and updates the manifest. Returns the snapshot date key.
+    """
+    SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    now = datetime.now(UTC)
+    snapshot_key = now.strftime("%Y-%m-%d_%H%M%S")
+
+    result = db.execute(text("""
+        SELECT
+            id, name, lat, lon, source_id, site_type,
+            period_start, period_end, period_name, country,
+            description, thumbnail_url, source_url, edited_by,
+            created_at
+        FROM unified_sites
+        WHERE source_id IN ('ancient_nerds', 'lyra', 'ancient_nerds_community')
+        ORDER BY source_id, name
+    """))
+
+    sites = []
+    source_counts: dict[str, int] = defaultdict(int)
+
+    for row in result:
+        site: dict[str, object] = {
+            "id": str(row.id),
+            "n": row.name[:100] if row.name else "",
+            "la": round(row.lat, 5),
+            "lo": round(row.lon, 5),
+            "s": row.source_id,
+        }
+        if row.site_type:
+            site["t"] = row.site_type
+        if row.period_start is not None:
+            site["p"] = row.period_start
+        if row.period_name:
+            site["pn"] = row.period_name
+        if row.country:
+            site["c"] = row.country
+        if row.description:
+            site["d"] = row.description[:500]
+        if row.thumbnail_url:
+            site["i"] = row.thumbnail_url
+        if row.source_url:
+            site["u"] = row.source_url
+        if row.edited_by and row.edited_by != "initial":
+            site["eb"] = row.edited_by
+        if row.created_at:
+            site["ea"] = row.created_at.isoformat()
+
+        sites.append(site)
+        source_counts[row.source_id] += 1
+
+    snapshot_data = {
+        "snapshot_date": now.isoformat(),
+        "sites": sites,
+        "count": len(sites),
+        "by_source": dict(source_counts),
+    }
+
+    snapshot_file = f"{snapshot_key}.json"
+    with open(SNAPSHOTS_DIR / snapshot_file, "w", encoding="utf-8") as f:
+        json.dump(snapshot_data, f, separators=(",", ":"))
+
+    # Update manifest
+    manifest_path = SNAPSHOTS_DIR / "manifest.json"
+    manifest: dict = {"snapshots": []}
+    if manifest_path.exists():
+        with open(manifest_path, encoding="utf-8") as f:
+            manifest = json.load(f)
+
+    snapshots = manifest["snapshots"]
+    snapshots.append({
+        "date": snapshot_key,
+        "file": snapshot_file,
+        "sites": len(sites),
+        "by_source": dict(source_counts),
+    })
+    snapshots.sort(key=lambda s: s["date"], reverse=True)
+    manifest["snapshots"] = snapshots
+
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2)
+
+    logger.info(f"File snapshot {snapshot_key}: {len(sites)} sites")
+    return snapshot_key
