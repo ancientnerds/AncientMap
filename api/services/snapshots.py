@@ -77,7 +77,7 @@ def create_snapshot(
         db.execute(
             text("""
                 INSERT INTO snapshot_rows (snapshot_id, site_id, old_data)
-                VALUES (:snapshot_id, :site_id, :old_data::jsonb)
+                VALUES (:snapshot_id, :site_id, CAST(:old_data AS jsonb))
             """),
             {
                 "snapshot_id": snapshot_id,
