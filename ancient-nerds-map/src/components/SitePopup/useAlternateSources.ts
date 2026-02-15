@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { config } from '../../config'
-import { categorizePeriod } from '../../data/sites'
+import { resolvePeriod } from '../../data/sites'
 import type { SiteData } from '../../data/sites'
 import type { AlternateSource } from './types'
 
@@ -13,7 +13,7 @@ export function alternateToSiteData(alt: AlternateSource): SiteData {
     title: alt.name,
     location: alt.country || '',
     category: alt.siteType || '',
-    period: alt.periodName || categorizePeriod(alt.periodStart),
+    period: resolvePeriod(alt.periodName, alt.periodStart),
     periodStart: alt.periodStart,
     description: alt.description || '',
     image: alt.thumbnailUrl,

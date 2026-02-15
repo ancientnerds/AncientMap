@@ -57,6 +57,13 @@ export function categorizePeriod(start: number | null | undefined): string {
 }
 
 /**
+ * Resolve display period: stored name wins, computed bucket is fallback.
+ */
+export function resolvePeriod(periodName?: string | null, periodStart?: number | null): string {
+  return periodName || categorizePeriod(periodStart) || 'Unknown'
+}
+
+/**
  * Fetch sites from API via DataStore.
  */
 export async function fetchSites(): Promise<SiteData[]> {
@@ -68,7 +75,7 @@ export async function fetchSites(): Promise<SiteData[]> {
     title: site.name,
     location: site.location || '',
     category: site.type || 'Unknown',
-    period: site.period || categorizePeriod(site.periodStart) || 'Unknown',
+    period: resolvePeriod(site.period, site.periodStart),
     periodStart: site.periodStart,
     description: site.description || '',
     image: site.imageUrl || site.image || undefined,
@@ -118,7 +125,7 @@ export function getCurrentSites(): SiteData[] {
     title: site.name,
     location: site.location || '',
     category: site.type || 'Unknown',
-    period: site.period || categorizePeriod(site.periodStart) || 'Unknown',
+    period: resolvePeriod(site.period, site.periodStart),
     periodStart: site.periodStart,
     description: site.description || '',
     image: site.imageUrl || site.image || undefined,
