@@ -4,6 +4,25 @@ A playbook for AI-assisted audits of the AncientMap database. Uses a three-phase
 
 All operations run against the **local** PostgreSQL database (Docker container `ancient_nerds_db` on `localhost:5432`). After fixing the DB, re-export static JSON and push via git.
 
+## Protecting User Edits
+
+Sites can be edited manually via `db.html` on the production database. Audit migrations **must not blindly overwrite** these edits. Every `UPDATE` statement must use **conditional WHERE clauses** that check the current (wrong) value — not just the row ID.
+
+```sql
+-- SAFE: Only fires if the bad value is still there.
+-- If a user already corrected country to 'Italy', this is a no-op.
+UPDATE unified_sites SET country = 'Greece'
+WHERE id = '<uuid>' AND (country IS NULL OR country = 'Unknown');
+
+-- DANGEROUS: Overwrites whatever the current value is, including user corrections.
+UPDATE unified_sites SET country = 'Greece'
+WHERE id = '<uuid>';
+```
+
+This applies to **all** audit-generated SQL — migrations, `database_fixes.sql`, and one-off fixes. The rule is: if the current value doesn't match what the audit expected, a human changed it since the audit ran, and the audit should not second-guess that.
+
+If an audit wants to change a field that a user already edited to a *different* value, that's a conflict. Flag it as `MANUAL_FIX` with both the audit's proposed value and what the user set, and let a human decide.
+
 ## Workflow
 
 ```
@@ -470,12 +489,16 @@ If the VPS DB is not synced and someone re-runs the static exporter on VPS, it w
   -- Applied: [date]
   -- ============================================================
   ```
-- **Idempotent WHERE clauses:** Always include the current (wrong) value in the WHERE clause to prevent double-application:
+- **Conditional WHERE clauses (MANDATORY):** Always include the current (wrong) value in the WHERE clause. This prevents both double-application AND overwriting user edits made via db.html:
   ```sql
-  -- GOOD: Won't re-apply if already fixed
+  -- GOOD: Won't fire if the value was already corrected (by audit OR user)
   UPDATE unified_sites SET period_start = -9000 WHERE id = '<uuid>' AND period_start IS NULL;
 
-  -- BAD: Will overwrite even if manually corrected later
+  -- GOOD: Multiple acceptable "old" values
+  UPDATE unified_sites SET country = 'Greece'
+  WHERE id = '<uuid>' AND (country IS NULL OR country = 'Unknown');
+
+  -- BAD: Blindly overwrites — destroys user corrections
   UPDATE unified_sites SET period_start = -9000 WHERE id = '<uuid>';
   ```
 - **File-based execution for large batches:** Heredocs hit OS limits (ENAMETOOLONG) for >100 statements. Always write SQL to a file and pipe it in:
@@ -568,7 +591,8 @@ These are explicit "do NOT" rules. Violating any of these was the problem with t
 11. **Do NOT trust `raw_period` when `raw_year` exists.** The `raw_data->>'period'` field is a pre-computed bucket label from the original source. It is frequently WRONG — especially when the raw_year uses formats the source's own parser couldn't handle (e.g., millennium patterns). Always parse `raw_year` first; only fall back to `raw_period` when `raw_year` is NULL.
 12. **Do NOT modify sites from sources outside the audit scope.** A `source <id>` or `full` audit of `ancient_nerds` must NEVER touch sites from `lyra`, `pleiades`, `wikidata`, etc. Always include `AND source_id = '<target>'` in every UPDATE and INSERT statement. Forgetting this filter can corrupt curated academic data.
 13. **Do NOT write raw strings for `site_type` — always run through `normalize_site_type()`.** Every ingestion path (connectors, API PUT, manual SQL) must normalize before writing. If you find non-canonical variants in the DB (`rock_art` instead of `Rock art`, `Monument` instead of `monument`), fix them AND find which ingestion path skipped normalization. Fixing the data without fixing the source is fighting symptoms — the variants will return on the next import.
-14. **Do NOT add a site type to one canonical source without the other.** `CANONICAL_TYPES` in `pipeline/normalizers/site_type.py` and `CATEGORY_COLORS` in `ancient-nerds-map/src/constants/colors.ts` must stay in sync. A type that exists in the DB but not in `CATEGORY_COLORS` will render with the default gray color. A type in `CATEGORY_COLORS` but not in `CANONICAL_TYPES` won't be normalized and can drift into variants.
+14. **Do NOT overwrite user-edited values without a conditional WHERE clause.** Every audit UPDATE must include the expected current (wrong) value in the WHERE clause — e.g., `WHERE id = '<uuid>' AND country IS NULL` instead of just `WHERE id = '<uuid>'`. If a user corrected a field via db.html and the audit proposes a different value, that's a conflict — flag it as MANUAL_FIX, don't silently overwrite. See "Protecting User Edits" section above.
+15. **Do NOT add a site type to one canonical source without the other.** `CANONICAL_TYPES` in `pipeline/normalizers/site_type.py` and `CATEGORY_COLORS` in `ancient-nerds-map/src/constants/colors.ts` must stay in sync. A type that exists in the DB but not in `CATEGORY_COLORS` will render with the default gray color. A type in `CATEGORY_COLORS` but not in `CANONICAL_TYPES` won't be normalized and can drift into variants.
 
 ---
 
