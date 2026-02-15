@@ -25,7 +25,7 @@ async def get_snapshots():
 @router.get("/{date}.json")
 async def get_snapshot_data(date: str):
     """Return a specific dated snapshot's site data."""
-    if not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
+    if not re.match(r"^\d{4}-\d{2}-\d{2}(_\d{6})?$", date):
         raise HTTPException(status_code=400, detail="Invalid date format")
     path = SNAPSHOTS_DIR / f"{date}.json"
     if not path.exists():

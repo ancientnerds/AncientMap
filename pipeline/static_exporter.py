@@ -423,8 +423,9 @@ class StaticExporter:
         snapshot_dir = self.output_dir / "snapshots"
         snapshot_dir.mkdir(parents=True, exist_ok=True)
 
-        today = datetime.now(UTC).strftime("%Y-%m-%d")
-        snapshot_time = datetime.now(UTC).isoformat()
+        now = datetime.now(UTC)
+        snapshot_time = now.isoformat()
+        snapshot_key = now.strftime("%Y-%m-%d_%H%M%S")
 
         with get_session() as session:
             result = session.execute(text("""
@@ -478,7 +479,7 @@ class StaticExporter:
             "by_source": dict(source_counts),
         }
 
-        snapshot_file = f"{today}.json"
+        snapshot_file = f"{snapshot_key}.json"
         save_json(snapshot_dir / snapshot_file, snapshot_data)
 
         # Update manifest
@@ -488,15 +489,14 @@ class StaticExporter:
             with open(manifest_path, encoding="utf-8") as f:
                 manifest = json.load(f)
 
-        # Replace existing entry for today or append
-        snapshots = [s for s in manifest["snapshots"] if s["date"] != today]
-        snapshots.append({"date": today, "file": snapshot_file, "sites": len(sites)})
+        snapshots = manifest["snapshots"]
+        snapshots.append({"date": snapshot_key, "file": snapshot_file, "sites": len(sites)})
         snapshots.sort(key=lambda s: s["date"], reverse=True)
         manifest["snapshots"] = snapshots
 
         save_json(manifest_path, manifest, compress=False)
 
-        logger.info(f"  Snapshot {today}: {len(sites):,} sites")
+        logger.info(f"  Snapshot {snapshot_key}: {len(sites):,} sites")
         for source, count in sorted(source_counts.items(), key=lambda x: -x[1]):
             logger.info(f"    {source}: {count:,}")
 
