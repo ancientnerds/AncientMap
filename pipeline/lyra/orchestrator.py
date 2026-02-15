@@ -891,7 +891,7 @@ def main() -> None:
     seed_lyra_source()
 
     # Seed Community source for user contributions
-    from pipeline.database import get_session, SourceMeta
+    from pipeline.database import SourceMeta, get_session
     with get_session() as session:
         if not session.get(SourceMeta, "ancient_nerds_community"):
             session.add(SourceMeta(
