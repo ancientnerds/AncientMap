@@ -1,7 +1,6 @@
 """Weekly article generation from NewsItem topics — magazine-quality digest."""
 
 import logging
-import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -293,16 +292,19 @@ def _verify_article(
             ),
             "cache_control": {"type": "ephemeral"},
         }],
-        messages=[{"role": "user", "content": prompt}],
+        messages=[
+            {"role": "user", "content": prompt},
+            {"role": "assistant", "content": "[START_VERIFIED]\n"},
+        ],
     )
     text = next((b.text for b in response.content if hasattr(b, "text")), "")
 
-    match = re.search(r"\[START_VERIFIED\](.*?)\[END_VERIFIED\]", text, re.DOTALL)
-    if match:
-        return match.group(1).strip()
-
-    logger.warning("Verification did not return expected markers, using unverified text")
-    return full_body
+    # Prefill guarantees the response starts inside [START_VERIFIED].
+    # Strip [END_VERIFIED] and anything after it; if missing, use full response.
+    end_idx = text.find("[END_VERIFIED]")
+    if end_idx != -1:
+        return text[:end_idx].strip()
+    return text.strip()
 
 
 def _generate_headline_tldr(
@@ -328,22 +330,27 @@ def _generate_headline_tldr(
             ),
             "cache_control": {"type": "ephemeral"},
         }],
-        messages=[{"role": "user", "content": prompt}],
+        messages=[
+            {"role": "user", "content": prompt},
+            {"role": "assistant", "content": "[HEADLINE]\n"},
+        ],
     )
     text = next((b.text for b in response.content if hasattr(b, "text")), "")
 
+    # Prefill guarantees the response starts after [HEADLINE].
+    # Split on [TLDR] marker to separate headline from summary.
     headline = "Weekly Archaeological Digest"
     tldr = ""
 
-    headline_match = re.search(
-        r"\[HEADLINE\]\s*(.*?)(?:\n\n|\[TLDR\])", text, re.DOTALL
-    )
-    if headline_match:
-        headline = headline_match.group(1).strip()
-
-    tldr_match = re.search(r"\[TLDR\]\s*(.*?)$", text, re.DOTALL)
-    if tldr_match:
-        tldr = tldr_match.group(1).strip()
+    tldr_idx = text.find("[TLDR]")
+    if tldr_idx != -1:
+        headline = text[:tldr_idx].strip()
+        tldr = text[tldr_idx + len("[TLDR]"):].strip()
+    else:
+        # No TLDR marker — first line is headline, rest is TLDR
+        lines = text.strip().splitlines()
+        if lines:
+            headline = lines[0].strip()
 
     return headline, tldr
 
