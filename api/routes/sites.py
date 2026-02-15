@@ -15,13 +15,14 @@ import os
 import secrets
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from api.cache import cache_delete_pattern, cache_get, cache_set
 from pipeline.database import get_db
+from pipeline.normalizers.site_type import normalize_site_type
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -747,24 +748,36 @@ async def update_site(
     site_id: str,
     site_update: SiteUpdateRequest,
     authorization: str | None = Header(None, description="Bearer token for admin authentication"),
+    x_admin_pin: str | None = Header(None, alias="X-Admin-Pin"),
     db: Session = Depends(get_db),
 ):
     """
     Update a site's details (admin only).
 
     Updates name, description, location, coordinates, category, period, and source URL.
-    Requires admin key for authentication via Authorization: Bearer header.
-    Set admin key via ADMIN_KEY environment variable.
+    Accepts EITHER:
+    - Authorization: Bearer <ADMIN_KEY> header (existing)
+    - X-Admin-Pin: <4-digit PIN> header (DB audit page)
     """
-    # Verify admin key from Authorization header
-    admin_key = _extract_bearer_token(authorization)
-    configured_admin_key = os.getenv("ADMIN_KEY", "")
-    if not configured_admin_key:
-        logger.warning("ADMIN_KEY not configured - site update endpoint disabled")
-        raise HTTPException(status_code=503, detail="Admin access not configured")
+    from api.services.admin_auth import ADMIN_PIN
 
-    if not secrets.compare_digest(admin_key, configured_admin_key):
-        raise HTTPException(status_code=403, detail="Invalid admin key")
+    if authorization:
+        # Existing Bearer token auth
+        admin_key = _extract_bearer_token(authorization)
+        configured_admin_key = os.getenv("ADMIN_KEY", "")
+        if not configured_admin_key:
+            logger.warning("ADMIN_KEY not configured - site update endpoint disabled")
+            raise HTTPException(status_code=503, detail="Admin access not configured")
+        if not secrets.compare_digest(admin_key, configured_admin_key):
+            raise HTTPException(status_code=403, detail="Invalid admin key")
+    elif x_admin_pin:
+        # PIN-based auth (Turnstile already verified at unlock time)
+        if not ADMIN_PIN:
+            raise HTTPException(status_code=503, detail="Admin PIN not configured")
+        if not secrets.compare_digest(x_admin_pin, ADMIN_PIN):
+            raise HTTPException(status_code=403, detail="Invalid admin PIN")
+    else:
+        raise HTTPException(status_code=401, detail="Authorization required")
 
     # First check if site exists
     check_query = text("SELECT id FROM unified_sites WHERE id::text = :site_id")
@@ -801,7 +814,7 @@ async def update_site(
         "description": site_update.description,
         "lat": lat,
         "lon": lon,
-        "site_type": site_update.category,
+        "site_type": normalize_site_type(site_update.category),
         "period_name": site_update.period,
         "period_start": period_start,
         "source_url": site_update.sourceUrl,

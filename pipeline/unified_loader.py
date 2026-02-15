@@ -37,6 +37,7 @@ from sqlalchemy.dialects.postgresql import insert
 
 from pipeline.database import SourceMeta, UnifiedSite, get_session
 from pipeline.normalizers.dates import parse_year
+from pipeline.normalizers.site_type import normalize_site_type
 from pipeline.utils import (
     get_centroid as _get_centroid,
 )
@@ -557,20 +558,6 @@ def get_centroid(geometry: dict) -> tuple[float | None, float | None]:
     if lon is not None and lat is not None:
         return lat, lon
     return None, None
-
-
-def normalize_site_type(site_type: str | None) -> str:
-    """Normalize site type to lowercase for consistent filtering.
-
-    Args:
-        site_type: Raw site type string
-
-    Returns:
-        Normalized lowercase site type, or 'unknown' if empty
-    """
-    if not site_type:
-        return "unknown"
-    return site_type.lower().strip()
 
 
 def enrich_country(record: dict) -> dict:
