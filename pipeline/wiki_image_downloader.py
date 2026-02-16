@@ -51,14 +51,16 @@ THUMB_WIDTH = 800       # Hero / lead image
 GALLERY_WIDTH = 1600    # All other gallery images (avoids OOM on huge panoramas)
 MAX_RAW_BYTES = 50_000_000  # 50 MB — skip downloads larger than this
 
-# Rate limits (seconds between API requests)
-WIKIPEDIA_DELAY = 0.1
-WIKIDATA_DELAY = 0.2
-COMMONS_DELAY = 0.05
+# Rate limits per Wikimedia robot policy: 1s between requests, serial only
+WIKIPEDIA_DELAY = 1.0
+WIKIDATA_DELAY = 1.0
+COMMONS_DELAY = 1.0
 
-# Download settings — sequential to avoid Wikimedia 429s on just 20 images
+# Download settings — sequential per Wikimedia robot policy (1 req at a time)
+# https://www.mediawiki.org/wiki/API:Etiquette
+# https://wikitech.wikimedia.org/wiki/Robot_policy
 DOWNLOAD_RETRY_ROUNDS = 3
-DOWNLOAD_DELAY = 0.3  # seconds between each download
+DOWNLOAD_DELAY = 1.0  # 1 second between downloads per robot policy
 
 
 class RateLimitedError(Exception):
