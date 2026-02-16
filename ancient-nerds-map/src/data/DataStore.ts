@@ -14,7 +14,6 @@ import {
 import { config } from '../config'
 import { OfflineStorage, CompactSite } from '../services/OfflineStorage'
 import { offlineFetch } from '../services/OfflineFetch'
-import { loadLocalImageIndex } from '../services/imageService'
 
 /** API Base URL - from environment config */
 const API_BASE_URL = config.api.baseUrl
@@ -74,9 +73,6 @@ class DataStoreClass {
       offlineFetch(`${API_BASE_URL}/sources/?${CACHE_BUSTER}`),
       offlineFetch(`${API_BASE_URL}/sites/all?limit=100000&source=${DEFAULT_SOURCE}&${CACHE_BUSTER}`),
     ])
-
-    // Load wiki image index in background (non-blocking)
-    loadLocalImageIndex().catch(() => {})
 
     if (!sourcesResponse.ok) {
       // If API fails and we have offline data, use it

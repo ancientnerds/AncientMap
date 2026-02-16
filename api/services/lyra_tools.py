@@ -577,6 +577,80 @@ def list_channels() -> str:
     return json.dumps(channels, ensure_ascii=False)
 
 
+@tool
+def get_site_images(
+    site: str,
+    limit: int = 20,
+) -> str:
+    """Get locally cached Wikipedia/Wikimedia Commons images for an archaeological site.
+
+    Returns image URLs, attribution (author, license), and metadata.
+    Use this when users ask to see images or photos of a site.
+
+    Args:
+        site: Site UUID or name (e.g. 'Pompeii', 'fa2293fa-5256-4a41-9e61-26844e54fde4').
+        limit: Maximum images to return (default 20, max 50).
+    """
+    import uuid as _uuid
+
+    limit = min(limit, 50)
+
+    try:
+        _uuid.UUID(site)
+        is_uuid = True
+    except ValueError:
+        is_uuid = False
+
+    if is_uuid:
+        site_id = site
+    else:
+        # Resolve name to UUID
+        find_sql = """
+            SELECT id::text FROM unified_sites
+            WHERE lower(name) = lower(:name)
+            LIMIT 1
+        """
+        with get_session() as session:
+            row = session.execute(text(find_sql), {"name": site}).fetchone()
+            if not row:
+                return f"Site '{site}' not found."
+            site_id = row.id
+
+    sql = """
+        SELECT filename, original_url, commons_page_url,
+               author, author_url, license, license_url,
+               title, is_hero, is_lead, source_type, width, height, site_id
+        FROM wiki_images
+        WHERE site_id = CAST(:site_id AS uuid)
+        ORDER BY sort_order
+        LIMIT :limit
+    """
+    with get_session() as session:
+        result = session.execute(text(sql), {"site_id": site_id, "limit": limit})
+        rows = result.fetchall()
+
+    if not rows:
+        return f"No cached images found for site '{site}'. Images may not have been downloaded yet."
+
+    images = []
+    for r in rows:
+        sid_short = str(r.site_id).replace("-", "")[:8]
+        img = {
+            "title": r.title,
+            "url": f"/data/images/wiki/{sid_short}/{r.filename}",
+            "commons_url": r.commons_page_url,
+            "author": r.author,
+            "license": r.license,
+            "is_hero": r.is_hero,
+            "source": r.source_type,
+        }
+        if r.width and r.height:
+            img["dimensions"] = f"{r.width}x{r.height}"
+        images.append(img)
+
+    return json.dumps(images, ensure_ascii=False)
+
+
 def _format_payload_for_rerank(payload: dict) -> str:
     """Format a Qdrant payload dict into text for the reranker."""
     parts = []
@@ -603,4 +677,4 @@ def _format_payload_for_rerank(payload: dict) -> str:
 # Exported tools list
 # ---------------------------------------------------------------------------
 
-TOOLS = [search_sites, get_site_details, search_news, get_empire_data, vector_search, search_radar, list_channels]
+TOOLS = [search_sites, get_site_details, search_news, get_empire_data, vector_search, search_radar, list_channels, get_site_images]
