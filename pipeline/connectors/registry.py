@@ -26,6 +26,35 @@ from pipeline.connectors.types import (
 )
 
 
+async def _gather_with_partial_results(
+    coros: list, timeout: float
+) -> list:
+    """Run coroutines with a timeout, keeping results from those that finished.
+
+    Unlike asyncio.wait_for(asyncio.gather(...)), this does NOT discard results
+    from fast connectors when slow ones exceed the timeout.
+    """
+    if not coros:
+        return []
+
+    tasks = [asyncio.ensure_future(c) for c in coros]
+    done, pending = await asyncio.wait(tasks, timeout=timeout)
+
+    if pending:
+        logger.warning(f"{len(pending)} connector(s) timed out after {timeout}s")
+        for task in pending:
+            task.cancel()
+
+    results = []
+    for task in done:
+        try:
+            results.append(task.result())
+        except Exception as exc:
+            results.append(exc)
+
+    return results
+
+
 class ConnectorRegistry:
     """
     Central registry for all content connectors.
@@ -227,14 +256,7 @@ class ConnectorRegistry:
         # Run searches in parallel with timeout
         tasks = [search_connector(c) for c in connectors]
 
-        try:
-            results = await asyncio.wait_for(
-                asyncio.gather(*tasks, return_exceptions=True),
-                timeout=timeout,
-            )
-        except TimeoutError:
-            logger.warning(f"Search timed out after {timeout}s")
-            results = []
+        results = await _gather_with_partial_results(tasks, timeout)
 
         # Aggregate results
         all_items: list[ContentItem] = []
@@ -328,13 +350,7 @@ class ConnectorRegistry:
 
         tasks = [query_connector(c) for c in connectors]
 
-        try:
-            results = await asyncio.wait_for(
-                asyncio.gather(*tasks, return_exceptions=True),
-                timeout=timeout,
-            )
-        except TimeoutError:
-            results = []
+        results = await _gather_with_partial_results(tasks, timeout)
 
         # Aggregate
         all_items: list[ContentItem] = []
@@ -427,13 +443,7 @@ class ConnectorRegistry:
 
         tasks = [query_connector(c) for c in connectors]
 
-        try:
-            results = await asyncio.wait_for(
-                asyncio.gather(*tasks, return_exceptions=True),
-                timeout=timeout,
-            )
-        except TimeoutError:
-            results = []
+        results = await _gather_with_partial_results(tasks, timeout)
 
         # Aggregate
         all_items: list[ContentItem] = []
@@ -515,13 +525,7 @@ class ConnectorRegistry:
 
         tasks = [query_connector(c) for c in connectors]
 
-        try:
-            results = await asyncio.wait_for(
-                asyncio.gather(*tasks, return_exceptions=True),
-                timeout=timeout,
-            )
-        except TimeoutError:
-            results = []
+        results = await _gather_with_partial_results(tasks, timeout)
 
         all_items: list[ContentItem] = []
         sources_searched: list[str] = []

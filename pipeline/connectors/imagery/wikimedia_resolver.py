@@ -43,6 +43,7 @@ class ResolvedEntity:
     main_image: str | None = None  # P18
     video_filenames: list[str] = field(default_factory=list)  # P10
     article_title: str | None = None
+    from_url: bool = False  # True when QID came from source_url (high confidence)
 
 
 # Module-level cache shared between WikidataConnector and WikimediaConnector
@@ -108,11 +109,13 @@ class WikimediaResolver:
         """Run the resolution chain without cache."""
         qid: str | None = None
         article_title: str | None = None
+        from_url = False  # True when QID derived from source_url (high confidence)
 
         # Strategy 1: Extract QID directly from Wikidata URL
         if source_url:
             qid = extract_qid_from_url(source_url)
             if qid:
+                from_url = True
                 logger.debug(f"WikimediaResolver: QID {qid} extracted from URL")
 
         # Strategy 2: Extract article title from Wikipedia URL -> resolve to QID
@@ -121,11 +124,12 @@ class WikimediaResolver:
             if article_title:
                 qid = await self._resolve_qid(article_title)
                 if qid:
+                    from_url = True
                     logger.debug(
                         f"WikimediaResolver: QID {qid} via Wikipedia article '{article_title}'"
                     )
 
-        # Strategy 3: opensearch -> article -> QID
+        # Strategy 3: opensearch -> article -> QID (low confidence — can resolve wrong entity)
         if not qid:
             article_title = await self._resolve_article_title(site_name)
             if article_title:
@@ -154,6 +158,7 @@ class WikimediaResolver:
             main_image=main_image,
             video_filenames=video_filenames,
             article_title=article_title,
+            from_url=from_url,
         )
         logger.info(
             f"WikimediaResolver: '{site_name}' -> {qid}"
