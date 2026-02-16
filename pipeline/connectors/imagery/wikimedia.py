@@ -188,7 +188,7 @@ class WikimediaConnector(BaseConnector):
         source_url = kwargs.get("source_url")
         entity = await _resolver.resolve(site_name, source_url)
 
-        if entity and entity.commons_category:
+        if entity and entity.commons_category and entity.from_url:
             return await self._search_in_category(
                 entity.commons_category, site_name, content_type, limit
             )
