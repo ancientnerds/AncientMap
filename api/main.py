@@ -39,6 +39,7 @@ from api.routes import (
     snapshots,
     sources,
     streetview,
+    vector_sync,
 )
 from pipeline.config import get_settings
 
@@ -200,6 +201,7 @@ app.include_router(news.router, prefix="/api/news", tags=["news"])
 app.include_router(radar.router, prefix="/api/radar", tags=["radar"])
 app.include_router(public_v1.router, prefix="/api/v1", tags=["Public API"])
 app.include_router(snapshots.router, prefix="/api/snapshots", tags=["snapshots"])
+app.include_router(vector_sync.router, prefix="/api/vector-sync", tags=["vector-sync"])
 
 # Serve news screenshots as static files
 _screenshots_dir = Path("public/data/news/screenshots")

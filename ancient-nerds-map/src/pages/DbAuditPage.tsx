@@ -252,6 +252,14 @@ export default function DbAuditPage() {
   const [uploadTarget, setUploadTarget] = useState('ancient_nerds')
   const [uploading, setUploading] = useState(false)
 
+  // Qdrant sync
+  interface QdrantCollection { pg_count: number; qdrant_count: number; delta: number }
+  interface QdrantReindex { running: boolean; started_at: string | null; collection: string | null; last_completed_at: string | null; last_duration_seconds: number | null; last_result: string | null }
+  interface QdrantStatus { qdrant_available: boolean; collections: { sites: QdrantCollection; news: QdrantCollection }; reindex: QdrantReindex }
+  const [qdrantStatus, setQdrantStatus] = useState<QdrantStatus | null>(null)
+  const [qdrantOpen, setQdrantOpen] = useState(false)
+  const qdrantRef = useRef<HTMLDivElement>(null)
+
   // Diff viewer
   const [showDiffModal, setShowDiffModal] = useState(false)
   const [diffData, setDiffData] = useState<DiffResponse | null>(null)
@@ -379,6 +387,47 @@ export default function DbAuditPage() {
     }, 30_000)
     return () => clearInterval(interval)
   }, [sourceVersions])
+
+  // ─── Qdrant sync widget ─────────────────────────────────────────────────────
+  const refreshQdrantStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`${config.api.baseUrl}/vector-sync/status`)
+      if (res.ok) setQdrantStatus(await res.json())
+    } catch { /* Qdrant status is optional */ }
+  }, [])
+
+  useEffect(() => {
+    refreshQdrantStatus()
+    const interval = setInterval(refreshQdrantStatus, qdrantStatus?.reindex.running ? 5_000 : 30_000)
+    return () => clearInterval(interval)
+  }, [refreshQdrantStatus, qdrantStatus?.reindex.running])
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!qdrantOpen) return
+    const handler = (e: MouseEvent) => {
+      if (qdrantRef.current && !qdrantRef.current.contains(e.target as Node)) setQdrantOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [qdrantOpen])
+
+  const handleReindex = async (collection?: string, rebuild?: boolean) => {
+    if (!confirm(`Reindex ${collection || 'all'} vectors${rebuild ? ' (full rebuild)' : ''}?`)) return
+    try {
+      const res = await fetch(`${config.api.baseUrl}/vector-sync/reindex`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': adminPin || '' },
+        body: JSON.stringify({ collection: collection || null, rebuild: rebuild || false }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }))
+        alert(err.detail || 'Reindex failed')
+        return
+      }
+      refreshQdrantStatus()
+    } catch { alert('Failed to start reindex') }
+  }
 
   // Compute stats (respect source filter)
   const stats = useMemo(() => {
@@ -925,6 +974,76 @@ export default function DbAuditPage() {
           )}
         </div>
         <div className="db-header-right">
+          {/* Qdrant sync widget */}
+          {qdrantStatus && (
+            <div className="db-qdrant-widget" ref={qdrantRef}>
+              <button
+                className={`db-qdrant-pill ${
+                  qdrantStatus.reindex.running ? 'db-qdrant-indexing' :
+                  !qdrantStatus.qdrant_available ? 'db-qdrant-offline' :
+                  (qdrantStatus.collections.sites.delta !== 0 || qdrantStatus.collections.news.delta !== 0) ? 'db-qdrant-stale' :
+                  'db-qdrant-ok'
+                }`}
+                onClick={() => setQdrantOpen(o => !o)}
+              >
+                {qdrantStatus.reindex.running
+                  ? <span className="db-qdrant-spinner" />
+                  : <span className="db-qdrant-dot" />}
+                <span>Qdrant: {
+                  qdrantStatus.reindex.running ? 'indexing...' :
+                  !qdrantStatus.qdrant_available ? 'offline' :
+                  (qdrantStatus.collections.sites.delta === 0 && qdrantStatus.collections.news.delta === 0) ? 'OK' :
+                  `${qdrantStatus.collections.sites.delta + qdrantStatus.collections.news.delta > 0 ? '-' : '+'}${Math.abs(qdrantStatus.collections.sites.delta + qdrantStatus.collections.news.delta)}`
+                }</span>
+              </button>
+              {qdrantOpen && (
+                <div className="db-qdrant-dropdown">
+                  <div className="db-qdrant-section-title">Collection Counts</div>
+                  {(['sites', 'news'] as const).map(col => {
+                    const c = qdrantStatus.collections[col]
+                    return (
+                      <div key={col} className="db-qdrant-row">
+                        <span className="db-qdrant-col-name">{col}</span>
+                        <span className="db-qdrant-counts">
+                          <span title="Qdrant">{c.qdrant_count.toLocaleString()}</span>
+                          <span className="db-qdrant-sep">/</span>
+                          <span title="PostgreSQL">{c.pg_count.toLocaleString()}</span>
+                        </span>
+                        {c.delta !== 0 && (
+                          <span className={`db-qdrant-delta ${c.delta > 0 ? 'stale' : 'over'}`}>
+                            {c.delta > 0 ? `-${c.delta}` : `+${Math.abs(c.delta)}`}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
+                  {qdrantStatus.reindex.last_completed_at && (
+                    <div className="db-qdrant-meta">
+                      Last indexed {formatRelativeDate(qdrantStatus.reindex.last_completed_at)}
+                      {qdrantStatus.reindex.last_duration_seconds != null && ` (${qdrantStatus.reindex.last_duration_seconds}s)`}
+                      {qdrantStatus.reindex.last_result && qdrantStatus.reindex.last_result !== 'success' && (
+                        <span className="db-qdrant-fail"> — {qdrantStatus.reindex.last_result}</span>
+                      )}
+                    </div>
+                  )}
+                  {qdrantStatus.reindex.running && (
+                    <div className="db-qdrant-meta">
+                      Indexing {qdrantStatus.reindex.collection}
+                      {qdrantStatus.reindex.started_at && ` — started ${formatRelativeDate(qdrantStatus.reindex.started_at)}`}
+                    </div>
+                  )}
+                  {isAuthenticated && !qdrantStatus.reindex.running && (
+                    <div className="db-qdrant-actions">
+                      <button onClick={() => handleReindex()}>Reindex All</button>
+                      <button onClick={() => handleReindex('sites')}>Sites</button>
+                      <button onClick={() => handleReindex('news')}>News</button>
+                      <button onClick={() => handleReindex(undefined, true)}>Rebuild All</button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           {isAuthenticated && (
             <button className="db-upload-btn" onClick={() => setShowUploadModal(true)}>
               Upload
