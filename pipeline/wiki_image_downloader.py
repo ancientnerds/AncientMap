@@ -55,47 +55,56 @@ WIKIDATA_DELAY = 0.2
 COMMONS_DELAY = 0.05
 
 # Parallel download settings
-MAX_DOWNLOAD_WORKERS = 8   # threads for parallel PIL conversion + I/O
-DOWNLOAD_RATE_LIMIT = 4.0  # image download requests per second (global)
+MAX_DOWNLOAD_WORKERS = 6   # threads for parallel PIL conversion + I/O
 DOWNLOAD_MAX_RETRIES = 4
+
+# Wikimedia throttles after ~20-60 image requests regardless of rate.
+# 2 req/s is conservative enough to avoid 429, still 7x faster than sequential.
+DOWNLOAD_RATE_LIMIT = 2.0
 
 
 class RateLimiter:
-    """Thread-safe rate limiter — assigns time slots without blocking other threads."""
+    """Thread-safe rate limiter with global freeze on 429."""
 
     def __init__(self, requests_per_second: float):
         self._interval = 1.0 / requests_per_second
         self._lock = threading.Lock()
         self._next_slot = time.monotonic()
+        self._gate = threading.Event()
+        self._gate.set()  # open
 
     def acquire(self):
-        """Reserve a slot and sleep until it arrives. Lock held only briefly."""
+        """Wait for the gate (in case of global 429 freeze), then get a slot."""
+        self._gate.wait()  # blocks if frozen
         with self._lock:
             now = time.monotonic()
             self._next_slot = max(now, self._next_slot) + self._interval
             my_slot = self._next_slot - self._interval
 
-        # Sleep outside the lock — other threads can reserve their own slots
         wait = my_slot - time.monotonic()
         if wait > 0:
             time.sleep(wait)
+        self._gate.wait()  # re-check after sleep
 
-    def pause(self, seconds: float):
-        """Push all future slots forward (e.g., on 429 Retry-After).
-        Affects all threads, not just the caller."""
-        with self._lock:
-            resume_at = time.monotonic() + seconds
-            self._next_slot = max(self._next_slot, resume_at)
+    def freeze(self, seconds: float):
+        """Freeze ALL threads for N seconds (called on 429 Retry-After)."""
+        self._gate.clear()
+        logger.info(f"Rate limiter: freezing all downloads for {seconds}s")
+
+        def _thaw():
+            time.sleep(seconds)
+            # Also push the slot schedule forward so threads don't burst on resume
+            with self._lock:
+                self._next_slot = max(self._next_slot, time.monotonic())
+            self._gate.set()
+
+        threading.Thread(target=_thaw, daemon=True).start()
 
     def slow_down(self):
-        """Halve the rate on 429 (min 1 req/s)."""
+        """Halve the rate on 429 (min 0.5 req/s)."""
         with self._lock:
-            self._interval = min(self._interval * 2, 1.0)
+            self._interval = min(self._interval * 2, 2.0)
             logger.info(f"Rate limiter → {1.0 / self._interval:.1f} req/s")
-
-    @property
-    def rate(self) -> float:
-        return 1.0 / self._interval
 
 
 _download_limiter = RateLimiter(DOWNLOAD_RATE_LIMIT)
@@ -787,10 +796,9 @@ def download_image(
 
             if resp.status_code == 429:
                 retry_after = float(resp.headers.get("retry-after", 2 ** (attempt + 1)))
-                # Pause ALL threads globally, then slow the rate
-                _download_limiter.pause(retry_after)
+                _download_limiter.freeze(retry_after)  # stops ALL threads
                 _download_limiter.slow_down()
-                logger.debug(f"429 → pausing all downloads {retry_after}s, attempt {attempt + 1}")
+                logger.debug(f"429 attempt {attempt + 1}, waiting {retry_after}s")
                 time.sleep(retry_after)
                 continue
             break
