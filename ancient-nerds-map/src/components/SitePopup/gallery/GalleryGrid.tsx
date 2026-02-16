@@ -1,12 +1,23 @@
+import { useState, useEffect } from 'react'
 import type { GalleryGridProps } from '../types'
 import { SourceFavicon } from './galleryUtils'
 import LazyImage from '../../LazyImage'
 
+const PAGE_SIZE = 50
+
 export function GalleryGrid({ items, onItemClick }: GalleryGridProps) {
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+
+  // Reset when items change (new site selected)
+  useEffect(() => { setVisibleCount(PAGE_SIZE) }, [items])
+
+  const visibleItems = items.slice(0, visibleCount)
+  const hasMore = visibleCount < items.length
+
   return (
     <div className="gallery-grid-container">
       <div className="gallery-grid">
-        {items.map((item, index) => (
+        {visibleItems.map((item, index) => (
           <div
             key={`${item.id}-${index}`}
             className="gallery-item"
@@ -26,6 +37,14 @@ export function GalleryGrid({ items, onItemClick }: GalleryGridProps) {
           </div>
         ))}
       </div>
+      {hasMore && (
+        <button
+          className="gallery-show-more"
+          onClick={() => setVisibleCount(prev => prev + PAGE_SIZE)}
+        >
+          Show more ({items.length - visibleCount} remaining)
+        </button>
+      )}
     </div>
   )
 }

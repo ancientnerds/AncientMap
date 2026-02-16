@@ -12,13 +12,16 @@ Usage:
     python -m pipeline.wiki_image_downloader --stats                     # show coverage
     python -m pipeline.wiki_image_downloader --force                     # re-process existing
     python -m pipeline.wiki_image_downloader --max-per-category 50       # limit Commons images
+    python -m pipeline.wiki_image_downloader --parallel 5                # concurrent sites
 """
 
 import argparse
 import hashlib
 import re
+import threading
 import time
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import httpx
@@ -47,9 +50,15 @@ WIKIDATA_SPARQL_URL = "https://query.wikidata.org/sparql"
 THUMB_WIDTH = 800
 
 # Rate limits (seconds between requests)
-WIKIPEDIA_DELAY = 1.0
-WIKIDATA_DELAY = 2.0
-COMMONS_DELAY = 0.5  # Commons is more lenient
+# Wikimedia allows 200 req/s for bots with proper User-Agent
+WIKIPEDIA_DELAY = 0.1
+WIKIDATA_DELAY = 0.2
+COMMONS_DELAY = 0.05
+
+# Parallel download settings
+MAX_DOWNLOAD_WORKERS = 10
+MAX_WIKIMEDIA_CONCURRENT = 20  # global cap across all site threads
+_wikimedia_semaphore = threading.Semaphore(MAX_WIKIMEDIA_CONCURRENT)
 
 # Wikidata image properties to extract
 WIKIDATA_IMAGE_PROPS = {
@@ -266,6 +275,77 @@ def fetch_image_metadata(file_title: str) -> dict:
     except Exception as e:
         logger.debug(f"imageinfo error for {file_title}: {e}")
         return {}
+
+
+def fetch_image_metadata_batch(file_titles: list[str]) -> dict[str, dict]:
+    """
+    Fetch metadata for up to 50 images in one API call.
+
+    The MediaWiki imageinfo API accepts pipe-separated titles (max 50).
+    Returns {file_title: {author, author_url, license, license_url, width, height, original_url}}.
+    """
+    if not file_titles:
+        return {}
+
+    normalized = [t if t.startswith("File:") else f"File:{t}" for t in file_titles]
+    titles_param = "|".join(normalized)
+
+    params = {
+        "action": "query",
+        "titles": titles_param,
+        "prop": "imageinfo",
+        "iiprop": "extmetadata|size|url",
+        "iiextmetadatafilter": "Artist|Author|Credit|LicenseShortName|License|LicenseUrl",
+        "format": "json",
+    }
+
+    try:
+        with httpx.Client(timeout=30, follow_redirects=True) as client:
+            resp = client.get(WIKIPEDIA_ACTION_API, params=params, headers=HEADERS)
+
+        if resp.status_code != 200:
+            return {}
+
+        data = resp.json()
+        pages = data.get("query", {}).get("pages", {})
+    except Exception as e:
+        logger.debug(f"batch imageinfo error: {e}")
+        return {}
+
+    results: dict[str, dict] = {}
+    for page in pages.values():
+        page_title = page.get("title", "")
+        info = (page.get("imageinfo") or [{}])[0]
+        ext = info.get("extmetadata", {})
+
+        author = ext.get("Artist", ext.get("Author", ext.get("Credit", {}))).get("value", "")
+        if author:
+            author = re.sub(r"<[^>]*>", "", author).strip()
+            if len(author) > 200:
+                author = author[:200] + "..."
+
+        author_url = None
+        raw_artist = ext.get("Artist", ext.get("Author", {})).get("value", "")
+        href_match = re.search(r'href="([^"]+)"', raw_artist)
+        if href_match:
+            author_url = href_match.group(1)
+            if author_url.startswith("//"):
+                author_url = "https:" + author_url
+
+        license_name = ext.get("LicenseShortName", ext.get("License", {})).get("value", "")
+        license_url = ext.get("LicenseUrl", {}).get("value", "")
+
+        results[page_title] = {
+            "author": author or None,
+            "author_url": author_url,
+            "license": license_name or None,
+            "license_url": license_url or None,
+            "width": info.get("width"),
+            "height": info.get("height"),
+            "original_url": info.get("url"),
+        }
+
+    return results
 
 
 def wikipedia_opensearch(site_name: str) -> str | None:
@@ -700,6 +780,45 @@ def download_image(
         return None
 
 
+def _download_image_with_semaphore(
+    original_url: str, dest_path: Path, width: int | None = None
+) -> tuple[int, int, int] | None:
+    """Download an image, respecting the global concurrency semaphore."""
+    with _wikimedia_semaphore:
+        result = download_image(original_url, dest_path, width)
+        time.sleep(COMMONS_DELAY)
+        return result
+
+
+def download_images_parallel(
+    download_tasks: list[tuple[int, dict, str, Path, int | None]],
+) -> list[tuple[int, dict, str, tuple[int, int, int] | None]]:
+    """
+    Download images in parallel using a thread pool.
+
+    Each task is (index, img_dict, original_url, dest_path, width).
+    Returns [(index, img_dict, original_url, result)] for successful downloads.
+    """
+    results: list[tuple[int, dict, str, tuple[int, int, int] | None]] = []
+
+    with ThreadPoolExecutor(max_workers=MAX_DOWNLOAD_WORKERS) as executor:
+        futures = {}
+        for idx, img, orig_url, dest_path, width in download_tasks:
+            future = executor.submit(_download_image_with_semaphore, orig_url, dest_path, width)
+            futures[future] = (idx, img, orig_url)
+
+        for future in as_completed(futures):
+            idx, img, orig_url = futures[future]
+            try:
+                result = future.result()
+                results.append((idx, img, orig_url, result))
+            except Exception as e:
+                logger.debug(f"Parallel download error for {img.get('title')}: {e}")
+                results.append((idx, img, orig_url, None))
+
+    return results
+
+
 # =============================================================================
 # Main processing
 # =============================================================================
@@ -874,55 +993,82 @@ def process_site(site: dict, dry_run: bool = False, max_per_category: int = 200)
         )
         return len(deduped)
 
-    # --- Download each image ---
+    # --- Prepare download list and batch-fetch metadata ---
     downloaded = 0
     img_dir = site_image_dir(site_id)
 
-    for idx, img in enumerate(deduped):
+    # Build local filenames and identify which images need metadata
+    needs_metadata: list[str] = []
+    img_filenames: list[str] = []
+    for img in deduped:
         file_title = img["title"]
         raw_name = sanitize_filename(file_title.replace("File:", ""))
         local_filename = re.sub(r"\.[^.]+$", ".webp", raw_name)
         if not local_filename.endswith(".webp"):
             local_filename += ".webp"
+        img_filenames.append(local_filename)
+
+        if not img.get("_has_metadata"):
+            needs_metadata.append(file_title)
+
+    # Batch-fetch metadata in chunks of 50 (instead of 1 API call per image)
+    batch_metadata: dict[str, dict] = {}
+    for chunk_start in range(0, len(needs_metadata), 50):
+        chunk = needs_metadata[chunk_start : chunk_start + 50]
+        batch_result = fetch_image_metadata_batch(chunk)
+        batch_metadata.update(batch_result)
+        time.sleep(WIKIPEDIA_DELAY)
+
+    # Build download tasks (skip already-downloaded)
+    download_tasks: list[tuple[int, dict, str, Path, int | None]] = []
+    for idx, img in enumerate(deduped):
+        local_filename = img_filenames[idx]
         dest_path = img_dir / local_filename
 
-        # Skip if already exists on disk
         if dest_path.exists():
             downloaded += 1
             continue
 
-        # Fetch metadata if not already inline (Wikipedia and Wikidata images need it)
+        file_title = img["title"]
+        normalized_title = file_title if file_title.startswith("File:") else f"File:{file_title}"
+
         if img.get("_has_metadata"):
             meta = {
-                "author": img.get("author"),
-                "author_url": img.get("author_url"),
-                "license": img.get("license"),
-                "license_url": img.get("license_url"),
-                "width": img.get("width"),
-                "height": img.get("height"),
+                "original_url": img.get("original_url"),
             }
         else:
-            meta = fetch_image_metadata(file_title)
-            time.sleep(WIKIPEDIA_DELAY)
+            meta = batch_metadata.get(normalized_title, {})
 
-        # Use the original URL from metadata if available, otherwise from the image dict
         original_url = (
             meta.get("original_url") or img.get("original_url") or img.get("full_url", "")
         )
 
-        # Download: hero image as 800px thumbnail, others at original size
         is_hero = idx == 0
         dl_width = THUMB_WIDTH if is_hero else None
-        result = download_image(original_url, dest_path, width=dl_width)
-        time.sleep(COMMONS_DELAY)
+        download_tasks.append((idx, img, original_url, dest_path, dl_width))
 
+    # Parallel image downloads
+    dl_results = download_images_parallel(download_tasks)
+
+    # Insert results into database
+    for idx, img, original_url, result in dl_results:
         if not result:
             continue
 
         file_size, img_width, img_height = result
+        local_filename = img_filenames[idx]
+        file_title = img["title"]
+        normalized_title = file_title if file_title.startswith("File:") else f"File:{file_title}"
+        is_hero = idx == 0
+        dl_width = THUMB_WIDTH if is_hero else None
         source_type = img.get("source_type", "wikimedia")
 
-        # Insert into database
+        # Get metadata from batch results or inline
+        if img.get("_has_metadata"):
+            meta = img
+        else:
+            meta = batch_metadata.get(normalized_title, {})
+
         try:
             with get_session() as session:
                 wiki_img = WikiImage(
@@ -948,7 +1094,6 @@ def process_site(site: dict, dry_run: bool = False, max_per_category: int = 200)
                 session.commit()
                 downloaded += 1
         except Exception as e:
-            # UniqueConstraint violation = already exists, skip
             if "uq_wiki_image_site_url" in str(e):
                 downloaded += 1
             else:
@@ -964,6 +1109,7 @@ def run_downloader(
     stats_only: bool = False,
     force: bool = False,
     max_per_category: int = 200,
+    parallel_sites: int = 3,
 ) -> None:
     """Main entry point for the wiki image downloader."""
     if stats_only:
@@ -974,34 +1120,65 @@ def run_downloader(
     logger.info(f"Found {len(sites)} sites to process")
     if force:
         logger.info("--force enabled: re-processing sites even if they already have images")
+    logger.info(f"Parallel sites: {parallel_sites}, download workers per site: {MAX_DOWNLOAD_WORKERS}")
+
+    # Filter out already-downloaded sites upfront (unless --force)
+    if not dry_run and not force:
+        to_process = []
+        total_skipped = 0
+        for site in sites:
+            if site_already_downloaded(site["id"]):
+                total_skipped += 1
+            else:
+                to_process.append(site)
+        logger.info(f"Skipped {total_skipped} sites already downloaded, {len(to_process)} remaining")
+    else:
+        to_process = sites
+        total_skipped = 0
 
     total_downloaded = 0
-    total_skipped = 0
     total_errors = 0
+    _lock = threading.Lock()
+    processed_count = 0
 
-    for i, site in enumerate(sites):
-        if (i + 1) % 100 == 0:
-            logger.info(
-                f"Progress: {i + 1}/{len(sites)} sites ({total_downloaded} images downloaded)"
-            )
+    def _process_one(site: dict) -> tuple[str, int]:
+        """Process a single site, return (name, count)."""
+        return site["name"], process_site(site, dry_run=dry_run, max_per_category=max_per_category)
 
-        # Skip sites that already have images (unless --force)
-        if not dry_run and not force and site_already_downloaded(site["id"]):
-            total_skipped += 1
-            continue
-
-        try:
-            count = process_site(site, dry_run=dry_run, max_per_category=max_per_category)
-            total_downloaded += count
-            if count > 0:
-                logger.info(f"  [{i + 1}/{len(sites)}] {site['name']}: {count} images")
-        except Exception as e:
-            logger.warning(f"  Error processing {site['name']}: {e}")
-            total_errors += 1
+    if parallel_sites <= 1:
+        # Sequential mode
+        for i, site in enumerate(to_process):
+            try:
+                name, count = _process_one(site)
+                total_downloaded += count
+                if count > 0:
+                    logger.info(f"  [{i + 1}/{len(to_process)}] {name}: {count} images")
+            except Exception as e:
+                logger.warning(f"  Error processing {site['name']}: {e}")
+                total_errors += 1
+    else:
+        # Parallel site processing
+        with ThreadPoolExecutor(max_workers=parallel_sites) as executor:
+            futures = {executor.submit(_process_one, site): site for site in to_process}
+            for future in as_completed(futures):
+                site = futures[future]
+                with _lock:
+                    processed_count += 1
+                    progress = processed_count
+                try:
+                    name, count = future.result()
+                    with _lock:
+                        total_downloaded += count
+                    if count > 0:
+                        logger.info(f"  [{progress}/{len(to_process)}] {name}: {count} images")
+                except Exception as e:
+                    logger.warning(f"  Error processing {site['name']}: {e}")
+                    with _lock:
+                        total_errors += 1
 
     logger.info("=" * 60)
     logger.info("Download complete:")
-    logger.info(f"  Sites processed: {len(sites)}")
+    logger.info(f"  Sites processed: {len(to_process)}")
     logger.info(f"  Sites skipped (already done): {total_skipped}")
     logger.info(f"  Images downloaded: {total_downloaded}")
     logger.info(f"  Errors: {total_errors}")
@@ -1080,6 +1257,12 @@ def main():
         default=200,
         help="Max images to fetch from Commons category per site (default: 200)",
     )
+    parser.add_argument(
+        "--parallel",
+        type=int,
+        default=3,
+        help="Number of sites to process concurrently (default: 3)",
+    )
     args = parser.parse_args()
 
     run_downloader(
@@ -1089,6 +1272,7 @@ def main():
         stats_only=args.stats,
         force=args.force,
         max_per_category=args.max_per_category,
+        parallel_sites=args.parallel,
     )
 
 

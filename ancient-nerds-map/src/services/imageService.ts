@@ -4,9 +4,9 @@
  * Uses /api/rest_v1/page/media-list/{title} - returns ALL article images
  * in a single fast API call (~200-500ms), replacing three slow Action API calls.
  *
- * For own curated sites (ancient_nerds, lyra, community), checks local
- * self-hosted images first (from static index.json), falling back to
- * live Wikipedia API only if no local images exist.
+ * For own curated sites (ancient_nerds, lyra, community), checks locally
+ * cached images via the /api/wiki-images/{siteId} endpoint first, falling
+ * back to live Wikipedia API only if no local images exist.
  */
 
 // =============================================================================
@@ -31,66 +31,6 @@ export interface FetchSiteImagesResult {
   europeana: ImageResult[]
 }
 
-/** Compact format from static images/index.json */
-interface LocalImageEntry {
-  f: string    // filename
-  p: string    // path (relative URL)
-  a?: string   // author
-  l?: string   // license
-  c?: string   // commons page URL
-  h?: boolean  // is hero
-  ld?: boolean // is lead
-  w?: number   // width
-  ht?: number  // height
-}
-
-// =============================================================================
-// Local image index (loaded from static JSON)
-// =============================================================================
-
-let localImageIndex: Record<string, LocalImageEntry[]> | null = null
-let localIndexLoading: Promise<void> | null = null
-
-/** Load the local wiki image index. Called once at startup. */
-export async function loadLocalImageIndex(): Promise<void> {
-  if (localImageIndex !== null) return
-  if (localIndexLoading) return localIndexLoading
-
-  localIndexLoading = (async () => {
-    try {
-      const resp = await fetch(`/data/images/index.json?_v=${__BUILD_HASH__}`)
-      if (resp.ok) {
-        localImageIndex = await resp.json()
-      } else {
-        localImageIndex = {}
-      }
-    } catch {
-      localImageIndex = {}
-    }
-  })()
-
-  return localIndexLoading
-}
-
-/** Get local images for a site ID, or null if none exist. */
-function getLocalImages(siteId: string): ImageResult[] | null {
-  if (!localImageIndex) return null
-  const entries = localImageIndex[siteId]
-  if (!entries || entries.length === 0) return null
-
-  return entries.map((entry, idx) => ({
-    id: `local-${idx}`,
-    thumb: entry.p,
-    full: entry.p,
-    title: entry.f.replace(/\.[^.]+$/, '').replace(/_/g, ' '),
-    author: entry.a,
-    sourceUrl: entry.c,
-    license: entry.l,
-    source: 'local' as const,
-    isLeadImage: entry.ld || entry.h || false,
-  }))
-}
-
 // =============================================================================
 // Excluded patterns (icons, logos, UI elements)
 // =============================================================================
@@ -99,26 +39,63 @@ const EXCLUDED = /icon|logo|symbol|diagram|chart|graph|flag|wikimedia|commons-lo
 const EXCLUDED_EXT = /\.svg$/i
 
 // =============================================================================
+// Local images via API
+// =============================================================================
+
+/** Fetch locally cached wiki images for a site from the API. */
+async function fetchLocalImages(siteId: string): Promise<ImageResult[] | null> {
+  try {
+    const resp = await fetch(`/api/wiki-images/${siteId}`)
+    if (!resp.ok) return null
+    const images = await resp.json()
+    if (!images.length) return null
+    return images.map((img: {
+      url: string
+      thumb?: string
+      title?: string
+      author?: string
+      authorUrl?: string
+      commonsUrl?: string
+      license?: string
+      isHero?: boolean
+      isLead?: boolean
+    }, idx: number) => ({
+      id: `local-${idx}`,
+      thumb: img.thumb || img.url,
+      full: img.url,
+      title: img.title,
+      author: img.author,
+      authorUrl: img.authorUrl,
+      sourceUrl: img.commonsUrl,
+      license: img.license,
+      source: 'local' as const,
+      isLeadImage: img.isLead || img.isHero || false,
+    }))
+  } catch {
+    return null
+  }
+}
+
+// =============================================================================
 // Public API
 // =============================================================================
 
 /**
  * Fetch images from a Wikipedia article about this site/empire.
  *
- * For own curated sites: checks local self-hosted images first (instant).
+ * For own curated sites: checks local cached images via API first (fast).
  * Falls back to live Wikipedia API only if no local images are available.
  *
- * Total time: 0ms (local) or ~200-700ms (1-2 API calls via REST API).
+ * Total time: ~50-100ms (API) or ~200-700ms (1-2 Wikipedia API calls).
  */
 export async function fetchSiteImages(
   name: string,
   options: { wikipediaUrl?: string; location?: string; limit?: number; siteId?: string } = {}
 ): Promise<FetchSiteImagesResult> {
   try {
-    // Check local images first (self-hosted from wiki_images table)
+    // Check local images first (cached from wiki_images table via API)
     if (options.siteId) {
-      await loadLocalImageIndex()
-      const local = getLocalImages(options.siteId)
+      const local = await fetchLocalImages(options.siteId)
       if (local && local.length > 0) {
         return { wikipedia: local, europeana: [] }
       }

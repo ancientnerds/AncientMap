@@ -37,7 +37,7 @@ export function useGalleryData({
       lat,
       lon: lng,
       source_url: sourceUrl,
-      limit: 100,
+      limit: 250,
     }, tier),
     [title, location, lat, lng, sourceUrl]
   )
