@@ -169,10 +169,10 @@ app = FastAPI(
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
-    """Return actual error detail for 500s instead of generic message."""
+    """Log full error server-side; return generic message to clients."""
     tb = traceback.format_exception(type(exc), exc, exc.__traceback__)
     logger.error(f"Unhandled error on {request.method} {request.url.path}: {exc}\n{''.join(tb)}")
-    return JSONResponse(status_code=500, content={"detail": str(exc)})
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
 # CORS - allow frontend to connect (configured via API_CORS_ORIGINS env var)

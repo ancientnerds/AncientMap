@@ -222,7 +222,7 @@ def _pre_research(
         return None
 
     for block in response.content:
-        if hasattr(block, "text"):
+        if hasattr(block, "text") and block.text:
             try:
                 result = parse_json_response("{" + block.text)
                 logger.info(
@@ -547,7 +547,7 @@ def _select_best_candidate(
         return None
 
     for block in response.content:
-        if hasattr(block, "text"):
+        if hasattr(block, "text") and block.text:
             try:
                 result = parse_json_response("{" + block.text)
             except (json.JSONDecodeError, KeyError, ValueError) as e:
@@ -646,7 +646,7 @@ def _gap_fill(
         return None
 
     for block in response.content:
-        if hasattr(block, "text"):
+        if hasattr(block, "text") and block.text:
             try:
                 result = parse_json_response("{" + block.text)
                 logger.info(

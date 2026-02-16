@@ -3,7 +3,7 @@
 import json
 import re
 import time
-from functools import lru_cache
+
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -103,9 +103,14 @@ def _load_snapshot(date: str) -> list[dict]:
     return data.get("sites", [])
 
 
-@lru_cache(maxsize=16)
+_diff_cache: dict[tuple[str, str], dict] = {}
+
+
 def _compute_diff(from_date: str, to_date: str) -> dict:
-    """Compare two snapshots and return structured diff. Cached by date pair."""
+    """Compare two snapshots and return structured diff. Cached by date pair (exceptions not cached)."""
+    key = (from_date, to_date)
+    if key in _diff_cache:
+        return _diff_cache[key]
     from_sites = _load_snapshot(from_date)
     to_sites = _load_snapshot(to_date)
 
@@ -147,7 +152,7 @@ def _compute_diff(from_date: str, to_date: str) -> dict:
     added.sort(key=lambda x: x.get("n", "").lower())
     removed.sort(key=lambda x: x.get("n", "").lower())
 
-    return {
+    result = {
         "from_date": from_date,
         "to_date": to_date,
         "from_count": len(from_sites),
@@ -162,6 +167,11 @@ def _compute_diff(from_date: str, to_date: str) -> dict:
         "removed": removed,
         "changed": changed,
     }
+    # Evict oldest if cache is full
+    if len(_diff_cache) >= 16:
+        _diff_cache.pop(next(iter(_diff_cache)))
+    _diff_cache[key] = result
+    return result
 
 
 @router.get("/diff")

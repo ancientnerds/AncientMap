@@ -118,12 +118,12 @@ def _convert_static_site(site):
 
 class SiteUpdateRequest(BaseModel):
     """Request model for updating a site."""
-    title: str
-    location: str | None = None
-    category: str
-    period: str
-    description: str | None = None
-    sourceUrl: str | None = None
+    title: str = Field(..., max_length=500)
+    location: str | None = Field(default=None, max_length=500)
+    category: str = Field(..., max_length=100)
+    period: str = Field(..., max_length=100)
+    description: str | None = Field(default=None, max_length=5000)
+    sourceUrl: str | None = Field(default=None, max_length=2000)
     coordinates: list[float] = Field(..., min_length=2, max_length=2, description="[lng, lat]")
 
 
@@ -964,14 +964,14 @@ async def update_site(
 
 class BatchSiteUpdate(BaseModel):
     """Single site update within a batch."""
-    id: str
-    title: str
-    location: str | None = None
-    category: str
-    period: str
-    description: str | None = None
-    sourceUrl: str | None = None
-    country: str | None = None
+    id: str = Field(..., max_length=100)
+    title: str = Field(..., max_length=500)
+    location: str | None = Field(default=None, max_length=500)
+    category: str = Field(..., max_length=100)
+    period: str = Field(..., max_length=100)
+    description: str | None = Field(default=None, max_length=5000)
+    sourceUrl: str | None = Field(default=None, max_length=2000)
+    country: str | None = Field(default=None, max_length=200)
     coordinates: list[float] = Field(..., min_length=2, max_length=2)
 
 
@@ -1076,17 +1076,17 @@ async def batch_update_sites(
 
 class ParsedSitePayload(BaseModel):
     """A site to be upserted via upload."""
-    name: str
+    name: str = Field(..., max_length=500)
     lat: float
     lon: float
-    site_type: str | None = None
-    period_name: str | None = None
+    site_type: str | None = Field(default=None, max_length=100)
+    period_name: str | None = Field(default=None, max_length=100)
     period_start: int | None = None
-    country: str | None = None
-    description: str | None = None
-    source_url: str | None = None
-    thumbnail_url: str | None = None
-    existing_id: str | None = None  # If updating an existing site
+    country: str | None = Field(default=None, max_length=200)
+    description: str | None = Field(default=None, max_length=5000)
+    source_url: str | None = Field(default=None, max_length=2000)
+    thumbnail_url: str | None = Field(default=None, max_length=2000)
+    existing_id: str | None = Field(default=None, max_length=100)  # If updating an existing site
 
 
 class BatchUploadRequest(BaseModel):
