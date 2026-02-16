@@ -241,7 +241,7 @@ function TypewriterMessage({
 
   return (
     <div ref={containerRef} className={`lyra-chat-msg-text${isTyping ? ' streaming' : ''}`}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents} urlTransform={(url) => url}>
         {displayedContent || '\u200B'}
       </ReactMarkdown>
     </div>
