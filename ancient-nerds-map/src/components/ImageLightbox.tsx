@@ -14,6 +14,16 @@ export interface LightboxImage {
   mediaType?: 'image' | 'video'
 }
 
+function getVideoMimeType(src: string): string | undefined {
+  const ext = src.split(/[?#]/)[0].split('.').pop()?.toLowerCase()
+  switch (ext) {
+    case 'webm': return 'video/webm'
+    case 'ogv': case 'ogg': return 'video/ogg'
+    case 'mp4': return 'video/mp4'
+    default: return undefined
+  }
+}
+
 interface ImageLightboxProps {
   images: LightboxImage[]
   currentIndex: number
@@ -292,7 +302,7 @@ export default function ImageLightbox({
               className="lightbox-image"
               style={{ maxWidth: '100%', maxHeight: '100%' }}
             >
-              <source src={current.src} />
+              <source src={current.src} type={getVideoMimeType(current.src)} />
             </video>
           </div>
         ) : (
