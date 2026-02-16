@@ -49,13 +49,10 @@ export function enrichLyraContent(content: string, sites: SiteHighlight[]): stri
       `(?<!\\[)(?<!\\]\\()\\b(${escaped})\\b(?!\\]|\\()`,
       'gi'
     )
-    let replaced = false
     result = result.replace(regex, (match) => {
-      if (replaced) return match // Only link first occurrence
-      replaced = true
       return `[${match}](lyra-site:${site.id}:${site.lon}:${site.lat})`
     })
-    if (replaced) replacedSiteNames.add(nameLower)
+    replacedSiteNames.add(nameLower)
   }
 
   // 3. Country names → flag image + name (longest first)
@@ -71,13 +68,10 @@ export function enrichLyraContent(content: string, sites: SiteHighlight[]): stri
       `(?<!\\[)(?<!/)\\b(${escaped})\\b(?!\\]|\\()`,
       'gi'
     )
-    let replaced = false
     result = result.replace(regex, (match) => {
-      if (replaced) return match
-      replaced = true
       return `![flag](${flagUrl})${match}`
     })
-    if (replaced) replacedCountries.add(name.toLowerCase())
+    replacedCountries.add(name.toLowerCase())
   }
 
   return result

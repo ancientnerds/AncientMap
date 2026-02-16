@@ -625,6 +625,31 @@ async def run_agent_stream(
                     except (json.JSONDecodeError, KeyError):
                         pass
 
+                # Extract news data from search_news tool for sidebar
+                if tc["name"] == "search_news":
+                    try:
+                        parsed_news = json.loads(result)
+                        if isinstance(parsed_news, list):
+                            existing_keys = {f"{n['video_id']}::{n['headline']}" for n in all_news}
+                            for item in parsed_news:
+                                news_entry = {
+                                    "headline": item.get("headline", ""),
+                                    "summary": item.get("summary"),
+                                    "channel": item.get("channel", ""),
+                                    "video_id": item.get("video_id", ""),
+                                    "video_title": item.get("video_title"),
+                                    "category": item.get("category"),
+                                    "significance": item.get("significance"),
+                                    "date": item.get("date"),
+                                    "site_name": item.get("site_mentioned"),
+                                }
+                                key = f"{news_entry['video_id']}::{news_entry['headline']}"
+                                if key not in existing_keys:
+                                    all_news.append(news_entry)
+                                    existing_keys.add(key)
+                    except (json.JSONDecodeError, KeyError, TypeError):
+                        pass
+
                 messages.append(ToolMessage(content=result, tool_call_id=str(tc["id"])))
 
             except Exception as e:
@@ -636,6 +661,7 @@ async def run_agent_stream(
             yield {"type": "sites", "sites": all_sites}
 
         # Fetch news for any new sites found via tool calls
+        news_before = len(all_news)
         new_site_ids = [s["id"] for s in all_sites if s.get("id")]
         new_site_names = [s["name"] for s in all_sites if s.get("name")]
         tool_news = _get_related_news(site_ids=new_site_ids, site_names=new_site_names) if (new_site_ids or new_site_names) else []
@@ -645,7 +671,10 @@ async def run_agent_stream(
             new_news = [n for n in tool_news if f"{n['video_id']}::{n['headline']}" not in existing_keys]
             if new_news:
                 all_news.extend(new_news)
-                yield {"type": "news", "news": all_news}
+
+        # Emit news if any were added this round (from search_news tool or site-based fetch)
+        if len(all_news) > news_before:
+            yield {"type": "news", "news": all_news}
 
     # Done
     yield {"type": "done", "metadata": {
