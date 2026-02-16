@@ -86,6 +86,7 @@ export function useEmpireGalleryData({
     [wikiGallery, tiered.grouped.photos]
   )
 
+  const videoItems = tiered.grouped.videos
   const mapItems = tiered.grouped.maps
   const sketchfabItems = tiered.grouped['3dmodels']
   const artifactItems = tiered.grouped.artifacts
@@ -97,7 +98,7 @@ export function useEmpireGalleryData({
   const allItems = { ...tiered.grouped, photos: photoItems }
   const currentItems = useMemo(
     () => selectCurrentItems(activeGalleryTab, allItems),
-    [activeGalleryTab, photoItems, mapItems, sketchfabItems, artifactItems, artworkItems, bookItems, paperItems, mythItems]
+    [activeGalleryTab, photoItems, videoItems, mapItems, sketchfabItems, artifactItems, artworkItems, bookItems, paperItems, mythItems]
   )
 
   const isLoading = wikiLoading || tiered.isLoading
@@ -145,9 +146,10 @@ export function useEmpireGalleryData({
   return {
     activeGalleryTab, setActiveGalleryTab,
     isGalleryExpanded, setIsGalleryExpanded,
-    photoItems, mapItems, sketchfabItems, artifactItems, artworkItems, bookItems, paperItems, mythItems,
+    photoItems, videoItems, mapItems, sketchfabItems, artifactItems, artworkItems, bookItems, paperItems, mythItems,
     currentItems,
     isLoadingImages: wikiLoading || tiered.tier1Loading,
+    isLoadingVideos: tiered.tier1Loading,
     isLoadingMaps: tiered.tier3Loading,
     isLoadingModels: tiered.tier2Loading,
     isLoadingArtifacts: tiered.tier3Loading,

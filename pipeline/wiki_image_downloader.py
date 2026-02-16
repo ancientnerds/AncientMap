@@ -25,7 +25,7 @@ import httpx
 from loguru import logger
 from sqlalchemy import text
 
-from pipeline.database import SiteContentLink, WikiImage, get_session
+from pipeline.database import WikiImage, get_session
 
 # =============================================================================
 # Configuration
@@ -71,8 +71,6 @@ EXCLUDED_PATTERN = re.compile(
 EXCLUDED_EXT = re.compile(
     r"\.(svg|oga|ogg|ogv|mp3|mp4|wav|webm|flac|midi?|pdf|djvu|stl)$", re.IGNORECASE
 )
-PAPER_EXT = re.compile(r"\.(pdf|djvu)$", re.IGNORECASE)
-
 # User-Agent per Wikimedia policy
 HEADERS = {
     "User-Agent": "AncientNerdsMap/1.0 (https://ancientnerds.com; contact@ancientnerds.com)",
@@ -468,38 +466,10 @@ def _parse_commons_file_page(page: dict) -> dict | None:
     }
 
 
-def _parse_commons_paper(page: dict) -> dict | None:
-    """Parse a Commons API page result for a PDF/DjVu into a paper dict."""
-    file_title = page.get("title", "")
-    if not file_title or not PAPER_EXT.search(file_title):
-        return None
-
-    info_list = page.get("imageinfo", [])
-    url = info_list[0].get("url") if info_list else None
-    if not url:
-        return None
-
-    # Clean title: "File:Pompei (IA pompeiscene00confiala).pdf" → "Pompei"
-    clean = file_title.replace("File:", "").rsplit(".", 1)[0]
-    # Strip Internet Archive IDs in parentheses: "(IA ...)"
-    clean = re.sub(r"\s*\(IA\s+\w+\)\s*$", "", clean).strip()
-
-    encoded_title = urllib.parse.quote(file_title, safe="")
-    return {
-        "title": clean or file_title,
-        "content_url": f"https://commons.wikimedia.org/wiki/{encoded_title}",
-        "original_url": url,
-        "filename": file_title.replace("File:", ""),
-    }
-
-
 def _fetch_category_files(
-    client: httpx.Client, category_name: str, limit: int, papers: list[dict] | None = None
+    client: httpx.Client, category_name: str, limit: int
 ) -> list[dict]:
-    """Fetch direct file members from a single Commons category.
-
-    If papers list is provided, PDF/DjVu files are appended to it instead of being discarded.
-    """
+    """Fetch direct file members from a single Commons category."""
     images: list[dict] = []
     gcmcontinue = None
 
@@ -529,11 +499,6 @@ def _fetch_category_files(
 
         pages = data.get("query", {}).get("pages", {})
         for page in pages.values():
-            # Collect PDFs as papers before the image parser filters them out
-            if papers is not None:
-                paper = _parse_commons_paper(page)
-                if paper:
-                    papers.append(paper)
             parsed = _parse_commons_file_page(page)
             if parsed:
                 images.append(parsed)
@@ -590,22 +555,18 @@ def _fetch_subcategory_names(client: httpx.Client, category_name: str) -> list[s
 
 def fetch_commons_category_images(
     category_name: str, limit: int = 200
-) -> tuple[list[dict], list[dict]]:
+) -> list[dict]:
     """
     Fetch image files from a Wikimedia Commons category and its subcategories.
 
     Crawls 1 level deep: direct files from the main category, then direct files
     from each subcategory, until the limit is reached.
-
-    Returns (images, papers) — papers are PDF/DjVu files found along the way.
     """
-    papers: list[dict] = []
-
     with httpx.Client(timeout=30, follow_redirects=True) as client:
         # Direct files from the main category
-        images = _fetch_category_files(client, category_name, limit, papers)
+        images = _fetch_category_files(client, category_name, limit)
         if len(images) >= limit:
-            return images[:limit], papers
+            return images[:limit]
 
         # Subcategories — fetch files from each until we hit the limit
         subcats = _fetch_subcategory_names(client, category_name)
@@ -613,10 +574,10 @@ def fetch_commons_category_images(
             remaining = limit - len(images)
             if remaining <= 0:
                 break
-            sub_images = _fetch_category_files(client, subcat, remaining, papers)
+            sub_images = _fetch_category_files(client, subcat, remaining)
             images.extend(sub_images)
 
-    return images[:limit], papers
+    return images[:limit]
 
 
 def build_wikidata_image_entries(wikidata_images: dict[str, str]) -> list[dict]:
@@ -838,7 +799,6 @@ def process_site(site: dict, dry_run: bool = False, max_per_category: int = 200)
     all_images.extend(wp_images)
 
     # --- Source 2 & 3: Wikidata entity + Commons category ---
-    all_papers: list[dict] = []
     wikidata = resolve_wikidata_entity(article_title)
     if wikidata:
         # Source 2: Wikidata curated images (P18, P3451, P4291, P5775)
@@ -850,14 +810,12 @@ def process_site(site: dict, dry_run: bool = False, max_per_category: int = 200)
         # Source 3: Commons category images
         commons_cat = wikidata.get("commons_category")
         if commons_cat:
-            cat_images, cat_papers = fetch_commons_category_images(
+            cat_images = fetch_commons_category_images(
                 commons_cat, limit=max_per_category
             )
             all_images.extend(cat_images)
-            all_papers.extend(cat_papers)
             logger.debug(
-                f"  Commons category '{commons_cat}': {len(cat_images)} images, "
-                f"{len(cat_papers)} papers for {site_name}"
+                f"  Commons category '{commons_cat}': {len(cat_images)} images for {site_name}"
             )
 
     time.sleep(WIKIDATA_DELAY)
@@ -914,8 +872,6 @@ def process_site(site: dict, dry_run: bool = False, max_per_category: int = 200)
             f"  [DRY RUN] {site_name}: {len(deduped)} images "
             f"(wikipedia={wp_count}, wikidata={wd_count}, commons={cc_count})"
         )
-        if all_papers:
-            logger.info(f"  [DRY RUN] {site_name}: {len(all_papers)} papers from Commons")
         return len(deduped)
 
     # --- Download each image ---
@@ -997,33 +953,6 @@ def process_site(site: dict, dry_run: bool = False, max_per_category: int = 200)
                 downloaded += 1
             else:
                 logger.warning(f"DB insert error for {file_title}: {e}")
-
-    # --- Save papers (PDF/DjVu) as SiteContentLink rows ---
-    if all_papers:
-        saved_papers = 0
-        with get_session() as session:
-            for paper in all_papers:
-                try:
-                    link = SiteContentLink(
-                        site_id=site_id,
-                        content_type="paper",
-                        content_source="wikimedia_commons",
-                        content_id=paper["filename"],
-                        title=paper["title"],
-                        content_url=paper["content_url"],
-                        link_metadata={"download_url": paper["original_url"]},
-                    )
-                    session.add(link)
-                    session.commit()
-                    saved_papers += 1
-                except Exception as e:
-                    session.rollback()
-                    if "uq_content_link" in str(e):
-                        pass  # Already linked
-                    else:
-                        logger.warning(f"Paper link error for {paper['filename']}: {e}")
-        if saved_papers:
-            logger.info(f"  {site_name}: linked {saved_papers} papers from Commons")
 
     return downloaded
 
