@@ -60,6 +60,8 @@ export default defineConfig({
         ]
       },
       workbox: {
+        // Don't let the service worker intercept Open WebUI or API paths
+        navigateFallbackDenylist: [/^\/chat/, /^\/v1/],
         // Pre-cache app shell assets
         globPatterns: ['**/*.{js,css,html,svg,woff2}'],
         // Don't pre-cache large data files
