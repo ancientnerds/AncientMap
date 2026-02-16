@@ -30,24 +30,24 @@ const API_BASE = import.meta.env.VITE_API_URL || '/api'
  */
 export const CONTENT_TIERS = {
   tier1: {
-    types: ['photo', 'video', 'audio'] as ContentType[],
+    types: ['photo', 'audio'] as ContentType[],
     timeout: 15,
     label: 'Photos'
   },
   tier2: {
+    types: ['video'] as ContentType[],
+    timeout: 20,
+    label: 'Videos'
+  },
+  tier3: {
     types: ['model_3d'] as ContentType[],
     timeout: 20,
     label: '3D Models'
   },
-  tier3: {
-    types: ['map', 'artifact', 'artwork', 'coin'] as ContentType[],
-    timeout: 25,
-    label: 'Maps & Artifacts'
-  },
   tier4: {
-    types: ['book', 'manuscript', 'document', 'paper', 'inscription', 'primary_text'] as ContentType[],
+    types: ['map', 'artifact', 'artwork', 'coin', 'book', 'manuscript', 'document', 'paper', 'inscription', 'primary_text'] as ContentType[],
     timeout: 30,
-    label: 'Texts'
+    label: 'Maps & More'
   },
 } as const
 
