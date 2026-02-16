@@ -159,6 +159,39 @@ class WikimediaConnector(BaseConnector):
 
         return items[:limit]
 
+    async def get_by_site(
+        self,
+        site_name: str,
+        location: str | None = None,
+        lat: float | None = None,
+        lon: float | None = None,
+        content_type: ContentType | None = None,
+        limit: int = 20,
+        **kwargs,
+    ) -> list[ContentItem]:
+        """Get photos and videos for a site."""
+        if content_type:
+            return await self.search(query=site_name, content_type=content_type, limit=limit)
+
+        # Fetch photos and videos in parallel
+        items: list[ContentItem] = []
+
+        photos = await self.search(
+            query=site_name,
+            content_type=ContentType.PHOTO,
+            limit=limit,
+        )
+        items.extend(photos)
+
+        videos = await self.search(
+            query=site_name,
+            content_type=ContentType.VIDEO,
+            limit=limit // 2 or 5,
+        )
+        items.extend(videos)
+
+        return items[:limit]
+
     async def search_maps(
         self,
         query: str,
