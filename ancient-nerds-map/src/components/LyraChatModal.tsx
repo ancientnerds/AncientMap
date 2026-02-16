@@ -43,45 +43,33 @@ interface Props {
   mode?: 'modal' | 'page'
 }
 
-interface ExamplePrompt {
-  text: string
-  level?: 'EASY' | 'MEDIUM' | 'HARD' | 'NEWS'
-}
-
-const EXAMPLE_QUESTIONS: Record<LyraContextType, ExamplePrompt[]> = {
+const EXAMPLE_QUESTIONS: Record<LyraContextType, string[]> = {
   global: [
-    { text: 'Tell me about Gobekli Tepe', level: 'EASY' },
-    { text: 'Show me pyramids in Egypt', level: 'MEDIUM' },
-    { text: 'What megalithic sites are in France?', level: 'MEDIUM' },
-    { text: 'Ancient temples older than the Egyptian pyramids', level: 'HARD' },
-    { text: 'Cave paintings and rock art in Europe', level: 'HARD' },
-    { text: 'Recent discoveries about Karahantepe', level: 'NEWS' },
+    'What sites are older than the Egyptian pyramids?',
+    'Show me underwater ruins in the Mediterranean',
+    'What has Lyra discovered this week?',
+    'Tell me about the Roman Empire\'s military technology',
+    'Any recent discoveries about Göbekli Tepe?',
+    'Compare Angkor Wat and Teotihuacan',
   ],
   site: [
-    { text: 'Tell me more about this site' },
-    { text: 'What other sites are nearby?' },
-    { text: 'What period does this belong to?' },
-    { text: 'Any recent news about this site?' },
+    'Tell me more about this site',
+    'What other sites are nearby?',
+    'What period does this belong to?',
+    'Any recent news about this site?',
   ],
   empire: [
-    { text: 'What weapons did this empire use?' },
-    { text: 'How large was their territory?' },
-    { text: 'Who were their main rivals?' },
-    { text: 'What caused their decline?' },
+    'What weapons did this empire use?',
+    'How large was their territory?',
+    'Who were their main rivals?',
+    'What caused their decline?',
   ],
   news: [
-    { text: 'Summarize this discovery' },
-    { text: 'Where exactly was this found?' },
-    { text: 'How significant is this finding?' },
-    { text: 'Are there similar discoveries?' },
+    'Summarize this discovery',
+    'Where exactly was this found?',
+    'How significant is this finding?',
+    'Are there similar discoveries?',
   ],
-}
-
-const LEVEL_LABELS: Record<string, string> = {
-  EASY: 'Easy',
-  MEDIUM: 'Medium',
-  HARD: 'Hard',
-  NEWS: 'News',
 }
 
 /* ---- Conversation persistence ---- */
@@ -749,15 +737,10 @@ export default function LyraChatModal({
                           <button
                             key={i}
                             className="lyra-chat-example-btn"
-                            onClick={() => handleExampleClick(q.text)}
+                            onClick={() => handleExampleClick(q)}
                             disabled={isStreaming}
                           >
-                            {q.level && (
-                              <span className={`lyra-example-level lyra-example-level-${q.level.toLowerCase()}`}>
-                                {LEVEL_LABELS[q.level]}
-                              </span>
-                            )}
-                            {q.text}
+                            {q}
                           </button>
                         ))}
                       </div>
@@ -776,10 +759,10 @@ export default function LyraChatModal({
                               ))}
                             </div>
                           )}
-                          <div className="lyra-chat-msg-text">
+                          <div className={`lyra-chat-msg-text${msg.role === 'assistant' && msg.isStreaming ? ' streaming' : ''}`}>
                             {msg.role === 'assistant' ? (
                               msg.isStreaming ? (
-                                msg.content
+                                <ReactMarkdown>{msg.content}</ReactMarkdown>
                               ) : (
                                 <ReactMarkdown components={mdComponents}>
                                   {enrichLyraContent(msg.content, sidebarSites)}
