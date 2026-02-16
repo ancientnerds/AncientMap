@@ -28,6 +28,7 @@ import SiteResultItem from './SiteResultItem'
 import { SitePopupOverlay } from './SitePopupOverlay'
 import LyraAuthGate from './LyraAuthGate'
 import { apiDetailToSiteData } from '../utils/siteApi'
+import { resolvePeriod } from '../data/sites'
 import type { SiteData } from '../data/sites'
 import './news/news-cards.css'
 
@@ -235,13 +236,12 @@ function TypewriterMessage({
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const isTyping = isStreaming || revealedLen < content.length
-  const displayedContent = isTyping
-    ? content.substring(0, revealedLen)
-    : enrichLyraContent(content, sidebarSites)
+  const partialContent = isTyping ? content.substring(0, revealedLen) : content
+  const displayedContent = enrichLyraContent(partialContent, sidebarSites)
 
   return (
     <div ref={containerRef} className={`lyra-chat-msg-text${isTyping ? ' streaming' : ''}`}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={isTyping ? undefined : mdComponents}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
         {displayedContent || '\u200B'}
       </ReactMarkdown>
     </div>
@@ -270,6 +270,10 @@ export default function LyraChatModal({
   const [conversationId, setConversationId] = useState<string>(() => crypto.randomUUID())
   const [conversations, setConversations] = useState<ConversationSummary[]>(() => listConversations())
   const [showHistory, setShowHistory] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<SiteData[]>([])
+  const [searchLoading, setSearchLoading] = useState(false)
 
   // Auth state — hydrate from sessionStorage
   const [adminKey, setAdminKey] = useState<string | null>(() =>
@@ -280,10 +284,16 @@ export default function LyraChatModal({
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const searchAbortRef = useRef<AbortController | null>(null)
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
-  // Abort in-flight SSE stream on unmount
+  // Abort in-flight SSE stream + search on unmount
   useEffect(() => {
-    return () => { abortRef.current?.abort() }
+    return () => {
+      abortRef.current?.abort()
+      searchAbortRef.current?.abort()
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+    }
   }, [])
 
   // Sort news by relevance (highest first)
@@ -292,7 +302,6 @@ export default function LyraChatModal({
     [sidebarNews],
   )
 
-  const hasSiteSidebar = sidebarSites.length > 0
   const hasNews = sortedNews.length > 0
 
   // Custom react-markdown components for interactive content
@@ -407,12 +416,65 @@ export default function LyraChatModal({
     }
   }, [isOpen, isAuthenticated])
 
-  // Close on Escape (modal mode) / stop streaming (page mode)
+  // Debounced site search
+  useEffect(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+
+    if (searchQuery.trim().length < 3) {
+      setSearchResults([])
+      setSearchLoading(false)
+      return
+    }
+
+    setSearchLoading(true)
+    searchDebounceRef.current = setTimeout(() => {
+      searchAbortRef.current?.abort()
+      const controller = new AbortController()
+      searchAbortRef.current = controller
+
+      const encoded = encodeURIComponent(searchQuery.trim())
+      fetch(`${config.api.baseUrl}/sites/search?q=${encoded}&limit=30`, { signal: controller.signal })
+        .then(res => res.json())
+        .then(data => {
+          if (controller.signal.aborted) return
+          const parsed: SiteData[] = (data.sites || []).map((s: { id: string; n: string; la: number; lo: number; s: string; t?: string; p?: number; pn?: string; d?: string; c?: string; u?: string }) => ({
+            id: s.id,
+            title: s.n,
+            coordinates: [s.lo, s.la] as [number, number],
+            category: s.t || 'Unknown',
+            period: resolvePeriod(s.pn, s.p),
+            periodStart: s.p ?? null,
+            location: s.c || '',
+            description: s.d || '',
+            sourceId: s.s,
+            sourceUrl: s.u,
+          }))
+          setSearchResults(parsed)
+          setSearchLoading(false)
+        })
+        .catch(err => {
+          if (err.name !== 'AbortError') {
+            setSearchResults([])
+            setSearchLoading(false)
+          }
+        })
+    }, 300)
+
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+    }
+  }, [searchQuery])
+
+  // Close on Escape: search panel → stop streaming → close modal
   useEffect(() => {
     if (!isOpen) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (isStreaming) {
+        if (searchOpen) {
+          setSearchOpen(false)
+          setSearchQuery('')
+          setSearchResults([])
+        } else if (isStreaming) {
           abortRef.current?.abort()
         } else if (mode === 'modal') {
           onClose()
@@ -421,7 +483,7 @@ export default function LyraChatModal({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [isOpen, isStreaming, onClose, mode])
+  }, [isOpen, isStreaming, searchOpen, onClose, mode])
 
   const handleAuthenticated = useCallback((key: string) => {
     setAdminKey(key)
@@ -718,6 +780,11 @@ export default function LyraChatModal({
             <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
           </svg>
         </button>
+        <button className={`lyra-chat-icon-btn${searchOpen ? ' active' : ''}`} onClick={() => { setSearchOpen(!searchOpen); if (searchOpen) { setSearchQuery(''); setSearchResults([]) } }} title="Search sites">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+        </button>
         {isStreaming && (
           <button className="lyra-chat-stop-btn" onClick={() => abortRef.current?.abort()}>
             Stop
@@ -756,6 +823,11 @@ export default function LyraChatModal({
         <button className="lyra-chat-icon-btn" onClick={() => { setConversations(listConversations()); setShowHistory(!showHistory) }} title="Chat history">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+          </svg>
+        </button>
+        <button className={`lyra-chat-icon-btn${searchOpen ? ' active' : ''}`} onClick={() => { setSearchOpen(!searchOpen); if (searchOpen) { setSearchQuery(''); setSearchResults([]) } }} title="Search sites">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
         </button>
         {isStreaming && (
@@ -820,7 +892,7 @@ export default function LyraChatModal({
   )
 
   const modalContent = (
-    <div className={`lyra-chat-modal${hasSiteSidebar ? ' has-sidebar' : ''}${hasNews ? ' has-news' : ''}`}>
+    <div className={`lyra-chat-modal${hasNews ? ' has-news' : ''}`}>
       {header}
       {historyPanel}
 
@@ -944,45 +1016,6 @@ export default function LyraChatModal({
                 </div>
               </div>
 
-              {/* Middle: sidebar with sites */}
-              {hasSiteSidebar && (
-                <div className="lyra-chat-sidebar">
-                  <div className="lyra-chat-sidebar-panel">
-                    <div className="lyra-chat-sidebar-header">
-                      Sites ({sidebarSites.length})
-                    </div>
-                    <div className="lyra-chat-sidebar-list">
-                      {sidebarSites.map((site, i) => (
-                        <SiteResultItem
-                          key={site.id || i}
-                          id={site.id}
-                          title={site.name}
-                          category={site.site_type}
-                          categoryColor={site.site_type ? getCategoryColor(site.site_type) : undefined}
-                          location={site.country}
-                          period={site.period_name}
-                          periodColor={site.period_name ? getPeriodColor(site.period_name) : undefined}
-                          thumbnailUrl={site.thumbnail_url}
-                          showInfoBtn={false}
-                          onMainClick={async () => {
-                            if (onFlyToSite) {
-                              onHighlightSites?.([site.id])
-                              onFlyToSite([site.lon, site.lat])
-                            } else {
-                              const res = await fetch(`${config.api.baseUrl}/sites/${site.id}`)
-                              if (res.ok) {
-                                const detail = await res.json()
-                                setSelectedSite(apiDetailToSiteData(detail))
-                              }
-                            }
-                          }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* Right: news column (full height) */}
               {hasNews && (
                 <div className="lyra-chat-news-column lyra-chat-news-panel">
@@ -1001,49 +1034,67 @@ export default function LyraChatModal({
                   </div>
                 </div>
               )}
+
+              {/* Search panel — slides in from right */}
+              {searchOpen && (
+                <div className="lyra-chat-search-panel">
+                  <div className="lyra-chat-search-header">
+                    <input
+                      className="lyra-chat-search-input"
+                      type="text"
+                      placeholder="Search sites..."
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      autoFocus
+                    />
+                    <button className="lyra-chat-close-btn" onClick={() => { setSearchOpen(false); setSearchQuery(''); setSearchResults([]) }}>
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <line x1="2" y1="2" x2="10" y2="10" /><line x1="10" y1="2" x2="2" y2="10" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="lyra-chat-search-results">
+                    {searchLoading && (
+                      <div className="lyra-chat-search-status">Searching...</div>
+                    )}
+                    {!searchLoading && searchQuery.trim().length >= 3 && searchResults.length === 0 && (
+                      <div className="lyra-chat-search-status">No sites found</div>
+                    )}
+                    {!searchLoading && searchQuery.trim().length < 3 && searchQuery.trim().length > 0 && (
+                      <div className="lyra-chat-search-status">Type at least 3 characters</div>
+                    )}
+                    {searchResults.map(site => (
+                      <SiteResultItem
+                        key={site.id}
+                        id={site.id}
+                        title={site.title}
+                        category={site.category}
+                        categoryColor={getCategoryColor(site.category)}
+                        location={site.location}
+                        period={site.period}
+                        periodColor={getPeriodColor(site.period)}
+                        showInfoBtn={false}
+                        onMainClick={async () => {
+                          if (onFlyToSite && site.coordinates) {
+                            onHighlightSites?.([site.id])
+                            onFlyToSite(site.coordinates)
+                          }
+                          const res = await fetch(`${config.api.baseUrl}/sites/${site.id}`)
+                          if (res.ok) {
+                            const detail = await res.json()
+                            setSelectedSite(apiDetailToSiteData(detail))
+                          }
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Mobile collapsible panels (page mode only, hidden on desktop via CSS) */}
-            {isPage && (hasSiteSidebar || hasNews) && (
+            {isPage && hasNews && (
               <div className="lyra-mobile-panels">
-                {hasSiteSidebar && (
-                  <div className={`lyra-mobile-panel${mobilePanelOpen === 'sites' ? ' open' : ''}`}>
-                    <button
-                      className="lyra-mobile-panel-header"
-                      onClick={() => setMobilePanelOpen(mobilePanelOpen === 'sites' ? null : 'sites')}
-                    >
-                      <span>Sites ({sidebarSites.length})</span>
-                      <svg className="lyra-mobile-panel-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
-                    </button>
-                    {mobilePanelOpen === 'sites' && (
-                      <div className="lyra-mobile-panel-content">
-                        {sidebarSites.map((site, i) => (
-                          <SiteResultItem
-                            key={site.id || i}
-                            id={site.id}
-                            title={site.name}
-                            category={site.site_type}
-                            categoryColor={site.site_type ? getCategoryColor(site.site_type) : undefined}
-                            location={site.country}
-                            period={site.period_name}
-                            periodColor={site.period_name ? getPeriodColor(site.period_name) : undefined}
-                            thumbnailUrl={site.thumbnail_url}
-                            showInfoBtn={false}
-                            onMainClick={async () => {
-                              const res = await fetch(`${config.api.baseUrl}/sites/${site.id}`)
-                              if (res.ok) {
-                                const detail = await res.json()
-                                setSelectedSite(apiDetailToSiteData(detail))
-                              }
-                            }}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
                 {hasNews && (
                   <div className={`lyra-mobile-panel${mobilePanelOpen === 'news' ? ' open' : ''}`}>
                     <button
