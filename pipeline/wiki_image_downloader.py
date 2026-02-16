@@ -811,7 +811,7 @@ def download_image(
 
         # Convert to WebP for smaller file size and faster loading
         try:
-            Image.MAX_IMAGE_PIXELS = 500_000_000  # Allow large panoramic photos
+            Image.MAX_IMAGE_PIXELS = None  # Disable limit — these are legit Wikimedia panoramas
             with Image.open(io.BytesIO(raw_bytes)) as img:
                 img_width, img_height = img.size
                 # Convert RGBA/palette to RGB (WebP lossy doesn't support palette)
