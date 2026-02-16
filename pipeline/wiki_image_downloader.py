@@ -68,7 +68,9 @@ EXCLUDED_PATTERN = re.compile(
     r"blason|coa_|seal_of|emblem",
     re.IGNORECASE,
 )
-EXCLUDED_EXT = re.compile(r"\.svg$", re.IGNORECASE)
+EXCLUDED_EXT = re.compile(
+    r"\.(svg|oga|ogg|ogv|mp3|mp4|wav|webm|flac|midi?|pdf|djvu|stl)$", re.IGNORECASE
+)
 
 # User-Agent per Wikimedia policy
 HEADERS = {
@@ -630,10 +632,14 @@ def download_image(
         # Commons URL pattern: .../commons/a/ab/File.jpg
         # Thumb URL pattern:   .../commons/thumb/a/ab/File.jpg/800px-File.jpg
         if "upload.wikimedia.org" in original_url and "/thumb/" not in original_url:
-            fetch_url = original_url.replace("/commons/", "/commons/thumb/")
-            fetch_url = fetch_url.replace(
-                "/wikipedia/", "/wikipedia/thumb/"
-            )  # Some are under /wikipedia/
+            # Insert /thumb/ into the path — URLs are either /wikipedia/commons/
+            # or /wikipedia/en/ etc, so only one replacement should apply.
+            if "/wikipedia/commons/" in original_url:
+                fetch_url = original_url.replace("/commons/", "/commons/thumb/", 1)
+            else:
+                fetch_url = re.sub(
+                    r"/wikipedia/(\w+)/", r"/wikipedia/\1/thumb/", original_url, count=1
+                )
             filename = original_url.rsplit("/", 1)[-1]
             fetch_url = f"{fetch_url}/{width}px-{filename}"
         elif "/thumb/" in original_url:
@@ -669,6 +675,7 @@ def download_image(
 
         # Convert to WebP for smaller file size and faster loading
         try:
+            Image.MAX_IMAGE_PIXELS = 500_000_000  # Allow large panoramic photos
             with Image.open(io.BytesIO(raw_bytes)) as img:
                 img_width, img_height = img.size
                 # Convert RGBA/palette to RGB (WebP lossy doesn't support palette)
