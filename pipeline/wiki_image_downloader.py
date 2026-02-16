@@ -411,106 +411,166 @@ def resolve_wikidata_entity(article_title: str) -> dict | None:
 # =============================================================================
 
 
-def fetch_commons_category_images(category_name: str, limit: int = 200) -> list[dict]:
-    """
-    Fetch image files from a Wikimedia Commons category.
+def _parse_commons_file_page(page: dict) -> dict | None:
+    """Parse a single Commons API page result into an image dict."""
+    file_title = page.get("title", "")
+    if not file_title:
+        return None
+    if EXCLUDED_PATTERN.search(file_title) or EXCLUDED_EXT.search(file_title):
+        return None
 
-    Uses generator=categorymembers with prop=imageinfo to get file metadata
-    in a single paginated call. Returns list of dicts with:
-    title, original_url, commons_page_url, author, license, width, height
-    """
+    info_list = page.get("imageinfo", [])
+    if not info_list:
+        return None
+    info = info_list[0]
+
+    original_url = info.get("url")
+    if not original_url:
+        return None
+
+    ext = info.get("extmetadata", {})
+
+    # Parse author (strip HTML)
+    author_raw = ext.get("Artist", {}).get("value", "")
+    author = re.sub(r"<[^>]*>", "", author_raw).strip() if author_raw else None
+    if author and len(author) > 200:
+        author = author[:200] + "..."
+
+    # Parse author URL from HTML
+    author_url = None
+    href_match = re.search(r'href="([^"]+)"', author_raw)
+    if href_match:
+        author_url = href_match.group(1)
+        if author_url.startswith("//"):
+            author_url = "https:" + author_url
+
+    license_name = ext.get("LicenseShortName", {}).get("value", "")
+    license_url = ext.get("LicenseUrl", {}).get("value", "")
+
+    encoded_title = urllib.parse.quote(file_title, safe="")
+    return {
+        "title": file_title,
+        "display_title": file_title.replace("File:", "").rsplit(".", 1)[0],
+        "original_url": original_url,
+        "commons_page_url": f"https://commons.wikimedia.org/wiki/{encoded_title}",
+        "is_lead": False,
+        "author": author or None,
+        "author_url": author_url,
+        "license": license_name or None,
+        "license_url": license_url or None,
+        "width": info.get("width"),
+        "height": info.get("height"),
+        "source_type": "commons_category",
+        "_has_metadata": True,
+    }
+
+
+def _fetch_category_files(client: httpx.Client, category_name: str, limit: int) -> list[dict]:
+    """Fetch direct file members from a single Commons category."""
     images: list[dict] = []
     gcmcontinue = None
 
+    while len(images) < limit:
+        params = {
+            "action": "query",
+            "generator": "categorymembers",
+            "gcmtitle": f"Category:{category_name}",
+            "gcmtype": "file",
+            "gcmlimit": str(min(50, limit - len(images))),
+            "prop": "imageinfo",
+            "iiprop": "url|size|extmetadata",
+            "iiextmetadatafilter": "Artist|LicenseShortName|LicenseUrl",
+            "format": "json",
+        }
+        if gcmcontinue:
+            params["gcmcontinue"] = gcmcontinue
+
+        try:
+            resp = client.get(COMMONS_API_URL, params=params, headers=HEADERS)
+            if resp.status_code != 200:
+                break
+            data = resp.json()
+        except Exception as e:
+            logger.debug(f"Commons category error for {category_name}: {e}")
+            break
+
+        pages = data.get("query", {}).get("pages", {})
+        for page in pages.values():
+            parsed = _parse_commons_file_page(page)
+            if parsed:
+                images.append(parsed)
+
+        cont = data.get("continue", {})
+        gcmcontinue = cont.get("gcmcontinue")
+        if not gcmcontinue:
+            break
+
+        time.sleep(COMMONS_DELAY)
+
+    return images[:limit]
+
+
+def _fetch_subcategory_names(client: httpx.Client, category_name: str) -> list[str]:
+    """Fetch direct subcategory names from a Commons category."""
+    subcats: list[str] = []
+    cmcontinue = None
+
+    while True:
+        params = {
+            "action": "query",
+            "list": "categorymembers",
+            "cmtitle": f"Category:{category_name}",
+            "cmtype": "subcat",
+            "cmlimit": "50",
+            "format": "json",
+        }
+        if cmcontinue:
+            params["cmcontinue"] = cmcontinue
+
+        try:
+            resp = client.get(COMMONS_API_URL, params=params, headers=HEADERS)
+            if resp.status_code != 200:
+                break
+            data = resp.json()
+        except Exception:
+            break
+
+        for member in data.get("query", {}).get("categorymembers", []):
+            title = member.get("title", "")
+            if title.startswith("Category:"):
+                subcats.append(title.removeprefix("Category:"))
+
+        cont = data.get("continue", {})
+        cmcontinue = cont.get("cmcontinue")
+        if not cmcontinue:
+            break
+
+        time.sleep(COMMONS_DELAY)
+
+    return subcats
+
+
+def fetch_commons_category_images(category_name: str, limit: int = 200) -> list[dict]:
+    """
+    Fetch image files from a Wikimedia Commons category and its subcategories.
+
+    Crawls 1 level deep: direct files from the main category, then direct files
+    from each subcategory, until the limit is reached.
+    """
     with httpx.Client(timeout=30, follow_redirects=True) as client:
-        while len(images) < limit:
-            params = {
-                "action": "query",
-                "generator": "categorymembers",
-                "gcmtitle": f"Category:{category_name}",
-                "gcmtype": "file",
-                "gcmlimit": str(min(50, limit - len(images))),
-                "prop": "imageinfo",
-                "iiprop": "url|size|extmetadata",
-                "iiextmetadatafilter": "Artist|LicenseShortName|LicenseUrl",
-                "format": "json",
-            }
-            if gcmcontinue:
-                params["gcmcontinue"] = gcmcontinue
+        # Direct files from the main category
+        images = _fetch_category_files(client, category_name, limit)
+        if len(images) >= limit:
+            return images[:limit]
 
-            try:
-                resp = client.get(COMMONS_API_URL, params=params, headers=HEADERS)
-                if resp.status_code != 200:
-                    logger.debug(f"Commons category API {resp.status_code} for {category_name}")
-                    break
-
-                data = resp.json()
-            except Exception as e:
-                logger.debug(f"Commons category error for {category_name}: {e}")
+        # Subcategories — fetch files from each until we hit the limit
+        subcats = _fetch_subcategory_names(client, category_name)
+        for subcat in subcats:
+            remaining = limit - len(images)
+            if remaining <= 0:
                 break
-
-            pages = data.get("query", {}).get("pages", {})
-            for page in pages.values():
-                file_title = page.get("title", "")
-                if not file_title:
-                    continue
-                if EXCLUDED_PATTERN.search(file_title) or EXCLUDED_EXT.search(file_title):
-                    continue
-
-                info_list = page.get("imageinfo", [])
-                if not info_list:
-                    continue
-                info = info_list[0]
-
-                original_url = info.get("url")
-                if not original_url:
-                    continue
-
-                ext = info.get("extmetadata", {})
-
-                # Parse author (strip HTML)
-                author_raw = ext.get("Artist", {}).get("value", "")
-                author = re.sub(r"<[^>]*>", "", author_raw).strip() if author_raw else None
-                if author and len(author) > 200:
-                    author = author[:200] + "..."
-
-                # Parse author URL from HTML
-                author_url = None
-                href_match = re.search(r'href="([^"]+)"', author_raw)
-                if href_match:
-                    author_url = href_match.group(1)
-                    if author_url.startswith("//"):
-                        author_url = "https:" + author_url
-
-                license_name = ext.get("LicenseShortName", {}).get("value", "")
-                license_url = ext.get("LicenseUrl", {}).get("value", "")
-
-                encoded_title = urllib.parse.quote(file_title, safe="")
-                images.append(
-                    {
-                        "title": file_title,
-                        "display_title": file_title.replace("File:", "").rsplit(".", 1)[0],
-                        "original_url": original_url,
-                        "commons_page_url": f"https://commons.wikimedia.org/wiki/{encoded_title}",
-                        "is_lead": False,
-                        "author": author or None,
-                        "author_url": author_url,
-                        "license": license_name or None,
-                        "license_url": license_url or None,
-                        "width": info.get("width"),
-                        "height": info.get("height"),
-                        "source_type": "commons_category",
-                        "_has_metadata": True,  # Metadata already fetched inline
-                    }
-                )
-
-            # Check for continuation
-            cont = data.get("continue", {})
-            gcmcontinue = cont.get("gcmcontinue")
-            if not gcmcontinue:
-                break
-
-            time.sleep(COMMONS_DELAY)
+            sub_images = _fetch_category_files(client, subcat, remaining)
+            images.extend(sub_images)
 
     return images[:limit]
 
