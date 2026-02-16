@@ -784,6 +784,8 @@ def download_image(
         file_size = dest_path.stat().st_size
         return file_size, img_width, img_height
 
+    except RateLimitedError:
+        raise  # let caller handle retry
     except Exception as e:
         logger.debug(f"Download error: {e}")
         return None
