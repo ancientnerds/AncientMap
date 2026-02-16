@@ -182,7 +182,7 @@ jobs:
               # root-owned files (only needs write on parent dir), rm -rf does not.
               DIST_BAK="ancient-nerds-map/dist-bak-$(date +%s)"
               mv ancient-nerds-map/dist "$DIST_BAK" 2>/dev/null || true
-              if echo "$CHANGED" | grep -q "package-lock.json"; then
+              if echo "$CHANGED" | grep -q "package-lock.json" || [ ! -d ancient-nerds-map/node_modules ]; then
                 mv ancient-nerds-map/node_modules "ancient-nerds-map/node_modules-bak-$(date +%s)" 2>/dev/null || true
                 (cd ancient-nerds-map && npm ci && npm run build)
               else
