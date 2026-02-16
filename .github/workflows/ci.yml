@@ -182,12 +182,8 @@ jobs:
               # root-owned files (only needs write on parent dir), rm -rf does not.
               DIST_BAK="ancient-nerds-map/dist-bak-$(date +%s)"
               mv ancient-nerds-map/dist "$DIST_BAK" 2>/dev/null || true
-              if echo "$CHANGED" | grep -q "package-lock.json" || [ ! -d ancient-nerds-map/node_modules ]; then
-                mv ancient-nerds-map/node_modules "ancient-nerds-map/node_modules-bak-$(date +%s)" 2>/dev/null || true
-                (cd ancient-nerds-map && npm ci && npm run build)
-              else
-                (cd ancient-nerds-map && npm run build)
-              fi
+              mv ancient-nerds-map/node_modules "ancient-nerds-map/node_modules-bak-$(date +%s)" 2>/dev/null || true
+              (cd ancient-nerds-map && npm ci && npm run build)
               # Verify build output — fail fast if build silently broke
               if [ ! -f ancient-nerds-map/dist/index.html ] || [ ! -f ancient-nerds-map/dist/an-logo.svg ]; then
                 echo "ERROR: Frontend build failed — dist/index.html or dist/an-logo.svg missing!"
