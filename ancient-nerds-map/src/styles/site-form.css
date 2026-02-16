@@ -1,0 +1,124 @@
+/* =============================================================================
+ * Shared SiteForm Styles
+ * Used by ContributeModal and DbAuditPage edit modal
+ * ========================================================================== */
+
+.site-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.site-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.site-form-group label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.site-form-row {
+  display: flex;
+  gap: 12px;
+}
+
+.site-form-row .site-form-group {
+  flex: 1;
+}
+
+/* Inputs, selects, textareas */
+.site-form-input,
+.site-form-select,
+.site-form-textarea {
+  width: 100%;
+  height: 36px;
+  padding: 0 12px;
+  background: rgba(0, 20, 25, 0.6);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s ease;
+  box-sizing: border-box;
+}
+
+.site-form-textarea {
+  height: auto;
+  padding: 10px 12px;
+  resize: vertical;
+  min-height: 60px;
+  font-family: inherit;
+}
+
+.site-form-input:focus,
+.site-form-select:focus,
+.site-form-textarea:focus {
+  border-color: var(--primary-red);
+}
+
+.site-form-input::placeholder,
+.site-form-textarea::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.5;
+}
+
+.site-form-input.valid {
+  border-color: rgba(74, 222, 128, 0.5);
+}
+
+.site-form-select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+.site-form-select option {
+  background: #0a1a1f;
+  color: var(--text-primary);
+}
+
+/* Coordinate row: input + optional globe button */
+.site-form-coord-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.site-form-coord-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.site-form-coord-wrapper .site-form-input {
+  padding-right: 36px;
+}
+
+.site-form-coord-clear {
+  position: absolute;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  opacity: 0.6;
+  transition: all 0.2s ease;
+}
+
+.site-form-coord-clear:hover {
+  opacity: 1;
+  color: var(--primary-red);
+}

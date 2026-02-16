@@ -971,6 +971,7 @@ class BatchSiteUpdate(BaseModel):
     period: str
     description: str | None = None
     sourceUrl: str | None = None
+    country: str | None = None
     coordinates: list[float] = Field(..., min_length=2, max_length=2)
 
 
@@ -1020,6 +1021,7 @@ async def batch_update_sites(
                     geom = ST_SetSRID(ST_MakePoint(:lon, :lat), 4326),
                     site_type = :site_type, period_name = :period_name,
                     period_start = :period_start, source_url = :source_url,
+                    country = :country,
                     edited_by = :edited_by, updated_at = NOW()
                 WHERE id::text = :site_id
             """),
@@ -1033,6 +1035,7 @@ async def batch_update_sites(
                 "period_name": update.period,
                 "period_start": period_start,
                 "source_url": update.sourceUrl,
+                "country": update.country,
                 "edited_by": edited_by,
             },
         )

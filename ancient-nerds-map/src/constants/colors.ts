@@ -378,6 +378,20 @@ export function getCategoryGroup(category: string): CategoryGroup {
 // Period Colors - Colors for time periods
 // =============================================================================
 
+// Chronological order for period sorting (oldest first, index 0 = oldest)
+export const PERIOD_ORDER: Record<string, number> = {
+  '< 4500 BC': 0,
+  '4500 - 3000 BC': 1,
+  '3000 - 1500 BC': 2,
+  '1500 - 500 BC': 3,
+  '500 BC - 1 AD': 4,
+  '1 - 500 AD': 5,
+  '500 - 1000 AD': 6,
+  '1000 - 1500 AD': 7,
+  '1500+ AD': 8,
+  'Unknown': 9,
+}
+
 export const PERIOD_COLORS: Record<string, string> = {
   '< 4500 BC': '#ff0000',          // Bright red (oldest)
   '4500 - 3000 BC': '#ff2200',     // Red-orange
@@ -390,6 +404,9 @@ export const PERIOD_COLORS: Record<string, string> = {
   '1500+ AD': '#ffff00',           // Bright yellow (newest)
   'Unknown': '#9ca3af',            // Gray
 }
+
+// Sort periods chronologically (oldest first)
+export const SORTED_PERIODS = Object.keys(PERIOD_COLORS).sort((a, b) => (PERIOD_ORDER[a] ?? 99) - (PERIOD_ORDER[b] ?? 99))
 
 // =============================================================================
 // UI Colors - Colors for interface elements

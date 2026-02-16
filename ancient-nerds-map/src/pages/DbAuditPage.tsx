@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { config } from '../config'
-import { CATEGORY_COLORS, PERIOD_COLORS, getCategoryColor, getPeriodColor, SOURCE_CONFIG } from '../constants/colors'
+import { CATEGORY_COLORS, PERIOD_ORDER, SORTED_PERIODS, getCategoryColor, getPeriodColor, SOURCE_CONFIG } from '../constants/colors'
 import { resolvePeriod } from '../data/sites'
 import type { SiteData } from '../data/sites'
 import { SitePopupOverlay } from '../components/SitePopupOverlay'
@@ -9,6 +9,8 @@ import { exportCSV, exportJSON, exportGeoJSON, parseCSV, parseJSON, parseGeoJSON
 import type { ParsedSite } from '../utils/exportFormats'
 import { MetadataBadge } from '../components/metadata/MetadataBadge'
 import PinAuthModal from '../components/PinAuthModal'
+import SiteForm from '../components/SiteForm'
+import type { SiteFormValues } from '../components/SiteForm'
 import '../styles/db-audit.css'
 
 declare const __BUILD_HASH__: string
@@ -38,22 +40,7 @@ type SortDir = 'asc' | 'desc'
 const CATEGORY_OPTIONS = Object.keys(CATEGORY_COLORS)
 const ROWS_PER_PAGE = 500
 
-// Chronological order for period sorting (oldest first, index 0 = oldest)
-const PERIOD_ORDER: Record<string, number> = {
-  '< 4500 BC': 0,
-  '4500 - 3000 BC': 1,
-  '3000 - 1500 BC': 2,
-  '1500 - 500 BC': 3,
-  '500 BC - 1 AD': 4,
-  '1 - 500 AD': 5,
-  '500 - 1000 AD': 6,
-  '1000 - 1500 AD': 7,
-  '1500+ AD': 8,
-  'Unknown': 9,
-}
-
-// Sort periods chronologically (oldest first)
-const SORTED_PERIODS = Object.keys(PERIOD_COLORS).sort((a, b) => (PERIOD_ORDER[a] ?? 99) - (PERIOD_ORDER[b] ?? 99))
+// PERIOD_ORDER and SORTED_PERIODS imported from constants/colors.ts
 
 interface SnapshotEntry {
   date: string
@@ -83,7 +70,7 @@ interface PendingEdit {
   changes: Record<string, { old: string; new: string }>
   fullUpdate: {
     id: string; title: string; description?: string; category: string
-    period: string; coordinates: [number, number]; sourceUrl?: string
+    period: string; coordinates: [number, number]; sourceUrl?: string; country?: string
   }
 }
 
@@ -229,7 +216,7 @@ export default function DbAuditPage() {
 
   // Modal editing
   const [editModalSite, setEditModalSite] = useState<AuditSite | null>(null)
-  const [modalForm, setModalForm] = useState({ title: '', description: '', lat: '', lon: '', category: '', period: '', sourceUrl: '' })
+  const [modalFormValues, setModalFormValues] = useState<SiteFormValues | null>(null)
   // Expanded descriptions
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
@@ -579,47 +566,41 @@ export default function DbAuditPage() {
   const openEditModal = useCallback((site: AuditSite) => {
     requireAuth(() => {
       setEditModalSite(site)
-      setModalForm({
-        title: site.n,
-        description: site.d || '',
-        lat: String(site.la),
-        lon: String(site.lo),
-        category: site.t || '',
-        period: resolvePeriod(site.pn, site.p),
-        sourceUrl: site.u || '',
-      })
+      setModalFormValues(null)
     })
   }, [requireAuth])
 
   const saveModal = useCallback(() => {
-    if (!editModalSite) return
-    const lat = parseFloat(modalForm.lat)
-    const lon = parseFloat(modalForm.lon)
-    if (isNaN(lat) || isNaN(lon)) { alert('Invalid coordinates'); return }
+    if (!editModalSite || !modalFormValues) return
+    const coords = modalFormValues.validCoords
+    const lat = coords ? coords[1] : editModalSite.la
+    const lon = coords ? coords[0] : editModalSite.lo
 
     // Build change record
     const changes: Record<string, { old: string; new: string }> = {}
-    if (modalForm.title !== editModalSite.n) changes['Name'] = { old: editModalSite.n, new: modalForm.title }
-    if (modalForm.category !== (editModalSite.t || '')) changes['Type'] = { old: editModalSite.t || '', new: modalForm.category }
-    if (modalForm.period !== resolvePeriod(editModalSite.pn, editModalSite.p)) changes['Period'] = { old: resolvePeriod(editModalSite.pn, editModalSite.p), new: modalForm.period }
-    if (modalForm.description !== (editModalSite.d || '')) changes['Description'] = { old: (editModalSite.d || '').slice(0, 50), new: modalForm.description.slice(0, 50) }
-    if (String(lat) !== String(editModalSite.la) || String(lon) !== String(editModalSite.lo)) changes['Coords'] = { old: `${editModalSite.la}, ${editModalSite.lo}`, new: `${lat}, ${lon}` }
-    if (modalForm.sourceUrl !== (editModalSite.u || '')) changes['Source URL'] = { old: editModalSite.u || '', new: modalForm.sourceUrl }
+    if (modalFormValues.name !== editModalSite.n) changes['Name'] = { old: editModalSite.n, new: modalFormValues.name }
+    if (modalFormValues.category !== (editModalSite.t || '')) changes['Type'] = { old: editModalSite.t || '', new: modalFormValues.category }
+    if (modalFormValues.period !== resolvePeriod(editModalSite.pn, editModalSite.p)) changes['Period'] = { old: resolvePeriod(editModalSite.pn, editModalSite.p), new: modalFormValues.period }
+    if (modalFormValues.description !== (editModalSite.d || '')) changes['Description'] = { old: (editModalSite.d || '').slice(0, 50), new: modalFormValues.description.slice(0, 50) }
+    if (lat !== editModalSite.la || lon !== editModalSite.lo) changes['Coords'] = { old: `${editModalSite.la}, ${editModalSite.lo}`, new: `${lat}, ${lon}` }
+    if (modalFormValues.sourceUrl !== (editModalSite.u || '')) changes['Source URL'] = { old: editModalSite.u || '', new: modalFormValues.sourceUrl }
+    if (modalFormValues.country !== (editModalSite.c || '')) changes['Country'] = { old: editModalSite.c || '', new: modalFormValues.country }
 
     if (Object.keys(changes).length === 0) { setEditModalSite(null); return }
 
     const edit: PendingEdit = {
       siteId: editModalSite.id,
-      siteName: modalForm.title,
+      siteName: modalFormValues.name,
       changes,
       fullUpdate: {
         id: editModalSite.id,
-        title: modalForm.title,
-        description: modalForm.description,
-        category: modalForm.category,
-        period: modalForm.period,
+        title: modalFormValues.name,
+        description: modalFormValues.description,
+        category: modalFormValues.category,
+        period: modalFormValues.period,
         coordinates: [lon, lat],
-        sourceUrl: modalForm.sourceUrl,
+        sourceUrl: modalFormValues.sourceUrl,
+        country: modalFormValues.country,
       },
     }
 
@@ -630,18 +611,18 @@ export default function DbAuditPage() {
       if (s.id !== editModalSite.id) return s
       return {
         ...s,
-        n: modalForm.title,
-        d: modalForm.description || undefined,
+        n: modalFormValues.name,
+        d: modalFormValues.description || undefined,
         la: lat,
         lo: lon,
-        t: modalForm.category || undefined,
-        pn: modalForm.period,
-        c: s.c,
-        u: modalForm.sourceUrl || undefined,
+        t: modalFormValues.category || undefined,
+        pn: modalFormValues.period,
+        c: modalFormValues.country || undefined,
+        u: modalFormValues.sourceUrl || undefined,
       }
     }))
     setEditModalSite(null)
-  }, [editModalSite, modalForm])
+  }, [editModalSite, modalFormValues])
 
   // Sort handler
   const handleSort = useCallback((col: SortColumn) => {
@@ -1719,41 +1700,21 @@ export default function DbAuditPage() {
               <button className="db-modal-close" onClick={() => setEditModalSite(null)}>&times;</button>
             </div>
             <div className="db-modal-body">
-              <div className="db-field">
-                <label>Name</label>
-                <input value={modalForm.title} onChange={e => setModalForm(f => ({ ...f, title: e.target.value }))} />
-              </div>
-              <div className="db-field">
-                <label>Description</label>
-                <textarea rows={3} value={modalForm.description} onChange={e => setModalForm(f => ({ ...f, description: e.target.value }))} />
-              </div>
-              <div className="db-field-row">
-                <div className="db-field">
-                  <label>Latitude</label>
-                  <input type="number" step="any" value={modalForm.lat} onChange={e => setModalForm(f => ({ ...f, lat: e.target.value }))} />
-                </div>
-                <div className="db-field">
-                  <label>Longitude</label>
-                  <input type="number" step="any" value={modalForm.lon} onChange={e => setModalForm(f => ({ ...f, lon: e.target.value }))} />
-                </div>
-              </div>
-              <div className="db-field">
-                <label>Category</label>
-                <select value={modalForm.category} onChange={e => setModalForm(f => ({ ...f, category: e.target.value }))}>
-                  <option value="">-- none --</option>
-                  {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div className="db-field">
-                <label>Period</label>
-                <select value={modalForm.period} onChange={e => setModalForm(f => ({ ...f, period: e.target.value }))}>
-                  {SORTED_PERIODS.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </div>
-              <div className="db-field">
-                <label>Source URL</label>
-                <input value={modalForm.sourceUrl} onChange={e => setModalForm(f => ({ ...f, sourceUrl: e.target.value }))} />
-              </div>
+              <SiteForm
+                key={editModalSite.id}
+                initialValues={{
+                  name: editModalSite.n,
+                  description: editModalSite.d || '',
+                  country: editModalSite.c || '',
+                  lat: editModalSite.la,
+                  lon: editModalSite.lo,
+                  category: editModalSite.t || '',
+                  period: resolvePeriod(editModalSite.pn, editModalSite.p),
+                  sourceUrl: editModalSite.u || '',
+                }}
+                onChange={setModalFormValues}
+                showPeriod={true}
+              />
             </div>
             <div className="db-modal-footer">
               <button className="db-btn db-btn-cancel" onClick={() => setEditModalSite(null)}>Cancel</button>
