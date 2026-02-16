@@ -142,6 +142,32 @@ services:
         condition: service_healthy
 
   # ==========================================================================
+  # Open WebUI — ChatGPT-like frontend for Lyra
+  # ==========================================================================
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: ancient_nerds_openwebui
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    ports:
+      - "127.0.0.1:${OPENWEBUI_PORT:-3000}:8080"
+    environment:
+      OPENAI_API_BASE_URLS: "http://api:8000/v1"
+      OPENAI_API_KEYS: "${LYRA_ADMIN_KEY}"
+      ENABLE_OLLAMA_API: "false"
+      WEBUI_NAME: "Lyra Chat"
+      ENABLE_SIGNUP: "false"
+    volumes:
+      - openwebui_data:/app/backend/data
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # ==========================================================================
   # pgAdmin for database management (optional, for development)
   # ==========================================================================
   pgadmin:
@@ -170,6 +196,8 @@ volumes:
     name: ancient_map_pgadmin_data
   qdrant_data:
     name: ancient_map_qdrant_data
+  openwebui_data:
+    name: ancient_map_openwebui_data
 
 networks:
   default:
