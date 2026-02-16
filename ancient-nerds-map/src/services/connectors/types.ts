@@ -98,6 +98,7 @@ export interface ContentBySiteParams {
   lat?: number
   lon?: number
   culture?: string
+  source_url?: string
   contentTypes?: ContentType[]
   limit?: number
   timeout?: number

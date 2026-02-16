@@ -6,7 +6,7 @@ Provides access to images and maps from Wikimedia Commons.
 Features:
 - Image search with metadata
 - Historical map search
-- Category-based retrieval
+- Category-based retrieval (precise path via WikimediaResolver)
 - License information extraction
 """
 
@@ -14,6 +14,7 @@ Features:
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
+from pipeline.connectors.imagery.wikimedia_resolver import _resolver
 from pipeline.connectors.protocols.mediawiki import MediaWikiProtocol
 from pipeline.connectors.registry import ConnectorRegistry
 from pipeline.connectors.types import AuthType, ContentItem, ContentType, ProtocolType
@@ -177,19 +178,72 @@ class WikimediaConnector(BaseConnector):
         limit: int = 20,
         **kwargs,
     ) -> list[ContentItem]:
-        """Get photos and videos for a site."""
-        if content_type:
-            return await self.search(query=site_name, content_type=content_type, limit=limit)
+        """Get photos and videos for a site.
 
-        # Fetch photos and videos — don't let photos consume the entire limit
+        Two-path strategy:
+        - Precise path: if WikimediaResolver finds a Commons category, search
+          within that category for accurate results.
+        - Fallback path: free-text search with country disambiguation.
+        """
+        source_url = kwargs.get("source_url")
+        entity = await _resolver.resolve(site_name, source_url)
+
+        if entity and entity.commons_category:
+            return await self._search_in_category(
+                entity.commons_category, site_name, content_type, limit
+            )
+
+        # Fallback: free-text search with country disambiguation
+        query = site_name
+        if location:
+            country = self.extract_country(location)
+            if country:
+                query = f"{site_name} {country}"
+
+        if content_type:
+            return await self.search(query=query, content_type=content_type, limit=limit)
+
         photos = await self.search(
-            query=site_name,
+            query=query,
             content_type=ContentType.PHOTO,
             limit=limit,
         )
 
         videos = await self.search(
-            query=site_name,
+            query=query,
+            content_type=ContentType.VIDEO,
+            limit=max(limit // 4, 5),
+        )
+
+        return photos + videos
+
+    async def _search_in_category(
+        self,
+        commons_category: str,
+        site_name: str,
+        content_type: ContentType | None,
+        limit: int,
+    ) -> list[ContentItem]:
+        """Search within a resolved Commons category for precise results."""
+        logger.info(f"Wikimedia: precise search in category '{commons_category}'")
+
+        if content_type == ContentType.VIDEO:
+            # Search videos with category constraint
+            return await self.search(
+                query=f'incategory:"{commons_category}" {site_name}',
+                content_type=ContentType.VIDEO,
+                limit=limit,
+            )
+
+        if content_type:
+            # Photos/maps/artwork from category
+            return await self.get_category_images(commons_category, limit=limit)
+
+        # No filter: category images (photos) + category-scoped video search
+        photos = await self.get_category_images(commons_category, limit=limit)
+
+        videos = await self.search(
+            query=f'incategory:"{commons_category}" {site_name}',
             content_type=ContentType.VIDEO,
             limit=max(limit // 4, 5),
         )

@@ -257,6 +257,7 @@ export default function SitePopup({
     location: displaySite.location,
     lat,
     lng,
+    sourceUrl: displaySite.sourceUrl,
     prefetchedImages,
     isOffline,
     isLoadingImages

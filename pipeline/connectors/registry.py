@@ -373,6 +373,7 @@ class ConnectorRegistry:
         location: str | None = None,
         lat: float | None = None,
         lon: float | None = None,
+        source_url: str | None = None,
         content_types: list[ContentType] | None = None,
         limit_per_source: int = 10,
         timeout: float = 30.0,
@@ -385,6 +386,7 @@ class ConnectorRegistry:
             location: Location string for context
             lat: Latitude
             lon: Longitude
+            source_url: Wikidata/Wikipedia URL for precise entity resolution
             content_types: Types of content to fetch
             limit_per_source: Max per source
             timeout: Total timeout
@@ -416,6 +418,7 @@ class ConnectorRegistry:
                     lat=lat,
                     lon=lon,
                     limit=limit_per_source,
+                    source_url=source_url,
                 )
                 return (connector.connector_id, items, None)
             except Exception as e:
