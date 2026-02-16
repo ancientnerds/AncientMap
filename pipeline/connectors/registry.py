@@ -277,6 +277,10 @@ class ConnectorRegistry:
                 items_by_source[connector_id] = len(items)
                 all_items.extend(items)
 
+        # Filter to requested type (connectors may return mixed types)
+        if content_type:
+            all_items = [i for i in all_items if i.content_type == content_type]
+
         # Sort by relevance
         all_items.sort(key=lambda x: x.relevance_score, reverse=True)
 
@@ -369,6 +373,9 @@ class ConnectorRegistry:
                 sources_searched.append(connector_id)
                 items_by_source[connector_id] = len(items)
                 all_items.extend(items)
+
+        if content_type:
+            all_items = [i for i in all_items if i.content_type == content_type]
 
         all_items.sort(key=lambda x: x.relevance_score, reverse=True)
 
@@ -463,6 +470,10 @@ class ConnectorRegistry:
                 items_by_source[connector_id] = len(items)
                 all_items.extend(items)
 
+        if content_types:
+            type_set = set(content_types)
+            all_items = [i for i in all_items if i.content_type in type_set]
+
         all_items.sort(key=lambda x: x.relevance_score, reverse=True)
 
         end_time = datetime.now(UTC)
@@ -543,6 +554,10 @@ class ConnectorRegistry:
                 sources_searched.append(connector_id)
                 items_by_source[connector_id] = len(items)
                 all_items.extend(items)
+
+        if content_types:
+            type_set = set(content_types)
+            all_items = [i for i in all_items if i.content_type in type_set]
 
         all_items.sort(key=lambda x: x.relevance_score, reverse=True)
 
