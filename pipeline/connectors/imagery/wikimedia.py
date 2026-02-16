@@ -224,13 +224,18 @@ class WikimediaConnector(BaseConnector):
         content_type: ContentType | None,
         limit: int,
     ) -> list[ContentItem]:
-        """Search within a resolved Commons category for precise results."""
+        """Search within a resolved Commons category for precise results.
+
+        Category constraint is only used for photos/images — most Commons
+        videos are NOT filed under the site's main category, so videos
+        always use free-text search to avoid returning empty results.
+        """
         logger.info(f"Wikimedia: precise search in category '{commons_category}'")
 
         if content_type == ContentType.VIDEO:
-            # Search videos with category constraint
+            # Videos: free-text search (category constraint is too restrictive)
             return await self.search(
-                query=f'incategory:"{commons_category}" {site_name}',
+                query=site_name,
                 content_type=ContentType.VIDEO,
                 limit=limit,
             )
@@ -239,11 +244,11 @@ class WikimediaConnector(BaseConnector):
             # Photos/maps/artwork from category
             return await self.get_category_images(commons_category, limit=limit)
 
-        # No filter: category images (photos) + category-scoped video search
+        # No filter: category images (photos) + free-text video search
         photos = await self.get_category_images(commons_category, limit=limit)
 
         videos = await self.search(
-            query=f'incategory:"{commons_category}" {site_name}',
+            query=site_name,
             content_type=ContentType.VIDEO,
             limit=max(limit // 4, 5),
         )
