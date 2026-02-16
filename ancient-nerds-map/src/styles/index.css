@@ -8186,26 +8186,6 @@ body.hud-hidden .empire-borders-window {
   text-overflow: ellipsis;
 }
 
-/* Video play overlay on thumbnails */
-.gallery-video-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-  z-index: 1;
-}
-
-.gallery-video-overlay svg {
-  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6));
-  transition: transform 0.2s ease;
-}
-
-.gallery-item:hover .gallery-video-overlay svg {
-  transform: scale(1.15);
-}
-
 .gallery-empty {
   display: flex;
   align-items: center;
@@ -13801,52 +13781,6 @@ body.news-feed-open .empire-borders-window {
 /* =========================================================================
    LYRA CHAT MODAL
    ========================================================================= */
-
-/* ── Lyra iframe overlay (Open WebUI) ── */
-.lyra-iframe-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 10000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
-}
-.lyra-iframe-container {
-  position: relative;
-  width: min(95vw, 900px);
-  height: min(90vh, 800px);
-  border-radius: 12px;
-  overflow: hidden;
-  background: #1a1a2e;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-}
-.lyra-iframe {
-  width: 100%;
-  height: 100%;
-  border: none;
-}
-.lyra-iframe-close {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 10;
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.5);
-  color: #fff;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.15s;
-}
-.lyra-iframe-close:hover {
-  background: rgba(0, 0, 0, 0.8);
-}
 
 .lyra-chat-overlay {
   position: fixed;

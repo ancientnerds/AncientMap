@@ -689,7 +689,13 @@ export default function SitePopup({
               <button
                 className="ask-lyra-btn"
                 style={{ marginTop: 8 }}
-                onClick={() => onAskLyra()}
+                onClick={() => {
+                  if (isEmpireMode && empire) {
+                    onAskLyra('empire', empire.id, empireYear)
+                  } else if (site) {
+                    onAskLyra('site', site.id)
+                  }
+                }}
               >
                 <img src="/lyra.gif" alt="" />
                 Ask Lyra

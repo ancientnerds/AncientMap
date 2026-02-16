@@ -7,7 +7,7 @@ import { EMPIRES, EmpireConfig } from './config/empireData'
 // Lazy-load modals for faster initial load
 const ContributeModal = lazy(() => import('./components/ContributeModal'))
 const DisclaimerModal = lazy(() => import('./components/DisclaimerModal'))
-const LyraChatIframe = lazy(() => import('./components/LyraChatIframe'))
+const LyraChatModal = lazy(() => import('./components/LyraChatModal'))
 const DownloadManager = lazy(() => import('./components/DownloadManager'))
 const NewsFeedPanel = lazy(() => import('./components/NewsFeedPanel'))
 import { SiteData, fetchSites, getCurrentSites, addSourceSites, SOURCE_COLORS, getDefaultEnabledSourceIds, getSourceColor, getCategoryColor, getPeriodColor, setDataSourceError, resolvePeriod } from './data/sites'
@@ -470,6 +470,7 @@ function AppContent() {
 
   // Lyra chat modal state
   const [showLyraChat, setShowLyraChat] = useState(false)
+  const [lyraChatContext, setLyraChatContext] = useState<{ type: 'global' | 'site' | 'empire' | 'news'; id?: string; year?: number }>({ type: 'global' })
 
   // Download manager modal state
   const [showDownloadManager, setShowDownloadManager] = useState(false)
@@ -534,9 +535,14 @@ function AppContent() {
     setContributeHoverCoords(null)
   }, [])
 
-  // Lyra chat handler
+  // Lyra chat handlers
   const handleAIAgentClick = useCallback(() => {
+    setLyraChatContext({ type: 'global' })
     setShowLyraChat(true)
+  }, [])
+
+  const handleLyraHighlightSites = useCallback((siteIds: string[]) => {
+    setListFrozenSiteIds(siteIds)
   }, [])
 
   // Async image loader - runs in background after popup opens
@@ -2221,7 +2227,10 @@ function AppContent() {
                 // Refresh from API failed, local state is still updated
               }
             }}
-            onAskLyra={() => setShowLyraChat(true)}
+            onAskLyra={(ctxType, ctxId, ctxYear) => {
+              setLyraChatContext({ type: ctxType, id: ctxId, year: ctxYear })
+              setShowLyraChat(true)
+            }}
           />
         )
       })}
@@ -2245,7 +2254,10 @@ function AppContent() {
             onClose={() => closeEmpirePopup(empireId)}
             onMinimizedChange={(isMin) => setEmpirePopupMinimized(empireId, isMin)}
             minimizedStackIndex={stackIndex}
-            onAskLyra={() => setShowLyraChat(true)}
+            onAskLyra={(ctxType, ctxId, ctxYear) => {
+              setLyraChatContext({ type: ctxType, id: ctxId, year: ctxYear })
+              setShowLyraChat(true)
+            }}
           />
         )
       })}
@@ -2270,7 +2282,10 @@ function AppContent() {
                 updateSelection([match.id])
               }
             }}
-            onAskLyra={() => setShowLyraChat(true)}
+            onAskLyra={(newsItemId) => {
+              setLyraChatContext({ type: 'news', id: String(newsItemId) })
+              setShowLyraChat(true)
+            }}
           />
         )}
       </Suspense>
@@ -2311,10 +2326,18 @@ function AppContent() {
           onToggleOffline={() => setOfflineMode(!isOffline)}
         />
 
-        {/* Lyra Chat (Open WebUI iframe) */}
-        <LyraChatIframe
+        {/* Lyra Chat Modal */}
+        <LyraChatModal
           isOpen={showLyraChat}
           onClose={() => setShowLyraChat(false)}
+          contextType={lyraChatContext.type}
+          contextId={lyraChatContext.id}
+          contextYear={lyraChatContext.year}
+          onHighlightSites={handleLyraHighlightSites}
+          onFlyToSite={(coords) => {
+            setFlyToCoords(null)
+            setTimeout(() => setFlyToCoords(coords), 10)
+          }}
         />
       </Suspense>
     </>
