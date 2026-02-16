@@ -30,11 +30,6 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
         timeout: 60000, // 60 seconds - backend connectors can take time
-      },
-      '/chat': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-        rewrite: (path: string) => path.replace(/^\/chat/, ''),
       }
     }
   },

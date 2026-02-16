@@ -10,7 +10,7 @@ interface Props {
   onClose: () => void
 }
 
-const CHAT_URL = '/chat/'
+const CHAT_URL = 'https://chat.ancientnerds.com'
 
 export default function LyraChatIframe({ isOpen, onClose }: Props) {
   if (!isOpen) return null
