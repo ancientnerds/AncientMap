@@ -3,7 +3,7 @@
  *
  * Features:
  * - Admin auth gate (Bearer key + Turnstile)
- * - Text input + image upload (drag & drop + file picker)
+ * - Text input
  * - SSE streaming with token-by-token display
  * - Conversation history (client-side)
  * - Context-aware: receives contextType, contextId, contextYear props
@@ -163,7 +163,6 @@ export default function LyraChatModal({
   const [messages, setMessages] = useState<LyraMessage[]>([])
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
-  const [pendingImages, setPendingImages] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [sidebarSites, setSidebarSites] = useState<SiteHighlight[]>([])
   const [sidebarNews, setSidebarNews] = useState<NewsHighlight[]>([])
@@ -182,7 +181,6 @@ export default function LyraChatModal({
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   // Abort in-flight SSE stream on unmount
@@ -379,33 +377,9 @@ export default function LyraChatModal({
     }
   }, [conversationId])
 
-  const handleImageUpload = useCallback((files: FileList | null) => {
-    if (!files) return
-    Array.from(files).forEach(file => {
-      if (!file.type.startsWith('image/')) return
-      if (file.size > 5 * 1024 * 1024) {
-        setError('Image must be under 5MB')
-        return
-      }
-      const reader = new FileReader()
-      reader.onload = () => {
-        if (typeof reader.result === 'string') {
-          setPendingImages(prev => [...prev, reader.result as string])
-        }
-      }
-      reader.readAsDataURL(file)
-    })
-  }, [])
-
-  // Drag & drop
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    handleImageUpload(e.dataTransfer.files)
-  }, [handleImageUpload])
-
   const sendMessage = useCallback(async (text?: string) => {
     const messageText = text || input.trim()
-    if (!messageText && pendingImages.length === 0) return
+    if (!messageText) return
     if (!adminKey) return
 
     setError(null)
@@ -420,10 +394,8 @@ export default function LyraChatModal({
       role: 'user',
       content: messageText,
       timestamp: new Date(),
-      images: pendingImages.length > 0 ? [...pendingImages] : undefined,
     }
     setMessages(prev => [...prev, userMsg])
-    setPendingImages([])
 
     // Create assistant placeholder
     const assistantId = `assistant-${Date.now()}`
@@ -444,7 +416,6 @@ export default function LyraChatModal({
 
     const body = {
       message: messageText,
-      images: userMsg.images?.map(data => ({ data })),
       context_type: contextType,
       context_id: contextId,
       context_year: contextYear,
@@ -593,7 +564,7 @@ export default function LyraChatModal({
       setIsStreaming(false)
       abortRef.current = null
     }
-  }, [input, adminKey, pendingImages, messages, contextType, contextId, contextYear, onHighlightSites, clearAuth, conversationId])
+  }, [input, adminKey, messages, contextType, contextId, contextYear, onHighlightSites, clearAuth, conversationId])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -760,11 +731,7 @@ export default function LyraChatModal({
             <div className="lyra-chat-body">
               {/* Left: chat messages */}
               <div className="lyra-chat-main">
-                <div
-                  className="lyra-chat-messages"
-                  onDragOver={e => e.preventDefault()}
-                  onDrop={handleDrop}
-                >
+                <div className="lyra-chat-messages">
                   {messages.length === 0 ? (
                     <div className="lyra-chat-welcome">
                       <img src="/lyra.gif" alt="Lyra" className="lyra-chat-welcome-avatar" />
@@ -802,13 +769,6 @@ export default function LyraChatModal({
                           <img src="/lyra.gif" alt="Lyra" className="lyra-chat-msg-avatar" />
                         )}
                         <div className="lyra-chat-msg-content">
-                          {msg.images && msg.images.length > 0 && (
-                            <div className="lyra-chat-msg-images">
-                              {msg.images.map((img, i) => (
-                                <img key={i} src={img} alt="Upload" className="lyra-chat-msg-image" />
-                              ))}
-                            </div>
-                          )}
                           {msg.role === 'assistant' && msg.statusLines && msg.statusLines.length > 0 && (
                             <div className="lyra-chat-status-lines">
                               {msg.statusLines.map((s, i) => (
@@ -984,43 +944,9 @@ export default function LyraChatModal({
               </div>
             )}
 
-            {/* Image preview */}
-            {pendingImages.length > 0 && (
-              <div className="lyra-chat-image-preview">
-                {pendingImages.map((img, i) => (
-                  <div key={i} className="lyra-chat-image-preview-item">
-                    <img src={img} alt="Preview" />
-                    <button onClick={() => setPendingImages(prev => prev.filter((_, j) => j !== i))}>
-                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
-                        <line x1="2" y1="2" x2="10" y2="10" /><line x1="10" y1="2" x2="2" y2="10" />
-                      </svg>
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
             {/* Input area */}
             <div className="lyra-chat-input-area">
               <div className="lyra-chat-input-row">
-                <button
-                  className="lyra-chat-attach-btn"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isStreaming}
-                  title="Attach image"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
-                  </svg>
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  style={{ display: 'none' }}
-                  onChange={e => handleImageUpload(e.target.files)}
-                />
                 <textarea
                   ref={inputRef}
                   className="lyra-chat-input"
@@ -1034,7 +960,7 @@ export default function LyraChatModal({
                 <button
                   className="lyra-chat-send-btn"
                   onClick={() => sendMessage()}
-                  disabled={isStreaming || (!input.trim() && pendingImages.length === 0)}
+                  disabled={isStreaming || !input.trim()}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <line x1="22" y1="2" x2="11" y2="13" />
