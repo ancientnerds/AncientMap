@@ -693,6 +693,7 @@ def _run_migrations(engine) -> None:
                         val = val.replace(bloated, clean)
                 return val
 
+            _ALLOWED_COLLAPSE_COLS = {"headline", "post_text", "summary", "facts"}
             fields = {"headline": row.headline, "post_text": row.post_text, "summary": row.summary}
             updates = {}
             for col, val in fields.items():
@@ -706,6 +707,9 @@ def _run_migrations(engine) -> None:
                 if fixed_facts != list(row.facts):
                     updates["facts"] = _json.dumps(fixed_facts)
             if updates:
+                for k in updates:
+                    if k not in _ALLOWED_COLLAPSE_COLS:
+                        raise ValueError(f"Unexpected column in collapse migration: {k}")
                 sets = ", ".join(
                     f"{k} = CAST(:{k} AS jsonb)" if k == "facts" else f"{k} = :{k}"
                     for k in updates

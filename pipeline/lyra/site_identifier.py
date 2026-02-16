@@ -1141,7 +1141,7 @@ def _escalate_to_sonnet(
         return None
 
     for block in response.content:
-        if hasattr(block, "text"):
+        if hasattr(block, "text") and block.text:
             result = parse_json_response("{" + block.text)
             break
     else:

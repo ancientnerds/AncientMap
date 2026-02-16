@@ -379,13 +379,20 @@ def _build_messages(
     system_text = LYRA_SYSTEM_PROMPT + _build_context_prompt(context_type, context_id, context_year) + retrieved_context
     messages: list[BaseMessage] = [SystemMessage(content=system_text)]
 
-    # Add conversation history
+    # Add conversation history (validated: role whitelist + content length cap)
+    _VALID_ROLES = {"user", "assistant"}
+    _MAX_HISTORY_CONTENT_LEN = 8000
     if history:
         for msg in history[-10:]:  # Last 10 messages
-            if msg["role"] == "user":
-                messages.append(HumanMessage(content=msg["content"]))
+            role = msg.get("role", "")
+            content = msg.get("content", "")
+            if role not in _VALID_ROLES or not isinstance(content, str):
+                continue
+            content = content[:_MAX_HISTORY_CONTENT_LEN]
+            if role == "user":
+                messages.append(HumanMessage(content=content))
             else:
-                messages.append(AIMessage(content=msg["content"]))
+                messages.append(AIMessage(content=content))
 
     # Build the current user message (may include images)
     content_blocks = []

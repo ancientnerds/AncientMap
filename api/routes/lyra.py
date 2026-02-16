@@ -38,10 +38,15 @@ _rate_limiter = RateLimiter(max_requests=int(os.getenv("LYRA_RATE_LIMIT", "20"))
 # Request / Response models
 # ---------------------------------------------------------------------------
 
+class _ImagePayload(BaseModel):
+    """Single base64 image in a Lyra chat request."""
+    data: str = Field(..., max_length=2_000_000, description="data:image/...;base64,...")
+
+
 class LyraChatRequest(BaseModel):
     """Request body for Lyra chat."""
     message: str = Field(..., min_length=1, max_length=4000)
-    images: list[dict] | None = Field(default=None, max_length=5, description="Base64 images: [{data: 'data:image/...;base64,...'}]")
+    images: list[_ImagePayload] | None = Field(default=None, max_length=5, description="Base64 images")
     context_type: str = Field(default="global", description="Where chat was opened: global, site, empire, news")
     context_id: str | None = Field(default=None, max_length=100, description="UUID of site, empire polity ID, or news item ID")
     context_year: int | None = Field(default=None, description="Year for empire context")
@@ -52,7 +57,7 @@ class LyraChatRequest(BaseModel):
 class LyraAdminRequest(BaseModel):
     """Request body for admin (no Turnstile)."""
     message: str = Field(..., min_length=1, max_length=4000)
-    images: list[dict] | None = Field(default=None, max_length=5)
+    images: list[_ImagePayload] | None = Field(default=None, max_length=5)
     context_type: str = "global"
     context_id: str | None = Field(default=None, max_length=100)
     context_year: int | None = None
@@ -85,7 +90,7 @@ async def lyra_chat(request: LyraChatRequest, req: Request):
 
     return _stream_response(
         message=request.message,
-        images=request.images,
+        images=[img.model_dump() for img in request.images] if request.images else None,
         history=request.history,
         context_type=request.context_type,
         context_id=request.context_id,
@@ -133,7 +138,7 @@ async def lyra_admin(
 
     return _stream_response(
         message=request.message,
-        images=request.images,
+        images=[img.model_dump() for img in request.images] if request.images else None,
         history=request.history,
         context_type=request.context_type,
         context_id=request.context_id,
