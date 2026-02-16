@@ -309,10 +309,15 @@ def wikidata_p18_for_name(site_name: str) -> str | None:
 
 def download_thumb(original_url: str, dest_path: Path, width: int = THUMB_WIDTH) -> tuple[int, int, int] | None:
     """
-    Download a Wikimedia image thumbnail at the given width.
+    Download a Wikimedia image thumbnail, convert to WebP, and save.
 
+    dest_path must already have a .webp extension.
     Returns (file_size_bytes, width, height) or None on failure.
     """
+    import io
+
+    from PIL import Image
+
     # Build thumbnail URL from original
     # Commons URL pattern: .../commons/a/ab/File.jpg
     # Thumb URL pattern:   .../commons/thumb/a/ab/File.jpg/800px-File.jpg
@@ -343,25 +348,28 @@ def download_thumb(original_url: str, dest_path: Path, width: int = THUMB_WIDTH)
             logger.debug(f"Not an image ({content_type}): {thumb_url}")
             return None
 
-        content = resp.content
-        if len(content) < 1000:
-            logger.debug(f"Image too small ({len(content)} bytes), skipping: {thumb_url}")
+        raw_bytes = resp.content
+        if len(raw_bytes) < 1000:
+            logger.debug(f"Image too small ({len(raw_bytes)} bytes), skipping: {thumb_url}")
             return None
 
-        dest_path.write_bytes(content)
-
-        # Try to get dimensions from response headers or PIL
-        img_width, img_height = width, 0
+        # Convert to WebP for smaller file size and faster loading
         try:
-            import io
-
-            from PIL import Image
-            with Image.open(io.BytesIO(content)) as img:
+            with Image.open(io.BytesIO(raw_bytes)) as img:
                 img_width, img_height = img.size
-        except Exception:
-            pass
+                # Convert RGBA/palette to RGB (WebP lossy doesn't support palette)
+                if img.mode in ("RGBA", "P"):
+                    img = img.convert("RGBA")
+                elif img.mode != "RGB":
+                    img = img.convert("RGB")
+                img.save(dest_path, "WEBP", quality=82, method=4)
+        except Exception as e:
+            logger.debug(f"WebP conversion failed, saving original: {e}")
+            dest_path.write_bytes(raw_bytes)
+            img_width, img_height = width, 0
 
-        return len(content), img_width, img_height
+        file_size = dest_path.stat().st_size
+        return file_size, img_width, img_height
 
     except Exception as e:
         logger.debug(f"Download error: {e}")
@@ -457,7 +465,11 @@ def process_site(site: dict, dry_run: bool = False) -> int:
 
     for idx, img in enumerate(images):
         file_title = img["title"]
-        local_filename = sanitize_filename(file_title.replace("File:", ""))
+        raw_name = sanitize_filename(file_title.replace("File:", ""))
+        # Replace original extension with .webp
+        local_filename = re.sub(r"\.[^.]+$", ".webp", raw_name)
+        if not local_filename.endswith(".webp"):
+            local_filename += ".webp"
         dest_path = img_dir / local_filename
 
         # Skip if already exists on disk
