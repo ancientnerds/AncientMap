@@ -441,6 +441,7 @@ async def run_agent_stream(
     retrieved_context = ""
     all_sites: list[dict] = []
     all_news: list[dict] = []
+    radar_names: set[str] = set()
     avg_relevance: float | None = None
     total_input_tokens = 0
     total_output_tokens = 0
@@ -595,7 +596,7 @@ async def run_agent_stream(
                 tool_calls_made += 1
 
                 # Extract site data for map highlighting
-                if tc["name"] in ("search_sites", "get_site_details", "vector_search"):
+                if tc["name"] in ("search_sites", "get_site_details", "vector_search", "search_radar"):
                     try:
                         parsed = json.loads(result)
                         if isinstance(parsed, list):
@@ -611,6 +612,14 @@ async def run_agent_stream(
                                         "country": s.get("country"),
                                         "thumbnail_url": s.get("thumbnail_url"),
                                     })
+                                # Radar discoveries may lack coords — still collect names for news fetch
+                                if tc["name"] == "search_radar":
+                                    name = s.get("name", "")
+                                    if name:
+                                        radar_names.add(name)
+                                    original = s.get("original_name")
+                                    if original and original != name:
+                                        radar_names.add(original)
                         elif isinstance(parsed, dict) and "lat" in parsed:
                             all_sites.append({
                                 "id": parsed.get("id", ""),
@@ -660,10 +669,10 @@ async def run_agent_stream(
         if all_sites:
             yield {"type": "sites", "sites": all_sites}
 
-        # Fetch news for any new sites found via tool calls
+        # Fetch news for any new sites found via tool calls (including radar discoveries)
         news_before = len(all_news)
         new_site_ids = [s["id"] for s in all_sites if s.get("id")]
-        new_site_names = [s["name"] for s in all_sites if s.get("name")]
+        new_site_names = list({s["name"] for s in all_sites if s.get("name")} | radar_names)
         tool_news = _get_related_news(site_ids=new_site_ids, site_names=new_site_names) if (new_site_ids or new_site_names) else []
         if tool_news:
             # Deduplicate against already-emitted news
