@@ -542,6 +542,64 @@ class SiteContentLink(Base):
         return f"<SiteContentLink {self.content_type}:{self.content_source}:{self.content_id}>"
 
 
+class WikiImage(Base):
+    """
+    Locally cached Wikipedia/Wikimedia Commons image for a site.
+
+    Stores downloaded image metadata and attribution for self-hosted serving.
+    """
+    __tablename__ = "wiki_images"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    site_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("unified_sites.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # File storage
+    filename: Mapped[str] = mapped_column(String(500), nullable=False)
+    original_url: Mapped[str] = mapped_column(Text, nullable=False)
+    commons_page_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Thumbnail dimensions
+    thumb_width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Attribution
+    author: Mapped[str | None] = mapped_column(Text, nullable=True)
+    author_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    license: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    license_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    title: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Display flags
+    is_hero: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_lead: Mapped[bool] = mapped_column(Boolean, default=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Source tracking
+    source_type: Mapped[str] = mapped_column(String(20), default="wikimedia")
+
+    # File metadata
+    file_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    # Relationships
+    site: Mapped["UnifiedSite"] = relationship("UnifiedSite", backref="wiki_images")
+
+    __table_args__ = (
+        UniqueConstraint("site_id", "original_url", name="uq_wiki_image_site_url"),
+        Index("idx_wiki_images_site", "site_id"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<WikiImage {self.filename} for site {self.site_id}>"
+
+
 class SourceMeta(Base):
     """
     Metadata about each data source for the frontend.

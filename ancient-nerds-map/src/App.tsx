@@ -563,6 +563,7 @@ function AppContent() {
         imagesResult = await fetchSiteImages(siteData.title, {
           wikipediaUrl,
           location: siteData.location,
+          siteId: siteData.id,
         })
       }
       images = convertToGalleryImages(imagesResult)
@@ -1377,6 +1378,7 @@ function AppContent() {
         wikipediaUrl,
         location: site.location,
         limit: 12,
+        siteId,
       }).then(async (result) => {
         // Also prefetch and cache the hero image immediately
         const heroUrl = result.wikipedia[0]?.full
@@ -1411,6 +1413,7 @@ function AppContent() {
         wikipediaUrl,
         location: site.location,
         limit: 12,
+        siteId: site.id,
       }).then(async (result) => {
         // Also prefetch and cache the hero image immediately
         const heroUrl = result.wikipedia[0]?.full
