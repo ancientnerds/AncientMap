@@ -173,24 +173,20 @@ class WikimediaConnector(BaseConnector):
         if content_type:
             return await self.search(query=site_name, content_type=content_type, limit=limit)
 
-        # Fetch photos and videos in parallel
-        items: list[ContentItem] = []
-
+        # Fetch photos and videos — don't let photos consume the entire limit
         photos = await self.search(
             query=site_name,
             content_type=ContentType.PHOTO,
             limit=limit,
         )
-        items.extend(photos)
 
         videos = await self.search(
             query=site_name,
             content_type=ContentType.VIDEO,
-            limit=limit // 2 or 5,
+            limit=max(limit // 4, 5),
         )
-        items.extend(videos)
 
-        return items[:limit]
+        return photos + videos
 
     async def search_maps(
         self,
