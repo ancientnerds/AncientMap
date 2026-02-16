@@ -550,12 +550,14 @@ def build_wikidata_image_entries(wikidata_images: dict[str, str]) -> list[dict]:
 # =============================================================================
 
 
-def download_thumb(
-    original_url: str, dest_path: Path, width: int = THUMB_WIDTH
+def download_image(
+    original_url: str, dest_path: Path, width: int | None = None
 ) -> tuple[int, int, int] | None:
     """
-    Download a Wikimedia image thumbnail, convert to WebP, and save.
+    Download a Wikimedia image, convert to WebP, and save.
 
+    If width is set, fetches a thumbnail at that width.
+    If width is None, fetches the original full-resolution image.
     dest_path must already have a .webp extension.
     Returns (file_size_bytes, width, height) or None on failure.
     """
@@ -563,41 +565,46 @@ def download_thumb(
 
     from PIL import Image
 
-    # Build thumbnail URL from original
-    # Commons URL pattern: .../commons/a/ab/File.jpg
-    # Thumb URL pattern:   .../commons/thumb/a/ab/File.jpg/800px-File.jpg
-    if "upload.wikimedia.org" in original_url and "/thumb/" not in original_url:
-        # Insert /thumb/ and append /{width}px-{filename}
-        thumb_url = original_url.replace("/commons/", "/commons/thumb/")
-        thumb_url = thumb_url.replace(
-            "/wikipedia/", "/wikipedia/thumb/"
-        )  # Some are under /wikipedia/
-        filename = original_url.rsplit("/", 1)[-1]
-        thumb_url = f"{thumb_url}/{width}px-{filename}"
-    elif "/thumb/" in original_url:
-        # Already a thumb URL, just change width
-        thumb_url = re.sub(r"/\d+px-", f"/{width}px-", original_url)
+    if width is not None:
+        # Build thumbnail URL from original
+        # Commons URL pattern: .../commons/a/ab/File.jpg
+        # Thumb URL pattern:   .../commons/thumb/a/ab/File.jpg/800px-File.jpg
+        if "upload.wikimedia.org" in original_url and "/thumb/" not in original_url:
+            fetch_url = original_url.replace("/commons/", "/commons/thumb/")
+            fetch_url = fetch_url.replace(
+                "/wikipedia/", "/wikipedia/thumb/"
+            )  # Some are under /wikipedia/
+            filename = original_url.rsplit("/", 1)[-1]
+            fetch_url = f"{fetch_url}/{width}px-{filename}"
+        elif "/thumb/" in original_url:
+            fetch_url = re.sub(r"/\d+px-", f"/{width}px-", original_url)
+        else:
+            fetch_url = original_url
     else:
-        thumb_url = original_url
+        # Download original — strip any /thumb/ rewrite to get the real URL
+        if "/thumb/" in original_url:
+            fetch_url = thumb_to_original(original_url)
+        else:
+            fetch_url = original_url
 
     dest_path.parent.mkdir(parents=True, exist_ok=True)
 
     try:
         with httpx.Client(timeout=60, follow_redirects=True) as client:
-            resp = client.get(thumb_url, headers=HEADERS)
+            resp = client.get(fetch_url, headers=HEADERS)
 
         if resp.status_code != 200:
-            logger.debug(f"Download failed {resp.status_code}: {thumb_url}")
+            logger.debug(f"Download failed {resp.status_code}: {fetch_url}")
             return None
 
         content_type = resp.headers.get("content-type", "")
         if not content_type.startswith("image/"):
-            logger.debug(f"Not an image ({content_type}): {thumb_url}")
+            logger.debug(f"Not an image ({content_type}): {fetch_url}")
             return None
 
         raw_bytes = resp.content
         if len(raw_bytes) < 1000:
-            logger.debug(f"Image too small ({len(raw_bytes)} bytes), skipping: {thumb_url}")
+            logger.debug(f"Image too small ({len(raw_bytes)} bytes), skipping: {fetch_url}")
             return None
 
         # Convert to WebP for smaller file size and faster loading
@@ -613,7 +620,7 @@ def download_thumb(
         except Exception as e:
             logger.debug(f"WebP conversion failed, saving original: {e}")
             dest_path.write_bytes(raw_bytes)
-            img_width, img_height = width, 0
+            img_width, img_height = width or 0, 0
 
         file_size = dest_path.stat().st_size
         return file_size, img_width, img_height
@@ -808,8 +815,10 @@ def process_site(site: dict, dry_run: bool = False, max_per_category: int = 200)
             meta.get("original_url") or img.get("original_url") or img.get("full_url", "")
         )
 
-        # Download thumbnail
-        result = download_thumb(original_url, dest_path, THUMB_WIDTH)
+        # Download: hero image as 800px thumbnail, others at original size
+        is_hero = idx == 0
+        dl_width = THUMB_WIDTH if is_hero else None
+        result = download_image(original_url, dest_path, width=dl_width)
         time.sleep(COMMONS_DELAY)
 
         if not result:
@@ -826,13 +835,13 @@ def process_site(site: dict, dry_run: bool = False, max_per_category: int = 200)
                     filename=local_filename,
                     original_url=original_url,
                     commons_page_url=img.get("commons_page_url"),
-                    thumb_width=THUMB_WIDTH,
+                    thumb_width=dl_width,
                     author=meta.get("author") or img.get("author"),
                     author_url=meta.get("author_url") or img.get("author_url"),
                     license=meta.get("license") or img.get("license"),
                     license_url=meta.get("license_url") or img.get("license_url"),
                     title=img.get("display_title"),
-                    is_hero=(idx == 0),
+                    is_hero=is_hero,
                     is_lead=img.get("is_lead", False),
                     sort_order=idx,
                     source_type=source_type,
