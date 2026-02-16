@@ -226,10 +226,11 @@ class WikidataConnector(BaseConnector):
         params = {
             "action": "query",
             "titles": f"File:{encoded_name}",
-            "prop": "imageinfo",
+            "prop": "imageinfo|videoinfo",
             "iiprop": "url|size|mime|extmetadata",
             "iiurlwidth": "400",  # Get a thumbnail even for video
             "iiextmetadatafilter": "Artist|LicenseShortName|LicenseUrl",
+            "viprop": "derivatives",
             "format": "json",
         }
         try:
@@ -245,10 +246,19 @@ class WikidataConnector(BaseConnector):
                 return None
             info = info_list[0]
 
-            media_url = info.get("url")
-            thumb_url = info.get("thumburl") or media_url
-            if not media_url:
+            original_url = info.get("url")
+            thumb_url = info.get("thumburl") or original_url
+            if not original_url:
                 return None
+
+            # Prefer .webm transcode for browser compatibility (Ogg Theora is poorly supported)
+            media_url = original_url
+            videoinfo = page.get("videoinfo", [])
+            if videoinfo:
+                derivatives = videoinfo[0].get("derivatives", [])
+                webm_url = self._pick_best_webm(derivatives)
+                if webm_url:
+                    media_url = webm_url
 
             ext = info.get("extmetadata", {})
             artist_raw = ext.get("Artist", {}).get("value", "")
@@ -275,6 +285,36 @@ class WikidataConnector(BaseConnector):
         except Exception as e:
             logger.debug(f"Commons video resolve failed for '{filename}': {e}")
             return None
+
+    @staticmethod
+    def _pick_best_webm(derivatives: list[dict]) -> str | None:
+        """Pick the best .webm transcode from Commons derivatives."""
+        best_url: str | None = None
+        best_score = -1
+
+        for d in derivatives:
+            d_type = d.get("type", "")
+            if "webm" not in d_type:
+                continue
+            src = d.get("src", "")
+            if not src:
+                continue
+
+            score = 0
+            if "vp9" in d_type:
+                score += 10000
+            m = re.search(r"(\d+)p\.", src)
+            if m:
+                score += min(int(m.group(1)), 720)
+
+            if score > best_score:
+                best_score = score
+                best_url = src
+
+        if best_url and best_url.startswith("//"):
+            best_url = f"https:{best_url}"
+
+        return best_url
 
     # =========================================================================
     # Paper extraction (P373 -> Commons category -> PDFs)

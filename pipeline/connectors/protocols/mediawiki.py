@@ -8,6 +8,7 @@ Provides access to MediaWiki-based sites including:
 """
 
 import asyncio
+import re
 from typing import Any
 
 import httpx
@@ -443,6 +444,84 @@ class MediaWikiProtocol:
 
         return maps
 
+    async def get_video_transcodes(
+        self,
+        titles: list[str],
+    ) -> dict[str, str]:
+        """
+        Fetch best .webm transcode URL for video files.
+
+        Commons provides WebM (VP8/VP9) transcoded versions of uploaded videos.
+        These have universal browser support unlike Ogg Theora originals.
+
+        Args:
+            titles: List of file titles (with or without "File:" prefix)
+
+        Returns:
+            Mapping of title (without "File:" prefix) -> best .webm transcode URL
+        """
+        if not titles:
+            return {}
+
+        normalized = [t if t.startswith("File:") else f"File:{t}" for t in titles]
+
+        params = {
+            "action": "query",
+            "titles": "|".join(normalized),
+            "prop": "videoinfo",
+            "viprop": "derivatives",
+        }
+
+        result = await self._request(params)
+        pages = result.get("query", {}).get("pages", [])
+
+        transcodes: dict[str, str] = {}
+        for page in pages:
+            title = page.get("title", "")
+            videoinfo = page.get("videoinfo", [])
+            if not videoinfo:
+                continue
+
+            derivatives = videoinfo[0].get("derivatives", [])
+            best_webm = self._pick_best_webm(derivatives)
+            if best_webm:
+                # Store with File: prefix stripped for easy lookup
+                clean_title = title.replace("File:", "") if title.startswith("File:") else title
+                transcodes[clean_title] = best_webm
+
+        return transcodes
+
+    @staticmethod
+    def _pick_best_webm(derivatives: list[dict[str, Any]]) -> str | None:
+        """Pick the best .webm transcode from Commons derivatives."""
+        best_url: str | None = None
+        best_score = -1
+
+        for d in derivatives:
+            d_type = d.get("type", "")
+            if "webm" not in d_type:
+                continue
+            src = d.get("src", "")
+            if not src:
+                continue
+
+            # Score: VP9 > VP8, higher resolution preferred (capped at 720p)
+            score = 0
+            if "vp9" in d_type:
+                score += 10000
+            m = re.search(r"(\d+)p\.", src)
+            if m:
+                score += min(int(m.group(1)), 720)
+
+            if score > best_score:
+                best_score = score
+                best_url = src
+
+        if best_url and best_url.startswith("//"):
+            best_url = f"https:{best_url}"
+
+        return best_url
+
     def _extract_metadata(
         self,
         extmetadata: dict[str, Any],
@@ -454,7 +533,5 @@ class MediaWikiProtocol:
 
         value = extmetadata[key].get("value", "")
 
-        # Strip HTML tags (simple approach)
-        import re
         clean = re.sub(r"<[^>]+>", "", value)
         return clean.strip() if clean else None
