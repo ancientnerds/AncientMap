@@ -28,6 +28,7 @@ export interface GalleryHookReturn {
 
   // Items by tab (unused tabs = [])
   photoItems: UnifiedGalleryItem[]
+  videoItems: UnifiedGalleryItem[]
   mapItems: UnifiedGalleryItem[]
   sketchfabItems: UnifiedGalleryItem[]
   artifactItems: UnifiedGalleryItem[]
@@ -39,6 +40,7 @@ export interface GalleryHookReturn {
 
   // Loading states (names match GalleryTabs props directly)
   isLoadingImages: boolean
+  isLoadingVideos: boolean
   isLoadingMaps: boolean
   isLoadingModels: boolean
   isLoadingArtifacts: boolean

@@ -31,6 +31,7 @@ export function selectCurrentItems(
 ): UnifiedGalleryItem[] {
   switch (tab) {
     case 'photos': return items.photos
+    case 'videos': return items.videos
     case 'maps': return items.maps
     case '3dmodels': return items['3dmodels']
     case 'artifacts': return items.artifacts

@@ -11,6 +11,7 @@ export interface LightboxImage {
              | 'europeana' | 'loc' | 'british-museum' | 'sketchfab' | string
   sourceUrl?: string
   license?: string
+  mediaType?: 'image' | 'video'
 }
 
 interface ImageLightboxProps {
@@ -247,7 +248,8 @@ export default function ImageLightbox({
 
   if (!current) return null
 
-  const cursorStyle = zoom > 1 ? (isPanning ? 'grabbing' : 'grab') : 'zoom-in'
+  const isVideo = current?.mediaType === 'video'
+  const cursorStyle = isVideo ? 'default' : zoom > 1 ? (isPanning ? 'grabbing' : 'grab') : 'zoom-in'
 
   return createPortal(
     <div className="lightbox-overlay" onClick={onClose}>
@@ -276,36 +278,54 @@ export default function ImageLightbox({
           </>
         )}
 
-        {/* Main image with zoom/pan */}
-        <div
-          ref={containerRef}
-          className={`lightbox-image-container ${zoom > 1 ? 'zoomed' : ''} ${isPanning ? 'panning' : ''}`}
-          style={{ cursor: cursorStyle }}
-          onWheel={handleWheel}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-          onClick={handleImageClick}
-        >
-          <img
-            ref={imageRef}
-            src={current.src}
-            alt={current.title || 'Site image'}
-            className="lightbox-image"
-            style={{
-              transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
-            }}
-            onLoad={handleImageLoad}
-            draggable={false}
-          />
-        </div>
+        {/* Main media container */}
+        {isVideo ? (
+          <div
+            ref={containerRef}
+            className="lightbox-image-container"
+            style={{ cursor: 'default' }}
+          >
+            <video
+              key={current.src}
+              controls
+              autoPlay
+              className="lightbox-image"
+              style={{ maxWidth: '100%', maxHeight: '100%' }}
+            >
+              <source src={current.src} />
+            </video>
+          </div>
+        ) : (
+          <div
+            ref={containerRef}
+            className={`lightbox-image-container ${zoom > 1 ? 'zoomed' : ''} ${isPanning ? 'panning' : ''}`}
+            style={{ cursor: cursorStyle }}
+            onWheel={handleWheel}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onClick={handleImageClick}
+          >
+            <img
+              ref={imageRef}
+              src={current.src}
+              alt={current.title || 'Site image'}
+              className="lightbox-image"
+              style={{
+                transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
+              }}
+              onLoad={handleImageLoad}
+              draggable={false}
+            />
+          </div>
+        )}
 
-        {/* Zoom controls */}
-        <div className="lightbox-zoom-controls">
+        {/* Zoom controls (hidden for videos) */}
+        <div className="lightbox-zoom-controls" style={isVideo ? { display: 'none' } : undefined}>
           <button className="lightbox-zoom-btn" onClick={zoomOut} title="Zoom out (-)">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="11" cy="11" r="8" />

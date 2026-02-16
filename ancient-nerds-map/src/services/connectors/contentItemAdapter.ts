@@ -25,7 +25,7 @@ const CONTENT_TYPE_TO_TAB: Record<ContentType, GalleryTab> = {
   book: 'books',
   paper: 'papers',
   document: 'papers',
-  video: 'photos',
+  video: 'videos',
   audio: 'photos',
   vocabulary_term: 'artifacts',
   place: 'artifacts',
@@ -49,6 +49,7 @@ const SOURCE_TO_LIGHTBOX_TYPE: Record<string, LightboxImage['sourceType']> = {
   library_of_congress: 'loc',
   british_museum: 'british-museum',
   sketchfab: 'sketchfab',
+  wikidata: 'wikimedia',
 }
 
 /**
@@ -97,6 +98,7 @@ export function toLightboxImage(item: ContentItem): LightboxImage {
     sourceType,
     sourceUrl: item.url,
     license: item.license,
+    mediaType: item.content_type === 'video' ? 'video' : 'image',
   }
 }
 
@@ -112,6 +114,7 @@ export function getTabForContentType(contentType: ContentType): GalleryTab {
  */
 export interface GroupedGalleryItems {
   photos: UnifiedGalleryItem[]
+  videos: UnifiedGalleryItem[]
   maps: UnifiedGalleryItem[]
   '3dmodels': UnifiedGalleryItem[]
   artifacts: UnifiedGalleryItem[]
@@ -127,6 +130,7 @@ export interface GroupedGalleryItems {
 export function groupByTab(items: ContentItem[]): GroupedGalleryItems {
   const grouped: GroupedGalleryItems = {
     photos: [],
+    videos: [],
     maps: [],
     '3dmodels': [],
     artifacts: [],

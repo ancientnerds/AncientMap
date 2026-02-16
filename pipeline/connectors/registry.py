@@ -613,6 +613,7 @@ class ConnectorRegistry:
         """Determine which UI tabs a connector populates based on its content types."""
         TAB_MAPPING = {
             'photo': 'Photos',
+            'video': 'Videos',
             'artwork': 'Artworks',
             'map': 'Maps',
             'model_3d': '3D',
@@ -622,8 +623,8 @@ class ConnectorRegistry:
             'primary_text': 'Books',
             'manuscript': 'Books',
             'book': 'Books',
-            'paper': 'Books',
-            'document': 'Books',
+            'paper': 'Papers',
+            'document': 'Papers',
         }
 
         content_types = connector.content_types

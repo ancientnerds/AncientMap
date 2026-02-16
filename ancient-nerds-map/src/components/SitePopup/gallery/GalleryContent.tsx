@@ -24,6 +24,80 @@ export function GalleryContent({
   onItemClick
 }: GalleryContentProps) {
 
+  // Videos tab - grid with play overlay on each thumbnail
+  if (activeTab === 'videos') {
+    if (isOffline) {
+      return (
+        <div className="gallery-grid-container">
+          <div className="gallery-empty gallery-offline-notice">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.5">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polygon points="10 8 16 12 10 16 10 8"></polygon>
+              <line x1="2" y1="2" x2="22" y2="22" strokeWidth="2"/>
+            </svg>
+            <span>Videos require internet</span>
+            <span className="gallery-subtext">Video sources are online-only</span>
+          </div>
+        </div>
+      )
+    }
+
+    if (isLoading && items.length === 0) {
+      return (
+        <div className="gallery-grid-container">
+          <div className="gallery-loading">
+            <div className="map-loading-spinner" />
+          </div>
+        </div>
+      )
+    }
+
+    if (!isLoading && items.length === 0) {
+      return (
+        <div className="gallery-grid-container">
+          <div className="gallery-empty">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.5">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polygon points="10 8 16 12 10 16 10 8"></polygon>
+            </svg>
+            <span>No videos found</span>
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <div className="gallery-grid-container">
+        <div className="gallery-grid">
+          {items.map((item, index) => (
+            <div
+              key={`${item.id}-${index}`}
+              className="gallery-item"
+              onClick={() => onItemClick(index)}
+              title={item.title || 'Click to play'}
+            >
+              <LazyImage
+                src={item.thumb}
+                alt={item.title || ''}
+                fallbackSrc='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%23333" width="100" height="100"/></svg>'
+              />
+              <div className="gallery-video-overlay">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="white" opacity="0.9">
+                  <polygon points="8 5 19 12 8 19 8 5"></polygon>
+                </svg>
+              </div>
+              <SourceFavicon
+                source={item.source}
+                original={item.original as Record<string, unknown>}
+                className="gallery-item-favicon"
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   // Books and Papers tabs - display as a list (these items may not have images)
   if (activeTab === 'books' || activeTab === 'papers') {
     const tabLabel = activeTab === 'books' ? 'Books' : 'Papers'

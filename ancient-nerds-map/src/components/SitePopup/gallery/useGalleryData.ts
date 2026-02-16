@@ -59,6 +59,7 @@ export function useGalleryData({
     [wikiItems, tiered.grouped.photos]
   )
 
+  const videoItems = tiered.grouped.videos
   const mapItems = tiered.grouped.maps
   const sketchfabItems = tiered.grouped['3dmodels']
   const artifactItems = tiered.grouped.artifacts
@@ -90,9 +91,10 @@ export function useGalleryData({
   return {
     activeGalleryTab, setActiveGalleryTab,
     isGalleryExpanded, setIsGalleryExpanded,
-    photoItems, mapItems, sketchfabItems, artifactItems, artworkItems, bookItems, paperItems, mythItems,
+    photoItems, videoItems, mapItems, sketchfabItems, artifactItems, artworkItems, bookItems, paperItems, mythItems,
     currentItems,
     isLoadingImages: isLoadingImages || tiered.tier1Loading,
+    isLoadingVideos: tiered.tier1Loading,
     isLoadingMaps: tiered.tier3Loading,
     isLoadingModels: tiered.tier2Loading,
     isLoadingArtifacts: tiered.tier3Loading,
