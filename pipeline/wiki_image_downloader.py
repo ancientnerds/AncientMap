@@ -56,9 +56,9 @@ WIKIPEDIA_DELAY = 0.1
 WIKIDATA_DELAY = 0.2
 COMMONS_DELAY = 0.05
 
-# Parallel download settings
-MAX_DOWNLOAD_WORKERS = 6
-DOWNLOAD_RETRY_ROUNDS = 3  # retry rounds for 429 failures
+# Download settings — sequential to avoid Wikimedia 429s on just 20 images
+DOWNLOAD_RETRY_ROUNDS = 3
+DOWNLOAD_DELAY = 0.3  # seconds between each download
 
 
 class RateLimitedError(Exception):
@@ -797,18 +797,14 @@ def download_image(
         return None
 
 
-def download_images_parallel(
+def download_images_sequential(
     download_tasks: list[tuple[int, dict, str, Path, int | None]],
 ) -> list[tuple[int, dict, str, tuple[int, int, int] | None]]:
     """
-    Download images using blast-then-retry strategy.
-
-    Round 1: parallel blast at full speed (gets ~80% before 429 kicks in).
-    Round 2+: wait for Retry-After cooldown, retry failures sequentially.
-
-    Each task is (index, img_dict, original_url, dest_path, width).
-    Returns [(index, img_dict, original_url, result)].
+    Download images one at a time with delay. Retries 429s after cooldown.
+    Logs every single image so you can see progress.
     """
+    total = len(download_tasks)
     results: list[tuple[int, dict, str, tuple[int, int, int] | None]] = []
     remaining = list(download_tasks)
 
@@ -816,57 +812,42 @@ def download_images_parallel(
         if not remaining:
             break
 
+        if round_num > 1:
+            logger.info(f"  Retry round {round_num}: {len(remaining)} images...")
+
         failed: list[tuple[int, dict, str, Path, int | None]] = []
         max_retry_after = 0.0
+        ok_count = 0
 
-        if round_num == 1:
-            # Round 1: parallel blast
-            with ThreadPoolExecutor(max_workers=MAX_DOWNLOAD_WORKERS) as executor:
-                futures = {}
-                for task in remaining:
-                    idx, img, orig_url, dest_path, width = task
-                    future = executor.submit(download_image, orig_url, dest_path, width)
-                    futures[future] = task
-
-                for future in as_completed(futures):
-                    task = futures[future]
-                    idx, img, orig_url = task[0], task[1], task[2]
-                    try:
-                        result = future.result()
-                        results.append((idx, img, orig_url, result))
-                    except RateLimitedError as e:
-                        max_retry_after = max(max_retry_after, e.retry_after)
-                        failed.append(task)
-                    except Exception as e:
-                        logger.debug(f"Download error for {img.get('title')}: {e}")
-                        results.append((idx, img, orig_url, None))
-        else:
-            # Round 2+: sequential with 0.5s gap
-            for task in remaining:
-                idx, img, orig_url, dest_path, width = task
-                try:
-                    result = download_image(orig_url, dest_path, width)
-                    results.append((idx, img, orig_url, result))
-                    time.sleep(0.5)
-                except RateLimitedError as e:
-                    max_retry_after = max(max_retry_after, e.retry_after)
-                    failed.append(task)
-                except Exception as e:
-                    logger.debug(f"Download error for {img.get('title')}: {e}")
-                    results.append((idx, img, orig_url, None))
+        for task in remaining:
+            idx, img, orig_url, dest_path, width = task
+            title = img.get("title", "?")[:60]
+            try:
+                result = download_image(orig_url, dest_path, width)
+                results.append((idx, img, orig_url, result))
+                if result:
+                    ok_count += 1
+                    sz = result[0] / 1024
+                    logger.info(f"  [{ok_count + len(results) - ok_count}/{total}] OK {sz:.0f}KB  {title}")
+                else:
+                    logger.info(f"  [{len(results)}/{total}] SKIP  {title}")
+                time.sleep(DOWNLOAD_DELAY)
+            except RateLimitedError as e:
+                max_retry_after = max(max_retry_after, e.retry_after)
+                failed.append(task)
+                logger.info(f"  [{len(results)}/{total}] 429 (retry-after {e.retry_after:.0f}s)  {title}")
+            except Exception as e:
+                logger.info(f"  [{len(results)}/{total}] FAIL  {title}: {e}")
+                results.append((idx, img, orig_url, None))
 
         remaining = failed
         if remaining:
             cooldown = max(max_retry_after, 12.0)
-            logger.info(
-                f"  Round {round_num}: {len(remaining)} got 429, "
-                f"retrying after {cooldown:.0f}s cooldown..."
-            )
+            logger.info(f"  Waiting {cooldown:.0f}s before retrying {len(remaining)} rate-limited images...")
             time.sleep(cooldown)
 
-    # Give up on anything still remaining
     for task in remaining:
-        logger.debug(f"Gave up on {task[1].get('title')} after {DOWNLOAD_RETRY_ROUNDS} rounds")
+        logger.info(f"  GAVE UP on {task[1].get('title', '?')[:60]} after {DOWNLOAD_RETRY_ROUNDS} rounds")
         results.append((task[0], task[1], task[2], None))
 
     return results
@@ -1140,8 +1121,9 @@ def process_site(site: dict, dry_run: bool = False, max_per_category: int = 20, 
     if not download_tasks:
         return downloaded
 
-    # Parallel image downloads
-    dl_results = download_images_parallel(download_tasks)
+    # Download images sequentially (avoids Wikimedia 429s)
+    logger.info(f"  Downloading {len(download_tasks)} images for {site_name}...")
+    dl_results = download_images_sequential(download_tasks)
 
     # Insert results into database
     for idx, img, original_url, result in dl_results:
@@ -1213,7 +1195,7 @@ def run_downloader(
     logger.info(f"Found {len(sites)} sites to process")
     if force:
         logger.info("--force enabled: re-processing sites even if they already have images")
-    logger.info(f"Parallel sites: {parallel_sites}, download workers per site: {MAX_DOWNLOAD_WORKERS}")
+    logger.info(f"Parallel sites: {parallel_sites}, max images per site: 20")
 
     # Filter out already-downloaded sites upfront (unless --force)
     if not dry_run and not force:
