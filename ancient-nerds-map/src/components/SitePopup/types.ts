@@ -108,7 +108,7 @@ export interface SitePopupProps {
   minimizedStackIndex?: number
   isLoadingImages?: boolean
   onSiteUpdate?: (siteId: string, updatedSite: SiteData) => void
-  onAskLyra?: () => void
+  onAskLyra?: (contextType: 'site' | 'empire', contextId: string, contextYear?: number) => void
 
   // Empire mode props
   empire?: EmpirePopupData

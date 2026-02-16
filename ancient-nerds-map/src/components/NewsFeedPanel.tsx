@@ -16,7 +16,7 @@ interface Props {
   onClose: () => void
   onSiteHover?: (siteId: string | null) => void
   onSiteClick?: (siteName: string, lat: number, lon: number) => void
-  onAskLyra?: () => void
+  onAskLyra?: (newsItemId: number) => void
 }
 
 export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAskLyra }: Props) {
@@ -180,7 +180,7 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
               facts={item.facts}
               onSiteLoaded={(site) => onSiteClick?.(site.title, site.coordinates[1], site.coordinates[0])}
               onSiteHover={(hovering) => onSiteHover?.(hovering && item.site_id ? item.site_id : null)}
-              onAskLyra={onAskLyra}
+              onAskLyra={onAskLyra ? () => onAskLyra(item.id) : undefined}
             />
           )
         })}

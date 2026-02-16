@@ -19,6 +19,7 @@ export default defineConfig({
         main: resolve(__dirname, 'index.html'),
         news: resolve(__dirname, 'news.html'),
         radar: resolve(__dirname, 'radar.html'),
+        lyra: resolve(__dirname, 'lyra.html'),
         db: resolve(__dirname, 'db.html'),
         articles: resolve(__dirname, 'articles.html'),
       },
@@ -55,8 +56,6 @@ export default defineConfig({
         ]
       },
       workbox: {
-        // Don't let the service worker intercept Open WebUI or API paths
-        navigateFallbackDenylist: [/^\/chat/, /^\/v1/],
         // Pre-cache app shell assets
         globPatterns: ['**/*.{js,css,html,svg,woff2}'],
         // Don't pre-cache large data files
