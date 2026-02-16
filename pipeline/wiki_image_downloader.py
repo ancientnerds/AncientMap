@@ -46,8 +46,10 @@ WIKIDATA_ACTION_API = "https://www.wikidata.org/w/api.php"
 COMMONS_API_URL = "https://commons.wikimedia.org/w/api.php"
 WIKIDATA_SPARQL_URL = "https://query.wikidata.org/sparql"
 
-# Thumbnail width for downloads
-THUMB_WIDTH = 800
+# Thumbnail widths for downloads
+THUMB_WIDTH = 800       # Hero / lead image
+GALLERY_WIDTH = 1600    # All other gallery images (avoids OOM on huge panoramas)
+MAX_RAW_BYTES = 50_000_000  # 50 MB — skip downloads larger than this
 
 # Rate limits (seconds between API requests)
 WIKIPEDIA_DELAY = 0.1
@@ -765,9 +767,13 @@ def download_image(
             logger.debug(f"Image too small ({len(raw_bytes)} bytes), skipping: {fetch_url}")
             return None
 
+        if len(raw_bytes) > MAX_RAW_BYTES:
+            logger.debug(f"Image too large ({len(raw_bytes) / 1_000_000:.1f} MB), skipping: {fetch_url}")
+            return None
+
         # Convert to WebP for smaller file size and faster loading
         try:
-            Image.MAX_IMAGE_PIXELS = None  # Disable limit — these are legit Wikimedia panoramas
+            Image.MAX_IMAGE_PIXELS = 200_000_000  # 200 MP — safe limit for panoramas
             with Image.open(io.BytesIO(raw_bytes)) as img:
                 img_width, img_height = img.size
                 # Convert RGBA/palette to RGB (WebP lossy doesn't support palette)
@@ -1119,7 +1125,7 @@ def process_site(site: dict, dry_run: bool = False, max_per_category: int = 200,
         )
 
         is_hero = idx == 0
-        dl_width = THUMB_WIDTH if is_hero else None
+        dl_width = THUMB_WIDTH if is_hero else GALLERY_WIDTH
         download_tasks.append((idx, img, original_url, dest_path, dl_width))
 
     skipped = sum(skip_flags)
@@ -1142,7 +1148,7 @@ def process_site(site: dict, dry_run: bool = False, max_per_category: int = 200,
         file_title = img["title"]
         normalized_title = file_title if file_title.startswith("File:") else f"File:{file_title}"
         is_hero = idx == 0
-        dl_width = THUMB_WIDTH if is_hero else None
+        dl_width = THUMB_WIDTH if is_hero else GALLERY_WIDTH
         source_type = img.get("source_type", "wikimedia")
 
         # Get metadata from batch results or inline
