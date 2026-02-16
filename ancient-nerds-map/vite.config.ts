@@ -19,7 +19,6 @@ export default defineConfig({
         main: resolve(__dirname, 'index.html'),
         news: resolve(__dirname, 'news.html'),
         radar: resolve(__dirname, 'radar.html'),
-        lyra: resolve(__dirname, 'lyra.html'),
         db: resolve(__dirname, 'db.html'),
         articles: resolve(__dirname, 'articles.html'),
       },
@@ -31,6 +30,11 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
         timeout: 60000, // 60 seconds - backend connectors can take time
+      },
+      '/chat': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        rewrite: (path: string) => path.replace(/^\/chat/, ''),
       }
     }
   },

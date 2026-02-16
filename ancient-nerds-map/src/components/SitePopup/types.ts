@@ -13,7 +13,7 @@ export interface Artifact {
 }
 
 // Gallery tab options
-export type GalleryTab = 'photos' | 'maps' | '3dmodels' | 'artifacts' | 'artworks' | 'books' | 'papers' | 'myths'
+export type GalleryTab = 'photos' | 'videos' | 'maps' | '3dmodels' | 'artifacts' | 'artworks' | 'books' | 'papers' | 'myths'
 
 // Unified gallery item type for all tabs
 export interface UnifiedGalleryItem {
@@ -108,7 +108,7 @@ export interface SitePopupProps {
   minimizedStackIndex?: number
   isLoadingImages?: boolean
   onSiteUpdate?: (siteId: string, updatedSite: SiteData) => void
-  onAskLyra?: (contextType: 'site' | 'empire', contextId: string, contextYear?: number) => void
+  onAskLyra?: () => void
 
   // Empire mode props
   empire?: EmpirePopupData
@@ -251,6 +251,7 @@ export interface GalleryTabsProps {
   activeTab: GalleryTab
   onTabChange: (tab: GalleryTab) => void
   photoCount: number
+  videoCount: number
   mapCount: number
   modelCount: number
   artifactCount: number
@@ -259,6 +260,7 @@ export interface GalleryTabsProps {
   paperCount: number
   mythCount: number
   isLoadingImages?: boolean
+  isLoadingVideos?: boolean
   isLoadingMaps?: boolean
   isLoadingModels?: boolean
   isLoadingArtifacts?: boolean

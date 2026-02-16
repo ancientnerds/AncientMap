@@ -688,13 +688,7 @@ export default function SitePopup({
               <button
                 className="ask-lyra-btn"
                 style={{ marginTop: 8 }}
-                onClick={() => {
-                  if (isEmpireMode && empire) {
-                    onAskLyra('empire', empire.id, empireYear)
-                  } else if (site) {
-                    onAskLyra('site', site.id)
-                  }
-                }}
+                onClick={() => onAskLyra()}
               >
                 <img src="/lyra.gif" alt="" />
                 Ask Lyra
@@ -792,6 +786,7 @@ export default function SitePopup({
           activeTab={galleryHook.activeGalleryTab}
           onTabChange={galleryHook.setActiveGalleryTab}
           photoCount={galleryHook.photoItems.length}
+          videoCount={galleryHook.videoItems.length}
           mapCount={galleryHook.mapItems.length}
           modelCount={galleryHook.sketchfabItems.length}
           artifactCount={galleryHook.artifactItems.length}
@@ -800,6 +795,7 @@ export default function SitePopup({
           paperCount={galleryHook.paperItems.length}
           mythCount={galleryHook.mythItems.length}
           isLoadingImages={galleryHook.isLoadingImages}
+          isLoadingVideos={galleryHook.isLoadingVideos}
           isLoadingMaps={galleryHook.isLoadingMaps}
           isLoadingModels={galleryHook.isLoadingModels}
           isLoadingArtifacts={galleryHook.isLoadingArtifacts}
