@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <!-- Primary Meta Tags -->
-    <title>Ancient Nerds - Interactive Archaeological Map | Explore 6000+ Ancient Sites</title>
-    <meta name="title" content="Ancient Nerds - Interactive Archaeological Map | Explore 6000+ Ancient Sites" />
-    <meta name="description" content="Explore over 6,000 archaeological sites worldwide on an interactive 3D globe. Discover ancient civilizations, megalithic structures, temples, pyramids, and historical empires. Free research platform for archaeology enthusiasts." />
+    <title>Ancient Nerds - Interactive Archaeological Map | Explore 800K+ Ancient Sites</title>
+    <meta name="title" content="Ancient Nerds - Interactive Archaeological Map | Explore 800K+ Ancient Sites" />
+    <meta name="description" content="Explore over 800,000 archaeological sites worldwide on an interactive 3D globe. Discover ancient civilizations, historical empires, AI-curated news, and research tools. Free platform for archaeology enthusiasts." />
     <meta name="keywords" content="archaeology, ancient sites, historical map, megalithic structures, ancient civilizations, pyramids, temples, archaeological research, interactive globe, ancient history, UNESCO sites, historical empires" />
     <meta name="author" content="Ancient Nerds" />
     <meta name="robots" content="index, follow" />
@@ -16,14 +16,14 @@
     <!-- Favicon and Icons -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" sizes="180x180" href="/favicon.svg" />
-    <meta name="theme-color" content="#0a1a1f" />
+    <meta name="theme-color" content="#000000" />
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://ancientnerds.com/" />
     <meta property="og:site_name" content="Ancient Nerds" />
-    <meta property="og:title" content="Ancient Nerds - Interactive Archaeological Map" />
-    <meta property="og:description" content="Explore over 6,000 archaeological sites worldwide on an interactive 3D globe. Discover ancient civilizations, megalithic structures, and historical empires." />
+    <meta property="og:title" content="Ancient Nerds - Interactive Archaeological Research Platform" />
+    <meta property="og:description" content="Explore 800K+ archaeological sites on a 3D globe. Historical empires, AI-curated news, research tools. Free and open." />
     <meta property="og:image" content="https://ancientnerds.com/api/og/homepage" />
     <meta property="og:image:width" content="600" />
     <meta property="og:image:height" content="315" />
@@ -32,17 +32,17 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:url" content="https://ancientnerds.com/" />
-    <meta name="twitter:title" content="Ancient Nerds - Interactive Archaeological Map" />
-    <meta name="twitter:description" content="Explore over 6,000 archaeological sites worldwide on an interactive 3D globe. Discover ancient civilizations and historical empires." />
+    <meta name="twitter:title" content="Ancient Nerds - Archaeological Research Platform" />
+    <meta name="twitter:description" content="Explore 800K+ archaeological sites on a 3D globe. Historical empires, AI news, research tools." />
     <meta name="twitter:image" content="https://ancientnerds.com/api/og/homepage" />
 
-    <!-- Structured Data - Organization -->
+    <!-- Structured Data -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
       "@type": "WebApplication",
       "name": "Ancient Nerds",
-      "description": "Interactive archaeological map featuring over 6,000 ancient sites worldwide",
+      "description": "Interactive archaeological research platform featuring over 800,000 ancient sites worldwide",
       "url": "https://ancientnerds.com",
       "applicationCategory": "EducationalApplication",
       "operatingSystem": "Web Browser",
@@ -55,47 +55,361 @@
         "@type": "Organization",
         "name": "Ancient Nerds",
         "url": "https://ancientnerds.com"
-      },
-      "aggregateRating": {
-        "@type": "AggregateRating",
-        "ratingValue": "4.8",
-        "ratingCount": "150"
       }
     }
     </script>
 
-    <!-- Structured Data - WebSite with SearchAction -->
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "WebSite",
-      "name": "Ancient Nerds",
-      "url": "https://ancientnerds.com",
-      "potentialAction": {
-        "@type": "SearchAction",
-        "target": "https://ancientnerds.com/?search={search_term_string}",
-        "query-input": "required name=search_term_string"
-      }
-    }
-    </script>
-
-    <!-- Preload critical fonts to prevent FOUT during loading screen -->
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&display=block" as="style" />
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Orbitron:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=block" rel="stylesheet" />
-    <!-- Preload critical texture for faster globe render -->
-    <link rel="preload" href="/data/basemaps/gray_dark_low.png" as="image" crossorigin="anonymous" />
+
+    <!-- Preload hero image -->
+    <link rel="preload" href="/landing/hero-globe.webp" as="image" />
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="/src/styles/landing.css" />
   </head>
   <body>
-    <noscript>
-      <div style="padding: 20px; text-align: center; background: #0a1a1f; color: white; min-height: 100vh;">
-        <h1>Ancient Nerds - Archaeological Map</h1>
-        <p>This interactive map requires JavaScript to run. Please enable JavaScript in your browser to explore over 6,000 archaeological sites worldwide.</p>
-        <p>Features include: Ancient civilizations, megalithic structures, temples, pyramids, UNESCO World Heritage sites, and historical empire borders.</p>
+
+    <!-- ═══════════ HERO ═══════════ -->
+    <section class="hero">
+      <div class="hero-bg" id="heroBg"></div>
+      <div class="hero-overlay"></div>
+      <div class="hero-content animate-in">
+        <img src="/an-logo.svg" alt="Ancient Nerds" class="hero-logo" />
+        <h1 class="hero-title">ANCIENT NERDS</h1>
+        <p class="hero-subtitle">RESEARCH PLATFORM</p>
+        <p class="hero-tagline">Explore the ancient world through data, maps, and AI</p>
+        <div class="hero-stats">
+          <div class="hero-stat">
+            <div class="hero-stat-value" data-target="800">0</div>
+            <div class="hero-stat-label">K+ Sites</div>
+          </div>
+          <div class="hero-stat">
+            <div class="hero-stat-value" data-target="91">0</div>
+            <div class="hero-stat-label">Countries</div>
+          </div>
+          <div class="hero-stat">
+            <div class="hero-stat-value" data-target="24">0</div>
+            <div class="hero-stat-label">Sources</div>
+          </div>
+          <div class="hero-stat">
+            <div class="hero-stat-value" data-target="44">0</div>
+            <div class="hero-stat-label">Empires</div>
+          </div>
+        </div>
+        <a href="/globe.html" class="cta-primary">EXPLORE THE GLOBE</a>
       </div>
-    </noscript>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+      <a href="#globe-section" class="scroll-arrow" aria-label="Scroll down">&#8964;</a>
+    </section>
+
+    <!-- ═══════════ THE GLOBE ═══════════ -->
+    <section class="landing-section" id="globe-section">
+      <div class="feature-row">
+        <div class="animate-in">
+          <img src="/landing/globe-category.webp" alt="Interactive 3D globe with category-colored archaeological sites" class="feature-image-main" data-lightbox loading="lazy" />
+          <div class="thumbnail-strip">
+            <img src="/landing/globe-satellite.webp" alt="Satellite view" data-lightbox loading="lazy" />
+            <img src="/landing/globe-country.webp" alt="Country-colored view" data-lightbox loading="lazy" />
+            <img src="/landing/globe-asia.webp" alt="Southeast Asia multi-source view" data-lightbox loading="lazy" />
+          </div>
+        </div>
+        <div class="animate-in delay-2">
+          <h2 class="section-label">INTERACTIVE 3D GLOBE</h2>
+          <p class="section-desc">Hundreds of thousands of archaeological sites rendered on a WebGL globe. Rotate, zoom from orbit to street level, switch between satellite and dark mode.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ FILTER & DISCOVER ═══════════ -->
+    <section class="landing-section">
+      <div class="feature-row reverse">
+        <div class="animate-in">
+          <h2 class="section-label">FILTER 800,000+ SITES</h2>
+          <p class="section-desc">By age, country, category, or data source. Narrow down from 10,000 BC to present across 91 countries and 49 site types.</p>
+        </div>
+        <div class="animate-in delay-2">
+          <div class="filter-collage">
+            <img src="/landing/filter-age.webp" alt="Age filter" data-lightbox loading="lazy" />
+            <img src="/landing/filter-country.webp" alt="Country filter" data-lightbox loading="lazy" />
+            <img src="/landing/filter-category.webp" alt="Category filter" data-lightbox loading="lazy" />
+            <img src="/landing/filter-source.webp" alt="Source filter showing 24 databases" data-lightbox loading="lazy" />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ EMPIRES ═══════════ -->
+    <section class="cinematic-section full-width">
+      <div class="cinematic-bg" style="background-image: url('/landing/empire-roman.webp')"></div>
+      <div class="cinematic-overlay"></div>
+      <div class="cinematic-content animate-in">
+        <h2 class="section-label">WATCH EMPIRES RISE AND FALL</h2>
+        <p class="section-desc">44 historical empires with animated timeline controls. Roman, Byzantine, Mongol, Inca, and more.</p>
+        <div class="empire-thumbnails">
+          <img src="/landing/empire-byzantine.webp" alt="Byzantine and Sassanid Empires" data-lightbox loading="lazy" />
+          <img src="/landing/empire-inca.webp" alt="Inca Empire" data-lightbox loading="lazy" />
+          <img src="/landing/globe-han.webp" alt="Han Dynasty overlay" data-lightbox loading="lazy" />
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ DEEP SITE DATA ═══════════ -->
+    <section class="landing-section">
+      <div class="feature-row">
+        <div class="animate-in">
+          <img src="/landing/site-popup.webp" alt="Site popup with photos, 3D, maps" class="feature-image-main" data-lightbox loading="lazy" />
+          <div class="thumbnail-strip">
+            <img src="/landing/site-3d.webp" alt="3D photogrammetry" data-lightbox loading="lazy" />
+            <img src="/landing/site-gallery.webp" alt="Photo gallery" data-lightbox loading="lazy" />
+            <img src="/landing/databases.webp" alt="Multi-source site detail" data-lightbox loading="lazy" />
+          </div>
+        </div>
+        <div class="animate-in delay-2">
+          <h2 class="section-label">EVERY SITE TELLS A STORY</h2>
+          <p class="section-desc">Photos, 3D photogrammetry, historical maps, artifacts, texts, and myths. Cross-referenced across multiple databases.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ LYRA AI ═══════════ -->
+    <section class="landing-section">
+      <div class="feature-row reverse">
+        <div class="animate-in">
+          <img src="/lyra.png" alt="Lyra Wiskerbyte" class="lyra-avatar" />
+          <h2 class="section-label">MEET LYRA WISKERBYTE</h2>
+          <p class="section-desc">Your AI archaeology companion. Ask about any site, period, or region. Powered by vector search across the entire database.</p>
+          <a href="/lyra.html" class="cta-secondary">CHAT WITH LYRA</a>
+        </div>
+        <div class="animate-in delay-2">
+          <img src="/landing/lyra-chat.webp" alt="Lyra AI chat in action" class="feature-image-main" data-lightbox loading="lazy" />
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ NEWS & RADAR ═══════════ -->
+    <section class="landing-section">
+      <div class="split-row animate-in">
+        <div class="split-card">
+          <h2 class="section-label">ARCHAEOLOGY NEWS</h2>
+          <p class="section-desc">AI-curated discoveries from top YouTube channels. Summaries, site links, and video timestamps.</p>
+          <img src="/landing/news-feed.webp" alt="News Feed page" data-lightbox loading="lazy" />
+          <a href="/news.html" class="cta-secondary">VIEW NEWS</a>
+        </div>
+        <div class="split-card">
+          <h2 class="section-label">DISCOVERY RADAR</h2>
+          <p class="section-desc">Track newly mentioned sites from video content. 749K+ known sites cross-referenced in real-time.</p>
+          <img src="/landing/radar.webp" alt="Radar map page" data-lightbox loading="lazy" />
+          <a href="/radar.html" class="cta-secondary">OPEN RADAR</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ TOOLS ═══════════ -->
+    <section class="landing-section" style="text-align: center;">
+      <h2 class="section-label animate-in">RESEARCH TOOLS</h2>
+      <div class="tools-grid">
+        <div class="tool-card animate-in delay-1">
+          <img src="/landing/search.webp" alt="Search bar" loading="lazy" />
+          <h3>Search</h3>
+          <p>Find any site by name</p>
+        </div>
+        <div class="tool-card animate-in delay-1">
+          <img src="/landing/proximity.webp" alt="Proximity search" loading="lazy" />
+          <h3>Proximity</h3>
+          <p>What's near you?</p>
+        </div>
+        <div class="tool-card animate-in delay-2">
+          <img src="/landing/measure.webp" alt="Measure tool" loading="lazy" />
+          <h3>Measure</h3>
+          <p>Distance between sites</p>
+        </div>
+        <div class="tool-card animate-in delay-2">
+          <img src="/landing/map-layers.webp" alt="Map Layers panel" loading="lazy" />
+          <h3>Map Layers</h3>
+          <p>Rivers, reefs, glaciers, tectonic plates</p>
+        </div>
+        <div class="tool-card animate-in delay-3">
+          <img src="/landing/paleoshoreline.webp" alt="Paleoshoreline control" loading="lazy" />
+          <h3>Paleoshoreline</h3>
+          <p>Ice age coastlines</p>
+        </div>
+        <div class="tool-card animate-in delay-3">
+          <img src="/landing/offline-manager.webp" alt="Offline Data Manager" loading="lazy" />
+          <h3>Offline Mode</h3>
+          <p>Field-ready PWA</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ DATA SOURCES ═══════════ -->
+    <section class="landing-section" style="text-align: center;">
+      <h2 class="section-label animate-in">24 CURATED DATA SOURCES</h2>
+      <p class="section-desc animate-in" style="margin: 0 auto 16px;">Aggregating the world's archaeological databases into one unified platform.</p>
+      <div class="animate-in">
+        <img src="/landing/filter-source.webp" alt="24 data sources" class="sources-image" data-lightbox loading="lazy" />
+        <div class="source-badges">
+          <span class="source-badge">Ancient Nerds</span>
+          <span class="source-badge">OpenStreetMap</span>
+          <span class="source-badge">Wikidata</span>
+          <span class="source-badge">Pleiades</span>
+          <span class="source-badge">UNESCO</span>
+          <span class="source-badge">Megalithic Portal</span>
+          <span class="source-badge">DARE</span>
+          <span class="source-badge">Arachne</span>
+          <span class="source-badge">Open Context</span>
+          <span class="source-badge">GeoNames</span>
+          <span class="source-badge">EAMENA</span>
+          <span class="source-badge">tDAR</span>
+          <span class="source-badge">Ariadne</span>
+          <span class="source-badge">PastMap</span>
+          <span class="source-badge">Heritage Gateway</span>
+          <span class="source-badge">INAH</span>
+          <span class="source-badge">AustArch</span>
+          <span class="source-badge">SAHI</span>
+          <span class="source-badge">Pelagios</span>
+          <span class="source-badge">Livius</span>
+          <span class="source-badge">Nabataea</span>
+          <span class="source-badge">MegaJ</span>
+          <span class="source-badge">ROMAQ</span>
+          <span class="source-badge">Canmore</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ COMMUNITY ═══════════ -->
+    <section class="landing-section" style="text-align: center;">
+      <h2 class="section-label animate-in">BUILT FOR RESEARCHERS, BY RESEARCHERS</h2>
+      <div class="animate-in">
+        <img src="/landing/contribute.webp" alt="Contribute a site form" class="community-image" data-lightbox loading="lazy" />
+      </div>
+      <p class="section-desc animate-in" style="margin: 16px auto 24px;">Contribute new sites. Free and open. No signup required to explore.</p>
+      <a href="/globe.html" class="cta-secondary animate-in">CONTRIBUTE A SITE</a>
+    </section>
+
+    <!-- ═══════════ FINAL CTA ═══════════ -->
+    <section class="final-cta full-width">
+      <div class="final-cta-bg"></div>
+      <div class="final-cta-content animate-in">
+        <h2 class="section-label">START EXPLORING</h2>
+        <a href="/globe.html" class="cta-primary">LAUNCH THE GLOBE</a>
+        <div class="secondary-links">
+          <a href="/news.html">News</a>
+          <a href="/lyra.html">Lyra</a>
+          <a href="/radar.html">Radar</a>
+          <a href="/articles.html">Articles</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ FOOTER ═══════════ -->
+    <footer class="landing-footer">
+      <div class="footer-inner">
+        <div class="footer-brand">
+          <img src="/an-logo.svg" alt="Ancient Nerds" class="footer-logo" />
+          <span class="footer-name">Ancient Nerds Research Platform</span>
+          <span class="beta-badge">BETA</span>
+        </div>
+        <nav class="footer-nav">
+          <a href="/globe.html">Globe</a>
+          <a href="/news.html">News</a>
+          <a href="/lyra.html">Lyra</a>
+          <a href="/radar.html">Radar</a>
+          <a href="/articles.html">Articles</a>
+        </nav>
+        <p class="footer-tagline">Free. Open data. Community-driven.</p>
+      </div>
+    </footer>
+
+    <!-- ═══════════ LIGHTBOX ═══════════ -->
+    <div class="lightbox" id="lightbox">
+      <img src="" alt="Full-size screenshot" />
+    </div>
+
+    <!-- ═══════════ SCRIPTS ═══════════ -->
+    <script>
+      // Scroll-triggered animations
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+          }
+        });
+      }, { threshold: 0.1 });
+
+      document.querySelectorAll('.animate-in').forEach(el => observer.observe(el));
+
+      // Counter animation
+      function animateCounters() {
+        document.querySelectorAll('.hero-stat-value[data-target]').forEach(el => {
+          const target = parseInt(el.dataset.target);
+          const duration = 1500;
+          const start = performance.now();
+
+          function tick(now) {
+            const progress = Math.min((now - start) / duration, 1);
+            const eased = 1 - Math.pow(1 - progress, 3);
+            const suffix = target === 800 ? 'K+' : target === 91 ? '' : '';
+            el.textContent = Math.floor(target * eased) + (progress === 1 && target === 800 ? 'K+' : progress === 1 ? '' : '');
+            if (progress < 1) requestAnimationFrame(tick);
+            else el.textContent = target + (target === 800 ? 'K+' : '');
+          }
+
+          requestAnimationFrame(tick);
+        });
+      }
+
+      // Trigger counters when hero is visible
+      const heroObserver = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) {
+          animateCounters();
+          heroObserver.disconnect();
+        }
+      }, { threshold: 0.3 });
+
+      heroObserver.observe(document.querySelector('.hero'));
+
+      // Parallax on hero background
+      const heroBg = document.getElementById('heroBg');
+      let ticking = false;
+      window.addEventListener('scroll', () => {
+        if (!ticking) {
+          requestAnimationFrame(() => {
+            const scrollY = window.scrollY;
+            if (scrollY < window.innerHeight) {
+              heroBg.style.transform = 'translateY(' + (scrollY * 0.3) + 'px)';
+            }
+            ticking = false;
+          });
+          ticking = true;
+        }
+      });
+
+      // Lightbox
+      const lightbox = document.getElementById('lightbox');
+      const lightboxImg = lightbox.querySelector('img');
+
+      document.querySelectorAll('[data-lightbox]').forEach(img => {
+        img.style.cursor = 'zoom-in';
+        img.addEventListener('click', () => {
+          lightboxImg.src = img.src;
+          lightboxImg.alt = img.alt;
+          lightbox.classList.add('active');
+        });
+      });
+
+      lightbox.addEventListener('click', () => {
+        lightbox.classList.remove('active');
+        lightboxImg.src = '';
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          lightbox.classList.remove('active');
+          lightboxImg.src = '';
+        }
+      });
+    </script>
   </body>
 </html>

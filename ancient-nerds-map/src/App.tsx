@@ -1833,7 +1833,7 @@ function AppContent() {
         <div className="standalone-popup-container">
           <div className="standalone-popup-error">
             <h2>Site not found</h2>
-            <a href="/" className="standalone-back-btn">Back to Map</a>
+            <a href="/globe.html" className="standalone-back-btn">Back to Map</a>
           </div>
         </div>
       )
@@ -1845,7 +1845,7 @@ function AppContent() {
           site={standalonePopup.site}
           onClose={() => {
             // In standalone mode, closing goes back to main map
-            window.location.href = '/'
+            window.location.href = '/globe.html'
           }}
           prefetchedImages={standalonePopup.images}
           isStandalone={true}

@@ -284,7 +284,7 @@ export default function NewsFeedPage() {
     <div className="news-page" ref={pageRef}>
       {/* Sticky header: brand + Lyra in one line */}
       <header className="news-page-header">
-        <a href="/" className="news-page-brand">
+        <a href="/globe.html" className="news-page-brand">
           <img src="/an-logo.svg" alt="" className="news-page-logo" />
           <span className="news-page-brand-text">ANCIENT NERDS</span>
         </a>

@@ -16,7 +16,8 @@ export default defineConfig({
   build: {
     rollupOptions: {
       input: {
-        main: resolve(__dirname, 'index.html'),
+        landing: resolve(__dirname, 'index.html'),
+        main: resolve(__dirname, 'globe.html'),
         news: resolve(__dirname, 'news.html'),
         radar: resolve(__dirname, 'radar.html'),
         lyra: resolve(__dirname, 'lyra.html'),
