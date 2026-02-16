@@ -108,6 +108,11 @@ function DisclaimerModal({ isOpen, onClose }: DisclaimerModalProps) {
               </div>
 
               <div className="license-group">
+                <h4>Site Images (Self-Hosted)</h4>
+                <p>Archaeological site images are sourced from <a href="https://commons.wikimedia.org/" target="_blank" rel="noopener noreferrer">Wikipedia and Wikimedia Commons</a> under their respective Creative Commons licenses (CC BY-SA 4.0, CC BY 4.0, CC0, Public Domain). Individual image attribution &mdash; including photographer, license, and source &mdash; is displayed when viewing each image. All images link back to their original Wikimedia Commons page.</p>
+              </div>
+
+              <div className="license-group">
                 <h4>Various / Mixed Licensing</h4>
                 <ul>
                   <li><a href="https://www.megalithic.co.uk/" target="_blank" rel="noopener noreferrer">Megalithic Portal</a>, <a href="https://sacredsites.com/" target="_blank" rel="noopener noreferrer">Sacred Sites</a>, <a href="https://rockartdatabase.com/" target="_blank" rel="noopener noreferrer">Rock Art Database</a></li>

@@ -92,6 +92,9 @@ class StaticExporter:
         # Export site details (chunked by region)
         self._export_site_details()
 
+        # Export wiki image index
+        self._export_wiki_images()
+
         if not sites_only:
             # Export content links
             self._export_content_links()
@@ -330,6 +333,60 @@ class StaticExporter:
                     }
                     save_json(details_dir / f"{region_id}.json", output)
                     logger.info(f"  {region_config['name']}: {len(sites):,} sites")
+
+    def _export_wiki_images(self):
+        """Export wiki image index for frontend (site_id → image metadata)."""
+        logger.info("\nExporting images/index.json...")
+
+        images_dir = self.output_dir / "images"
+        images_dir.mkdir(parents=True, exist_ok=True)
+
+        with get_session() as session:
+            result = session.execute(text("""
+                SELECT
+                    site_id, filename, author, license,
+                    commons_page_url, is_hero, is_lead,
+                    width, height, sort_order
+                FROM wiki_images
+                ORDER BY site_id, sort_order
+            """))
+
+            index: dict[str, list] = {}
+            total_images = 0
+
+            for row in result:
+                site_id = str(row.site_id)
+                site_id_short = site_id.replace("-", "")[:8]
+
+                img: dict = {
+                    "f": row.filename,
+                    "p": f"/data/images/wiki/{site_id_short}/{row.filename}",
+                }
+                # Optional fields (only include if present to save space)
+                if row.author:
+                    img["a"] = row.author
+                if row.license:
+                    img["l"] = row.license
+                if row.commons_page_url:
+                    img["c"] = row.commons_page_url
+                if row.is_hero:
+                    img["h"] = True
+                if row.is_lead:
+                    img["ld"] = True
+                if row.width:
+                    img["w"] = row.width
+                if row.height:
+                    img["ht"] = row.height
+
+                if site_id not in index:
+                    index[site_id] = []
+                index[site_id].append(img)
+                total_images += 1
+
+            save_json(images_dir / "index.json", index)
+            self.stats["wiki_images"] = total_images
+            self.stats["wiki_image_sites"] = len(index)
+            logger.info(f"  {total_images:,} images for {len(index):,} sites")
 
     def _export_content_links(self):
         """Export site-to-content relationships."""

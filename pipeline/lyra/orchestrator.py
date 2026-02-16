@@ -821,6 +821,41 @@ def _run_migrations(engine) -> None:
               AND (uc.enrichment_data IS NULL OR NOT (uc.enrichment_data ? 'v_an_dedup'))
         """))
 
+        # Wiki images table for self-hosted Wikipedia/Commons images
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS wiki_images (
+                id SERIAL PRIMARY KEY,
+                site_id UUID NOT NULL REFERENCES unified_sites(id) ON DELETE CASCADE,
+                filename VARCHAR(500) NOT NULL,
+                original_url TEXT NOT NULL,
+                commons_page_url TEXT,
+                thumb_width INTEGER,
+                author TEXT,
+                author_url TEXT,
+                license VARCHAR(50),
+                license_url TEXT,
+                title TEXT,
+                is_hero BOOLEAN DEFAULT FALSE,
+                is_lead BOOLEAN DEFAULT FALSE,
+                sort_order INTEGER DEFAULT 0,
+                source_type VARCHAR(20) DEFAULT 'wikimedia',
+                file_size_bytes INTEGER,
+                width INTEGER,
+                height INTEGER,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_wiki_images_site ON wiki_images (site_id)"
+        ))
+        conn.execute(text("""
+            DO $$ BEGIN
+                ALTER TABLE wiki_images
+                    ADD CONSTRAINT uq_wiki_image_site_url UNIQUE (site_id, original_url);
+            EXCEPTION WHEN duplicate_table THEN NULL;
+            END $$
+        """))
+
         # Source version pins table (per-source snapshot pinning for public globe)
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS source_version_pins (

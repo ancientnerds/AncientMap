@@ -40,6 +40,7 @@ from api.routes import (
     sources,
     streetview,
     vector_sync,
+    wiki_images,
 )
 from pipeline.config import get_settings
 
@@ -202,6 +203,12 @@ app.include_router(radar.router, prefix="/api/radar", tags=["radar"])
 app.include_router(public_v1.router, prefix="/api/v1", tags=["Public API"])
 app.include_router(snapshots.router, prefix="/api/snapshots", tags=["snapshots"])
 app.include_router(vector_sync.router, prefix="/api/vector-sync", tags=["vector-sync"])
+app.include_router(wiki_images.router, prefix="/api/wiki-images", tags=["wiki-images"])
+
+# Serve wiki images as static files
+_wiki_images_dir = Path("public/data/images/wiki")
+_wiki_images_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/data/images/wiki", StaticFiles(directory=str(_wiki_images_dir)), name="wiki-images")
 
 # Serve news screenshots as static files
 _screenshots_dir = Path("public/data/news/screenshots")

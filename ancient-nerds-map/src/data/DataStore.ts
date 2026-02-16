@@ -14,6 +14,7 @@ import {
 import { config } from '../config'
 import { OfflineStorage, CompactSite } from '../services/OfflineStorage'
 import { offlineFetch } from '../services/OfflineFetch'
+import { loadLocalImageIndex } from '../services/imageService'
 
 /** API Base URL - from environment config */
 const API_BASE_URL = config.api.baseUrl
@@ -65,14 +66,17 @@ class DataStoreClass {
       return
     }
 
-    // PARALLEL FETCH: Load sources and sites simultaneously for faster startup
+    // PARALLEL FETCH: Load sources, sites, and image index simultaneously for faster startup
     // Hardcode default source 'ancient_nerds' to enable parallel fetch
     const DEFAULT_SOURCE = 'ancient_nerds'
 
     const [sourcesResponse, sitesResponse] = await Promise.all([
       offlineFetch(`${API_BASE_URL}/sources/?${CACHE_BUSTER}`),
-      offlineFetch(`${API_BASE_URL}/sites/all?limit=100000&source=${DEFAULT_SOURCE}&${CACHE_BUSTER}`)
+      offlineFetch(`${API_BASE_URL}/sites/all?limit=100000&source=${DEFAULT_SOURCE}&${CACHE_BUSTER}`),
     ])
+
+    // Load wiki image index in background (non-blocking)
+    loadLocalImageIndex().catch(() => {})
 
     if (!sourcesResponse.ok) {
       // If API fails and we have offline data, use it
