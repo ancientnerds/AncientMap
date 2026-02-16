@@ -934,7 +934,7 @@ def site_already_downloaded(site_id: str) -> bool:
         return count > 0
 
 
-def process_site(site: dict, dry_run: bool = False, max_per_category: int = 200, force: bool = False) -> int:
+def process_site(site: dict, dry_run: bool = False, max_per_category: int = 20, force: bool = False) -> int:
     """
     Download images for a single site from all sources:
     1. Wikipedia article images (media-list REST API)
@@ -1035,6 +1035,11 @@ def process_site(site: dict, dry_run: bool = False, max_per_category: int = 200,
     if best_hero_idx != 0:
         hero = deduped.pop(best_hero_idx)
         deduped.insert(0, hero)
+
+    # Cap total images per site — gallery lazy-loads more from external APIs
+    MAX_IMAGES_PER_SITE = 20
+    if len(deduped) > MAX_IMAGES_PER_SITE:
+        deduped = deduped[:MAX_IMAGES_PER_SITE]
 
     if dry_run:
         wp_count = sum(1 for i in deduped if i.get("source_type") == "wikipedia")
@@ -1196,7 +1201,7 @@ def run_downloader(
     dry_run: bool = False,
     stats_only: bool = False,
     force: bool = False,
-    max_per_category: int = 200,
+    max_per_category: int = 20,
     parallel_sites: int = 3,
 ) -> None:
     """Main entry point for the wiki image downloader."""
@@ -1342,8 +1347,8 @@ def main():
     parser.add_argument(
         "--max-per-category",
         type=int,
-        default=200,
-        help="Max images to fetch from Commons category per site (default: 200)",
+        default=20,
+        help="Max images to fetch from Commons category per site (default: 20)",
     )
     parser.add_argument(
         "--parallel",
