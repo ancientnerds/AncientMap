@@ -183,7 +183,7 @@ jobs:
               DIST_BAK="ancient-nerds-map/dist-bak-$(date +%s)"
               mv ancient-nerds-map/dist "$DIST_BAK" 2>/dev/null || true
               if echo "$CHANGED" | grep -q "package-lock.json"; then
-                rm -rf ancient-nerds-map/node_modules 2>/dev/null || true
+                mv ancient-nerds-map/node_modules "ancient-nerds-map/node_modules-bak-$(date +%s)" 2>/dev/null || true
                 (cd ancient-nerds-map && npm ci && npm run build)
               else
                 (cd ancient-nerds-map && npm run build)
