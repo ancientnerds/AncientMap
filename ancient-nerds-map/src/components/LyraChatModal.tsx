@@ -21,7 +21,7 @@ import remarkGfm from 'remark-gfm'
 import { config } from '../config'
 import type { LyraContextType, LyraMessage, SiteHighlight, NewsHighlight, ConversationSummary } from '../types/ai'
 import { getCategoryColor, getPeriodColor } from '../constants/colors'
-import { enrichLyraContent } from '../utils/lyraContentEnricher'
+import { enrichLyraContent, siteNameInContent } from '../utils/lyraContentEnricher'
 import { formatRelativeDate } from '../utils/formatters'
 import NewsCard, { newsHighlightToCardProps } from './news/NewsCard'
 import SiteResultItem from './SiteResultItem'
@@ -686,11 +686,11 @@ export default function LyraChatModal({
                       ? { ...m, isStreaming: false, confidence: avgRelevance, tokens }
                       : m
                   )
-                  // Filter sidebar to sites Lyra actually mentioned
+                  // Filter sidebar to sites Lyra actually mentioned (flexible variant matching)
                   const finalContent = updated.find(m => m.id === assistantId)?.content
                   if (finalContent) {
                     const lower = finalContent.toLowerCase()
-                    setSidebarSites(prev => prev.filter(s => lower.includes(s.name.toLowerCase())))
+                    setSidebarSites(prev => prev.filter(s => siteNameInContent(s.name, lower)))
                   }
                   // Auto-save conversation
                   const title = updated.find(m => m.role === 'user')?.content.slice(0, 50) || 'New conversation'
