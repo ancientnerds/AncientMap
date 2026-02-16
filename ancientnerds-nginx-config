@@ -27,6 +27,13 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
     }
 
+    # Wiki images — served by API container (files are inside Docker)
+    location /data/images/wiki/ {
+        proxy_pass http://127.0.0.1:8000/data/images/wiki/;
+        proxy_set_header Host $host;
+        add_header Cache-Control "public, max-age=86400";
+    }
+
     # Static news feed + screenshots — served directly, no API
     location /data/news/ {
         alias /var/www/ancientnerds/public/data/news/;
