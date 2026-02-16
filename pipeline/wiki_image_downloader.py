@@ -56,25 +56,36 @@ COMMONS_DELAY = 0.05
 
 # Parallel download settings
 MAX_DOWNLOAD_WORKERS = 8   # threads for parallel PIL conversion + I/O
-DOWNLOAD_RATE_LIMIT = 10.0  # max image download requests per second (global)
-DOWNLOAD_MAX_RETRIES = 3
+DOWNLOAD_RATE_LIMIT = 4.0  # image download requests per second (global)
+DOWNLOAD_MAX_RETRIES = 4
 
 
 class RateLimiter:
-    """Thread-safe rate limiter that spaces requests evenly."""
+    """Thread-safe rate limiter — assigns time slots without blocking other threads."""
 
     def __init__(self, requests_per_second: float):
         self._interval = 1.0 / requests_per_second
         self._lock = threading.Lock()
-        self._next_allowed = time.monotonic()
+        self._next_slot = time.monotonic()
 
     def acquire(self):
-        """Block until the next request is allowed."""
+        """Reserve a slot and sleep until it arrives. Lock held only briefly."""
         with self._lock:
             now = time.monotonic()
-            if now < self._next_allowed:
-                time.sleep(self._next_allowed - now)
-            self._next_allowed = max(time.monotonic(), self._next_allowed) + self._interval
+            self._next_slot = max(now, self._next_slot) + self._interval
+            my_slot = self._next_slot - self._interval
+
+        # Sleep outside the lock — other threads can reserve their own slots
+        wait = my_slot - time.monotonic()
+        if wait > 0:
+            time.sleep(wait)
+
+    def pause(self, seconds: float):
+        """Push all future slots forward (e.g., on 429 Retry-After).
+        Affects all threads, not just the caller."""
+        with self._lock:
+            resume_at = time.monotonic() + seconds
+            self._next_slot = max(self._next_slot, resume_at)
 
     def slow_down(self):
         """Halve the rate on 429 (min 1 req/s)."""
@@ -775,9 +786,11 @@ def download_image(
                 resp = client.get(fetch_url, headers=HEADERS)
 
             if resp.status_code == 429:
+                retry_after = float(resp.headers.get("retry-after", 2 ** (attempt + 1)))
+                # Pause ALL threads globally, then slow the rate
+                _download_limiter.pause(retry_after)
                 _download_limiter.slow_down()
-                retry_after = int(resp.headers.get("retry-after", 2 ** attempt))
-                logger.debug(f"429 rate-limited, retry in {retry_after}s (attempt {attempt + 1})")
+                logger.debug(f"429 → pausing all downloads {retry_after}s, attempt {attempt + 1}")
                 time.sleep(retry_after)
                 continue
             break
