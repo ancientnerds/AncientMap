@@ -55,59 +55,15 @@ WIKIDATA_DELAY = 0.2
 COMMONS_DELAY = 0.05
 
 # Parallel download settings
-MAX_DOWNLOAD_WORKERS = 6   # threads for parallel PIL conversion + I/O
-DOWNLOAD_MAX_RETRIES = 4
-
-# Wikimedia throttles after ~20-60 image requests regardless of rate.
-# 2 req/s is conservative enough to avoid 429, still 7x faster than sequential.
-DOWNLOAD_RATE_LIMIT = 2.0
+MAX_DOWNLOAD_WORKERS = 6
+DOWNLOAD_RETRY_ROUNDS = 3  # retry rounds for 429 failures
 
 
-class RateLimiter:
-    """Thread-safe rate limiter with global freeze on 429."""
+class RateLimitedError(Exception):
+    """Raised when Wikimedia returns 429 Too Many Requests."""
 
-    def __init__(self, requests_per_second: float):
-        self._interval = 1.0 / requests_per_second
-        self._lock = threading.Lock()
-        self._next_slot = time.monotonic()
-        self._gate = threading.Event()
-        self._gate.set()  # open
-
-    def acquire(self):
-        """Wait for the gate (in case of global 429 freeze), then get a slot."""
-        self._gate.wait()  # blocks if frozen
-        with self._lock:
-            now = time.monotonic()
-            self._next_slot = max(now, self._next_slot) + self._interval
-            my_slot = self._next_slot - self._interval
-
-        wait = my_slot - time.monotonic()
-        if wait > 0:
-            time.sleep(wait)
-        self._gate.wait()  # re-check after sleep
-
-    def freeze(self, seconds: float):
-        """Freeze ALL threads for N seconds (called on 429 Retry-After)."""
-        self._gate.clear()
-        logger.info(f"Rate limiter: freezing all downloads for {seconds}s")
-
-        def _thaw():
-            time.sleep(seconds)
-            # Also push the slot schedule forward so threads don't burst on resume
-            with self._lock:
-                self._next_slot = max(self._next_slot, time.monotonic())
-            self._gate.set()
-
-        threading.Thread(target=_thaw, daemon=True).start()
-
-    def slow_down(self):
-        """Halve the rate on 429 (min 0.5 req/s)."""
-        with self._lock:
-            self._interval = min(self._interval * 2, 2.0)
-            logger.info(f"Rate limiter → {1.0 / self._interval:.1f} req/s")
-
-
-_download_limiter = RateLimiter(DOWNLOAD_RATE_LIMIT)
+    def __init__(self, retry_after: float):
+        self.retry_after = retry_after
 
 # Wikidata image properties to extract
 WIKIDATA_IMAGE_PROPS = {
@@ -788,23 +744,15 @@ def download_image(
     dest_path.parent.mkdir(parents=True, exist_ok=True)
 
     try:
-        resp = None
-        for attempt in range(DOWNLOAD_MAX_RETRIES):
-            _download_limiter.acquire()
-            with httpx.Client(timeout=60, follow_redirects=True) as client:
-                resp = client.get(fetch_url, headers=HEADERS)
+        with httpx.Client(timeout=60, follow_redirects=True) as client:
+            resp = client.get(fetch_url, headers=HEADERS)
 
-            if resp.status_code == 429:
-                retry_after = float(resp.headers.get("retry-after", 2 ** (attempt + 1)))
-                _download_limiter.freeze(retry_after)  # stops ALL threads
-                _download_limiter.slow_down()
-                logger.debug(f"429 attempt {attempt + 1}, waiting {retry_after}s")
-                time.sleep(retry_after)
-                continue
-            break
+        if resp.status_code == 429:
+            retry_after = float(resp.headers.get("retry-after", 12))
+            raise RateLimitedError(retry_after)
 
-        if resp is None or resp.status_code != 200:
-            logger.debug(f"Download failed {resp.status_code if resp else 'no response'}: {fetch_url}")
+        if resp.status_code != 200:
+            logger.debug(f"Download failed {resp.status_code}: {fetch_url}")
             return None
 
         content_type = resp.headers.get("content-type", "")
@@ -845,28 +793,73 @@ def download_images_parallel(
     download_tasks: list[tuple[int, dict, str, Path, int | None]],
 ) -> list[tuple[int, dict, str, tuple[int, int, int] | None]]:
     """
-    Download images in parallel using a thread pool.
+    Download images using blast-then-retry strategy.
 
-    Rate-limited globally by _download_limiter (inside download_image).
+    Round 1: parallel blast at full speed (gets ~80% before 429 kicks in).
+    Round 2+: wait for Retry-After cooldown, retry failures sequentially.
+
     Each task is (index, img_dict, original_url, dest_path, width).
-    Returns [(index, img_dict, original_url, result)] for successful downloads.
+    Returns [(index, img_dict, original_url, result)].
     """
     results: list[tuple[int, dict, str, tuple[int, int, int] | None]] = []
+    remaining = list(download_tasks)
 
-    with ThreadPoolExecutor(max_workers=MAX_DOWNLOAD_WORKERS) as executor:
-        futures = {}
-        for idx, img, orig_url, dest_path, width in download_tasks:
-            future = executor.submit(download_image, orig_url, dest_path, width)
-            futures[future] = (idx, img, orig_url)
+    for round_num in range(1, DOWNLOAD_RETRY_ROUNDS + 1):
+        if not remaining:
+            break
 
-        for future in as_completed(futures):
-            idx, img, orig_url = futures[future]
-            try:
-                result = future.result()
-                results.append((idx, img, orig_url, result))
-            except Exception as e:
-                logger.debug(f"Parallel download error for {img.get('title')}: {e}")
-                results.append((idx, img, orig_url, None))
+        failed: list[tuple[int, dict, str, Path, int | None]] = []
+        max_retry_after = 0.0
+
+        if round_num == 1:
+            # Round 1: parallel blast
+            with ThreadPoolExecutor(max_workers=MAX_DOWNLOAD_WORKERS) as executor:
+                futures = {}
+                for task in remaining:
+                    idx, img, orig_url, dest_path, width = task
+                    future = executor.submit(download_image, orig_url, dest_path, width)
+                    futures[future] = task
+
+                for future in as_completed(futures):
+                    task = futures[future]
+                    idx, img, orig_url = task[0], task[1], task[2]
+                    try:
+                        result = future.result()
+                        results.append((idx, img, orig_url, result))
+                    except RateLimitedError as e:
+                        max_retry_after = max(max_retry_after, e.retry_after)
+                        failed.append(task)
+                    except Exception as e:
+                        logger.debug(f"Download error for {img.get('title')}: {e}")
+                        results.append((idx, img, orig_url, None))
+        else:
+            # Round 2+: sequential with 0.5s gap
+            for task in remaining:
+                idx, img, orig_url, dest_path, width = task
+                try:
+                    result = download_image(orig_url, dest_path, width)
+                    results.append((idx, img, orig_url, result))
+                    time.sleep(0.5)
+                except RateLimitedError as e:
+                    max_retry_after = max(max_retry_after, e.retry_after)
+                    failed.append(task)
+                except Exception as e:
+                    logger.debug(f"Download error for {img.get('title')}: {e}")
+                    results.append((idx, img, orig_url, None))
+
+        remaining = failed
+        if remaining:
+            cooldown = max(max_retry_after, 12.0)
+            logger.info(
+                f"  Round {round_num}: {len(remaining)} got 429, "
+                f"retrying after {cooldown:.0f}s cooldown..."
+            )
+            time.sleep(cooldown)
+
+    # Give up on anything still remaining
+    for task in remaining:
+        logger.debug(f"Gave up on {task[1].get('title')} after {DOWNLOAD_RETRY_ROUNDS} rounds")
+        results.append((task[0], task[1], task[2], None))
 
     return results
 
