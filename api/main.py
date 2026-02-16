@@ -32,6 +32,7 @@ from api.routes import (
     lyra,
     news,
     og,
+    openai_compat,
     public_v1,
     radar,
     sitemap,
@@ -204,6 +205,7 @@ app.include_router(public_v1.router, prefix="/api/v1", tags=["Public API"])
 app.include_router(snapshots.router, prefix="/api/snapshots", tags=["snapshots"])
 app.include_router(vector_sync.router, prefix="/api/vector-sync", tags=["vector-sync"])
 app.include_router(wiki_images.router, prefix="/api/wiki-images", tags=["wiki-images"])
+app.include_router(openai_compat.router, tags=["OpenAI API"])
 
 # Serve wiki images as static files
 _wiki_images_dir = Path("public/data/images/wiki")
