@@ -52,6 +52,73 @@ export function siteNameInContent(siteName: string, lowerContent: string): boole
 }
 
 /**
+ * Extract site names from a completed Lyra response that aren't already in sidebarSites.
+ * Looks at bold text and table first-column cells — strong signals for site names.
+ * Returns candidate names to search via the API.
+ */
+export function extractUnlinkedSiteNames(content: string, existingSites: SiteHighlight[]): string[] {
+  // Build set of names we already know about (including prefix variants)
+  const known = new Set<string>()
+  for (const s of existingSites) {
+    known.add(s.name.toLowerCase())
+    for (const v of getNameVariants(s.name)) {
+      known.add(v.toLowerCase())
+    }
+  }
+
+  const candidates = new Set<string>()
+  const SKIP = new Set([
+    'site', 'sites', 'date', 'country', 'notes', 'location', 'significance',
+    'type', 'period', 'quick notes', 'description', 'details', 'summary',
+    'features', 'key facts', 'coordinates', 'overview', 'history',
+  ])
+
+  function addCandidate(raw: string) {
+    let name = raw.trim()
+    // Strip leading emoji
+    name = name.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}]+\s*/u, '')
+    // Strip trailing colon
+    if (name.endsWith(':')) name = name.slice(0, -1).trim()
+    // Strip parenthetical suffix like "(Malta)"
+    name = name.replace(/\s*\([^)]*\)\s*$/, '').trim()
+
+    if (name.length < 3) return
+    if (name.split(/\s+/).length > 5) return
+    if (SKIP.has(name.toLowerCase())) return
+    if (known.has(name.toLowerCase())) return
+    // Must start with uppercase (site names are proper nouns)
+    if (!/^[A-ZÀ-ÖØ-Ý\u0100-\u024F]/.test(name)) return
+
+    candidates.add(name)
+  }
+
+  // 1. Bold text: **SomeName**
+  for (const m of content.matchAll(/\*\*([^*]+)\*\*/g)) {
+    addCandidate(m[1])
+  }
+
+  // 2. Table data rows (after separator row like |---|---|)
+  const lines = content.split('\n')
+  let inTable = false
+  for (const line of lines) {
+    if (/^\|.*\|/.test(line)) {
+      if (/^\|[\s\-:|]+\|/.test(line)) {
+        inTable = true
+        continue
+      }
+      if (inTable) {
+        const cells = line.split('|').filter(c => c.trim())
+        if (cells.length > 0) addCandidate(cells[0])
+      }
+    } else {
+      inTable = false
+    }
+  }
+
+  return [...candidates]
+}
+
+/**
  * Pre-process markdown content to embed interactive markers.
  *
  * Order matters: coordinates first (they contain brackets that could interfere),

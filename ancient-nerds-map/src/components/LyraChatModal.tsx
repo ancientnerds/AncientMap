@@ -21,7 +21,7 @@ import remarkGfm from 'remark-gfm'
 import { config } from '../config'
 import type { LyraContextType, LyraMessage, SiteHighlight, NewsHighlight, ConversationSummary } from '../types/ai'
 import { getCategoryColor, getPeriodColor } from '../constants/colors'
-import { enrichLyraContent, siteNameInContent } from '../utils/lyraContentEnricher'
+import { enrichLyraContent, siteNameInContent, extractUnlinkedSiteNames } from '../utils/lyraContentEnricher'
 import { formatRelativeDate } from '../utils/formatters'
 import NewsCard, { newsHighlightToCardProps } from './news/NewsCard'
 import SiteResultItem from './SiteResultItem'
@@ -613,6 +613,7 @@ export default function LyraChatModal({
       let buffer = ''
       let collectedSites: SiteHighlight[] = []
       let eventType = ''
+      let fullContent = ''
 
       while (true) {
         const { done, value } = await reader.read()
@@ -632,6 +633,7 @@ export default function LyraChatModal({
               const type = data.type || eventType || ''
 
               if (type === 'token' && data.content) {
+                fullContent += data.content
                 setMessages(prev => prev.map(m =>
                   m.id === assistantId
                     ? { ...m, content: m.content + data.content }
@@ -640,6 +642,7 @@ export default function LyraChatModal({
               } else if (type === 'status' && data.content) {
                 // Pre-tool-call preamble: move streamed tokens to a status line
                 // and reset content so the real answer starts clean
+                fullContent = ''
                 setMessages(prev => prev.map(m =>
                   m.id === assistantId
                     ? { ...m, statusLines: [...(m.statusLines || []), data.content], content: '' }
@@ -712,6 +715,34 @@ export default function LyraChatModal({
       // Highlight sites on globe
       if (collectedSites.length > 0 && onHighlightSites) {
         onHighlightSites(collectedSites.map(s => s.id).filter(Boolean))
+      }
+
+      // Post-search: find site names Lyra mentioned that aren't in Qdrant results
+      if (fullContent) {
+        const candidates = extractUnlinkedSiteNames(fullContent, collectedSites)
+        if (candidates.length > 0) {
+          Promise.all(candidates.map(name =>
+            fetch(`${config.api.baseUrl}/sites/search?q=${encodeURIComponent(name)}&limit=3`)
+              .then(r => r.json())
+              .then(data => {
+                const sites = (data.sites || []) as { id: string; n: string; la: number; lo: number; t?: string; c?: string; pn?: string }[]
+                const nameLower = name.toLowerCase()
+                const match = sites.find(s => s.n.toLowerCase().startsWith(nameLower))
+                  || sites.find(s => nameLower.startsWith(s.n.toLowerCase()))
+                if (!match) return null
+                return { id: match.id, name: match.n, lat: match.la, lon: match.lo, site_type: match.t, country: match.c, period_name: match.pn } as SiteHighlight
+              })
+              .catch(() => null)
+          )).then(results => {
+            const newSites = results.filter((s): s is SiteHighlight => s !== null)
+            if (newSites.length > 0) {
+              setSidebarSites(prev => {
+                const ids = new Set(prev.map(s => s.id))
+                return [...prev, ...newSites.filter(s => !ids.has(s.id))]
+              })
+            }
+          })
+        }
       }
 
     } catch (e) {
