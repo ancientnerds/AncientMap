@@ -14863,8 +14863,11 @@ body.news-feed-open .empire-borders-window {
    Example Prompt Level Badges
    ============================================= */
 
-/* Red blinking cursor — Matrix-inspired */
-.lyra-chat-msg-text.streaming::after {
+/* Red blinking cursor — Matrix-inspired, follows end of text */
+.lyra-chat-msg-text.streaming > :last-child::after,
+.lyra-chat-msg-text.streaming > ul:last-child > li:last-child::after,
+.lyra-chat-msg-text.streaming > ol:last-child > li:last-child::after,
+.lyra-chat-msg-text.streaming > table:last-child tr:last-child td:last-child::after {
   content: '';
   display: inline-block;
   width: 2px;
@@ -14876,9 +14879,43 @@ body.news-feed-open .empire-borders-window {
   box-shadow: 0 0 4px var(--primary-red), 0 0 8px rgba(192, 32, 35, 0.3);
 }
 
+/* Prevent duplicate cursors when last-child is a list/table */
+.lyra-chat-msg-text.streaming > ul:last-child::after,
+.lyra-chat-msg-text.streaming > ol:last-child::after,
+.lyra-chat-msg-text.streaming > table:last-child::after {
+  display: none;
+}
+
 @keyframes lyra-cursor-blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
+}
+
+/* GFM table styles inside Lyra chat */
+.lyra-chat-msg-assistant .lyra-chat-msg-text table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 12px;
+}
+
+.lyra-chat-msg-assistant .lyra-chat-msg-text th,
+.lyra-chat-msg-assistant .lyra-chat-msg-text td {
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  text-align: left;
+}
+
+.lyra-chat-msg-assistant .lyra-chat-msg-text th {
+  background: rgba(255, 255, 255, 0.05);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.lyra-chat-msg-assistant .lyra-chat-msg-text tr:hover {
+  background: rgba(255, 255, 255, 0.03);
 }
 
 /* =============================================

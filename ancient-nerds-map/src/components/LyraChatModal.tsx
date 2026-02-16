@@ -17,6 +17,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { config } from '../config'
 import type { LyraContextType, LyraMessage, SiteHighlight, NewsHighlight, ConversationSummary } from '../types/ai'
 import { getCategoryColor, getPeriodColor } from '../constants/colors'
@@ -135,6 +136,102 @@ function ConfidenceBadge({ value }: { value: number }) {
     <span className={`lyra-chat-confidence ${tier}`}>
       {pct}% confidence
     </span>
+  )
+}
+
+/* ---- Typewriter: reveals content char-by-char like fast human typing ---- */
+
+function TypewriterMessage({
+  content,
+  isStreaming,
+  sidebarSites,
+  mdComponents,
+}: {
+  content: string
+  isStreaming: boolean
+  sidebarSites: SiteHighlight[]
+  mdComponents: React.ComponentProps<typeof ReactMarkdown>['components']
+}) {
+  // For already-complete messages (loaded from history), show everything immediately
+  const [revealedLen, setRevealedLen] = useState(() => isStreaming ? 0 : content.length)
+  const contentRef = useRef(content)
+  const streamingRef = useRef(isStreaming)
+  const revealedRef = useRef(revealedLen)
+
+  contentRef.current = content
+  streamingRef.current = isStreaming
+
+  useEffect(() => { revealedRef.current = revealedLen }, [revealedLen])
+
+  useEffect(() => {
+    // Already fully revealed (e.g. loaded conversation) — nothing to animate
+    if (!streamingRef.current && revealedRef.current >= contentRef.current.length) return
+
+    let running = true
+    let lastTime = 0
+    let nextDelay = 0
+
+    const tick = (now: number) => {
+      if (!running) return
+
+      const cur = contentRef.current
+      const revealed = revealedRef.current
+
+      // Fully done — stop
+      if (!streamingRef.current && revealed >= cur.length) return
+
+      if (!lastTime) lastTime = now
+      const elapsed = now - lastTime
+
+      if (revealed < cur.length && elapsed >= nextDelay) {
+        lastTime = now
+
+        // Adaptive speed: type faster when buffer is large
+        const buffered = cur.length - revealed
+        const speed = buffered > 200 ? 0.25 : buffered > 100 ? 0.4 : buffered > 50 ? 0.6 : 1.0
+
+        // Type 1-4 chars at a time (bursts)
+        const chunk = 1 + Math.floor(Math.random() * 3)
+        const next = Math.min(revealed + chunk, cur.length)
+
+        // Delay based on character — simulate human rhythm
+        const char = cur[revealed] || ''
+        let base: number
+        if (char === '.' || char === '!' || char === '?') {
+          base = 80 + Math.random() * 120 // sentence end — think pause
+        } else if (char === ',' || char === ':' || char === ';') {
+          base = 40 + Math.random() * 60
+        } else if (char === '\n') {
+          base = 50 + Math.random() * 80 // new line — brief pause
+        } else {
+          base = 12 + Math.random() * 20 // fast typing
+        }
+        // Random micro-pauses (~5% chance) to feel human
+        if (Math.random() < 0.05) base += 100 + Math.random() * 150
+        nextDelay = base * speed
+
+        revealedRef.current = next
+        setRevealedLen(next)
+      }
+
+      requestAnimationFrame(tick)
+    }
+
+    requestAnimationFrame(tick)
+    return () => { running = false }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const isTyping = isStreaming || revealedLen < content.length
+  const displayedContent = isTyping
+    ? content.substring(0, revealedLen)
+    : enrichLyraContent(content, sidebarSites)
+
+  return (
+    <div className={`lyra-chat-msg-text${isTyping ? ' streaming' : ''}`}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={isTyping ? undefined : mdComponents}>
+        {displayedContent || '\u200B'}
+      </ReactMarkdown>
+    </div>
   )
 }
 
@@ -759,19 +856,18 @@ export default function LyraChatModal({
                               ))}
                             </div>
                           )}
-                          <div className={`lyra-chat-msg-text${msg.role === 'assistant' && msg.isStreaming ? ' streaming' : ''}`}>
-                            {msg.role === 'assistant' ? (
-                              msg.isStreaming ? (
-                                <ReactMarkdown>{msg.content}</ReactMarkdown>
-                              ) : (
-                                <ReactMarkdown components={mdComponents}>
-                                  {enrichLyraContent(msg.content, sidebarSites)}
-                                </ReactMarkdown>
-                              )
-                            ) : (
-                              msg.content
-                            )}
-                          </div>
+                          {msg.role === 'assistant' ? (
+                            <TypewriterMessage
+                              content={msg.content}
+                              isStreaming={!!msg.isStreaming}
+                              sidebarSites={sidebarSites}
+                              mdComponents={mdComponents}
+                            />
+                          ) : (
+                            <div className="lyra-chat-msg-text">
+                              {msg.content}
+                            </div>
+                          )}
                           {msg.role === 'assistant' && !msg.isStreaming && msg.confidence != null && (
                             <div className="lyra-chat-msg-footer">
                               <ConfidenceBadge value={msg.confidence} />
