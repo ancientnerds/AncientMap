@@ -9455,6 +9455,27 @@ body.hud-hidden .empire-borders-window {
   font-size: 12px;
 }
 
+/* Gallery "Show More" pagination button */
+.gallery-show-more {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: rgba(192, 32, 35, 0.08);
+  border: 1px solid rgba(192, 32, 35, 0.2);
+  border-radius: 6px;
+  color: var(--primary-red);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.gallery-show-more:hover {
+  background: rgba(192, 32, 35, 0.15);
+  border-color: rgba(192, 32, 35, 0.4);
+}
+
 /* ==========================================================================
    Popup Links Section
    ========================================================================== */
@@ -13996,16 +14017,21 @@ body.news-feed-open .empire-borders-window {
   align-items: flex-end;
 }
 
-.lyra-chat-status-lines {
+/* Thinking bubble — separate from answer */
+.lyra-chat-thinking-bubble {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  border-top-left-radius: 2px;
+  padding: 8px 12px;
   font-size: 12px;
   font-style: italic;
-  color: rgba(255, 255, 255, 0.4);
-  padding: 0 2px 4px;
+  color: rgba(255, 255, 255, 0.45);
+  margin-bottom: 4px;
+  max-width: 85%;
 }
-
-.lyra-chat-status-lines p {
-  margin: 0 0 2px;
-}
+.lyra-chat-thinking-bubble p { margin: 0 0 2px; }
+.lyra-chat-thinking-bubble p:last-child { margin: 0; }
 
 .lyra-chat-msg-text {
   padding: 10px 14px;
@@ -14891,12 +14917,68 @@ body.news-feed-open .empire-borders-window {
   50% { opacity: 0; }
 }
 
+/* Red fade on last typed element — Matrix-inspired */
+.lyra-chat-msg-text.streaming > :last-child,
+.lyra-chat-msg-text.streaming > ul:last-child > li:last-child,
+.lyra-chat-msg-text.streaming > ol:last-child > li:last-child,
+.lyra-chat-msg-text.streaming > table:last-child tr:last-child td:last-child {
+  animation: lyra-fresh-type 0.8s ease-out forwards;
+}
+
+@keyframes lyra-fresh-type {
+  0% { color: var(--primary-red); text-shadow: 0 0 6px rgba(192, 32, 35, 0.3); }
+  100% { color: var(--text-primary); text-shadow: none; }
+}
+
+/* Typing indicator dots */
+.lyra-chat-typing-dots {
+  display: flex; gap: 4px; padding: 12px 16px;
+  background: var(--bg-inner); border: 1px solid var(--border-color);
+  border-radius: 12px; border-top-left-radius: 2px; width: fit-content;
+}
+.lyra-chat-typing-dots span {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--primary-red); opacity: 0.4;
+  animation: lyra-dot-pulse 1.4s ease-in-out infinite;
+}
+.lyra-chat-typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.lyra-chat-typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes lyra-dot-pulse {
+  0%, 80%, 100% { opacity: 0.4; transform: scale(1); }
+  40% { opacity: 1; transform: scale(1.2); }
+}
+
+/* Copy message button */
+.lyra-chat-copy-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 4px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.4);
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+}
+.lyra-chat-msg-content { position: relative; }
+.lyra-chat-msg-content:hover .lyra-chat-copy-btn { opacity: 1; }
+.lyra-chat-copy-btn:hover { color: rgba(255, 255, 255, 0.8); background: rgba(255, 255, 255, 0.1); }
+.lyra-chat-copy-btn .lyra-check-icon { display: none; }
+.lyra-chat-copy-btn.copied .lyra-copy-icon { display: none; }
+.lyra-chat-copy-btn.copied .lyra-check-icon { display: block; }
+.lyra-chat-copy-btn.copied { color: #4caf50; opacity: 1; }
+
 /* GFM table styles inside Lyra chat */
 .lyra-chat-msg-assistant .lyra-chat-msg-text table {
   width: 100%;
   border-collapse: collapse;
   margin: 8px 0;
   font-size: 12px;
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .lyra-chat-msg-assistant .lyra-chat-msg-text th,
@@ -15569,5 +15651,32 @@ body.news-feed-open .empire-borders-window {
   .articles-page-card-title {
     font-size: 18px;
   }
+}
+
+/* ============= DEMO MODE (video recording) ============= */
+/* Hides all UI except the globe canvas when body.demo-mode is set */
+body.demo-mode .filter-panel,
+body.demo-mode .loading-overlay,
+body.demo-mode .loading-cursor-overlay,
+body.demo-mode .site-popup,
+body.demo-mode .empire-popup,
+body.demo-mode .zoom-controls,
+body.demo-mode .social-links,
+body.demo-mode .options-panel,
+body.demo-mode .map-layers-panel,
+body.demo-mode .empire-borders-panel,
+body.demo-mode .screenshot-controls,
+body.demo-mode .coordinate-display,
+body.demo-mode .scale-bar,
+body.demo-mode .contribute-picker-hint,
+body.demo-mode .hardware-warning,
+body.demo-mode .tooltip-overlay,
+body.demo-mode .connector-status-modal,
+body.demo-mode .news-feed-panel,
+body.demo-mode .contribute-modal,
+body.demo-mode .disclaimer-modal,
+body.demo-mode .lyra-chat-modal,
+body.demo-mode .download-manager {
+  display: none !important;
 }
 

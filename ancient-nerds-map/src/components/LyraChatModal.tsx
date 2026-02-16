@@ -157,6 +157,7 @@ function TypewriterMessage({
   const contentRef = useRef(content)
   const streamingRef = useRef(isStreaming)
   const revealedRef = useRef(revealedLen)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   contentRef.current = content
   streamingRef.current = isStreaming
@@ -212,6 +213,18 @@ function TypewriterMessage({
 
         revealedRef.current = next
         setRevealedLen(next)
+
+        // Re-trigger red fade animation on the last element
+        const el = containerRef.current
+        if (el) {
+          const last = el.querySelector(':scope > :last-child > :last-child')
+            || el.querySelector(':scope > :last-child')
+          if (last instanceof HTMLElement) {
+            last.style.animation = 'none'
+            last.offsetHeight // force reflow
+            last.style.animation = ''
+          }
+        }
       }
 
       requestAnimationFrame(tick)
@@ -227,7 +240,7 @@ function TypewriterMessage({
     : enrichLyraContent(content, sidebarSites)
 
   return (
-    <div className={`lyra-chat-msg-text${isTyping ? ' streaming' : ''}`}>
+    <div ref={containerRef} className={`lyra-chat-msg-text${isTyping ? ' streaming' : ''}`}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={isTyping ? undefined : mdComponents}>
         {displayedContent || '\u200B'}
       </ReactMarkdown>
@@ -381,11 +394,11 @@ export default function LyraChatModal({
     },
   }), [onHighlightSites, onFlyToSite])
 
-  // Auto-scroll: instant during streaming (tokens fire rapidly), smooth otherwise
+  // Auto-scroll: always smooth — typewriter controls reveal speed
   const lastMsg = messages[messages.length - 1]
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: isStreaming ? 'instant' : 'smooth' })
-  }, [messages.length, isStreaming, lastMsg?.content.length])
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages.length, lastMsg?.content.length])
 
   // Focus input when opening (if authenticated)
   useEffect(() => {
@@ -611,6 +624,12 @@ export default function LyraChatModal({
                       ? { ...m, isStreaming: false, confidence: avgRelevance, tokens }
                       : m
                   )
+                  // Filter sidebar to sites Lyra actually mentioned
+                  const finalContent = updated.find(m => m.id === assistantId)?.content
+                  if (finalContent) {
+                    const lower = finalContent.toLowerCase()
+                    setSidebarSites(prev => prev.filter(s => lower.includes(s.name.toLowerCase())))
+                  }
                   // Auto-save conversation
                   const title = updated.find(m => m.role === 'user')?.content.slice(0, 50) || 'New conversation'
                   saveConversation(conversationId, title, updated)
@@ -844,42 +863,80 @@ export default function LyraChatModal({
                     </div>
                   ) : (
                     messages.map(msg => (
-                      <div key={msg.id} className={`lyra-chat-msg lyra-chat-msg-${msg.role}`}>
-                        {msg.role === 'assistant' && (
-                          <img src="/lyra.gif" alt="Lyra" className="lyra-chat-msg-avatar" />
-                        )}
-                        <div className="lyra-chat-msg-content">
-                          {msg.role === 'assistant' && msg.statusLines && msg.statusLines.length > 0 && (
-                            <div className="lyra-chat-status-lines">
+                      <div key={msg.id}>
+                        {/* Thinking bubble — separate from answer */}
+                        {msg.role === 'assistant' && msg.statusLines && msg.statusLines.length > 0 && (
+                          <div className="lyra-chat-msg lyra-chat-msg-assistant">
+                            <img src="/lyra.gif" alt="Lyra" className="lyra-chat-msg-avatar" />
+                            <div className="lyra-chat-thinking-bubble">
                               {msg.statusLines.map((s, i) => (
                                 <p key={i}>{s}</p>
                               ))}
                             </div>
-                          )}
-                          {msg.role === 'assistant' ? (
-                            <TypewriterMessage
-                              content={msg.content}
-                              isStreaming={!!msg.isStreaming}
-                              sidebarSites={sidebarSites}
-                              mdComponents={mdComponents}
-                            />
-                          ) : (
-                            <div className="lyra-chat-msg-text">
-                              {msg.content}
+                          </div>
+                        )}
+                        {/* Typing dots — waiting for first token */}
+                        {msg.role === 'assistant' && msg.isStreaming && !msg.content && (
+                          <div className="lyra-chat-msg lyra-chat-msg-assistant">
+                            <img src="/lyra.gif" alt="Lyra" className="lyra-chat-msg-avatar" />
+                            <div className="lyra-chat-typing-dots">
+                              <span /><span /><span />
                             </div>
-                          )}
-                          {msg.role === 'assistant' && !msg.isStreaming && msg.confidence != null && (
-                            <div className="lyra-chat-msg-footer">
-                              <ConfidenceBadge value={msg.confidence} />
-                              {msg.tokens && (msg.tokens.input > 0 || msg.tokens.output > 0 || (msg.tokens.voyage ?? 0) > 0) && (
-                                <span className="lyra-chat-tokens">
-                                  Haiku: {msg.tokens.input + msg.tokens.output}
-                                  {(msg.tokens.voyage ?? 0) > 0 && ` · Voyage: ${msg.tokens.voyage}`}
-                                </span>
+                          </div>
+                        )}
+                        {/* Main message bubble */}
+                        {(msg.role === 'user' || msg.content) && (
+                          <div className={`lyra-chat-msg lyra-chat-msg-${msg.role}`}>
+                            {msg.role === 'assistant' && (
+                              <img src="/lyra.gif" alt="Lyra" className="lyra-chat-msg-avatar" />
+                            )}
+                            <div className="lyra-chat-msg-content">
+                              {msg.role === 'assistant' ? (
+                                <TypewriterMessage
+                                  content={msg.content}
+                                  isStreaming={!!msg.isStreaming}
+                                  sidebarSites={sidebarSites}
+                                  mdComponents={mdComponents}
+                                />
+                              ) : (
+                                <div className="lyra-chat-msg-text">
+                                  {msg.content}
+                                </div>
+                              )}
+                              {msg.role === 'assistant' && !msg.isStreaming && msg.content && (
+                                <button
+                                  className="lyra-chat-copy-btn"
+                                  title="Copy message"
+                                  onClick={(e) => {
+                                    navigator.clipboard.writeText(msg.content)
+                                    const btn = e.currentTarget
+                                    btn.classList.add('copied')
+                                    setTimeout(() => btn.classList.remove('copied'), 2000)
+                                  }}
+                                >
+                                  <svg className="lyra-copy-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                  </svg>
+                                  <svg className="lyra-check-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <polyline points="20 6 9 17 4 12" />
+                                  </svg>
+                                </button>
+                              )}
+                              {msg.role === 'assistant' && !msg.isStreaming && msg.confidence != null && (
+                                <div className="lyra-chat-msg-footer">
+                                  <ConfidenceBadge value={msg.confidence} />
+                                  {msg.tokens && (msg.tokens.input > 0 || msg.tokens.output > 0 || (msg.tokens.voyage ?? 0) > 0) && (
+                                    <span className="lyra-chat-tokens">
+                                      Haiku: {msg.tokens.input + msg.tokens.output}
+                                      {(msg.tokens.voyage ?? 0) > 0 && ` · Voyage: ${msg.tokens.voyage}`}
+                                    </span>
+                                  )}
+                                </div>
                               )}
                             </div>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
                     ))
                   )}
