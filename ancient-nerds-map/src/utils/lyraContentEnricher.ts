@@ -19,10 +19,43 @@ function escapeRegex(s: string): string {
 }
 
 /**
+ * Generate prefix variants of a site name for flexible matching.
+ * "Gunung Padang Megalithic Site" → ["Gunung Padang Megalithic Site", "Gunung Padang Megalithic", "Gunung Padang"]
+ * "Ġgantija Temples" → ["Ġgantija Temples", "Ġgantija"]
+ * "Newgrange" → ["Newgrange"]
+ */
+function getNameVariants(name: string): string[] {
+  const words = name.split(/\s+/)
+  const variants: string[] = [name]
+  for (let i = words.length - 1; i >= 1; i--) {
+    const variant = words.slice(0, i).join(' ')
+    if (variant === name) continue
+    // Keep 2+ word prefixes, or single words of 8+ chars
+    if (i >= 2 || variant.length >= 8) {
+      variants.push(variant)
+    }
+  }
+  return variants
+}
+
+/**
+ * Check if a site name (or a shorter variant) appears in content.
+ * Used by the done-handler to decide which sites to keep.
+ */
+export function siteNameInContent(siteName: string, lowerContent: string): boolean {
+  if (lowerContent.includes(siteName.toLowerCase())) return true
+  const variants = getNameVariants(siteName)
+  for (let i = 1; i < variants.length; i++) {
+    if (lowerContent.includes(variants[i].toLowerCase())) return true
+  }
+  return false
+}
+
+/**
  * Pre-process markdown content to embed interactive markers.
  *
  * Order matters: coordinates first (they contain brackets that could interfere),
- * then sites, then countries.
+ * then sites (hijack existing links, then plain text), then countries.
  */
 export function enrichLyraContent(content: string, sites: SiteHighlight[]): string {
   let result = content
@@ -35,24 +68,48 @@ export function enrichLyraContent(content: string, sites: SiteHighlight[]): stri
   )
 
   // 2. Site names → links (longest first to avoid partial matches)
-  //    Only match if not already inside a markdown link [...](...) or **bold**
   const sortedSites = [...sites].sort((a, b) => b.name.length - a.name.length)
-  const replacedSiteNames = new Set<string>()
-  for (const site of sortedSites) {
-    const nameLower = site.name.toLowerCase()
-    if (replacedSiteNames.has(nameLower)) continue
-    if (!site.id || site.name.length < 3) continue
 
-    const escaped = escapeRegex(site.name)
-    // Word-boundary match, case-insensitive. Avoid matching inside existing links.
-    const regex = new RegExp(
-      `(?<!\\[)(?<!\\]\\()\\b(${escaped})\\b(?!\\]|\\()`,
-      'gi'
-    )
-    result = result.replace(regex, (match) => {
-      return `[${match}](lyra-site:${site.id}:${site.lon}:${site.lat})`
-    })
-    replacedSiteNames.add(nameLower)
+  // 2a. Hijack existing markdown links [SiteName](external-url) → [SiteName](lyra-site:...)
+  //     Lyra often generates its own wiki/external links — we want those to open popups.
+  for (const site of sortedSites) {
+    if (!site.id || site.name.length < 3) continue
+    for (const variant of getNameVariants(site.name)) {
+      const escaped = escapeRegex(variant)
+      // Match [variant text](any-url-that-isnt-already-lyra-site)
+      const linkRegex = new RegExp(
+        `\\[(${escaped})\\]\\((?!lyra-site:|lyra-coord:)[^)]+\\)`,
+        'gi'
+      )
+      result = result.replace(linkRegex, (_, name) =>
+        `[${name}](lyra-site:${site.id}:${site.lon}:${site.lat})`
+      )
+    }
+  }
+
+  // 2b. Replace plain-text site names (not already inside links)
+  const replacedNames = new Set<string>()
+  for (const site of sortedSites) {
+    if (!site.id || site.name.length < 3) continue
+    for (const variant of getNameVariants(site.name)) {
+      const varLower = variant.toLowerCase()
+      if (replacedNames.has(varLower)) continue
+
+      const escaped = escapeRegex(variant)
+      // Word-boundary match, case-insensitive. Avoid matching inside existing links.
+      const regex = new RegExp(
+        `(?<!\\[)(?<!\\]\\()\\b(${escaped})\\b(?!\\]|\\()`,
+        'gi'
+      )
+      const before = result
+      result = result.replace(regex, (match) =>
+        `[${match}](lyra-site:${site.id}:${site.lon}:${site.lat})`
+      )
+      if (result !== before) {
+        replacedNames.add(varLower)
+        break // Longest matching variant wins, stop trying shorter ones
+      }
+    }
   }
 
   // 3. Country names → flag image + name (longest first)
