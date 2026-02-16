@@ -107,9 +107,9 @@ _diff_cache: dict[tuple[str, str], dict] = {}
 
 def _compute_diff(from_date: str, to_date: str) -> dict:
     """Compare two snapshots and return structured diff. Cached by date pair (exceptions not cached)."""
-    key = (from_date, to_date)
-    if key in _diff_cache:
-        return _diff_cache[key]
+    cache_key = (from_date, to_date)
+    if cache_key in _diff_cache:
+        return _diff_cache[cache_key]
     from_sites = _load_snapshot(from_date)
     to_sites = _load_snapshot(to_date)
 
@@ -169,7 +169,7 @@ def _compute_diff(from_date: str, to_date: str) -> dict:
     # Evict oldest if cache is full
     if len(_diff_cache) >= 16:
         _diff_cache.pop(next(iter(_diff_cache)))
-    _diff_cache[key] = result
+    _diff_cache[cache_key] = result
     return result
 
 
