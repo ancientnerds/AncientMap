@@ -3,7 +3,7 @@
 import asyncio
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
@@ -111,7 +111,7 @@ async def vector_reindex(
         cmd.append("--rebuild")
 
     _reindex_state["running"] = True
-    _reindex_state["started_at"] = datetime.now(timezone.utc).isoformat()
+    _reindex_state["started_at"] = datetime.now(UTC).isoformat()
     _reindex_state["collection"] = body.collection or "all"
 
     asyncio.create_task(_run_reindex(cmd))
@@ -131,10 +131,10 @@ async def _run_reindex(cmd: list[str]):
         await proc.wait()
         duration = time.monotonic() - start
         _reindex_state["last_duration_seconds"] = round(duration)
-        _reindex_state["last_completed_at"] = datetime.now(timezone.utc).isoformat()
+        _reindex_state["last_completed_at"] = datetime.now(UTC).isoformat()
         _reindex_state["last_result"] = "success" if proc.returncode == 0 else f"failed (exit {proc.returncode})"
     except Exception as exc:
-        _reindex_state["last_completed_at"] = datetime.now(timezone.utc).isoformat()
+        _reindex_state["last_completed_at"] = datetime.now(UTC).isoformat()
         _reindex_state["last_duration_seconds"] = round(time.monotonic() - start)
         _reindex_state["last_result"] = f"error: {exc}"
     finally:
