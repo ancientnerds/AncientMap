@@ -11,6 +11,7 @@ interface UseGalleryDataOptions {
   location?: string
   lat: number
   lng: number
+  sourceUrl?: string
   prefetchedImages?: { wiki: GalleryImage[] } | null
   isOffline: boolean
   isLoadingImages?: boolean
@@ -21,6 +22,7 @@ export function useGalleryData({
   location,
   lat,
   lng,
+  sourceUrl,
   prefetchedImages,
   isOffline,
   isLoadingImages = false
@@ -34,9 +36,10 @@ export function useGalleryData({
       location: location || undefined,
       lat,
       lon: lng,
+      source_url: sourceUrl,
       limit: 100,
     }, tier),
-    [title, location, lat, lng]
+    [title, location, lat, lng, sourceUrl]
   )
 
   const tiered = useTieredFetch(fetchFn, `${title}-${lat}-${lng}`, !isOffline)
