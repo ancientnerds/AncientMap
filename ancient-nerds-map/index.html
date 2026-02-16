@@ -64,8 +64,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Orbitron:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=block" rel="stylesheet" />
 
-    <!-- Preload hero image -->
+    <!-- Preload hero assets -->
     <link rel="preload" href="/landing/hero-globe.webp" as="image" />
+    <link rel="preload" href="/landing/video/hero-fast.mp4" as="video" type="video/mp4" />
 
     <!-- Styles -->
     <link rel="stylesheet" href="/src/styles/landing.css" />
@@ -74,7 +75,11 @@
 
     <!-- ═══════════ HERO ═══════════ -->
     <section class="hero">
-      <div class="hero-bg" id="heroBg"></div>
+      <div class="hero-bg" id="heroBg">
+        <video autoplay muted loop playsinline poster="/landing/hero-globe.webp" class="hero-video" id="heroVideo">
+          <source src="/landing/video/hero-fast.mp4" type="video/mp4" />
+        </video>
+      </div>
       <div class="hero-overlay"></div>
       <div class="hero-content animate-in">
         <img src="/an-logo.svg" alt="Ancient Nerds" class="hero-logo" />
@@ -108,7 +113,9 @@
     <section class="landing-section" id="globe-section">
       <div class="feature-row">
         <div class="animate-in">
-          <img src="/landing/globe-category.webp" alt="Interactive 3D globe with category-colored archaeological sites" class="feature-image-main" data-lightbox loading="lazy" />
+          <video autoplay muted loop playsinline poster="/landing/globe-category.webp" class="feature-image-main feature-video">
+            <source data-src="/landing/video/globe-overview.mp4" type="video/mp4" />
+          </video>
           <div class="thumbnail-strip">
             <img src="/landing/globe-satellite.webp" alt="Satellite view" data-lightbox loading="lazy" />
             <img src="/landing/globe-country.webp" alt="Country-colored view" data-lightbox loading="lazy" />
@@ -130,19 +137,20 @@
           <p class="section-desc">By age, country, category, or data source. Narrow down from 10,000 BC to present across 91 countries and 49 site types.</p>
         </div>
         <div class="animate-in delay-2">
-          <div class="filter-collage">
-            <img src="/landing/filter-age.webp" alt="Age filter" data-lightbox loading="lazy" />
-            <img src="/landing/filter-country.webp" alt="Country filter" data-lightbox loading="lazy" />
-            <img src="/landing/filter-category.webp" alt="Category filter" data-lightbox loading="lazy" />
-            <img src="/landing/filter-source.webp" alt="Source filter showing 24 databases" data-lightbox loading="lazy" />
-          </div>
+          <video autoplay muted loop playsinline poster="/landing/filter-age.webp" class="feature-image-main feature-video">
+            <source data-src="/landing/video/filters.mp4" type="video/mp4" />
+          </video>
         </div>
       </div>
     </section>
 
     <!-- ═══════════ EMPIRES ═══════════ -->
     <section class="cinematic-section full-width">
-      <div class="cinematic-bg" style="background-image: url('/landing/empire-roman.webp')"></div>
+      <div class="cinematic-bg">
+        <video autoplay muted loop playsinline poster="/landing/empire-roman.webp" class="cinematic-video feature-video">
+          <source data-src="/landing/video/empires.mp4" type="video/mp4" />
+        </video>
+      </div>
       <div class="cinematic-overlay"></div>
       <div class="cinematic-content animate-in">
         <h2 class="section-label">WATCH EMPIRES RISE AND FALL</h2>
@@ -211,27 +219,37 @@
       <h2 class="section-label animate-in">RESEARCH TOOLS</h2>
       <div class="tools-grid">
         <div class="tool-card animate-in delay-1">
-          <img src="/landing/search.webp" alt="Search bar" loading="lazy" />
+          <video autoplay muted loop playsinline poster="/landing/search.webp" class="tool-video feature-video">
+            <source data-src="/landing/video/search.mp4" type="video/mp4" />
+          </video>
           <h3>Search</h3>
           <p>Find any site by name</p>
         </div>
         <div class="tool-card animate-in delay-1">
-          <img src="/landing/proximity.webp" alt="Proximity search" loading="lazy" />
+          <video autoplay muted loop playsinline poster="/landing/proximity.webp" class="tool-video feature-video">
+            <source data-src="/landing/video/proximity.mp4" type="video/mp4" />
+          </video>
           <h3>Proximity</h3>
           <p>What's near you?</p>
         </div>
         <div class="tool-card animate-in delay-2">
-          <img src="/landing/measure.webp" alt="Measure tool" loading="lazy" />
+          <video autoplay muted loop playsinline poster="/landing/measure.webp" class="tool-video feature-video">
+            <source data-src="/landing/video/measure.mp4" type="video/mp4" />
+          </video>
           <h3>Measure</h3>
           <p>Distance between sites</p>
         </div>
         <div class="tool-card animate-in delay-2">
-          <img src="/landing/map-layers.webp" alt="Map Layers panel" loading="lazy" />
+          <video autoplay muted loop playsinline poster="/landing/map-layers.webp" class="tool-video feature-video">
+            <source data-src="/landing/video/map-layers.mp4" type="video/mp4" />
+          </video>
           <h3>Map Layers</h3>
           <p>Rivers, reefs, glaciers, tectonic plates</p>
         </div>
         <div class="tool-card animate-in delay-3">
-          <img src="/landing/paleoshoreline.webp" alt="Paleoshoreline control" loading="lazy" />
+          <video autoplay muted loop playsinline poster="/landing/paleoshoreline.webp" class="tool-video feature-video">
+            <source data-src="/landing/video/paleoshoreline.mp4" type="video/mp4" />
+          </video>
           <h3>Paleoshoreline</h3>
           <p>Ice age coastlines</p>
         </div>
@@ -329,6 +347,36 @@
 
     <!-- ═══════════ SCRIPTS ═══════════ -->
     <script>
+      // Bandwidth / accessibility guard: pause videos for users who prefer reduced motion or save-data
+      (function() {
+        const prefersReducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const saveData = navigator.connection && navigator.connection.saveData;
+        if (prefersReducedMotion || saveData) {
+          document.querySelectorAll('video').forEach(function(v) {
+            v.removeAttribute('autoplay');
+            v.pause();
+          });
+        }
+      })();
+
+      // Lazy-load below-fold videos: swap data-src → src when visible
+      var videoObserver = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting) {
+            var video = entry.target;
+            video.querySelectorAll('source[data-src]').forEach(function(source) {
+              source.src = source.dataset.src;
+              source.removeAttribute('data-src');
+            });
+            video.load();
+            video.play().catch(function() {});
+            videoObserver.unobserve(video);
+          }
+        });
+      }, { rootMargin: '400px' });
+
+      document.querySelectorAll('.feature-video').forEach(function(v) { videoObserver.observe(v); });
+
       // Scroll-triggered animations
       const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
@@ -369,6 +417,26 @@
       }, { threshold: 0.3 });
 
       heroObserver.observe(document.querySelector('.hero'));
+
+      // Progressive quality upgrade: load full HD hero in background
+      (function() {
+        var preview = document.getElementById('heroVideo');
+        if (!preview) return;
+        var hd = document.createElement('video');
+        hd.muted = true;
+        hd.loop = true;
+        hd.playsInline = true;
+        hd.preload = 'auto';
+        hd.src = '/landing/video/hero.mp4';
+        hd.addEventListener('canplaythrough', function() {
+          hd.currentTime = preview.currentTime % hd.duration;
+          hd.play().then(function() {
+            hd.className = preview.className;
+            hd.id = preview.id;
+            preview.parentNode.replaceChild(hd, preview);
+          }).catch(function() {});
+        }, { once: true });
+      })();
 
       // Parallax on hero background
       const heroBg = document.getElementById('heroBg');
