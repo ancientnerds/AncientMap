@@ -200,6 +200,12 @@ class WikimediaConnector(BaseConnector):
             if country:
                 query = f"{site_name} {country}"
 
+        if content_type == ContentType.VIDEO:
+            # Quoted search to prevent broad fuzzy matching
+            return await self.search(
+                query=f'"{query}"', content_type=ContentType.VIDEO, limit=limit
+            )
+
         if content_type:
             return await self.search(query=query, content_type=content_type, limit=limit)
 
@@ -209,8 +215,9 @@ class WikimediaConnector(BaseConnector):
             limit=limit,
         )
 
+        # Quoted search to prevent broad fuzzy matching
         videos = await self.search(
-            query=query,
+            query=f'"{query}"',
             content_type=ContentType.VIDEO,
             limit=max(limit // 4, 5),
         )
@@ -226,34 +233,57 @@ class WikimediaConnector(BaseConnector):
     ) -> list[ContentItem]:
         """Search within a resolved Commons category for precise results.
 
-        Category constraint is only used for photos/images — most Commons
-        videos are NOT filed under the site's main category, so videos
-        always use free-text search to avoid returning empty results.
+        Videos use a two-step search to avoid false positives from ambiguous
+        names (e.g. "Sphinx" matching moth videos):
+        1. incategory:"<category>" — most precise, works when videos are filed
+        2. Quoted "<site_name>" — prevents broad fuzzy matching
         """
         logger.info(f"Wikimedia: precise search in category '{commons_category}'")
 
         if content_type == ContentType.VIDEO:
-            # Videos: free-text search (category constraint is too restrictive)
-            return await self.search(
-                query=site_name,
-                content_type=ContentType.VIDEO,
-                limit=limit,
+            return await self._search_videos_precise(
+                commons_category, site_name, limit
             )
 
         if content_type:
             # Photos/maps/artwork from category
             return await self.get_category_images(commons_category, limit=limit)
 
-        # No filter: category images (photos) + free-text video search
+        # No filter: category images (photos) + precise video search
         photos = await self.get_category_images(commons_category, limit=limit)
 
-        videos = await self.search(
-            query=site_name,
-            content_type=ContentType.VIDEO,
-            limit=max(limit // 4, 5),
+        videos = await self._search_videos_precise(
+            commons_category, site_name, max(limit // 4, 5)
         )
 
         return photos + videos
+
+    async def _search_videos_precise(
+        self,
+        commons_category: str,
+        site_name: str,
+        limit: int,
+    ) -> list[ContentItem]:
+        """Search for videos with category constraint, falling back to quoted search.
+
+        Avoids broad fuzzy matching that returns irrelevant results for
+        ambiguous names (e.g. "Sphinx" → Sphinx moth videos).
+        """
+        # Step 1: category-constrained search (most precise)
+        videos = await self.search(
+            query=f'incategory:"{commons_category}"',
+            content_type=ContentType.VIDEO,
+            limit=limit,
+        )
+        if videos:
+            return videos
+
+        # Step 2: quoted site name (prevents fuzzy word matching)
+        return await self.search(
+            query=f'"{site_name}"',
+            content_type=ContentType.VIDEO,
+            limit=limit,
+        )
 
     async def search_maps(
         self,
