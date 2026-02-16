@@ -146,7 +146,7 @@ export function enrichLyraContent(content: string, sites: SiteHighlight[]): stri
       // Match [variant text](any-url-that-isnt-already-lyra-site)
       const linkRegex = new RegExp(
         `\\[(${escaped})\\]\\((?!lyra-site:|lyra-coord:)[^)]+\\)`,
-        'gi'
+        'giu'
       )
       result = result.replace(linkRegex, (_, name) =>
         `[${name}](lyra-site:${site.id}:${site.lon}:${site.lat})`
@@ -163,10 +163,10 @@ export function enrichLyraContent(content: string, sites: SiteHighlight[]): stri
       if (replacedNames.has(varLower)) continue
 
       const escaped = escapeRegex(variant)
-      // Word-boundary match, case-insensitive. Avoid matching inside existing links.
+      // Unicode-aware word boundary (\b fails for Ġ, Ħ, etc.)
       const regex = new RegExp(
-        `(?<!\\[)(?<!\\]\\()\\b(${escaped})\\b(?!\\]|\\()`,
-        'gi'
+        `(?<!\\[)(?<!\\]\\()(?<![\\p{L}\\d])(${escaped})(?![\\p{L}\\d])(?!\\]|\\()`,
+        'giu'
       )
       const before = result
       result = result.replace(regex, (match) =>
@@ -189,8 +189,8 @@ export function enrichLyraContent(content: string, sites: SiteHighlight[]): stri
 
     const escaped = escapeRegex(name)
     const regex = new RegExp(
-      `(?<!\\[)(?<!/)\\b(${escaped})\\b(?!\\]|\\()`,
-      'gi'
+      `(?<!\\[)(?<!/)(?<![\\p{L}\\d])(${escaped})(?![\\p{L}\\d])(?!\\]|\\()`,
+      'giu'
     )
     result = result.replace(regex, (match) => {
       return `![flag](${flagUrl})${match}`
