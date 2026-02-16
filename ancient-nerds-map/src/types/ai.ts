@@ -58,7 +58,6 @@ export interface LyraMessage {
   news?: NewsHighlight[]
   timestamp: Date
   isStreaming?: boolean
-  images?: string[]
   confidence?: number | null
   tokens?: { input: number; output: number; voyage?: number }
 }
@@ -68,7 +67,6 @@ export interface LyraMessage {
  */
 export interface LyraChatRequest {
   message: string
-  images?: { data: string }[]
   context_type: LyraContextType
   context_id?: string
   context_year?: number
