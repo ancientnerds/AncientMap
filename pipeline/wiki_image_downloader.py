@@ -50,14 +50,14 @@ WIKIDATA_SPARQL_URL = "https://query.wikidata.org/sparql"
 THUMB_WIDTH = 800
 
 # Rate limits (seconds between requests)
-# Wikimedia allows 200 req/s for bots with proper User-Agent
 WIKIPEDIA_DELAY = 0.1
 WIKIDATA_DELAY = 0.2
-COMMONS_DELAY = 0.05
+COMMONS_DELAY = 0.1
 
 # Parallel download settings
-MAX_DOWNLOAD_WORKERS = 10
-MAX_WIKIMEDIA_CONCURRENT = 20  # global cap across all site threads
+MAX_DOWNLOAD_WORKERS = 5
+MAX_WIKIMEDIA_CONCURRENT = 10  # global cap across all site threads
+DOWNLOAD_MAX_RETRIES = 3       # retry 429s with exponential backoff
 _wikimedia_semaphore = threading.Semaphore(MAX_WIKIMEDIA_CONCURRENT)
 
 # Wikidata image properties to extract
@@ -739,11 +739,20 @@ def download_image(
     dest_path.parent.mkdir(parents=True, exist_ok=True)
 
     try:
-        with httpx.Client(timeout=60, follow_redirects=True) as client:
-            resp = client.get(fetch_url, headers=HEADERS)
+        resp = None
+        for attempt in range(DOWNLOAD_MAX_RETRIES):
+            with httpx.Client(timeout=60, follow_redirects=True) as client:
+                resp = client.get(fetch_url, headers=HEADERS)
 
-        if resp.status_code != 200:
-            logger.debug(f"Download failed {resp.status_code}: {fetch_url}")
+            if resp.status_code == 429:
+                wait = 2 ** attempt  # 1s, 2s, 4s
+                logger.debug(f"429 rate-limited, retrying in {wait}s: {fetch_url}")
+                time.sleep(wait)
+                continue
+            break
+
+        if resp is None or resp.status_code != 200:
+            logger.debug(f"Download failed {resp.status_code if resp else 'no response'}: {fetch_url}")
             return None
 
         content_type = resp.headers.get("content-type", "")
