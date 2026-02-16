@@ -836,6 +836,29 @@ def process_site(site: dict, dry_run: bool = False, max_per_category: int = 200)
         logger.debug(f"No images for: {site_name} ({article_title})")
         return 0
 
+    # --- Pick best hero image (most panoramic) and move to front ---
+    best_hero_idx = 0  # default: first image (Wikipedia lead)
+
+    # Priority 1: Wikidata P4291 (explicitly tagged as panoramic view)
+    for i, img in enumerate(deduped):
+        if img.get("source_type") == "wikidata_p4291":
+            best_hero_idx = i
+            break
+    else:
+        # Priority 2: widest aspect ratio among images with known dimensions
+        best_ratio = 0.0
+        for i, img in enumerate(deduped):
+            w, h = img.get("width"), img.get("height")
+            if w and h and h > 0:
+                ratio = w / h
+                if ratio > best_ratio and ratio >= 1.5:
+                    best_ratio = ratio
+                    best_hero_idx = i
+
+    if best_hero_idx != 0:
+        hero = deduped.pop(best_hero_idx)
+        deduped.insert(0, hero)
+
     if dry_run:
         wp_count = sum(1 for i in deduped if i.get("source_type") == "wikipedia")
         wd_count = sum(1 for i in deduped if (i.get("source_type") or "").startswith("wikidata"))
