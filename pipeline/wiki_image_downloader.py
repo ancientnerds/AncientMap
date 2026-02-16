@@ -912,7 +912,7 @@ def site_already_downloaded(site_id: str) -> bool:
         return count > 0
 
 
-def process_site(site: dict, dry_run: bool = False, max_per_category: int = 200) -> int:
+def process_site(site: dict, dry_run: bool = False, max_per_category: int = 200, force: bool = False) -> int:
     """
     Download images for a single site from all sources:
     1. Wikipedia article images (media-list REST API)
@@ -1031,16 +1031,17 @@ def process_site(site: dict, dry_run: bool = False, max_per_category: int = 200)
     # Load existing DB entries for this site to skip already-downloaded images
     existing_urls: set[str] = set()
     existing_filenames: set[str] = set()
-    with get_session() as session:
-        rows = session.execute(
-            text("SELECT original_url, filename FROM wiki_images WHERE site_id = :sid"),
-            {"sid": site_id},
-        ).fetchall()
-        for row in rows:
-            if row.original_url:
-                existing_urls.add(row.original_url)
-            if row.filename:
-                existing_filenames.add(row.filename)
+    if not force:
+        with get_session() as session:
+            rows = session.execute(
+                text("SELECT original_url, filename FROM wiki_images WHERE site_id = :sid"),
+                {"sid": site_id},
+            ).fetchall()
+            for row in rows:
+                if row.original_url:
+                    existing_urls.add(row.original_url)
+                if row.filename:
+                    existing_filenames.add(row.filename)
 
     # Build local filenames, skip images already in DB, identify metadata needs
     needs_metadata: list[str] = []
@@ -1054,13 +1055,16 @@ def process_site(site: dict, dry_run: bool = False, max_per_category: int = 200)
             local_filename += ".webp"
         img_filenames.append(local_filename)
 
-        # Skip if already in DB or on disk
-        orig_url = img.get("original_url") or img.get("full_url", "")
-        already_done = (
-            local_filename in existing_filenames
-            or orig_url in existing_urls
-            or (img_dir / local_filename).exists()
-        )
+        if force:
+            already_done = False
+        else:
+            # Skip if already in DB or on disk
+            orig_url = img.get("original_url") or img.get("full_url", "")
+            already_done = (
+                local_filename in existing_filenames
+                or orig_url in existing_urls
+                or (img_dir / local_filename).exists()
+            )
         skip_flags.append(already_done)
 
         if already_done:
@@ -1205,7 +1209,7 @@ def run_downloader(
 
     def _process_one(site: dict) -> tuple[str, int]:
         """Process a single site, return (name, count)."""
-        return site["name"], process_site(site, dry_run=dry_run, max_per_category=max_per_category)
+        return site["name"], process_site(site, dry_run=dry_run, max_per_category=max_per_category, force=force)
 
     if parallel_sites <= 1:
         # Sequential mode
