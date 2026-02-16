@@ -87,6 +87,14 @@ class WikimediaConnector(BaseConnector):
                         limit=limit,
                         file_type="video",
                     )
+                    # Resolve .webm transcodes — Ogg Theora has poor browser support
+                    if results:
+                        titles = [r["title"] for r in results if r.get("title")]
+                        transcodes = await self.mediawiki.get_video_transcodes(titles)
+                        for r in results:
+                            webm_url = transcodes.get(r.get("title", ""))
+                            if webm_url:
+                                r["transcode_url"] = webm_url
                 else:
                     results = await self.mediawiki.search_images(
                         query=query,
@@ -259,6 +267,9 @@ class WikimediaConnector(BaseConnector):
         else:
             page_url = url
 
+        # Prefer .webm transcode for videos (browser compatibility)
+        media_url = result.get("transcode_url") or url
+
         return ContentItem(
             id=str(page_id) if page_id else title,
             source=self.connector_id,
@@ -266,7 +277,7 @@ class WikimediaConnector(BaseConnector):
             title=title.replace("File:", ""),
             url=page_url,
             thumbnail_url=thumb_url or url,
-            media_url=url,
+            media_url=media_url,
             creator=result.get("artist"),
             date=result.get("date"),
             description=result.get("description"),
