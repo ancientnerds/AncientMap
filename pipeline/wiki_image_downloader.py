@@ -10,6 +10,8 @@ Usage:
     python -m pipeline.wiki_image_downloader --site-id <uuid>            # single site
     python -m pipeline.wiki_image_downloader --dry-run                   # preview only
     python -m pipeline.wiki_image_downloader --stats                     # show coverage
+    python -m pipeline.wiki_image_downloader --force                     # re-process existing
+    python -m pipeline.wiki_image_downloader --max-per-category 50       # limit Commons images
 """
 
 import argparse
@@ -37,6 +39,8 @@ IMAGE_DIR = Path("public/data/images/wiki")
 # Wikipedia/Wikimedia API endpoints
 WIKIPEDIA_REST_API = "https://en.wikipedia.org/api/rest_v1"
 WIKIPEDIA_ACTION_API = "https://en.wikipedia.org/w/api.php"
+WIKIDATA_ACTION_API = "https://www.wikidata.org/w/api.php"
+COMMONS_API_URL = "https://commons.wikimedia.org/w/api.php"
 WIKIDATA_SPARQL_URL = "https://query.wikidata.org/sparql"
 
 # Thumbnail width for downloads
@@ -45,6 +49,15 @@ THUMB_WIDTH = 800
 # Rate limits (seconds between requests)
 WIKIPEDIA_DELAY = 1.0
 WIKIDATA_DELAY = 2.0
+COMMONS_DELAY = 0.5  # Commons is more lenient
+
+# Wikidata image properties to extract
+WIKIDATA_IMAGE_PROPS = {
+    "P18": "wikidata_p18",  # Main image
+    "P3451": "wikidata_p3451",  # Nighttime view
+    "P4291": "wikidata_p4291",  # Panoramic view
+    "P5775": "wikidata_p5775",  # Interior view
+}
 
 # Excluded image patterns (icons, logos, UI elements) — matches frontend
 EXCLUDED_PATTERN = re.compile(
@@ -67,6 +80,7 @@ HEADERS = {
 # =============================================================================
 # URL helpers
 # =============================================================================
+
 
 def extract_title_from_url(wikipedia_url: str) -> str | None:
     """Extract article title from a Wikipedia URL."""
@@ -116,14 +130,17 @@ def sanitize_filename(filename: str, max_len: int = 200) -> str:
     safe = safe.strip(". ")
     if len(safe) > max_len:
         # Keep extension
-        name, ext = (safe[:safe.rfind(".")], safe[safe.rfind("."):]) if "." in safe else (safe, "")
-        safe = name[:max_len - len(ext)] + ext
+        name, ext = (
+            (safe[: safe.rfind(".")], safe[safe.rfind(".") :]) if "." in safe else (safe, "")
+        )
+        safe = name[: max_len - len(ext)] + ext
     return safe or "image.jpg"
 
 
 # =============================================================================
 # Wikipedia API functions
 # =============================================================================
+
 
 def fetch_article_images(article_title: str) -> list[dict]:
     """
@@ -166,19 +183,23 @@ def fetch_article_images(article_title: str) -> list[dict]:
             continue
 
         # Get largest thumbnail from srcset
-        sorted_srcset = sorted(srcset, key=lambda s: float(s.get("scale", "1").rstrip("x") or "1"), reverse=True)
+        sorted_srcset = sorted(
+            srcset, key=lambda s: float(s.get("scale", "1").rstrip("x") or "1"), reverse=True
+        )
         thumb_src = sorted_srcset[0]["src"]
         thumb_url = ("https:" + thumb_src) if thumb_src.startswith("//") else thumb_src
         full_url = thumb_to_original(thumb_url)
 
-        images.append({
-            "title": title,
-            "display_title": title.replace("File:", "").rsplit(".", 1)[0],
-            "thumb_url": thumb_url,
-            "full_url": full_url,
-            "commons_page_url": f"https://commons.wikimedia.org/wiki/{urllib.parse.quote(title, safe='')}",
-            "is_lead": item.get("leadImage") is True,
-        })
+        images.append(
+            {
+                "title": title,
+                "display_title": title.replace("File:", "").rsplit(".", 1)[0],
+                "thumb_url": thumb_url,
+                "full_url": full_url,
+                "commons_page_url": f"https://commons.wikimedia.org/wiki/{urllib.parse.quote(title, safe='')}",
+                "is_lead": item.get("leadImage") is True,
+            }
+        )
 
     return images
 
@@ -273,11 +294,12 @@ def wikipedia_opensearch(site_name: str) -> str | None:
 # Wikidata fallback for sites without Wikipedia URL
 # =============================================================================
 
+
 def wikidata_p18_for_name(site_name: str) -> str | None:
     """Query Wikidata for an image (P18) by site name. Returns Commons filename."""
     query = f"""
     SELECT ?image WHERE {{
-      ?item rdfs:label "{site_name.replace('"', '')}"@en .
+      ?item rdfs:label "{site_name.replace('"', "")}"@en .
       ?item wdt:P18 ?image .
     }} LIMIT 1
     """
@@ -303,11 +325,234 @@ def wikidata_p18_for_name(site_name: str) -> str | None:
     return None
 
 
+def resolve_wikidata_entity(article_title: str) -> dict | None:
+    """
+    Resolve a Wikipedia article title to a Wikidata entity.
+
+    Returns dict with: qid, commons_category (P373), commons_gallery (P935),
+    and image filenames for P18, P3451, P4291, P5775.
+    Returns None if resolution fails.
+    """
+    # Step 1: Get Wikidata QID from Wikipedia article
+    encoded_title = article_title.replace(" ", "_")
+    params = {
+        "action": "query",
+        "titles": encoded_title,
+        "prop": "pageprops",
+        "ppprop": "wikibase_item",
+        "format": "json",
+    }
+
+    try:
+        with httpx.Client(timeout=30, follow_redirects=True) as client:
+            resp = client.get(WIKIPEDIA_ACTION_API, params=params, headers=HEADERS)
+
+        if resp.status_code != 200:
+            return None
+
+        pages = resp.json().get("query", {}).get("pages", {})
+        page: dict = next(iter(pages.values()), {})
+        qid = page.get("pageprops", {}).get("wikibase_item")
+        if not qid:
+            return None
+    except Exception as e:
+        logger.debug(f"Wikidata QID lookup failed for '{article_title}': {e}")
+        return None
+
+    time.sleep(WIKIDATA_DELAY)
+
+    # Step 2: Fetch entity claims from Wikidata
+    params = {
+        "action": "wbgetentities",
+        "ids": qid,
+        "props": "claims",
+        "format": "json",
+    }
+
+    try:
+        with httpx.Client(timeout=30, follow_redirects=True) as client:
+            resp = client.get(WIKIDATA_ACTION_API, params=params, headers=HEADERS)
+
+        if resp.status_code != 200:
+            return None
+
+        entity = resp.json().get("entities", {}).get(qid, {})
+        claims = entity.get("claims", {})
+    except Exception as e:
+        logger.debug(f"Wikidata entity fetch failed for {qid}: {e}")
+        return None
+
+    def get_string_value(prop_id: str) -> str | None:
+        claim_list = claims.get(prop_id, [])
+        if claim_list:
+            snak = claim_list[0].get("mainsnak", {})
+            return snak.get("datavalue", {}).get("value")
+        return None
+
+    result = {"qid": qid}
+
+    # P373 = Commons category name (the key to unlocking many more images)
+    result["commons_category"] = get_string_value("P373")
+    # P935 = Commons gallery page
+    result["commons_gallery"] = get_string_value("P935")
+
+    # Image properties: P18, P3451, P4291, P5775
+    result["images"] = {}
+    for prop_id, source_type in WIKIDATA_IMAGE_PROPS.items():
+        filename = get_string_value(prop_id)
+        if filename:
+            result["images"][source_type] = filename
+
+    return result
+
+
+# =============================================================================
+# Commons category fetcher
+# =============================================================================
+
+
+def fetch_commons_category_images(category_name: str, limit: int = 200) -> list[dict]:
+    """
+    Fetch image files from a Wikimedia Commons category.
+
+    Uses generator=categorymembers with prop=imageinfo to get file metadata
+    in a single paginated call. Returns list of dicts with:
+    title, original_url, commons_page_url, author, license, width, height
+    """
+    images: list[dict] = []
+    gcmcontinue = None
+
+    with httpx.Client(timeout=30, follow_redirects=True) as client:
+        while len(images) < limit:
+            params = {
+                "action": "query",
+                "generator": "categorymembers",
+                "gcmtitle": f"Category:{category_name}",
+                "gcmtype": "file",
+                "gcmlimit": str(min(50, limit - len(images))),
+                "prop": "imageinfo",
+                "iiprop": "url|size|extmetadata",
+                "iiextmetadatafilter": "Artist|LicenseShortName|LicenseUrl",
+                "format": "json",
+            }
+            if gcmcontinue:
+                params["gcmcontinue"] = gcmcontinue
+
+            try:
+                resp = client.get(COMMONS_API_URL, params=params, headers=HEADERS)
+                if resp.status_code != 200:
+                    logger.debug(f"Commons category API {resp.status_code} for {category_name}")
+                    break
+
+                data = resp.json()
+            except Exception as e:
+                logger.debug(f"Commons category error for {category_name}: {e}")
+                break
+
+            pages = data.get("query", {}).get("pages", {})
+            for page in pages.values():
+                file_title = page.get("title", "")
+                if not file_title:
+                    continue
+                if EXCLUDED_PATTERN.search(file_title) or EXCLUDED_EXT.search(file_title):
+                    continue
+
+                info_list = page.get("imageinfo", [])
+                if not info_list:
+                    continue
+                info = info_list[0]
+
+                original_url = info.get("url")
+                if not original_url:
+                    continue
+
+                ext = info.get("extmetadata", {})
+
+                # Parse author (strip HTML)
+                author_raw = ext.get("Artist", {}).get("value", "")
+                author = re.sub(r"<[^>]*>", "", author_raw).strip() if author_raw else None
+                if author and len(author) > 200:
+                    author = author[:200] + "..."
+
+                # Parse author URL from HTML
+                author_url = None
+                href_match = re.search(r'href="([^"]+)"', author_raw)
+                if href_match:
+                    author_url = href_match.group(1)
+                    if author_url.startswith("//"):
+                        author_url = "https:" + author_url
+
+                license_name = ext.get("LicenseShortName", {}).get("value", "")
+                license_url = ext.get("LicenseUrl", {}).get("value", "")
+
+                encoded_title = urllib.parse.quote(file_title, safe="")
+                images.append(
+                    {
+                        "title": file_title,
+                        "display_title": file_title.replace("File:", "").rsplit(".", 1)[0],
+                        "original_url": original_url,
+                        "commons_page_url": f"https://commons.wikimedia.org/wiki/{encoded_title}",
+                        "is_lead": False,
+                        "author": author or None,
+                        "author_url": author_url,
+                        "license": license_name or None,
+                        "license_url": license_url or None,
+                        "width": info.get("width"),
+                        "height": info.get("height"),
+                        "source_type": "commons_category",
+                        "_has_metadata": True,  # Metadata already fetched inline
+                    }
+                )
+
+            # Check for continuation
+            cont = data.get("continue", {})
+            gcmcontinue = cont.get("gcmcontinue")
+            if not gcmcontinue:
+                break
+
+            time.sleep(COMMONS_DELAY)
+
+    return images[:limit]
+
+
+def build_wikidata_image_entries(wikidata_images: dict[str, str]) -> list[dict]:
+    """
+    Build image entries from Wikidata curated properties (P18, P3451, etc.).
+
+    Takes a dict of {source_type: commons_filename} and returns list of image dicts.
+    """
+    entries = []
+    for source_type, filename in wikidata_images.items():
+        # Build the Commons file URL from filename
+        # MD5 hash of filename determines the directory path
+        encoded_name = filename.replace(" ", "_")
+        md5 = hashlib.md5(encoded_name.encode()).hexdigest()
+        original_url = f"https://upload.wikimedia.org/wikipedia/commons/{md5[0]}/{md5[:2]}/{urllib.parse.quote(encoded_name)}"
+        encoded_title = urllib.parse.quote(f"File:{encoded_name}", safe="")
+
+        entries.append(
+            {
+                "title": f"File:{filename}",
+                "display_title": filename.rsplit(".", 1)[0],
+                "original_url": original_url,
+                "commons_page_url": f"https://commons.wikimedia.org/wiki/{encoded_title}",
+                "is_lead": False,
+                "source_type": source_type,
+                "_has_metadata": False,  # Need to fetch metadata separately
+            }
+        )
+
+    return entries
+
+
 # =============================================================================
 # Image download
 # =============================================================================
 
-def download_thumb(original_url: str, dest_path: Path, width: int = THUMB_WIDTH) -> tuple[int, int, int] | None:
+
+def download_thumb(
+    original_url: str, dest_path: Path, width: int = THUMB_WIDTH
+) -> tuple[int, int, int] | None:
     """
     Download a Wikimedia image thumbnail, convert to WebP, and save.
 
@@ -324,7 +569,9 @@ def download_thumb(original_url: str, dest_path: Path, width: int = THUMB_WIDTH)
     if "upload.wikimedia.org" in original_url and "/thumb/" not in original_url:
         # Insert /thumb/ and append /{width}px-{filename}
         thumb_url = original_url.replace("/commons/", "/commons/thumb/")
-        thumb_url = thumb_url.replace("/wikipedia/", "/wikipedia/thumb/")  # Some are under /wikipedia/
+        thumb_url = thumb_url.replace(
+            "/wikipedia/", "/wikipedia/thumb/"
+        )  # Some are under /wikipedia/
         filename = original_url.rsplit("/", 1)[-1]
         thumb_url = f"{thumb_url}/{width}px-{filename}"
     elif "/thumb/" in original_url:
@@ -380,6 +627,7 @@ def download_thumb(original_url: str, dest_path: Path, width: int = THUMB_WIDTH)
 # Main processing
 # =============================================================================
 
+
 def get_sites_to_process(
     source_filter: str | None = None,
     site_id: str | None = None,
@@ -387,28 +635,42 @@ def get_sites_to_process(
     """Get sites from own sources that need image downloading."""
     with get_session() as session:
         if site_id:
-            result = session.execute(text("""
+            result = session.execute(
+                text("""
                 SELECT id, name, source_url, source_id
                 FROM unified_sites
                 WHERE id = :site_id
-            """), {"site_id": site_id})
+            """),
+                {"site_id": site_id},
+            )
         elif source_filter:
-            result = session.execute(text("""
+            result = session.execute(
+                text("""
                 SELECT id, name, source_url, source_id
                 FROM unified_sites
                 WHERE source_id = :source
                 ORDER BY name
-            """), {"source": source_filter})
+            """),
+                {"source": source_filter},
+            )
         else:
-            result = session.execute(text("""
+            result = session.execute(
+                text("""
                 SELECT id, name, source_url, source_id
                 FROM unified_sites
                 WHERE source_id IN :sources
                 ORDER BY source_id, name
-            """), {"sources": OWN_SOURCES})
+            """),
+                {"sources": OWN_SOURCES},
+            )
 
         return [
-            {"id": str(row.id), "name": row.name, "source_url": row.source_url, "source_id": row.source_id}
+            {
+                "id": str(row.id),
+                "name": row.name,
+                "source_url": row.source_url,
+                "source_id": row.source_id,
+            }
             for row in result
         ]
 
@@ -423,9 +685,12 @@ def site_already_downloaded(site_id: str) -> bool:
         return count > 0
 
 
-def process_site(site: dict, dry_run: bool = False) -> int:
+def process_site(site: dict, dry_run: bool = False, max_per_category: int = 200) -> int:
     """
-    Download images for a single site.
+    Download images for a single site from all sources:
+    1. Wikipedia article images (media-list REST API)
+    2. Wikidata curated images (P18, P3451, P4291, P5775)
+    3. Wikimedia Commons category images (via Wikidata P373)
 
     Returns number of images downloaded.
     """
@@ -439,7 +704,6 @@ def process_site(site: dict, dry_run: bool = False) -> int:
         article_title = extract_title_from_url(source_url)
 
     if not article_title:
-        # Try opensearch
         article_title = wikipedia_opensearch(site_name)
         time.sleep(WIKIPEDIA_DELAY)
 
@@ -447,26 +711,74 @@ def process_site(site: dict, dry_run: bool = False) -> int:
         logger.debug(f"No Wikipedia article for: {site_name}")
         return 0
 
-    # Fetch media list
-    images = fetch_article_images(article_title)
+    # --- Source 1: Wikipedia article images ---
+    all_images: list[dict] = []
+    wp_images = fetch_article_images(article_title)
     time.sleep(WIKIPEDIA_DELAY)
 
-    if not images:
+    for img in wp_images:
+        img["source_type"] = "wikipedia"
+        img["_has_metadata"] = False
+    all_images.extend(wp_images)
+
+    # --- Source 2 & 3: Wikidata entity + Commons category ---
+    wikidata = resolve_wikidata_entity(article_title)
+    if wikidata:
+        # Source 2: Wikidata curated images (P18, P3451, P4291, P5775)
+        if wikidata.get("images"):
+            wd_entries = build_wikidata_image_entries(wikidata["images"])
+            all_images.extend(wd_entries)
+            logger.debug(f"  Wikidata: {len(wd_entries)} curated images for {site_name}")
+
+        # Source 3: Commons category images
+        commons_cat = wikidata.get("commons_category")
+        if commons_cat:
+            cat_images = fetch_commons_category_images(commons_cat, limit=max_per_category)
+            all_images.extend(cat_images)
+            logger.debug(
+                f"  Commons category '{commons_cat}': {len(cat_images)} images for {site_name}"
+            )
+
+    time.sleep(WIKIDATA_DELAY)
+
+    # --- Deduplicate by file title + URL ---
+    # The File: title is the canonical Wikimedia identifier — same image always
+    # has the same title even when URLs differ due to encoding (thumb_to_original
+    # vs imageinfo API vs MD5-constructed URL).
+    seen: set[str] = set()
+    deduped: list[dict] = []
+    for img in all_images:
+        title_key = img.get("title", "").replace(" ", "_").lower()
+        url = img.get("original_url") or img.get("full_url", "")
+        if title_key in seen or url in seen:
+            continue
+        if title_key:
+            seen.add(title_key)
+        if url:
+            seen.add(url)
+        deduped.append(img)
+
+    if not deduped:
         logger.debug(f"No images for: {site_name} ({article_title})")
         return 0
 
     if dry_run:
-        logger.info(f"  [DRY RUN] {site_name}: {len(images)} images found")
-        return len(images)
+        wp_count = sum(1 for i in deduped if i.get("source_type") == "wikipedia")
+        wd_count = sum(1 for i in deduped if (i.get("source_type") or "").startswith("wikidata"))
+        cc_count = sum(1 for i in deduped if i.get("source_type") == "commons_category")
+        logger.info(
+            f"  [DRY RUN] {site_name}: {len(deduped)} images "
+            f"(wikipedia={wp_count}, wikidata={wd_count}, commons={cc_count})"
+        )
+        return len(deduped)
 
-    # Download each image
+    # --- Download each image ---
     downloaded = 0
     img_dir = site_image_dir(site_id)
 
-    for idx, img in enumerate(images):
+    for idx, img in enumerate(deduped):
         file_title = img["title"]
         raw_name = sanitize_filename(file_title.replace("File:", ""))
-        # Replace original extension with .webp
         local_filename = re.sub(r"\.[^.]+$", ".webp", raw_name)
         if not local_filename.endswith(".webp"):
             local_filename += ".webp"
@@ -477,21 +789,34 @@ def process_site(site: dict, dry_run: bool = False) -> int:
             downloaded += 1
             continue
 
-        # Fetch metadata (author, license)
-        meta = fetch_image_metadata(file_title)
-        time.sleep(WIKIPEDIA_DELAY)
+        # Fetch metadata if not already inline (Wikipedia and Wikidata images need it)
+        if img.get("_has_metadata"):
+            meta = {
+                "author": img.get("author"),
+                "author_url": img.get("author_url"),
+                "license": img.get("license"),
+                "license_url": img.get("license_url"),
+                "width": img.get("width"),
+                "height": img.get("height"),
+            }
+        else:
+            meta = fetch_image_metadata(file_title)
+            time.sleep(WIKIPEDIA_DELAY)
 
-        # Use the original URL from metadata if available, otherwise from media-list
-        original_url = meta.get("original_url") or img["full_url"]
+        # Use the original URL from metadata if available, otherwise from the image dict
+        original_url = (
+            meta.get("original_url") or img.get("original_url") or img.get("full_url", "")
+        )
 
         # Download thumbnail
         result = download_thumb(original_url, dest_path, THUMB_WIDTH)
-        time.sleep(WIKIPEDIA_DELAY)
+        time.sleep(COMMONS_DELAY)
 
         if not result:
             continue
 
         file_size, img_width, img_height = result
+        source_type = img.get("source_type", "wikimedia")
 
         # Insert into database
         try:
@@ -502,15 +827,15 @@ def process_site(site: dict, dry_run: bool = False) -> int:
                     original_url=original_url,
                     commons_page_url=img.get("commons_page_url"),
                     thumb_width=THUMB_WIDTH,
-                    author=meta.get("author"),
-                    author_url=meta.get("author_url"),
-                    license=meta.get("license"),
-                    license_url=meta.get("license_url"),
+                    author=meta.get("author") or img.get("author"),
+                    author_url=meta.get("author_url") or img.get("author_url"),
+                    license=meta.get("license") or img.get("license"),
+                    license_url=meta.get("license_url") or img.get("license_url"),
                     title=img.get("display_title"),
                     is_hero=(idx == 0),
                     is_lead=img.get("is_lead", False),
                     sort_order=idx,
-                    source_type="wikimedia",
+                    source_type=source_type,
                     file_size_bytes=file_size,
                     width=img_width,
                     height=img_height,
@@ -533,6 +858,8 @@ def run_downloader(
     site_id: str | None = None,
     dry_run: bool = False,
     stats_only: bool = False,
+    force: bool = False,
+    max_per_category: int = 200,
 ) -> None:
     """Main entry point for the wiki image downloader."""
     if stats_only:
@@ -541,6 +868,8 @@ def run_downloader(
 
     sites = get_sites_to_process(source_filter, site_id)
     logger.info(f"Found {len(sites)} sites to process")
+    if force:
+        logger.info("--force enabled: re-processing sites even if they already have images")
 
     total_downloaded = 0
     total_skipped = 0
@@ -548,15 +877,17 @@ def run_downloader(
 
     for i, site in enumerate(sites):
         if (i + 1) % 100 == 0:
-            logger.info(f"Progress: {i + 1}/{len(sites)} sites ({total_downloaded} images downloaded)")
+            logger.info(
+                f"Progress: {i + 1}/{len(sites)} sites ({total_downloaded} images downloaded)"
+            )
 
-        # Skip sites that already have images
-        if not dry_run and site_already_downloaded(site["id"]):
+        # Skip sites that already have images (unless --force)
+        if not dry_run and not force and site_already_downloaded(site["id"]):
             total_skipped += 1
             continue
 
         try:
-            count = process_site(site, dry_run=dry_run)
+            count = process_site(site, dry_run=dry_run, max_per_category=max_per_category)
             total_downloaded += count
             if count > 0:
                 logger.info(f"  [{i + 1}/{len(sites)}] {site['name']}: {count} images")
@@ -576,25 +907,29 @@ def print_stats() -> None:
     """Print image download coverage statistics."""
     with get_session() as session:
         # Total sites in own sources
-        total = session.execute(text(
-            "SELECT COUNT(*) FROM unified_sites WHERE source_id IN :sources"
-        ), {"sources": OWN_SOURCES}).scalar()
+        total = session.execute(
+            text("SELECT COUNT(*) FROM unified_sites WHERE source_id IN :sources"),
+            {"sources": OWN_SOURCES},
+        ).scalar()
 
         # Sites with wiki images
-        with_images = session.execute(text("""
+        with_images = session.execute(
+            text("""
             SELECT COUNT(DISTINCT site_id) FROM wiki_images
-        """)).scalar()
+        """)
+        ).scalar()
 
         # Total images
         total_images = session.execute(text("SELECT COUNT(*) FROM wiki_images")).scalar()
 
         # Total disk size
-        total_bytes = session.execute(text(
-            "SELECT COALESCE(SUM(file_size_bytes), 0) FROM wiki_images"
-        )).scalar()
+        total_bytes = session.execute(
+            text("SELECT COALESCE(SUM(file_size_bytes), 0) FROM wiki_images")
+        ).scalar()
 
         # By source
-        by_source = session.execute(text("""
+        by_source = session.execute(
+            text("""
             SELECT us.source_id,
                    COUNT(DISTINCT us.id) AS total_sites,
                    COUNT(DISTINCT wi.site_id) AS sites_with_images,
@@ -604,7 +939,9 @@ def print_stats() -> None:
             WHERE us.source_id IN :sources
             GROUP BY us.source_id
             ORDER BY us.source_id
-        """), {"sources": OWN_SOURCES}).fetchall()
+        """),
+            {"sources": OWN_SOURCES},
+        ).fetchall()
 
     print("\n" + "=" * 60)
     print("WIKI IMAGE DOWNLOAD STATISTICS")
@@ -618,7 +955,9 @@ def print_stats() -> None:
     print(f"{'Source':<30} {'Sites':>8} {'With img':>10} {'Images':>8}")
     print("-" * 60)
     for row in by_source:
-        print(f"{row.source_id:<30} {row.total_sites:>8,} {row.sites_with_images:>10,} {row.total_images:>8,}")
+        print(
+            f"{row.source_id:<30} {row.total_sites:>8,} {row.sites_with_images:>10,} {row.total_images:>8,}"
+        )
     print("=" * 60 + "\n")
 
 
@@ -628,6 +967,15 @@ def main():
     parser.add_argument("--site-id", type=str, help="Process a single site by UUID")
     parser.add_argument("--dry-run", action="store_true", help="Preview only, don't download")
     parser.add_argument("--stats", action="store_true", help="Print coverage statistics")
+    parser.add_argument(
+        "--force", action="store_true", help="Re-process sites that already have images"
+    )
+    parser.add_argument(
+        "--max-per-category",
+        type=int,
+        default=200,
+        help="Max images to fetch from Commons category per site (default: 200)",
+    )
     args = parser.parse_args()
 
     run_downloader(
@@ -635,6 +983,8 @@ def main():
         site_id=args.site_id,
         dry_run=args.dry_run,
         stats_only=args.stats,
+        force=args.force,
+        max_per_category=args.max_per_category,
     )
 
 
