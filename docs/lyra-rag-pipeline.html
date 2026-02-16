@@ -417,7 +417,7 @@
 
 <div class="stats">
   <div class="stat-card">
-    <div class="value" style="color: var(--accent);">9</div>
+    <div class="value" style="color: var(--accent);">11</div>
     <div class="label">Pipeline Steps</div>
   </div>
   <div class="stat-card">
@@ -433,7 +433,7 @@
     <div class="label">Voyage Models</div>
   </div>
   <div class="stat-card">
-    <div class="value" style="color: var(--yellow);">5</div>
+    <div class="value" style="color: var(--yellow);">8</div>
     <div class="label">RAG Agent Tools</div>
   </div>
   <div class="stat-card">
@@ -447,7 +447,7 @@
 <!-- ================================================================== -->
 <!-- NEWS PIPELINE FLOW (NEW) -->
 <!-- ================================================================== -->
-<h2><span class="num">1</span> News Pipeline &mdash; 9-Step Hourly Cycle</h2>
+<h2><span class="num">1</span> News Pipeline &mdash; 11-Step Hourly Cycle</h2>
 
 <p style="font-size: 12px; color: var(--dim); margin-bottom: 20px;">
   Runs every hour via <code>pipeline/lyra/orchestrator.py</code>. Each step returns a count + elapsed time. Steps run sequentially; failures in one step don't block later steps (SAVEPOINT isolation).
@@ -481,9 +481,24 @@
 
   <div class="flow-arrow">&#x25BC;</div>
 
-  <!-- Step 2: Summarize -->
+  <!-- Step 2: Retry -->
   <div class="stage">
-    <div class="stage-label">step 2<br><strong>summarize</strong></div>
+    <div class="stage-label">step 2<br><strong>retry</strong></div>
+    <div class="stage-content">
+      <div class="node node-index">
+        <div class="node-title">Retry Failed Transcripts <span class="badge badge-existing">IO</span></div>
+        <div class="node-desc">
+          Re-attempts transcript downloads for videos that failed in previous cycles (proxy issues, rate limits, transient errors). Same logic as fetch but targets <code>status = 'failed'</code> rows.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-arrow">&#x25BC;</div>
+
+  <!-- Step 3: Summarize -->
+  <div class="stage">
+    <div class="stage-label">step 3<br><strong>summarize</strong></div>
     <div class="stage-content">
       <div class="node node-ai">
         <div class="node-title">
@@ -508,9 +523,9 @@
 
   <div class="flow-arrow">&#x25BC;</div>
 
-  <!-- Step 3: Match -->
+  <!-- Step 4: Match -->
   <div class="stage">
-    <div class="stage-label">step 3<br><strong>match</strong></div>
+    <div class="stage-label">step 4<br><strong>match</strong></div>
     <div class="stage-content">
       <div class="node node-search">
         <div class="node-title">Site Matching <span class="badge badge-existing">DB</span></div>
@@ -523,9 +538,9 @@
 
   <div class="flow-arrow">&#x25BC;</div>
 
-  <!-- Step 4: Posts -->
+  <!-- Step 5: Posts -->
   <div class="stage">
-    <div class="stage-label">step 4<br><strong>posts</strong></div>
+    <div class="stage-label">step 5<br><strong>posts</strong></div>
     <div class="stage-content">
       <div class="node node-ai">
         <div class="node-title">
@@ -534,7 +549,7 @@
           <span class="badge badge-cache">cached</span>
         </div>
         <div class="node-desc">
-          Summary JSON &rarr; MiniMax writes <strong>engaging news feed posts</strong> (max 170 chars each). Significance scoring and categorization are handled by a separate rescore step (5b) to reduce token waste.<br>
+          Summary JSON &rarr; MiniMax writes <strong>engaging news feed posts</strong> (max 170 chars each). Significance scoring and categorization are handled by a separate rescore step (step 7) to reduce token waste.<br>
           Persona: hobby archaeologist sharing discoveries. No hashtags. Video status &rarr; <code>"posted"</code>.
         </div>
         <div style="margin-top: 8px; font-size: 11px; color: var(--dim);">
@@ -548,9 +563,9 @@
 
   <div class="flow-arrow">&#x25BC;</div>
 
-  <!-- Step 5: Verify -->
+  <!-- Step 6: Verify -->
   <div class="stage">
-    <div class="stage-label">step 5<br><strong>verify</strong></div>
+    <div class="stage-label">step 6<br><strong>verify</strong></div>
     <div class="stage-content">
       <div class="node node-verify">
         <div class="node-title">
@@ -576,9 +591,9 @@
 
   <div class="flow-arrow">&#x25BC;</div>
 
-  <!-- Step 5b: Rescore -->
+  <!-- Step 7: Rescore -->
   <div class="stage">
-    <div class="stage-label">step 5b<br><strong>rescore</strong></div>
+    <div class="stage-label">step 7<br><strong>rescore</strong></div>
     <div class="stage-content">
       <div class="node node-ai">
         <div class="node-title">
@@ -604,9 +619,9 @@
 
   <div class="flow-arrow">&#x25BC;</div>
 
-  <!-- Step 6: Dedup -->
+  <!-- Step 8: Dedup -->
   <div class="stage">
-    <div class="stage-label">step 6<br><strong>dedup</strong></div>
+    <div class="stage-label">step 8<br><strong>dedup</strong></div>
     <div class="stage-content">
       <div class="node" style="border-left: 3px solid var(--dim);">
         <div class="node-title">Deduplication <span class="badge badge-existing">code</span></div>
@@ -619,9 +634,9 @@
 
   <div class="flow-arrow">&#x25BC;</div>
 
-  <!-- Step 7: Screenshots -->
+  <!-- Step 9: Screenshots -->
   <div class="stage">
-    <div class="stage-label">step 7<br><strong>screenshots</strong></div>
+    <div class="stage-label">step 9<br><strong>screenshots</strong></div>
     <div class="stage-content">
       <div class="node node-index">
         <div class="node-title">Screenshot Extraction <span class="badge badge-existing">IO</span></div>
@@ -634,9 +649,9 @@
 
   <div class="flow-arrow">&#x25BC;</div>
 
-  <!-- Step 8: Backfill -->
+  <!-- Step 10: Backfill -->
   <div class="stage">
-    <div class="stage-label">step 8<br><strong>backfill</strong></div>
+    <div class="stage-label">step 10<br><strong>backfill</strong></div>
     <div class="stage-content">
       <div class="node node-index">
         <div class="node-title">Video Description Backfill <span class="badge badge-existing">IO</span></div>
@@ -649,9 +664,9 @@
 
   <div class="flow-arrow">&#x25BC;</div>
 
-  <!-- Step 9: Identify -->
+  <!-- Step 11: Identify -->
   <div class="stage">
-    <div class="stage-label">step 9<br><strong>identify</strong></div>
+    <div class="stage-label">step 11<br><strong>identify</strong></div>
     <div class="stage-content">
       <div class="node node-ai" style="border: 1px solid var(--purple); background: rgba(192, 132, 252, 0.03);">
         <div class="node-title">
@@ -1163,8 +1178,9 @@ ESCALATION_SCHEMA:
       <div class="node node-embed" style="border: 1px solid var(--green); background: rgba(74, 222, 128, 0.03);">
         <div class="node-title">_auto_retrieve() + _get_related_news()</div>
         <div class="node-desc">
-          Runs BEFORE the LLM. Hybrid search across both collections (sites + news).
-          Returns formatted context + site results for immediate map highlighting (relevance &ge; 0.3).
+          Runs BEFORE the LLM. Dual hybrid search: sites collection (top 5) + news collection (top 3) on every query.
+          Returns formatted context + site results for map highlighting (relevance &ge; 0.3) + semantic news for sidebar cards.
+          SQL-based news fetch (_get_related_news + LLM filter extraction) adds complementary results.
         </div>
       </div>
 
@@ -1264,9 +1280,23 @@ ESCALATION_SCHEMA:
           <div class="node-title" style="font-size: 12px;">vector_search</div>
           <div class="node-desc">Deep-dive hybrid search w/ metadata filters</div>
         </div>
-        <div class="node node-tool" style="opacity: 0.4;">
-          <div class="node-title" style="font-size: 12px; color: var(--dim);">(future tools)</div>
-          <div class="node-desc">Extensible</div>
+        <div class="node node-tool">
+          <div class="node-title" style="font-size: 12px;">search_radar</div>
+          <div class="node-desc">Recent Lyra-discovered sites by country/period</div>
+        </div>
+      </div>
+      <div class="split-3" style="opacity: 0.8;">
+        <div class="node node-tool">
+          <div class="node-title" style="font-size: 12px;">list_channels</div>
+          <div class="node-desc">List monitored YouTube channels</div>
+        </div>
+        <div class="node node-tool">
+          <div class="node-title" style="font-size: 12px;">get_site_images</div>
+          <div class="node-desc">Wikimedia Commons images for a site</div>
+        </div>
+        <div class="node node-tool" style="opacity: 0.3;">
+          <div class="node-title" style="font-size: 12px; color: var(--dim);">8 tools total</div>
+          <div class="node-desc">Extensible via @tool decorator</div>
         </div>
       </div>
     </div>
@@ -1284,13 +1314,24 @@ ESCALATION_SCHEMA:
           <div class="node-desc">Site data for map pins</div>
         </div>
         <div class="node node-output">
+          <div class="node-title" style="font-size: 12px;">{"type": "news"}</div>
+          <div class="node-desc">News items for sidebar cards</div>
+        </div>
+        <div class="node node-output">
           <div class="node-title" style="font-size: 12px;">{"type": "token"}</div>
           <div class="node-desc">Streamed LLM text</div>
+        </div>
+      </div>
+      <div class="split-3">
+        <div class="node node-output">
+          <div class="node-title" style="font-size: 12px;">{"type": "status"}</div>
+          <div class="node-desc">Tool-call preamble (styled differently)</div>
         </div>
         <div class="node node-output">
           <div class="node-title" style="font-size: 12px;">{"type": "done"}</div>
           <div class="node-desc">Metadata: model, tool_calls, sites_found, tokens</div>
         </div>
+        <div class="node" style="opacity: 0;"></div>
       </div>
     </div>
   </div>
@@ -1776,7 +1817,7 @@ ESCALATION_SCHEMA:
 <div class="file-list">
   <div class="file-item">
     <span class="file-path">pipeline/lyra/orchestrator.py</span>
-    <span class="file-desc">Main pipeline loop. 9 steps, hourly cycle, DB migrations, heartbeat.</span>
+    <span class="file-desc">Main pipeline loop. 11 steps, hourly cycle, DB migrations, heartbeat.</span>
   </div>
   <div class="file-item">
     <span class="file-path">pipeline/lyra/config.py</span>
@@ -1813,7 +1854,7 @@ ESCALATION_SCHEMA:
   <div class="file-item">
     <span class="file-path">api/services/lyra_tools.py</span> · <span class="file-path">api/services/lyra_prompts.py</span> · <span class="file-path">api/services/lyra_agent.py</span>
     <span class="badge badge-model">M2.5</span>
-    <span class="file-desc">RAG agent: hybrid search, 5 tools, streaming, LangChain ChatAnthropic.</span>
+    <span class="file-desc">RAG agent: hybrid search, 8 tools, streaming, LangChain ChatAnthropic.</span>
   </div>
   <div class="file-item">
     <span class="file-path">api/services/lyra_embeddings.py</span>
@@ -1881,7 +1922,7 @@ ESCALATION_SCHEMA:
   <div class="node-desc" style="line-height: 1.8;">
     <strong>News pipeline:</strong> 9 automated steps &mdash; fetch, summarize, match, post, verify, dedup, screenshot, backfill, identify.<br>
     <strong>AI stack:</strong> 9 MiniMax M2.5 call sites with structured outputs (via prefill), extended thinking, prompt caching.<br>
-    <strong>RAG agent:</strong> Hybrid dense+BM25+rerank retrieval, 5 tools, streaming responses, map highlighting.<br>
+    <strong>RAG agent:</strong> Hybrid dense+BM25+rerank retrieval, 8 tools, streaming responses, map highlighting.<br>
     <strong>Embedding:</strong> Voyage-4/4-large (1024-dim) + BM25 sparse + rerank-2.5-lite. Qdrant vector DB.<br>
     <strong>Data:</strong> 40K+ sites, 18+ YouTube channels, Seshat empire data, Wikidata/Wikipedia enrichment.
   </div>
