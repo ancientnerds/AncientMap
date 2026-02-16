@@ -36,7 +36,7 @@ export const CONTENT_TIERS = {
   },
   tier2: {
     types: ['video'] as ContentType[],
-    timeout: 20,
+    timeout: 30,
     label: 'Videos'
   },
   tier3: {
