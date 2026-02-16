@@ -41,28 +41,55 @@ logger = logging.getLogger(__name__)
 # Auto-retrieval
 # ---------------------------------------------------------------------------
 
-def _auto_retrieve(query: str, context_type: str) -> tuple[str, list[dict], float | None, int]:
+def _auto_retrieve(query: str, context_type: str) -> tuple[str, list[dict], list[dict], float | None, int]:
     """Run automatic hybrid retrieval BEFORE the LLM sees the message.
 
-    Searches the sites Qdrant collection to find relevant archaeological sites.
-    News is fetched separately via _get_related_news() based on matched site IDs and query filters.
+    Searches BOTH Qdrant collections on every query:
+    - Sites collection (limit=5) for archaeological site context + map highlighting
+    - News collection (limit=3) for semantically relevant news items
 
     Returns:
         Tuple of (formatted context string, list of site result dicts for map highlighting,
-        average relevance score or None, total Voyage tokens used).
+        list of news result dicts for sidebar cards, average relevance score or None,
+        total Voyage tokens used).
     """
     site_results: list[dict] = []
+    news_results: list[dict] = []
     all_relevance_scores: list[float] = []
     total_voyage_tokens = 0
+    context_parts: list[str] = []
 
-    if context_type == "news":
-        # Search news collection for related items
-        results, vt = _hybrid_search(query, collection="news", limit=5)
+    # --- Sites collection (always, unless context is news-only) ---
+    if context_type != "news":
+        results, vt = _hybrid_search(query, collection="sites", limit=5)
         total_voyage_tokens += vt
-        if not results:
-            return "", [], None, total_voyage_tokens
-        lines = []
+        site_results = results
         for r in results:
+            if "relevance" in r:
+                all_relevance_scores.append(r["relevance"])
+        if results:
+            lines = []
+            for r in results:
+                name = r.get("name", "?")
+                period = r.get("period_name", "")
+                country = r.get("country", "")
+                desc = r.get("description", "")[:150]
+                lat = r.get("lat", "")
+                lon = r.get("lon", "")
+                line = f"- **{name}** ({period}, {country}) [{lat}, {lon}]"
+                if desc:
+                    line += f" — {desc}"
+                lines.append(line)
+            context_parts.append("### Sites\n" + "\n".join(lines))
+
+    # --- News collection (always — semantic news retrieval) ---
+    news_limit = 5 if context_type == "news" else 3
+    news_raw, vt = _hybrid_search(query, collection="news", limit=news_limit)
+    total_voyage_tokens += vt
+    if news_raw:
+        news_results = news_raw
+        lines = []
+        for r in news_raw:
             headline = r.get("headline", "?")
             channel = r.get("channel", "")
             desc = r.get("description", r.get("summary", ""))[:150]
@@ -70,35 +97,14 @@ def _auto_retrieve(query: str, context_type: str) -> tuple[str, list[dict], floa
             if desc:
                 line += f" — {desc}"
             lines.append(line)
-        context_str = "\n\n## Retrieved Context\nRelated news items:\n\n" + "\n".join(lines) + "\n"
-        return context_str, [], None, total_voyage_tokens
+        context_parts.append("### Related News (semantic)\n" + "\n".join(lines))
 
-    results, vt = _hybrid_search(query, collection="sites", limit=5)
-    total_voyage_tokens += vt
-    if not results:
-        return "", [], None, total_voyage_tokens
-
-    site_results = results
-    for r in results:
-        if "relevance" in r:
-            all_relevance_scores.append(r["relevance"])
-
-    lines = []
-    for r in results:
-        name = r.get("name", "?")
-        period = r.get("period_name", "")
-        country = r.get("country", "")
-        desc = r.get("description", "")[:150]
-        lat = r.get("lat", "")
-        lon = r.get("lon", "")
-        line = f"- **{name}** ({period}, {country}) [{lat}, {lon}]"
-        if desc:
-            line += f" — {desc}"
-        lines.append(line)
+    if not context_parts:
+        return "", [], [], None, total_voyage_tokens
 
     avg_relevance = sum(all_relevance_scores) / len(all_relevance_scores) if all_relevance_scores else None
-    context_str = "\n\n## Retrieved Context\nThe following results were automatically retrieved for the user's query:\n\n### Sites\n" + "\n".join(lines) + "\n"
-    return context_str, site_results, avg_relevance, total_voyage_tokens
+    context_str = "\n\n## Retrieved Context\nThe following results were automatically retrieved for the user's query:\n\n" + "\n\n".join(context_parts) + "\n"
+    return context_str, site_results, news_results, avg_relevance, total_voyage_tokens
 
 
 # ---------------------------------------------------------------------------
@@ -447,10 +453,11 @@ async def run_agent_stream(
     total_output_tokens = 0
     total_voyage_tokens = 0
     if message and len(message.strip()) > 2:
-        # Auto-retrieve sites from Qdrant (isolated so Qdrant failures don't kill the response)
+        # Auto-retrieve sites + news from Qdrant (isolated so Qdrant failures don't kill the response)
         auto_site_results: list[dict] = []
+        auto_news_results: list[dict] = []
         try:
-            retrieved_context, auto_site_results, avg_relevance, vt = _auto_retrieve(message, context_type)
+            retrieved_context, auto_site_results, auto_news_results, avg_relevance, vt = _auto_retrieve(message, context_type)
             total_voyage_tokens += vt
         except Exception as e:
             logger.error(f"Auto-retrieve failed (Qdrant/Voyage issue, falling back to filter-based news): {e}")
@@ -471,12 +478,34 @@ async def run_agent_stream(
                     "thumbnail_url": s.get("thumbnail_url"),
                 })
 
+        # Seed all_news with Qdrant semantic news results (normalized to SQL shape)
+        for r in auto_news_results:
+            all_news.append({
+                "headline": r.get("headline", ""),
+                "summary": r.get("summary"),
+                "channel": r.get("channel", ""),
+                "video_id": r.get("video_id", ""),
+                "video_title": None,
+                "category": r.get("category"),
+                "significance": r.get("significance"),
+                "date": str(r["date"]) if r.get("date") else None,
+                "site_name": r.get("site_mentioned"),
+                "source": "qdrant",
+            })
+
         # Fetch related news: site-specific first, then broader filters
         site_ids = [s["id"] for s in all_sites if s.get("id")]
         site_names = [s["name"] for s in all_sites if s.get("name")]
 
         # Site-specific news (by ID and name — always works, no LLM needed)
-        all_news = _get_related_news(site_ids=site_ids, site_names=site_names) if (site_ids or site_names) else []
+        sql_news = _get_related_news(site_ids=site_ids, site_names=site_names) if (site_ids or site_names) else []
+        if sql_news:
+            existing_keys = {f"{n['video_id']}::{n['headline']}" for n in all_news}
+            for n in sql_news:
+                key = f"{n['video_id']}::{n['headline']}"
+                if key not in existing_keys:
+                    all_news.append(n)
+                    existing_keys.add(key)
 
         # Filter-based news (uses LLM to extract filters including site names — catches site queries even when Qdrant is down)
         try:
