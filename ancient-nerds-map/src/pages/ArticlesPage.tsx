@@ -86,7 +86,7 @@ export default function ArticlesPage() {
   return (
     <div className="articles-page">
       <header className="articles-page-header">
-        <a href="/" className="articles-page-brand">
+        <a href="/globe.html" className="articles-page-brand">
           <img src="/an-logo.svg" alt="" className="articles-page-logo" />
           <span className="articles-page-brand-text">ANCIENT NERDS</span>
         </a>
