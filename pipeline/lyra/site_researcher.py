@@ -52,43 +52,10 @@ RESEARCH_SYNTHESIS_SCHEMA = {
     "additionalProperties": False,
 }
 
-GAP_FILL_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "country": {"type": "string"},
-        "site_type": {
-            "type": "string",
-            "enum": [
-                "settlement", "temple", "tomb", "fortification", "megalithic",
-                "cave", "rock_art", "port", "monument", "inscription", "ruin",
-                "archaeological_site", "Unknown",
-            ],
-        },
-        "period": {
-            "type": "string",
-            "enum": [
-                "< 4500 BC", "4500 - 3000 BC", "3000 - 1500 BC",
-                "1500 - 500 BC", "500 BC - 1 AD", "1 - 500 AD",
-                "500 - 1000 AD", "1000 - 1500 AD", "1500+ AD", "Unknown",
-            ],
-        },
-        "brief_description": {"type": "string"},
-        "approximate_lat": {"type": "number"},
-        "approximate_lon": {"type": "number"},
-        "coordinate_confidence": {
-            "type": "string",
-            "enum": ["exact", "approximate", "unknown"],
-        },
-    },
-    "required": ["country", "site_type", "period"],
-    "additionalProperties": False,
-}
-
 # --- System prompts ---
 
 PRE_RESEARCH_SYSTEM = "You are an archaeological research agent. Respond with JSON only."
 SYNTHESIS_SYSTEM = "You are an archaeological site research agent. Pick the best match from the candidates. Respond with JSON only."
-GAP_FILL_SYSTEM = "You are an archaeological metadata enrichment agent. Fill missing fields from your knowledge. Respond with JSON only."
 
 # --- API URLs ---
 
@@ -106,14 +73,12 @@ class ResearchResult:
     pre_research: dict | None = None
     all_candidates: dict = field(default_factory=dict)
     best_match: dict | None = None
-    gap_fill: dict | None = None
     search_names_used: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
             "pre_research": self.pre_research,
             "best_match": self.best_match,
-            "gap_fill": self.gap_fill,
             "search_names_used": self.search_names_used,
             "candidate_counts": {k: len(v) for k, v in self.all_candidates.items()},
         }
@@ -133,7 +98,6 @@ def research_site(
     1. MiniMax pre-research (generate search terms + prior knowledge)
     2. Multi-source API search (Wikidata, Wikipedia, GeoNames)
     3. MiniMax candidate selection (if ambiguous)
-    4. MiniMax gap-fill (fill missing fields from AI knowledge)
 
     Always returns a ResearchResult (never None).
     """
@@ -174,9 +138,6 @@ def research_site(
                 f"  [{name}] Research: best match from {result.best_match.get('source')}: "
                 f"{result.best_match.get('id', 'N/A')} (confidence: {result.best_match.get('confidence')})"
             )
-
-    # Step 4: Gap-fill (fill missing fields from AI knowledge)
-    result.gap_fill = _gap_fill(name, client, settings, facts, result)
 
     return result
 
@@ -570,93 +531,3 @@ def _select_best_candidate(
     return None
 
 
-# --- Step 4: Gap-Fill ---
-
-def _gap_fill(
-    name: str,
-    client: anthropic.Anthropic,
-    settings: LyraSettings,
-    facts: list[str],
-    research: ResearchResult,
-) -> dict | None:
-    """Fill missing metadata fields from AI knowledge."""
-    # Determine what we already know
-    known = {}
-    missing = []
-
-    # Check pre-research and best_match for existing data
-    pr = research.pre_research or {}
-    bm = research.best_match or {}
-
-    if pr.get("country") or bm.get("country"):
-        known["country"] = pr.get("country") or bm.get("country")
-    else:
-        missing.append("country")
-
-    if pr.get("site_type"):
-        known["site_type"] = pr["site_type"]
-    else:
-        missing.append("site_type")
-
-    if pr.get("approximate_period"):
-        known["period"] = pr["approximate_period"]
-    else:
-        missing.append("period")
-
-    if pr.get("brief_description"):
-        known["description"] = pr["brief_description"]
-    else:
-        missing.append("brief_description")
-
-    if bm and bm.get("lat") and bm.get("lon"):
-        known["coordinates"] = f"{bm['lat']}, {bm['lon']}"
-    else:
-        missing.append("approximate_lat, approximate_lon")
-
-    # If nothing is missing, skip the gap-fill call
-    if not missing:
-        logger.info(f"  [{name}] Gap-fill: nothing missing, skipping")
-        return None
-
-    prompt_template = (PROMPT_DIR / "gap_fill.txt").read_text(encoding="utf-8")
-    facts_text = "\n".join(f"- {f}" for f in facts[:15]) if facts else "(none)"
-
-    prompt = prompt_template.format(
-        name=name,
-        known_fields=json.dumps(known, indent=2),
-        missing_fields=", ".join(missing),
-        facts=facts_text,
-    )
-
-    try:
-        response = call_api(
-            client,
-            model=settings.model_identify,
-            max_tokens=1024,
-            messages=[{"role": "user", "content": prompt}],
-            system=[{
-                "type": "text",
-                "text": GAP_FILL_SYSTEM,
-                "cache_control": {"type": "ephemeral"},
-            }],
-            prefill="{",
-        )
-    except anthropic.APIError as e:
-        logger.warning(f"  [{name}] Gap-fill API error: {e}")
-        return None
-
-    for block in response.content:
-        if hasattr(block, "text") and block.text:
-            try:
-                result = parse_json_response("{" + block.text)
-                logger.info(
-                    f"  [{name}] Gap-fill: country={result.get('country')}, "
-                    f"type={result.get('site_type')}, period={result.get('period')}, "
-                    f"coords=({result.get('approximate_lat')}, {result.get('approximate_lon')})"
-                )
-                return result
-            except (json.JSONDecodeError, KeyError, ValueError) as e:
-                logger.warning(f"  [{name}] Gap-fill parse error: {e}")
-                return None
-
-    return None

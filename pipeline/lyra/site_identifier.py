@@ -434,8 +434,6 @@ def _process_single(
             session, contribution, identification, wikidata_candidates,
             client, settings, pick_entity_prompt, extract_metadata_prompt,
         )
-        # Apply gap-fill on top of Wikidata enrichment
-        _apply_gap_fill(contribution, research)
         _apply_pre_research(contribution, research)
 
         # Step 6: GeoNames coordinate fallback — if Wikidata enrichment
@@ -1664,19 +1662,6 @@ def _apply_pre_research(contribution: UserContribution, research) -> None:
     # No fields are applied here — AI guesses are not authoritative data.
 
 
-def _apply_gap_fill(contribution: UserContribution, research) -> None:
-    """Gap-fill is disabled — AI-guessed metadata is not applied.
-
-    Gap-fill asks the AI to fill missing fields from its training data.
-    This produces unreliable data (wrong periods, wrong coordinates, wrong
-    countries) that pollutes the database. Only verified sources (Wikidata,
-    Wikipedia, GeoNames, DB matches) should populate contribution fields.
-
-    The gap-fill data is still stored in enrichment_data.research.gap_fill
-    for diagnostic purposes, but nothing is written to the contribution.
-    """
-
-
 def _handle_ai_enriched_site(
     session: Session,
     contribution: UserContribution,
@@ -1688,9 +1673,6 @@ def _handle_ai_enriched_site(
     """Handle a site enriched from AI research (no external DB match)."""
     # Apply pre-research knowledge
     _apply_pre_research(contribution, research)
-
-    # Apply gap-fill knowledge
-    _apply_gap_fill(contribution, research)
 
     # Apply GeoNames coordinates from best_match if available
     if research and research.best_match:

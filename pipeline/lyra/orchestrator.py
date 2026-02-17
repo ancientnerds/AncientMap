@@ -56,6 +56,15 @@ STEPS = {
 # Ordered step list matching the full pipeline sequence
 STEP_ORDER = ["fetch", "retry", "summarize", "match", "posts", "verify", "rescore", "dedup", "screenshots", "backfill", "identify"]
 
+# Steps that run less often than every cycle. Value = run every N cycles.
+# Unlisted steps run every cycle. With CYCLE_INTERVAL=3600, 24 ≈ daily.
+STEP_INTERVALS: dict[str, int] = {
+    "backfill": 24,
+}
+
+# Tracks how many cycles have elapsed (reset on container restart is fine)
+_cycle_count = 0
+
 
 def setup_logging() -> None:
     """Configure logging for the Lyra pipeline."""
@@ -132,6 +141,8 @@ def _log_cycle_summary(step_results: dict[str, tuple[int, float]], total_elapsed
 
 def run_pipeline(settings: LyraSettings, only_step: str | None = None) -> None:
     """Run one full pipeline cycle, or a single step if only_step is set."""
+    global _cycle_count
+
     # Re-seed channels every cycle so new entries in channels.json are picked up
     # without restarting the container.
     from pipeline.lyra.channels import seed_channels
@@ -145,9 +156,16 @@ def run_pipeline(settings: LyraSettings, only_step: str | None = None) -> None:
     if only_step:
         logger.info(f"=== Running single step: {only_step} ===")
     else:
-        logger.info("=== Starting pipeline cycle ===")
+        _cycle_count += 1
+        logger.info(f"=== Starting pipeline cycle #{_cycle_count} ===")
 
     for step_name in steps_to_run:
+        # Skip steps that have a longer interval (unless --step forces it)
+        if not only_step and step_name in STEP_INTERVALS:
+            interval = STEP_INTERVALS[step_name]
+            if _cycle_count % interval != 0:
+                continue
+
         try:
             result, elapsed = _run_step(step_name, settings)
             step_results[step_name] = (result, elapsed)
