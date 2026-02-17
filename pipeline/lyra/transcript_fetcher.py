@@ -184,64 +184,6 @@ def _fetch_metadata_youtube_api(video_id: str, api_key: str) -> dict | None:
     }
 
 
-def fix_published_dates(api_key: str) -> int:
-    """Fix videos with corrupted published_at (set by datetime.now fallback).
-
-    Re-fetches real publishedAt from the YouTube API for all videos and updates
-    any that differ. Batches 50 IDs per API call (1 quota unit each).
-
-    Returns number of videos fixed.
-    """
-    from pipeline.utils.http import fetch_with_retry
-
-    with get_session() as session:
-        all_videos = session.query(NewsVideo.id).all()
-        video_ids = [v.id for v in all_videos]
-
-    if not video_ids:
-        return 0
-
-    logger.info(f"Checking published_at for {len(video_ids)} videos")
-    fixed = 0
-
-    # YouTube API accepts up to 50 IDs per call
-    for i in range(0, len(video_ids), 50):
-        batch = video_ids[i:i + 50]
-        try:
-            resp = fetch_with_retry(
-                "https://www.googleapis.com/youtube/v3/videos",
-                params={
-                    "id": ",".join(batch),
-                    "part": "snippet",
-                    "key": api_key,
-                },
-            )
-            data = resp.json()
-        except Exception as e:
-            logger.warning(f"YouTube API failed for date fix batch: {e}")
-            continue
-
-        # Build id -> real publishedAt map
-        date_map = {}
-        for item in data.get("items", []):
-            vid = item["id"]
-            published_str = item.get("snippet", {}).get("publishedAt", "")
-            try:
-                date_map[vid] = datetime.fromisoformat(published_str.replace("Z", "+00:00"))
-            except (ValueError, AttributeError):
-                pass
-
-        with get_session() as session:
-            for vid, real_date in date_map.items():
-                video = session.get(NewsVideo, vid)
-                if video and video.published_at != real_date:
-                    video.published_at = real_date
-                    fixed += 1
-
-    logger.info(f"Fixed published_at for {fixed} videos")
-    return fixed
-
-
 def fetch_new_videos(settings: LyraSettings) -> int:
     """Fetch new videos from all enabled channels and store transcripts in DB.
 

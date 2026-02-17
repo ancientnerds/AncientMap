@@ -896,18 +896,46 @@ def _run_migrations(engine) -> None:
 
         # One-time fix: re-fetch real published_at from YouTube API for videos
         # where datetime.now(UTC) fallback corrupted the date.
+        # Done inline with conn (get_session has a shorter statement timeout).
         _dates_fixed = conn.execute(text("""
             SELECT 1 FROM news_videos
             WHERE tags IS NOT NULL AND tags @> '"__dates_fixed"'::jsonb
             LIMIT 1
         """)).fetchone()
         if not _dates_fixed:
+            from datetime import datetime as _dt
+
             from pipeline.lyra.config import LyraSettings as _LS
             _api_key = _LS().youtube_api_key
             if _api_key:
-                from pipeline.lyra.transcript_fetcher import fix_published_dates
-                fix_published_dates(_api_key)
-            # Stamp a sentinel so this doesn't run again
+                from pipeline.utils.http import fetch_with_retry as _fetch
+                _all_ids = [r[0] for r in conn.execute(text(
+                    "SELECT id FROM news_videos"
+                )).fetchall()]
+                _fixed = 0
+                for _i in range(0, len(_all_ids), 50):
+                    _batch = _all_ids[_i:_i + 50]
+                    try:
+                        _resp = _fetch(
+                            "https://www.googleapis.com/youtube/v3/videos",
+                            params={"id": ",".join(_batch), "part": "snippet", "key": _api_key},
+                        )
+                        _data = _resp.json()
+                    except Exception as _e:
+                        logger.warning(f"YouTube API date fix batch failed: {_e}")
+                        continue
+                    for _item in _data.get("items", []):
+                        _pub = _item.get("snippet", {}).get("publishedAt", "")
+                        try:
+                            _real = _dt.fromisoformat(_pub.replace("Z", "+00:00"))
+                        except (ValueError, AttributeError):
+                            continue
+                        conn.execute(text(
+                            "UPDATE news_videos SET published_at = :d WHERE id = :id"
+                        ), {"d": _real, "id": _item["id"]})
+                        _fixed += 1
+                logger.info(f"Fixed published_at for {_fixed} videos")
+            # Stamp sentinel so this doesn't run again
             conn.execute(text("""
                 UPDATE news_videos SET tags = COALESCE(tags, '[]'::jsonb) || '["__dates_fixed"]'::jsonb
                 WHERE id = (SELECT id FROM news_videos LIMIT 1)
