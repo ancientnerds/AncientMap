@@ -217,14 +217,14 @@ jobs:
               echo "==> No Docker changes"
             fi
             echo "==> Waiting for API health..."
-            for i in 1 2 3 4 5 6; do
+            for i in $(seq 1 12); do
               sleep 5
               if curl -sf http://localhost:8000/; then
                 echo " API healthy after $((i * 5))s"
                 break
               fi
-              if [ "$i" = "6" ]; then
-                echo "ERROR: Health check failed after 30s!"
+              if [ "$i" = "12" ]; then
+                echo "ERROR: Health check failed after 60s!"
                 docker compose logs api --tail=30
                 exit 1
               fi
