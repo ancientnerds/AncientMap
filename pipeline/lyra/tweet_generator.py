@@ -125,6 +125,7 @@ def generate_posts_for_video(
         return 0
     posts_data = parse_prefilled_json(text_block).get("posts", [])
 
+
     with get_session() as session:
         db_video = session.get(NewsVideo, video.id)
         if not db_video:
@@ -216,7 +217,10 @@ def generate_pending_posts(settings: LyraSettings) -> int:
     system_prompt = _load_prompt()
     total = 0
     for video in pending:
-        total += generate_posts_for_video(video, settings, system_prompt)
+        try:
+            total += generate_posts_for_video(video, settings, system_prompt)
+        except Exception:
+            logger.exception(f"Failed to generate posts for video {video.id}, skipping")
 
     logger.info(f"Generated {total} posts total")
     return total
