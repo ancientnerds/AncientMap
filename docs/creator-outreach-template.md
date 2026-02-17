@@ -76,6 +76,6 @@ Store email threads as evidence of consent. A simple "yes" or "go ahead" in writ
 
 ## If a Creator Declines or Doesn't Respond
 
-- Remove their channel from the pipeline configuration (`pipeline/lyra/config.py` channels list)
+- Remove their channel from `pipeline/lyra/channels.json` (or set `"enabled": false`)
 - No further contact needed
 - Their existing news items can remain (they were generated from publicly available content) but no new items should be created
