@@ -20,6 +20,7 @@ import type { GalleryImage } from './components/ImageGallery'
 import { apiDetailToSiteData } from './utils/siteApi'
 import { OfflineProvider, useOffline } from './contexts/OfflineContext'
 import { offlineFetch } from './services/OfflineFetch'
+import { isDemoMode, registerAppDemoApi } from './utils/demoApi'
 
 export type FilterMode = 'category' | 'age' | 'source' | 'country'
 
@@ -475,12 +476,25 @@ function AppContent() {
   // Download manager modal state
   const [showDownloadManager, setShowDownloadManager] = useState(false)
   const [showNewsFeed, setShowNewsFeed] = useState(false)
+  const [demoMode, setDemoMode] = useState(false)
 
   // Toggle body class when news feed is open so right-side UI shifts left
   useEffect(() => {
     document.body.classList.toggle('news-feed-open', showNewsFeed)
     return () => { document.body.classList.remove('news-feed-open') }
   }, [showNewsFeed])
+
+  // Demo API for Puppeteer-driven video recording (?demo=1)
+  useEffect(() => {
+    if (!isDemoMode()) return
+    registerAppDemoApi({ setFilterMode, setAgeRange, setFlyToCoords, setDemoMode })
+  }, [])
+
+  // Toggle body class for demo mode (hides all UI except the globe)
+  useEffect(() => {
+    document.body.classList.toggle('demo-mode', demoMode)
+    return () => { document.body.classList.remove('demo-mode') }
+  }, [demoMode])
 
   // Additional sources loading - track which sources have been loaded
   const [loadedSourceIds, setLoadedSourceIds] = useState<Set<string>>(new Set())

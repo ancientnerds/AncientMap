@@ -14,6 +14,7 @@ import { ScreenshotControls } from './Globe/controls'
 import { useUIState, useLabelVisibility, usePaleoshoreline, useEmpireBorders, useMapboxSync, useGlobeRefs, useGlobeZoom, useSiteTooltips, useHighlightedSites, useFlyToAnimation, useSatelliteMode, useContributePicker, useScreenshot, useRotationControl, useFullscreen, useCursorMode, useStarsVisibility, useTextureLoading, useLayersReady, useTooltipHandlers } from '../hooks/globe'
 import { useConnectorStatus } from '../hooks/useConnectorStatus'
 import ConnectorStatusModal from './ConnectorStatusModal'
+import { isDemoMode, registerGlobeDemoApi } from '../utils/demoApi'
 import {
   loadEmpireBorders as loadEmpireBordersImpl,
   removeEmpireFromGlobe as removeEmpireFromGlobeImpl,
@@ -431,6 +432,23 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   labelTypesVisibleRef.current = labelTypesVisible
   vectorLayersRef.current = vectorLayers
 
+  // Demo API for Puppeteer-driven video recording (?demo=1)
+  useEffect(() => {
+    if (!isDemoMode()) return
+    registerGlobeDemoApi({
+      isAutoRotatingRef: refs.isAutoRotating,
+      manualRotationRef: refs.manualRotation,
+      sceneRef,
+      warpCompleteForLabelsRef,
+      dotsAnimationCompleteRef,
+      setTileLayers,
+      setVectorLayers,
+      toggleEmpire,
+      getVisibleEmpires: () => empires.visibleEmpiresRef.current,
+      setPaleoshorelineVisible: paleo.setPaleoshorelineVisible,
+      setSeaLevelWithSlider: paleo.setSeaLevelWithSlider,
+    })
+  }, [])
 
   // Fast color update during proximity hover - no React state, direct BufferGeometry update
   const updateProximityColors = useCallback((centerLng: number | null, centerLat: number | null, radius: number) => {

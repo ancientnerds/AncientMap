@@ -2,7 +2,7 @@
  * Main video recording orchestrator.
  *
  * Starts a Vite dev server, launches Puppeteer with the globe in demo mode,
- * runs each scene script, captures frames, then encodes to WebM/MP4.
+ * runs each scene script, captures via canvas stream, then encodes to MP4.
  *
  * Usage: npx tsx video/record.ts [scene-name]
  *   If scene-name is provided, only that scene is recorded.
@@ -12,7 +12,7 @@
 import { spawn, execSync, type ChildProcess } from 'child_process'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { mkdirSync } from 'fs'
+import { mkdirSync, unlinkSync } from 'fs'
 import puppeteer, { type Browser, type Page } from 'puppeteer'
 import type { DemoAPI } from '../src/utils/demoApi'
 
@@ -22,8 +22,12 @@ import { globeOverviewScene } from './scenes/globe-overview.js'
 import { filtersScene } from './scenes/filters.js'
 import { empiresScene } from './scenes/empires.js'
 import { toolsScene } from './scenes/tools.js'
+import { regionalToursScene } from './scenes/regional-tours.js'
+import { empireSpotlightsScene } from './scenes/empire-spotlights.js'
+import { dataStoriesScene } from './scenes/data-stories.js'
+import { brollScene } from './scenes/b-roll.js'
 import { encodeScene } from './utils/encode.js'
-import { injectTimeControl } from './utils/capture.js'
+import { injectTimeControl, StreamRecorder } from './utils/capture.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -33,7 +37,7 @@ export interface SceneContext {
   demo: DemoAPI
   /** Fire a demo command without waiting for completion */
   fire: (code: string) => void
-  framesDir: string
+  recorder: StreamRecorder
   fps: number
 }
 
@@ -50,6 +54,10 @@ const ALL_SCENES: SceneDefinition[] = [
   ...filtersScene,
   ...empiresScene,
   ...toolsScene,
+  ...regionalToursScene,
+  ...empireSpotlightsScene,
+  ...dataStoriesScene,
+  ...brollScene,
 ]
 
 const DEV_SERVER_PORT = 5199  // High port to avoid conflicts
@@ -101,12 +109,14 @@ async function launchBrowser(): Promise<{ browser: Browser; page: Page }> {
       '--disable-dev-shm-usage',
       '--disable-web-security',
       '--window-size=1920,1080',
-      // Compositor stability for flicker-free screenshots:
-      '--run-all-compositor-stages-before-draw',  // Complete all GPU compositing before frame
-      '--disable-gpu-vsync',                      // Remove vsync timing jitter
-      '--disable-frame-rate-limit',               // Don't throttle frame rate
-      '--disable-backgrounding-occluded-windows',  // Don't throttle hidden windows
-      '--disable-renderer-backgrounding',          // Don't throttle renderer
+      // Compositor stability:
+      '--run-all-compositor-stages-before-draw',
+      '--disable-gpu-vsync',
+      '--disable-frame-rate-limit',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding',
+      // Enable MediaRecorder VP9 support:
+      '--enable-features=WebRTCPipeWireCapturer',
     ],
     defaultViewport: {
       width: 1920,
@@ -159,7 +169,7 @@ async function loadGlobe(page: Page): Promise<void> {
  */
 function createDemoProxy(page: Page): DemoAPI {
   // Use string evaluation to avoid tsx/esbuild __name injection into browser context
-  const evalDemo = (code: string) => page.evaluate(code)
+  const evalDemo = (code: string) => page.evaluate(code) as Promise<void>
 
   return {
     flyTo: (lng, lat) => evalDemo(`window.__DEMO.flyTo(${lng}, ${lat})`),
@@ -184,11 +194,11 @@ async function main() {
   const requestedScene = process.argv[2]
 
   const baseDir = __dirname
-  const framesBase = join(baseDir, 'output', 'frames')
   const outputDir = join(baseDir, '..', 'public', 'landing', 'video')
+  const webmDir = join(baseDir, 'output')
 
   // Ensure output dirs exist
-  mkdirSync(framesBase, { recursive: true })
+  mkdirSync(webmDir, { recursive: true })
   mkdirSync(outputDir, { recursive: true })
 
   // Determine which scenes to run
@@ -245,24 +255,33 @@ async function main() {
       console.log(`Recording scene: ${scene.name} (${scene.duration}s)`)
       console.log('='.repeat(50))
 
-      const sceneFramesDir = join(framesBase, scene.name)
+      // Create and start a fresh StreamRecorder for this scene
+      const recorder = new StreamRecorder({ fps })
+      await recorder.start(page)
 
       const ctx: SceneContext = {
         page,
         demo,
         fire: (code: string) => { page.evaluate(code).catch(() => {}) },
-        framesDir: sceneFramesDir,
-        fps: 24,
+        recorder,
+        fps,
       }
 
       // Run the scene choreography + capture
       await scene.run(ctx)
 
-      // Encode frames to video
+      // Stop recorder and save WebM
+      const webmPath = join(webmDir, `${scene.name}.webm`)
+      await recorder.stop(page, webmPath)
+
+      // Encode WebM to MP4
       console.log(`\nEncoding ${scene.name}...`)
-      const result = encodeScene(scene.name, sceneFramesDir, outputDir, scene.resolution)
+      const result = encodeScene(scene.name, webmPath, outputDir)
       console.log(`  MP4: ${result.mp4}`)
       console.log(`  Fast: ${result.fast}`)
+
+      // Clean up intermediate WebM
+      try { unlinkSync(webmPath) } catch {}
     }
 
     console.log('\n\nAll scenes recorded and encoded!')
