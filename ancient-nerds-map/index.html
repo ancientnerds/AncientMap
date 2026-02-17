@@ -113,10 +113,9 @@
     <section class="landing-section" id="globe-section">
       <div class="feature-row">
         <div class="animate-in">
-          <img src="/landing/globe-category.webp" alt="Interactive 3D globe with category coloring" class="feature-image-main" data-lightbox loading="lazy" />
+          <img src="/landing/globe-country.webp" alt="Interactive 3D globe with country coloring" class="feature-image-main" data-lightbox loading="lazy" />
           <div class="thumbnail-strip">
             <img src="/landing/globe-satellite.webp" alt="Satellite view" data-lightbox loading="lazy" />
-            <img src="/landing/globe-country.webp" alt="Country-colored view" data-lightbox loading="lazy" />
             <img src="/landing/globe-asia.webp" alt="Southeast Asia multi-source view" data-lightbox loading="lazy" />
           </div>
         </div>
@@ -128,14 +127,19 @@
     </section>
 
     <!-- ═══════════ FILTER & DISCOVER ═══════════ -->
-    <section class="landing-section">
+    <section class="landing-section" id="filter-section">
       <div class="feature-row reverse">
         <div class="animate-in">
           <h2 class="section-label">FILTER 750,000+ SITES</h2>
-          <p class="section-desc">By age, country, category, or data source. Narrow down from 10,000 BC to present across 91 countries and 49 site types.</p>
+          <p class="section-desc">By age, country, category, or data source. Narrow down from 5,000 BC and older to present across 91 countries and 49 site types.</p>
         </div>
         <div class="animate-in delay-2">
-          <img src="/landing/filter-age.webp" alt="Filter sites by age, category, and source" class="feature-image-main" data-lightbox loading="lazy" />
+          <img src="/landing/filter-age.webp" alt="Filter sites by age" class="feature-image-main" data-lightbox loading="lazy" />
+          <div class="thumbnail-strip">
+            <img src="/landing/filter-source.webp" alt="Filter by source" data-lightbox loading="lazy" />
+            <img src="/landing/filter-category.webp" alt="Filter by category" data-lightbox loading="lazy" />
+            <img src="/landing/filter-country.webp" alt="Filter by country" data-lightbox loading="lazy" />
+          </div>
         </div>
       </div>
     </section>
@@ -152,13 +156,13 @@
         <div class="empire-thumbnails">
           <img src="/landing/empire-byzantine.webp" alt="Byzantine and Sassanid Empires" data-lightbox loading="lazy" />
           <img src="/landing/empire-inca.webp" alt="Inca Empire" data-lightbox loading="lazy" />
-          <img src="/landing/globe-han.webp" alt="Han Dynasty overlay" data-lightbox loading="lazy" />
+          <img src="/landing/empire-detail.webp" alt="Old Kingdom Egypt empire detail" data-lightbox loading="lazy" />
         </div>
       </div>
     </section>
 
     <!-- ═══════════ DEEP SITE DATA ═══════════ -->
-    <section class="landing-section">
+    <section class="landing-section" id="sitedata-section">
       <div class="feature-row">
         <div class="animate-in">
           <img src="/landing/site-popup.webp" alt="Site popup with photos, 3D, maps" class="feature-image-main" data-lightbox loading="lazy" />
@@ -176,10 +180,10 @@
     </section>
 
     <!-- ═══════════ LYRA AI ═══════════ -->
-    <section class="landing-section">
+    <section class="landing-section" id="lyra-section">
       <div class="feature-row reverse">
         <div class="animate-in">
-          <img src="/lyra.png" alt="Lyra Wiskerbyte" class="lyra-avatar" />
+          <img src="/lyra.gif" alt="Lyra Wiskerbyte" class="lyra-avatar" />
           <h2 class="section-label">MEET LYRA WISKERBYTE</h2>
           <p class="section-desc">Your AI archaeology companion. Ask about any site, period, or region. Powered by vector search across the entire database.</p>
           <a href="/lyra.html" class="cta-secondary">CHAT WITH LYRA</a>
@@ -197,12 +201,14 @@
           <h2 class="section-label">ARCHAEOLOGY NEWS</h2>
           <p class="section-desc">AI-curated discoveries from top YouTube channels. Summaries, site links, and video timestamps.</p>
           <img src="/landing/news-feed.webp" alt="News Feed page" data-lightbox loading="lazy" />
+          <img src="/landing/news-filters.webp" alt="News filters and tags" data-lightbox loading="lazy" />
           <a href="/news.html" class="cta-secondary">VIEW NEWS</a>
         </div>
         <div class="split-card">
           <h2 class="section-label">DISCOVERY RADAR</h2>
           <p class="section-desc">Track newly mentioned sites from video content. 749K+ known sites cross-referenced in real-time.</p>
-          <img src="/landing/radar.webp" alt="Radar map page" data-lightbox loading="lazy" />
+          <img src="/landing/radar-map.webp" alt="Radar discovery map" data-lightbox loading="lazy" />
+          <img src="/landing/radar-cards.webp" alt="Radar site cards" data-lightbox loading="lazy" />
           <a href="/radar.html" class="cta-secondary">OPEN RADAR</a>
         </div>
       </div>
@@ -245,12 +251,29 @@
       </div>
     </section>
 
+    <!-- ═══════════ ARTICLES ═══════════ -->
+    <section class="landing-section" id="articles-section">
+      <div class="feature-row reverse">
+        <div class="animate-in">
+          <h2 class="section-label">WEEKLY ARTICLES</h2>
+          <p class="section-desc">AI-generated deep dives into the week's biggest archaeological discoveries. Sourced, cited, and illustrated.</p>
+          <a href="/articles.html" class="cta-secondary">READ ARTICLES</a>
+        </div>
+        <div class="animate-in delay-2">
+          <img src="/landing/articles.webp" alt="Weekly archaeology article" class="feature-image-main" data-lightbox loading="lazy" />
+        </div>
+      </div>
+    </section>
+
     <!-- ═══════════ DATA SOURCES ═══════════ -->
     <section class="landing-section text-center">
       <h2 class="section-label animate-in">24 CURATED DATA SOURCES</h2>
       <p class="section-desc sources-desc animate-in">Aggregating the world's archaeological databases into one unified platform.</p>
       <div class="animate-in">
-        <img src="/landing/filter-source.webp" alt="24 data sources" class="sources-image" data-lightbox loading="lazy" />
+        <div class="sources-row">
+          <img src="/landing/database-audit.webp" alt="Database audit with 5,013 sites" data-lightbox loading="lazy" />
+          <img src="/landing/filter-source.webp" alt="24 data sources filter panel" data-lightbox loading="lazy" />
+        </div>
         <div class="source-badges">
           <span class="source-badge">Ancient Nerds</span>
           <span class="source-badge">OpenStreetMap</span>
@@ -288,6 +311,7 @@
       </div>
       <p class="section-desc community-desc animate-in">Contribute new sites. Free and open. No signup required to explore.</p>
       <a href="/globe.html" class="cta-secondary animate-in">CONTRIBUTE A SITE</a>
+      <a href="https://discord.gg/8bAjKKCue4" target="_blank" rel="noopener noreferrer" class="cta-secondary animate-in">JOIN DISCORD</a>
     </section>
 
     <!-- ═══════════ FINAL CTA ═══════════ -->

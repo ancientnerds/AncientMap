@@ -20,6 +20,11 @@
   box-sizing: border-box;
 }
 
+img {
+  max-width: 100%;
+  height: auto;
+}
+
 html {
   scroll-behavior: smooth;
 }
@@ -279,7 +284,7 @@ body {
 .section-desc {
   font-size: 1.05rem;
   color: var(--text-secondary);
-  max-width: 500px;
+  max-width: 640px;
   line-height: 1.7;
 }
 
@@ -335,6 +340,22 @@ body {
 .thumbnail-strip img:hover {
   opacity: 1;
   transform: scale(1.05);
+}
+
+#globe-section .thumbnail-strip img {
+  width: calc(50% - 6px);
+}
+
+#filter-section .thumbnail-strip img {
+  aspect-ratio: 1/1;
+  object-position: left;
+}
+
+#sitedata-section .feature-image-main,
+#lyra-section .feature-image-main,
+#articles-section .feature-image-main {
+  aspect-ratio: auto;
+  object-fit: contain;
 }
 
 /* ─── Cinematic Full-Width Section (Empires) ─── */
@@ -398,7 +419,8 @@ body {
 }
 
 .empire-thumbnails img {
-  width: 220px;
+  flex: 1 1 180px;
+  max-width: 240px;
   aspect-ratio: 3/2;
   object-fit: cover;
   border-radius: 10px;
@@ -414,8 +436,8 @@ body {
 /* ─── Lyra Section ─── */
 
 .lyra-avatar {
-  width: 80px;
-  height: 80px;
+  width: 120px;
+  height: 120px;
   border-radius: 50%;
   margin-bottom: 16px;
   border: 2px solid var(--border-color);
@@ -525,11 +547,19 @@ body {
 
 /* ─── Sources Section ─── */
 
-.sources-image {
-  width: 100%;
-  max-width: 700px;
+.sources-row {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  align-items: stretch;
+  max-width: 900px;
   margin: 30px auto;
-  display: block;
+}
+
+.sources-row img {
+  height: 400px;
+  width: auto;
+  object-fit: cover;
   border-radius: 12px;
   border: 1px solid var(--border-color);
   box-shadow: 0 0 40px var(--glow-cyan);
@@ -540,7 +570,8 @@ body {
   flex-wrap: wrap;
   gap: 10px;
   justify-content: center;
-  margin-top: 30px;
+  max-width: 900px;
+  margin: 30px auto 0;
 }
 
 .source-badge {
@@ -576,8 +607,8 @@ body {
 .final-cta-bg {
   position: absolute;
   inset: 0;
-  background: url('/landing/hero-globe.webp') center/cover no-repeat;
-  opacity: 0.15;
+  background: url('/landing/globe-han.webp') center/cover no-repeat;
+  opacity: 0.35;
 }
 
 .final-cta-content {
@@ -729,10 +760,6 @@ body {
     grid-template-columns: 1fr 1fr;
   }
 
-  .empire-thumbnails img {
-    width: 160px;
-  }
-
   .landing-section {
     padding: 60px 20px;
   }
@@ -746,10 +773,6 @@ body {
   .thumbnail-strip {
     flex-wrap: wrap;
   }
-
-  .thumbnail-strip img {
-    width: calc(50% - 6px);
-  }
 }
 
 @media (max-width: 600px) {
@@ -761,13 +784,6 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .empire-thumbnails img {
-    width: 130px;
-  }
-
-  .thumbnail-strip img {
-    width: calc(50% - 6px);
-  }
 
   .hero-title {
     letter-spacing: 0.08em;
