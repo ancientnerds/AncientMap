@@ -1,9 +1,7 @@
-"""Fetch YouTube transcripts via yt-dlp + youtube-transcript-api, store in PostgreSQL."""
+"""Fetch YouTube transcripts via YouTube Data API + youtube-transcript-api, store in PostgreSQL."""
 
-import json
 import logging
 import re
-import subprocess
 from datetime import UTC, datetime, timedelta
 
 from youtube_transcript_api import YouTubeTranscriptApi
@@ -29,15 +27,15 @@ def _build_ytt_api(settings: LyraSettings) -> YouTubeTranscriptApi:
 SKIP_TITLE_KEYWORDS = ["trailer", "premiere", "teaser", "promo"]
 
 
-def _get_recent_videos_api(channel: NewsChannel, lookup_days: int, api_key: str) -> list[dict]:
+def get_recent_videos(channel: NewsChannel, lookup_days: int, api_key: str) -> list[dict]:
     """Fetch recent videos using the YouTube Data API v3 playlistItems endpoint.
 
     Derives the channel's "uploads" playlist ID from the channel ID
-    (replace 2nd char 'C' → 'U'). Costs 1 quota unit per call.
+    (replace 2nd char 'C' -> 'U'). Costs 1 quota unit per call.
     """
     from pipeline.utils.http import fetch_with_retry
 
-    # Every YouTube channel has an uploads playlist: UC... → UU...
+    # Every YouTube channel has an uploads playlist: UC... -> UU...
     uploads_playlist_id = "UU" + channel.id[2:]
     cutoff = datetime.now(UTC) - timedelta(days=lookup_days)
 
@@ -70,7 +68,8 @@ def _get_recent_videos_api(channel: NewsChannel, lookup_days: int, api_key: str)
         try:
             published = datetime.fromisoformat(published_str.replace("Z", "+00:00"))
         except (ValueError, AttributeError):
-            published = datetime.now(UTC)
+            logger.warning(f"Malformed publishedAt '{published_str}' for video {video_id}, skipping")
+            continue
 
         if published < cutoff:
             continue
@@ -97,95 +96,6 @@ def _get_recent_videos_api(channel: NewsChannel, lookup_days: int, api_key: str)
 
     logger.info(f"YouTube API found {len(videos)} recent videos for {channel.name}")
     return videos
-
-
-def _get_recent_videos_ytdlp(channel: NewsChannel, lookup_days: int, proxy_url: str | None) -> list[dict]:
-    """Fetch recent videos using yt-dlp --flat-playlist (fallback when no API key)."""
-    channel_url = f"https://www.youtube.com/channel/{channel.id}/videos"
-    cmd = [
-        "yt-dlp",
-        "--flat-playlist",
-        "--dump-json",
-        "--no-warnings",
-        "--playlist-items", "1:15",
-        channel_url,
-    ]
-    if proxy_url:
-        cmd.insert(1, "--proxy")
-        cmd.insert(2, proxy_url)
-
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-    except subprocess.TimeoutExpired:
-        logger.warning(f"yt-dlp playlist timed out for {channel.name}")
-        return []
-
-    if result.returncode != 0:
-        logger.warning(f"yt-dlp playlist failed for {channel.name}: {result.stderr.strip()[-200:]}")
-        return []
-
-    cutoff = datetime.now(UTC) - timedelta(days=lookup_days)
-    videos = []
-
-    for line in result.stdout.strip().splitlines():
-        try:
-            data = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-
-        video_id = data.get("id")
-        title = data.get("title")
-        upload_date = data.get("upload_date")  # YYYYMMDD
-
-        if not video_id or not title:
-            continue
-
-        # Parse upload_date (YYYYMMDD) to datetime
-        if upload_date:
-            try:
-                published = datetime(
-                    int(upload_date[:4]), int(upload_date[4:6]), int(upload_date[6:8]),
-                    tzinfo=UTC,
-                )
-            except (ValueError, IndexError):
-                published = datetime.now(UTC)
-        else:
-            published = datetime.now(UTC)
-
-        if published < cutoff:
-            continue
-
-        if any(skip in title.lower() for skip in SKIP_TITLE_KEYWORDS):
-            continue
-
-        thumbnails = data.get("thumbnails")
-        if thumbnails and isinstance(thumbnails, list):
-            thumbnail_url = thumbnails[-1].get("url")
-        else:
-            thumbnail_url = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
-
-        videos.append({
-            "id": video_id,
-            "title": title,
-            "published_at": published,
-            "thumbnail_url": thumbnail_url,
-            "description": data.get("description"),
-        })
-
-    logger.info(f"yt-dlp found {len(videos)} recent videos for {channel.name}")
-    return videos
-
-
-def get_recent_videos(channel: NewsChannel, lookup_days: int, proxy_url: str | None,
-                      api_key: str | None = None) -> list[dict]:
-    """Fetch recent videos from a channel.
-
-    Prefers the YouTube Data API (fast, reliable, 1 quota unit per call).
-    Falls back to yt-dlp scraping when no API key is configured.
-    """
-    if api_key:
-        return _get_recent_videos_api(channel, lookup_days, api_key)
-    return _get_recent_videos_ytdlp(channel, lookup_days, proxy_url)
 
 
 def fetch_transcript(video_id: str, settings: LyraSettings) -> tuple[str | None, float | None]:
@@ -231,21 +141,55 @@ def fetch_transcript(video_id: str, settings: LyraSettings) -> tuple[str | None,
     return transcript_text, duration_minutes
 
 
+def _fetch_metadata_youtube_api(video_id: str, api_key: str) -> dict | None:
+    """Fetch video metadata using the YouTube Data API v3.
+
+    No cookies or OAuth needed — just an API key. Free tier: 10,000 units/day
+    (this call costs 1 unit). Returns dict with 'description' and 'tags' keys.
+    """
+    from pipeline.utils.http import fetch_with_retry
+
+    try:
+        resp = fetch_with_retry(
+            "https://www.googleapis.com/youtube/v3/videos",
+            params={
+                "id": video_id,
+                "part": "snippet",
+                "key": api_key,
+            },
+        )
+        data = resp.json()
+    except Exception as e:
+        logger.warning(f"YouTube API metadata failed for {video_id}: {e}")
+        return None
+
+    items = data.get("items", [])
+    if not items:
+        return None
+
+    snippet = items[0].get("snippet", {})
+    return {
+        "description": snippet.get("description", "").strip() or None,
+        "tags": snippet.get("tags") or None,
+    }
+
+
 def fetch_new_videos(settings: LyraSettings) -> int:
     """Fetch new videos from all enabled channels and store transcripts in DB.
 
     Returns number of new videos processed.
     """
     from pipeline.lyra.channels import get_enabled_channels
-    from pipeline.lyra.screenshot_extractor import get_proxy_url
+
+    if not settings.youtube_api_key:
+        logger.error("LYRA_YOUTUBE_API_KEY is not configured")
+        return 0
 
     channels = get_enabled_channels()
-    proxy_url = get_proxy_url(settings)
     total_new = 0
 
     for channel in channels:
-        videos = get_recent_videos(channel, settings.lookup_days, proxy_url,
-                                   api_key=settings.youtube_api_key or None)
+        videos = get_recent_videos(channel, settings.lookup_days, settings.youtube_api_key)
         if not videos:
             continue
 
@@ -266,7 +210,7 @@ def fetch_new_videos(settings: LyraSettings) -> int:
                     video_info["id"], settings
                 )
 
-                # Skip short videos BEFORE fetching yt-dlp metadata (saves a subprocess call)
+                # Skip short videos BEFORE fetching metadata (saves an API call)
                 if duration is not None and duration < settings.min_video_minutes:
                     logger.info(f"  -> skipped ({duration:.1f} min < {settings.min_video_minutes} min minimum)")
                     session.add(NewsVideo(
@@ -281,14 +225,10 @@ def fetch_new_videos(settings: LyraSettings) -> int:
                     ))
                     continue
 
-                # Fetch tags + description (prefer YouTube API, fall back to yt-dlp)
-                if settings.youtube_api_key:
-                    metadata = _fetch_metadata_youtube_api(video_info["id"], settings.youtube_api_key)
-                else:
-                    metadata = _fetch_metadata_ytdlp(video_info["id"], proxy_url)
+                metadata = _fetch_metadata_youtube_api(video_info["id"], settings.youtube_api_key)
                 tags = metadata["tags"] if metadata else None
 
-                # Prefer yt-dlp description over RSS if available
+                # Prefer full API description over playlist snippet
                 description = video_info.get("description")
                 if metadata and metadata["description"]:
                     description = metadata["description"]
@@ -389,16 +329,16 @@ def extract_transcript_segment(transcript_text: str, timestamp_range: str, buffe
         buffer_seconds: Extra seconds before/after range to include
 
     Returns:
-        Extracted segment text
+        Extracted segment text, or empty string if timestamps can't be parsed.
     """
     parts = timestamp_range.split("-")
     if len(parts) != 2:
-        return transcript_text[:2000]  # Fallback: return beginning
+        return ""
 
     start_secs = parse_timestamp_to_seconds(parts[0].strip())
     end_secs = parse_timestamp_to_seconds(parts[1].strip())
     if start_secs is None or end_secs is None:
-        return transcript_text[:2000]
+        return ""
 
     start_secs = max(0, start_secs - buffer_seconds)
     end_secs = end_secs + buffer_seconds
@@ -414,90 +354,19 @@ def extract_transcript_segment(transcript_text: str, timestamp_range: str, buffe
             if line_secs is not None and start_secs <= line_secs <= end_secs:
                 segment_lines.append(line)
 
-    return "\n".join(segment_lines) if segment_lines else transcript_text[:2000]
-
-
-def _fetch_metadata_youtube_api(video_id: str, api_key: str) -> dict | None:
-    """Fetch video metadata using the YouTube Data API v3.
-
-    No cookies or OAuth needed — just an API key. Free tier: 10,000 units/day
-    (this call costs 1 unit). Returns dict with 'description' and 'tags' keys.
-    """
-    from pipeline.utils.http import fetch_with_retry
-
-    try:
-        resp = fetch_with_retry(
-            "https://www.googleapis.com/youtube/v3/videos",
-            params={
-                "id": video_id,
-                "part": "snippet",
-                "key": api_key,
-            },
-        )
-        data = resp.json()
-    except Exception as e:
-        logger.warning(f"YouTube API metadata failed for {video_id}: {e}")
-        return None
-
-    items = data.get("items", [])
-    if not items:
-        return None
-
-    snippet = items[0].get("snippet", {})
-    return {
-        "description": snippet.get("description", "").strip() or None,
-        "tags": snippet.get("tags") or None,
-    }
-
-
-def _fetch_metadata_ytdlp(video_id: str, proxy_url: str | None) -> dict | None:
-    """Fetch video metadata using yt-dlp (no video download).
-
-    Fallback for when no YouTube API key is configured.
-    Returns dict with 'description' and 'tags' keys, or None on failure.
-    """
-    yt_url = f"https://www.youtube.com/watch?v={video_id}"
-    cmd = [
-        "yt-dlp",
-        "--dump-json",
-        "--no-download",
-        "--no-warnings",
-        yt_url,
-    ]
-    if proxy_url:
-        cmd.insert(1, "--proxy")
-        cmd.insert(2, proxy_url)
-
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        if result.returncode != 0:
-            logger.warning(f"yt-dlp metadata failed for {video_id}: {result.stderr.strip()[-200:]}")
-            return None
-
-        data = json.loads(result.stdout)
-        return {
-            "description": data.get("description", "").strip() or None,
-            "tags": data.get("tags") or None,
-        }
-    except subprocess.TimeoutExpired:
-        logger.warning(f"yt-dlp metadata timed out for {video_id}")
-        return None
-    except (json.JSONDecodeError, KeyError):
-        logger.warning(f"yt-dlp returned invalid JSON for {video_id}")
-        return None
+    return "\n".join(segment_lines)
 
 
 def backfill_video_descriptions(settings: LyraSettings, max_per_cycle: int = 10) -> int:
-    """Backfill descriptions and tags for existing videos using yt-dlp.
+    """Backfill descriptions and tags for existing videos via YouTube Data API.
 
     Videos fetched before the description/tags-parsing change have NULL values.
-    This fetches them via yt-dlp metadata extraction (no video download needed).
-
     Returns number of videos backfilled.
     """
-    from pipeline.lyra.screenshot_extractor import get_proxy_url
+    if not settings.youtube_api_key:
+        logger.error("LYRA_YOUTUBE_API_KEY is not configured")
+        return 0
 
-    proxy_url = get_proxy_url(settings)
     backfilled = 0
 
     with get_session() as session:
@@ -520,10 +389,7 @@ def backfill_video_descriptions(settings: LyraSettings, max_per_cycle: int = 10)
         logger.info(f"Backfilling metadata for {len(videos)} videos")
 
         for video in videos:
-            if settings.youtube_api_key:
-                metadata = _fetch_metadata_youtube_api(video.id, settings.youtube_api_key)
-            else:
-                metadata = _fetch_metadata_ytdlp(video.id, proxy_url)
+            metadata = _fetch_metadata_youtube_api(video.id, settings.youtube_api_key)
             if metadata:
                 updated = False
                 if metadata["description"] and not video.description:
@@ -538,7 +404,7 @@ def backfill_video_descriptions(settings: LyraSettings, max_per_cycle: int = 10)
                 else:
                     logger.info(f"  No new metadata: {video.title}")
             else:
-                logger.info(f"  yt-dlp failed: {video.title} (will retry next cycle)")
+                logger.info(f"  API failed: {video.title} (will retry next cycle)")
 
     logger.info(f"Backfilled {backfilled} videos")
     return backfilled
