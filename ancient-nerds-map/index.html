@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <!-- Primary Meta Tags -->
-    <title>Ancient Nerds - Interactive Archaeological Map | Explore 800K+ Ancient Sites</title>
-    <meta name="title" content="Ancient Nerds - Interactive Archaeological Map | Explore 800K+ Ancient Sites" />
-    <meta name="description" content="Explore over 800,000 archaeological sites worldwide on an interactive 3D globe. Discover ancient civilizations, historical empires, AI-curated news, and research tools. Free platform for archaeology enthusiasts." />
+    <title>Ancient Nerds - Interactive Archaeological Map | Explore 750K+ Ancient Sites</title>
+    <meta name="title" content="Ancient Nerds - Interactive Archaeological Map | Explore 750K+ Ancient Sites" />
+    <meta name="description" content="Explore over 750,000 archaeological sites worldwide on an interactive 3D globe. Discover ancient civilizations, historical empires, AI-curated news, and research tools. Free platform for archaeology enthusiasts." />
     <meta name="keywords" content="archaeology, ancient sites, historical map, megalithic structures, ancient civilizations, pyramids, temples, archaeological research, interactive globe, ancient history, UNESCO sites, historical empires" />
     <meta name="author" content="Ancient Nerds" />
     <meta name="robots" content="index, follow" />
@@ -23,7 +23,7 @@
     <meta property="og:url" content="https://ancientnerds.com/" />
     <meta property="og:site_name" content="Ancient Nerds" />
     <meta property="og:title" content="Ancient Nerds - Interactive Archaeological Research Platform" />
-    <meta property="og:description" content="Explore 800K+ archaeological sites on a 3D globe. Historical empires, AI-curated news, research tools. Free and open." />
+    <meta property="og:description" content="Explore 750K+ archaeological sites on a 3D globe. Historical empires, AI-curated news, research tools. Free and open." />
     <meta property="og:image" content="https://ancientnerds.com/api/og/homepage" />
     <meta property="og:image:width" content="600" />
     <meta property="og:image:height" content="315" />
@@ -33,7 +33,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:url" content="https://ancientnerds.com/" />
     <meta name="twitter:title" content="Ancient Nerds - Archaeological Research Platform" />
-    <meta name="twitter:description" content="Explore 800K+ archaeological sites on a 3D globe. Historical empires, AI news, research tools." />
+    <meta name="twitter:description" content="Explore 750K+ archaeological sites on a 3D globe. Historical empires, AI news, research tools." />
     <meta name="twitter:image" content="https://ancientnerds.com/api/og/homepage" />
 
     <!-- Structured Data -->
@@ -42,7 +42,7 @@
       "@context": "https://schema.org",
       "@type": "WebApplication",
       "name": "Ancient Nerds",
-      "description": "Interactive archaeological research platform featuring over 800,000 ancient sites worldwide",
+      "description": "Interactive archaeological research platform featuring over 750,000 ancient sites worldwide",
       "url": "https://ancientnerds.com",
       "applicationCategory": "EducationalApplication",
       "operatingSystem": "Web Browser",
@@ -64,9 +64,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Orbitron:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=block" rel="stylesheet" />
 
-    <!-- Preload hero assets -->
-    <link rel="preload" href="/landing/hero-globe.webp" as="image" />
-    <link rel="preload" href="/landing/video/hero-fast.mp4" as="video" type="video/mp4" />
+    <!-- Preload hero video -->
+    <link rel="preload" href="/landing/video/hero.mp4" as="video" type="video/mp4" />
 
     <!-- Styles -->
     <link rel="stylesheet" href="/src/styles/landing.css" />
@@ -76,19 +75,20 @@
     <!-- ═══════════ HERO ═══════════ -->
     <section class="hero">
       <div class="hero-bg" id="heroBg">
-        <video autoplay muted loop playsinline poster="/landing/hero-globe.webp" class="hero-video" id="heroVideo">
-          <source src="/landing/video/hero-fast.mp4" type="video/mp4" />
+        <video autoplay muted loop playsinline class="hero-video" id="heroVideo">
+          <source src="/landing/video/hero.mp4" type="video/mp4" />
         </video>
       </div>
+      <div class="hero-curtain" id="heroCurtain"></div>
       <div class="hero-overlay"></div>
-      <div class="hero-content animate-in">
+      <div class="hero-content">
         <img src="/an-logo.svg" alt="Ancient Nerds" class="hero-logo" />
         <h1 class="hero-title">ANCIENT NERDS</h1>
         <p class="hero-subtitle">RESEARCH PLATFORM</p>
         <p class="hero-tagline">Explore the ancient world through data, maps, and AI</p>
         <div class="hero-stats">
           <div class="hero-stat">
-            <div class="hero-stat-value" data-target="800">0</div>
+            <div class="hero-stat-value" data-target="750">0</div>
             <div class="hero-stat-label">K+ Sites</div>
           </div>
           <div class="hero-stat">
@@ -113,9 +113,7 @@
     <section class="landing-section" id="globe-section">
       <div class="feature-row">
         <div class="animate-in">
-          <video autoplay muted loop playsinline poster="/landing/globe-category.webp" class="feature-image-main feature-video">
-            <source data-src="/landing/video/globe-overview.mp4" type="video/mp4" />
-          </video>
+          <img src="/landing/globe-category.webp" alt="Interactive 3D globe with category coloring" class="feature-image-main" data-lightbox loading="lazy" />
           <div class="thumbnail-strip">
             <img src="/landing/globe-satellite.webp" alt="Satellite view" data-lightbox loading="lazy" />
             <img src="/landing/globe-country.webp" alt="Country-colored view" data-lightbox loading="lazy" />
@@ -133,13 +131,11 @@
     <section class="landing-section">
       <div class="feature-row reverse">
         <div class="animate-in">
-          <h2 class="section-label">FILTER 800,000+ SITES</h2>
+          <h2 class="section-label">FILTER 750,000+ SITES</h2>
           <p class="section-desc">By age, country, category, or data source. Narrow down from 10,000 BC to present across 91 countries and 49 site types.</p>
         </div>
         <div class="animate-in delay-2">
-          <video autoplay muted loop playsinline poster="/landing/filter-age.webp" class="feature-image-main feature-video">
-            <source data-src="/landing/video/filters.mp4" type="video/mp4" />
-          </video>
+          <img src="/landing/filter-age.webp" alt="Filter sites by age, category, and source" class="feature-image-main" data-lightbox loading="lazy" />
         </div>
       </div>
     </section>
@@ -147,9 +143,7 @@
     <!-- ═══════════ EMPIRES ═══════════ -->
     <section class="cinematic-section full-width">
       <div class="cinematic-bg">
-        <video autoplay muted loop playsinline poster="/landing/empire-roman.webp" class="cinematic-video feature-video">
-          <source data-src="/landing/video/empires.mp4" type="video/mp4" />
-        </video>
+        <img src="/landing/empire-roman.webp" alt="Roman Empire overlay on the globe" class="cinematic-video" loading="lazy" />
       </div>
       <div class="cinematic-overlay"></div>
       <div class="cinematic-content animate-in">
@@ -215,41 +209,31 @@
     </section>
 
     <!-- ═══════════ TOOLS ═══════════ -->
-    <section class="landing-section" style="text-align: center;">
+    <section class="landing-section text-center">
       <h2 class="section-label animate-in">RESEARCH TOOLS</h2>
       <div class="tools-grid">
         <div class="tool-card animate-in delay-1">
-          <video autoplay muted loop playsinline poster="/landing/search.webp" class="tool-video feature-video">
-            <source data-src="/landing/video/search.mp4" type="video/mp4" />
-          </video>
+          <img src="/landing/search.webp" alt="Search tool" loading="lazy" />
           <h3>Search</h3>
           <p>Find any site by name</p>
         </div>
         <div class="tool-card animate-in delay-1">
-          <video autoplay muted loop playsinline poster="/landing/proximity.webp" class="tool-video feature-video">
-            <source data-src="/landing/video/proximity.mp4" type="video/mp4" />
-          </video>
+          <img src="/landing/proximity.webp" alt="Proximity tool" loading="lazy" />
           <h3>Proximity</h3>
           <p>What's near you?</p>
         </div>
         <div class="tool-card animate-in delay-2">
-          <video autoplay muted loop playsinline poster="/landing/measure.webp" class="tool-video feature-video">
-            <source data-src="/landing/video/measure.mp4" type="video/mp4" />
-          </video>
+          <img src="/landing/measure.webp" alt="Measure tool" loading="lazy" />
           <h3>Measure</h3>
           <p>Distance between sites</p>
         </div>
         <div class="tool-card animate-in delay-2">
-          <video autoplay muted loop playsinline poster="/landing/map-layers.webp" class="tool-video feature-video">
-            <source data-src="/landing/video/map-layers.mp4" type="video/mp4" />
-          </video>
+          <img src="/landing/map-layers.webp" alt="Map layers tool" loading="lazy" />
           <h3>Map Layers</h3>
           <p>Rivers, reefs, glaciers, tectonic plates</p>
         </div>
         <div class="tool-card animate-in delay-3">
-          <video autoplay muted loop playsinline poster="/landing/paleoshoreline.webp" class="tool-video feature-video">
-            <source data-src="/landing/video/paleoshoreline.mp4" type="video/mp4" />
-          </video>
+          <img src="/landing/paleoshoreline.webp" alt="Paleoshoreline tool" loading="lazy" />
           <h3>Paleoshoreline</h3>
           <p>Ice age coastlines</p>
         </div>
@@ -262,9 +246,9 @@
     </section>
 
     <!-- ═══════════ DATA SOURCES ═══════════ -->
-    <section class="landing-section" style="text-align: center;">
+    <section class="landing-section text-center">
       <h2 class="section-label animate-in">24 CURATED DATA SOURCES</h2>
-      <p class="section-desc animate-in" style="margin: 0 auto 16px;">Aggregating the world's archaeological databases into one unified platform.</p>
+      <p class="section-desc sources-desc animate-in">Aggregating the world's archaeological databases into one unified platform.</p>
       <div class="animate-in">
         <img src="/landing/filter-source.webp" alt="24 data sources" class="sources-image" data-lightbox loading="lazy" />
         <div class="source-badges">
@@ -297,12 +281,12 @@
     </section>
 
     <!-- ═══════════ COMMUNITY ═══════════ -->
-    <section class="landing-section" style="text-align: center;">
+    <section class="landing-section text-center">
       <h2 class="section-label animate-in">BUILT FOR RESEARCHERS, BY RESEARCHERS</h2>
       <div class="animate-in">
         <img src="/landing/contribute.webp" alt="Contribute a site form" class="community-image" data-lightbox loading="lazy" />
       </div>
-      <p class="section-desc animate-in" style="margin: 16px auto 24px;">Contribute new sites. Free and open. No signup required to explore.</p>
+      <p class="section-desc community-desc animate-in">Contribute new sites. Free and open. No signup required to explore.</p>
       <a href="/globe.html" class="cta-secondary animate-in">CONTRIBUTE A SITE</a>
     </section>
 
@@ -347,6 +331,20 @@
 
     <!-- ═══════════ SCRIPTS ═══════════ -->
     <script>
+      // Fade black curtain away once video is ready
+      (function() {
+        var v = document.getElementById('heroVideo');
+        var c = document.getElementById('heroCurtain');
+        if (!v || !c) return;
+        function reveal() {
+          c.style.opacity = '0';
+          c.addEventListener('transitionend', function() { c.remove(); }, { once: true });
+        }
+        if (v.readyState >= 2) return reveal();
+        v.addEventListener('loadeddata', reveal, { once: true });
+        setTimeout(reveal, 3000);
+      })();
+
       // Bandwidth / accessibility guard: pause videos for users who prefer reduced motion or save-data
       (function() {
         const prefersReducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -359,35 +357,6 @@
         }
       })();
 
-      // Lazy-load below-fold videos: swap data-src → src when visible
-      var videoObserver = new IntersectionObserver(function(entries) {
-        entries.forEach(function(entry) {
-          if (entry.isIntersecting) {
-            var video = entry.target;
-            video.querySelectorAll('source[data-src]').forEach(function(source) {
-              source.src = source.dataset.src;
-              source.removeAttribute('data-src');
-            });
-            video.load();
-            video.play().catch(function() {});
-            videoObserver.unobserve(video);
-          }
-        });
-      }, { rootMargin: '400px' });
-
-      document.querySelectorAll('.feature-video').forEach(function(v) { videoObserver.observe(v); });
-
-      // Scroll-triggered animations
-      const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('visible');
-          }
-        });
-      }, { threshold: 0.1 });
-
-      document.querySelectorAll('.animate-in').forEach(el => observer.observe(el));
-
       // Counter animation
       function animateCounters() {
         document.querySelectorAll('.hero-stat-value[data-target]').forEach(el => {
@@ -398,10 +367,9 @@
           function tick(now) {
             const progress = Math.min((now - start) / duration, 1);
             const eased = 1 - Math.pow(1 - progress, 3);
-            const suffix = target === 800 ? 'K+' : target === 91 ? '' : '';
-            el.textContent = Math.floor(target * eased) + (progress === 1 && target === 800 ? 'K+' : progress === 1 ? '' : '');
+            el.textContent = Math.floor(target * eased) + (progress === 1 && target === 750 ? 'K+' : progress === 1 ? '' : '');
             if (progress < 1) requestAnimationFrame(tick);
-            else el.textContent = target + (target === 800 ? 'K+' : '');
+            else el.textContent = target + (target === 750 ? 'K+' : '');
           }
 
           requestAnimationFrame(tick);
@@ -418,25 +386,17 @@
 
       heroObserver.observe(document.querySelector('.hero'));
 
-      // Progressive quality upgrade: load full HD hero in background
-      (function() {
-        var preview = document.getElementById('heroVideo');
-        if (!preview) return;
-        var hd = document.createElement('video');
-        hd.muted = true;
-        hd.loop = true;
-        hd.playsInline = true;
-        hd.preload = 'auto';
-        hd.src = '/landing/video/hero.mp4';
-        hd.addEventListener('canplaythrough', function() {
-          hd.currentTime = preview.currentTime % hd.duration;
-          hd.play().then(function() {
-            hd.className = preview.className;
-            hd.id = preview.id;
-            preview.parentNode.replaceChild(hd, preview);
-          }).catch(function() {});
-        }, { once: true });
-      })();
+      // Scroll-triggered animations
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+          }
+        });
+      }, { threshold: 0.1 });
+
+      document.querySelectorAll('.animate-in').forEach(el => observer.observe(el));
+
 
       // Parallax on hero background
       const heroBg = document.getElementById('heroBg');
@@ -459,7 +419,6 @@
       const lightboxImg = lightbox.querySelector('img');
 
       document.querySelectorAll('[data-lightbox]').forEach(img => {
-        img.style.cursor = 'zoom-in';
         img.addEventListener('click', () => {
           lightboxImg.src = img.src;
           lightboxImg.alt = img.alt;
