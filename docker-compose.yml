@@ -137,7 +137,6 @@ services:
       POSTGRES_HOST: db
     volumes:
       - ./public/data/news:/app/public/data/news
-      - ytdlp_cache:/home/appuser/.cache/yt-dlp
     depends_on:
       db:
         condition: service_healthy
@@ -171,8 +170,6 @@ volumes:
     name: ancient_map_pgadmin_data
   qdrant_data:
     name: ancient_map_qdrant_data
-  ytdlp_cache:
-    name: ancient_map_ytdlp_cache
 
 networks:
   default:

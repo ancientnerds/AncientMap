@@ -77,8 +77,8 @@ class LyraSettings(BaseSettings):
     webshare_username: str = ""
     webshare_password: str = ""
 
-    # YouTube OAuth2 for yt-dlp (auto-refreshing token, no manual cookie export)
-    ytdlp_use_oauth: bool = False
+    # YouTube Data API key (for video metadata — no cookies/OAuth needed)
+    youtube_api_key: str = ""
 
 
 _cached_client: anthropic.Anthropic | None = None
