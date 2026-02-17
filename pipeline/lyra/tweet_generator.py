@@ -8,7 +8,7 @@ from pathlib import Path
 import anthropic
 
 from pipeline.database import NewsItem, NewsVideo, get_session
-from pipeline.lyra.config import LyraSettings, call_api, get_anthropic_client, parse_json_response
+from pipeline.lyra.config import LyraSettings, call_api, get_anthropic_client, parse_prefilled_json
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +123,7 @@ def generate_posts_for_video(
     if not text_block:
         logger.warning(f"Empty response content for {video.id}")
         return 0
-    posts_data = parse_json_response("{" + text_block).get("posts", [])
+    posts_data = parse_prefilled_json(text_block).get("posts", [])
 
     with get_session() as session:
         db_video = session.get(NewsVideo, video.id)
