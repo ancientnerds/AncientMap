@@ -809,10 +809,11 @@ def _pick_wikidata_entity(
         )
     except anthropic.APIError as e:
         logger.warning(f"LLM tiebreaker API error for {site_name}: {e}")
-        return with_wiki[0]["qid"]
+        return None
 
     if not response.content or not hasattr(response.content[0], "text"):
-        return with_wiki[0]["qid"]
+        logger.warning(f"  [{site_name}] LLM tiebreaker returned empty response")
+        return None
 
     reply = ("Q" + response.content[0].text).strip()
     # Extract QID from reply (e.g. "Q115679382" or "A) Q115679382")
@@ -825,9 +826,9 @@ def _pick_wikidata_entity(
             logger.info(f"  [{site_name}] LLM picked: {chosen_qid}")
             return chosen_qid
 
-    # LLM returned something unexpected — fall back to first
-    logger.warning(f"  [{site_name}] LLM returned unexpected: '{reply}', using first candidate")
-    return with_wiki[0]["qid"]
+    # LLM returned something unexpected — skip Wikidata enrichment
+    logger.warning(f"  [{site_name}] LLM returned unexpected: '{reply}', skipping Wikidata pick")
+    return None
 
 
 def _enrich_from_wikidata(qid: str) -> dict:

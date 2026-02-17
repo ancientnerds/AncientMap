@@ -2,7 +2,7 @@
 
 import json
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import anthropic
@@ -96,10 +96,11 @@ def _check_relevance(
     client: anthropic.Anthropic,
     settings: LyraSettings,
     relevance_prompt: str | None = None,
-) -> bool:
+) -> bool | None:
     """Quick LLM check: is this video about real archaeology?
 
-    Returns True if the video passes the relevance gate.
+    Returns True if relevant, False if not, None if the check failed
+    (LLM unavailable / bad response).
     """
     context_parts = [f"Title: {video.title}"]
     if video.description:
@@ -134,18 +135,18 @@ def _check_relevance(
         )
     except anthropic.APIError as e:
         logger.error(f"Relevance gate API error for {video.id}: {e}")
-        return True  # pass through on API failure rather than crashing the batch
+        return None
 
     text_block = next((b.text for b in response.content if hasattr(b, "text")), None)
     if not text_block:
         logger.warning(f"Relevance gate: empty response for {video.id}")
-        return True
+        return None
 
     try:
         result = parse_prefilled_json(text_block)
     except (json.JSONDecodeError, KeyError, ValueError) as e:
         logger.warning(f"Relevance gate: bad JSON for {video.id}: {e}")
-        return True  # pass through on parse failure
+        return None
     if not result.get("is_archaeology", True):
         logger.info(f"Relevance gate: {video.title!r} -> NO ({result.get('reason', '')})")
     return result.get("is_archaeology", True)
@@ -214,7 +215,11 @@ def summarize_video(
     client = get_anthropic_client(settings)
 
     # Relevance gate: skip non-archaeology videos
-    if not _check_relevance(video, client, settings, relevance_prompt):
+    relevance = _check_relevance(video, client, settings, relevance_prompt)
+    if relevance is None:
+        logger.warning(f"Relevance gate unavailable for {video.id}, deferring to next cycle")
+        return False
+    if not relevance:
         with get_session() as session:
             v = session.get(NewsVideo, video.id)
             if v:
@@ -337,11 +342,14 @@ def summarize_video(
 def summarize_pending_videos(settings: LyraSettings) -> int:
     """Summarize all videos that have transcripts but no summaries yet.
 
+    Only processes videos published within the lookup_days window.
     Returns number of videos summarized.
     """
+    cutoff = datetime.now(UTC) - timedelta(days=settings.lookup_days)
     with get_session() as session:
         pending = session.query(NewsVideo).filter(
-            NewsVideo.status == "transcribed"
+            NewsVideo.status == "transcribed",
+            NewsVideo.published_at >= cutoff,
         ).all()
         session.expunge_all()
 
@@ -361,8 +369,11 @@ def summarize_pending_videos(settings: LyraSettings) -> int:
     count = 0
     for video in pending:
         ch_count = channel_counts.get(video.channel_id, 0)
-        if summarize_video(video, settings, ch_count, avg_items, summary_prompt, relevance_prompt):
-            count += 1
+        try:
+            if summarize_video(video, settings, ch_count, avg_items, summary_prompt, relevance_prompt):
+                count += 1
+        except Exception:
+            logger.exception(f"Failed to summarize video {video.id}, skipping")
 
     logger.info(f"Summarized {count}/{len(pending)} pending videos")
     return count
