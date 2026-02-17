@@ -13,6 +13,13 @@ from pipeline.lyra.transcript_cleaner import clean_segments
 
 logger = logging.getLogger(__name__)
 
+# Error messages that mean the video will never have a transcript
+_PERMANENT_PATTERNS = ["members-only content", "channel's members on level", "video is private"]
+
+
+class PermanentVideoError(Exception):
+    """Video is permanently unavailable (members-only, private, etc.)."""
+
 
 def _build_ytt_api(settings: LyraSettings) -> YouTubeTranscriptApi:
     """Build a YouTubeTranscriptApi instance, optionally with Webshare proxy."""
@@ -104,6 +111,9 @@ def fetch_transcript(video_id: str, settings: LyraSettings) -> tuple[str | None,
     try:
         transcript = ytt_api.fetch(video_id, languages=["en", "en-US", "en-GB"])
     except Exception as e:
+        msg = str(e)
+        if any(p in msg for p in _PERMANENT_PATTERNS):
+            raise PermanentVideoError(msg) from e
         logger.warning(f"No transcript for {video_id}: {e}")
         return None, None
 
@@ -206,9 +216,22 @@ def fetch_new_videos(settings: LyraSettings) -> int:
                     continue
 
                 logger.info(f"Fetching transcript for: {video_info['title']}")
-                transcript_text, duration = fetch_transcript(
-                    video_info["id"], settings
-                )
+                try:
+                    transcript_text, duration = fetch_transcript(
+                        video_info["id"], settings
+                    )
+                except PermanentVideoError as e:
+                    logger.info(f"  -> skipped (permanently unavailable: {e!s:.80s})")
+                    session.add(NewsVideo(
+                        id=video_info["id"],
+                        channel_id=channel.id,
+                        title=video_info["title"],
+                        description=video_info.get("description"),
+                        published_at=video_info["published_at"],
+                        thumbnail_url=video_info.get("thumbnail_url"),
+                        status="skipped",
+                    ))
+                    continue
 
                 # Skip short videos BEFORE fetching metadata (saves an API call)
                 if duration is not None and duration < settings.min_video_minutes:
@@ -286,7 +309,12 @@ def retry_failed_videos(settings: LyraSettings) -> int:
 
         for video in failed_videos:
             logger.info(f"  Retrying: {video.title} ({video.id})")
-            transcript_text, duration = fetch_transcript(video.id, settings)
+            try:
+                transcript_text, duration = fetch_transcript(video.id, settings)
+            except PermanentVideoError as e:
+                video.status = "skipped"
+                logger.info(f"    -> permanently unavailable, skipping: {e!s:.80s}")
+                continue
 
             if transcript_text:
                 video.duration_minutes = duration
