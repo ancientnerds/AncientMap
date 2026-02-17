@@ -2,7 +2,6 @@
 # ENVIRONMENT & SECRETS - Never commit these!
 # =============================================================================
 .env
-.cookies.txt
 .env.local
 .env.*.local
 

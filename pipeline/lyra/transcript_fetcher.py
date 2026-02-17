@@ -30,7 +30,7 @@ SKIP_TITLE_KEYWORDS = ["trailer", "premiere", "teaser", "promo"]
 
 
 def get_recent_videos(
-    channel: NewsChannel, lookup_days: int, proxy_url: str | None, cookies_path: str | None = None,
+    channel: NewsChannel, lookup_days: int, proxy_url: str | None, use_oauth: bool = False,
 ) -> list[dict]:
     """Fetch recent videos from a channel using yt-dlp --flat-playlist."""
     channel_url = f"https://www.youtube.com/channel/{channel.id}/videos"
@@ -45,9 +45,8 @@ def get_recent_videos(
     if proxy_url:
         cmd.insert(1, "--proxy")
         cmd.insert(2, proxy_url)
-    if cookies_path:
-        cmd.insert(1, "--cookies")
-        cmd.insert(2, cookies_path)
+    if use_oauth:
+        cmd[1:1] = ["--username", "oauth2", "--password", ""]
 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
@@ -166,11 +165,11 @@ def fetch_new_videos(settings: LyraSettings) -> int:
 
     channels = get_enabled_channels()
     proxy_url = get_proxy_url(settings)
-    cookies_path = settings.ytdlp_cookies_path or None
+    use_oauth = settings.ytdlp_use_oauth
     total_new = 0
 
     for channel in channels:
-        videos = get_recent_videos(channel, settings.lookup_days, proxy_url, cookies_path)
+        videos = get_recent_videos(channel, settings.lookup_days, proxy_url, use_oauth)
         if not videos:
             continue
 
@@ -207,7 +206,7 @@ def fetch_new_videos(settings: LyraSettings) -> int:
                     continue
 
                 # Fetch tags + description via yt-dlp metadata (only for non-skipped videos)
-                metadata = _fetch_metadata_ytdlp(video_info["id"], proxy_url, cookies_path)
+                metadata = _fetch_metadata_ytdlp(video_info["id"], proxy_url, use_oauth)
                 tags = metadata["tags"] if metadata else None
 
                 # Prefer yt-dlp description over RSS if available
@@ -340,7 +339,7 @@ def extract_transcript_segment(transcript_text: str, timestamp_range: str, buffe
 
 
 def _fetch_metadata_ytdlp(
-    video_id: str, proxy_url: str | None, cookies_path: str | None = None,
+    video_id: str, proxy_url: str | None, use_oauth: bool = False,
 ) -> dict | None:
     """Fetch video metadata using yt-dlp (no video download).
 
@@ -357,9 +356,8 @@ def _fetch_metadata_ytdlp(
     if proxy_url:
         cmd.insert(1, "--proxy")
         cmd.insert(2, proxy_url)
-    if cookies_path:
-        cmd.insert(1, "--cookies")
-        cmd.insert(2, cookies_path)
+    if use_oauth:
+        cmd[1:1] = ["--username", "oauth2", "--password", ""]
 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
@@ -391,7 +389,7 @@ def backfill_video_descriptions(settings: LyraSettings, max_per_cycle: int = 10)
     from pipeline.lyra.screenshot_extractor import get_proxy_url
 
     proxy_url = get_proxy_url(settings)
-    cookies_path = settings.ytdlp_cookies_path or None
+    use_oauth = settings.ytdlp_use_oauth
     backfilled = 0
 
     with get_session() as session:
@@ -414,7 +412,7 @@ def backfill_video_descriptions(settings: LyraSettings, max_per_cycle: int = 10)
         logger.info(f"Backfilling metadata for {len(videos)} videos")
 
         for video in videos:
-            metadata = _fetch_metadata_ytdlp(video.id, proxy_url, cookies_path)
+            metadata = _fetch_metadata_ytdlp(video.id, proxy_url, use_oauth)
             if metadata:
                 updated = False
                 if metadata["description"] and not video.description:
