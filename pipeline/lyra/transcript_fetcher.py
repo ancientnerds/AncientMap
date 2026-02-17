@@ -29,8 +29,78 @@ def _build_ytt_api(settings: LyraSettings) -> YouTubeTranscriptApi:
 SKIP_TITLE_KEYWORDS = ["trailer", "premiere", "teaser", "promo"]
 
 
-def get_recent_videos(channel: NewsChannel, lookup_days: int, proxy_url: str | None) -> list[dict]:
-    """Fetch recent videos from a channel using yt-dlp --flat-playlist."""
+def _get_recent_videos_api(channel: NewsChannel, lookup_days: int, api_key: str) -> list[dict]:
+    """Fetch recent videos using the YouTube Data API v3 playlistItems endpoint.
+
+    Derives the channel's "uploads" playlist ID from the channel ID
+    (replace 2nd char 'C' → 'U'). Costs 1 quota unit per call.
+    """
+    from pipeline.utils.http import fetch_with_retry
+
+    # Every YouTube channel has an uploads playlist: UC... → UU...
+    uploads_playlist_id = "UU" + channel.id[2:]
+    cutoff = datetime.now(UTC) - timedelta(days=lookup_days)
+
+    try:
+        resp = fetch_with_retry(
+            "https://www.googleapis.com/youtube/v3/playlistItems",
+            params={
+                "playlistId": uploads_playlist_id,
+                "part": "snippet",
+                "maxResults": 15,
+                "key": api_key,
+            },
+        )
+        data = resp.json()
+    except Exception as e:
+        logger.warning(f"YouTube API playlist fetch failed for {channel.name}: {e}")
+        return []
+
+    videos = []
+    for item in data.get("items", []):
+        snippet = item.get("snippet", {})
+        video_id = snippet.get("resourceId", {}).get("videoId")
+        title = snippet.get("title", "")
+
+        if not video_id or not title:
+            continue
+
+        # Parse ISO 8601 publishedAt
+        published_str = snippet.get("publishedAt", "")
+        try:
+            published = datetime.fromisoformat(published_str.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            published = datetime.now(UTC)
+
+        if published < cutoff:
+            continue
+
+        if any(skip in title.lower() for skip in SKIP_TITLE_KEYWORDS):
+            continue
+
+        # Best available thumbnail
+        thumbs = snippet.get("thumbnails", {})
+        thumbnail_url = (
+            thumbs.get("high", {}).get("url")
+            or thumbs.get("medium", {}).get("url")
+            or thumbs.get("default", {}).get("url")
+            or f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+        )
+
+        videos.append({
+            "id": video_id,
+            "title": title,
+            "published_at": published,
+            "thumbnail_url": thumbnail_url,
+            "description": snippet.get("description"),
+        })
+
+    logger.info(f"YouTube API found {len(videos)} recent videos for {channel.name}")
+    return videos
+
+
+def _get_recent_videos_ytdlp(channel: NewsChannel, lookup_days: int, proxy_url: str | None) -> list[dict]:
+    """Fetch recent videos using yt-dlp --flat-playlist (fallback when no API key)."""
     channel_url = f"https://www.youtube.com/channel/{channel.id}/videos"
     cmd = [
         "yt-dlp",
@@ -85,11 +155,9 @@ def get_recent_videos(channel: NewsChannel, lookup_days: int, proxy_url: str | N
         if published < cutoff:
             continue
 
-        # Skip trailers and premieres
         if any(skip in title.lower() for skip in SKIP_TITLE_KEYWORDS):
             continue
 
-        # Thumbnail: use last (highest-res) from thumbnails list, or fallback
         thumbnails = data.get("thumbnails")
         if thumbnails and isinstance(thumbnails, list):
             thumbnail_url = thumbnails[-1].get("url")
@@ -106,6 +174,18 @@ def get_recent_videos(channel: NewsChannel, lookup_days: int, proxy_url: str | N
 
     logger.info(f"yt-dlp found {len(videos)} recent videos for {channel.name}")
     return videos
+
+
+def get_recent_videos(channel: NewsChannel, lookup_days: int, proxy_url: str | None,
+                      api_key: str | None = None) -> list[dict]:
+    """Fetch recent videos from a channel.
+
+    Prefers the YouTube Data API (fast, reliable, 1 quota unit per call).
+    Falls back to yt-dlp scraping when no API key is configured.
+    """
+    if api_key:
+        return _get_recent_videos_api(channel, lookup_days, api_key)
+    return _get_recent_videos_ytdlp(channel, lookup_days, proxy_url)
 
 
 def fetch_transcript(video_id: str, settings: LyraSettings) -> tuple[str | None, float | None]:
@@ -164,7 +244,8 @@ def fetch_new_videos(settings: LyraSettings) -> int:
     total_new = 0
 
     for channel in channels:
-        videos = get_recent_videos(channel, settings.lookup_days, proxy_url)
+        videos = get_recent_videos(channel, settings.lookup_days, proxy_url,
+                                   api_key=settings.youtube_api_key or None)
         if not videos:
             continue
 
