@@ -1,6 +1,6 @@
 # Lyra News Pipeline
 
-Fully-automated AI-powered archaeological news discovery system. Runs on a 1-hour cycle inside the `ancient_nerds_lyra` Docker container. Transforms raw YouTube video content into curated Radar cards through 9 sequential stages.
+Fully-automated AI-powered archaeological news discovery system. Runs on a 1-hour cycle inside the `ancient_nerds_lyra` Docker container. Transforms raw YouTube video content into curated Radar cards through 11 sequential stages.
 
 ---
 
@@ -9,15 +9,16 @@ Fully-automated AI-powered archaeological news discovery system. Runs on a 1-hou
 ```mermaid
 flowchart LR
     subgraph "Every Hour"
-        F[1. Fetch] --> S[2. Summarize]
-        S --> M[3. Match]
-        M --> P[4. Posts]
-        P --> V[5. Verify]
-        V --> R[5b. Rescore]
-        R --> D[6. Dedup]
-        D --> SC[7. Screenshots]
-        SC --> B[8. Backfill]
-        B --> I[9. Identify]
+        F[1. Fetch] --> RT[2. Retry]
+        RT --> S[3. Summarize]
+        S --> M[4. Match]
+        M --> P[5. Posts]
+        P --> V[6. Verify]
+        V --> R[7. Rescore]
+        R --> D[8. Dedup]
+        D --> SC[9. Screenshots]
+        SC --> B[10. Backfill]
+        B --> I[11. Identify]
     end
     I --> CB[Cache Bust]
     CB --> HB[Heartbeat]
@@ -26,15 +27,16 @@ flowchart LR
 | Stage | File | Entry Point | AI Model |
 |-------|------|-------------|----------|
 | 1. Fetch | `transcript_fetcher.py` | `fetch_new_videos()` | - |
-| 2. Summarize | `summarizer.py` | `summarize_pending_videos()` | MiniMax M2.5 |
-| 3. Match | `site_matcher.py` | `match_sites_for_pending_items()` | - |
-| 4. Posts | `tweet_generator.py` | `generate_pending_posts()` | MiniMax M2.5 |
-| 5. Verify | `tweet_verifier.py` | `verify_pending_posts()` | MiniMax M2.5 |
-| 5b. Rescore | `significance_scorer.py` | `rescore_pending_items()` | MiniMax M2.5 |
-| 6. Dedup | `tweet_deduplicator.py` | `deduplicate_posts()` | - |
-| 7. Screenshots | `screenshot_extractor.py` | `extract_screenshots()` | - |
-| 8. Backfill | `transcript_fetcher.py` | `backfill_video_descriptions()` | - |
-| 9. Identify | `site_identifier.py` | `identify_and_enrich_sites()` | MiniMax M2.5 |
+| 2. Retry | `transcript_fetcher.py` | `retry_failed_videos()` | - |
+| 3. Summarize | `summarizer.py` | `summarize_pending_videos()` | MiniMax M2.5 |
+| 4. Match | `site_matcher.py` | `match_sites_for_pending_items()` | - |
+| 5. Posts | `tweet_generator.py` | `generate_pending_posts()` | MiniMax M2.5 |
+| 6. Verify | `tweet_verifier.py` | `verify_pending_posts()` | MiniMax M2.5 |
+| 7. Rescore | `significance_scorer.py` | `rescore_pending_items()` | MiniMax M2.5 |
+| 8. Dedup | `tweet_deduplicator.py` | `deduplicate_posts()` | - |
+| 9. Screenshots | `screenshot_extractor.py` | `extract_screenshots()` | - |
+| 10. Backfill | `transcript_fetcher.py` | `backfill_video_descriptions()` | - |
+| 11. Identify | `site_identifier.py` | `identify_and_enrich_sites()` | MiniMax M2.5 |
 
 ---
 
@@ -42,7 +44,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    YT["YouTube RSS\n(18 channels)"] -->|transcripts| NV[(news_videos)]
+    YT["YouTube RSS\n(35 channels)"] -->|transcripts| NV[(news_videos)]
     NV -->|MiniMax summarize| NI[(news_items)]
     NI -->|exact/spaceless match| US[(unified_sites\nunified_site_names)]
     NI -->|unmatched names| UC[(user_contributions\nsource='lyra')]
@@ -68,21 +70,29 @@ flowchart TD
 
 ### 1. Fetch (`transcript_fetcher.py`)
 
-Fetches recent videos from 18 seed YouTube archaeology channels via RSS. Downloads transcripts (youtube-transcript-api, optional Webshare proxy) and metadata (yt-dlp). Skips videos < 5 minutes.
+Fetches recent videos from 35 seed YouTube archaeology channels via RSS. Downloads transcripts (youtube-transcript-api, optional Webshare proxy) and metadata (yt-dlp). Skips videos < 5 minutes.
 
 - **Reads:** `news_channels` (enabled only)
 - **Writes:** `news_videos` (status=`transcribed` or `failed`)
 - **External:** YouTube RSS, youtube-transcript-api, yt-dlp
 
-### 2. Summarize (`summarizer.py`)
+### 2. Retry (`transcript_fetcher.py`)
 
-Sends full transcript to MiniMax M2.5. Extracts 2-8 key archaeological topics per video (scaled by duration + queue size). Queue soft cap 32 / hard cap 48.
+Re-attempts transcript downloads for videos that failed in previous cycles (proxy issues, rate limits, transient errors). Same logic as fetch but targets `status = 'failed'` rows.
+
+- **Reads:** `news_videos` (status=`failed`)
+- **Writes:** `news_videos` (status=`transcribed` or remains `failed`)
+- **External:** YouTube RSS, youtube-transcript-api, yt-dlp
+
+### 3. Summarize (`summarizer.py`)
+
+Sends full transcript to MiniMax M2.5. Extracts 2-8 key archaeological topics per video (scaled by duration).
 
 - **Reads:** `news_videos` (status=`transcribed`)
 - **Writes:** `news_items` (headline, facts[], site_name_extracted), `news_videos.summary_json`
 - **Model:** MiniMax M2.5 (`prompts/summary.txt`)
 
-### 3. Match (`site_matcher.py`)
+### 4. Match (`site_matcher.py`)
 
 Matches `news_items.site_name_extracted` against the curated sites database. Four strategies in order: exact name, spaceless name, exact alt-name, spaceless alt-name. Multiple candidates resolved by source priority.
 
@@ -108,7 +118,7 @@ flowchart TD
 - **Writes:** `user_contributions` (upsert by lowercase name), `news_items.site_id`
 - **Key function:** `fill_contrib_from_site()` -- canonical 10-field fill-if-missing
 
-### 4. Posts (`tweet_generator.py`)
+### 5. Posts (`tweet_generator.py`)
 
 Generates short-form news feed posts (max 170 chars) from news items via MiniMax M2.5. One post per item. Includes timestamp attribution and recency note. Significance scoring and categorization are handled by the separate rescore step (5b).
 
@@ -117,7 +127,7 @@ Generates short-form news feed posts (max 170 chars) from news items via MiniMax
 - **Model:** MiniMax M2.5 (`prompts/tweet_template.txt`)
 - **Security:** Shared API client pool, prompt caching (ephemeral)
 
-### 5. Verify (`tweet_verifier.py`)
+### 6. Verify (`tweet_verifier.py`)
 
 Fact-checks posts against the transcript segment around the timestamp (+/-10s). Verdict: VERIFY_AS_IS / MODIFY / REJECT.
 
@@ -127,7 +137,7 @@ Fact-checks posts against the transcript segment around the timestamp (+/-10s). 
 - **Model:** MiniMax M2.5 (`prompts/verify_tweets.txt`)
 - **Security:** Prompt injection guard on transcript segment
 
-### 5b. Rescore (`significance_scorer.py`)
+### 7. Rescore (`significance_scorer.py`)
 
 Independent re-scoring of each verified item's significance (1-10) and category assignment. Items scored 1 (not archaeology) have their post_text set to NULL, removing them from the feed. This step was separated from post generation to avoid wasting tokens on scores the LLM generates poorly alongside creative writing.
 
@@ -137,28 +147,28 @@ Independent re-scoring of each verified item's significance (1-10) and category 
 - **Model:** MiniMax M2.5 (`prompts/rescore_significance.txt`)
 - **Security:** Shared API client pool, prompt caching, injection guard
 
-### 6. Dedup (`tweet_deduplicator.py`)
+### 8. Dedup (`tweet_deduplicator.py`)
 
 Soft-deletes semantic duplicates. Feature extraction: numbers, words > 3 chars, URLs, timestamps. Weighted similarity: 40% numbers + 40% words + 20% metadata. Threshold configurable (default: 0.25). Keeps newest. Query bounded to 500 most recent items.
 
 - **Reads:** `news_items` (with post_text, limit 500)
 - **Soft-deletes:** `news_items.post_text` → NULL, `news_items.news_category` → "duplicate"
 
-### 7. Screenshots (`screenshot_extractor.py`)
+### 9. Screenshots (`screenshot_extractor.py`)
 
-Extracts one frame per news item at the post timestamp. Two-step: yt-dlp downloads 3s clip, ffmpeg extracts WebP frame (300px, q75). 4 parallel workers, 3 retries with proxy rotation.
+Extracts one frame per news item at the post timestamp. Two-step: yt-dlp downloads 3s clip (max 480p), ffmpeg extracts WebP frame (q75). 4 parallel workers, 3 retries with proxy rotation.
 
 - **Reads:** `news_items.timestamp_seconds`
 - **Writes:** `news_items.screenshot_url` -> `public/data/news/screenshots/{video_id}_{ts}.webp`
 - **External:** yt-dlp (with proxy), ffmpeg
 
-### 8. Backfill (`transcript_fetcher.py`)
+### 10. Backfill (`transcript_fetcher.py`)
 
 Fills in missing video metadata (description, tags) for older videos via yt-dlp.
 
 - **Reads/Writes:** `news_videos.description`, `news_videos.tags`
 
-### 9. Identify + Enrich (`site_identifier.py`)
+### 11. Identify + Enrich (`site_identifier.py`)
 
 The core AI discovery engine. Processes up to 20 candidates per cycle.
 
@@ -345,7 +355,7 @@ erDiagram
 | youtube-transcript-api | Fetch | Download video captions |
 | yt-dlp | Fetch, Screenshots, Backfill | Video metadata + frame extraction |
 | ffmpeg | Screenshots | Extract WebP frame from clip |
-| MiniMax M2.5 (via Anthropic SDK) | Summarize, Verify, Identify, Extract Metadata, Pick Entity, Posts | AI processing + creative generation |
+| MiniMax M2.5 (via Anthropic SDK) | Summarize, Verify, Rescore, Identify, Extract Metadata, Pick Entity, Posts | AI processing + creative generation |
 | Wikidata | Identify | Entity search + claims (coords, dates) |
 
 ### Assistant Prefill Pattern
@@ -388,11 +398,11 @@ PostGIS reverse geocoding: lat/lon -> country name. Fallback when Wikidata/AI do
 flowchart TD
     BOOT["Container Start"] --> MIG["Auto-migrations\n(ALTER TABLE for new columns)"]
     MIG --> SEED["Seed source_meta\n+ news_channels"]
-    SEED --> RESET["Versioned resets\n(v4-v13)"]
+    SEED --> RESET["Versioned resets\n(v4-v15 + named resets)"]
     RESET --> LOOP["Main Loop"]
 
     LOOP --> CHECK{"Elapsed\n>= 3600s?"}
-    CHECK -->|yes| RUN["run_pipeline()\n9 stages in order"]
+    CHECK -->|yes| RUN["run_pipeline()\n11 stages in order"]
     CHECK -->|no| ART{"Weekly article\ndue?"}
 
     RUN --> SUMMARY["Log cycle summary"]
@@ -408,6 +418,6 @@ flowchart TD
 
 The orchestrator runs `main()` which:
 1. Applies auto-migrations (new columns, indexes, table renames)
-2. Seeds `source_meta` ('lyra') and `news_channels` (18 YouTube channels)
-3. Applies versioned resets (v4-v13) to re-queue items when prompts/logic change
+2. Seeds `source_meta` ('lyra') and `news_channels` (35 YouTube channels)
+3. Applies versioned resets (v4-v15 + named resets) to re-queue items when prompts/logic change
 4. Enters infinite loop: run pipeline every hour, generate article weekly, heartbeat after each cycle
