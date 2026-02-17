@@ -4,7 +4,6 @@ import logging
 import re
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api.proxies import WebshareProxyConfig
 
@@ -188,26 +187,21 @@ def _fetch_metadata_youtube_api(video_id: str, api_key: str) -> dict | None:
 def fix_published_dates(api_key: str) -> int:
     """Fix videos with corrupted published_at (set by datetime.now fallback).
 
-    Detects rows where published_at has microseconds (real YouTube dates don't)
-    and re-fetches the actual publishedAt from the YouTube API. Batches 50 IDs
-    per API call (1 quota unit each).
+    Re-fetches real publishedAt from the YouTube API for all videos and updates
+    any that differ. Batches 50 IDs per API call (1 quota unit each).
 
     Returns number of videos fixed.
     """
     from pipeline.utils.http import fetch_with_retry
 
     with get_session() as session:
-        # datetime.now(UTC) produces microseconds; real YouTube dates are clean
-        bad_videos = session.query(NewsVideo.id).filter(
-            NewsVideo.published_at.isnot(None),
-            func.extract("microsecond", NewsVideo.published_at) > 0,
-        ).all()
-        video_ids = [v.id for v in bad_videos]
+        all_videos = session.query(NewsVideo.id).all()
+        video_ids = [v.id for v in all_videos]
 
     if not video_ids:
         return 0
 
-    logger.info(f"Fixing published_at for {len(video_ids)} videos with bad dates")
+    logger.info(f"Checking published_at for {len(video_ids)} videos")
     fixed = 0
 
     # YouTube API accepts up to 50 IDs per call
