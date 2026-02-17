@@ -501,6 +501,7 @@ def _select_best_candidate(
                 "text": SYNTHESIS_SYSTEM,
                 "cache_control": {"type": "ephemeral"},
             }],
+            output_config={"format": {"type": "json_schema", "schema": RESEARCH_SYNTHESIS_SCHEMA}},
             prefill="{",
         )
     except anthropic.APIError as e:
