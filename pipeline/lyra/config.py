@@ -77,6 +77,9 @@ class LyraSettings(BaseSettings):
     webshare_username: str = ""
     webshare_password: str = ""
 
+    # YouTube cookies (Netscape-format cookies.txt for yt-dlp)
+    ytdlp_cookies_path: str = ""
+
 
 _cached_client: anthropic.Anthropic | None = None
 _cached_client_key: str = ""
@@ -125,6 +128,19 @@ def parse_json_response(text: str) -> dict:
         cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
         cleaned = cleaned.rsplit("```", 1)[0].strip()
     return json.loads(cleaned)
+
+
+def parse_prefilled_json(text: str) -> dict:
+    """Parse JSON from a prefill='{' LLM call.
+
+    MiniMax-M2.5 changed behavior: it now returns the full JSON including
+    the opening '{', so the old pattern of prepending '{' creates invalid
+    '{{...}' JSON. This handles both old and new model behavior.
+    """
+    stripped = text.strip()
+    if stripped.startswith("{"):
+        return parse_json_response(stripped)
+    return parse_json_response("{" + stripped)
 
 
 # Rate throttle — auto-tunes from API response headers.

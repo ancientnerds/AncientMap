@@ -14,7 +14,7 @@ from pathlib import Path
 
 import anthropic
 
-from pipeline.lyra.config import LyraSettings, call_api, parse_json_response
+from pipeline.lyra.config import LyraSettings, call_api, parse_prefilled_json
 from pipeline.utils.http import fetch_with_retry
 from pipeline.utils.text import normalize_transliteration
 
@@ -185,7 +185,7 @@ def _pre_research(
     for block in response.content:
         if hasattr(block, "text") and block.text:
             try:
-                result = parse_json_response("{" + block.text)
+                result = parse_prefilled_json(block.text)
                 logger.info(
                     f"  [{name}] Pre-research: country={result.get('country')}, "
                     f"well_known={result.get('well_known')}, "
@@ -510,7 +510,7 @@ def _select_best_candidate(
     for block in response.content:
         if hasattr(block, "text") and block.text:
             try:
-                result = parse_json_response("{" + block.text)
+                result = parse_prefilled_json(block.text)
             except (json.JSONDecodeError, KeyError, ValueError) as e:
                 logger.warning(f"  [{name}] Research synthesis parse error: {e}")
                 return None

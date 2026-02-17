@@ -137,6 +137,7 @@ services:
       POSTGRES_HOST: db
     volumes:
       - ./public/data/news:/app/public/data/news
+      - ./.cookies.txt:/app/cookies.txt:ro
     depends_on:
       db:
         condition: service_healthy

@@ -9,7 +9,7 @@ import anthropic
 from sqlalchemy import func
 
 from pipeline.database import NewsItem, NewsVideo, get_session
-from pipeline.lyra.config import LyraSettings, call_api, get_anthropic_client, parse_json_response
+from pipeline.lyra.config import LyraSettings, call_api, get_anthropic_client, parse_prefilled_json
 from pipeline.lyra.transcript_fetcher import extract_transcript_segment, parse_timestamp_to_seconds
 
 logger = logging.getLogger(__name__)
@@ -142,7 +142,7 @@ def _check_relevance(
         return True
 
     try:
-        result = parse_json_response("{" + text_block)
+        result = parse_prefilled_json(text_block)
     except (json.JSONDecodeError, KeyError, ValueError) as e:
         logger.warning(f"Relevance gate: bad JSON for {video.id}: {e}")
         return True  # pass through on parse failure
@@ -272,7 +272,7 @@ def summarize_video(
     if not text_block:
         logger.warning(f"Empty response content for {video.id}")
         return False
-    summary_data = parse_json_response("{" + text_block)
+    summary_data = parse_prefilled_json(text_block)
 
     key_topics = summary_data.get("key_topics", [])
     if not key_topics:

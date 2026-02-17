@@ -7,7 +7,7 @@ from pathlib import Path
 import anthropic
 
 from pipeline.database import NewsItem, NewsVideo, get_session
-from pipeline.lyra.config import LyraSettings, call_api, get_anthropic_client, parse_json_response
+from pipeline.lyra.config import LyraSettings, call_api, get_anthropic_client, parse_prefilled_json
 from pipeline.lyra.transcript_fetcher import extract_transcript_segment, parse_timestamp_to_seconds
 
 logger = logging.getLogger(__name__)
@@ -103,7 +103,7 @@ def verify_single_post(
     if not text_block:
         logger.warning(f"Empty verification response for item {item.id}")
         return None
-    return parse_json_response("{" + text_block)
+    return parse_prefilled_json(text_block)
 
 
 def verify_video_posts(

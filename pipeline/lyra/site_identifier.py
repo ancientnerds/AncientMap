@@ -27,7 +27,7 @@ from pipeline.database import (
     UserContribution,
     get_session,
 )
-from pipeline.lyra.config import LyraSettings, call_api, get_anthropic_client, parse_json_response
+from pipeline.lyra.config import LyraSettings, call_api, get_anthropic_client, parse_prefilled_json
 from pipeline.lyra.site_matcher import fill_contrib_from_site
 from pipeline.lyra.site_researcher import research_site
 from pipeline.normalizers.dates import passes_date_cutoff
@@ -530,7 +530,7 @@ def _call_ai(
                 logger.warning(f"Empty text block from AI (model={model})")
                 return None
             try:
-                return parse_json_response("{" + block.text)
+                return parse_prefilled_json(block.text)
             except json.JSONDecodeError:
                 logger.warning(f"Non-JSON AI response (model={model}): {block.text[:200]}")
                 return None
@@ -1140,7 +1140,7 @@ def _escalate_to_sonnet(
 
     for block in response.content:
         if hasattr(block, "text") and block.text:
-            result = parse_json_response("{" + block.text)
+            result = parse_prefilled_json(block.text)
             break
     else:
         logger.warning("Empty review model escalation response")
