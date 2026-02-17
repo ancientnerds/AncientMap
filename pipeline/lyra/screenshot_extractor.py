@@ -26,10 +26,7 @@ def get_proxy_url(settings: LyraSettings) -> str | None:
     return None
 
 
-def _extract_frame(
-    video_id: str, timestamp: int, output_path: Path, proxy_url: str | None,
-    use_oauth: bool = False,
-) -> bool:
+def _extract_frame(video_id: str, timestamp: int, output_path: Path, proxy_url: str | None) -> bool:
     """Extract a single frame from a YouTube video at the given timestamp.
 
     Step 1: yt-dlp --download-sections downloads just a 3-second clip around the
@@ -55,9 +52,6 @@ def _extract_frame(
     if proxy_url:
         cmd_clip.insert(1, "--proxy")
         cmd_clip.insert(2, proxy_url)
-    if use_oauth:
-        cmd_clip[1:1] = ["--username", "oauth2", "--password", ""]
-
     try:
         result = subprocess.run(cmd_clip, capture_output=True, text=True, timeout=60)
         if result.returncode != 0:
@@ -103,7 +97,6 @@ def extract_screenshots(settings: LyraSettings) -> int:
     """
     SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
     proxy_url = get_proxy_url(settings)
-    use_oauth = settings.ytdlp_use_oauth
     extracted = 0
 
     with get_session() as session:
@@ -146,7 +139,7 @@ def extract_screenshots(settings: LyraSettings) -> int:
         def _do_extract(args: tuple[int, str, int, str, Path]) -> tuple[int, str, str, bool]:
             item_id, video_id, ts, fn, out = args
             for attempt in range(3):
-                if _extract_frame(video_id, ts, out, proxy_url, use_oauth):
+                if _extract_frame(video_id, ts, out, proxy_url):
                     return item_id, video_id, fn, True
                 if attempt < 2:
                     logger.info(f"  Retry {attempt + 2}/3 for {fn} (new proxy IP)")
