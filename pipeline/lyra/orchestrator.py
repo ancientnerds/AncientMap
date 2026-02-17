@@ -895,19 +895,23 @@ def _run_migrations(engine) -> None:
         """))
 
         # One-time fix: re-fetch real published_at from YouTube API for videos
-        # where datetime.now(UTC) fallback corrupted the date (has microseconds).
-        # Guarded by v_fix_dates flag so it only runs once.
-        _needs_date_fix = conn.execute(text("""
+        # where datetime.now(UTC) fallback corrupted the date.
+        _dates_fixed = conn.execute(text("""
             SELECT 1 FROM news_videos
-            WHERE EXTRACT(MICROSECOND FROM published_at) > 0
+            WHERE tags IS NOT NULL AND tags @> '"__dates_fixed"'::jsonb
             LIMIT 1
         """)).fetchone()
-        if _needs_date_fix:
+        if not _dates_fixed:
             from pipeline.lyra.config import LyraSettings as _LS
             _api_key = _LS().youtube_api_key
             if _api_key:
                 from pipeline.lyra.transcript_fetcher import fix_published_dates
                 fix_published_dates(_api_key)
+            # Stamp a sentinel so this doesn't run again
+            conn.execute(text("""
+                UPDATE news_videos SET tags = COALESCE(tags, '[]'::jsonb) || '["__dates_fixed"]'::jsonb
+                WHERE id = (SELECT id FROM news_videos LIMIT 1)
+            """))
 
         # Missing columns on unified_sites that models define but were never migrated
         conn.execute(text("ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS raw_data JSONB"))
