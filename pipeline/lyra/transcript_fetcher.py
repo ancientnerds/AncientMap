@@ -4,10 +4,9 @@ import logging
 import re
 from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import func
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api.proxies import WebshareProxyConfig
-
-from sqlalchemy import func
 
 from pipeline.database import NewsChannel, NewsVideo, get_session
 from pipeline.lyra.config import LyraSettings
