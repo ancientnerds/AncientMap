@@ -1,13 +1,11 @@
-"""Fetch YouTube transcripts via RSS + youtube-transcript-api, store in PostgreSQL."""
+"""Fetch YouTube transcripts via yt-dlp + youtube-transcript-api, store in PostgreSQL."""
 
 import json
 import logging
 import re
 import subprocess
-import xml.etree.ElementTree as ET
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-import requests
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api.proxies import WebshareProxyConfig
 
@@ -28,79 +26,85 @@ def _build_ytt_api(settings: LyraSettings) -> YouTubeTranscriptApi:
         return YouTubeTranscriptApi(proxy_config=proxy_config)
     return YouTubeTranscriptApi()
 
-YOUTUBE_RSS_URL = "https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
-ATOM_NS = {"atom": "http://www.w3.org/2005/Atom", "yt": "http://www.youtube.com/xml/schemas/2015", "media": "http://search.yahoo.com/mrss/"}
-
-RSS_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "application/xml, text/xml, */*",
-}
+SKIP_TITLE_KEYWORDS = ["trailer", "premiere", "teaser", "promo"]
 
 
-def get_recent_videos(channel: NewsChannel, lookup_days: int) -> list[dict]:
-    """Fetch recent videos from a channel's RSS feed."""
-    url = YOUTUBE_RSS_URL.format(channel_id=channel.id)
+def get_recent_videos(channel: NewsChannel, lookup_days: int, proxy_url: str | None) -> list[dict]:
+    """Fetch recent videos from a channel using yt-dlp --flat-playlist."""
+    channel_url = f"https://www.youtube.com/channel/{channel.id}/videos"
+    cmd = [
+        "yt-dlp",
+        "--flat-playlist",
+        "--dump-json",
+        "--no-warnings",
+        "--playlist-items", "1:15",
+        channel_url,
+    ]
+    if proxy_url:
+        cmd.insert(1, "--proxy")
+        cmd.insert(2, proxy_url)
+
     try:
-        resp = requests.get(url, headers=RSS_HEADERS, timeout=15)
-        resp.raise_for_status()
-    except requests.RequestException as e:
-        logger.warning(f"Failed to fetch RSS for {channel.name}: {e}")
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    except subprocess.TimeoutExpired:
+        logger.warning(f"yt-dlp playlist timed out for {channel.name}")
         return []
 
-    try:
-        root = ET.fromstring(resp.text)
-    except ET.ParseError as e:
-        logger.warning(f"Failed to parse RSS XML for {channel.name}: {e}")
+    if result.returncode != 0:
+        logger.warning(f"yt-dlp playlist failed for {channel.name}: {result.stderr.strip()[-200:]}")
         return []
 
     cutoff = datetime.now(UTC) - timedelta(days=lookup_days)
     videos = []
 
-    for entry in root.findall("atom:entry", ATOM_NS):
-        video_id_el = entry.find("yt:videoId", ATOM_NS)
-        title_el = entry.find("atom:title", ATOM_NS)
-        published_el = entry.find("atom:published", ATOM_NS)
-
-        if video_id_el is None or title_el is None or published_el is None:
-            continue
-
-        video_id = video_id_el.text
-        title = title_el.text
-        published_str = published_el.text
-
-        # Parse ISO 8601 date
+    for line in result.stdout.strip().splitlines():
         try:
-            published = datetime.fromisoformat(published_str.replace("Z", "+00:00"))
-        except (ValueError, AttributeError):
+            data = json.loads(line)
+        except json.JSONDecodeError:
             continue
+
+        video_id = data.get("id")
+        title = data.get("title")
+        upload_date = data.get("upload_date")  # YYYYMMDD
+
+        if not video_id or not title:
+            continue
+
+        # Parse upload_date (YYYYMMDD) to datetime
+        if upload_date:
+            try:
+                published = datetime(
+                    int(upload_date[:4]), int(upload_date[4:6]), int(upload_date[6:8]),
+                    tzinfo=UTC,
+                )
+            except (ValueError, IndexError):
+                published = datetime.now(UTC)
+        else:
+            published = datetime.now(UTC)
 
         if published < cutoff:
             continue
 
         # Skip trailers and premieres
-        if title and any(skip in title.lower() for skip in ["trailer", "premiere", "teaser", "promo"]):
+        if any(skip in title.lower() for skip in SKIP_TITLE_KEYWORDS):
             continue
 
-        # Get thumbnail and description from media:group
-        media_group = entry.find("media:group", ATOM_NS)
-        thumbnail_url = None
-        description = None
-        if media_group is not None:
-            thumb = media_group.find("media:thumbnail", ATOM_NS)
-            if thumb is not None:
-                thumbnail_url = thumb.get("url")
-            desc_el = media_group.find("media:description", ATOM_NS)
-            if desc_el is not None and desc_el.text:
-                description = desc_el.text.strip()
+        # Thumbnail: use last (highest-res) from thumbnails list, or fallback
+        thumbnails = data.get("thumbnails")
+        if thumbnails and isinstance(thumbnails, list):
+            thumbnail_url = thumbnails[-1].get("url")
+        else:
+            thumbnail_url = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
 
         videos.append({
             "id": video_id,
             "title": title,
             "published_at": published,
             "thumbnail_url": thumbnail_url,
-            "description": description,
+            "description": data.get("description"),
         })
 
+    logger.info(f"yt-dlp found {len(videos)} recent videos for {channel.name}")
     return videos
 
 
@@ -160,7 +164,7 @@ def fetch_new_videos(settings: LyraSettings) -> int:
     total_new = 0
 
     for channel in channels:
-        videos = get_recent_videos(channel, settings.lookup_days)
+        videos = get_recent_videos(channel, settings.lookup_days, proxy_url)
         if not videos:
             continue
 
