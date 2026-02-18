@@ -790,6 +790,22 @@ body {
   color: var(--text-muted);
 }
 
+.footer-socials {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin: 16px 0;
+}
+
+.footer-socials a {
+  color: var(--text-muted);
+  transition: color 0.2s;
+}
+
+.footer-socials a:hover {
+  color: var(--text-primary);
+}
+
 .footer-legal {
   font-size: 0.7rem;
   color: #787878;
