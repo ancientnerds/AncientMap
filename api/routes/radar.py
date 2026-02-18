@@ -8,12 +8,14 @@ rejected items. Matched items (already in DB) and not_a_site are excluded.
 import logging
 import os
 import secrets
+import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from api.cache import cache_delete_pattern, cache_get, cache_set
+from api.routes.sites import _verify_admin
 from pipeline.database import get_db
 from pipeline.utils.text import categorize_period, normalize_name
 
@@ -191,6 +193,36 @@ async def get_radar_map_data(db: Session = Depends(get_db)):
 
     result = [dict(r._mapping) for r in rows]
     cache_set(cache_key, result, ttl=CACHE_TTL)
+    return result
+
+
+@router.get("/sites-map")
+async def get_sites_map(db: Session = Depends(get_db)):
+    """All unified_sites with enrichment score for the background map layer."""
+    cache_key = "radar:sites-map"
+    cached = cache_get(cache_key)
+    if cached:
+        return cached
+
+    rows = db.execute(text("""
+        SELECT id::text, name, lat, lon,
+          (45
+           + CASE WHEN country IS NOT NULL AND country != '' THEN 10 ELSE 0 END
+           + CASE WHEN site_type IS NOT NULL AND site_type != '' THEN 10 ELSE 0 END
+           + CASE WHEN period_name IS NOT NULL AND period_name != '' THEN 10 ELSE 0 END
+           + CASE WHEN LENGTH(description) >= 50 THEN 10 ELSE 0 END
+           + CASE WHEN source_url IS NOT NULL THEN 5 ELSE 0 END
+           + CASE WHEN thumbnail_url IS NOT NULL THEN 5 ELSE 0 END
+          ) AS score
+        FROM unified_sites
+        WHERE lat IS NOT NULL AND lon IS NOT NULL
+    """)).fetchall()
+
+    result = {
+        "cols": ["id", "n", "la", "lo", "sc"],
+        "rows": [[r.id, r.name, float(r.lat), float(r.lon), r.score] for r in rows],
+    }
+    cache_set(cache_key, result, ttl=1800)
     return result
 
 
@@ -519,3 +551,122 @@ async def bust_radar_cache(authorization: str | None = Header(None)):
         raise HTTPException(status_code=403, detail="Invalid token")
     count = cache_delete_pattern("radar:*")
     return {"cleared": count}
+
+
+@router.post("/{contribution_id}/promote")
+async def promote_to_db(
+    contribution_id: str,
+    authorization: str | None = Header(None),
+    x_admin_pin: str | None = Header(None, alias="X-Admin-Pin"),
+    db: Session = Depends(get_db),
+):
+    """
+    Promote a 100%-enriched radar item into unified_sites.
+
+    Manual admin action only — no AI/automation should call this.
+    """
+    _verify_admin(authorization, x_admin_pin)
+
+    # Fetch the contribution
+    row = db.execute(
+        text("SELECT * FROM user_contributions WHERE id = :id"),
+        {"id": contribution_id},
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Contribution not found")
+
+    item = dict(row._mapping)
+
+    # Must be enriched
+    if item.get("enrichment_status") != "enriched":
+        raise HTTPException(status_code=409, detail=f"Cannot promote: status is '{item.get('enrichment_status')}', expected 'enriched'")
+
+    # Must not already be promoted
+    if item.get("promoted_site_id") is not None:
+        raise HTTPException(status_code=409, detail="Already promoted")
+
+    # Build a dict compatible with _compute_display_score
+    display_name = item.get("corrected_name") or item["name"]
+    score_item = {
+        "lat": item.get("lat"),
+        "lon": item.get("lon"),
+        "country": item.get("country"),
+        "site_type": item.get("site_type"),
+        "period_name": item.get("period_name"),
+        "description": item.get("description"),
+        "wikipedia_url": item.get("wikipedia_url"),
+        "thumbnail_url": item.get("thumbnail_url"),
+        "wikidata_id": item.get("wikidata_id"),
+    }
+    score = _compute_display_score(score_item)
+    if score < 100:
+        raise HTTPException(status_code=409, detail=f"Enrichment score is {score}%, must be 100%")
+
+    # Determine source_id for the new unified_sites row
+    source_id = "lyra" if item.get("source") == "lyra" else "ancient_nerds_community"
+
+    # Compute period_name from period_start if available
+    period_name = item.get("period_name")
+    if item.get("period_start") is not None:
+        period_name = categorize_period(item["period_start"])
+
+    new_site_id = uuid.uuid4()
+    name_norm = normalize_name(display_name)
+
+    # INSERT into unified_sites
+    db.execute(text("""
+        INSERT INTO unified_sites (
+            id, source_id, source_record_id, name, name_normalized,
+            lat, lon, geom,
+            site_type, period_start, period_end, period_name,
+            country, description, thumbnail_url, source_url,
+            edited_by
+        ) VALUES (
+            :id, :source_id, :source_record_id, :name, :name_normalized,
+            :lat, :lon, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326),
+            :site_type, :period_start, :period_end, :period_name,
+            :country, :description, :thumbnail_url, :source_url,
+            'radar_promote'
+        )
+    """), {
+        "id": new_site_id,
+        "source_id": source_id,
+        "source_record_id": str(item["id"]),
+        "name": display_name,
+        "name_normalized": name_norm,
+        "lat": item["lat"],
+        "lon": item["lon"],
+        "site_type": item.get("site_type"),
+        "period_start": item.get("period_start"),
+        "period_end": item.get("period_end"),
+        "period_name": period_name,
+        "country": item.get("country"),
+        "description": item.get("description"),
+        "thumbnail_url": item.get("thumbnail_url"),
+        "source_url": item.get("wikipedia_url"),
+    })
+
+    # INSERT into unified_site_names for trigram search
+    db.execute(text("""
+        INSERT INTO unified_site_names (site_id, name, name_normalized, name_type)
+        VALUES (:site_id, :name, :name_normalized, 'label')
+    """), {
+        "site_id": new_site_id,
+        "name": display_name,
+        "name_normalized": name_norm,
+    })
+
+    # UPDATE the contribution
+    db.execute(text("""
+        UPDATE user_contributions
+        SET enrichment_status = 'promoted', promoted_site_id = :site_id
+        WHERE id = :id
+    """), {"site_id": new_site_id, "id": contribution_id})
+
+    db.commit()
+
+    # Bust caches
+    cache_delete_pattern("radar:*")
+    cache_delete_pattern("sites:*")
+
+    return {"success": True, "site_id": str(new_site_id)}
