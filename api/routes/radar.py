@@ -154,22 +154,55 @@ def _flatten_facts(all_facts: list | None) -> list[str]:
     return sorted(unique)
 
 
-def _find_nearest_an_site(db: Session, lat: float, lon: float, max_km: float = 10.0):
-    """Find closest AN Originals site within max_km. Returns dict or None."""
+def _find_nearest_an_sites_batch(
+    db: Session, items: list[dict], max_km: float = 10.0,
+) -> dict[str, dict]:
+    """Find closest AN Originals site within max_km for each item with coords.
+
+    Returns dict mapping item_id -> {"name": ..., "distance_km": ...}.
+    Uses a single query with a VALUES list + LATERAL JOIN.
+    """
+    coords = [
+        (it["id"], it["lat"], it["lon"])
+        for it in items
+        if it.get("lat") is not None and it.get("lon") is not None
+    ]
+    if not coords:
+        return {}
+
     delta = max_km / 111.0
-    row = db.execute(text("""
-        SELECT name,
-               SQRT(POW((:lat - lat) * 111.0, 2) + POW((:lon - lon) * 111.0 * COS(RADIANS(:lat)), 2)) AS dist_km
-        FROM unified_sites
-        WHERE source_id = 'ancient_nerds'
-          AND lat BETWEEN :lat - :delta AND :lat + :delta
-          AND lon BETWEEN :lon - :delta AND :lon + :delta
-        ORDER BY dist_km
-        LIMIT 1
-    """), {"lat": lat, "lon": lon, "delta": delta}).fetchone()
-    if row and row.dist_km <= max_km:
-        return {"name": row.name, "distance_km": round(row.dist_km, 1)}
-    return None
+
+    # Build VALUES rows: (id, lat, lon)
+    values_rows = ", ".join(
+        f"({i}, {lat}, {lon})"
+        for i, (_, lat, lon) in enumerate(coords)
+    )
+
+    rows = db.execute(text(f"""
+        WITH candidates(idx, clat, clon) AS (
+            VALUES {values_rows}
+        )
+        SELECT DISTINCT ON (c.idx)
+            c.idx,
+            us.name,
+            SQRT(POW((c.clat - us.lat) * 111.0, 2)
+               + POW((c.clon - us.lon) * 111.0 * COS(RADIANS(c.clat)), 2)) AS dist_km
+        FROM candidates c
+        JOIN unified_sites us
+          ON us.source_id = 'ancient_nerds'
+         AND us.lat BETWEEN c.clat - {delta} AND c.clat + {delta}
+         AND us.lon BETWEEN c.clon - {delta} AND c.clon + {delta}
+        WHERE SQRT(POW((c.clat - us.lat) * 111.0, 2)
+                 + POW((c.clon - us.lon) * 111.0 * COS(RADIANS(c.clat)), 2)) <= {max_km}
+        ORDER BY c.idx, dist_km
+    """)).fetchall()
+
+    result: dict[str, dict] = {}
+    for row in rows:
+        item_id = coords[row.idx][0]
+        if item_id not in result:  # DISTINCT ON handles this, but be safe
+            result[item_id] = {"name": row.name, "distance_km": round(row.dist_km, 1)}
+    return result
 
 
 @router.get("/map")
@@ -183,7 +216,8 @@ async def get_radar_map_data(db: Session = Depends(get_db)):
     rows = db.execute(text("""
         SELECT id::text, source, COALESCE(corrected_name, name) AS display_name,
                COALESCE(enrichment_status, 'pending') AS enrichment_status,
-               country, site_type, period_name, lat, lon,
+               country, site_type, period_name, period_start, lat, lon,
+               description, wikipedia_url, thumbnail_url, wikidata_id,
                (25
                 + 20
                 + CASE WHEN country IS NOT NULL AND country != '' THEN 10 ELSE 0 END
@@ -268,9 +302,6 @@ async def get_radar(
     elif status == "rejected":
         status_clause = "uc.enrichment_status = 'rejected'"
 
-    # For mentions/recency: push sort + pagination into SQL
-    # For score: fetch all rows, sort in Python (score is computed post-query)
-    sql_paginated = sort_by in ("mentions", "recency")
     offset = (page - 1) * page_size
 
     if sort_by == "mentions":
@@ -278,10 +309,7 @@ async def get_radar(
     elif sort_by == "recency":
         order_clause = "va.last_mentioned DESC NULLS LAST, c.mention_count DESC, c.id"
     else:
-        order_clause = "c.mention_count DESC, c.id"
-
-    limit_clause = "LIMIT :limit OFFSET :offset" if sql_paginated else ""
-    count_col = "COUNT(*) OVER() AS _total_count," if sql_paginated else ""
+        order_clause = "c.computed_score DESC, c.mention_count DESC, c.id"
 
     contributions_query = text(f"""
         WITH contrib AS (
@@ -291,7 +319,6 @@ async def get_radar(
                 uc.name,
                 uc.corrected_name,
                 uc.enrichment_status,
-                uc.score,
                 uc.mention_count,
                 uc.country,
                 uc.site_type,
@@ -304,7 +331,17 @@ async def get_radar(
                 uc.lat,
                 uc.lon,
                 uc.description,
-                uc.wikidata_id
+                uc.wikidata_id,
+                (25
+                 + CASE WHEN uc.lat IS NOT NULL AND uc.lon IS NOT NULL THEN 20 ELSE 0 END
+                 + CASE WHEN uc.country IS NOT NULL AND uc.country != '' THEN 10 ELSE 0 END
+                 + CASE WHEN uc.site_type IS NOT NULL AND uc.site_type != '' THEN 10 ELSE 0 END
+                 + CASE WHEN uc.period_name IS NOT NULL AND uc.period_name != '' THEN 10 ELSE 0 END
+                 + CASE WHEN LENGTH(uc.description) >= 50 THEN 10 ELSE 0 END
+                 + CASE WHEN uc.wikipedia_url IS NOT NULL THEN 5 ELSE 0 END
+                 + CASE WHEN uc.thumbnail_url IS NOT NULL THEN 5 ELSE 0 END
+                 + CASE WHEN uc.wikidata_id IS NOT NULL THEN 5 ELSE 0 END
+                ) AS computed_score
             FROM user_contributions uc
             WHERE uc.source IN ('lyra', 'user')
               AND (:source_filter = 'all' OR uc.source = :source_filter)
@@ -330,14 +367,14 @@ async def get_radar(
             GROUP BY c.id
         )
         SELECT
-            {count_col}
+            COUNT(*) OVER() AS _total_count,
             c.id::text,
             c.source,
             COALESCE(c.corrected_name, c.name) AS display_name,
             CASE WHEN c.corrected_name IS NOT NULL AND c.corrected_name != c.name
                  THEN c.name ELSE NULL END AS original_name,
             COALESCE(c.enrichment_status, 'pending') AS enrichment_status,
-            c.score AS enrichment_score,
+            c.computed_score,
             c.country,
             c.site_type,
             c.period_name,
@@ -358,13 +395,15 @@ async def get_radar(
         FROM contrib c
         LEFT JOIN video_agg va ON va.contrib_id = c.id
         ORDER BY {order_clause}
-        {limit_clause}
+        LIMIT :limit OFFSET :offset
     """)
 
-    params = {"min_mentions": min_mentions, "source_filter": source_filter}
-    if sql_paginated:
-        params["limit"] = page_size
-        params["offset"] = offset
+    params = {
+        "min_mentions": min_mentions,
+        "source_filter": source_filter,
+        "limit": page_size,
+        "offset": offset,
+    }
 
     contrib_rows = db.execute(contributions_query, params).fetchall()
 
@@ -423,13 +462,13 @@ async def get_radar(
                         # The filename is the second-to-last path segment
                         commons_url = f"https://commons.wikimedia.org/wiki/File:{parts[-2]}"
 
-        item = {
+        return {
             "id": row.id,
             "source": row.source,
             "display_name": row.display_name,
             "original_name": row.original_name,
             "enrichment_status": enrichment_status,
-            "enrichment_score": 0,
+            "enrichment_score": row.computed_score,
             "rejection_reason": rejection_reason,
             "country": row.country,
             "site_type": row.site_type,
@@ -455,21 +494,15 @@ async def get_radar(
             "commons_url": commons_url,
             "nearby_an_site": None,
         }
-        item["enrichment_score"] = _compute_display_score(item)
-        if row.lat is not None and row.lon is not None:
-            item["nearby_an_site"] = _find_nearest_an_site(db, row.lat, row.lon)
-        return item
 
-    if sql_paginated:
-        # SQL already sorted and paginated; total comes from window function
-        total_count = contrib_rows[0]._total_count if contrib_rows else 0
-        page_items = [_row_to_item(row) for row in contrib_rows]
-    else:
-        # score sort: build all items, sort in Python, then slice
-        items = [_row_to_item(row) for row in contrib_rows]
-        items.sort(key=lambda x: x["enrichment_score"], reverse=True)
-        total_count = len(items)
-        page_items = items[offset:offset + page_size]
+    total_count = contrib_rows[0]._total_count if contrib_rows else 0
+    page_items = [_row_to_item(row) for row in contrib_rows]
+
+    # ── Batch: find nearest AN site for items with coords ──────────
+    nearby_map = _find_nearest_an_sites_batch(db, page_items)
+    for item in page_items:
+        if item["id"] in nearby_map:
+            item["nearby_an_site"] = nearby_map[item["id"]]
 
     # ── Fuzzy suggestions for pending/enriching items only ──────────
     # Wrapped in try/except: suggestions are optional, a pg_trgm or
