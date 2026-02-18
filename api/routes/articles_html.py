@@ -15,6 +15,7 @@ from pipeline.article_html_renderer import (
     render_404_html,
     render_article_html,
     render_article_listing_html,
+    render_medium_copy_html,
     render_news_archive_html,
     slugify,
 )
@@ -29,20 +30,20 @@ _HTML_HEADERS_SHORT = {"Cache-Control": "public, max-age=1800"}
 
 @router.get("/articles/")
 async def articles_listing(db: Session = Depends(get_db)):
-    """HTML listing of all articles (newest first)."""
-    articles = db.query(NewsArticle).order_by(
+    """HTML listing showing only the latest article."""
+    article = db.query(NewsArticle).order_by(
         NewsArticle.created_at.desc()
-    ).all()
+    ).first()
 
     article_dicts = []
-    for a in articles:
+    if article:
         article_dicts.append({
-            "title": a.title,
-            "summary": a.summary,
-            "slug": slugify(a.title),
-            "published_at": a.published_at.isoformat() if a.published_at else "",
-            "week_start": a.week_start.isoformat() if a.week_start else "",
-            "week_end": a.week_end.isoformat() if a.week_end else "",
+            "title": article.title,
+            "summary": article.summary,
+            "slug": slugify(article.title),
+            "published_at": article.published_at.isoformat() if article.published_at else "",
+            "week_start": article.week_start.isoformat() if article.week_start else "",
+            "week_end": article.week_end.isoformat() if article.week_end else "",
         })
 
     html = render_article_listing_html(article_dicts)
@@ -78,6 +79,32 @@ async def article_page(slug: str, db: Session = Depends(get_db)):
         slug=slug,
     )
     return Response(content=html, media_type="text/html", headers=_HTML_HEADERS)
+
+
+@router.get("/articles/{slug}/medium")
+async def article_medium_copy(slug: str, db: Session = Depends(get_db)):
+    """Clean, light-themed article page for copying into Medium's editor."""
+    articles = db.query(NewsArticle).all()
+    article = None
+    for a in articles:
+        if slugify(a.title) == slug:
+            article = a
+            break
+
+    if not article:
+        return Response(
+            content=render_404_html("Article"),
+            media_type="text/html",
+            status_code=404,
+        )
+
+    html = render_medium_copy_html(
+        title=article.title,
+        content_md=article.content,
+        summary=article.summary,
+        slug=slug,
+    )
+    return Response(content=html, media_type="text/html")
 
 
 @router.get("/news-archive/")

@@ -417,6 +417,101 @@ def render_news_archive_html(
 </html>"""
 
 
+def render_medium_copy_html(
+    title: str,
+    content_md: str,
+    summary: str | None,
+    slug: str,
+) -> str:
+    """Render a clean, light-themed page for copying into Medium's editor."""
+    md = markdown.Markdown(extensions=['extra', 'smarty'])
+    body_html = md.convert(content_md)
+    canonical = f"{BASE_URL}/articles/{slug}"
+    e_title = escape(title)
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Copy for Medium: {e_title}</title>
+    <meta name="robots" content="noindex">
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ background: #f8f8f8; color: #333; font-family: Georgia, serif; line-height: 1.8; font-size: 18px; }}
+        .toolbar {{
+            position: sticky; top: 0; z-index: 10;
+            background: #1a1a2e; color: #fff; padding: 14px 24px;
+            display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+        }}
+        .toolbar h2 {{ font-size: 15px; font-family: sans-serif; font-weight: 400; opacity: 0.7; }}
+        .toolbar button {{
+            background: #c02023; color: #fff; border: none; padding: 8px 20px;
+            border-radius: 4px; font-size: 14px; cursor: pointer; font-family: sans-serif;
+        }}
+        .toolbar button:hover {{ background: #e02525; }}
+        .toolbar .canonical {{
+            font-family: monospace; font-size: 13px; background: #2a2a4a;
+            padding: 6px 12px; border-radius: 4px; user-select: all; color: #8f8;
+        }}
+        .toolbar .status {{ font-size: 13px; font-family: sans-serif; color: #8f8; display: none; }}
+        #article {{ max-width: 720px; margin: 40px auto; padding: 0 24px 80px; }}
+        #article h1 {{ font-size: 2.2em; margin-bottom: 12px; color: #111; }}
+        #article h2 {{ font-size: 1.6em; margin-top: 36px; margin-bottom: 10px; color: #222; }}
+        #article h3 {{ font-size: 1.3em; margin-top: 28px; margin-bottom: 8px; color: #333; }}
+        #article p {{ margin-bottom: 16px; }}
+        #article ul, #article ol {{ margin: 12px 0 16px 28px; }}
+        #article li {{ margin-bottom: 6px; }}
+        #article blockquote {{
+            border-left: 3px solid #c02023; padding: 12px 20px;
+            margin: 16px 0; background: #f0f0f0; font-style: italic; color: #555;
+        }}
+        #article strong {{ color: #111; }}
+        #article a {{ color: #c02023; }}
+        #article hr {{ border: none; border-top: 1px solid #ddd; margin: 32px 0; }}
+        .note {{
+            max-width: 720px; margin: 0 auto 20px; padding: 0 24px;
+            font-family: sans-serif; font-size: 13px; color: #888;
+        }}
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <h2>Copy for Medium</h2>
+        <button onclick="selectAndCopy()">Select All &amp; Copy</button>
+        <span class="canonical">{canonical}</span>
+        <span class="status" id="status">Copied!</span>
+    </div>
+    <p class="note">
+        1. Click "Select All &amp; Copy" above &nbsp; 2. Open Medium &rarr; New Story &nbsp;
+        3. Paste (Ctrl+V) &nbsp; 4. After publishing, set canonical URL to the green URL above
+    </p>
+    <div id="article">
+        <h1>{e_title}</h1>
+        {body_html}
+        <hr>
+        <p><em>Originally published on <a href="{canonical}">Ancient Nerds</a>
+        &mdash; explore 750,000+ archaeological sites on our
+        <a href="{BASE_URL}/globe.html">interactive 3D globe</a>.</em></p>
+    </div>
+    <script>
+    function selectAndCopy() {{
+        const el = document.getElementById('article');
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        document.execCommand('copy');
+        const status = document.getElementById('status');
+        status.style.display = 'inline';
+        setTimeout(() => status.style.display = 'none', 2000);
+    }}
+    </script>
+</body>
+</html>"""
+
+
 def render_404_html(what: str = "Page") -> str:
     """Render a styled 404 page."""
     return f"""<!DOCTYPE html>
