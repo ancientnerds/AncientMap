@@ -11,12 +11,12 @@ import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { MAPBOX } from '../config/mapboxConstants'
 import { applyDarkTealTheme, setupDarkFog } from '../utils/mapboxTheme'
-import { getPeriodColor } from '../constants/colors'
 
 interface RadarMapItem {
   id: string
   display_name: string
   enrichment_status: string
+  enrichment_score: number
   country: string | null
   site_type: string | null
   period_name: string | null
@@ -43,6 +43,12 @@ interface RadarMapProps {
 const SWEEP_MS = 12000 // 12 seconds per full rotation
 const GLOW_MS = 1200
 
+/** 0% → red (hsl 0), 100% → green (hsl 120) — matches LyraRadarPage scoreColor */
+function scoreToColor(pct: number): string {
+  const hue = Math.round((pct / 100) * 120)
+  return `hsl(${hue}, 72%, 55%)`
+}
+
 function buildGeoJSON(items: RadarMapItem[]): GeoJSON.FeatureCollection {
   return {
     type: 'FeatureCollection',
@@ -58,9 +64,8 @@ function buildGeoJSON(items: RadarMapItem[]): GeoJSON.FeatureCollection {
           id: it.id,
           name: it.display_name,
           status: it.enrichment_status,
-          country: it.country || '',
-          period: it.period_name || '',
-          color: getPeriodColor(it.period_name || 'Unknown'),
+          score: it.enrichment_score,
+          color: scoreToColor(it.enrichment_score),
         },
       })),
   }

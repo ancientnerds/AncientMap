@@ -184,7 +184,17 @@ async def get_radar_map_data(db: Session = Depends(get_db)):
         SELECT id::text, source, COALESCE(corrected_name, name) AS display_name,
                COALESCE(enrichment_status, 'pending') AS enrichment_status,
                country, site_type, period_name, lat, lon,
-               score AS enrichment_score, mention_count
+               (25
+                + 20
+                + CASE WHEN country IS NOT NULL AND country != '' THEN 10 ELSE 0 END
+                + CASE WHEN site_type IS NOT NULL AND site_type != '' THEN 10 ELSE 0 END
+                + CASE WHEN period_name IS NOT NULL AND period_name != '' THEN 10 ELSE 0 END
+                + CASE WHEN LENGTH(description) >= 50 THEN 10 ELSE 0 END
+                + CASE WHEN wikipedia_url IS NOT NULL THEN 5 ELSE 0 END
+                + CASE WHEN thumbnail_url IS NOT NULL THEN 5 ELSE 0 END
+                + CASE WHEN wikidata_id IS NOT NULL THEN 5 ELSE 0 END
+               ) AS enrichment_score,
+               mention_count
         FROM user_contributions
         WHERE source IN ('lyra', 'user')
           AND COALESCE(enrichment_status, 'pending') NOT IN ('matched', 'not_a_site', 'failed')
