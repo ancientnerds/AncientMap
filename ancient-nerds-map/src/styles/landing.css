@@ -598,6 +598,40 @@ body {
   border: 1px solid var(--border-color);
 }
 
+/* ─── Founders Section ─── */
+
+.founders-photo {
+  width: 100%;
+  aspect-ratio: 4/3;
+  object-fit: cover;
+  border-radius: 12px;
+  box-shadow: 0 0 40px var(--glow-cyan);
+  border: 1px solid var(--border-color);
+}
+
+.founders-detail {
+  margin-top: 16px;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.founders-locations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.founders-loc {
+  padding: 4px 14px;
+  background: rgba(0, 20, 25, 0.6);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  letter-spacing: 0.03em;
+}
+
 /* ─── Discord Section ─── */
 
 .discord-logo {
