@@ -100,7 +100,7 @@ body {
   transform: translateZ(0);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
-  filter: brightness(1);
+  filter: brightness(0.5);
 }
 
 .hero-curtain {
@@ -176,6 +176,7 @@ body {
   letter-spacing: 0.3em;
   color: #bbb;
   margin-bottom: 24px;
+  text-shadow: 0 0 4px rgba(0,0,0,1), 0 0 10px rgba(0,0,0,1), 0 0 30px rgba(0,0,0,0.9), 0 0 60px rgba(0,0,0,0.7);
 }
 
 .hero-tagline {
@@ -185,6 +186,7 @@ body {
   color: #bbb;
   margin-bottom: 40px;
   text-wrap: balance;
+  text-shadow: 0 0 4px rgba(0,0,0,1), 0 0 10px rgba(0,0,0,1), 0 0 30px rgba(0,0,0,0.9), 0 0 60px rgba(0,0,0,0.7);
 }
 
 .hero-stats {
