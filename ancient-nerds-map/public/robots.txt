@@ -4,7 +4,8 @@
 User-agent: *
 Allow: /
 
-# Sitemap location (dynamic API-generated sitemap with all sites)
+# Sitemap locations
+Sitemap: https://ancientnerds.com/sitemap.xml
 Sitemap: https://ancientnerds.com/api/sitemap/sitemap.xml
 
 # Crawl-delay for polite crawling

@@ -15,7 +15,8 @@
 
     <!-- Favicon and Icons -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/favicon.svg" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <meta name="theme-color" content="#000000" />
 
     <!-- Open Graph / Facebook -->
@@ -24,9 +25,10 @@
     <meta property="og:site_name" content="Ancient Nerds" />
     <meta property="og:title" content="Ancient Nerds - Interactive Archaeological Research Platform" />
     <meta property="og:description" content="Explore 750K+ archaeological sites on a 3D globe. Historical empires, AI-curated news, research tools. Free and open." />
-    <meta property="og:image" content="https://ancientnerds.com/api/og/homepage" />
-    <meta property="og:image:width" content="600" />
-    <meta property="og:image:height" content="315" />
+    <meta property="og:image" content="https://ancientnerds.com/landing/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Ancient Nerds interactive 3D globe showing archaeological sites worldwide" />
     <meta property="og:locale" content="en_US" />
 
     <!-- Twitter -->
@@ -34,15 +36,16 @@
     <meta name="twitter:url" content="https://ancientnerds.com/" />
     <meta name="twitter:title" content="Ancient Nerds - Archaeological Research Platform" />
     <meta name="twitter:description" content="Explore 750K+ archaeological sites on a 3D globe. Historical empires, AI news, research tools." />
-    <meta name="twitter:image" content="https://ancientnerds.com/api/og/homepage" />
+    <meta name="twitter:image" content="https://ancientnerds.com/landing/og-image.png" />
+    <meta name="twitter:site" content="@AncientNerdsDAO" />
 
-    <!-- Structured Data -->
+    <!-- Structured Data - WebApplication -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
       "@type": "WebApplication",
       "name": "Ancient Nerds",
-      "description": "Interactive archaeological research platform featuring over 750,000 ancient sites worldwide",
+      "description": "Interactive archaeological research platform featuring over 750,000 ancient sites worldwide on a 3D globe. Explore ancient civilizations, megalithic structures, pyramids, temples, and historical empires.",
       "url": "https://ancientnerds.com",
       "applicationCategory": "EducationalApplication",
       "operatingSystem": "Web Browser",
@@ -59,6 +62,39 @@
     }
     </script>
 
+    <!-- Structured Data - Organization -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "Ancient Nerds",
+      "url": "https://ancientnerds.com",
+      "logo": "https://ancientnerds.com/an-logo.svg",
+      "description": "Free archaeological research platform mapping 750,000+ ancient sites worldwide. AI-curated news, interactive 3D globe, and community-driven discovery.",
+      "sameAs": [
+        "https://x.com/AncientNerdsDAO",
+        "https://www.youtube.com/@ancientnerds",
+        "https://discord.gg/8bAjKKCue4",
+        "https://medium.com/@ancientnerdsdao"
+      ]
+    }
+    </script>
+
+    <!-- Structured Data - WebSite with SearchAction -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Ancient Nerds",
+      "url": "https://ancientnerds.com",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://ancientnerds.com/globe.html?search={search_term_string}",
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
+
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -68,11 +104,18 @@
     <link rel="stylesheet" href="/src/styles/landing.css" />
   </head>
   <body>
+    <noscript>
+      <div style="padding: 20px; text-align: center; background: #0a0a0a; color: white; min-height: 100vh;">
+        <h1>Ancient Nerds - Archaeological Research Platform</h1>
+        <p>Explore over 750,000 archaeological sites worldwide on an interactive 3D globe. Discover ancient civilizations, historical empires, AI-curated news, and research tools.</p>
+        <p><a href="https://ancientnerds.com/globe.html" style="color: #c02023;">Launch the Globe</a></p>
+      </div>
+    </noscript>
 
     <!-- ═══════════ HERO ═══════════ -->
     <section class="hero">
       <div class="hero-bg" id="heroBg">
-        <video autoplay muted loop playsinline preload="none" poster="/landing/hero-poster.webp" class="hero-video" id="heroVideo">
+        <video autoplay muted loop playsinline preload="metadata" poster="/landing/hero-poster.webp" class="hero-video" id="heroVideo">
           <source src="/landing/video/hero.mp4" type="video/mp4" />
         </video>
       </div>

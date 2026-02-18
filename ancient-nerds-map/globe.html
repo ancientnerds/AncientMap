@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <!-- Primary Meta Tags -->
-    <title>Ancient Nerds - Interactive Archaeological Map | Explore 6000+ Ancient Sites</title>
-    <meta name="title" content="Ancient Nerds - Interactive Archaeological Map | Explore 6000+ Ancient Sites" />
-    <meta name="description" content="Explore over 6,000 archaeological sites worldwide on an interactive 3D globe. Discover ancient civilizations, megalithic structures, temples, pyramids, and historical empires. Free research platform for archaeology enthusiasts." />
+    <title>Ancient Nerds - Interactive Archaeological Map | Explore 750K+ Ancient Sites</title>
+    <meta name="title" content="Ancient Nerds - Interactive Archaeological Map | Explore 750K+ Ancient Sites" />
+    <meta name="description" content="Explore over 750,000 archaeological sites worldwide on an interactive 3D globe. Discover ancient civilizations, megalithic structures, temples, pyramids, and historical empires. Free research platform for archaeology enthusiasts." />
     <meta name="keywords" content="archaeology, ancient sites, historical map, megalithic structures, ancient civilizations, pyramids, temples, archaeological research, interactive globe, ancient history, UNESCO sites, historical empires" />
     <meta name="author" content="Ancient Nerds" />
     <meta name="robots" content="index, follow" />
@@ -15,7 +15,8 @@
 
     <!-- Favicon and Icons -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/favicon.svg" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <meta name="theme-color" content="#0a1a1f" />
 
     <!-- Open Graph / Facebook -->
@@ -23,27 +24,29 @@
     <meta property="og:url" content="https://ancientnerds.com/globe.html" />
     <meta property="og:site_name" content="Ancient Nerds" />
     <meta property="og:title" content="Ancient Nerds - Interactive Archaeological Map" />
-    <meta property="og:description" content="Explore over 6,000 archaeological sites worldwide on an interactive 3D globe. Discover ancient civilizations, megalithic structures, and historical empires." />
-    <meta property="og:image" content="https://ancientnerds.com/api/og/homepage" />
-    <meta property="og:image:width" content="600" />
-    <meta property="og:image:height" content="315" />
+    <meta property="og:description" content="Explore over 750,000 archaeological sites worldwide on an interactive 3D globe. Discover ancient civilizations, megalithic structures, and historical empires." />
+    <meta property="og:image" content="https://ancientnerds.com/landing/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Ancient Nerds interactive 3D globe showing archaeological sites worldwide" />
     <meta property="og:locale" content="en_US" />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:url" content="https://ancientnerds.com/globe.html" />
     <meta name="twitter:title" content="Ancient Nerds - Interactive Archaeological Map" />
-    <meta name="twitter:description" content="Explore over 6,000 archaeological sites worldwide on an interactive 3D globe. Discover ancient civilizations and historical empires." />
-    <meta name="twitter:image" content="https://ancientnerds.com/api/og/homepage" />
+    <meta name="twitter:description" content="Explore over 750,000 archaeological sites worldwide on an interactive 3D globe. Discover ancient civilizations and historical empires." />
+    <meta name="twitter:image" content="https://ancientnerds.com/landing/og-image.png" />
+    <meta name="twitter:site" content="@AncientNerdsDAO" />
 
-    <!-- Structured Data - Organization -->
+    <!-- Structured Data - WebApplication -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
       "@type": "WebApplication",
-      "name": "Ancient Nerds",
-      "description": "Interactive archaeological map featuring over 6,000 ancient sites worldwide",
-      "url": "https://ancientnerds.com",
+      "name": "Ancient Nerds - Interactive Archaeological Map",
+      "description": "Explore 750,000+ archaeological sites on an interactive 3D globe. Ancient civilizations, megalithic structures, pyramids, temples, UNESCO sites, and 44 historical empires with animated timelines.",
+      "url": "https://ancientnerds.com/globe.html",
       "applicationCategory": "EducationalApplication",
       "operatingSystem": "Web Browser",
       "offers": {
@@ -54,12 +57,14 @@
       "author": {
         "@type": "Organization",
         "name": "Ancient Nerds",
-        "url": "https://ancientnerds.com"
-      },
-      "aggregateRating": {
-        "@type": "AggregateRating",
-        "ratingValue": "4.8",
-        "ratingCount": "150"
+        "url": "https://ancientnerds.com",
+        "logo": "https://ancientnerds.com/an-logo.svg",
+        "sameAs": [
+          "https://x.com/AncientNerdsDAO",
+          "https://www.youtube.com/@ancientnerds",
+          "https://discord.gg/8bAjKKCue4",
+          "https://medium.com/@ancientnerdsdao"
+        ]
       }
     }
     </script>
@@ -82,8 +87,8 @@
     <!-- Preload critical fonts to prevent FOUT during loading screen -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&display=block" as="style" />
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Orbitron:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=block" rel="stylesheet" />
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&display=swap" as="style" />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Orbitron:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
     <!-- Preload critical texture for faster globe render -->
     <link rel="preload" href="/data/basemaps/gray_dark_low.png" as="image" crossorigin="anonymous" />
   </head>
@@ -91,7 +96,7 @@
     <noscript>
       <div style="padding: 20px; text-align: center; background: #0a1a1f; color: white; min-height: 100vh;">
         <h1>Ancient Nerds - Archaeological Map</h1>
-        <p>This interactive map requires JavaScript to run. Please enable JavaScript in your browser to explore over 6,000 archaeological sites worldwide.</p>
+        <p>This interactive map requires JavaScript to run. Please enable JavaScript in your browser to explore over 750,000 archaeological sites worldwide.</p>
         <p>Features include: Ancient civilizations, megalithic structures, temples, pyramids, UNESCO World Heritage sites, and historical empire borders.</p>
       </div>
     </noscript>
