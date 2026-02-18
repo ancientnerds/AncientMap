@@ -6,6 +6,8 @@ from pathlib import Path
 
 import anthropic
 
+from sqlalchemy import func
+
 from pipeline.database import NewsItem, NewsVideo, get_session
 from pipeline.lyra.config import LyraSettings, call_api, get_anthropic_client, parse_prefilled_json
 from pipeline.lyra.transcript_fetcher import extract_transcript_segment, parse_timestamp_to_seconds
@@ -103,7 +105,11 @@ def verify_single_post(
     if not text_block:
         logger.warning(f"Empty verification response for item {item.id}")
         return None
-    return parse_prefilled_json(text_block)
+    try:
+        return parse_prefilled_json(text_block)
+    except (json.JSONDecodeError, KeyError, ValueError):
+        logger.warning("Failed to parse verification result for item %s", item.id)
+        return None
 
 
 def verify_video_posts(
@@ -128,7 +134,16 @@ def verify_video_posts(
         items = session.query(NewsItem).filter(
             NewsItem.video_id == video.id,
             NewsItem.post_text.isnot(None),
+            NewsItem.verified_at.is_(None),
         ).all()
+
+        if not items:
+            # All items already verified — transition the video if needed
+            v = session.get(NewsVideo, video.id)
+            if v and v.status == "posted":
+                v.status = "verified"
+                logger.info(f"Video {video.id}: all items already verified, transitioning to 'verified'")
+            return 0
 
         verified = 0
         skipped = 0
@@ -158,15 +173,22 @@ def verify_video_posts(
                 if secs is not None:
                     item.timestamp_seconds = secs
 
+            item.verified_at = func.now()
             verified += 1
 
-        # Only transition if all items were processed (no API errors left behind)
+        # Count remaining unverified items for this video
+        remaining = session.query(NewsItem).filter(
+            NewsItem.video_id == video.id,
+            NewsItem.post_text.isnot(None),
+            NewsItem.verified_at.is_(None),
+        ).count()
+
         v = session.get(NewsVideo, video.id)
         if v:
-            if skipped == 0:
+            if remaining == 0:
                 v.status = "verified"
             else:
-                logger.warning(f"Video {video.id}: {skipped} items skipped, keeping 'posted' for retry")
+                logger.warning(f"Video {video.id}: {remaining} items still unverified, keeping 'posted' for retry")
 
     logger.info(f"Verified {verified}/{len(items)} posts for video {video.id} ({skipped} skipped)")
     return verified
@@ -186,7 +208,10 @@ def verify_pending_posts(settings: LyraSettings) -> int:
     system_prompt = _load_prompt()
     total = 0
     for video in videos:
-        total += verify_video_posts(video, settings, system_prompt)
+        try:
+            total += verify_video_posts(video, settings, system_prompt)
+        except Exception:
+            logger.exception(f"Failed to verify video {video.id}, skipping")
 
     logger.info(f"Verified {total} posts total")
     return total

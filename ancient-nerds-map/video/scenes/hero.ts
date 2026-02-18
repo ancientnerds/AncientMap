@@ -3,13 +3,14 @@
  *
  * Camera philosophy: NO BREATHING. No smoothZoom oscillation.
  * Visual interest comes from filter switches, empire reveals, layer toggles,
- * and purposeful single-direction zoom changes.
+ * source showcases, and purposeful single-direction zoom changes.
  *
- * 4 acts:
- *   Act 1 (0-20s)  — "The Living Planet" — filter cycling at fixed zoom
- *   Act 2 (20-40s) — "Iconic Sites" — flyTo hops with empires
- *   Act 3 (40-55s) — "Layers of Time" — satellite, rivers, paleoshoreline
- *   Act 4 (55-60s) — "Full Circle" — return to start for seamless loop
+ * 5 acts:
+ *   Act 1 (0-14s)  — "The Living Planet" — filter cycling at fixed zoom
+ *   Act 2 (14-22s) — "Mediterranean & Shipwrecks" — source showcase
+ *   Act 3 (22-44s) — "Iconic Sites" — slower flyTo hops with empires + Asia volcanos
+ *   Act 4 (44-55s) — "Layers of Time" — satellite+labels, rivers, paleoshoreline
+ *   Act 5 (55-60s) — "Full Circle" — return to start for seamless loop
  */
 
 import type { SceneDefinition, SceneContext } from '../record'
@@ -22,9 +23,13 @@ async function runHero(ctx: SceneContext): Promise<void> {
   await demo.setAutoRotate(true)
   await demo.setZoom(2.3)
   await demo.setFilterMode('age')
+  // Preload extra sources we'll need later
+  await demo.loadSources(['shipwrecks_oxrep', 'volcanic_holvol'])
+  // Allow source data to load
+  await new Promise(r => setTimeout(r, 3000))
   await settle(page)
 
-  // ─── Act 1: "The Living Planet" (0-20s) ─── zoom 2.3, auto-rotate ON
+  // ─── Act 1: "The Living Planet" (0-14s) ─── zoom 2.3, auto-rotate ON
 
   // 0-5s: Age filter, steady rotation. Let density impress.
   console.log('  [0-5s] Age filter, steady rotation...')
@@ -48,127 +53,141 @@ async function runHero(ctx: SceneContext): Promise<void> {
   await settle(page)
   await recorder.capture(page, 3)
 
-  // 14-17s: Back to age. Fly to Mediterranean.
-  console.log('  [14-17s] Age filter, fly to Mediterranean...')
-  await demo.setFilterMode('age')
+  // ─── Act 2: "Mediterranean & Shipwrecks" (14-22s) ─── shipwreck showcase
+
+  // 14-17s: Fly to Mediterranean, enable shipwrecks source (slower fly-to)
+  console.log('  [14-17s] Fly to Mediterranean + shipwrecks...')
+  await demo.setFlyToDuration(1800)
+  await demo.setSelectedSources(['ancient_nerds', 'shipwrecks_oxrep'])
+  await demo.setFilterMode('source')
   await settle(page)
   fire(`window.__DEMO.flyTo(20, 37)`)
   await recorder.capture(page, 3)
 
-  // 17-20s: Hold on Mediterranean cluster.
-  console.log('  [17-20s] Hold on Mediterranean...')
+  // 17-20s: Hold on Mediterranean with shipwrecks visible.
+  console.log('  [17-20s] Hold Mediterranean + shipwrecks...')
   await recorder.capture(page, 3)
 
-  // ─── Act 2: "Iconic Sites" (20-40s) ─── zoom to 2.1 once
-
-  // 20-21s: Single zoom in (2.3 → 2.1)
-  console.log('  [20-21s] Zoom in to 2.1...')
-  fire(`window.__DEMO.smoothZoom(2.3, 2.1, 800)`)
-  await recorder.capture(page, 1)
-
-  // 21-24s: Category filter. Show Egyptian empire + fly to Giza.
-  console.log('  [21-24s] Egyptian empire + Giza...')
+  // 20-22s: Clear shipwrecks, category filter, zoom in for sites.
+  console.log('  [20-22s] Clear shipwrecks, zoom in...')
+  await demo.setSelectedSources(['ancient_nerds'])
   await demo.setFilterMode('category')
   await settle(page)
+  fire(`window.__DEMO.smoothZoom(2.3, 2.1, 1200)`)
+  await recorder.capture(page, 2)
+
+  // ─── Act 3: "Iconic Sites" (22-44s) ─── slower flyTos (2s each)
+
+  // 22-24s: Egyptian empire + fly to Giza (2s fly-to)
+  console.log('  [22-24s] Egyptian empire + fly to Giza...')
   fire(`window.__DEMO.showEmpire("egyptian")`)
   fire(`window.__DEMO.flyTo(31.13, 29.98)`)
-  await recorder.capture(page, 3)
+  await recorder.capture(page, 2)
 
   // 24-27s: Hold on Giza with Egyptian empire.
   console.log('  [24-27s] Hold on Giza...')
   await recorder.capture(page, 3)
 
-  // 27-28s: Switch to Roman empire + fly to Rome.
-  console.log('  [27-28s] Roman empire + Rome...')
+  // 27-29s: Switch to Roman empire + fly to Rome (2s fly-to)
+  console.log('  [27-29s] Roman empire + fly to Rome...')
   await demo.hideAllEmpires()
   fire(`window.__DEMO.showEmpire("roman")`)
   fire(`window.__DEMO.flyTo(12.49, 41.89)`)
-  await recorder.capture(page, 1)
+  await recorder.capture(page, 2)
 
-  // 28-31s: Hold on Rome with Roman empire.
-  console.log('  [28-31s] Hold on Rome...')
+  // 29-32s: Hold on Rome with Roman empire.
+  console.log('  [29-32s] Hold on Rome...')
   await recorder.capture(page, 3)
 
-  // 31-32s: Age filter. Fly to Stonehenge.
-  console.log('  [31-32s] Fly to Stonehenge...')
+  // 32-34s: Fly to Stonehenge (2s fly-to)
+  console.log('  [32-34s] Fly to Stonehenge...')
   await demo.hideAllEmpires()
   await demo.setFilterMode('age')
   await settle(page)
   fire(`window.__DEMO.flyTo(-1.826, 51.179)`)
-  await recorder.capture(page, 1)
+  await recorder.capture(page, 2)
 
-  // 32-35s: Hold on Stonehenge.
-  console.log('  [32-35s] Hold on Stonehenge...')
-  await recorder.capture(page, 3)
+  // 34-36s: Hold on Stonehenge.
+  console.log('  [34-36s] Hold on Stonehenge...')
+  await recorder.capture(page, 2)
 
-  // 35-36s: Fly to Machu Picchu.
-  console.log('  [35-36s] Fly to Machu Picchu...')
+  // 36-38s: Fly to Machu Picchu (2s fly-to)
+  console.log('  [36-38s] Fly to Machu Picchu...')
   fire(`window.__DEMO.flyTo(-72.545, -13.163)`)
-  await recorder.capture(page, 1)
+  await recorder.capture(page, 2)
 
-  // 36-39s: Show Inca empire. Hold.
-  console.log('  [36-39s] Inca empire, hold...')
+  // 38-40s: Inca empire, hold.
+  console.log('  [38-40s] Inca empire, hold...')
   fire(`window.__DEMO.showEmpire("inca")`)
-  await recorder.capture(page, 3)
+  await recorder.capture(page, 2)
 
-  // 39-40s: Hide empires.
-  console.log('  [39-40s] Hide empires...')
+  // 40-41s: Hide empires, fly toward Asia.
+  console.log('  [40-41s] Hide empires...')
   await demo.hideAllEmpires()
   await recorder.capture(page, 1)
 
-  // ─── Act 3: "Layers of Time" (40-55s) ─── zoom out to 2.3
+  // 41-44s: Fly to Indonesia/Southeast Asia + volcanos source.
+  console.log('  [41-44s] Fly to Asia + volcanos...')
+  await demo.setSelectedSources(['ancient_nerds', 'volcanic_holvol'])
+  await demo.setFilterMode('source')
+  await settle(page)
+  fire(`window.__DEMO.flyTo(110, 5)`)
+  await recorder.capture(page, 3)
 
-  // 40-41s: Single zoom out (2.1 → 2.3)
-  console.log('  [40-41s] Zoom out to 2.3...')
+  // ─── Act 4: "Layers of Time" (44-55s) ─── satellite+labels, paleoshoreline
+
+  // 44-45s: Clear volcanos, zoom out.
+  console.log('  [44-45s] Clear volcanos, zoom out...')
+  await demo.setSelectedSources(['ancient_nerds'])
+  await demo.setFilterMode('category')
+  await settle(page)
   fire(`window.__DEMO.smoothZoom(2.1, 2.3, 800)`)
   await recorder.capture(page, 1)
 
-  // 41-44s: Category filter. Satellite ON.
-  console.log('  [41-44s] Satellite mode...')
-  await demo.setFilterMode('category')
+  // 45-48s: Satellite ON + labels ON.
+  console.log('  [45-48s] Satellite + labels ON...')
   await demo.setSatellite(true)
+  await demo.setGeoLabels(true)
   await settle(page)
   await recorder.capture(page, 3)
 
-  // 44-47s: Add rivers layer on satellite.
-  console.log('  [44-47s] Rivers layer...')
+  // 48-50s: Add rivers layer on satellite.
+  console.log('  [48-50s] Rivers layer...')
   await demo.setVectorLayer('rivers', true)
   await settle(page)
-  await recorder.capture(page, 3)
+  await recorder.capture(page, 2)
 
-  // 47-50s: Remove rivers + satellite. Paleoshoreline -120m (ice age).
-  console.log('  [47-50s] Paleoshoreline -120m...')
+  // 50-52s: Remove rivers + satellite + labels. Paleoshoreline -120m (ice age).
+  console.log('  [50-52s] Paleoshoreline -120m...')
   await demo.setVectorLayer('rivers', false)
   await demo.setSatellite(false)
+  await demo.setGeoLabels(false)
   await demo.setPaleoshoreline(true, -120)
   await settle(page)
-  await recorder.capture(page, 3)
+  await recorder.capture(page, 2)
 
-  // 50-53s: Shift paleoshoreline to -60m.
-  console.log('  [50-53s] Paleoshoreline -60m...')
+  // 52-55s: Shift paleoshoreline to -60m.
+  console.log('  [52-55s] Paleoshoreline -60m...')
   await demo.setPaleoshoreline(true, -60)
   await settle(page)
   await recorder.capture(page, 3)
 
-  // 53-55s: Remove paleoshoreline. Country filter. Clean.
-  console.log('  [53-55s] Country filter, clean...')
+  // ─── Act 5: "Full Circle" (55-60s) ─── loop point
+
+  // 55-57s: Remove paleoshoreline. Country filter. Clean.
+  console.log('  [55-57s] Country filter, clean...')
   await demo.setPaleoshoreline(false)
   await demo.setFilterMode('country')
   await settle(page)
   await recorder.capture(page, 2)
 
-  // ─── Act 4: "Full Circle" (55-60s) ─── loop point
-
-  // 55-58s: Age filter. Fly back toward start.
-  console.log('  [55-58s] Age filter, fly toward start...')
+  // 57-60s: Age filter. Fly back toward start. Reset fly-to duration.
+  console.log('  [57-60s] Age filter, fly toward start (loop point)...')
+  await demo.setFlyToDuration(600)
   await demo.setFilterMode('age')
   await settle(page)
   fire(`window.__DEMO.flyTo(30, 20)`)
   await recorder.capture(page, 3)
-
-  // 58-60s: Steady rotation. Matches frame 0 for seamless loop.
-  console.log('  [58-60s] Steady rotation (loop point)...')
-  await recorder.capture(page, 2)
 }
 
 export const heroScene: SceneDefinition[] = [

@@ -9,6 +9,7 @@ Multi-step research protocol for sites not found via DB fuzzy search:
 
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -373,8 +374,9 @@ def _search_geonames(name: str, username: str, limit: int = 5) -> list[dict]:
 
 def _search_wikidata_sparql(name: str) -> list[dict]:
     """SPARQL search filtered to archaeological site instances."""
-    # Escape for SPARQL string
-    safe_name = name.replace('"', '').replace('\\', '')
+    # Sanitize for SPARQL string literal — strip all characters that could
+    # break out of the quoted string or alter query structure
+    safe_name = re.sub(r'[{}()#<>\\"' + "'" + r'\n\r\t]', '', name).strip()
     if not safe_name:
         return []
 
@@ -530,5 +532,3 @@ def _select_best_candidate(
             return result
 
     return None
-
-

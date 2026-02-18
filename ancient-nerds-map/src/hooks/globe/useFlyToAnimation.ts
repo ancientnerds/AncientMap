@@ -63,7 +63,7 @@ export function useFlyToAnimation({
     refs.isAutoRotating.current = false
 
     // Animate using spherical interpolation (slerp) to avoid diving through globe
-    const duration = 600 // ms
+    const duration = refs.flyToDuration.current // ms (default 600, configurable via demo API)
     const startTime = performance.now()
 
     // Use quaternions for proper spherical interpolation
@@ -97,5 +97,5 @@ export function useFlyToAnimation({
     }
 
     refs.cameraAnimation.current = requestAnimationFrame(animateRotate)
-  }, [flyTo, refs.showMapbox, refs.mapboxService, refs.scene, refs.cameraAnimation, refs.isAutoRotating])
+  }, [flyTo, refs.showMapbox, refs.mapboxService, refs.scene, refs.cameraAnimation, refs.isAutoRotating, refs.flyToDuration])
 }

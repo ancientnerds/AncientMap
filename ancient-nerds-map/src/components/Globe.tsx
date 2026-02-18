@@ -15,6 +15,7 @@ import { useUIState, useLabelVisibility, usePaleoshoreline, useEmpireBorders, us
 import { useConnectorStatus } from '../hooks/useConnectorStatus'
 import ConnectorStatusModal from './ConnectorStatusModal'
 import { isDemoMode, registerGlobeDemoApi } from '../utils/demoApi'
+import { calculateSiteTooltipPosition } from './Globe/rendering/highlightedSitesRenderer'
 import {
   loadEmpireBorders as loadEmpireBordersImpl,
   removeEmpireFromGlobe as removeEmpireFromGlobeImpl,
@@ -251,6 +252,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   const {
     showMapbox, setShowMapbox, showMapboxRef,
     mapboxTransitioningRef, prevShowMapboxRef,
+    enterMapboxMode, exitMapboxMode,
     satelliteModeRef,
     showMapboxOfflineWarning, setShowMapboxOfflineWarning
   } = mapboxSync
@@ -441,12 +443,27 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       sceneRef,
       warpCompleteForLabelsRef,
       dotsAnimationCompleteRef,
+      flyToDurationRef: refs.flyToDuration,
       setTileLayers,
       setVectorLayers,
+      setGeoLabelsVisible: labels.setGeoLabelsVisible,
       toggleEmpire,
       getVisibleEmpires: () => empires.visibleEmpiresRef.current,
       setPaleoshorelineVisible: paleo.setPaleoshorelineVisible,
       setSeaLevelWithSlider: paleo.setSeaLevelWithSlider,
+      // Site tooltip control
+      validSitesRef: refs.validSites,
+      setFrozenSite,
+      setIsFrozen,
+      setTooltipPos,
+      calculateTooltipPos: (site) => {
+        if (!sceneRef.current) return { x: window.innerWidth / 2, y: 100 }
+        return calculateSiteTooltipPosition(site, sceneRef.current.camera as any)
+      },
+      // Mapbox control
+      enterMapboxMode,
+      exitMapboxMode,
+      mapboxServiceRef,
     })
   }, [])
 
@@ -655,6 +672,20 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       cancelAnimationFrame(animationIdRef.current.value)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       cleanupEventHandlers()
+      scene.traverse((object) => {
+        if (object instanceof THREE.Mesh) {
+          object.geometry?.dispose()
+          if (Array.isArray(object.material)) {
+            object.material.forEach((m) => {
+              m.map?.dispose()
+              m.dispose()
+            })
+          } else if (object.material) {
+            object.material.map?.dispose()
+            object.material.dispose()
+          }
+        }
+      })
       renderer.dispose()
       containerRef.current?.removeChild(renderer.domElement)
       logoSpriteRef.current = null

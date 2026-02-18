@@ -1,7 +1,7 @@
 {
   "name": "Ancient Nerds Research Platform",
   "short_name": "Ancient Map",
-  "description": "Interactive 3D globe of 800K+ archaeological sites worldwide",
+  "description": "Interactive 3D globe of 750K+ archaeological sites worldwide",
   "start_url": "/",
   "display": "standalone",
   "orientation": "any",

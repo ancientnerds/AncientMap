@@ -1,6 +1,6 @@
 /**
  * ffmpeg encoding utility.
- * Re-encodes WebM (VP9) from StreamRecorder into MP4 (H.264) for web delivery.
+ * Re-encodes WebM (VP8) from StreamRecorder into MP4 (H.264) for web delivery.
  */
 
 import { execSync } from 'child_process'
@@ -26,14 +26,59 @@ export interface EncodeOptions {
   fps?: number
   outputDir: string
   name: string
+  /** Target duration in seconds. If set, frames are stretched/compressed to fit. */
+  targetDuration?: number
+}
+
+/**
+ * Count decoded frames in a WebM file.
+ * ffmpeg's progress output uses \r (carriage return) so we parse
+ * via stderr redirect and look for the final frame= line.
+ */
+function probeFrameCount(webmPath: string): number {
+  // Run ffmpeg to null, capturing stderr where the progress counter lives.
+  // The -progress flag outputs machine-readable stats to stdout.
+  const output = execSync(
+    `"${ffmpegPath}" -i "${webmPath}" -f null -progress pipe:1 -`,
+    { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
+  )
+  // -progress outputs "frame=N" lines to stdout
+  const lines = output.split('\n')
+  let lastFrame = 0
+  for (const line of lines) {
+    const m = line.match(/^frame=(\d+)/)
+    if (m) lastFrame = parseInt(m[1], 10)
+  }
+  if (lastFrame <= 0) {
+    throw new Error(`Failed to probe frame count for ${webmPath}. Output: ${output.slice(0, 200)}`)
+  }
+  return lastFrame
+}
+
+/**
+ * Calculate the setpts filter expression.
+ *
+ * When targetDuration is set, we probe the actual frame count in the WebM
+ * (MediaRecorder may drop frames vs our capture count) and calculate
+ * the rate that stretches all frames to exactly targetDuration seconds.
+ * ffmpeg then duplicates frames as needed to fill the output fps.
+ */
+function getSetptsRate(webmPath: string, fps: number, targetDuration?: number): number {
+  if (!targetDuration) return fps
+
+  const frameCount = probeFrameCount(webmPath)
+  const effectiveRate = frameCount / targetDuration
+  console.log(`  WebM has ${frameCount} frames, target ${targetDuration}s → effective rate ${effectiveRate.toFixed(2)}fps`)
+  return effectiveRate
 }
 
 /**
  * Encode a WebM file to MP4 (H.264) with near-lossless quality.
  * Also produces a fast preview version (540p, CRF 30) for progressive loading.
  *
- * The `-r fps` before `-i` forces ffmpeg to interpret the WebM at the target
- * framerate regardless of wall-clock timestamps from MediaRecorder.
+ * Uses setpts to reassign frame timestamps, fixing the duration mismatch
+ * caused by MediaRecorder using wall-clock timestamps and occasionally
+ * dropping frames from our synthetic-time capture.
  */
 export function encodeFrames(options: EncodeOptions): { mp4: string; fast: string } {
   const {
@@ -41,6 +86,7 @@ export function encodeFrames(options: EncodeOptions): { mp4: string; fast: strin
     fps = 24,
     outputDir,
     name,
+    targetDuration,
   } = options
 
   const mp4Output = join(outputDir, `${name}.mp4`)
@@ -48,10 +94,13 @@ export function encodeFrames(options: EncodeOptions): { mp4: string; fast: strin
 
   mkdirSync(outputDir, { recursive: true })
 
+  const rate = getSetptsRate(webmPath, fps, targetDuration)
+
   // Full HD quality
   console.log(`  Encoding MP4: ${name}.mp4`)
   execSync(
-    `"${ffmpegPath}" -y -r ${fps} -i "${webmPath}" ` +
+    `"${ffmpegPath}" -y -i "${webmPath}" ` +
+    `-vf "setpts=N/${rate}/TB" -r ${fps} ` +
     `-c:v libx264 -preset medium -crf 22 -pix_fmt yuv420p ` +
     `-movflags +faststart ` +
     `-an "${mp4Output}"`,
@@ -61,8 +110,8 @@ export function encodeFrames(options: EncodeOptions): { mp4: string; fast: strin
   // Fast preview (540p, smaller file for instant loading)
   console.log(`  Encoding fast preview: ${name}-fast.mp4`)
   execSync(
-    `"${ffmpegPath}" -y -r ${fps} -i "${webmPath}" ` +
-    `-vf scale=960:540 ` +
+    `"${ffmpegPath}" -y -i "${webmPath}" ` +
+    `-vf "setpts=N/${rate}/TB,scale=960:540" -r ${fps} ` +
     `-c:v libx264 -preset fast -crf 30 -pix_fmt yuv420p ` +
     `-movflags +faststart ` +
     `-an "${fastOutput}"`,
@@ -79,11 +128,13 @@ export function encodeScene(
   sceneName: string,
   webmPath: string,
   outputDir: string,
+  targetDuration?: number,
 ): { mp4: string; fast: string } {
   return encodeFrames({
     webmPath,
     outputDir,
     name: sceneName,
+    targetDuration,
   })
 }
 

@@ -125,13 +125,17 @@ def cache_delete_pattern(pattern: str) -> int:
     """Delete all keys matching pattern (Redis and in-memory)."""
     count = 0
 
-    # Try Redis
+    # Try Redis using SCAN (non-blocking) instead of KEYS
     client = get_redis_client()
     if client:
         try:
-            keys = client.keys(pattern)
-            if keys:
-                count += client.delete(*keys)
+            cursor = 0
+            while True:
+                cursor, keys = client.scan(cursor, match=pattern, count=100)
+                if keys:
+                    count += client.delete(*keys)
+                if cursor == 0:
+                    break
         except Exception as e:
             logger.warning(f"Cache delete pattern error for {pattern}: {e}")
 

@@ -43,6 +43,12 @@ class _ImagePayload(BaseModel):
     data: str = Field(..., max_length=2_000_000, description="data:image/...;base64,...")
 
 
+class _HistoryMessage(BaseModel):
+    """Single message in conversation history."""
+    role: str = Field(..., pattern=r"^(user|assistant)$")
+    content: str = Field(..., max_length=4000)
+
+
 class LyraChatRequest(BaseModel):
     """Request body for Lyra chat."""
     message: str = Field(..., min_length=1, max_length=4000)
@@ -51,7 +57,7 @@ class LyraChatRequest(BaseModel):
     context_id: str | None = Field(default=None, max_length=100, description="UUID of site, empire polity ID, or news item ID")
     context_year: int | None = Field(default=None, description="Year for empire context")
     turnstile_token: str = Field(..., description="Cloudflare Turnstile token")
-    history: list[dict] | None = Field(default=None, max_length=50, description="Conversation history [{role, content}]")
+    history: list[_HistoryMessage] | None = Field(default=None, max_length=50, description="Conversation history [{role, content}]")
 
 
 class LyraAdminRequest(BaseModel):
@@ -61,7 +67,7 @@ class LyraAdminRequest(BaseModel):
     context_type: str = "global"
     context_id: str | None = Field(default=None, max_length=100)
     context_year: int | None = None
-    history: list[dict] | None = Field(default=None, max_length=50)
+    history: list[_HistoryMessage] | None = Field(default=None, max_length=50)
 
 
 # ---------------------------------------------------------------------------
@@ -91,7 +97,7 @@ async def lyra_chat(request: LyraChatRequest, req: Request):
     return _stream_response(
         message=request.message,
         images=[img.model_dump() for img in request.images] if request.images else None,
-        history=request.history,
+        history=[h.model_dump() for h in request.history] if request.history else None,
         context_type=request.context_type,
         context_id=request.context_id,
         context_year=request.context_year,
@@ -139,7 +145,7 @@ async def lyra_admin(
     return _stream_response(
         message=request.message,
         images=[img.model_dump() for img in request.images] if request.images else None,
-        history=request.history,
+        history=[h.model_dump() for h in request.history] if request.history else None,
         context_type=request.context_type,
         context_id=request.context_id,
         context_year=request.context_year,

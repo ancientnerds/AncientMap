@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial open source release
 - Interactive 3D globe visualization with Three.js and Mapbox GL
-- 800,000+ archaeological sites from 30+ data sources
+- 750,000+ archaeological sites from 30+ data sources
 - Real-time site filtering by source, category, country, and time period
 - Site detail popups with Wikipedia images and related content
 - Offline mode with IndexedDB caching

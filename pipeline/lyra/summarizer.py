@@ -277,7 +277,11 @@ def summarize_video(
     if not text_block:
         logger.warning(f"Empty response content for {video.id}")
         return False
-    summary_data = parse_prefilled_json(text_block)
+    try:
+        summary_data = parse_prefilled_json(text_block)
+    except (json.JSONDecodeError, KeyError, ValueError) as e:
+        logger.warning(f"Failed to parse summary JSON for {video.id}: {e}")
+        return False
 
     key_topics = summary_data.get("key_topics", [])
     if not key_topics:

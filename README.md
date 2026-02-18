@@ -4,9 +4,9 @@ The one and only platform with all ancient archaeological sites in one place for
 
 ## Project Overview
 
-This project aggregates data from 30+ open-source archaeological databases into a unified dataset of 800,000+ sites, displayed on an interactive 3D globe. It includes:
+This project aggregates data from 30+ open-source archaeological databases into a unified dataset of 750,000+ sites, displayed on an interactive 3D globe. It includes:
 
-- **3D Globe**: Three.js + Mapbox GL interactive visualization with 800K+ site markers
+- **3D Globe**: Three.js + Mapbox GL interactive visualization with 750K+ site markers
 - **Lyra AI Agent**: MiniMax-powered research assistant with tool use (site search, news lookup, map navigation)
 - **News Pipeline**: Automated archaeological news discovery from 18+ YouTube channels (hourly cycle)
 - **Radar**: AI-discovered archaeological sites not yet in the main database

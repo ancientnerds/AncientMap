@@ -9,6 +9,7 @@
  */
 
 import type { FilterMode } from '../App'
+import type { SiteData } from '../data/sites'
 
 export interface DemoAPI {
   // Camera
@@ -16,14 +17,20 @@ export interface DemoAPI {
   setZoom(distance: number): void
   smoothZoom(from: number, to: number, durationMs: number): void
   setAutoRotate(enabled: boolean): void
+  setFlyToDuration(ms: number): void
 
   // Filters
   setFilterMode(mode: FilterMode): void
   setAgeRange(min: number, max: number): void
 
+  // Sources
+  setSelectedSources(sourceIds: string[]): void
+  loadSources(sourceIds: string[]): void
+
   // Visual layers
   setVectorLayer(layer: string, visible: boolean): void
   setSatellite(enabled: boolean): void
+  setGeoLabels(visible: boolean): void
 
   // Empires
   showEmpire(id: string): Promise<void>
@@ -31,6 +38,19 @@ export interface DemoAPI {
 
   // Paleoshoreline
   setPaleoshoreline(visible: boolean, seaLevel?: number): void
+
+  // Site interaction (tooltips & popups)
+  selectSite(name: string): Promise<void>
+  deselectSite(): void
+  openSitePopup(name: string): Promise<void>
+  closeAllPopups(): void
+  setDemoTooltips(visible: boolean): void
+  setDemoPopups(visible: boolean): void
+
+  // Mapbox street-level
+  enterMapbox(): Promise<void>
+  exitMapbox(): void
+  mapboxJumpTo(lng: number, lat: number, zoom: number, bearing?: number, pitch?: number): void
 
   // UI control
   hideAllUI(): void
@@ -58,6 +78,11 @@ export interface AppDemoSetters {
   setAgeRange: (range: [number, number]) => void
   setFlyToCoords: (coords: [number, number] | null) => void
   setDemoMode: (on: boolean) => void
+  setSelectedSources: (sources: string[]) => void
+  handleLoadSources: (sourceIds: string[]) => void
+  openSitePopup: (site: SiteData) => Promise<void>
+  closeAllPopups: () => void
+  sitesRef: React.MutableRefObject<SiteData[]>
 }
 
 export function registerAppDemoApi(setters: AppDemoSetters): void {
@@ -78,6 +103,25 @@ export function registerAppDemoApi(setters: AppDemoSetters): void {
     },
     hideAllUI: () => setters.setDemoMode(true),
     showUI: () => setters.setDemoMode(false),
+    setSelectedSources: (ids) => setters.setSelectedSources(ids),
+    loadSources: (ids) => setters.handleLoadSources(ids),
+    openSitePopup: (name) => {
+      const site = setters.sitesRef.current.find(s =>
+        s.title.toLowerCase().includes(name.toLowerCase())
+      )
+      if (!site) {
+        console.warn(`[DemoAPI] Site not found: "${name}"`)
+        return Promise.resolve()
+      }
+      return setters.openSitePopup(site)
+    },
+    closeAllPopups: () => setters.closeAllPopups(),
+    setDemoTooltips: (visible) => {
+      document.body.classList.toggle('demo-show-tooltips', visible)
+    },
+    setDemoPopups: (visible) => {
+      document.body.classList.toggle('demo-show-popups', visible)
+    },
   }
 
   window.__DEMO = { ...window.__DEMO, ...api }
@@ -90,12 +134,24 @@ export interface GlobeDemoRefs {
   sceneRef: React.MutableRefObject<{ camera: { position: { setLength(d: number): void } }; controls: { update(): void } } | null>
   warpCompleteForLabelsRef: React.MutableRefObject<boolean>
   dotsAnimationCompleteRef: React.MutableRefObject<boolean>
+  flyToDurationRef: React.MutableRefObject<number>
   setTileLayers: (updater: (prev: any) => any) => void
   setVectorLayers: (updater: (prev: any) => any) => void
+  setGeoLabelsVisible: (visible: boolean) => void
   toggleEmpire: (id: string) => void
   getVisibleEmpires: () => Set<string>
   setPaleoshorelineVisible: (visible: boolean) => void
   setSeaLevelWithSlider: (level: number) => void
+  // Site tooltip control
+  validSitesRef: React.MutableRefObject<SiteData[]>
+  setFrozenSite: (site: SiteData | null) => void
+  setIsFrozen: (frozen: boolean) => void
+  setTooltipPos: (pos: { x: number; y: number }) => void
+  calculateTooltipPos: (site: SiteData) => { x: number; y: number }
+  // Mapbox control
+  enterMapboxMode: () => void
+  exitMapboxMode: () => void
+  mapboxServiceRef: React.MutableRefObject<any>
 }
 
 export function registerGlobeDemoApi(refs: GlobeDemoRefs): void {
@@ -130,11 +186,17 @@ export function registerGlobeDemoApi(refs: GlobeDemoRefs): void {
       }
       step()
     },
+    setFlyToDuration: (ms) => {
+      refs.flyToDurationRef.current = ms
+    },
     setSatellite: (on) => {
       refs.setTileLayers(prev => ({ ...prev, satellite: on }))
     },
     setVectorLayer: (key, visible) => {
       refs.setVectorLayers(prev => ({ ...prev, [key]: visible }))
+    },
+    setGeoLabels: (visible) => {
+      refs.setGeoLabelsVisible(visible)
     },
     showEmpire: (id) => {
       return new Promise<void>((resolve) => {
@@ -155,6 +217,57 @@ export function registerGlobeDemoApi(refs: GlobeDemoRefs): void {
       refs.setPaleoshorelineVisible(visible)
       if (seaLevel !== undefined) {
         refs.setSeaLevelWithSlider(seaLevel)
+      }
+    },
+    selectSite: (name) => {
+      const site = refs.validSitesRef.current.find(s =>
+        s.title.toLowerCase().includes(name.toLowerCase())
+      )
+      if (!site) {
+        console.warn(`[DemoAPI] Site not found: "${name}"`)
+        return Promise.resolve()
+      }
+      // Set frozen tooltip state
+      refs.setFrozenSite(site)
+      refs.setIsFrozen(true)
+      // Calculate and set tooltip position
+      const pos = refs.calculateTooltipPos(site)
+      refs.setTooltipPos(pos)
+      return Promise.resolve()
+    },
+    deselectSite: () => {
+      refs.setFrozenSite(null)
+      refs.setIsFrozen(false)
+    },
+    enterMapbox: () => {
+      return new Promise<void>((resolve) => {
+        const mapbox = refs.mapboxServiceRef.current
+        // Wait for Mapbox to be initialized (it loads asynchronously)
+        const waitForInit = () => {
+          if (mapbox?.getIsInitialized()) {
+            refs.enterMapboxMode()
+            // Wait for the 300ms CSS transition + React state update
+            setTimeout(resolve, 500)
+          } else {
+            setTimeout(waitForInit, 100)
+          }
+        }
+        waitForInit()
+      })
+    },
+    exitMapbox: () => {
+      refs.exitMapboxMode()
+    },
+    mapboxJumpTo: (lng, lat, zoom, bearing, pitch) => {
+      const mapbox = refs.mapboxServiceRef.current
+      if (!mapbox?.getIsInitialized()) {
+        console.warn('[DemoAPI] Mapbox not initialized')
+        return
+      }
+      // jumpTo is instant (no animation) — works with synthetic time
+      const map = mapbox.getMap()
+      if (map) {
+        map.jumpTo({ center: [lng, lat], zoom, bearing: bearing ?? 0, pitch: pitch ?? 0 })
       }
     },
     isReady: () => {

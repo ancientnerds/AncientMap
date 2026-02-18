@@ -67,7 +67,7 @@ export default function NewsFeedPage() {
 
   const PAGE_SIZE = 50
 
-  const fetchPage = useCallback(async (pageNum: number, append: boolean) => {
+  const fetchPage = useCallback(async (pageNum: number, append: boolean, signal?: AbortSignal) => {
     try {
       setLoading(true)
       setError(null)
@@ -84,7 +84,7 @@ export default function NewsFeedPage() {
       if (activeFilters.news_category) params.set('news_category', activeFilters.news_category)
       if (activeFilters.speculative_tag) params.set('speculative_tag', activeFilters.speculative_tag)
       if (activeFilters.sort) params.set('sort', activeFilters.sort)
-      const resp = await fetch(`${config.api.baseUrl}/news/feed?${params}`)
+      const resp = await fetch(`${config.api.baseUrl}/news/feed?${params}`, { signal })
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const data: { items: NewsItemData[]; has_more: boolean; total_count: number; page: number } = await resp.json()
       setItems(prev => append ? [...prev, ...data.items] : data.items)
@@ -92,6 +92,7 @@ export default function NewsFeedPage() {
       setTotalCount(data.total_count)
       setPage(data.page)
     } catch (e) {
+      if ((e as Error).name === 'AbortError') return
       setError(e instanceof Error ? e.message : 'Failed to load')
     } finally {
       setLoading(false)
@@ -124,7 +125,12 @@ export default function NewsFeedPage() {
 
   // Fetch page 1 on mount and whenever filters/sort change
   useEffect(() => {
-    fetchPage(1, false)
+    const controller = new AbortController()
+    fetchPage(1, false, controller.signal)
+    return () => {
+      if (doneTimer.current) clearTimeout(doneTimer.current)
+      controller.abort()
+    }
   }, [fetchPage])
 
   // Load source metadata on mount (for SitePopup display names)

@@ -176,13 +176,29 @@ function createDemoProxy(page: Page): DemoAPI {
     setZoom: (d) => evalDemo(`window.__DEMO.setZoom(${d})`),
     smoothZoom: (from, to, ms) => evalDemo(`window.__DEMO.smoothZoom(${from}, ${to}, ${ms})`),
     setAutoRotate: (on) => evalDemo(`window.__DEMO.setAutoRotate(${on})`),
+    setFlyToDuration: (ms) => evalDemo(`window.__DEMO.setFlyToDuration(${ms})`),
     setFilterMode: (mode) => evalDemo(`window.__DEMO.setFilterMode("${mode}")`),
     setAgeRange: (min, max) => evalDemo(`window.__DEMO.setAgeRange(${min}, ${max})`),
+    setSelectedSources: (ids) => evalDemo(`window.__DEMO.setSelectedSources(${JSON.stringify(ids)})`),
+    loadSources: (ids) => evalDemo(`window.__DEMO.loadSources(${JSON.stringify(ids)})`),
     setVectorLayer: (layer, vis) => evalDemo(`window.__DEMO.setVectorLayer("${layer}", ${vis})`),
     setSatellite: (on) => evalDemo(`window.__DEMO.setSatellite(${on})`),
+    setGeoLabels: (vis) => evalDemo(`window.__DEMO.setGeoLabels(${vis})`),
     showEmpire: (id) => evalDemo(`window.__DEMO.showEmpire("${id}")`),
     hideAllEmpires: () => evalDemo(`window.__DEMO.hideAllEmpires()`),
     setPaleoshoreline: (vis, sl) => evalDemo(`window.__DEMO.setPaleoshoreline(${vis}${sl !== undefined ? ', ' + sl : ''})`),
+    // Site interaction
+    selectSite: (name) => evalDemo(`window.__DEMO.selectSite("${name}")`),
+    deselectSite: () => evalDemo(`window.__DEMO.deselectSite()`),
+    openSitePopup: (name) => evalDemo(`window.__DEMO.openSitePopup("${name}")`),
+    closeAllPopups: () => evalDemo(`window.__DEMO.closeAllPopups()`),
+    setDemoTooltips: (vis) => evalDemo(`window.__DEMO.setDemoTooltips(${vis})`),
+    setDemoPopups: (vis) => evalDemo(`window.__DEMO.setDemoPopups(${vis})`),
+    // Mapbox street-level
+    enterMapbox: () => evalDemo(`window.__DEMO.enterMapbox()`),
+    exitMapbox: () => evalDemo(`window.__DEMO.exitMapbox()`),
+    mapboxJumpTo: (lng, lat, zoom, bearing, pitch) => evalDemo(`window.__DEMO.mapboxJumpTo(${lng}, ${lat}, ${zoom}${bearing !== undefined ? ', ' + bearing : ''}${pitch !== undefined ? ', ' + pitch : ''})`),
+    // UI control
     hideAllUI: () => evalDemo(`window.__DEMO.hideAllUI()`),
     showUI: () => evalDemo(`window.__DEMO.showUI()`),
     isReady: () => { throw new Error('Use page.evaluate for isReady') },
@@ -276,7 +292,7 @@ async function main() {
 
       // Encode WebM to MP4
       console.log(`\nEncoding ${scene.name}...`)
-      const result = encodeScene(scene.name, webmPath, outputDir)
+      const result = encodeScene(scene.name, webmPath, outputDir, scene.duration)
       console.log(`  MP4: ${result.mp4}`)
       console.log(`  Fast: ${result.fast}`)
 

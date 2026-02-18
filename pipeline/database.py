@@ -875,6 +875,10 @@ class NewsItem(Base):
     news_category: Mapped[str | None] = mapped_column(String(50), nullable=True)
     speculative_tag: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
+    # Pipeline efficiency tracking
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    screenshot_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
     # RAG enrichment fields
     transcript_segment: Mapped[str | None] = mapped_column(Text, nullable=True)
     entities: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

@@ -48,7 +48,7 @@ def _load_seshat_data() -> dict:
             logger.info(f"Loaded Seshat data from {path}: {len(_seshat_data.get('polities', {}))} polities")
             return _seshat_data
 
-    logger.warning("Seshat polities.json not found — empire knowledge unavailable")
+    logger.warning("Seshat polities.json not found \u2014 empire knowledge unavailable")
     _seshat_data = {"polities": {}}
     return _seshat_data
 
@@ -74,6 +74,7 @@ def search_sites(
         site_type: Filter by site type (e.g. 'settlement', 'temple', 'burial').
         limit: Maximum results to return (default 10, max 25).
     """
+    query = (query or "")[:500]
     limit = min(limit, 25)
     conditions = ["1=1"]
     params: dict = {"limit": limit}
@@ -252,6 +253,7 @@ def search_news(
         days_back: How many days back to search (default 30, max 365).
         limit: Maximum results (default 10, max 20).
     """
+    query = (query or "")[:500]
     limit = min(limit, 20)
     days_back = min(days_back, 365)
 
@@ -383,7 +385,7 @@ def _hybrid_search(
     voyage_tokens = 0
     client = get_qdrant_client()
 
-    # Step 1: Embed query — dense (voyage-4) + sparse (BM25)
+    # Step 1: Embed query \u2014 dense (voyage-4) + sparse (BM25)
     embeddings = get_embeddings(usage="query")
     dense_vec = embeddings.embed_query(query)
     voyage_tokens += embeddings.last_total_tokens
@@ -403,7 +405,7 @@ def _hybrid_search(
         conditions.append(models.FieldCondition(key="site_type", match=models.MatchText(text=site_type)))
     query_filter = models.Filter(must=conditions) if conditions else None  # type: ignore[arg-type]
 
-    # Step 3: Hybrid query — prefetch dense + BM25, fuse with RRF
+    # Step 3: Hybrid query \u2014 prefetch dense + BM25, fuse with RRF
     results = client.query_points(
         collection_name=collection,
         prefetch=[
@@ -418,7 +420,7 @@ def _hybrid_search(
     if not scored_points:
         return [], voyage_tokens
 
-    # Step 4: Rerank with voyage rerank-2.5-lite → top K
+    # Step 4: Rerank with voyage rerank-2.5-lite \u2192 top K
     # Per Voyage docs: prepend instructions to the query for rerank-2.5-lite
     reranker = get_reranker()
     docs = [_format_payload_for_rerank(hit.payload) for hit in scored_points]
@@ -459,6 +461,7 @@ def vector_search(
         period: Filter by period name (e.g. 'Bronze Age', 'Neolithic').
         site_type: Filter by site type (e.g. 'settlement', 'temple').
     """
+    query = (query or "")[:500]
     items, _vt = _hybrid_search(
         query, collection=collection, limit=limit,
         country=country, period=period, site_type=site_type,
@@ -487,6 +490,7 @@ def search_radar(
         status: Filter by status: 'enriched' (identified), 'promoted' (added to map), 'pending' (awaiting identification). Default: all visible.
         limit: Max results (default 10, max 20).
     """
+    query = (query or "")[:500]
     limit = min(limit, 20)
     conditions = ["uc.source = 'lyra'"]
     params: dict = {"limit": limit}
