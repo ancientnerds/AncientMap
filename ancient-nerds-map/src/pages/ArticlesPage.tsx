@@ -624,6 +624,7 @@ export default function ArticlesPage() {
       <PageHeader
         speechBubble="I write weekly digests from the latest archaeology videos"
         onAvatarClick={() => setShowLyraProfile(true)}
+        currentPage="articles"
       >
         {view === 'listing' ? (
           <span className="page-header-title">Articles</span>

@@ -1,5 +1,6 @@
 import { type ReactNode, useState, useEffect } from 'react'
 import { config } from '../../config'
+import HamburgerNav from './HamburgerNav'
 import './page-header.css'
 
 interface PageHeaderProps {
@@ -7,6 +8,7 @@ interface PageHeaderProps {
   rightSection?: ReactNode
   speechBubble?: string
   onAvatarClick?: () => void
+  currentPage?: string
 }
 
 function LiveIndicator() {
@@ -37,13 +39,14 @@ function LiveIndicator() {
   )
 }
 
-export default function PageHeader({ children, rightSection, speechBubble, onAvatarClick }: PageHeaderProps) {
+export default function PageHeader({ children, rightSection, speechBubble, onAvatarClick, currentPage }: PageHeaderProps) {
   return (
     <header className="page-header">
       <a href="/globe.html" className="page-header-brand">
         <img src="/an-logo.svg" alt="" className="page-header-logo" />
         <span className="page-header-brand-text">ANCIENT NERDS</span>
       </a>
+      <HamburgerNav currentPage={currentPage} />
       <div className="page-header-divider" />
       {children}
       <img

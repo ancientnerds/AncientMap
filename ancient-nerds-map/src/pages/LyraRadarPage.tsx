@@ -828,6 +828,7 @@ export default function LyraRadarPage() {
       <PageHeader
         speechBubble="I find new sites in YouTube videos that aren't in our database yet"
         onAvatarClick={() => setShowLyraProfile(true)}
+        currentPage="radar"
       >
         <span className="page-header-title">Radar</span>
       </PageHeader>

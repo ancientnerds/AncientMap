@@ -959,6 +959,7 @@ export default function DbAuditPage() {
       <PageHeader
         speechBubble="I help maintain and enrich the sites database"
         onAvatarClick={() => setShowLyraProfile(true)}
+        currentPage="db"
         rightSection={
         <>
           {/* Qdrant sync widget */}

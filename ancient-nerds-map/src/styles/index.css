@@ -1180,6 +1180,9 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 }
 
 .logo-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-family: 'Orbitron', sans-serif;
   font-size: 22px;
   font-weight: 700;

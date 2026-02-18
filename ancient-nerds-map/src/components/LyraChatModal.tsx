@@ -794,32 +794,35 @@ export default function LyraChatModal({
     <PageHeader
       speechBubble="I can search 750K+ sites, find news, and answer archaeology questions!"
       onAvatarClick={() => setShowDossier(true)}
-    >
-      <span className="page-header-title">Lyra</span>
-      <div className="lyra-chat-header-actions">
-        {messages.length > 0 && (
-          <button className="lyra-chat-icon-btn" onClick={startNewChat} title="New chat">
+      currentPage="lyra"
+      rightSection={
+        <div className="lyra-chat-header-actions">
+          {messages.length > 0 && (
+            <button className="lyra-chat-icon-btn" onClick={startNewChat} title="New chat">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+              </svg>
+            </button>
+          )}
+          <button className="lyra-chat-icon-btn" onClick={() => { setConversations(listConversations()); setShowHistory(!showHistory) }} title="Chat history">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+              <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
             </svg>
           </button>
-        )}
-        <button className="lyra-chat-icon-btn" onClick={() => { setConversations(listConversations()); setShowHistory(!showHistory) }} title="Chat history">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
-          </svg>
-        </button>
-        <button className={`lyra-chat-icon-btn${searchOpen ? ' active' : ''}`} onClick={() => { setSearchOpen(!searchOpen); if (searchOpen) { setSearchQuery(''); setSearchResults([]) } }} title="Search sites">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-        </button>
-        {isStreaming && (
-          <button className="lyra-chat-stop-btn" onClick={() => abortRef.current?.abort()}>
-            Stop
+          <button className={`lyra-chat-icon-btn${searchOpen ? ' active' : ''}`} onClick={() => { setSearchOpen(!searchOpen); if (searchOpen) { setSearchQuery(''); setSearchResults([]) } }} title="Search sites">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
           </button>
-        )}
-      </div>
+          {isStreaming && (
+            <button className="lyra-chat-stop-btn" onClick={() => abortRef.current?.abort()}>
+              Stop
+            </button>
+          )}
+        </div>
+      }
+    >
+      <span className="page-header-title">Lyra</span>
     </PageHeader>
   ) : (
     <div className="lyra-chat-header">
