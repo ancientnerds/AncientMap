@@ -46,6 +46,11 @@ function enrichCitations(content: string): string {
   return content.replace(/(?<!\[)\[(\d+)\](?!\()/g, '[$1](#sources)')
 }
 
+function firstImageUrl(article: Article): string | null {
+  const m = article.content.match(/!\[.*?\]\((\S+?)\)/)
+  return m ? m[1] : null
+}
+
 function shareUrl(article: Article): string {
   return `https://ancientnerds.com/articles/${slugify(article.title)}`
 }
@@ -124,6 +129,7 @@ export default function ArticlesPage() {
   const [error, setError] = useState<string | null>(null)
   const [view, setView] = useState<'listing' | 'reading'>('listing')
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null)
+  const [readProgress, setReadProgress] = useState(0)
 
   // Resolve hash → article once articles are loaded
   const resolveHash = useCallback((articleList: Article[]) => {
@@ -178,9 +184,19 @@ export default function ArticlesPage() {
     window.scrollTo(0, 0)
   }
 
-  // Scroll to top when entering reading view
+  // Scroll to top when entering reading view + track read progress
   useEffect(() => {
-    if (view === 'reading') window.scrollTo(0, 0)
+    if (view === 'reading') {
+      window.scrollTo(0, 0)
+      setReadProgress(0)
+      const onScroll = () => {
+        const scrollable = document.documentElement.scrollHeight - window.innerHeight
+        setReadProgress(scrollable > 0 ? Math.min(100, (window.scrollY / scrollable) * 100) : 0)
+      }
+      window.addEventListener('scroll', onScroll, { passive: true })
+      return () => window.removeEventListener('scroll', onScroll)
+    }
+    setReadProgress(0)
   }, [view])
 
   const hero = articles[0] ?? null
@@ -206,6 +222,12 @@ export default function ArticlesPage() {
         )}
       </header>
 
+      {view === 'reading' && (
+        <div className="articles-progress-track">
+          <div className="articles-progress-bar" style={{ width: `${readProgress}%` }} />
+        </div>
+      )}
+
       <main className="articles-page-content">
         {loading && <div className="articles-page-loading">Loading articles...</div>}
         {error && (
@@ -226,9 +248,19 @@ export default function ArticlesPage() {
               <span className="articles-hero-date">
                 {formatDateRange(hero.week_start, hero.week_end)}
               </span>
-              {hero.summary && (
-                <p className="articles-hero-summary">{hero.summary}</p>
-              )}
+              <div className="articles-hero-body">
+                {hero.summary && (
+                  <p className="articles-hero-summary">{hero.summary}</p>
+                )}
+                {firstImageUrl(hero) && (
+                  <img
+                    src={firstImageUrl(hero)!}
+                    alt=""
+                    className="articles-hero-img"
+                    loading="lazy"
+                  />
+                )}
+              </div>
               <div className="articles-hero-actions">
                 <button className="articles-hero-cta" onClick={(e) => { e.stopPropagation(); openArticle(hero) }}>
                   Read Article
@@ -249,6 +281,14 @@ export default function ArticlesPage() {
                       className="articles-grid-card"
                       onClick={() => openArticle(article)}
                     >
+                      {firstImageUrl(article) && (
+                        <img
+                          src={firstImageUrl(article)!}
+                          alt=""
+                          className="articles-grid-card-img"
+                          loading="lazy"
+                        />
+                      )}
                       <h2 className="articles-grid-card-title">{article.title}</h2>
                       <span className="articles-grid-card-date">
                         {formatDateRange(article.week_start, article.week_end)}
