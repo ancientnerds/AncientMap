@@ -310,6 +310,8 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 /* Filter panel no longer scrolls - children handle their own scrolling */
 
 .panel-header {
+  display: flex;
+  align-items: center;
   padding: 0;
   flex-shrink: 0;
 }
@@ -1159,17 +1161,10 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 }
 
 .logo-panel {
-  position: relative;
   padding: 16px;
   display: flex;
   flex-direction: column;
   white-space: nowrap;
-}
-
-.globe-hamburger {
-  position: absolute;
-  top: 12px;
-  right: 8px;
 }
 
 .beta-badge {
