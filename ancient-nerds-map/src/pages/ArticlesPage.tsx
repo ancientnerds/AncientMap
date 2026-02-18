@@ -626,7 +626,7 @@ export default function ArticlesPage() {
         onAvatarClick={() => setShowLyraProfile(true)}
       >
         {view === 'listing' ? (
-          <span className="articles-page-title">Articles</span>
+          <span className="page-header-title">Articles</span>
         ) : (
           <button className="articles-page-back-btn" onClick={backToListing}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

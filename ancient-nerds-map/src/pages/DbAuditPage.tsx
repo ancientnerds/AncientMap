@@ -1045,7 +1045,7 @@ export default function DbAuditPage() {
           )}
         </>
       }>
-        <span className="db-header-title">Database Audit</span>
+        <span className="page-header-title">Database Audit</span>
         <div className="db-source-badge" style={sourceFilter !== 'all' ? {
           borderColor: SOURCE_CONFIG[sourceFilter]?.color,
           background: SOURCE_CONFIG[sourceFilter]?.color + '15',

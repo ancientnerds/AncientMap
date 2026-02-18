@@ -281,7 +281,7 @@ export default function NewsFeedPage() {
         speechBubble="I monitor YouTube archaeology channels and extract discoveries in real-time"
         onAvatarClick={() => setShowLyraProfile(true)}
       >
-        <span className="news-page-lyra-name">News Feed</span>
+        <span className="page-header-title">News Feed</span>
       </PageHeader>
 
       {/* Stats bar */}

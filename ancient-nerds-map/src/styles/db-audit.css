@@ -26,41 +26,6 @@
 }
 
 /* Header */
-.db-header {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 24px;
-  background: rgba(0, 10, 15, 0.9);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border-color);
-}
-
-.db-header-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.db-logo {
-  font-family: 'Orbitron', monospace;
-  font-size: 0.85rem;
-  font-weight: 600;
-  letter-spacing: 2px;
-  color: var(--primary-red);
-}
-
-.db-header-sep {
-  color: var(--text-secondary);
-}
-
-.db-header-title {
-  font-size: 0.95rem;
-  color: var(--text-secondary);
-}
 
 .db-source-badge {
   display: inline-flex;
@@ -994,12 +959,6 @@
   background: var(--primary-red-hover);
 }
 
-/* ─── Header right section ────────────────────────────────────────────────── */
-.db-header-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
 
 /* Upload button */
 .db-upload-btn {
@@ -1956,10 +1915,6 @@
     flex-wrap: wrap;
     padding: 12px 16px;
     gap: 8px;
-  }
-
-  .db-header {
-    padding: 10px 16px;
   }
 
   .db-table-wrap {
