@@ -48,6 +48,16 @@
   gap: 10px;
 }
 
+/* Page title (unified across all pages) */
+.page-header-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--text-primary, #e8e8e8);
+  font-family: 'Orbitron', sans-serif;
+  white-space: nowrap;
+}
+
 /* ── LIVE indicator wrapper — pushed to the far right ── */
 .page-header-live-wrap {
   margin-left: auto;
@@ -168,6 +178,10 @@
 
   .page-header-divider {
     height: 20px;
+  }
+
+  .page-header-title {
+    font-size: 12px;
   }
 
   .page-header-avatar {

@@ -795,7 +795,7 @@ export default function LyraChatModal({
       speechBubble="I can search 750K+ sites, find news, and answer archaeology questions!"
       onAvatarClick={() => setShowDossier(true)}
     >
-      <span className="lyra-chat-page-label">Lyra</span>
+      <span className="page-header-title">Lyra</span>
       <div className="lyra-chat-header-actions">
         {messages.length > 0 && (
           <button className="lyra-chat-icon-btn" onClick={startNewChat} title="New chat">
