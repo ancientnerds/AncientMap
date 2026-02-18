@@ -114,6 +114,12 @@ _SHARED_CSS = """
 """
 
 
+def _first_image_url(content_md: str) -> str | None:
+    """Extract the first markdown image URL from article content."""
+    m = re.search(r'!\[.*?\]\((\S+?)\)', content_md)
+    return m.group(1) if m else None
+
+
 def slugify(title: str) -> str:
     """Generate URL-safe slug from article title."""
     slug = title.lower().strip()
@@ -170,6 +176,7 @@ def render_article_html(
         date_range = f"{week_start.strftime('%b %d')} &ndash; {week_end.strftime('%b %d, %Y')}"
 
     canonical = f"{BASE_URL}/articles/{slug}"
+    og_image = _first_image_url(content_md) or f"{BASE_URL}/landing/og-image.png"
     e_title = escape(title)
     e_desc = escape(meta_desc)
 
@@ -182,6 +189,7 @@ def render_article_html(
         "datePublished": "{pub_date}",
         "author": {{"@type": "Organization", "name": "Ancient Nerds", "url": "{BASE_URL}"}},
         "publisher": {{"@type": "Organization", "name": "Ancient Nerds", "url": "{BASE_URL}", "logo": {{"@type": "ImageObject", "url": "{BASE_URL}/landing/og-image.png"}}}},
+        "image": "{og_image}",
         "mainEntityOfPage": "{canonical}",
         "url": "{canonical}"
     }}"""
@@ -201,13 +209,13 @@ def render_article_html(
     <meta property="og:site_name" content="Ancient Nerds">
     <meta property="og:title" content="{e_title}">
     <meta property="og:description" content="{e_desc}">
-    <meta property="og:image" content="{BASE_URL}/landing/og-image.png">
+    <meta property="og:image" content="{og_image}">
     <meta property="article:published_time" content="{pub_date}">
 
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{e_title}">
     <meta name="twitter:description" content="{e_desc}">
-    <meta name="twitter:image" content="{BASE_URL}/landing/og-image.png">
+    <meta name="twitter:image" content="{og_image}">
     <meta name="twitter:site" content="@AncientNerdsDAO">
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
