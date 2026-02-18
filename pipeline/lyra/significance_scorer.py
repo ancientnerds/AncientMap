@@ -167,7 +167,7 @@ def _rescore_item(
         response = call_api(
             client,
             model=settings.model_rescore,
-            max_tokens=256,
+            max_tokens=8192,
             temperature=0.0,
             system=[{
                 "type": "text",
