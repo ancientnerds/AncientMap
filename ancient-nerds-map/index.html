@@ -10,7 +10,7 @@
     <meta name="description" content="Explore over 750,000 archaeological sites worldwide on an interactive 3D globe. Discover ancient civilizations, historical empires, AI-curated news, and research tools. Free platform for archaeology enthusiasts." />
     <meta name="keywords" content="archaeology, ancient sites, historical map, megalithic structures, ancient civilizations, pyramids, temples, archaeological research, interactive globe, ancient history, UNESCO sites, historical empires" />
     <meta name="author" content="Ancient Nerds" />
-    <meta name="robots" content="index, follow" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
     <link rel="canonical" href="https://ancientnerds.com/" />
 
     <!-- Favicon and Icons -->
@@ -80,18 +80,23 @@
     }
     </script>
 
-    <!-- Structured Data - WebSite with SearchAction -->
+    <!-- Structured Data - Dataset (Google Dataset Search) -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "WebSite",
-      "name": "Ancient Nerds",
+      "@type": "Dataset",
+      "name": "Ancient Nerds Archaeological Sites Database",
+      "description": "Aggregated database of 750,000+ archaeological sites worldwide from 24 sources including OpenStreetMap, Wikidata, Pleiades, UNESCO, Megalithic Portal, DARE, Open Context, and more. Covers temples, megaliths, pyramids, burial sites, settlements, and fortifications across 91 countries from 10,000 BC to present.",
       "url": "https://ancientnerds.com",
-      "potentialAction": {
-        "@type": "SearchAction",
-        "target": "https://ancientnerds.com/globe.html?search={search_term_string}",
-        "query-input": "required name=search_term_string"
-      }
+      "creator": {
+        "@type": "Organization",
+        "name": "Ancient Nerds",
+        "url": "https://ancientnerds.com"
+      },
+      "spatialCoverage": "Global",
+      "temporalCoverage": "-10000/2026",
+      "keywords": ["archaeology", "ancient sites", "archaeological database", "megalithic structures", "ancient civilizations", "UNESCO sites", "historical empires", "temples", "pyramids"],
+      "isAccessibleForFree": true
     }
     </script>
 

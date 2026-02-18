@@ -10,7 +10,7 @@
     <meta name="description" content="Explore over 750,000 archaeological sites worldwide on an interactive 3D globe. Discover ancient civilizations, megalithic structures, temples, pyramids, and historical empires. Free research platform for archaeology enthusiasts." />
     <meta name="keywords" content="archaeology, ancient sites, historical map, megalithic structures, ancient civilizations, pyramids, temples, archaeological research, interactive globe, ancient history, UNESCO sites, historical empires" />
     <meta name="author" content="Ancient Nerds" />
-    <meta name="robots" content="index, follow" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
     <link rel="canonical" href="https://ancientnerds.com/globe.html" />
 
     <!-- Favicon and Icons -->
@@ -69,21 +69,6 @@
     }
     </script>
 
-    <!-- Structured Data - WebSite with SearchAction -->
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "WebSite",
-      "name": "Ancient Nerds",
-      "url": "https://ancientnerds.com",
-      "potentialAction": {
-        "@type": "SearchAction",
-        "target": "https://ancientnerds.com/globe.html?search={search_term_string}",
-        "query-input": "required name=search_term_string"
-      }
-    }
-    </script>
-
     <!-- Preload critical fonts to prevent FOUT during loading screen -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -94,10 +79,23 @@
   </head>
   <body>
     <noscript>
-      <div style="padding: 20px; text-align: center; background: #0a1a1f; color: white; min-height: 100vh;">
-        <h1>Ancient Nerds - Archaeological Map</h1>
-        <p>This interactive map requires JavaScript to run. Please enable JavaScript in your browser to explore over 750,000 archaeological sites worldwide.</p>
-        <p>Features include: Ancient civilizations, megalithic structures, temples, pyramids, UNESCO World Heritage sites, and historical empire borders.</p>
+      <div style="padding: 40px 20px; max-width: 800px; margin: 0 auto; background: #0a1a1f; color: #e0e0e0; min-height: 100vh; font-family: sans-serif;">
+        <h1 style="color: white;">Ancient Nerds - Interactive Archaeological Map</h1>
+        <p>Explore over 750,000 archaeological sites worldwide on an interactive 3D globe. This WebGL application requires JavaScript to run.</p>
+        <h2 style="color: #c02023;">What You Can Explore</h2>
+        <ul>
+          <li>750,000+ archaeological sites from 24 curated databases across 91 countries</li>
+          <li>Ancient temples, megalithic structures, pyramids, burial sites, and settlements</li>
+          <li>44 historical empires with animated timeline — Roman, Byzantine, Mongol, Inca, Ottoman, and more</li>
+          <li>UNESCO World Heritage sites and cultural landmarks</li>
+          <li>Filter by age (10,000 BC to present), country, site type, or data source</li>
+          <li>Satellite and dark mode views with zoom from orbit to street level</li>
+          <li>Paleoshoreline tool showing ice age coastlines</li>
+          <li>Proximity search, distance measurement, and offline field mode</li>
+        </ul>
+        <h2 style="color: #c02023;">Data Sources</h2>
+        <p>Ancient Nerds aggregates data from OpenStreetMap, Wikidata, Pleiades, UNESCO, Megalithic Portal, DARE, Arachne, Open Context, GeoNames, EAMENA, tDAR, Ariadne, PastMap, Heritage Gateway, INAH, AustArch, SAHI, Pelagios, Livius, Nabataea, MegaJ, ROMAQ, and Canmore.</p>
+        <p>Please enable JavaScript to use the interactive globe. <a href="https://ancientnerds.com/" style="color: #c02023;">Visit the homepage</a> for a full overview.</p>
       </div>
     </noscript>
     <div id="root"></div>
