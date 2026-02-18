@@ -100,10 +100,14 @@
     }
     </script>
 
-    <!-- Fonts -->
+    <!-- Fonts (async to avoid render-blocking) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Orbitron:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Orbitron:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Orbitron:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" /></noscript>
+
+    <!-- Preload LCP hero poster -->
+    <link rel="preload" href="/landing/hero-poster.webp" as="image" type="image/webp" fetchpriority="high" />
 
     <!-- Styles -->
     <link rel="stylesheet" href="/src/styles/landing.css" />
@@ -120,8 +124,9 @@
     <!-- ═══════════ HERO ═══════════ -->
     <section class="hero">
       <div class="hero-bg" id="heroBg">
-        <video autoplay muted loop playsinline preload="metadata" poster="/landing/hero-poster.webp" class="hero-video" id="heroVideo">
+        <video autoplay muted loop playsinline preload="metadata" poster="/landing/hero-poster.webp" class="hero-video" id="heroVideo" width="1920" height="1080">
           <source src="/landing/video/hero.mp4" type="video/mp4" />
+          <track kind="captions" src="/landing/video/hero.vtt" srclang="en" label="English" default />
         </video>
       </div>
       <div class="hero-curtain" id="heroCurtain"></div>
@@ -158,10 +163,10 @@
     <section class="landing-section" id="globe-section">
       <div class="feature-row">
         <div class="animate-in">
-          <img src="/landing/globe-country.webp" alt="Interactive 3D globe with country coloring" class="feature-image-main" data-lightbox loading="lazy" decoding="async" />
+          <img src="/landing/globe-country.webp" alt="Interactive 3D globe with country coloring" class="feature-image-main" data-lightbox loading="lazy" decoding="async" width="2560" height="1440" />
           <div class="thumbnail-strip">
-            <img src="/landing/globe-satellite.webp" alt="Satellite view" data-lightbox loading="lazy" decoding="async" />
-            <img src="/landing/globe-asia.webp" alt="Southeast Asia multi-source view" data-lightbox loading="lazy" decoding="async" />
+            <img src="/landing/globe-satellite.webp" alt="Satellite view" data-lightbox loading="lazy" decoding="async" width="2560" height="1440" />
+            <img src="/landing/globe-asia.webp" alt="Southeast Asia multi-source view" data-lightbox loading="lazy" decoding="async" width="2559" height="1438" />
           </div>
         </div>
         <div class="animate-in delay-2">
@@ -179,11 +184,11 @@
           <p class="section-desc">By age, country, category, or data source. Narrow down from 5,000 BC and older to present across 91 countries and 49 site types.</p>
         </div>
         <div class="animate-in delay-2">
-          <img src="/landing/filter-age.webp" alt="Filter sites by age" class="feature-image-main" data-lightbox loading="lazy" decoding="async" />
+          <img src="/landing/filter-age.webp" alt="Filter sites by age" class="feature-image-main" data-lightbox loading="lazy" decoding="async" width="523" height="304" />
           <div class="thumbnail-strip">
-            <img src="/landing/filter-source.webp" alt="Filter by source" data-lightbox loading="lazy" decoding="async" />
-            <img src="/landing/filter-category.webp" alt="Filter by category" data-lightbox loading="lazy" decoding="async" />
-            <img src="/landing/filter-country.webp" alt="Filter by country" data-lightbox loading="lazy" decoding="async" />
+            <img src="/landing/filter-source.webp" alt="Filter by source" data-lightbox loading="lazy" decoding="async" width="378" height="775" />
+            <img src="/landing/filter-category.webp" alt="Filter by category" data-lightbox loading="lazy" decoding="async" width="381" height="727" />
+            <img src="/landing/filter-country.webp" alt="Filter by country" data-lightbox loading="lazy" decoding="async" width="376" height="769" />
           </div>
         </div>
       </div>
@@ -192,16 +197,16 @@
     <!-- ═══════════ EMPIRES ═══════════ -->
     <section class="cinematic-section full-width">
       <div class="cinematic-bg">
-        <img src="/landing/empire-roman.webp" alt="Roman Empire overlay on the globe" class="cinematic-video" loading="lazy" decoding="async" />
+        <img src="/landing/empire-roman.webp" alt="Roman Empire overlay on the globe" class="cinematic-video" loading="lazy" decoding="async" width="2560" height="1246" />
       </div>
       <div class="cinematic-overlay"></div>
       <div class="cinematic-content animate-in">
         <h2 class="section-label">WATCH EMPIRES RISE AND FALL</h2>
         <p class="section-desc">44 historical empires with animated timeline controls. Roman, Byzantine, Mongol, Inca, and more.</p>
         <div class="empire-thumbnails">
-          <img src="/landing/empire-byzantine.webp" alt="Byzantine and Sassanid Empires" data-lightbox loading="lazy" decoding="async" />
-          <img src="/landing/empire-inca.webp" alt="Inca Empire" data-lightbox loading="lazy" decoding="async" />
-          <img src="/landing/empire-detail.webp" alt="Old Kingdom Egypt empire detail" data-lightbox loading="lazy" decoding="async" />
+          <img src="/landing/empire-byzantine.webp" alt="Byzantine and Sassanid Empires" data-lightbox loading="lazy" decoding="async" width="1732" height="1254" />
+          <img src="/landing/empire-inca.webp" alt="Inca Empire" data-lightbox loading="lazy" decoding="async" width="966" height="1201" />
+          <img src="/landing/empire-detail.webp" alt="Old Kingdom Egypt empire detail" data-lightbox loading="lazy" decoding="async" width="1567" height="1026" />
         </div>
       </div>
     </section>
@@ -210,11 +215,11 @@
     <section class="landing-section" id="sitedata-section">
       <div class="feature-row">
         <div class="animate-in">
-          <img src="/landing/site-popup.webp" alt="Site popup with photos, 3D, maps" class="feature-image-main" data-lightbox loading="lazy" decoding="async" />
+          <img src="/landing/site-popup.webp" alt="Site popup with photos, 3D, maps" class="feature-image-main" data-lightbox loading="lazy" decoding="async" width="1483" height="1108" />
           <div class="thumbnail-strip">
-            <img src="/landing/site-3d.webp" alt="3D photogrammetry" data-lightbox loading="lazy" decoding="async" />
-            <img src="/landing/site-gallery.webp" alt="Photo gallery" data-lightbox loading="lazy" decoding="async" />
-            <img src="/landing/databases.webp" alt="Multi-source site detail" data-lightbox loading="lazy" decoding="async" />
+            <img src="/landing/site-3d.webp" alt="3D photogrammetry" data-lightbox loading="lazy" decoding="async" width="2032" height="966" />
+            <img src="/landing/site-gallery.webp" alt="Photo gallery" data-lightbox loading="lazy" decoding="async" width="1480" height="1096" />
+            <img src="/landing/databases.webp" alt="Multi-source site detail" data-lightbox loading="lazy" decoding="async" width="316" height="339" />
           </div>
         </div>
         <div class="animate-in delay-2">
@@ -228,13 +233,13 @@
     <section class="landing-section" id="lyra-section">
       <div class="feature-row reverse">
         <div class="animate-in">
-          <img src="/lyra.webp" alt="Lyra Wiskerbyte" class="lyra-avatar" loading="lazy" decoding="async" />
+          <img src="/lyra.webp" alt="Lyra Wiskerbyte" class="lyra-avatar" loading="lazy" decoding="async" width="240" height="240" />
           <h2 class="section-label">MEET LYRA WISKERBYTE</h2>
           <p class="section-desc">Your AI archaeology companion. Ask about any site, period, or region. Powered by vector search across the entire database.</p>
           <a href="/lyra.html" class="cta-secondary">CHAT WITH LYRA</a>
         </div>
         <div class="animate-in delay-2">
-          <img src="/landing/lyra-chat.webp" alt="Lyra AI chat in action" class="feature-image-main" data-lightbox loading="lazy" decoding="async" />
+          <img src="/landing/lyra-chat.webp" alt="Lyra AI chat in action" class="feature-image-main" data-lightbox loading="lazy" decoding="async" width="805" height="819" />
         </div>
       </div>
     </section>
@@ -245,15 +250,15 @@
         <div class="split-card">
           <h2 class="section-label">ARCHAEOLOGY NEWS</h2>
           <p class="section-desc">AI-curated discoveries from top YouTube channels. Summaries, site links, and video timestamps.</p>
-          <img src="/landing/news-feed.webp" alt="News Feed page" data-lightbox loading="lazy" decoding="async" />
-          <img src="/landing/news-filters.webp" alt="News filters and tags" data-lightbox loading="lazy" decoding="async" />
+          <img src="/landing/news-feed.webp" alt="News Feed page" data-lightbox loading="lazy" decoding="async" width="2559" height="1365" />
+          <img src="/landing/news-filters.webp" alt="News filters and tags" data-lightbox loading="lazy" decoding="async" width="1878" height="1051" />
           <a href="/news.html" class="cta-secondary">VIEW NEWS</a>
         </div>
         <div class="split-card">
           <h2 class="section-label">DISCOVERY RADAR</h2>
           <p class="section-desc">Track newly mentioned sites from video content. 749K+ known sites cross-referenced in real-time.</p>
-          <img src="/landing/radar-map.webp" alt="Radar discovery map" data-lightbox loading="lazy" decoding="async" />
-          <img src="/landing/radar-cards.webp" alt="Radar site cards" data-lightbox loading="lazy" decoding="async" />
+          <img src="/landing/radar-map.webp" alt="Radar discovery map" data-lightbox loading="lazy" decoding="async" width="1276" height="967" />
+          <img src="/landing/radar-cards.webp" alt="Radar site cards" data-lightbox loading="lazy" decoding="async" width="2361" height="1096" />
           <a href="/radar.html" class="cta-secondary">OPEN RADAR</a>
         </div>
       </div>
@@ -264,32 +269,32 @@
       <h2 class="section-label animate-in">RESEARCH TOOLS</h2>
       <div class="tools-grid">
         <div class="tool-card animate-in delay-1">
-          <img src="/landing/search.webp" alt="Search tool" loading="lazy" decoding="async" />
+          <img src="/landing/search.webp" alt="Search tool" loading="lazy" decoding="async" width="529" height="316" />
           <h3>Search</h3>
           <p>Find any site by name</p>
         </div>
         <div class="tool-card animate-in delay-1">
-          <img src="/landing/proximity.webp" alt="Proximity tool" loading="lazy" decoding="async" />
+          <img src="/landing/proximity.webp" alt="Proximity tool" loading="lazy" decoding="async" width="511" height="427" />
           <h3>Proximity</h3>
           <p>What's near you?</p>
         </div>
         <div class="tool-card animate-in delay-2">
-          <img src="/landing/measure.webp" alt="Measure tool" loading="lazy" decoding="async" />
+          <img src="/landing/measure.webp" alt="Measure tool" loading="lazy" decoding="async" width="514" height="369" />
           <h3>Measure</h3>
           <p>Distance between sites</p>
         </div>
         <div class="tool-card animate-in delay-2">
-          <img src="/landing/map-layers.webp" alt="Map layers tool" loading="lazy" decoding="async" />
+          <img src="/landing/map-layers.webp" alt="Map layers tool" loading="lazy" decoding="async" width="321" height="1159" />
           <h3>Map Layers</h3>
           <p>Rivers, reefs, glaciers, tectonic plates</p>
         </div>
         <div class="tool-card animate-in delay-3">
-          <img src="/landing/paleoshoreline.webp" alt="Paleoshoreline tool" loading="lazy" decoding="async" />
+          <img src="/landing/paleoshoreline.webp" alt="Paleoshoreline tool" loading="lazy" decoding="async" width="312" height="330" />
           <h3>Paleoshoreline</h3>
           <p>Ice age coastlines</p>
         </div>
         <div class="tool-card animate-in delay-3">
-          <img src="/landing/offline-manager.webp" alt="Offline Data Manager" loading="lazy" decoding="async" />
+          <img src="/landing/offline-manager.webp" alt="Offline Data Manager" loading="lazy" decoding="async" width="705" height="789" />
           <h3>Offline Mode</h3>
           <p>Field-ready PWA</p>
         </div>
@@ -305,7 +310,7 @@
           <a href="/articles.html" class="cta-secondary">READ ARTICLES</a>
         </div>
         <div class="animate-in delay-2">
-          <img src="/landing/articles.webp" alt="Weekly archaeology article" class="feature-image-main" data-lightbox loading="lazy" decoding="async" />
+          <img src="/landing/articles.webp" alt="Weekly archaeology article" class="feature-image-main" data-lightbox loading="lazy" decoding="async" width="1113" height="1144" />
         </div>
       </div>
     </section>
@@ -316,8 +321,8 @@
       <p class="section-desc sources-desc animate-in">Aggregating the world's archaeological databases into one unified platform.</p>
       <div class="animate-in">
         <div class="sources-row">
-          <img src="/landing/database-audit.webp" alt="Database audit with 5,013 sites" data-lightbox loading="lazy" decoding="async" />
-          <img src="/landing/filter-source.webp" alt="24 data sources filter panel" data-lightbox loading="lazy" decoding="async" />
+          <img src="/landing/database-audit.webp" alt="Database audit with 5,013 sites" data-lightbox loading="lazy" decoding="async" width="1848" height="1158" />
+          <img src="/landing/filter-source.webp" alt="24 data sources filter panel" data-lightbox loading="lazy" decoding="async" width="378" height="775" />
         </div>
         <div class="source-badges">
           <span class="source-badge">Ancient Nerds</span>
@@ -371,7 +376,7 @@
     <footer class="landing-footer">
       <div class="footer-inner">
         <div class="footer-brand">
-          <img src="/an-logo.svg" alt="Ancient Nerds" class="footer-logo" decoding="async" />
+          <img src="/an-logo.svg" alt="Ancient Nerds" class="footer-logo" decoding="async" width="32" height="32" />
           <span class="footer-name">Ancient Nerds Research Platform</span>
           <span class="beta-badge">BETA</span>
         </div>
@@ -389,7 +394,7 @@
 
     <!-- ═══════════ LIGHTBOX ═══════════ -->
     <div class="lightbox" id="lightbox">
-      <img src="" alt="Full-size screenshot" decoding="async" />
+      <img src="" alt="Full-size screenshot" decoding="async" width="0" height="0" />
     </div>
 
     <!-- ═══════════ SCRIPTS ═══════════ -->
@@ -420,33 +425,34 @@
         }
       })();
 
-      // Scroll-triggered animations
-      const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('visible');
-            observer.unobserve(entry.target);
+      // Scroll-triggered animations + parallax (deferred to yield main thread for first paint)
+      (typeof requestIdleCallback === 'function' ? requestIdleCallback : setTimeout)(function() {
+        var observer = new IntersectionObserver(function(entries) {
+          entries.forEach(function(entry) {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('visible');
+              observer.unobserve(entry.target);
+            }
+          });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('.animate-in').forEach(function(el) { observer.observe(el); });
+
+        // Parallax on hero background
+        var heroBg = document.getElementById('heroBg');
+        var ticking = false;
+        window.addEventListener('scroll', function() {
+          if (!ticking) {
+            requestAnimationFrame(function() {
+              var scrollY = window.scrollY;
+              if (scrollY < window.innerHeight) {
+                heroBg.style.transform = 'translateY(' + (scrollY * 0.3) + 'px)';
+              }
+              ticking = false;
+            });
+            ticking = true;
           }
         });
-      }, { threshold: 0.1 });
-
-      document.querySelectorAll('.animate-in').forEach(el => observer.observe(el));
-
-
-      // Parallax on hero background
-      const heroBg = document.getElementById('heroBg');
-      let ticking = false;
-      window.addEventListener('scroll', () => {
-        if (!ticking) {
-          requestAnimationFrame(() => {
-            const scrollY = window.scrollY;
-            if (scrollY < window.innerHeight) {
-              heroBg.style.transform = 'translateY(' + (scrollY * 0.3) + 'px)';
-            }
-            ticking = false;
-          });
-          ticking = true;
-        }
       });
 
       // Lightbox (deferred to idle)
