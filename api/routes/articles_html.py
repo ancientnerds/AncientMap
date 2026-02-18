@@ -103,7 +103,6 @@ async def news_archive(db: Session = Depends(get_db)):
     grouped: dict[str, list[dict]] = defaultdict(list)
     for item in items:
         video = item.video
-        channel = video.channel if video else None
         site = item.site
 
         date_label = ""
