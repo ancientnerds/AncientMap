@@ -7,6 +7,27 @@ import { VitePWA } from 'vite-plugin-pwa'
 const commitHash = execSync('git rev-parse --short HEAD').toString().trim()
 const buildTime = new Date().toISOString()
 
+// Post-build: make landing page CSS non-render-blocking (critical CSS is inlined in <style>)
+function asyncLandingCss() {
+  return {
+    name: 'async-landing-css',
+    enforce: 'post' as const,
+    transformIndexHtml: {
+      order: 'post' as const,
+      handler(html: string, ctx: { filename: string }) {
+        if (!ctx.filename.endsWith('index.html')) return html
+        return html.replace(
+          /<link\b([^>]*)href="(\/assets\/landing-[^"]+\.css)"([^>]*)>/g,
+          (_match: string, before: string, href: string, after: string) => {
+            if (_match.includes('media=')) return _match
+            return `<link rel="stylesheet" href="${href}" media="print" onload="this.media='all'" />\n    <noscript><link rel="stylesheet" href="${href}" /></noscript>`
+          }
+        )
+      }
+    }
+  }
+}
+
 export default defineConfig({
   envDir: '..',
   define: {
@@ -37,6 +58,7 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    asyncLandingCss(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
