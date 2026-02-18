@@ -240,7 +240,7 @@ body {
 
 .cta-primary:hover {
   background: var(--primary-red);
-  color: #fff;
+  color: #000;
 }
 
 .cta-primary:active {
@@ -467,7 +467,7 @@ body {
 
 .cta-secondary:hover {
   background: var(--primary-red);
-  color: #fff;
+  color: #000;
 }
 
 .cta-secondary:active {
@@ -670,7 +670,7 @@ body {
 
 .cta-discord:hover {
   background: #5865F2;
-  color: #fff;
+  color: #000;
 }
 
 .cta-discord:active {
