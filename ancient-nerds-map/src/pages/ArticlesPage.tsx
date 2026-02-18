@@ -50,6 +50,17 @@ function enrichCitations(content: string): string {
   return content.replace(/(?<!\[)\[(\d+)\](?!\()/g, '[$1](#sources)')
 }
 
+/** Strip the sources numbered list from markdown when rich attribution is used.
+ *  Keeps the ### Sources heading (handled by the h3 component) but removes the OL after it. */
+function stripSourcesList(content: string): string {
+  // Match from "### Sources" to end — remove only the numbered list lines
+  const idx = content.indexOf('### Sources')
+  if (idx === -1) return content
+  const before = content.slice(0, idx)
+  // Keep just the heading line
+  return before + '### Sources'
+}
+
 function firstImageUrl(article: Article): string | null {
   const m = article.content.match(/!\[.*?\]\((\S+?)\)/)
   return m ? m[1] : null
@@ -57,6 +68,37 @@ function firstImageUrl(article: Article): string | null {
 
 function shareUrl(article: Article): string {
   return `https://ancientnerds.com/articles/${slugify(article.title)}`
+}
+
+function readingTime(content: string): number {
+  return Math.max(1, Math.ceil(content.split(/\s+/).length / 200))
+}
+
+/** Extract ## headings from article content for the TOC. */
+function extractHeadings(content: string): { text: string; slug: string }[] {
+  const headings: { text: string; slug: string }[] = []
+  for (const line of content.split('\n')) {
+    const m = line.match(/^##\s+(.+)$/)
+    if (m) {
+      const text = m[1].trim()
+      headings.push({ text, slug: slugify(text) })
+    }
+  }
+  return headings
+}
+
+/** Parse screenshot filename → video_id + timestamp.
+ *  Format: /screenshots/news/{video_id}_{timestamp}.jpg  */
+function parseScreenshotUrl(src: string): { videoId: string; timestamp: number } | null {
+  const m = src.match(/\/screenshots\/news\/([^/]+?)_(\d+)\.\w+$/)
+  if (!m) return null
+  return { videoId: m[1], timestamp: parseInt(m[2], 10) }
+}
+
+function formatTimestamp(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${m}:${s.toString().padStart(2, '0')}`
 }
 
 /** Convert an API NewsItemData into NewsCardProps for CitationPopover. */
@@ -90,17 +132,198 @@ function itemToCardProps(item: NewsItemData): NewsCardProps {
   }
 }
 
-function makeArticleComponents(
-  citationItems: Map<number, NewsItemData>,
-  onCitationEnter: (num: number, rect: DOMRect) => void,
-  onCitationLeave: () => void,
-): Components {
-  return {
-    img: ({ src, alt }) => (
+/** Playable screenshot component — shows play overlay, click to embed YouTube. */
+function ArticleScreenshot({ src, alt, citationItems }: {
+  src: string
+  alt: string
+  citationItems: Map<number, NewsItemData>
+}) {
+  const [playing, setPlaying] = useState(false)
+  const parsed = parseScreenshotUrl(src || '')
+
+  // Try to get video metadata from citations
+  let videoId = parsed?.videoId
+  let timestamp = parsed?.timestamp ?? 0
+  if (videoId && citationItems.size > 0) {
+    for (const item of citationItems.values()) {
+      if (item.video.id === videoId) {
+        timestamp = item.timestamp_seconds ?? timestamp
+        break
+      }
+    }
+  }
+
+  if (!videoId) {
+    return (
       <figure className="article-figure">
         <img src={src} alt={alt || ''} loading="lazy" className="article-screenshot" />
         {alt && <figcaption className="article-figcaption">{alt}</figcaption>}
       </figure>
+    )
+  }
+
+  return (
+    <figure className="article-figure">
+      {playing ? (
+        <div className="article-video-embed">
+          <iframe
+            src={`https://www.youtube.com/embed/${videoId}?start=${timestamp}&autoplay=1`}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            referrerPolicy="strict-origin-when-cross-origin"
+            allowFullScreen
+          />
+        </div>
+      ) : (
+        <div className="article-video-thumb" onClick={() => setPlaying(true)}>
+          <img src={src} alt={alt || ''} loading="lazy" className="article-screenshot" />
+          <svg className="article-video-play" width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+          </svg>
+        </div>
+      )}
+      <a
+        className="article-video-link"
+        href={`https://youtube.com/watch?v=${videoId}&t=${timestamp}s`}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        &#9654; Watch on YouTube (at {formatTimestamp(timestamp)})
+      </a>
+      {alt && <figcaption className="article-figcaption">{alt}</figcaption>}
+    </figure>
+  )
+}
+
+/** Rich attribution section — grouped source cards with channel links. */
+function SourcesAttribution({ citationItems }: { citationItems: Map<number, NewsItemData> }) {
+  // Group citations by channel
+  const channelGroups = useMemo(() => {
+    const groups = new Map<string, { channelName: string; channelId: string; items: { num: number; item: NewsItemData }[] }>()
+    for (const [num, item] of citationItems) {
+      const key = item.video.channel_id || item.video.channel_name
+      if (!groups.has(key)) {
+        groups.set(key, {
+          channelName: item.video.channel_name,
+          channelId: item.video.channel_id || '',
+          items: [],
+        })
+      }
+      groups.get(key)!.items.push({ num, item })
+    }
+    // Sort groups by earliest citation number
+    return [...groups.values()].sort((a, b) => a.items[0].num - b.items[0].num)
+  }, [citationItems])
+
+  if (channelGroups.length === 0) return null
+
+  return (
+    <div className="articles-attribution">
+      <h3 id="sources" className="articles-attribution-heading">Sources & Attribution</h3>
+      <p className="articles-attribution-thanks">
+        This article wouldn&rsquo;t exist without these incredible creators who bring archaeology and ancient
+        history to life. We are deeply grateful for their work &mdash; please visit their channels, like,
+        subscribe, and support them.
+      </p>
+
+      <div className="articles-attribution-cards">
+        {channelGroups.map(group => (
+          <div key={group.channelId || group.channelName} className="articles-attribution-channel">
+            <div className="articles-attribution-channel-header">
+              <a
+                href={`https://www.youtube.com/channel/${group.channelId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="articles-attribution-channel-name"
+              >
+                {group.channelName}
+              </a>
+              <span className="articles-attribution-count">
+                {group.items.length} citation{group.items.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+            <div className="articles-attribution-items">
+              {group.items.map(({ num, item }) => (
+                <a
+                  key={num}
+                  className="articles-attribution-item"
+                  href={item.youtube_deep_url || item.youtube_url || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <span className="articles-attribution-num">[{num}]</span>
+                  <span className="articles-attribution-video-title">{item.video.title}</span>
+                  {item.timestamp_seconds != null && (
+                    <span className="articles-attribution-ts">
+                      {formatTimestamp(item.timestamp_seconds)}
+                    </span>
+                  )}
+                </a>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="articles-attribution-optout">
+        <p>
+          Are you a YouTube creator? If you&rsquo;d like your channel excluded, reach out with
+          subject &ldquo;Channel Opt-Out&rdquo;.
+        </p>
+        <div className="contact-links">
+          <a href="mailto:ancient.nerds@protonmail.com?subject=Channel%20Opt-Out" target="_blank" rel="noopener noreferrer">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="4" width="20" height="16" rx="2" />
+              <path d="M22 7l-10 6L2 7" />
+            </svg>
+            Email
+          </a>
+          <a href="https://discord.gg/8bAjKKCue4" target="_blank" rel="noopener noreferrer">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.095 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.095 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
+            </svg>
+            Discord
+          </a>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** TOC sidebar component. */
+function TableOfContents({ headings, activeSlug }: {
+  headings: { text: string; slug: string }[]
+  activeSlug: string | null
+}) {
+  if (headings.length === 0) return null
+  return (
+    <nav className="articles-toc">
+      <span className="articles-toc-label">Contents</span>
+      <ul className="articles-toc-list">
+        {headings.map(h => (
+          <li key={h.slug} className={h.slug === activeSlug ? 'active' : ''}>
+            <a href={`#${h.slug}`} onClick={e => {
+              e.preventDefault()
+              document.getElementById(h.slug)?.scrollIntoView({ behavior: 'smooth' })
+            }}>
+              {h.text}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  )
+}
+
+function makeArticleComponents(
+  citationItems: Map<number, NewsItemData>,
+  onCitationEnter: (num: number, rect: DOMRect) => void,
+  onCitationLeave: () => void,
+  onCitationClick: (num: number, rect: DOMRect) => void,
+  renderSources: boolean,
+): Components {
+  return {
+    img: ({ src, alt }) => (
+      <ArticleScreenshot src={src || ''} alt={alt || ''} citationItems={citationItems} />
     ),
     a: ({ href, children }) => {
       if (href === '#sources') {
@@ -112,6 +335,7 @@ function makeArticleComponents(
             className={`article-citation-link${hasCard ? ' has-popover' : ''}`}
             onMouseEnter={hasCard ? (e) => onCitationEnter(num, e.currentTarget.getBoundingClientRect()) : undefined}
             onMouseLeave={hasCard ? onCitationLeave : undefined}
+            onClick={hasCard ? (e) => { e.preventDefault(); onCitationClick(num, e.currentTarget.getBoundingClientRect()) } : undefined}
           >
             {children}
           </a>
@@ -119,9 +343,18 @@ function makeArticleComponents(
       }
       return <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
     },
+    h2: ({ children }) => {
+      const text = String(children)
+      return <h2 id={slugify(text)}>{children}</h2>
+    },
     h3: ({ children }) => {
       const text = String(children)
-      if (text === 'Sources') return <h3 id="sources">{children}</h3>
+      if (text === 'Sources') {
+        if (renderSources) {
+          return <SourcesAttribution citationItems={citationItems} />
+        }
+        return <h3 id="sources">{children}</h3>
+      }
       return <h3>{children}</h3>
     },
   }
@@ -183,10 +416,15 @@ export default function ArticlesPage() {
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null)
   const [readProgress, setReadProgress] = useState(0)
 
-  // Citation hover card state
+  // Citation hover + pinned state
   const [citationItems, setCitationItems] = useState<Map<number, NewsItemData>>(new Map())
   const [hoverCitation, setHoverCitation] = useState<{ num: number; rect: DOMRect } | null>(null)
+  const [pinnedCitation, setPinnedCitation] = useState<{ num: number; rect: DOMRect } | null>(null)
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pinnedRef = useRef<HTMLDivElement>(null)
+
+  // TOC active heading tracking
+  const [activeHeading, setActiveHeading] = useState<string | null>(null)
 
   const cancelHoverClose = () => {
     if (hoverTimeout.current) {
@@ -201,9 +439,31 @@ export default function ArticlesPage() {
   }
 
   const handleCitationEnter = (num: number, rect: DOMRect) => {
+    if (pinnedCitation) return // don't show hover when a card is pinned
     cancelHoverClose()
     setHoverCitation({ num, rect })
   }
+
+  const handleCitationClick = (num: number, rect: DOMRect) => {
+    setHoverCitation(null)
+    cancelHoverClose()
+    setPinnedCitation({ num, rect })
+  }
+
+  const dismissPinned = useCallback(() => setPinnedCitation(null), [])
+
+  // Click-outside listener for pinned citation
+  useEffect(() => {
+    if (!pinnedCitation) return
+    const onMouseDown = (e: MouseEvent) => {
+      const popover = document.querySelector('.citation-popover--pinned')
+      if (popover && !popover.contains(e.target as Node)) {
+        setPinnedCitation(null)
+      }
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    return () => document.removeEventListener('mousedown', onMouseDown)
+  }, [pinnedCitation])
 
   // Resolve hash → article once articles are loaded
   const resolveHash = useCallback((articleList: Article[]) => {
@@ -263,6 +523,7 @@ export default function ArticlesPage() {
     if (view !== 'reading' || !selectedArticle) {
       setCitationItems(new Map())
       setHoverCitation(null)
+      setPinnedCitation(null)
       return
     }
     let cancelled = false
@@ -295,11 +556,56 @@ export default function ArticlesPage() {
     setReadProgress(0)
   }, [view])
 
+  // IntersectionObserver for TOC active heading tracking
+  const headings = useMemo(
+    () => selectedArticle ? extractHeadings(selectedArticle.content) : [],
+    [selectedArticle],
+  )
+
+  useEffect(() => {
+    if (view !== 'reading' || headings.length === 0) {
+      setActiveHeading(null)
+      return
+    }
+    // Small delay to let DOM render heading elements
+    const timer = setTimeout(() => {
+      const elements = headings
+        .map(h => document.getElementById(h.slug))
+        .filter((el): el is HTMLElement => el !== null)
+      if (elements.length === 0) return
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          // Find the topmost visible heading
+          for (const entry of entries) {
+            if (entry.isIntersecting) {
+              setActiveHeading(entry.target.id)
+              break
+            }
+          }
+        },
+        { rootMargin: '-80px 0px -70% 0px', threshold: 0 },
+      )
+      elements.forEach(el => observer.observe(el))
+      return () => observer.disconnect()
+    }, 100)
+    return () => clearTimeout(timer)
+  }, [view, headings])
+
+  // Determine if we have citations loaded (for rich source rendering)
+  const hasCitations = citationItems.size > 0
+
   // Memoize ReactMarkdown components to avoid remounting on every render
   const mdComponents = useMemo(
-    () => makeArticleComponents(citationItems, handleCitationEnter, scheduleHoverClose),
-    [citationItems],
+    () => makeArticleComponents(
+      citationItems, handleCitationEnter, scheduleHoverClose, handleCitationClick, hasCitations,
+    ),
+    [citationItems, hasCitations],
   )
+
+  // Determine the active citation to show (pinned takes priority)
+  const activeCitation = pinnedCitation ?? hoverCitation
+  const isPinned = !!pinnedCitation
 
   const hero = articles[0] ?? null
   const older = articles.slice(1)
@@ -349,6 +655,7 @@ export default function ArticlesPage() {
               <h1 className="articles-hero-title">{hero.title}</h1>
               <span className="articles-hero-date">
                 {formatDateRange(hero.week_start, hero.week_end)}
+                <span className="articles-reader-readtime">~{readingTime(hero.content)} min read</span>
               </span>
               <div className="articles-hero-body">
                 {hero.summary && (
@@ -394,6 +701,7 @@ export default function ArticlesPage() {
                       <h2 className="articles-grid-card-title">{article.title}</h2>
                       <span className="articles-grid-card-date">
                         {formatDateRange(article.week_start, article.week_end)}
+                        <span className="articles-reader-readtime">~{readingTime(article.content)} min read</span>
                       </span>
                       {article.summary && (
                         <p className="articles-grid-card-summary">{article.summary}</p>
@@ -411,43 +719,67 @@ export default function ArticlesPage() {
 
         {/* ── Reading view: full-page article ── */}
         {view === 'reading' && selectedArticle && (
-          <article className="articles-reader">
-            <h1 className="articles-reader-title">{selectedArticle.title}</h1>
-            <div className="articles-reader-meta">
-              <span className="articles-reader-date">
-                {formatDateRange(selectedArticle.week_start, selectedArticle.week_end)}
-              </span>
-              <div className="articles-reader-meta-actions">
-                <ShareButton article={selectedArticle} />
-                <CopyLinkButton article={selectedArticle} />
+          <div className="articles-reader-layout">
+            <TableOfContents headings={headings} activeSlug={activeHeading} />
+            <article className="articles-reader">
+              <h1 className="articles-reader-title">{selectedArticle.title}</h1>
+              <div className="articles-reader-meta">
+                <span className="articles-reader-date">
+                  {formatDateRange(selectedArticle.week_start, selectedArticle.week_end)}
+                  <span className="articles-reader-readtime">~{readingTime(selectedArticle.content)} min read</span>
+                </span>
+                <div className="articles-reader-meta-actions">
+                  <ShareButton article={selectedArticle} />
+                  <CopyLinkButton article={selectedArticle} />
+                </div>
               </div>
-            </div>
-            <div className="articles-reader-body">
-              <ReactMarkdown components={mdComponents}>
-                {enrichCitations(selectedArticle.content)}
-              </ReactMarkdown>
-            </div>
-            <footer className="articles-reader-footer">
-              <button className="articles-reader-back-link" onClick={backToListing}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="15 18 9 12 15 6" />
-                </svg>
-                Back to all articles
-              </button>
-            </footer>
-          </article>
+              <div className="articles-ai-notice">
+                This article is AI-generated from YouTube video content. Always verify with original sources.
+              </div>
+              <div className="articles-reader-body">
+                <ReactMarkdown components={mdComponents}>
+                  {enrichCitations(hasCitations ? stripSourcesList(selectedArticle.content) : selectedArticle.content)}
+                </ReactMarkdown>
+              </div>
+              <footer className="articles-reader-footer">
+                <button className="articles-reader-back-link" onClick={backToListing}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="15 18 9 12 15 6" />
+                  </svg>
+                  Back to all articles
+                </button>
+              </footer>
+            </article>
+          </div>
         )}
 
-        {/* Citation hover popover */}
-        {hoverCitation && citationItems.has(hoverCitation.num) && (
-          <CitationPopover
-            cardProps={itemToCardProps(citationItems.get(hoverCitation.num)!)}
-            anchorRect={hoverCitation.rect}
-            onMouseEnter={cancelHoverClose}
-            onMouseLeave={scheduleHoverClose}
-          />
+        {/* Citation popover (pinned takes priority over hover) */}
+        {activeCitation && citationItems.has(activeCitation.num) && (
+          <div ref={pinnedRef}>
+            <CitationPopover
+              cardProps={itemToCardProps(citationItems.get(activeCitation.num)!)}
+              anchorRect={activeCitation.rect}
+              onMouseEnter={isPinned ? () => {} : cancelHoverClose}
+              onMouseLeave={isPinned ? () => {} : scheduleHoverClose}
+              pinned={isPinned}
+              onClose={dismissPinned}
+            />
+          </div>
         )}
       </main>
+
+      {/* Back-to-top button */}
+      {view === 'reading' && (
+        <button
+          className={`articles-back-to-top${readProgress > 30 ? ' visible' : ''}`}
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          title="Back to top"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="18 15 12 9 6 15" />
+          </svg>
+        </button>
+      )}
     </div>
   )
 }

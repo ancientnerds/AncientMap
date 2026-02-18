@@ -507,6 +507,45 @@
   cursor: pointer;
 }
 
+/* Pinned citation popover — click-to-pin mode */
+.citation-popover--pinned {
+  border-color: rgba(0, 180, 180, 0.3);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 180, 180, 0.15);
+}
+
+.citation-popover--pinned::before {
+  display: none;
+}
+
+.citation-popover-header {
+  position: relative;
+  height: 14px;
+  cursor: grab;
+  border-bottom: 1px solid rgba(0, 180, 180, 0.08);
+}
+
+.citation-popover-header:active {
+  cursor: grabbing;
+}
+
+.citation-popover-close {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  line-height: 0;
+  transition: color 0.15s;
+}
+
+.citation-popover-close:hover {
+  color: #fff;
+}
+
 /* Mobile: bottom-anchored sheet */
 @media (max-width: 600px) {
   .citation-popover {
