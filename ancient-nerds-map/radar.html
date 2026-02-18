@@ -7,7 +7,7 @@
     <title>Discovery Radar - Newly Found Archaeological Sites & Ruins | Ancient Nerds</title>
     <meta name="description" content="Track newly discovered archaeological sites extracted from YouTube archaeology videos by AI. See which ancient ruins, temples, and megalithic sites are being talked about before they hit the mainstream." />
     <meta name="keywords" content="new archaeological discoveries, newly found ruins, archaeological sites radar, ancient ruins discovery, archaeology tracker, undiscovered sites, megalithic discoveries" />
-    <meta name="robots" content="index, follow" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
     <link rel="canonical" href="https://ancientnerds.com/radar.html" />
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -40,6 +40,21 @@
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Orbitron:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
   </head>
   <body>
+    <noscript>
+      <div style="padding: 40px 20px; max-width: 800px; margin: 0 auto; background: #0a1a1f; color: #e0e0e0; min-height: 100vh; font-family: sans-serif;">
+        <h1 style="color: white;">Discovery Radar - Newly Found Archaeological Sites</h1>
+        <p>Track archaeological sites that AI has extracted from YouTube archaeology videos but aren't yet in our main database. These are candidates for addition to the globe — the freshest discoveries in archaeology.</p>
+        <h2 style="color: #c02023;">How Discovery Radar Works</h2>
+        <ul>
+          <li>AI monitors top archaeology YouTube channels for newly mentioned sites</li>
+          <li>Cross-references mentions against our 750K+ site database</li>
+          <li>Sites not yet in the database appear here as new discoveries</li>
+          <li>Each discovery includes source video, coordinates, and AI analysis</li>
+          <li>Verified sites get added to the interactive 3D globe</li>
+        </ul>
+        <p>This page requires JavaScript. <a href="https://ancientnerds.com/" style="color: #c02023;">Visit the homepage</a> or <a href="https://ancientnerds.com/globe.html" style="color: #c02023;">explore the globe</a>.</p>
+      </div>
+    </noscript>
     <div id="root"></div>
     <script type="module" src="/src/radarMain.tsx"></script>
   </body>
