@@ -245,7 +245,7 @@ def _write_section(
         response = call_api(
             client,
             model=settings.model_article,
-            max_tokens=2048,
+            max_tokens=8192,
             system=[{
                 "type": "text",
                 "text": (
@@ -326,7 +326,7 @@ def _generate_headline_tldr(
         response = call_api(
             client,
             model=settings.model_article,
-            max_tokens=1024,
+            max_tokens=8192,
             system=[{
                 "type": "text",
                 "text": (

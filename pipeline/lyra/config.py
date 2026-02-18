@@ -249,9 +249,9 @@ def call_api(
                 used_tool_calling = True
 
         # Guard 3: Enforce min max_tokens (MiniMax thinks by default, eating
-        # the token budget; calls under 1024 produce empty/truncated responses)
+        # the token budget; calls under 4096 risk truncation on verbose items)
         if "max_tokens" in kwargs and not has_thinking:
-            kwargs["max_tokens"] = max(1024, kwargs["max_tokens"])
+            kwargs["max_tokens"] = max(4096, kwargs["max_tokens"])
 
     # Append assistant prefill message to force structured output start
     if prefill:

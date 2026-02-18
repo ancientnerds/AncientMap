@@ -80,7 +80,7 @@ def verify_single_post(
         response = call_api(
             client,
             model=model,
-            max_tokens=1024,
+            max_tokens=8192,
             temperature=0.0,
             system=[{
                 "type": "text",

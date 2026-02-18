@@ -117,7 +117,7 @@ def _check_relevance(
         response = call_api(
             client,
             model=settings.model_relevance,
-            max_tokens=256,
+            max_tokens=8192,
             temperature=0.0,
             system=[{
                 "type": "text",

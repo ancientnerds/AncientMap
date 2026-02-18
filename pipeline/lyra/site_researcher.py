@@ -496,7 +496,7 @@ def _select_best_candidate(
         response = call_api(
             client,
             model=settings.model_identify,
-            max_tokens=1024,
+            max_tokens=8192,
             messages=[{"role": "user", "content": prompt}],
             system=[{
                 "type": "text",

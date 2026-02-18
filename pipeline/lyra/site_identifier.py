@@ -497,7 +497,7 @@ def _call_ai(
     """
     create_kwargs: dict = {
         "model": model,
-        "max_tokens": kwargs.pop("max_tokens", 1024),
+        "max_tokens": kwargs.pop("max_tokens", 8192),
         "messages": [{"role": "user", "content": prompt}],
     }
 
@@ -1124,7 +1124,7 @@ def _escalate_to_sonnet(
         response = call_api(
             client,
             model=settings.model_identify_escalation,
-            max_tokens=1024,
+            max_tokens=8192,
             temperature=0.0,
             system=[{
                 "type": "text",
