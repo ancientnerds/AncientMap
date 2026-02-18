@@ -303,6 +303,10 @@ body {
   direction: ltr;
 }
 
+.feature-row .section-desc {
+  margin: 0;
+}
+
 .feature-image-main {
   width: 100%;
   aspect-ratio: 16/9;
@@ -342,6 +346,10 @@ body {
 
 #globe-section .thumbnail-strip img {
   width: calc(50% - 6px);
+}
+
+#filter-section .feature-image-main {
+  max-width: 520px;
 }
 
 #filter-section .thumbnail-strip img {
