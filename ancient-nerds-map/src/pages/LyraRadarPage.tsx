@@ -579,6 +579,8 @@ export default function LyraRadarPage() {
   const [showMap, setShowMap] = useState(false)
   const [bgSites, setBgSites] = useState<{id:string, name:string, lat:number, lon:number, score:number}[]>([])
   const bgSitesFetched = useRef(false)
+  const [allRadarMapItems, setAllRadarMapItems] = useState<RadarItem[]>([])
+  const radarMapFetched = useRef(false)
 
   // Admin auth (same pattern as DbAuditPage)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -723,19 +725,30 @@ export default function LyraRadarPage() {
       .catch(() => {})
   }, [])
 
-  // Fetch background sites for map (once, when map is first shown)
+  // Fetch background sites + all radar items for map (once, when map is first shown)
   useEffect(() => {
-    if (!showMap || bgSitesFetched.current) return
-    bgSitesFetched.current = true
-    fetch(`${config.api.baseUrl}/radar/sites-map`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (!data?.rows) return
-        setBgSites(data.rows.map((r: [string, string, number, number, number]) => ({
-          id: r[0], name: r[1], lat: r[2], lon: r[3], score: r[4],
-        })))
-      })
-      .catch(() => {})
+    if (!showMap) return
+    if (!bgSitesFetched.current) {
+      bgSitesFetched.current = true
+      fetch(`${config.api.baseUrl}/radar/sites-map`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (!data?.rows) return
+          setBgSites(data.rows.map((r: [string, string, number, number, number]) => ({
+            id: r[0], name: r[1], lat: r[2], lon: r[3], score: r[4],
+          })))
+        })
+        .catch(() => {})
+    }
+    if (!radarMapFetched.current) {
+      radarMapFetched.current = true
+      fetch(`${config.api.baseUrl}/radar/map`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (Array.isArray(data)) setAllRadarMapItems(data)
+        })
+        .catch(() => {})
+    }
   }, [showMap])
 
   // Infinite scroll
@@ -898,7 +911,7 @@ export default function LyraRadarPage() {
       {showMap && (
         <div className="radar-map-wrapper">
           <Suspense fallback={<div style={{ height: 'calc(100vh - 180px)' }} />}>
-            <RadarMap items={items} bgSites={bgSites} onHoverItem={handleMapHover} onPinItem={handleMapPin}>
+            <RadarMap items={allRadarMapItems} bgSites={bgSites} onHoverItem={handleMapHover} onPinItem={handleMapPin}>
               {mapActiveItem && (
                 <div
                   className={`radar-map-card-overlay${mapPinnedId ? ' pinned' : ''}`}
