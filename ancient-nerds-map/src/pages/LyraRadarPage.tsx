@@ -595,11 +595,19 @@ export default function LyraRadarPage() {
     return map
   }, [items])
 
+  const mapItemsById = useMemo(() => {
+    const map = new Map<string, RadarItem>()
+    for (const item of allRadarMapItems) map.set(item.id, item)
+    return map
+  }, [allRadarMapItems])
+
   // Hovered item takes priority (preview), pinned is fallback
+  // Prefer full paginated item (has videos/facts/suggestions), fall back to map item
   const mapActiveItem = useMemo(() => {
     const id = mapHoveredId || mapPinnedId
-    return id ? itemsById.get(id) || null : null
-  }, [mapHoveredId, mapPinnedId, itemsById])
+    if (!id) return null
+    return itemsById.get(id) || mapItemsById.get(id) || null
+  }, [mapHoveredId, mapPinnedId, itemsById, mapItemsById])
 
   const handleMapHover = useCallback((id: string | null) => {
     clearTimeout(hoverTimeoutRef.current)
@@ -730,7 +738,39 @@ export default function LyraRadarPage() {
     fetch(`${config.api.baseUrl}/radar/map`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (Array.isArray(data)) setAllRadarMapItems(data)
+        if (Array.isArray(data)) setAllRadarMapItems(data.map((d: Partial<RadarItem>) => ({
+          id: d.id ?? '',
+          source: d.source ?? null,
+          display_name: d.display_name ?? '',
+          enrichment_status: d.enrichment_status ?? 'pending',
+          enrichment_score: d.enrichment_score ?? 0,
+          country: d.country ?? null,
+          site_type: d.site_type ?? null,
+          period_name: d.period_name ?? null,
+          period_start: d.period_start ?? null,
+          lat: d.lat ?? null,
+          lon: d.lon ?? null,
+          mention_count: d.mention_count ?? 0,
+          description: d.description ?? null,
+          wikipedia_url: d.wikipedia_url ?? null,
+          thumbnail_url: d.thumbnail_url ?? null,
+          wikidata_id: d.wikidata_id ?? null,
+          original_name: null,
+          rejection_reason: null,
+          facts: [],
+          videos: [],
+          suggestions: [],
+          external_sources: [],
+          unique_videos: 0,
+          unique_channels: 0,
+          last_mentioned: null,
+          best_match: null,
+          confidence: null,
+          data_sources: [],
+          commons_url: null,
+          nearby_an_site: null,
+        })))
+
       })
       .catch(() => {})
   }, [showMap])
