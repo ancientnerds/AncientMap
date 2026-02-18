@@ -5,8 +5,9 @@ Runs as a long-lived process (Docker entrypoint):
 - Weekly: generate digest article
 
 Local dev usage:
-  python -m pipeline.lyra.orchestrator --once          # single full cycle
-  python -m pipeline.lyra.orchestrator --step identify  # single step only
+  python -m pipeline.lyra.orchestrator --once              # single full cycle
+  python -m pipeline.lyra.orchestrator --step identify     # single step only
+  python -m pipeline.lyra.orchestrator --once --group news  # run only news steps
 """
 
 import argparse
@@ -60,6 +61,12 @@ STEP_ORDER = ["fetch", "retry", "summarize", "match", "posts", "verify", "rescor
 # Unlisted steps run every cycle. With CYCLE_INTERVAL=3600, 24 ≈ daily.
 STEP_INTERVALS: dict[str, int] = {
     "backfill": 24,
+}
+
+# Named groups for --group CLI flag
+STEP_GROUPS: dict[str, list[str]] = {
+    "news":  ["fetch", "retry", "summarize", "match", "posts", "verify", "rescore", "dedup", "screenshots", "backfill"],
+    "radar": ["identify"],
 }
 
 # Tracks how many cycles have elapsed (reset on container restart is fine)
@@ -139,8 +146,8 @@ def _log_cycle_summary(step_results: dict[str, tuple[int, float]], total_elapsed
     logger.info("\n".join(lines))
 
 
-def run_pipeline(settings: LyraSettings, only_step: str | None = None) -> None:
-    """Run one full pipeline cycle, or a single step if only_step is set."""
+def run_pipeline(settings: LyraSettings, only_step: str | None = None, only_group: str | None = None) -> None:
+    """Run one full pipeline cycle, a single step, or a named group of steps."""
     global _cycle_count
 
     # Re-seed channels every cycle so new entries in channels.json are picked up
@@ -151,10 +158,18 @@ def run_pipeline(settings: LyraSettings, only_step: str | None = None) -> None:
     cycle_start = time.time()
     step_results: dict[str, tuple[int, float]] = {}
 
-    steps_to_run = [only_step] if only_step else STEP_ORDER
+    if only_step:
+        steps_to_run = [only_step]
+    elif only_group:
+        group_steps = STEP_GROUPS[only_group]
+        steps_to_run = [s for s in STEP_ORDER if s in group_steps]
+    else:
+        steps_to_run = list(STEP_ORDER)
 
     if only_step:
         logger.info(f"=== Running single step: {only_step} ===")
+    elif only_group:
+        logger.info(f"=== Running group '{only_group}': {', '.join(steps_to_run)} ===")
     else:
         _cycle_count += 1
         logger.info(f"=== Starting pipeline cycle #{_cycle_count} ===")
@@ -980,6 +995,19 @@ def _run_migrations(engine) -> None:
                     "UPDATE user_contributions SET site_type = :canonical WHERE site_type = :raw"
                 ), {"canonical": canonical, "raw": raw})
 
+        # Pipeline efficiency: per-item verification tracking
+        conn.execute(text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP"))
+        # Backfill: mark items in already-verified videos so they don't re-run
+        conn.execute(text("""
+            UPDATE news_items SET verified_at = NOW()
+            WHERE post_text IS NOT NULL
+              AND verified_at IS NULL
+              AND video_id IN (SELECT id FROM news_videos WHERE status IN ('verified', 'rescored'))
+        """))
+
+        # Pipeline efficiency: cap screenshot retry attempts across cycles
+        conn.execute(text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS screenshot_attempts INTEGER DEFAULT 0"))
+
         conn.commit()
 
 
@@ -988,6 +1016,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Lyra news pipeline orchestrator")
     parser.add_argument("--once", action="store_true", help="Run a single pipeline cycle and exit")
     parser.add_argument("--step", choices=list(STEPS.keys()), help="Run only a single named step")
+    parser.add_argument("--group", choices=list(STEP_GROUPS.keys()), help="Run only steps in a named group")
     args = parser.parse_args()
 
     setup_logging()
@@ -1025,12 +1054,12 @@ def main() -> None:
             ))
             session.commit()
 
-    # --once or --step: run and exit
-    if args.once or args.step:
+    # --once or --step or --group: run and exit
+    if args.once or args.step or args.group:
         cycle_status = "ok"
         cycle_error = None
         try:
-            run_pipeline(settings, only_step=args.step)
+            run_pipeline(settings, only_step=args.step, only_group=args.group)
         except Exception as exc:
             logger.exception("Pipeline cycle failed")
             cycle_status = "error"
