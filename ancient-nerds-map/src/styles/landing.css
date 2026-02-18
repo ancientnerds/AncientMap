@@ -191,6 +191,7 @@ body {
   font-size: clamp(1.1rem, 2.5vw, 1.5rem);
   color: #bbb;
   margin-bottom: 40px;
+  text-wrap: balance;
 }
 
 .hero-stats {
@@ -273,6 +274,7 @@ body {
   font-weight: 600;
   letter-spacing: 0.1em;
   margin-bottom: 16px;
+  text-wrap: balance;
 }
 
 .section-desc {
@@ -281,6 +283,7 @@ body {
   max-width: 640px;
   margin: 0 auto;
   line-height: 1.7;
+  text-wrap: pretty;
 }
 
 /* ─── Two-Column Feature Layouts ─── */
@@ -546,6 +549,7 @@ body {
 .tool-card p {
   font-size: 0.85rem;
   color: var(--text-secondary);
+  text-wrap: balance;
 }
 
 /* ─── Sources Section ─── */
