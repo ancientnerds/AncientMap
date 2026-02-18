@@ -7,6 +7,7 @@ import { getCountryFlatFlagUrl, getCountryContinent, CONTINENT_ORDER, Continent 
 import { parseAnyCoordinate, formatCoordinate, applyCoordMask } from '../utils/coordinateParser'
 import { haversineDistance } from '../utils/geoMath'
 import SiteResultItem from './SiteResultItem'
+import HamburgerNav from './layout/HamburgerNav'
 
 interface SourceInfo {
   id: string
@@ -397,7 +398,7 @@ function FilterPanel({
       <div className="panel-header">
         <div className="logo-wrapper">
           <div className="glass-panel logo-panel">
-            <div className="logo-main">ANCIENT NERDS</div>
+            <div className="logo-main">ANCIENT NERDS <HamburgerNav currentPage="globe" /></div>
             <div className="logo-sub">RESEARCH PLATFORM</div>
           </div>
           <span className="beta-badge">BETA</span>

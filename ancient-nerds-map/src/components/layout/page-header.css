@@ -203,6 +203,54 @@
   }
 }
 
+/* ── Hamburger navigation ── */
+.hamburger-nav {
+  position: relative;
+}
+
+.hamburger-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.5));
+  padding: 4px;
+  display: flex;
+  align-items: center;
+}
+.hamburger-btn:hover {
+  color: var(--text-primary, #e8e8e8);
+}
+
+.hamburger-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 200;
+  background: var(--bg-main, #0a1520);
+  border: 1px solid var(--border-color, rgba(0, 180, 180, 0.12));
+  border-radius: 6px;
+  padding: 4px 0;
+  min-width: 160px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.hamburger-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.5));
+  text-decoration: none;
+  font-size: 13px;
+}
+.hamburger-link:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary, #e8e8e8);
+}
+.hamburger-link.active {
+  color: var(--primary-red, #c02023);
+}
+
 /* ── Lyra chat page mode: hide brand text on very small screens ── */
 @media (max-width: 600px) {
   .lyra-chat-page .page-header-brand-text {

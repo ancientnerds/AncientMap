@@ -280,6 +280,7 @@ export default function NewsFeedPage() {
       <PageHeader
         speechBubble="I monitor YouTube archaeology channels and extract discoveries in real-time"
         onAvatarClick={() => setShowLyraProfile(true)}
+        currentPage="news"
       >
         <span className="page-header-title">News Feed</span>
       </PageHeader>
