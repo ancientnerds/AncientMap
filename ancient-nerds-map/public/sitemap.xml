@@ -2,21 +2,60 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
         xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
 
-  <!-- Homepage -->
+  <!-- Homepage / Landing Page -->
   <url>
     <loc>https://ancientnerds.com/</loc>
-    <lastmod>2026-01-13</lastmod>
+    <lastmod>2026-02-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
     <image:image>
-      <image:loc>https://ancientnerds.com/api/og/homepage</image:loc>
-      <image:title>Ancient Nerds Interactive Archaeological Map</image:title>
-      <image:caption>Explore over 6,000 archaeological sites worldwide on an interactive 3D globe</image:caption>
+      <image:loc>https://ancientnerds.com/landing/og-image.png</image:loc>
+      <image:title>Ancient Nerds Interactive Archaeological Research Platform</image:title>
+      <image:caption>Explore over 750,000 archaeological sites worldwide on an interactive 3D globe</image:caption>
     </image:image>
   </url>
 
-  <!-- Note: Individual site pages are dynamically accessible via /?site={id} -->
-  <!-- For comprehensive site indexing, consider implementing a dynamic sitemap API endpoint -->
-  <!-- Example: https://ancientnerds.com/api/sitemap.xml -->
+  <!-- Interactive Globe -->
+  <url>
+    <loc>https://ancientnerds.com/globe.html</loc>
+    <lastmod>2026-02-18</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <!-- Archaeology News -->
+  <url>
+    <loc>https://ancientnerds.com/news.html</loc>
+    <lastmod>2026-02-18</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- Lyra AI Assistant -->
+  <url>
+    <loc>https://ancientnerds.com/lyra.html</loc>
+    <lastmod>2026-02-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <!-- Discovery Radar -->
+  <url>
+    <loc>https://ancientnerds.com/radar.html</loc>
+    <lastmod>2026-02-18</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <!-- Weekly Articles -->
+  <url>
+    <loc>https://ancientnerds.com/articles.html</loc>
+    <lastmod>2026-02-18</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <!-- Note: Individual site pages are dynamically accessible via /globe.html?site={id} -->
+  <!-- For comprehensive site indexing, see the dynamic sitemap at /api/sitemap/sitemap.xml -->
 
 </urlset>
