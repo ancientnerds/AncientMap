@@ -373,7 +373,7 @@ def extract_transcript_segment(transcript_text: str, timestamp_range: str, buffe
 
     lines = transcript_text.split("\n")
     segment_lines = []
-    ts_pattern = re.compile(r"\[(\d{1,2}:\d{2}(?::\d{2})?)\]")
+    ts_pattern = re.compile(r"\[(\d+:\d{2}(?::\d{2})?)\]")
 
     for line in lines:
         m = ts_pattern.match(line)
