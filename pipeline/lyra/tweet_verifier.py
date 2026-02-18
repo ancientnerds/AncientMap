@@ -5,7 +5,6 @@ import logging
 from pathlib import Path
 
 import anthropic
-
 from sqlalchemy import func
 
 from pipeline.database import NewsItem, NewsVideo, get_session
