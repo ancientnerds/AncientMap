@@ -11,7 +11,7 @@
   --border-color: rgba(0, 180, 180, 0.2);
   --text-primary: #ffffff;
   --text-secondary: #888888;
-  --text-muted: #666666;
+  --text-muted: #787878;
   --accent-cyan: rgba(0, 180, 180, 0.3);
   --glow-cyan: rgba(0, 180, 180, 0.1);
 }
@@ -755,7 +755,7 @@ body {
 
 .footer-legal {
   font-size: 0.7rem;
-  color: #555;
+  color: #787878;
   text-decoration: none;
   margin-top: 12px;
 }
