@@ -310,6 +310,9 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 /* Filter panel no longer scrolls - children handle their own scrolling */
 
 .panel-header {
+  display: flex;
+  align-items: center;
+  gap: 2px;
   padding: 0;
   flex-shrink: 0;
 }
@@ -1180,9 +1183,6 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 }
 
 .logo-main {
-  display: flex;
-  align-items: center;
-  gap: 6px;
   font-family: 'Orbitron', sans-serif;
   font-size: 22px;
   font-weight: 700;
