@@ -2,10 +2,10 @@
 
 import json
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 
 import anthropic
-from sqlalchemy import func
 
 from pipeline.database import NewsItem, NewsVideo, get_session
 from pipeline.lyra.config import LyraSettings, call_api, get_anthropic_client, parse_prefilled_json
@@ -172,8 +172,10 @@ def verify_video_posts(
                 if secs is not None:
                     item.timestamp_seconds = secs
 
-            item.verified_at = func.now()
+            item.verified_at = datetime.now(timezone.utc)
             verified += 1
+
+        session.flush()
 
         # Count remaining unverified items for this video
         remaining = session.query(NewsItem).filter(
