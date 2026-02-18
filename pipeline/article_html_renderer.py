@@ -9,8 +9,7 @@ import re
 from datetime import datetime
 from html import escape
 
-import markdown
-
+import markdown  # noqa: I001 — third-party, separated intentionally
 
 BASE_URL = "https://ancientnerds.com"
 
