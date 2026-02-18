@@ -161,6 +161,8 @@ function AppContent() {
   const [standaloneSiteId] = useState(() => getStandaloneSiteId())
 
   const [sites, setSites] = useState<SiteData[]>([])
+  const sitesRef = useRef<SiteData[]>([])
+  sitesRef.current = sites
   const [filteredSites, setFilteredSites] = useState<SiteData[]>([])
   const [_categories, setCategories] = useState<string[]>([])
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
@@ -487,7 +489,7 @@ function AppContent() {
   // Demo API for Puppeteer-driven video recording (?demo=1)
   useEffect(() => {
     if (!isDemoMode()) return
-    registerAppDemoApi({ setFilterMode, setAgeRange, setFlyToCoords, setDemoMode })
+    registerAppDemoApi({ setFilterMode, setAgeRange, setFlyToCoords, setDemoMode, setSelectedSources, handleLoadSources, openSitePopup, closeAllPopups, sitesRef })
   }, [])
 
   // Toggle body class for demo mode (hides all UI except the globe)
@@ -662,6 +664,11 @@ function AppContent() {
       next.delete(siteId)
       return next
     })
+  }, [])
+
+  // Close all popups (used by demo API)
+  const closeAllPopups = useCallback(() => {
+    setOpenPopups(new Map())
   }, [])
 
   // Update minimized state for a popup

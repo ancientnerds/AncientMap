@@ -91,9 +91,12 @@ export class StreamRecorder {
       var stream = canvas.captureStream(0);
       window.__captureStream = stream;
 
+      // VP8 is much faster to encode than VP9, preventing frame drops
+      // when the encoder can't keep up with capture speed. Quality loss
+      // is irrelevant since we re-encode to H.264 anyway.
       var recorder = new MediaRecorder(stream, {
-        mimeType: 'video/webm;codecs=vp9',
-        videoBitsPerSecond: 10_000_000,
+        mimeType: 'video/webm;codecs=vp8',
+        videoBitsPerSecond: 20_000_000,
       });
 
       recorder.ondataavailable = function(e) {
@@ -112,7 +115,7 @@ export class StreamRecorder {
       recorder.start(1000);
       window.__mediaRecorder = recorder;
 
-      console.log('[StreamRecorder] Started. VP9 @ 10 Mbps');
+      console.log('[StreamRecorder] Started. VP8 @ 20 Mbps');
     })()`)
   }
 
@@ -150,6 +153,11 @@ export class StreamRecorder {
           // Fallback for older Chrome: use canvas-level requestFrame
           stream.requestFrame();
         }
+
+        // 4. Yield to event loop so the VP8 encoder can process the frame.
+        // Without this, requestFrame() calls pile up faster than the
+        // encoder can handle, causing frame drops in the WebM.
+        await new Promise(function(r) { setTimeout(r, 0); });
 
         // Progress logging every 30 frames
         if ((i + 1) % 30 === 0 || i === totalFrames - 1) {

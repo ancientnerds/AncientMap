@@ -238,6 +238,7 @@ export interface GlobeRefs {
   isAutoRotating: React.MutableRefObject<boolean>
   manualRotation: React.MutableRefObject<boolean>
   cameraAnimation: React.MutableRefObject<number | null>
+  flyToDuration: React.MutableRefObject<number>
   kmPerPixel: React.MutableRefObject<number>
 
   // ========== Zoom Control Refs ==========

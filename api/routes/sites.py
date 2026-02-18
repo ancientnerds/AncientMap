@@ -1202,7 +1202,8 @@ async def batch_upload_sites(
                 )
                 inserted += 1
             except Exception as e:
-                errors.append({"row": i, "name": site.name, "error": str(e)})
+                logger.error(f"Batch upload row {i} ({site.name}): {e}")
+                errors.append({"row": i, "name": site.name, "error": "Insert failed for this row"})
 
     db.commit()
     cache_delete_pattern("sites:*")

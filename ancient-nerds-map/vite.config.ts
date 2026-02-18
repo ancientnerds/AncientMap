@@ -43,7 +43,7 @@ export default defineConfig({
       manifest: {
         name: 'Ancient Nerds Research Platform',
         short_name: 'Ancient Map',
-        description: 'Interactive 3D globe of 800K+ archaeological sites worldwide',
+        description: 'Interactive 3D globe of 750K+ archaeological sites worldwide',
         theme_color: '#0a1520',
         background_color: '#0a1520',
         display: 'standalone',

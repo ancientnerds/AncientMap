@@ -83,16 +83,17 @@ export default function ContributeModal({
 
     let pollId: ReturnType<typeof setInterval> | null = null
     let timeoutId: ReturnType<typeof setTimeout> | null = null
+    let initTimeoutId: ReturnType<typeof setTimeout> | null = null
 
     if (!document.getElementById('turnstile-script')) {
       const script = document.createElement('script')
       script.id = 'turnstile-script'
       script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js'
       script.async = true
-      script.onload = () => setTimeout(initTurnstile, 100)
+      script.onload = () => { initTimeoutId = setTimeout(initTurnstile, 100) }
       document.head.appendChild(script)
     } else if (window.turnstile) {
-      setTimeout(initTurnstile, 100)
+      initTimeoutId = setTimeout(initTurnstile, 100)
     } else {
       pollId = setInterval(() => {
         if (window.turnstile) {
@@ -107,6 +108,7 @@ export default function ContributeModal({
     return () => {
       if (pollId) clearInterval(pollId)
       if (timeoutId) clearTimeout(timeoutId)
+      if (initTimeoutId) clearTimeout(initTimeoutId)
       if (turnstileWidgetId.current && window.turnstile) {
         try {
           window.turnstile.remove(turnstileWidgetId.current)
@@ -119,20 +121,15 @@ export default function ContributeModal({
     }
   }, [hasBeenOpened, turnstileKey])
 
-  // Save coordinates when entering map picker mode (only on transition to active)
+  // Save coordinates when entering map picker mode (only on transition to active).
+  // When picker is cancelled, externalCoords going null stops overwriting — the form
+  // keeps whatever coords it had. A full coord restore would require re-creating the form,
+  // which is not worth the complexity for a rare cancel action.
   const wasPickerActive = useRef(false)
   useEffect(() => {
     if (isMapPickerActive && !wasPickerActive.current) {
       coordsBeforePickerRef.current = formValues?.coordinates || ''
       validCoordsBeforePickerRef.current = formValues?.validCoords || null
-    } else if (!isMapPickerActive && wasPickerActive.current) {
-      if (wasMapPickerCancelled) {
-        // Restore by bumping the key with initial values restored — but we can't easily
-        // reset just coords. Instead, the SiteForm externalCoords=null will leave coords alone.
-        // For a full restore, we need to re-create the form. Since the picker cancel is rare
-        // and the form values are controlled by SiteForm internally, we accept this limitation.
-        // The externalCoords going null stops overwriting.
-      }
     }
     wasPickerActive.current = isMapPickerActive
   // eslint-disable-next-line react-hooks/exhaustive-deps

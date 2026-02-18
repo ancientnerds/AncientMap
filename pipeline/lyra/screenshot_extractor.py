@@ -100,14 +100,16 @@ def extract_screenshots(settings: LyraSettings) -> int:
     extracted = 0
 
     with get_session() as session:
-        # Find items with a timestamp but no screenshot
+        # Find items with a timestamp but no screenshot (skip permanently failed)
         items = (
             session.query(NewsItem)
             .join(NewsVideo)
             .filter(
                 NewsItem.timestamp_seconds.isnot(None),
                 NewsItem.screenshot_url.is_(None),
+                NewsItem.screenshot_attempts < 9,
             )
+            .limit(100)
             .all()
         )
 
@@ -154,6 +156,7 @@ def extract_screenshots(settings: LyraSettings) -> int:
                     extracted += 1
                     logger.info(f"  Extracted: {filename}")
                 else:
+                    item_by_id[item_id].screenshot_attempts += 3  # 3 attempts this cycle
                     logger.warning(f"  Failed: {video_id}@{filename}")
 
     logger.info(f"Extracted {extracted} screenshots")

@@ -1,7 +1,7 @@
 """
 FastAPI Backend for Ancient Nerds Map.
 
-High-performance API for serving 800K+ archaeological sites
+High-performance API for serving 750K+ archaeological sites
 with spatial clustering and viewport filtering.
 
 Updated: BitNet LLM optimized for faster responses
@@ -162,7 +162,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Ancient Nerds Map API",
-    description="High-performance API for 800K+ archaeological sites",
+    description="High-performance API for 750K+ archaeological sites",
     version="1.0.0",
     lifespan=lifespan,
 )

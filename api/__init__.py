@@ -1,7 +1,7 @@
 """
 Ancient Nerds Map API.
 
-High-performance FastAPI backend for 800K+ archaeological sites.
+High-performance FastAPI backend for 750K+ archaeological sites.
 
 Run with:
     uvicorn api.main:app --reload --port 8000

@@ -5,6 +5,7 @@ All contributions are saved to a JSON file for easy review and editing.
 Later, approved contributions can be integrated into the main database.
 """
 
+import hashlib
 import json
 import logging
 import re
@@ -268,7 +269,7 @@ async def create_contribution(
         "site_type": contribution.site_type,
         "source_url": source_url,
         "submitted_at": datetime.now(UTC).isoformat(),
-        "submitter_ip": client_ip,
+        "submitter_ip": hashlib.sha256(client_ip.encode()).hexdigest()[:16],
     }
     save_contribution(contribution_data)
 

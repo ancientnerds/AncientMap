@@ -15,7 +15,7 @@ import uuid
 from pathlib import Path
 
 import anthropic
-from sqlalchemy import func, text
+from sqlalchemy import case, func, text
 from sqlalchemy.orm import Session
 
 from pipeline.database import (
@@ -197,13 +197,18 @@ def identify_and_enrich_sites(settings: LyraSettings) -> int:
     client = get_anthropic_client(settings)
 
     with get_session() as session:
-        # Get pending candidates ordered by mention count (best data first)
+        # Get candidates: pending items first, then failed, then others
         contributions = session.query(UserContribution).filter(
             UserContribution.source == "lyra",
             UserContribution.enrichment_status.in_(["pending", "enriched", "enriching", "rejected", "failed"]),
             UserContribution.promoted_site_id.is_(None),
         ).order_by(
-            UserContribution.mention_count.desc()
+            case(
+                (UserContribution.enrichment_status == "pending", 0),
+                (UserContribution.enrichment_status == "failed", 1),
+                else_=2,
+            ),
+            UserContribution.mention_count.desc(),
         ).limit(
             settings.max_identifications_per_cycle
         ).all()
@@ -434,7 +439,7 @@ def _process_single(
             session, contribution, identification, wikidata_candidates,
             client, settings, pick_entity_prompt, extract_metadata_prompt,
         )
-        _apply_pre_research(contribution, research)
+        # Pre-research data used only for search names, not field population
 
         # Step 6: GeoNames coordinate fallback — if Wikidata enrichment
         # lacked coordinates, use GeoNames results from the research step
@@ -1141,7 +1146,11 @@ def _escalate_to_sonnet(
 
     for block in response.content:
         if hasattr(block, "text") and block.text:
-            result = parse_prefilled_json(block.text)
+            try:
+                result = parse_prefilled_json(block.text)
+            except (json.JSONDecodeError, KeyError, ValueError):
+                logger.warning("Failed to parse review model escalation response")
+                return None
             break
     else:
         logger.warning("Empty review model escalation response")
@@ -1650,19 +1659,6 @@ def _validate_period_start(contribution: UserContribution) -> None:
         contribution.period_name = None
 
 
-def _apply_pre_research(contribution: UserContribution, research) -> None:
-    """Apply pre-research knowledge to a contribution.
-
-    Pre-research generates alternative search names (useful for finding
-    Wikidata/GeoNames matches) but its guessed country/period/type/description
-    come from AI training data, not verified sources. We do NOT apply those
-    fields — only verified sources (Wikidata, Wikipedia, GeoNames, DB match)
-    should populate the contribution record.
-    """
-    # Pre-research alternative_names are used for search in site_researcher.py.
-    # No fields are applied here — AI guesses are not authoritative data.
-
-
 def _handle_ai_enriched_site(
     session: Session,
     contribution: UserContribution,
@@ -1673,7 +1669,7 @@ def _handle_ai_enriched_site(
 ) -> bool:
     """Handle a site enriched from AI research (no external DB match)."""
     # Apply pre-research knowledge
-    _apply_pre_research(contribution, research)
+    # Pre-research data used only for search names, not field population
 
     # Apply GeoNames coordinates from best_match if available
     if research and research.best_match:

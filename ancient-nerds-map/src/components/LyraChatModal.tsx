@@ -241,7 +241,13 @@ function TypewriterMessage({
 
   return (
     <div ref={containerRef} className={`lyra-chat-msg-text${isTyping ? ' streaming' : ''}`}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents} urlTransform={(url) => url}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents} urlTransform={(url) => {
+        const colonIndex = url.indexOf(':');
+        if (colonIndex === -1) return url;
+        const protocol = url.trim().slice(0, colonIndex);
+        if (['http', 'https', 'mailto'].includes(protocol.toLowerCase())) return url;
+        return '';
+      }}>
         {displayedContent || '\u200B'}
       </ReactMarkdown>
     </div>
@@ -322,14 +328,18 @@ export default function LyraChatModal({
             <button
               className="lyra-inline-site"
               onClick={async () => {
-                if (onFlyToSite) {
-                  onHighlightSites?.([siteId])
-                  if (!isNaN(lon) && !isNaN(lat)) onFlyToSite([lon, lat])
-                }
-                const res = await fetch(`${config.api.baseUrl}/sites/${siteId}`)
-                if (res.ok) {
-                  const detail = await res.json()
-                  setSelectedSite(apiDetailToSiteData(detail))
+                try {
+                  if (onFlyToSite) {
+                    onHighlightSites?.([siteId])
+                    if (!isNaN(lon) && !isNaN(lat)) onFlyToSite([lon, lat])
+                  }
+                  const res = await fetch(`${config.api.baseUrl}/sites/${siteId}`)
+                  if (res.ok) {
+                    const detail = await res.json()
+                    setSelectedSite(apiDetailToSiteData(detail))
+                  }
+                } catch (err) {
+                  console.error('Failed to fetch site detail:', err)
                 }
               }}
             >
@@ -341,7 +351,7 @@ export default function LyraChatModal({
                 title="Copy site name"
                 onClick={(e) => {
                   const btn = e.currentTarget
-                  navigator.clipboard.writeText(text)
+                  navigator.clipboard.writeText(text).catch(() => {})
                   btn.classList.add('copied')
                   setTimeout(() => btn.classList.remove('copied'), 2000)
                 }}
@@ -375,7 +385,7 @@ export default function LyraChatModal({
               title="Copy coordinates"
               onClick={(e) => {
                 const btn = e.currentTarget
-                navigator.clipboard.writeText(`${lat}, ${lon}`)
+                navigator.clipboard.writeText(`${lat}, ${lon}`).catch(() => {})
                 btn.classList.add('copied')
                 setTimeout(() => btn.classList.remove('copied'), 2000)
               }}
@@ -741,7 +751,7 @@ export default function LyraChatModal({
                 return [...prev, ...newSites.filter(s => !ids.has(s.id))]
               })
             }
-          })
+          }).catch((err) => console.error('Failed to prepare suggestions:', err))
         }
       }
 
@@ -795,7 +805,7 @@ export default function LyraChatModal({
       <span className="lyra-chat-page-label">Lyra</span>
       {messages.length === 0 && (
         <div className="lyra-chat-speech-bubble">
-          I can search 800K+ sites, find news, and answer archaeology questions!
+          I can search 750K+ sites, find news, and answer archaeology questions!
         </div>
       )}
       <div className="lyra-chat-header-actions">
@@ -836,7 +846,7 @@ export default function LyraChatModal({
           <div className="lyra-chat-header-name">Lyra Wiskerbyte</div>
           {messages.length === 0 ? (
             <div className="lyra-chat-speech-bubble">
-              I can search 800K+ sites, find news, and answer archaeology questions!
+              I can search 750K+ sites, find news, and answer archaeology questions!
             </div>
           ) : (
             <div className="lyra-chat-header-status">Archaeological Agent</div>
@@ -1011,7 +1021,7 @@ export default function LyraChatModal({
                                   className="lyra-chat-copy-btn"
                                   title="Copy message"
                                   onClick={(e) => {
-                                    navigator.clipboard.writeText(msg.content)
+                                    navigator.clipboard.writeText(msg.content).catch(() => {})
                                     const btn = e.currentTarget
                                     btn.classList.add('copied')
                                     setTimeout(() => btn.classList.remove('copied'), 2000)
@@ -1106,14 +1116,18 @@ export default function LyraChatModal({
                         periodColor={getPeriodColor(site.period)}
                         showInfoBtn={false}
                         onMainClick={async () => {
-                          if (onFlyToSite && site.coordinates) {
-                            onHighlightSites?.([site.id])
-                            onFlyToSite(site.coordinates)
-                          }
-                          const res = await fetch(`${config.api.baseUrl}/sites/${site.id}`)
-                          if (res.ok) {
-                            const detail = await res.json()
-                            setSelectedSite(apiDetailToSiteData(detail))
+                          try {
+                            if (onFlyToSite && site.coordinates) {
+                              onHighlightSites?.([site.id])
+                              onFlyToSite(site.coordinates)
+                            }
+                            const res = await fetch(`${config.api.baseUrl}/sites/${site.id}`)
+                            if (res.ok) {
+                              const detail = await res.json()
+                              setSelectedSite(apiDetailToSiteData(detail))
+                            }
+                          } catch (err) {
+                            console.error('Failed to fetch site detail:', err)
                           }
                         }}
                       />

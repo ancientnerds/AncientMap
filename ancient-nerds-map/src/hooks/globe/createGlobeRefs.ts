@@ -188,6 +188,7 @@ export function useGlobeRefs(): GlobeRefs {
   const isAutoRotating = useRef<boolean>(true)
   const manualRotation = useRef<boolean>(false)
   const cameraAnimation = useRef<number | null>(null)
+  const flyToDuration = useRef<number>(600)
   const kmPerPixel = useRef<number>(1)
 
   // ========== Zoom Control Refs ==========
@@ -438,6 +439,7 @@ export function useGlobeRefs(): GlobeRefs {
     isAutoRotating,
     manualRotation,
     cameraAnimation,
+    flyToDuration,
     kmPerPixel,
 
     // Zoom Control Refs

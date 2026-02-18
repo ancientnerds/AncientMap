@@ -4,7 +4,7 @@ Base URL: `http://localhost:8000/api` (development)
 
 ## Overview
 
-The Ancient Nerds Map API provides access to 800K+ archaeological sites with
+The Ancient Nerds Map API provides access to 750K+ archaeological sites with
 spatial queries, filtering, and AI-powered search capabilities.
 
 ## Authentication
@@ -318,7 +318,7 @@ Get database statistics (cached 5 minutes).
 **Response:**
 ```json
 {
-  "total_sites": 800000,
+  "total_sites": 750000,
   "by_source": {
     "pleiades": 38000,
     "dare": 15000,

@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { config } from '../config'
+import { DataStore } from '../data/DataStore'
 import type { NewsItemData, NewsFeedResponse } from '../types/news'
 import NewsCard from './news/NewsCard'
 import './news/news-cards.css'
@@ -30,11 +31,11 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
   const [online, setOnline] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const fetchFeed = useCallback(async (pageNum: number, append: boolean = false) => {
+  const fetchFeed = useCallback(async (pageNum: number, append: boolean = false, signal?: AbortSignal) => {
     try {
       setLoading(true)
       setError(null)
-      const resp = await fetch(`${config.api.baseUrl}/news/feed?page=${pageNum}&page_size=20&include_speculative=true`)
+      const resp = await fetch(`${config.api.baseUrl}/news/feed?page=${pageNum}&page_size=20&include_speculative=true`, { signal })
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const data: NewsFeedResponse = await resp.json()
       setItems(prev => append ? [...prev, ...data.items] : data.items)
@@ -42,6 +43,7 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
       setHasMore(data.has_more)
       setPage(pageNum)
     } catch (e) {
+      if ((e as Error).name === 'AbortError') return
       setError(e instanceof Error ? e.message : 'Failed to load')
     } finally {
       setLoading(false)
@@ -49,7 +51,10 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
   }, [])
 
   useEffect(() => {
-    fetchFeed(1)
+    const controller = new AbortController()
+    fetchFeed(1, false, controller.signal)
+    DataStore.loadSources()
+    return () => { controller.abort() }
   }, [fetchFeed])
 
   useEffect(() => {
@@ -58,15 +63,16 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
   }, [])
 
   useEffect(() => {
+    const controller = new AbortController()
     const check = () => {
-      fetch(`${config.api.baseUrl}/news/lyra-status`)
+      fetch(`${config.api.baseUrl}/news/lyra-status`, { signal: controller.signal })
         .then(r => r.ok ? r.json() : null)
         .then(d => setOnline(d ? d.status === 'online' : false))
         .catch(() => setOnline(false))
     }
     check()
     const id = setInterval(check, 60_000)
-    return () => clearInterval(id)
+    return () => { clearInterval(id); controller.abort() }
   }, [])
 
   const loadMore = () => {

@@ -123,7 +123,11 @@ def generate_posts_for_video(
     if not text_block:
         logger.warning(f"Empty response content for {video.id}")
         return 0
-    posts_data = parse_prefilled_json(text_block).get("posts", [])
+    try:
+        posts_data = parse_prefilled_json(text_block).get("posts", [])
+    except (json.JSONDecodeError, KeyError, ValueError) as e:
+        logger.warning(f"Failed to parse post generation JSON for {video.id}: {e}")
+        return 0
 
 
     with get_session() as session:

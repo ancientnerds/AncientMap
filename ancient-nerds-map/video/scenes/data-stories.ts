@@ -92,7 +92,7 @@ async function runDataTimeline(ctx: SceneContext): Promise<void> {
   await settle(page)
   await recorder.capture(page, 2)
 
-  // 13-15s: Full range — all 800K visible
+  // 13-15s: Full range — all 750K visible
   console.log('  [13-15s] Full range, all sites...')
   await demo.setAgeRange(-10000, 2025)
   await settle(page)

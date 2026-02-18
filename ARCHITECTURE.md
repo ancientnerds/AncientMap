@@ -147,7 +147,7 @@ AncientMap/
 **Globe Visualization** (`Globe.tsx`)
 - Three.js-based 3D globe rendering
 - WebGL for high-performance rendering
-- Supports 800K+ site markers
+- Supports 750K+ site markers
 - H3 hexagonal clustering for zoom levels
 - Custom shaders for visual effects
 
@@ -187,7 +187,7 @@ AncientMap/
 ### Databases
 
 **PostgreSQL + PostGIS**
-- Primary data store for 800K+ sites
+- Primary data store for 750K+ sites
 - Spatial indexing with PostGIS
 - H3 hexagonal indexes for clustering
 

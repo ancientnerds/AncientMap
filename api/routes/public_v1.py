@@ -12,6 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from api.cache import cache_get, cache_set
+from api.services.admin_auth import get_client_ip
 from api.services.rate_limiter import RateLimiter
 from pipeline.database import get_db
 
@@ -26,7 +27,7 @@ RATE_LIMIT = 10
 
 async def rate_limit_dependency(request: Request, response: Response):
     """FastAPI dependency that enforces rate limiting and sets response headers."""
-    ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or request.client.host
+    ip = get_client_ip(request)
     allowed, remaining, reset_seconds = _limiter.check_with_info(ip)
 
     response.headers["X-RateLimit-Limit"] = str(RATE_LIMIT)
