@@ -33,6 +33,7 @@
   font-weight: 700;
   letter-spacing: 2px;
   color: var(--primary-red, #c02023);
+  white-space: nowrap;
 }
 
 .page-header-divider {
@@ -83,6 +84,10 @@
   border-radius: 8px;
   padding: 4px 10px;
   line-height: 1.4;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* LIVE indicator */
@@ -251,12 +256,7 @@
   color: var(--primary-red, #c02023);
 }
 
-/* ── Lyra chat page mode: hide brand text on very small screens ── */
-@media (max-width: 600px) {
-  .lyra-chat-page .page-header-brand-text {
-    display: none;
-  }
-}
+/* Brand text is always visible — bubble shrinks instead */
 
 /* ── Page header speech bubble (lyra chat, no pointer, inline) ── */
 .page-header .lyra-chat-speech-bubble {
