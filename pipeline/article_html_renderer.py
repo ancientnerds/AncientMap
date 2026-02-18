@@ -218,6 +218,7 @@ def render_article_html(
                 {f'<time datetime="{pub_date}">{pub_display}</time>' if pub_date else ''}
                 {f' &middot; Week of {date_range}' if date_range else ''}
                 &middot; <a href="/articles/">All Articles</a>
+                &middot; <a href="/articles/{slug}/medium" style="color:#c02023">Copy for Medium</a>
             </div>
             <div class="article-body">
                 {body_html}
