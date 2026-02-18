@@ -2,7 +2,7 @@
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import anthropic
@@ -172,7 +172,7 @@ def verify_video_posts(
                 if secs is not None:
                     item.timestamp_seconds = secs
 
-            item.verified_at = datetime.now(timezone.utc)
+            item.verified_at = datetime.now(UTC)
             verified += 1
 
         session.flush()
