@@ -235,13 +235,12 @@ body {
   letter-spacing: 0.15em;
   border-radius: 4px;
   cursor: pointer;
-  transition: box-shadow 0.3s ease, text-shadow 0.3s ease, border-color 0.3s ease, transform 0.1s ease;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
 }
 
 .cta-primary:hover {
-  border-color: rgba(192, 32, 35, 0.8);
-  box-shadow: 0 0 15px rgba(192, 32, 35, 0.4), 0 0 30px rgba(192, 32, 35, 0.15), inset 0 0 15px rgba(192, 32, 35, 0.06);
-  text-shadow: 0 0 10px rgba(192, 32, 35, 0.7), 0 0 20px rgba(192, 32, 35, 0.3);
+  background: var(--primary-red);
+  color: #fff;
 }
 
 .cta-primary:active {
@@ -463,13 +462,12 @@ body {
   letter-spacing: 0.1em;
   border-radius: 4px;
   cursor: pointer;
-  transition: box-shadow 0.3s ease, text-shadow 0.3s ease, border-color 0.3s ease, transform 0.1s ease;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
 }
 
 .cta-secondary:hover {
-  border-color: rgba(192, 32, 35, 0.8);
-  box-shadow: 0 0 15px rgba(192, 32, 35, 0.4), 0 0 30px rgba(192, 32, 35, 0.15), inset 0 0 15px rgba(192, 32, 35, 0.06);
-  text-shadow: 0 0 10px rgba(192, 32, 35, 0.7), 0 0 20px rgba(192, 32, 35, 0.3);
+  background: var(--primary-red);
+  color: #fff;
 }
 
 .cta-secondary:active {
@@ -667,13 +665,12 @@ body {
   letter-spacing: 0.12em;
   border-radius: 4px;
   cursor: pointer;
-  transition: box-shadow 0.3s ease, text-shadow 0.3s ease, border-color 0.3s ease, transform 0.1s ease;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
 }
 
 .cta-discord:hover {
-  border-color: rgba(88, 101, 242, 0.8);
-  box-shadow: 0 0 15px rgba(88, 101, 242, 0.4), 0 0 30px rgba(88, 101, 242, 0.15), inset 0 0 15px rgba(88, 101, 242, 0.06);
-  text-shadow: 0 0 10px rgba(88, 101, 242, 0.7), 0 0 20px rgba(88, 101, 242, 0.3);
+  background: #5865F2;
+  color: #fff;
 }
 
 .cta-discord:active {
