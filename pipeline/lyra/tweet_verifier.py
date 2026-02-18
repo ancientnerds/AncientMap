@@ -64,6 +64,10 @@ def verify_single_post(
     else:
         segment = extract_transcript_segment(transcript_text, item.timestamp_range)
     if not segment:
+        logger.warning(
+            f"Skipping item {item.id}: no transcript segment "
+            f"(timestamp_range={item.timestamp_range!r}, has_transcript={bool(transcript_text)})"
+        )
         return None
 
     if system_prompt is None:
