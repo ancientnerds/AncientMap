@@ -209,23 +209,12 @@ jobs:
             # Rebuild frontend if files changed OR dist is missing key assets
             if echo "$CHANGED" | grep -q "^ancient-nerds-map/" || [ ! -f ancient-nerds-map/dist/an-logo.svg ]; then
               echo "==> Building frontend..."
-              # Move dist out of the way — use timestamp to avoid collision with
-              # leftover dist-old from a previous failed deploy. mv works even on
-              # root-owned files (only needs write on parent dir), rm -rf does not.
-              DIST_BAK="ancient-nerds-map/dist-bak-$(date +%s)"
-              mv ancient-nerds-map/dist "$DIST_BAK" 2>/dev/null || true
-              mv ancient-nerds-map/node_modules "ancient-nerds-map/node_modules-bak-$(date +%s)" 2>/dev/null || true
+              rm -rf ancient-nerds-map/dist ancient-nerds-map/dist-bak-* ancient-nerds-map/dist-old ancient-nerds-map/node_modules-bak-* 2>/dev/null || true
               (cd ancient-nerds-map && npm ci && npm run build)
-              # Verify build output — fail fast if build silently broke
               if [ ! -f ancient-nerds-map/dist/index.html ] || [ ! -f ancient-nerds-map/dist/an-logo.svg ]; then
                 echo "ERROR: Frontend build failed — dist/index.html or dist/an-logo.svg missing!"
-                echo "Restoring previous build..."
-                rm -rf ancient-nerds-map/dist 2>/dev/null || true
-                mv "$DIST_BAK" ancient-nerds-map/dist 2>/dev/null || true
                 exit 1
               fi
-              # Clean up backup and any old leftovers (best-effort)
-              rm -rf "$DIST_BAK" ancient-nerds-map/dist-bak-* ancient-nerds-map/dist-old 2>/dev/null || true
             else
               echo "==> Frontend unchanged, skipping build"
             fi
@@ -262,6 +251,9 @@ jobs:
               fi
               echo " Attempt $i failed, retrying..."
             done
+
+            echo "==> Pruning unused Docker resources..."
+            docker system prune -af 2>/dev/null || true
 
             echo "==> Restarting log streaming..."
             [ -f scripts/follow_logs.sh ] && chmod +x scripts/follow_logs.sh
