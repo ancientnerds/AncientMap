@@ -24,8 +24,17 @@ interface RadarMapItem {
   lon: number | null
 }
 
+interface BgSite {
+  id: string
+  name: string
+  lat: number
+  lon: number
+  score: number
+}
+
 interface RadarMapProps {
   items: RadarMapItem[]
+  bgSites?: BgSite[]
   onHoverItem?: (id: string | null) => void
   onPinItem?: (id: string | null) => void
   children?: ReactNode
@@ -57,12 +66,23 @@ function buildGeoJSON(items: RadarMapItem[]): GeoJSON.FeatureCollection {
   }
 }
 
+function buildBgGeoJSON(sites: BgSite[]): GeoJSON.FeatureCollection {
+  return {
+    type: 'FeatureCollection',
+    features: sites.map(s => ({
+      type: 'Feature' as const,
+      geometry: { type: 'Point' as const, coordinates: [s.lon, s.lat] },
+      properties: { id: s.id, name: s.name, score: s.score },
+    })),
+  }
+}
+
 /** Convert longitude (-180..180) to 0..360 for wrap-safe comparisons */
 function lonToDeg(lon: number): number {
   return lon < 0 ? lon + 360 : lon
 }
 
-export default function RadarMap({ items, onHoverItem, onPinItem, children }: RadarMapProps) {
+export default function RadarMap({ items, bgSites, onHoverItem, onPinItem, children }: RadarMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
   const scanAnimRef = useRef<number>(0)
@@ -96,6 +116,46 @@ export default function RadarMap({ items, onHoverItem, onPinItem, children }: Ra
       setupDarkFog(map)
       applyDarkTealTheme(map)
       mapRef.current = map
+
+      // ── Background sites (all unified_sites, colored by enrichment) ──
+      map.addSource('bg-sites', {
+        type: 'geojson',
+        data: buildBgGeoJSON(bgSites || []),
+      })
+
+      map.addLayer({
+        id: 'bg-sites',
+        type: 'circle',
+        source: 'bg-sites',
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 1.5, 8, 4],
+          'circle-color': ['interpolate', ['linear'], ['get', 'score'],
+            45, '#ff0000',
+            65, '#ffcc00',
+            95, '#00cc44',
+          ],
+          'circle-opacity': ['interpolate', ['linear'], ['zoom'], 1, 0.4, 8, 0.7],
+        },
+      })
+
+      const bgPopup = new mapboxgl.Popup({ closeButton: false, closeOnClick: false, offset: 8 })
+
+      map.on('mouseenter', 'bg-sites', (e) => {
+        map.getCanvas().style.cursor = 'pointer'
+        const f = e.features?.[0]
+        if (f) {
+          const coords = (f.geometry as GeoJSON.Point).coordinates.slice() as [number, number]
+          const pct = Math.round((f.properties!.score / 95) * 100)
+          bgPopup.setLngLat(coords).setHTML(
+            `<strong>${f.properties!.name}</strong><br/>Score: ${pct}%`
+          ).addTo(map)
+        }
+      })
+
+      map.on('mouseleave', 'bg-sites', () => {
+        map.getCanvas().style.cursor = ''
+        bgPopup.remove()
+      })
 
       // ── Sites ──
       map.addSource('radar-sites', {
@@ -273,6 +333,13 @@ export default function RadarMap({ items, onHoverItem, onPinItem, children }: Ra
     const source = map.getSource('radar-sites') as mapboxgl.GeoJSONSource
     if (source) source.setData(geojsonRef.current)
   }, [items]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !map.isStyleLoaded() || !bgSites) return
+    const source = map.getSource('bg-sites') as mapboxgl.GeoJSONSource
+    if (source) source.setData(buildBgGeoJSON(bgSites))
+  }, [bgSites]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="radar-map-container">
