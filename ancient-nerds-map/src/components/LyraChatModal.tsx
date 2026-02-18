@@ -23,6 +23,7 @@ import type { LyraContextType, LyraMessage, SiteHighlight, NewsHighlight, Conver
 import { getCategoryColor, getPeriodColor } from '../constants/colors'
 import { enrichLyraContent, siteNameInContent, extractUnlinkedSiteNames } from '../utils/lyraContentEnricher'
 import { formatRelativeDate } from '../utils/formatters'
+import PageHeader from './layout/PageHeader'
 import NewsCard, { newsHighlightToCardProps } from './news/NewsCard'
 import SiteResultItem from './SiteResultItem'
 import { SitePopupOverlay } from './SitePopupOverlay'
@@ -790,24 +791,11 @@ export default function LyraChatModal({
   const isPage = mode === 'page'
 
   const header = isPage ? (
-    <header className="lyra-chat-page-header">
-      <a href="/globe.html" className="news-page-brand">
-        <img src="/an-logo.svg" alt="" className="news-page-logo" />
-        <span className="news-page-brand-text">ANCIENT NERDS</span>
-      </a>
-      <div className="news-page-divider" />
-      <img
-        src="/lyra.png"
-        alt="Lyra"
-        className="news-page-avatar lyra-avatar-clickable"
-        onClick={() => setShowDossier(true)}
-      />
+    <PageHeader
+      speechBubble="I can search 750K+ sites, find news, and answer archaeology questions!"
+      onAvatarClick={() => setShowDossier(true)}
+    >
       <span className="lyra-chat-page-label">Lyra</span>
-      {messages.length === 0 && (
-        <div className="lyra-chat-speech-bubble">
-          I can search 750K+ sites, find news, and answer archaeology questions!
-        </div>
-      )}
       <div className="lyra-chat-header-actions">
         {messages.length > 0 && (
           <button className="lyra-chat-icon-btn" onClick={startNewChat} title="New chat">
@@ -832,7 +820,7 @@ export default function LyraChatModal({
           </button>
         )}
       </div>
-    </header>
+    </PageHeader>
   ) : (
     <div className="lyra-chat-header">
       <div className="lyra-chat-header-left">

@@ -7,10 +7,16 @@
  * Share URLs use the canonical SEO path: /articles/{slug}
  */
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import { config } from '../config'
 import CitationPopover from '../components/news/CitationPopover'
+import PageHeader from '../components/layout/PageHeader'
+import PageStatsBar from '../components/layout/PageStatsBar'
+import type { StatItem } from '../components/layout/PageStatsBar'
+import AiNoticeBanner from '../components/layout/AiNoticeBanner'
+
+const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
 import type { NewsItemData } from '../types/news'
 import type { NewsCardProps } from '../components/news/NewsCard'
 import '../components/news/news-cards.css'
@@ -88,9 +94,9 @@ function extractHeadings(content: string): { text: string; slug: string }[] {
 }
 
 /** Parse screenshot filename → video_id + timestamp.
- *  Format: /screenshots/news/{video_id}_{timestamp}.jpg  */
+ *  Format: /news/screenshots/{video_id}_{timestamp}.webp  */
 function parseScreenshotUrl(src: string): { videoId: string; timestamp: number } | null {
-  const m = src.match(/\/screenshots\/news\/([^/]+?)_(\d+)\.\w+$/)
+  const m = src.match(/\/news\/screenshots\/([^/]+?)_(\d+)\.\w+$/)
   if (!m) return null
   return { videoId: m[1], timestamp: parseInt(m[2], 10) }
 }
@@ -415,13 +421,13 @@ export default function ArticlesPage() {
   const [view, setView] = useState<'listing' | 'reading'>('listing')
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null)
   const [readProgress, setReadProgress] = useState(0)
+  const [showLyraProfile, setShowLyraProfile] = useState(false)
 
   // Citation hover + pinned state
   const [citationItems, setCitationItems] = useState<Map<number, NewsItemData>>(new Map())
   const [hoverCitation, setHoverCitation] = useState<{ num: number; rect: DOMRect } | null>(null)
-  const [pinnedCitation, setPinnedCitation] = useState<{ num: number; rect: DOMRect } | null>(null)
+  const [pinnedCitations, setPinnedCitations] = useState<{ num: number; rect: DOMRect }[]>([])
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pinnedRef = useRef<HTMLDivElement>(null)
 
   // TOC active heading tracking
   const [activeHeading, setActiveHeading] = useState<string | null>(null)
@@ -439,7 +445,6 @@ export default function ArticlesPage() {
   }
 
   const handleCitationEnter = (num: number, rect: DOMRect) => {
-    if (pinnedCitation) return // don't show hover when a card is pinned
     cancelHoverClose()
     setHoverCitation({ num, rect })
   }
@@ -447,23 +452,31 @@ export default function ArticlesPage() {
   const handleCitationClick = (num: number, rect: DOMRect) => {
     setHoverCitation(null)
     cancelHoverClose()
-    setPinnedCitation({ num, rect })
+    // Toggle: if already pinned, unpin; otherwise add
+    setPinnedCitations(prev => {
+      if (prev.some(p => p.num === num)) return prev.filter(p => p.num !== num)
+      return [...prev, { num, rect }]
+    })
   }
 
-  const dismissPinned = useCallback(() => setPinnedCitation(null), [])
+  const dismissPinnedNum = useCallback((num: number) => {
+    setPinnedCitations(prev => prev.filter(p => p.num !== num))
+  }, [])
 
-  // Click-outside listener for pinned citation
+  // Click-outside listener for pinned citations
   useEffect(() => {
-    if (!pinnedCitation) return
+    if (pinnedCitations.length === 0) return
     const onMouseDown = (e: MouseEvent) => {
-      const popover = document.querySelector('.citation-popover--pinned')
-      if (popover && !popover.contains(e.target as Node)) {
-        setPinnedCitation(null)
+      const popovers = document.querySelectorAll('.citation-popover--pinned')
+      for (const popover of popovers) {
+        if (popover.contains(e.target as Node)) return
       }
+      // Clicked outside all pinned cards — dismiss all
+      setPinnedCitations([])
     }
     document.addEventListener('mousedown', onMouseDown)
     return () => document.removeEventListener('mousedown', onMouseDown)
-  }, [pinnedCitation])
+  }, [pinnedCitations])
 
   // Resolve hash → article once articles are loaded
   const resolveHash = useCallback((articleList: Article[]) => {
@@ -523,7 +536,7 @@ export default function ArticlesPage() {
     if (view !== 'reading' || !selectedArticle) {
       setCitationItems(new Map())
       setHoverCitation(null)
-      setPinnedCitation(null)
+      setPinnedCitations([])
       return
     }
     let cancelled = false
@@ -603,21 +616,15 @@ export default function ArticlesPage() {
     [citationItems, hasCitations],
   )
 
-  // Determine the active citation to show (pinned takes priority)
-  const activeCitation = pinnedCitation ?? hoverCitation
-  const isPinned = !!pinnedCitation
-
   const hero = articles[0] ?? null
   const older = articles.slice(1)
 
   return (
     <div className="articles-page">
-      <header className="articles-page-header">
-        <a href="/globe.html" className="articles-page-brand">
-          <img src="/an-logo.svg" alt="" className="articles-page-logo" />
-          <span className="articles-page-brand-text">ANCIENT NERDS</span>
-        </a>
-        <div className="articles-page-divider" />
+      <PageHeader
+        speechBubble="I write weekly digests from the latest archaeology videos"
+        onAvatarClick={() => setShowLyraProfile(true)}
+      >
         {view === 'listing' ? (
           <span className="articles-page-title">Articles</span>
         ) : (
@@ -628,12 +635,23 @@ export default function ArticlesPage() {
             All Articles
           </button>
         )}
-      </header>
+      </PageHeader>
+
+      {/* Stats bar — listing view only */}
+      {view === 'listing' && !loading && !error && articles.length > 0 && (
+        <PageStatsBar items={[
+          { value: articles.length, label: 'articles' } as StatItem,
+          { value: formatDateRange(articles[articles.length - 1].week_start, articles[0].week_end), label: '', sep: '·' } as StatItem,
+        ]} />
+      )}
 
       {view === 'reading' && (
-        <div className="articles-progress-track">
-          <div className="articles-progress-bar" style={{ width: `${readProgress}%` }} />
-        </div>
+        <>
+          <div className="articles-progress-track">
+            <div className="articles-progress-bar" style={{ width: `${readProgress}%` }} />
+          </div>
+          <AiNoticeBanner message="This article is AI-generated from YouTube video content. Always verify with original sources." />
+        </>
       )}
 
       <main className="articles-page-content">
@@ -733,9 +751,6 @@ export default function ArticlesPage() {
                   <CopyLinkButton article={selectedArticle} />
                 </div>
               </div>
-              <div className="articles-ai-notice">
-                This article is AI-generated from YouTube video content. Always verify with original sources.
-              </div>
               <div className="articles-reader-body">
                 <ReactMarkdown components={mdComponents}>
                   {enrichCitations(hasCitations ? stripSourcesList(selectedArticle.content) : selectedArticle.content)}
@@ -753,18 +768,27 @@ export default function ArticlesPage() {
           </div>
         )}
 
-        {/* Citation popover (pinned takes priority over hover) */}
-        {activeCitation && citationItems.has(activeCitation.num) && (
-          <div ref={pinnedRef}>
-            <CitationPopover
-              cardProps={itemToCardProps(citationItems.get(activeCitation.num)!)}
-              anchorRect={activeCitation.rect}
-              onMouseEnter={isPinned ? () => {} : cancelHoverClose}
-              onMouseLeave={isPinned ? () => {} : scheduleHoverClose}
-              pinned={isPinned}
-              onClose={dismissPinned}
-            />
-          </div>
+        {/* Pinned citation popovers (multiple) */}
+        {pinnedCitations.map(pin => citationItems.has(pin.num) && (
+          <CitationPopover
+            key={pin.num}
+            cardProps={itemToCardProps(citationItems.get(pin.num)!)}
+            anchorRect={pin.rect}
+            onMouseEnter={() => {}}
+            onMouseLeave={() => {}}
+            pinned
+            onClose={() => dismissPinnedNum(pin.num)}
+          />
+        ))}
+
+        {/* Hover citation popover */}
+        {hoverCitation && citationItems.has(hoverCitation.num) && (
+          <CitationPopover
+            cardProps={itemToCardProps(citationItems.get(hoverCitation.num)!)}
+            anchorRect={hoverCitation.rect}
+            onMouseEnter={cancelHoverClose}
+            onMouseLeave={scheduleHoverClose}
+          />
         )}
       </main>
 
@@ -779,6 +803,12 @@ export default function ArticlesPage() {
             <polyline points="18 15 12 9 6 15" />
           </svg>
         </button>
+      )}
+
+      {showLyraProfile && (
+        <Suspense fallback={null}>
+          <LyraProfileModal onClose={() => setShowLyraProfile(false)} />
+        </Suspense>
       )}
     </div>
   )

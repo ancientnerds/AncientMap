@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react'
 import { config } from '../config'
 import { CATEGORY_COLORS, PERIOD_ORDER, SORTED_PERIODS, getCategoryColor, getPeriodColor, SOURCE_CONFIG } from '../constants/colors'
 import { resolvePeriod } from '../data/sites'
 import type { SiteData } from '../data/sites'
 import { SitePopupOverlay } from '../components/SitePopupOverlay'
+import PageHeader from '../components/layout/PageHeader'
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
 import { exportCSV, exportJSON, exportGeoJSON, parseCSV, parseJSON, parseGeoJSON } from '../utils/exportFormats'
 import type { ParsedSite } from '../utils/exportFormats'
@@ -12,6 +13,8 @@ import PinAuthModal from '../components/PinAuthModal'
 import SiteForm from '../components/SiteForm'
 import type { SiteFormValues } from '../components/SiteForm'
 import '../styles/db-audit.css'
+
+const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
 
 declare const __BUILD_HASH__: string
 const CACHE_BUSTER = `_v=${__BUILD_HASH__}`
@@ -225,6 +228,9 @@ export default function DbAuditPage() {
 
   // Site popup
   const [popupSite, setPopupSite] = useState<SiteData | null>(null)
+
+  // Lyra profile
+  const [showLyraProfile, setShowLyraProfile] = useState(false)
 
   // Source filter
   const [sourceFilter, setSourceFilter] = useState('all')
@@ -950,30 +956,11 @@ export default function DbAuditPage() {
   return (
     <div className="db-page">
       {/* Header */}
-      <div className="db-header">
-        <div className="db-header-left">
-          <span className="db-logo">ANCIENT NERDS</span>
-          <span className="db-header-sep">&middot;</span>
-          <span className="db-header-title">Database Audit</span>
-          <div className="db-source-badge" style={sourceFilter !== 'all' ? {
-            borderColor: SOURCE_CONFIG[sourceFilter]?.color,
-            background: SOURCE_CONFIG[sourceFilter]?.color + '15',
-          } : undefined}>
-            <span className="db-source-dot" style={{
-              background: sourceFilter !== 'all' ? SOURCE_CONFIG[sourceFilter]?.color : 'var(--text-secondary)'
-            }} />
-            <select value={sourceFilter} onChange={e => setSourceFilter(e.target.value)}>
-              <option value="all">All Databases</option>
-              {Object.entries(SOURCE_CONFIG).map(([id, cfg]) => (
-                <option key={id} value={id}>{cfg.name}</option>
-              ))}
-            </select>
-          </div>
-          {snapshots.length >= 2 && (
-            <button className="db-compare-btn" onClick={openDiffModal}>Compare</button>
-          )}
-        </div>
-        <div className="db-header-right">
+      <PageHeader
+        speechBubble="I help maintain and enrich the sites database"
+        onAvatarClick={() => setShowLyraProfile(true)}
+        rightSection={
+        <>
           {/* Qdrant sync widget */}
           {qdrantStatus && (
             <div className="db-qdrant-widget" ref={qdrantRef}>
@@ -1056,8 +1043,27 @@ export default function DbAuditPage() {
               Unlock Editing
             </button>
           )}
+        </>
+      }>
+        <span className="db-header-title">Database Audit</span>
+        <div className="db-source-badge" style={sourceFilter !== 'all' ? {
+          borderColor: SOURCE_CONFIG[sourceFilter]?.color,
+          background: SOURCE_CONFIG[sourceFilter]?.color + '15',
+        } : undefined}>
+          <span className="db-source-dot" style={{
+            background: sourceFilter !== 'all' ? SOURCE_CONFIG[sourceFilter]?.color : 'var(--text-secondary)'
+          }} />
+          <select value={sourceFilter} onChange={e => setSourceFilter(e.target.value)}>
+            <option value="all">All Databases</option>
+            {Object.entries(SOURCE_CONFIG).map(([id, cfg]) => (
+              <option key={id} value={id}>{cfg.name}</option>
+            ))}
+          </select>
         </div>
-      </div>
+        {snapshots.length >= 2 && (
+          <button className="db-compare-btn" onClick={openDiffModal}>Compare</button>
+        )}
+      </PageHeader>
 
       {/* Per-source version selectors */}
       {snapshots.length > 0 && (
@@ -1466,6 +1472,12 @@ export default function DbAuditPage() {
         onSuccess={handleAuthSuccess}
         variant="admin"
       />
+
+      {showLyraProfile && (
+        <Suspense fallback={null}>
+          <LyraProfileModal onClose={() => setShowLyraProfile(false)} />
+        </Suspense>
+      )}
 
       {/* Pending changes bar */}
       {pendingEdits.size > 0 && (
