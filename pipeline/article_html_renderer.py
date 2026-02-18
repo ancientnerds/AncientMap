@@ -91,6 +91,15 @@ _SHARED_CSS = """
     }
     .news-item .source-link { font-size: 13px; color: #708890; }
 
+    /* Copy link button */
+    .copy-link-btn {
+        background: #1a3a44; color: #c02023; border: 1px solid #2a4a54;
+        padding: 2px 10px; border-radius: 4px; font-size: 13px;
+        cursor: pointer; font-family: inherit; vertical-align: middle;
+    }
+    .copy-link-btn:hover { background: #2a4a54; }
+    .copy-ok { display: none; color: #4a9; font-size: 13px; margin-left: 4px; }
+
     /* Footer */
     .footer {
         border-top: 1px solid #1a3a44; padding: 24px;
@@ -219,6 +228,8 @@ def render_article_html(
                 {f' &middot; Week of {date_range}' if date_range else ''}
                 &middot; <a href="/articles/">All Articles</a>
                 &middot; <a href="/articles/{slug}/medium" style="color:#c02023">Copy for Medium</a>
+                &middot; <button onclick="copyLink()" class="copy-link-btn" title="Copy shareable link">Copy Link</button>
+                <span class="copy-ok" id="copyOk">Copied!</span>
             </div>
             <div class="article-body">
                 {body_html}
@@ -226,6 +237,15 @@ def render_article_html(
         </article>
     </main>
     {_footer_html()}
+    <script>
+    function copyLink() {{
+        navigator.clipboard.writeText("{canonical}").then(function() {{
+            var el = document.getElementById("copyOk");
+            el.style.display = "inline";
+            setTimeout(function() {{ el.style.display = "none"; }}, 2000);
+        }});
+    }}
+    </script>
 </body>
 </html>"""
 
@@ -251,12 +271,16 @@ def render_article_listing_html(
             except (ValueError, TypeError):
                 pub_display = pub
 
+        article_url = f"{BASE_URL}/articles/{slug}"
         cards.append(f"""
         <div class="article-card">
             <h2><a href="/articles/{slug}">{e_title}</a></h2>
             <div class="meta"><time datetime="{pub}">{pub_display}</time></div>
             <p>{e_summary}</p>
             <a href="/articles/{slug}" class="read-more">Read full article &rarr;</a>
+            <div style="margin-top:8px;font-size:13px;color:#506870">
+                Share: <code style="background:#132830;padding:2px 8px;border-radius:3px;user-select:all;color:#90a8b0">{article_url}</code>
+            </div>
         </div>""")
 
     cards_html = "\n".join(cards) if cards else "<p>No articles published yet. Check back soon!</p>"
