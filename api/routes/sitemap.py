@@ -5,12 +5,14 @@ Generates XML sitemaps for search engine indexing.
 """
 
 from datetime import datetime
+from html import escape
 
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from pipeline.database import get_db
+from pipeline.article_html_renderer import slugify
+from pipeline.database import NewsArticle, get_db
 
 router = APIRouter()
 
@@ -66,6 +68,21 @@ async def get_sitemap(db: Session = Depends(get_db)):
             f'    <lastmod>{lastmod}</lastmod>',
             '    <changefreq>monthly</changefreq>',
             '    <priority>0.8</priority>',
+            '  </url>',
+        ])
+
+    # --- Articles (high SEO value: keyword-rich, regularly updated) ---
+    articles = db.query(NewsArticle).order_by(NewsArticle.created_at.desc()).all()
+    for article in articles:
+        slug = slugify(article.title)
+        article_url = f"{BASE_URL}/articles/{slug}"
+        lastmod = article.published_at.strftime("%Y-%m-%d") if article.published_at else today
+        xml_parts.extend([
+            '  <url>',
+            f'    <loc>{escape(article_url)}</loc>',
+            f'    <lastmod>{lastmod}</lastmod>',
+            '    <changefreq>monthly</changefreq>',
+            '    <priority>0.9</priority>',
             '  </url>',
         ])
 

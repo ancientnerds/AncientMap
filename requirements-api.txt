@@ -33,6 +33,9 @@ anthropic>=0.40
 # --- Image processing ---
 Pillow>=10.0.0
 
+# --- Content rendering ---
+markdown>=3.5.0
+
 # --- Utilities ---
 python-dotenv>=1.0.0
 pyyaml>=6.0.0
