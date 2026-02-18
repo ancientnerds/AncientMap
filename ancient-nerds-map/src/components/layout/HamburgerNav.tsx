@@ -11,9 +11,10 @@ const NAV_ITEMS = [
 
 interface HamburgerNavProps {
   currentPage?: string
+  openInNewTab?: boolean
 }
 
-export default function HamburgerNav({ currentPage }: HamburgerNavProps) {
+export default function HamburgerNav({ currentPage, openInNewTab }: HamburgerNavProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -54,6 +55,7 @@ export default function HamburgerNav({ currentPage }: HamburgerNavProps) {
               href={item.href}
               className={`hamburger-link${currentPage === item.page ? ' active' : ''}`}
               onClick={() => setOpen(false)}
+              {...(openInNewTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d={item.icon} />
