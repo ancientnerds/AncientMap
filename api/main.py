@@ -27,6 +27,7 @@ from fastapi.staticfiles import StaticFiles
 
 from api.cache import cache_get, cache_set, get_redis_client
 from api.routes import (
+    articles_html,
     content,
     contributions,
     lyra,
@@ -188,6 +189,9 @@ app.add_middleware(
 
 # GZip compression for responses > 500 bytes (reduces JSON payload 3-5x)
 app.add_middleware(GZipMiddleware, minimum_size=500)
+
+# SEO: HTML pages for crawlers (no /api/ prefix — served via nginx proxy)
+app.include_router(articles_html.router, tags=["articles-html"])
 
 # Include routers
 app.include_router(sites.router, prefix="/api/sites", tags=["sites"])

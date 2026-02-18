@@ -47,7 +47,7 @@
     <priority>0.7</priority>
   </url>
 
-  <!-- Weekly Articles -->
+  <!-- Weekly Articles (SPA) -->
   <url>
     <loc>https://ancientnerds.com/articles.html</loc>
     <lastmod>2026-02-18</lastmod>
@@ -55,7 +55,24 @@
     <priority>0.7</priority>
   </url>
 
+  <!-- SEO: Crawlable article listing (full HTML, no JS required) -->
+  <url>
+    <loc>https://ancientnerds.com/articles/</loc>
+    <lastmod>2026-02-18</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- SEO: Crawlable news archive (full HTML, no JS required) -->
+  <url>
+    <loc>https://ancientnerds.com/news-archive/</loc>
+    <lastmod>2026-02-18</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+
   <!-- Note: Individual site pages are dynamically accessible via /globe.html?site={id} -->
+  <!-- Individual articles are in the dynamic sitemap at /api/sitemap/sitemap.xml -->
   <!-- For comprehensive site indexing, see the dynamic sitemap at /api/sitemap/sitemap.xml -->
 
 </urlset>
