@@ -15,14 +15,21 @@ function asyncLandingCss() {
     transformIndexHtml: {
       order: 'post' as const,
       handler(html: string, ctx: { filename: string }) {
+        // Make registerSW non-render-blocking on all pages (it already waits for 'load' internally)
+        html = html.replace(
+          '<script id="vite-plugin-pwa:register-sw" src="/registerSW.js">',
+          '<script id="vite-plugin-pwa:register-sw" src="/registerSW.js" defer>'
+        )
         if (!ctx.filename.endsWith('index.html')) return html
-        return html.replace(
+        // Make landing CSS non-render-blocking (critical CSS is inlined)
+        html = html.replace(
           /<link\b([^>]*)href="(\/assets\/landing-[^"]+\.css)"([^>]*)>/g,
           (_match: string, before: string, href: string, after: string) => {
             if (_match.includes('media=')) return _match
             return `<link rel="stylesheet" href="${href}" media="print" onload="this.media='all'" />\n    <noscript><link rel="stylesheet" href="${href}" /></noscript>`
           }
         )
+        return html
       }
     }
   }
@@ -58,7 +65,6 @@ export default defineConfig({
   },
   plugins: [
     react(),
-    asyncLandingCss(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
@@ -192,6 +198,7 @@ export default defineConfig({
           }
         ]
       }
-    })
+    }),
+    asyncLandingCss(),
   ],
 })
