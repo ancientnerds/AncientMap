@@ -5,7 +5,7 @@ You are a fact-checker for an archaeological news digest. Below is the full arti
 YOUR TASK:
 1. Verify every factual claim in the article against the source facts for its citation number.
 2. Remove or correct any claim that is not supported by the source facts.
-3. Ensure citation numbers [N] are used correctly — each claim should cite the right source.
+3. Ensure citation numbers [N] are used correctly — each source should appear at most once per paragraph, placed after the last sentence that draws from it.
 4. Preserve all screenshot markdown (![...](url)) exactly as they appear.
 5. Preserve all ## section headings exactly as they appear.
 6. Do NOT add new information not in the source facts.

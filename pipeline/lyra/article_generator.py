@@ -286,7 +286,7 @@ def _verify_article(
         response = call_api(
             client,
             model=settings.model_verify,
-            max_tokens=4096,
+            max_tokens=16384,
             system=[{
                 "type": "text",
                 "text": (
@@ -306,11 +306,13 @@ def _verify_article(
     text = next((b.text for b in response.content if hasattr(b, "text")), "")
 
     # Prefill guarantees the response starts inside [START_VERIFIED].
-    # Strip [END_VERIFIED] and anything after it; if missing, use full response.
+    # Strip [END_VERIFIED] and anything after it.
     end_idx = text.find("[END_VERIFIED]")
     if end_idx != -1:
         return text[:end_idx].strip()
-    return text.strip()
+    # Missing end marker means truncation — fall back to unverified body
+    logger.warning("Verification response truncated (no [END_VERIFIED] marker), using unverified body")
+    return full_body
 
 
 def _generate_headline_tldr(
@@ -326,7 +328,7 @@ def _generate_headline_tldr(
         response = call_api(
             client,
             model=settings.model_article,
-            max_tokens=8192,
+            max_tokens=1024,
             system=[{
                 "type": "text",
                 "text": (
