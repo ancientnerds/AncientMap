@@ -253,7 +253,8 @@ jobs:
             done
 
             echo "==> Pruning unused Docker resources..."
-            docker system prune -af 2>/dev/null || true
+            docker image prune -f 2>/dev/null || true
+            docker builder prune -af 2>/dev/null || true
 
             echo "==> Restarting log streaming..."
             [ -f scripts/follow_logs.sh ] && chmod +x scripts/follow_logs.sh
