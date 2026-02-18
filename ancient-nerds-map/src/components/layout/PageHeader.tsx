@@ -46,14 +46,14 @@ export default function PageHeader({ children, rightSection, speechBubble, onAva
       </a>
       <div className="page-header-divider" />
       {children}
-      <div className="page-header-lyra">
-        {speechBubble && <div className="page-header-bubble">{speechBubble}</div>}
-        <img
-          src="/lyra.png"
-          alt="Lyra Wiskerbyte"
-          className="page-header-avatar lyra-avatar-clickable"
-          onClick={onAvatarClick}
-        />
+      <img
+        src="/lyra.png"
+        alt="Lyra Wiskerbyte"
+        className="page-header-avatar lyra-avatar-clickable"
+        onClick={onAvatarClick}
+      />
+      {speechBubble && <div className="page-header-bubble">{speechBubble}</div>}
+      <div className="page-header-live-wrap">
         <LiveIndicator />
       </div>
       {rightSection && <div className="page-header-right">{rightSection}</div>}

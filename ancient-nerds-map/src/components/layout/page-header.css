@@ -48,16 +48,13 @@
   gap: 10px;
 }
 
-/* ── Lyra section — avatar + bubble + LIVE, pushed to the right ── */
-.page-header-lyra {
+/* ── LIVE indicator wrapper — pushed to the far right ── */
+.page-header-live-wrap {
   margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
   flex-shrink: 0;
 }
 
-/* Avatar */
+/* Avatar (inline, right after page title) */
 .page-header-avatar {
   width: 30px;
   height: 30px;
