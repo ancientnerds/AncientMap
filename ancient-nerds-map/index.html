@@ -156,7 +156,6 @@
     <section class="hero">
       <div class="hero-bg" id="heroBg">
         <video muted loop playsinline preload="none" poster="/landing/hero-poster.webp" class="hero-video" id="heroVideo" width="1920" height="1080">
-          <source src="/landing/video/hero.mp4" type="video/mp4" />
           <track kind="descriptions" src="/landing/hero-captions.vtt" srclang="en" label="English" />
         </video>
       </div>
@@ -476,16 +475,19 @@
         if (skipVideo) return;
 
         function startVideo() {
-          v.preload = 'auto';
+          var source = document.createElement('source');
+          source.src = '/landing/video/hero.mp4';
+          source.type = 'video/mp4';
+          v.appendChild(source);
           v.load();
           v.play().catch(function() {});
         }
 
         if (document.readyState === 'complete') {
-          (typeof requestIdleCallback === 'function' ? requestIdleCallback : setTimeout)(startVideo);
+          setTimeout(startVideo, 8000);
         } else {
           window.addEventListener('load', function() {
-            (typeof requestIdleCallback === 'function' ? requestIdleCallback : setTimeout)(startVideo);
+            setTimeout(startVideo, 8000);
           });
         }
       })();
