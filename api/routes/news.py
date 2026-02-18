@@ -5,9 +5,10 @@ Serves Lyra pipeline news items, channels, articles, and stats.
 """
 
 import logging
+import re
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import distinct, func, text
 from sqlalchemy.orm import Session, joinedload
@@ -452,6 +453,117 @@ async def get_news_articles(
         )
         for a in articles
     ]
+
+
+# Regex to parse citation lines from the ### Sources section:
+# e.g. "1. [Channel — "Title"](https://youtu.be/VIDEO_ID?t=123) (2:03)"
+_CITATION_RE = re.compile(
+    r"^(\d+)\.\s*\[.*?\]\(https?://youtu\.be/([^?\s)]+)(?:\?t=(\d+))?\)",
+    re.MULTILINE,
+)
+
+
+@router.get("/articles/{article_id}/citations")
+async def article_citations(article_id: int, db: Session = Depends(get_db)):
+    """Return news items keyed by citation number for hover cards."""
+    cache_key = f"news:article-citations:{article_id}"
+    cached = cache_get(cache_key)
+    if cached:
+        return cached
+
+    article = db.query(NewsArticle).filter(NewsArticle.id == article_id).first()
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+
+    # Parse (citation_number, video_id, timestamp_seconds) from Sources section
+    sources_idx = article.content.find("### Sources")
+    if sources_idx == -1:
+        return {}
+    sources_text = article.content[sources_idx:]
+    parsed = [
+        (int(m.group(1)), m.group(2), int(m.group(3)) if m.group(3) else None)
+        for m in _CITATION_RE.finditer(sources_text)
+    ]
+    if not parsed:
+        return {}
+
+    # Fetch all relevant news items in one query
+    video_ids = list({vid for _, vid, _ in parsed})
+    items = (
+        db.query(NewsItem)
+        .filter(NewsItem.video_id.in_(video_ids), NewsItem.post_text.isnot(None))
+        .options(
+            joinedload(NewsItem.video).joinedload(NewsVideo.channel),
+            joinedload(NewsItem.site),
+        )
+        .all()
+    )
+
+    # Build lookup: (video_id, timestamp_seconds) → NewsItem
+    by_vid_ts: dict[tuple[str, int | None], NewsItem] = {}
+    by_vid: dict[str, list[NewsItem]] = {}
+    for item in items:
+        by_vid_ts[(item.video_id, item.timestamp_seconds)] = item
+        by_vid.setdefault(item.video_id, []).append(item)
+
+    # Match each citation to a NewsItem
+    result: dict[str, NewsItemResponse] = {}
+    for cit_num, video_id, ts in parsed:
+        matched = by_vid_ts.get((video_id, ts))
+        if not matched and video_id in by_vid:
+            # Fallback: closest timestamp match for this video
+            candidates = by_vid[video_id]
+            if ts is not None:
+                candidates.sort(key=lambda i: abs((i.timestamp_seconds or 0) - ts))
+            matched = candidates[0]
+        if not matched:
+            continue
+
+        video = matched.video
+        channel = video.channel if video else None
+        site = matched.site
+        youtube_url = f"https://www.youtube.com/watch?v={video.id}" if video else None
+        youtube_deep_url = None
+        if video and matched.timestamp_seconds:
+            youtube_deep_url = f"https://www.youtube.com/watch?v={video.id}&t={matched.timestamp_seconds}s"
+
+        result[str(cit_num)] = NewsItemResponse(
+            id=matched.id,
+            headline=matched.headline,
+            summary=matched.summary,
+            post_text=matched.post_text,
+            facts=matched.facts,
+            timestamp_range=matched.timestamp_range,
+            timestamp_seconds=matched.timestamp_seconds,
+            screenshot_url=matched.screenshot_url,
+            youtube_url=youtube_url,
+            youtube_deep_url=youtube_deep_url,
+            video=NewsVideoInfo(
+                id=video.id,
+                title=video.title,
+                channel_name=channel.name if channel else "Unknown",
+                channel_id=video.channel_id,
+                published_at=video.published_at.isoformat() if video.published_at else "",
+                thumbnail_url=video.thumbnail_url,
+                duration_minutes=video.duration_minutes,
+            ),
+            created_at=matched.created_at.isoformat() if matched.created_at else "",
+            site_id=str(site.id) if site else None,
+            site_name=site.name if site else None,
+            site_lat=site.lat if site else None,
+            site_lon=site.lon if site else None,
+            site_type=site.site_type if site else None,
+            site_period_name=site.period_name if site else None,
+            site_period_start=site.period_start if site else None,
+            site_country=site.country if site else None,
+            site_name_extracted=matched.site_name_extracted if not site else None,
+            significance=matched.significance,
+            news_category=matched.news_category,
+            speculative_tag=matched.speculative_tag,
+        )
+
+    cache_set(cache_key, result, ttl=3600)  # 1 hour cache
+    return result
 
 
 @router.get("/stats", response_model=NewsStatsResponse)
