@@ -1,0 +1,207 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Shared PageHeader + AiNoticeBanner + PageStatsBar
+   Single source of truth for all page headers (news, radar, articles, db, lyra chat)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 20px;
+  background: var(--bg-main, #0a1520);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.page-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.page-header-logo {
+  width: 22px;
+  height: 22px;
+}
+
+.page-header-brand-text {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--primary-red, #c02023);
+}
+
+.page-header-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--border-color, rgba(0, 180, 180, 0.12));
+  flex-shrink: 0;
+}
+
+.page-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ── Lyra section — avatar + bubble + LIVE, pushed to the right ── */
+.page-header-lyra {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Avatar */
+.page-header-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid rgba(192, 32, 35, 0.5);
+  flex-shrink: 0;
+  object-fit: cover;
+}
+
+/* Speech bubble */
+.page-header-bubble {
+  font-size: 11px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.5));
+  background: rgba(192, 32, 35, 0.08);
+  border: 1px solid rgba(192, 32, 35, 0.2);
+  border-radius: 8px;
+  padding: 4px 10px;
+  max-width: 280px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* LIVE indicator */
+.page-header-live {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+}
+
+.page-header-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #00cc66;
+  box-shadow: 0 0 6px rgba(0, 204, 102, 0.6);
+  animation: page-header-live-pulse 2s ease infinite;
+}
+
+.page-header-live.offline .page-header-live-dot {
+  background: #666;
+  box-shadow: none;
+  animation: none;
+}
+
+.page-header-live-text {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: #00cc66;
+}
+
+.page-header-live.offline .page-header-live-text {
+  color: #666;
+}
+
+@keyframes page-header-live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ── AI notice banner ── */
+.ai-notice-banner {
+  text-align: center;
+  padding: 5px 20px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  background: rgba(0, 0, 0, 0.15);
+  border-bottom: 1px solid rgba(0, 180, 180, 0.06);
+}
+
+/* ── Stats bar below header ── */
+.page-stats-bar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 20px 5px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.35);
+  border-bottom: 1px solid var(--border-color, rgba(0, 180, 180, 0.06));
+  background: var(--bg-main, #0a1520);
+  white-space: nowrap;
+  overflow-x: auto;
+}
+
+.page-stats-bar strong {
+  color: var(--primary-red, #c02023);
+  font-weight: 700;
+}
+
+.psb-sep {
+  color: rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
+}
+
+/* ── Responsive (≤640px) ── */
+@media (max-width: 640px) {
+  .page-header {
+    padding: 6px 10px;
+    gap: 6px;
+  }
+
+  .page-header-logo {
+    width: 18px;
+    height: 18px;
+  }
+
+  .page-header-brand-text {
+    font-size: 10px;
+    letter-spacing: 1.5px;
+  }
+
+  .page-header-divider {
+    height: 20px;
+  }
+
+  .page-header-avatar {
+    width: 26px;
+    height: 26px;
+  }
+
+  .page-header-bubble {
+    display: none;
+  }
+
+  .page-header-live-text {
+    display: none;
+  }
+
+  .page-stats-bar {
+    font-size: 10px;
+    padding: 3px 10px 4px;
+  }
+}
+
+/* ── Lyra chat page mode: hide brand text on very small screens ── */
+@media (max-width: 600px) {
+  .lyra-chat-page .page-header-brand-text {
+    display: none;
+  }
+}
+
+/* ── Page header speech bubble (lyra chat, no pointer, inline) ── */
+.page-header .lyra-chat-speech-bubble {
+  margin-left: 4px;
+}

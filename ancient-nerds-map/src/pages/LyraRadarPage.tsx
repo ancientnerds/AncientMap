@@ -13,6 +13,10 @@ import { getCountryFlatFlagUrl } from '../utils/countryFlags'
 import { SiteBadges, CountryFlag, CopyButton } from '../components/metadata'
 import { SOURCE_CONFIG } from '../constants/colors'
 import { SitePopupOverlay } from '../components/SitePopupOverlay'
+import PageHeader from '../components/layout/PageHeader'
+import PageStatsBar from '../components/layout/PageStatsBar'
+import type { StatItem } from '../components/layout/PageStatsBar'
+import AiNoticeBanner from '../components/layout/AiNoticeBanner'
 import PinAuthModal from '../components/PinAuthModal'
 import LazyImage from '../components/LazyImage'
 import type { SiteData } from '../data/sites'
@@ -821,33 +825,22 @@ export default function LyraRadarPage() {
   return (
     <div className="lyra-discoveries-page">
       {/* Header */}
-      <header className="news-page-header">
-        <a href="/globe.html" className="news-page-brand">
-          <img src="/an-logo.svg" alt="" className="news-page-logo" />
-          <span className="news-page-brand-text">ANCIENT NERDS</span>
-        </a>
-        <div className="news-page-divider" />
-        <img
-          src="/lyra.png"
-          alt="Lyra Wiskerbyte"
-          className="news-page-avatar lyra-avatar-clickable"
-          onClick={() => setShowLyraProfile(true)}
-        />
-        <div className="news-page-lyra-label">
-          <span className="news-page-lyra-name" style={{ cursor: 'pointer' }} onClick={() => setShowLyraProfile(true)}>Radar</span>
-          {stats && (
-            <div className="news-page-stats">
-              <span className="news-page-stats-item"><strong>{stats.enriched_count}</strong> enriched</span>
-              <span className="news-page-stats-sep">&middot;</span>
-              <span className="news-page-stats-item"><strong>{stats.pending_count}</strong> pending</span>
-              <span className="news-page-stats-sep">&middot;</span>
-              <span className="news-page-stats-item"><strong>{stats.added_count}</strong> added</span>
-              <span className="news-page-stats-sep">&middot;</span>
-              <span className="news-page-stats-item"><strong>{stats.total_sites_known.toLocaleString()}</strong> known sites</span>
-            </div>
-          )}
-        </div>
-      </header>
+      <PageHeader
+        speechBubble="I find new sites in YouTube videos that aren't in our database yet"
+        onAvatarClick={() => setShowLyraProfile(true)}
+      >
+        <span className="news-page-lyra-name">Radar</span>
+      </PageHeader>
+
+      {/* Stats bar */}
+      {stats && (
+        <PageStatsBar items={[
+          { value: stats.enriched_count, label: 'enriched' } as StatItem,
+          { value: stats.pending_count, label: 'pending', sep: '·' } as StatItem,
+          { value: stats.added_count, label: 'added', sep: '·' } as StatItem,
+          { value: stats.total_sites_known, label: 'known sites', sep: '·' } as StatItem,
+        ]} />
+      )}
 
       {/* Filter bar */}
       <div className="lyra-discoveries-filters">
@@ -927,9 +920,7 @@ export default function LyraRadarPage() {
       </div>
 
       {/* AI disclosure */}
-      <div className="news-page-ai-notice">
-        Content is AI-generated from YouTube video content. Always verify with original sources.
-      </div>
+      <AiNoticeBanner />
 
       {/* Map */}
       {showMap && (

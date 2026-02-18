@@ -11,6 +11,10 @@ import type { SiteData } from '../data/sites'
 import type { NewsItemData, NewsStats, NewsFilters, ActiveFilters } from '../types/news'
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
 import { SitePopupOverlay } from '../components/SitePopupOverlay'
+import PageHeader from '../components/layout/PageHeader'
+import PageStatsBar from '../components/layout/PageStatsBar'
+import type { StatItem } from '../components/layout/PageStatsBar'
+import AiNoticeBanner from '../components/layout/AiNoticeBanner'
 import NewsCard from '../components/news/NewsCard'
 import { getNewsCategoryLabel, getTopicColor, sortTopics } from '../components/news/significance'
 import '../components/news/news-cards.css'
@@ -38,9 +42,6 @@ export default function NewsFeedPage() {
 
   // Site popup
   const [selectedSite, setSelectedSite] = useState<SiteData | null>(null)
-
-  // Live updates
-  const [online, setOnline] = useState(false)
 
   useEffect(() => {
     const el = gridRef.current
@@ -142,19 +143,6 @@ export default function NewsFeedPage() {
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data) setStats(data) })
       .catch(() => {})
-  }, [])
-
-  // Lyra heartbeat — drives the LIVE/OFFLINE LED
-  useEffect(() => {
-    const check = () => {
-      fetch(`${config.api.baseUrl}/news/lyra-status`)
-        .then(r => r.ok ? r.json() : null)
-        .then(d => setOnline(d ? d.status === 'online' : false))
-        .catch(() => setOnline(false))
-    }
-    check()
-    const id = setInterval(check, 60_000)
-    return () => clearInterval(id)
   }, [])
 
   // Fetch filter options on mount
@@ -289,37 +277,21 @@ export default function NewsFeedPage() {
   return (
     <div className="news-page" ref={pageRef}>
       {/* Sticky header: brand + Lyra in one line */}
-      <header className="news-page-header">
-        <a href="/globe.html" className="news-page-brand">
-          <img src="/an-logo.svg" alt="" className="news-page-logo" />
-          <span className="news-page-brand-text">ANCIENT NERDS</span>
-        </a>
-        <div className="news-page-divider" />
-        <img
-          src="/lyra.png"
-          alt="Lyra Wiskerbyte"
-          className="news-page-avatar lyra-avatar-clickable"
-          onClick={() => setShowLyraProfile(true)}
-        />
-        <div className="news-page-lyra-label">
-          <span className="news-page-lyra-name" style={{ cursor: 'pointer' }} onClick={() => setShowLyraProfile(true)}>News Feed</span>
-          {stats && (
-            <div className="news-page-stats">
-              <span className="news-page-stats-item"><strong>{stats.total_videos}</strong> videos processed</span>
-              <span className="news-page-stats-sep">→</span>
-              <span className="news-page-stats-item"
-                title={stats.rejected ? `Filtered out: ${stats.rejected.low_significance} low significance, ${stats.rejected.duplicate} duplicates, ${stats.rejected.verified_rejected} verification failures` : undefined}
-              ><strong>{stats.total_items}</strong> stories</span>
-              <span className="news-page-stats-sep">·</span>
-              <span className="news-page-stats-item"><strong>{stats.total_channels}</strong> channels</span>
-            </div>
-          )}
-        </div>
-        <div className={`news-page-live${online ? '' : ' offline'}`} title={online ? 'Lyra is online — monitoring YouTube archaeology channels and extracting discoveries' : 'Lyra is offline — pipeline not currently running'}>
-          <span className="news-page-live-dot" />
-          <span className="news-page-live-text">{online ? 'LIVE' : 'OFFLINE'}</span>
-        </div>
-      </header>
+      <PageHeader
+        speechBubble="I monitor YouTube archaeology channels and extract discoveries in real-time"
+        onAvatarClick={() => setShowLyraProfile(true)}
+      >
+        <span className="news-page-lyra-name">News Feed</span>
+      </PageHeader>
+
+      {/* Stats bar */}
+      {stats && (
+        <PageStatsBar items={[
+          { value: stats.total_videos, label: 'videos processed' } as StatItem,
+          { value: stats.total_items, label: 'stories', sep: '→', title: stats.rejected ? `Filtered out: ${stats.rejected.low_significance} low significance, ${stats.rejected.duplicate} duplicates, ${stats.rejected.verified_rejected} verification failures` : undefined } as StatItem,
+          { value: stats.total_channels, label: 'channels', sep: '·' } as StatItem,
+        ]} />
+      )}
 
       {/* Multi-dimension filter section */}
       {filters && (
@@ -536,9 +508,7 @@ export default function NewsFeedPage() {
       )}
 
       {/* AI disclosure */}
-      <div className="news-page-ai-notice">
-        Content is AI-generated from YouTube video content. Always verify with original sources.
-      </div>
+      <AiNoticeBanner />
 
       {/* Pull-to-refresh zone */}
       <div
