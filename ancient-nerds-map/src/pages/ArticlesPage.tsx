@@ -7,9 +7,13 @@
  * Share URLs use the canonical SEO path: /articles/{slug}
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import { config } from '../config'
+import CitationPopover from '../components/news/CitationPopover'
+import type { NewsItemData } from '../types/news'
+import type { NewsCardProps } from '../components/news/NewsCard'
+import '../components/news/news-cards.css'
 
 interface Article {
   id: number
@@ -55,24 +59,72 @@ function shareUrl(article: Article): string {
   return `https://ancientnerds.com/articles/${slugify(article.title)}`
 }
 
-const articleComponents: Components = {
-  img: ({ src, alt }) => (
-    <figure className="article-figure">
-      <img src={src} alt={alt || ''} loading="lazy" className="article-screenshot" />
-      {alt && <figcaption className="article-figcaption">{alt}</figcaption>}
-    </figure>
-  ),
-  a: ({ href, children }) => {
-    if (href === '#sources') {
-      return <a href={href} className="article-citation-link">{children}</a>
-    }
-    return <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
-  },
-  h3: ({ children }) => {
-    const text = String(children)
-    if (text === 'Sources') return <h3 id="sources">{children}</h3>
-    return <h3>{children}</h3>
-  },
+/** Convert an API NewsItemData into NewsCardProps for CitationPopover. */
+function itemToCardProps(item: NewsItemData): NewsCardProps {
+  const screenshotUrl = item.screenshot_url
+    ? `${config.api.baseUrl}${item.screenshot_url.replace('/api', '')}`
+    : item.video.thumbnail_url
+  const deepLink = item.youtube_deep_url || item.youtube_url || '#'
+  return {
+    headline: item.headline,
+    postText: item.post_text,
+    channelName: item.video.channel_name,
+    publishedAt: item.video.published_at,
+    significance: item.significance,
+    newsCategory: item.news_category,
+    speculativeTag: item.speculative_tag,
+    screenshotUrl,
+    deepLink,
+    videoId: item.video.id,
+    videoTitle: item.video.title,
+    durationMinutes: item.video.duration_minutes,
+    timestampSeconds: item.timestamp_seconds,
+    siteName: item.site_name || item.site_name_extracted,
+    siteNameExtracted: item.site_name_extracted,
+    siteId: item.site_id,
+    siteCountry: item.site_country,
+    siteType: item.site_type,
+    sitePeriodName: item.site_period_name,
+    sitePeriodStart: item.site_period_start,
+    facts: item.facts,
+  }
+}
+
+function makeArticleComponents(
+  citationItems: Map<number, NewsItemData>,
+  onCitationEnter: (num: number, rect: DOMRect) => void,
+  onCitationLeave: () => void,
+): Components {
+  return {
+    img: ({ src, alt }) => (
+      <figure className="article-figure">
+        <img src={src} alt={alt || ''} loading="lazy" className="article-screenshot" />
+        {alt && <figcaption className="article-figcaption">{alt}</figcaption>}
+      </figure>
+    ),
+    a: ({ href, children }) => {
+      if (href === '#sources') {
+        const num = parseInt(String(children).replace(/[[\]]/g, ''), 10)
+        const hasCard = citationItems.has(num)
+        return (
+          <a
+            href={href}
+            className={`article-citation-link${hasCard ? ' has-popover' : ''}`}
+            onMouseEnter={hasCard ? (e) => onCitationEnter(num, e.currentTarget.getBoundingClientRect()) : undefined}
+            onMouseLeave={hasCard ? onCitationLeave : undefined}
+          >
+            {children}
+          </a>
+        )
+      }
+      return <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+    },
+    h3: ({ children }) => {
+      const text = String(children)
+      if (text === 'Sources') return <h3 id="sources">{children}</h3>
+      return <h3>{children}</h3>
+    },
+  }
 }
 
 function ShareButton({ article }: { article: Article }) {
@@ -131,6 +183,28 @@ export default function ArticlesPage() {
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null)
   const [readProgress, setReadProgress] = useState(0)
 
+  // Citation hover card state
+  const [citationItems, setCitationItems] = useState<Map<number, NewsItemData>>(new Map())
+  const [hoverCitation, setHoverCitation] = useState<{ num: number; rect: DOMRect } | null>(null)
+  const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const cancelHoverClose = () => {
+    if (hoverTimeout.current) {
+      clearTimeout(hoverTimeout.current)
+      hoverTimeout.current = null
+    }
+  }
+
+  const scheduleHoverClose = () => {
+    cancelHoverClose()
+    hoverTimeout.current = setTimeout(() => setHoverCitation(null), 150)
+  }
+
+  const handleCitationEnter = (num: number, rect: DOMRect) => {
+    cancelHoverClose()
+    setHoverCitation({ num, rect })
+  }
+
   // Resolve hash → article once articles are loaded
   const resolveHash = useCallback((articleList: Article[]) => {
     const hash = window.location.hash.slice(1)
@@ -184,6 +258,28 @@ export default function ArticlesPage() {
     window.scrollTo(0, 0)
   }
 
+  // Fetch citation items when entering reading view
+  useEffect(() => {
+    if (view !== 'reading' || !selectedArticle) {
+      setCitationItems(new Map())
+      setHoverCitation(null)
+      return
+    }
+    let cancelled = false
+    fetch(`${config.api.baseUrl}/news/articles/${selectedArticle.id}/citations`)
+      .then(r => r.ok ? r.json() : {})
+      .then((data: Record<string, NewsItemData>) => {
+        if (cancelled) return
+        const map = new Map<number, NewsItemData>()
+        for (const [key, item] of Object.entries(data)) {
+          map.set(parseInt(key, 10), item)
+        }
+        setCitationItems(map)
+      })
+      .catch(() => { /* non-critical — popover just won't show */ })
+    return () => { cancelled = true }
+  }, [view, selectedArticle])
+
   // Scroll to top when entering reading view + track read progress
   useEffect(() => {
     if (view === 'reading') {
@@ -198,6 +294,12 @@ export default function ArticlesPage() {
     }
     setReadProgress(0)
   }, [view])
+
+  // Memoize ReactMarkdown components to avoid remounting on every render
+  const mdComponents = useMemo(
+    () => makeArticleComponents(citationItems, handleCitationEnter, scheduleHoverClose),
+    [citationItems],
+  )
 
   const hero = articles[0] ?? null
   const older = articles.slice(1)
@@ -321,7 +423,7 @@ export default function ArticlesPage() {
               </div>
             </div>
             <div className="articles-reader-body">
-              <ReactMarkdown components={articleComponents}>
+              <ReactMarkdown components={mdComponents}>
                 {enrichCitations(selectedArticle.content)}
               </ReactMarkdown>
             </div>
@@ -334,6 +436,16 @@ export default function ArticlesPage() {
               </button>
             </footer>
           </article>
+        )}
+
+        {/* Citation hover popover */}
+        {hoverCitation && citationItems.has(hoverCitation.num) && (
+          <CitationPopover
+            cardProps={itemToCardProps(citationItems.get(hoverCitation.num)!)}
+            anchorRect={hoverCitation.rect}
+            onMouseEnter={cancelHoverClose}
+            onMouseLeave={scheduleHoverClose}
+          />
         )}
       </main>
     </div>

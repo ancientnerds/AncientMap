@@ -438,3 +438,94 @@
 .news-page-chips-scroll::-webkit-scrollbar {
   display: none;
 }
+
+/* =============================================================================
+   Citation Popover (article reader hover card)
+   ============================================================================= */
+
+.citation-popover {
+  position: fixed;
+  z-index: 50;
+  width: 380px;
+  max-width: calc(100vw - 16px);
+  background: var(--bg-card, rgba(8, 18, 26, 0.95));
+  border: 1px solid var(--border-color, rgba(0, 180, 180, 0.15));
+  border-radius: 8px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 180, 180, 0.08);
+  animation: citation-popover-in 0.15s ease-out;
+  pointer-events: auto;
+}
+
+/* Arrow pointing down (popover above citation) */
+.citation-popover::before {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 12px;
+  height: 12px;
+  background: var(--bg-card, rgba(8, 18, 26, 0.95));
+  border-right: 1px solid var(--border-color, rgba(0, 180, 180, 0.15));
+  border-bottom: 1px solid var(--border-color, rgba(0, 180, 180, 0.15));
+  rotate: 45deg;
+}
+
+/* Flipped: arrow pointing up (popover below citation) */
+.citation-popover--below::before {
+  bottom: auto;
+  top: -6px;
+  border-right: none;
+  border-bottom: none;
+  border-left: 1px solid var(--border-color, rgba(0, 180, 180, 0.15));
+  border-top: 1px solid var(--border-color, rgba(0, 180, 180, 0.15));
+}
+
+/* Remove inner card border-bottom since popover already has a border */
+.citation-popover .news-feed-item {
+  border-bottom: none;
+  padding: 10px 14px;
+}
+
+@keyframes citation-popover-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.citation-popover--below {
+  animation-name: citation-popover-in-below;
+}
+
+@keyframes citation-popover-in-below {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Citation links that have popovers get a subtle indicator */
+.article-citation-link.has-popover {
+  border-bottom: 1px dotted rgba(192, 32, 35, 0.4);
+  cursor: pointer;
+}
+
+/* Mobile: bottom-anchored sheet */
+@media (max-width: 600px) {
+  .citation-popover {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    top: auto !important;
+    width: 100%;
+    max-width: 100%;
+    border-radius: 12px 12px 0 0;
+    animation-name: citation-popover-slide-up;
+  }
+
+  .citation-popover::before {
+    display: none;
+  }
+
+  @keyframes citation-popover-slide-up {
+    from { opacity: 0; transform: translateY(100%); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+}
