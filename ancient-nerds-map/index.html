@@ -155,7 +155,7 @@
     <!-- ═══════════ HERO ═══════════ -->
     <section class="hero">
       <div class="hero-bg" id="heroBg">
-        <video autoplay muted loop playsinline preload="metadata" poster="/landing/hero-poster.webp" class="hero-video" id="heroVideo" width="1920" height="1080">
+        <video muted loop playsinline preload="none" poster="/landing/hero-poster.webp" class="hero-video" id="heroVideo" width="1920" height="1080">
           <source src="/landing/video/hero.mp4" type="video/mp4" />
           <track kind="descriptions" src="/landing/hero-captions.vtt" srclang="en" label="English" />
         </video>
@@ -455,29 +455,37 @@
 
     <!-- ═══════════ SCRIPTS ═══════════ -->
     <script>
-      // Fade black curtain away once video is ready
+      // Hero: fade curtain, defer video playback until after page load
       (function() {
         var v = document.getElementById('heroVideo');
         var c = document.getElementById('heroCurtain');
-        if (!v || !c) return;
-        function reveal() {
+        if (!c) return;
+
+        // Fade curtain immediately — poster is preloaded
+        requestAnimationFrame(function() {
           c.style.opacity = '0';
           c.addEventListener('transitionend', function() { c.remove(); }, { once: true });
-        }
-        if (v.readyState >= 2) return reveal();
-        v.addEventListener('loadeddata', reveal, { once: true });
-        setTimeout(reveal, 3000);
-      })();
+        });
+        setTimeout(function() { if (c.parentNode) c.remove(); }, 3000);
 
-      // Bandwidth / accessibility guard: skip video on reduced-motion, save-data, or slow connections
-      (function() {
-        const prefersReducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-        const conn = navigator.connection;
-        const slowConn = conn && (conn.saveData || conn.effectiveType === 'slow-2g' || conn.effectiveType === '2g' || conn.effectiveType === '3g');
-        if (prefersReducedMotion || slowConn) {
-          document.querySelectorAll('video').forEach(function(v) {
-            v.removeAttribute('autoplay');
-            v.pause();
+        // Defer video playback to after page load
+        if (!v) return;
+        var prefersReducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        var conn = navigator.connection;
+        var skipVideo = prefersReducedMotion || (conn && (conn.saveData || conn.effectiveType === 'slow-2g' || conn.effectiveType === '2g' || conn.effectiveType === '3g'));
+        if (skipVideo) return;
+
+        function startVideo() {
+          v.preload = 'auto';
+          v.load();
+          v.play().catch(function() {});
+        }
+
+        if (document.readyState === 'complete') {
+          (typeof requestIdleCallback === 'function' ? requestIdleCallback : setTimeout)(startVideo);
+        } else {
+          window.addEventListener('load', function() {
+            (typeof requestIdleCallback === 'function' ? requestIdleCallback : setTimeout)(startVideo);
           });
         }
       })();
