@@ -400,10 +400,10 @@ function FilterPanel({
           <div className="glass-panel logo-panel">
             <div className="logo-main">ANCIENT NERDS</div>
             <div className="logo-sub">RESEARCH PLATFORM</div>
+            <div className="globe-hamburger"><HamburgerNav currentPage="globe" openInNewTab /></div>
           </div>
           <span className="beta-badge">BETA</span>
         </div>
-        <HamburgerNav currentPage="globe" openInNewTab />
       </div>
 
       {/* Search/Proximity Section */}
