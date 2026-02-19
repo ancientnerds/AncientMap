@@ -150,15 +150,15 @@
 }
 
 .account-badge.og-nerd {
-  background: rgba(192, 32, 35, 0.2);
-  color: #c02023;
-  border: 1px solid rgba(192, 32, 35, 0.3);
+  background: rgba(248, 102, 0, 0.15);
+  color: #f86600;
+  border: 1px solid rgba(248, 102, 0, 0.3);
 }
 
 .account-badge.founder {
-  background: rgba(255, 185, 0, 0.15);
-  color: #ffb900;
-  border: 1px solid rgba(255, 185, 0, 0.3);
+  background: rgba(0, 255, 46, 0.12);
+  color: #00ff2e;
+  border: 1px solid rgba(0, 255, 46, 0.25);
 }
 
 /* Credits section */
