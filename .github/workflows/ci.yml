@@ -243,10 +243,11 @@ jobs:
 
             if [ -n "$REBUILD" ]; then
               echo "==> Rebuilding:$REBUILD"
-              BUILD_HASH=$(git rev-parse --short HEAD) docker compose up -d --build $REBUILD
+              docker compose rm -sf $REBUILD 2>/dev/null || true
+              BUILD_HASH=$(git rev-parse --short HEAD) docker compose up -d --build --remove-orphans $REBUILD
             elif echo "$CHANGED" | grep -qE "^docker-compose\.yml"; then
               echo "==> Compose config changed, recreating services..."
-              BUILD_HASH=$(git rev-parse --short HEAD) docker compose up -d
+              BUILD_HASH=$(git rev-parse --short HEAD) docker compose up -d --remove-orphans
             else
               echo "==> No Docker changes"
             fi
