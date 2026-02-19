@@ -835,6 +835,11 @@ export default function LyraChatModal({
       currentPage="lyra"
       rightSection={
         <div className="lyra-chat-header-actions">
+          {authMode === 'discord' && userCredits !== null && (
+            <span className="lyra-credits-badge" title="Lyra credits remaining">
+              {userCredits === -1 ? '∞' : userCredits.toLocaleString()} credits
+            </span>
+          )}
           {messages.length > 0 && (
             <button className="lyra-chat-icon-btn" onClick={startNewChat} title="New chat">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1089,8 +1094,8 @@ export default function LyraChatModal({
                                   <ConfidenceBadge value={msg.confidence} />
                                   {msg.tokens && (msg.tokens.input > 0 || msg.tokens.output > 0 || (msg.tokens.voyage ?? 0) > 0) && (
                                     <span className="lyra-chat-tokens">
-                                      Haiku: {msg.tokens.input + msg.tokens.output}
-                                      {(msg.tokens.voyage ?? 0) > 0 && ` · Voyage: ${msg.tokens.voyage}`}
+                                      LLM: {msg.tokens.input + msg.tokens.output}
+                                      {(msg.tokens.voyage ?? 0) > 0 && ` · Embed: ${msg.tokens.voyage}`}
                                     </span>
                                   )}
                                 </div>
