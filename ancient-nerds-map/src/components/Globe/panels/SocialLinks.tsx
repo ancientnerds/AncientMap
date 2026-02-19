@@ -3,6 +3,8 @@
  * Includes YouTube, Discord links plus Contribute, AI Agent and Sign In buttons
  */
 
+import HamburgerNav from '../../layout/HamburgerNav'
+
 interface SocialLinksProps {
   onContributeClick?: () => void
   isContributeMapPickerActive?: boolean
@@ -89,6 +91,9 @@ export function SocialLinks({
             </svg>
           </button>
         )}
+
+        {/* Navigation Menu */}
+        <HamburgerNav currentPage="globe" openInNewTab />
 
         {/* Sign In Button - Coming Soon */}
         <button

@@ -310,15 +310,8 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 /* Filter panel no longer scrolls - children handle their own scrolling */
 
 .panel-header {
-  position: relative;
   padding: 0;
   flex-shrink: 0;
-}
-
-.panel-header > .hamburger-nav {
-  position: absolute;
-  right: 8px;
-  top: 14px;
 }
 
 /* Offline Mode Button in Settings */
