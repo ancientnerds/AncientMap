@@ -186,7 +186,7 @@ app.add_middleware(
     allow_origins=settings.api.cors_origins_list,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "X-Requested-With", "X-Admin-Pin"],
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
 )
 
 # GZip compression for responses > 500 bytes (reduces JSON payload 3-5x)

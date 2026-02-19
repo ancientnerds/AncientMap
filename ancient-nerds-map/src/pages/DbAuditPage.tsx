@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react'
 import { config } from '../config'
 import { CATEGORY_COLORS, PERIOD_ORDER, SORTED_PERIODS, getCategoryColor, getPeriodColor, SOURCE_CONFIG } from '../constants/colors'
+import { useAuth } from '../contexts/AuthContext'
 import { resolvePeriod } from '../data/sites'
 import type { SiteData } from '../data/sites'
 import { SitePopupOverlay } from '../components/SitePopupOverlay'
@@ -9,7 +10,6 @@ import { getCountryFlatFlagUrl } from '../utils/countryFlags'
 import { exportCSV, exportJSON, exportGeoJSON, parseCSV, parseJSON, parseGeoJSON } from '../utils/exportFormats'
 import type { ParsedSite } from '../utils/exportFormats'
 import { MetadataBadge } from '../components/metadata/MetadataBadge'
-import PinAuthModal from '../components/PinAuthModal'
 import SiteForm from '../components/SiteForm'
 import type { SiteFormValues } from '../components/SiteForm'
 import '../styles/db-audit.css'
@@ -191,6 +191,9 @@ function MultiSelect({ label, options, selected, onChange, colorFn }: {
 
 // ─── Main component ──────────────────────────────────────────────────────────
 export default function DbAuditPage() {
+  const { user, token } = useAuth()
+  const isFounder = !!user?.is_founder
+
   const [sites, setSites] = useState<AuditSite[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -207,11 +210,6 @@ export default function DbAuditPage() {
 
   // Pagination
   const [visibleRows, setVisibleRows] = useState(ROWS_PER_PAGE)
-
-  // Auth
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [adminPin, setAdminPin] = useState<string | null>(null)
-  const [showPinModal, setShowPinModal] = useState(false)
 
   // Inline editing
   const [editingCell, setEditingCell] = useState<{ id: string; field: 'type' | 'period' | 'country' } | null>(null)
@@ -423,7 +421,7 @@ export default function DbAuditPage() {
     try {
       const res = await fetch(`${config.api.baseUrl}/vector-sync/reindex`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': adminPin || '' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ collection: collection || null, rebuild: rebuild || false }),
       })
       if (!res.ok) {
@@ -538,34 +536,13 @@ export default function DbAuditPage() {
   const displayedSites = useMemo(() => filteredSites.slice(0, visibleRows), [filteredSites, visibleRows])
   const hasMore = visibleRows < filteredSites.length
 
-  // Auth gate
-  const requireAuth = useCallback((cb: () => void) => {
-    if (isAuthenticated) { cb(); return }
-    setShowPinModal(true)
-    pendingAuthAction.current = cb
-  }, [isAuthenticated])
-
-  const pendingAuthAction = useRef<(() => void) | null>(null)
-
-  const handleAuthSuccess = useCallback((_token: string, pin?: string) => {
-    setIsAuthenticated(true)
-    setAdminPin(pin || null)
-    setShowPinModal(false)
-    if (pendingAuthAction.current) {
-      pendingAuthAction.current()
-      pendingAuthAction.current = null
-    }
-  }, [])
-
   // Inline edit handlers
   const startInlineEdit = useCallback((site: AuditSite, field: 'type' | 'period' | 'country') => {
-    requireAuth(() => {
-      setEditingCell({ id: site.id, field })
-      if (field === 'type') setEditValue(site.t || '')
-      else if (field === 'period') setEditValue(resolvePeriod(site.pn, site.p))
-      else setEditValue(site.c || '')
-    })
-  }, [requireAuth])
+    setEditingCell({ id: site.id, field })
+    if (field === 'type') setEditValue(site.t || '')
+    else if (field === 'period') setEditValue(resolvePeriod(site.pn, site.p))
+    else setEditValue(site.c || '')
+  }, [])
 
   const commitInlineEdit = useCallback(() => {
     if (!editingCell) return
@@ -619,11 +596,9 @@ export default function DbAuditPage() {
 
   // Modal edit handlers
   const openEditModal = useCallback((site: AuditSite) => {
-    requireAuth(() => {
-      setEditModalSite(site)
-      setModalFormValues(null)
-    })
-  }, [requireAuth])
+    setEditModalSite(site)
+    setModalFormValues(null)
+  }, [])
 
   const saveModal = useCallback(() => {
     if (!editModalSite || !modalFormValues) return
@@ -720,14 +695,14 @@ export default function DbAuditPage() {
 
   // Pin/unpin a source to a snapshot version
   const handleSetPin = useCallback(async (sourceId: string, snapDate: string | null) => {
-    if (!adminPin) return
+    if (!token) return
     const action = snapDate ? `Pin ${sourceId} to ${snapDate}?` : `Unpin ${sourceId} to live?`
     if (!confirm(`${action}\n\nThis affects the public globe — all visitors will see this version.`)) return
     setPinLoading(sourceId)
     try {
       const res = await fetch(`${config.api.baseUrl}/snapshots/pins/${sourceId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': adminPin },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ snapshot_date: snapDate }),
       })
       if (!res.ok) {
@@ -746,17 +721,17 @@ export default function DbAuditPage() {
     } finally {
       setPinLoading(null)
     }
-  }, [adminPin])
+  }, [token])
 
   // Commit all pending edits via batch-update
   const commitAllEdits = useCallback(async () => {
-    if (!adminPin || pendingEdits.size === 0) return
+    if (!token || pendingEdits.size === 0) return
     setCommitting(true)
     try {
       const updates = Array.from(pendingEdits.values()).map(e => e.fullUpdate)
       const res = await fetch(`${config.api.baseUrl}/sites/batch-update`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': adminPin },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(updates),
       })
       if (!res.ok) {
@@ -779,7 +754,7 @@ export default function DbAuditPage() {
     } finally {
       setCommitting(false)
     }
-  }, [adminPin, pendingEdits, refreshDbSnapshots])
+  }, [token, pendingEdits, refreshDbSnapshots])
 
   // Upload file handler
   const handleUploadFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -812,7 +787,7 @@ export default function DbAuditPage() {
 
   // Commit upload
   const commitUpload = useCallback(async () => {
-    if (!adminPin || uploadParsed.length === 0) return
+    if (!token || uploadParsed.length === 0) return
     setUploading(true)
     try {
       const payload = uploadParsed
@@ -830,7 +805,7 @@ export default function DbAuditPage() {
         }))
       const res = await fetch(`${config.api.baseUrl}/sites/batch-upload`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': adminPin },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ sites: payload, target_source: uploadTarget }),
       })
       if (!res.ok) {
@@ -850,16 +825,16 @@ export default function DbAuditPage() {
     } finally {
       setUploading(false)
     }
-  }, [adminPin, uploadParsed, uploadTarget, refreshDbSnapshots, discardAllEdits])
+  }, [token, uploadParsed, uploadTarget, refreshDbSnapshots, discardAllEdits])
 
   // Restore a DB snapshot
   const restoreDbSnapshot = useCallback(async (snapshotId: string) => {
-    if (!adminPin) return
+    if (!token) return
     if (!confirm('Restore this snapshot? This will revert the affected sites to their pre-change state.')) return
     try {
       const res = await fetch(`${config.api.baseUrl}/sites/snapshots/${snapshotId}/restore`, {
         method: 'POST',
-        headers: { 'X-Admin-Pin': adminPin },
+        headers: { 'Authorization': `Bearer ${token}` },
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
@@ -872,7 +847,7 @@ export default function DbAuditPage() {
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Restore failed')
     }
-  }, [adminPin, discardAllEdits, refreshDbSnapshots])
+  }, [token, discardAllEdits, refreshDbSnapshots])
 
   // Diff: open compare modal with defaults
   const openDiffModal = useCallback(() => {
@@ -1020,7 +995,7 @@ export default function DbAuditPage() {
                       {qdrantStatus.reindex.started_at && ` — started ${formatRelativeDate(qdrantStatus.reindex.started_at)}`}
                     </div>
                   )}
-                  {isAuthenticated && !qdrantStatus.reindex.running && (
+                  {isFounder && !qdrantStatus.reindex.running && (
                     <div className="db-qdrant-actions">
                       <button onClick={() => handleReindex()}>Reindex All</button>
                       <button onClick={() => handleReindex('sites')}>Sites</button>
@@ -1032,17 +1007,19 @@ export default function DbAuditPage() {
               )}
             </div>
           )}
-          {isAuthenticated && (
+          {isFounder && (
             <button className="db-upload-btn" onClick={() => setShowUploadModal(true)}>
               Upload
             </button>
           )}
-          {isAuthenticated ? (
-            <span className="db-auth-badge db-auth-unlocked">Editing Unlocked</span>
+          {isFounder ? (
+            <span className="db-auth-badge db-auth-unlocked">Founder</span>
+          ) : user ? (
+            <span className="db-auth-badge">View Only</span>
           ) : (
-            <button className="db-unlock-btn" onClick={() => setShowPinModal(true)}>
-              Unlock Editing
-            </button>
+            <a className="db-unlock-btn" href={`${config.api.baseUrl}/auth/discord`}>
+              Sign in
+            </a>
           )}
         </>
       }>
@@ -1110,7 +1087,7 @@ export default function DbAuditPage() {
                 {isPinned && isViewingPinned && (
                   <span className="db-pin-indicator">PUBLIC</span>
                 )}
-                {isAuthenticated && ver !== 'latest' && (
+                {isFounder && ver !== 'latest' && (
                   isPinnedToThis ? (
                     <button
                       className="db-pin-btn db-pin-btn-active"
@@ -1129,7 +1106,7 @@ export default function DbAuditPage() {
                     </button>
                   )
                 )}
-                {isAuthenticated && ver === 'latest' && isPinned && (
+                {isFounder && ver === 'latest' && isPinned && (
                   <button
                     className="db-pin-btn db-pin-btn-active"
                     onClick={() => handleSetPin(sid, null)}
@@ -1283,7 +1260,7 @@ export default function DbAuditPage() {
               <th className="db-th db-th-nosort">User</th>
               <th className="db-th db-th-nosort db-th-db">DB</th>
               <th className="db-th" onClick={() => handleSort('edited_at')}>Last Edited{sortArrow('edited_at')}</th>
-              {isAuthenticated && <th className="db-th db-th-edit">Edit</th>}
+              {isFounder && <th className="db-th db-th-edit">Edit</th>}
             </tr>
           </thead>
           <tbody>
@@ -1313,7 +1290,7 @@ export default function DbAuditPage() {
                   {/* Type cell */}
                   <td
                     className={`db-td db-td-editable ${isEditingType ? 'editing' : ''}`}
-                    onClick={() => !isEditingType && isAuthenticated && startInlineEdit(site, 'type')}
+                    onClick={() => !isEditingType && isFounder && startInlineEdit(site, 'type')}
                   >
                     {isEditingType ? (
                       <select
@@ -1337,7 +1314,7 @@ export default function DbAuditPage() {
                   {/* Period cell */}
                   <td
                     className={`db-td db-td-editable ${isEditingPeriod ? 'editing' : ''}`}
-                    onClick={() => !isEditingPeriod && isAuthenticated && startInlineEdit(site, 'period')}
+                    onClick={() => !isEditingPeriod && isFounder && startInlineEdit(site, 'period')}
                   >
                     {isEditingPeriod ? (
                       <select
@@ -1361,7 +1338,7 @@ export default function DbAuditPage() {
                   {/* Country cell */}
                   <td
                     className={`db-td db-td-country db-td-editable ${isEditingCountry ? 'editing' : ''}`}
-                    onClick={() => !isEditingCountry && isAuthenticated && startInlineEdit(site, 'country')}
+                    onClick={() => !isEditingCountry && isFounder && startInlineEdit(site, 'country')}
                   >
                     {isEditingCountry ? (
                       <input
@@ -1435,7 +1412,7 @@ export default function DbAuditPage() {
                   </td>
 
                   {/* Edit button */}
-                  {isAuthenticated && (
+                  {isFounder && (
                     <td className="db-td db-td-edit">
                       <button className="db-edit-btn" onClick={() => openEditModal(site)} title="Edit all fields">
                         &#9998;
@@ -1465,14 +1442,6 @@ export default function DbAuditPage() {
 
       {/* Site Popup Overlay */}
       {popupSite && <SitePopupOverlay site={popupSite} onClose={() => setPopupSite(null)} />}
-
-      {/* PIN Auth Modal */}
-      <PinAuthModal
-        isOpen={showPinModal}
-        onClose={() => { setShowPinModal(false); pendingAuthAction.current = null }}
-        onSuccess={handleAuthSuccess}
-        variant="admin"
-      />
 
       {showLyraProfile && (
         <Suspense fallback={null}>
@@ -1596,7 +1565,7 @@ export default function DbAuditPage() {
       )}
 
       {/* DB Snapshots (undo history) */}
-      {isAuthenticated && dbSnapshots.length > 0 && (
+      {isFounder && dbSnapshots.length > 0 && (
         <details className="db-snapshots-panel">
           <summary className="db-snapshots-summary">Undo History ({dbSnapshots.length} snapshots)</summary>
           <div className="db-snapshots-list">

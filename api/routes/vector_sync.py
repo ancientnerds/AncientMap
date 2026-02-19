@@ -5,11 +5,12 @@ import sys
 import time
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import text
 
-from pipeline.database import get_session
+from api.services.jwt_auth import require_founder
+from pipeline.database import DiscordUser, get_session
 
 router = APIRouter()
 
@@ -92,13 +93,9 @@ async def vector_sync_status():
 @router.post("/reindex")
 async def vector_reindex(
     body: ReindexRequest,
-    authorization: str | None = Header(None),
-    x_admin_pin: str | None = Header(None, alias="X-Admin-Pin"),
+    _user: DiscordUser = Depends(require_founder),
 ):
-    """Trigger a background reindex of Qdrant collections."""
-    from api.routes.sites import _verify_admin
-
-    _verify_admin(authorization, x_admin_pin)
+    """Trigger a background reindex of Qdrant collections (founders only)."""
 
     if _reindex_state["running"]:
         raise HTTPException(status_code=409, detail="Reindex already running")

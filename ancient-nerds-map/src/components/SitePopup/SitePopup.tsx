@@ -62,7 +62,6 @@ import type { SeshatPolityData } from '../../types/seshat'
 // Components
 import ImageLightbox, { LightboxImage } from '../ImageLightbox'
 import ModelViewer from '../ModelViewer'
-import PinAuthModal from '../PinAuthModal'
 
 // Extracted components
 import { usePopupWindow, WindowControls, ResizeHandles, MinimizedBar } from './window'
@@ -107,6 +106,19 @@ export default function SitePopup({
   empireDefaultYear,
   onEmpireYearChange
 }: SitePopupProps) {
+  // Auth: read directly from localStorage (no AuthProvider on the globe page)
+  const authToken = useMemo(() => localStorage.getItem('an_auth_token'), [])
+  const [isFounder, setIsFounder] = useState(false)
+  useEffect(() => {
+    if (!authToken) return
+    fetch(`${config.api.baseUrl}/auth/me`, {
+      headers: { 'Authorization': `Bearer ${authToken}` },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.is_founder) setIsFounder(true) })
+      .catch(() => {})
+  }, [authToken])
+
   // Offline mode context
   const { isOffline } = useOffline()
 
@@ -204,7 +216,8 @@ export default function SitePopup({
   // Admin mode hook (only used for sites)
   const adminMode = useAdminMode({
     site: site || dummySite,
-    onSiteUpdate
+    onSiteUpdate,
+    authToken,
   })
 
   // Alternate sources for source switching
@@ -679,8 +692,9 @@ export default function SitePopup({
                 rawData={rawData}
                 rawDataLoading={rawDataLoading}
                 sourceUrl={displaySite.sourceUrl}
-                onAdminClick={() => adminMode.setShowAdminPin(true)}
+                onAdminClick={() => adminMode.enterAdminMode()}
                 isEmpireMode={isEmpireMode}
+                isFounder={isFounder}
               />
             )}
 
@@ -865,17 +879,6 @@ export default function SitePopup({
     document.body
   )
 
-  // PIN auth modal portal
-  const pinModal = adminMode.showAdminPin && !isEmpireMode && createPortal(
-    <PinAuthModal
-      isOpen={adminMode.showAdminPin}
-      onClose={() => adminMode.setShowAdminPin(false)}
-      onSuccess={adminMode.enterAdminMode}
-      variant="admin"
-    />,
-    document.body
-  )
-
   // In standalone mode, return content directly
   if (isStandalone) {
     return (
@@ -883,7 +886,6 @@ export default function SitePopup({
         {popupContent}
         {lightbox}
         {modelViewer}
-        {pinModal}
       </>
     )
   }
@@ -894,7 +896,6 @@ export default function SitePopup({
       {createPortal(popupContent, document.body)}
       {lightbox}
       {modelViewer}
-      {pinModal}
     </>
   )
 }

@@ -5,11 +5,11 @@ import { config } from '../../../config'
 interface UseAdminModeOptions {
   site: SiteData
   onSiteUpdate?: (siteId: string, updatedSite: SiteData) => void
+  authToken?: string | null
 }
 
 interface UseAdminModeReturn {
   // State
-  showAdminPin: boolean
   isAdminMode: boolean
   editedSite: SiteData | null
   isSaving: boolean
@@ -17,7 +17,6 @@ interface UseAdminModeReturn {
   localSite: SiteData
 
   // Handlers
-  setShowAdminPin: (show: boolean) => void
   enterAdminMode: () => void
   handleSave: () => Promise<void>
   handleCancelEdit: () => void
@@ -26,7 +25,8 @@ interface UseAdminModeReturn {
 
 export function useAdminMode({
   site,
-  onSiteUpdate
+  onSiteUpdate,
+  authToken
 }: UseAdminModeOptions): UseAdminModeReturn {
   // Local site data that can be updated after save (overrides prop)
   const [localSite, setLocalSite] = useState<SiteData>(site)
@@ -37,17 +37,15 @@ export function useAdminMode({
   }, [site.id])
 
   // Admin mode state
-  const [showAdminPin, setShowAdminPin] = useState(false)
   const [isAdminMode, setIsAdminMode] = useState(false)
   const [editedSite, setEditedSite] = useState<SiteData | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
-  // Enter admin mode after PIN validation
+  // Enter admin mode directly (no PIN step)
   const enterAdminMode = useCallback(() => {
     setEditedSite({ ...localSite })
     setIsAdminMode(true)
-    setShowAdminPin(false)
   }, [localSite])
 
   // Admin mode save handler
@@ -56,9 +54,12 @@ export function useAdminMode({
     setIsSaving(true)
     setSaveError(null)
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (authToken) headers['Authorization'] = `Bearer ${authToken}`
+
       const response = await fetch(`${config.api.baseUrl}/sites/${localSite.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(editedSite)
       })
       if (response.ok) {
@@ -88,7 +89,7 @@ export function useAdminMode({
       setSaveError('Network error - failed to save')
     }
     setIsSaving(false)
-  }, [editedSite, localSite.id, onSiteUpdate])
+  }, [editedSite, localSite.id, onSiteUpdate, authToken])
 
   // Cancel admin edit
   const handleCancelEdit = useCallback(() => {
@@ -99,7 +100,6 @@ export function useAdminMode({
 
   return {
     // State
-    showAdminPin,
     isAdminMode,
     editedSite,
     isSaving,
@@ -107,7 +107,6 @@ export function useAdminMode({
     localSite,
 
     // Handlers
-    setShowAdminPin,
     enterAdminMode,
     handleSave,
     handleCancelEdit,

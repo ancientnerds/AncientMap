@@ -3,18 +3,15 @@ Lyra Chat API Routes.
 
 Endpoints:
 - POST /lyra/chat     — Discord OAuth login required, credits deducted
-- POST /lyra/admin    — Bearer LYRA_ADMIN_KEY (no rate limit, no credits)
 """
 
 import json
 import logging
-import os
-import secrets
 import time
 import uuid
 from math import ceil
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -31,7 +28,6 @@ router = APIRouter()
 # Configuration
 # ---------------------------------------------------------------------------
 
-LYRA_ADMIN_KEY = os.getenv("LYRA_ADMIN_KEY", "")
 SSE_MAX_DURATION = 300  # Max SSE stream duration in seconds (5 minutes)
 
 # Anti-exploit: cap conversation history for low-credit users to bound max request cost
@@ -40,7 +36,6 @@ LOW_CREDIT_MAX_HISTORY = 5  # max history messages for low-credit users (~2-3 ex
 
 # Rate limits
 _chat_limiter = RateLimiter(max_requests=10, window_seconds=3600, namespace="lyra_chat")
-_admin_verify_limiter = RateLimiter(max_requests=5, window_seconds=3600, namespace="lyra_admin_verify")
 
 
 # ---------------------------------------------------------------------------
@@ -66,16 +61,6 @@ class LyraChatRequest(BaseModel):
     context_id: str | None = Field(default=None, max_length=100, description="UUID of site, empire polity ID, or news item ID")
     context_year: int | None = Field(default=None, description="Year for empire context")
     history: list[_HistoryMessage] | None = Field(default=None, max_length=50, description="Conversation history [{role, content}]")
-
-
-class LyraAdminRequest(BaseModel):
-    """Request body for admin (no Turnstile)."""
-    message: str = Field(..., min_length=1, max_length=4000)
-    images: list[_ImagePayload] | None = Field(default=None, max_length=5)
-    context_type: str = "global"
-    context_id: str | None = Field(default=None, max_length=100)
-    context_year: int | None = None
-    history: list[_HistoryMessage] | None = Field(default=None, max_length=50)
 
 
 # ---------------------------------------------------------------------------
@@ -132,58 +117,6 @@ async def lyra_chat(request: LyraChatRequest, req: Request):
         message=request.message,
         images=[img.model_dump() for img in request.images] if request.images else None,
         history=history,
-        context_type=request.context_type,
-        context_id=request.context_id,
-        context_year=request.context_year,
-    )
-
-
-@router.post("/admin/verify")
-async def lyra_admin_verify(req: Request, authorization: str | None = Header(None)):
-    """
-    Lightweight key check — no LLM call, just verifies the Bearer token.
-    Used by the frontend auth gate before opening the chat.
-    """
-    if not LYRA_ADMIN_KEY:
-        raise HTTPException(status_code=503, detail="LYRA_ADMIN_KEY not configured")
-
-    client_ip = req.client.host if req.client else "unknown"
-    if not _admin_verify_limiter.check(client_ip):
-        raise HTTPException(status_code=429, detail="Too many attempts. Try again later.")
-
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing auth")
-
-    if not secrets.compare_digest(authorization[7:], LYRA_ADMIN_KEY):
-        raise HTTPException(status_code=403, detail="Invalid key")
-
-    return {"verified": True}
-
-
-@router.post("/admin")
-async def lyra_admin(
-    request: LyraAdminRequest,
-    authorization: str | None = Header(None),
-):
-    """
-    Admin chat with Lyra. No login, no credits, no rate limit.
-
-    Requires Authorization: Bearer <LYRA_ADMIN_KEY>.
-    """
-    if not LYRA_ADMIN_KEY:
-        raise HTTPException(status_code=503, detail="LYRA_ADMIN_KEY not configured")
-
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Authorization: Bearer <key> required")
-
-    token = authorization[7:]
-    if not secrets.compare_digest(token, LYRA_ADMIN_KEY):
-        raise HTTPException(status_code=403, detail="Invalid admin key")
-
-    return _stream_response(
-        message=request.message,
-        images=[img.model_dump() for img in request.images] if request.images else None,
-        history=[h.model_dump() for h in request.history] if request.history else None,
         context_type=request.context_type,
         context_id=request.context_id,
         context_year=request.context_year,

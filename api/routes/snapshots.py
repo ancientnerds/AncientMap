@@ -5,14 +5,15 @@ import re
 import time
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from api.cache import cache_delete_pattern
-from pipeline.database import get_db
+from api.services.jwt_auth import require_founder
+from pipeline.database import DiscordUser, get_db
 
 router = APIRouter()
 
@@ -215,14 +216,11 @@ async def get_pins(db: Session = Depends(get_db)):
 async def set_pin(
     source_id: str,
     body: PinRequest,
-    authorization: str | None = Header(None),
-    x_admin_pin: str | None = Header(None, alias="X-Admin-Pin"),
+    user: DiscordUser = Depends(require_founder),
     db: Session = Depends(get_db),
 ):
-    """Pin or unpin a source to a specific snapshot version."""
-    from api.routes.sites import _verify_admin
-
-    edited_by = _verify_admin(authorization, x_admin_pin)
+    """Pin or unpin a source to a specific snapshot version (founders only)."""
+    edited_by = user.username
 
     if source_id not in VALID_SOURCES:
         raise HTTPException(status_code=400, detail=f"Unknown source: {source_id}")

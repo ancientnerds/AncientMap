@@ -6,23 +6,19 @@ rejected items. Matched items (already in DB) and not_a_site are excluded.
 """
 
 import logging
-import os
-import secrets
 import uuid
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from api.cache import cache_delete_pattern, cache_get, cache_set
-from api.routes.sites import _verify_admin
-from pipeline.database import get_db
+from api.services.jwt_auth import require_founder
+from pipeline.database import DiscordUser, get_db
 from pipeline.utils.text import categorize_period, normalize_name
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-CACHE_BUST_SECRET = os.getenv("LYRA_ADMIN_KEY", "")
 
 CACHE_TTL = 300  # 5 minutes
 
@@ -584,14 +580,8 @@ async def get_radar_stats(db: Session = Depends(get_db)):
 
 
 @router.post("/cache-bust")
-async def bust_radar_cache(authorization: str | None = Header(None)):
-    """Called by the Lyra pipeline after processing to show fresh data."""
-    if not CACHE_BUST_SECRET:
-        raise HTTPException(status_code=503, detail="LYRA_ADMIN_KEY not configured")
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Authorization required")
-    if not secrets.compare_digest(authorization[7:], CACHE_BUST_SECRET):
-        raise HTTPException(status_code=403, detail="Invalid token")
+async def bust_radar_cache(_user: DiscordUser = Depends(require_founder)):
+    """Clear radar cache (founders only)."""
     count = cache_delete_pattern("radar:*")
     return {"cleared": count}
 
@@ -599,16 +589,14 @@ async def bust_radar_cache(authorization: str | None = Header(None)):
 @router.post("/{contribution_id}/promote")
 async def promote_to_db(
     contribution_id: str,
-    authorization: str | None = Header(None),
-    x_admin_pin: str | None = Header(None, alias="X-Admin-Pin"),
+    _user: DiscordUser = Depends(require_founder),
     db: Session = Depends(get_db),
 ):
     """
-    Promote a 100%-enriched radar item into unified_sites.
+    Promote a 100%-enriched radar item into unified_sites (founders only).
 
-    Manual admin action only — no AI/automation should call this.
+    Manual action only — no AI/automation should call this.
     """
-    _verify_admin(authorization, x_admin_pin)
 
     # Fetch the contribution
     row = db.execute(

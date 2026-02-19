@@ -23,7 +23,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from api.services.jwt_auth import create_token, get_current_user
+from api.services.jwt_auth import FOUNDER_ROLE_ID, create_token, get_current_user, require_founder
 from api.services.rate_limiter import RateLimiter
 from pipeline.database import CreditGrant, DiscordUser, TokenUsageLog, get_session
 
@@ -37,7 +37,6 @@ DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "")
 DISCORD_REDIRECT_URI = os.getenv("DISCORD_REDIRECT_URI", "")
 DISCORD_GUILD_ID = os.getenv("DISCORD_GUILD_ID", "932330696956063765")
 OG_NERD_ROLE_ID = "972439407086944266"
-FOUNDER_ROLE_ID = "933105341292486707"
 
 # --- Role-based credit configuration ---
 # Each Discord role that grants credits is defined here.
@@ -391,12 +390,6 @@ async def logout():
 
 
 # --- Founder Admin ---
-
-async def require_founder(user: DiscordUser = Depends(get_current_user)) -> DiscordUser:
-    """Dependency that requires the user to have the Founder role."""
-    if FOUNDER_ROLE_ID not in (user.roles or []):
-        raise HTTPException(status_code=403, detail="Founders only")
-    return user
 
 
 class CreditAdjustRequest(BaseModel):

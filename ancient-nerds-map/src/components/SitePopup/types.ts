@@ -180,6 +180,7 @@ export interface DescriptionSectionProps {
   sourceUrl?: string
   onAdminClick: () => void
   isEmpireMode?: boolean
+  isFounder?: boolean
 }
 
 export interface MapSectionProps {

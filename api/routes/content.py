@@ -16,17 +16,13 @@ Endpoints:
 import logging
 import time
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from api.services.admin_auth import (
-    AdminPinRequest,
-    AdminPinResponse,
-    get_client_ip,
-    verify_admin_pin,
-)
+from api.services.jwt_auth import require_founder
 from pipeline.connectors import ConnectorRegistry
 from pipeline.connectors.types import ContentItem, ContentType
+from pipeline.database import DiscordUser
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -563,52 +559,47 @@ async def get_connectors_status(
 
 
 # ============================================================================
-# Admin PIN Verification Endpoints
+# Admin Endpoints (founders only)
 # ============================================================================
 
-@router.post("/admin/verify-pin", response_model=AdminPinResponse)
-async def verify_pin(request: AdminPinRequest, req: Request):
+
+class RefreshResponse(BaseModel):
+    """Response from connector refresh authorization."""
+    verified: bool
+    error: str | None = None
+    message: str | None = None
+    cooldown_remaining: int | None = None
+
+
+@router.post("/connectors/verify-refresh", response_model=RefreshResponse)
+async def verify_refresh(
+    req: Request,
+    _user: DiscordUser = Depends(require_founder),
+):
     """
-    Verify Turnstile + admin PIN.
-
-    Used by: site editing, connector tests, any admin action without rate limiting.
+    Authorize connector refresh (founders only, rate limited to 1 per 5 min per IP).
     """
-    ip = get_client_ip(req)
-    return await verify_admin_pin(request.pin, request.turnstile_token, ip)
+    ip = req.client.host if req.client else "unknown"
 
-
-@router.post("/connectors/verify-refresh", response_model=AdminPinResponse)
-async def verify_refresh(request: AdminPinRequest, req: Request):
-    """
-    Verify Turnstile + admin PIN with rate limiting.
-
-    Used by: connector refresh (pings external APIs, so rate limited to 1 per 5 min).
-    """
-    ip = get_client_ip(req)
-
-    # Extra rate limit for refresh (hits external APIs)
     now = time.time()
     last_refresh = _refresh_timestamps.get(ip, 0)
     cooldown_remaining = int(REFRESH_COOLDOWN_SECONDS - (now - last_refresh))
 
     if cooldown_remaining > 0:
-        return AdminPinResponse(
+        return RefreshResponse(
             verified=False,
             error="rate_limited",
             message=f"Please wait {cooldown_remaining} seconds before refreshing again.",
             cooldown_remaining=cooldown_remaining,
         )
 
-    result = await verify_admin_pin(request.pin, request.turnstile_token, ip)
+    # Purge expired entries before adding new one
+    if len(_refresh_timestamps) >= _MAX_REFRESH_ENTRIES:
+        cutoff = now - REFRESH_COOLDOWN_SECONDS
+        expired = [k for k, v in _refresh_timestamps.items() if v < cutoff]
+        for k in expired:
+            del _refresh_timestamps[k]
+    _refresh_timestamps[ip] = now
+    logger.info(f"Connector refresh authorized for {ip}")
 
-    if result.verified:
-        # Purge expired entries before adding new one
-        if len(_refresh_timestamps) >= _MAX_REFRESH_ENTRIES:
-            cutoff = now - REFRESH_COOLDOWN_SECONDS
-            expired = [k for k, v in _refresh_timestamps.items() if v < cutoff]
-            for k in expired:
-                del _refresh_timestamps[k]
-        _refresh_timestamps[ip] = now
-        logger.info(f"Connector refresh authorized for {ip}")
-
-    return result
+    return RefreshResponse(verified=True, message="Refresh authorized")

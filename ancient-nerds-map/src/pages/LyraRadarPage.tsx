@@ -17,7 +17,7 @@ import PageHeader from '../components/layout/PageHeader'
 import PageStatsBar from '../components/layout/PageStatsBar'
 import type { StatItem } from '../components/layout/PageStatsBar'
 import AiNoticeBanner from '../components/layout/AiNoticeBanner'
-import PinAuthModal from '../components/PinAuthModal'
+import { useAuth } from '../contexts/AuthContext'
 import LazyImage from '../components/LazyImage'
 import type { SiteData } from '../data/sites'
 import './LyraRadarPage.css'
@@ -584,11 +584,9 @@ export default function LyraRadarPage() {
   const [allRadarMapItems, setAllRadarMapItems] = useState<RadarItem[]>([])
   const radarMapFetched = useRef(false)
 
-  // Admin auth (same pattern as DbAuditPage)
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [adminPin, setAdminPin] = useState<string | null>(null)
-  const [showPinModal, setShowPinModal] = useState(false)
-  const pendingAuthAction = useRef<(() => void) | null>(null)
+  // Auth (founder role check)
+  const { user, token } = useAuth()
+  const isFounder = !!user?.is_founder
   const [mapHoveredId, setMapHoveredId] = useState<string | null>(null)
   const [mapPinnedId, setMapPinnedId] = useState<string | null>(null)
   const hoverTimeoutRef = useRef<number>(0)
@@ -641,43 +639,26 @@ export default function LyraRadarPage() {
     }
   }, [mapPinnedId])
 
-  const requireAuth = useCallback((cb: () => void) => {
-    if (isAuthenticated) { cb(); return }
-    setShowPinModal(true)
-    pendingAuthAction.current = cb
-  }, [isAuthenticated])
-
-  const handleAuthSuccess = useCallback((_token: string, pin?: string) => {
-    setIsAuthenticated(true)
-    setAdminPin(pin || null)
-    setShowPinModal(false)
-    if (pendingAuthAction.current) {
-      pendingAuthAction.current()
-      pendingAuthAction.current = null
-    }
-  }, [])
-
-  const handlePromote = useCallback((itemId: string) => {
-    requireAuth(async () => {
-      try {
-        const resp = await fetch(`${config.api.baseUrl}/radar/${itemId}/promote`, {
-          method: 'POST',
-          headers: { 'X-Admin-Pin': adminPin || '' },
-        })
-        if (!resp.ok) {
-          const data = await resp.json().catch(() => ({ detail: `HTTP ${resp.status}` }))
-          alert(`Promote failed: ${data.detail || resp.statusText}`)
-          return
-        }
-        // Update local state to reflect promotion
-        setItems(prev => prev.map(it =>
-          it.id === itemId ? { ...it, enrichment_status: 'promoted' } : it
-        ))
-      } catch (e) {
-        alert(`Promote failed: ${e instanceof Error ? e.message : 'Network error'}`)
+  const handlePromote = useCallback(async (itemId: string) => {
+    if (!token) return
+    try {
+      const resp = await fetch(`${config.api.baseUrl}/radar/${itemId}/promote`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+      })
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({ detail: `HTTP ${resp.status}` }))
+        alert(`Promote failed: ${data.detail || resp.statusText}`)
+        return
       }
-    })
-  }, [requireAuth, adminPin])
+      // Update local state to reflect promotion
+      setItems(prev => prev.map(it =>
+        it.id === itemId ? { ...it, enrichment_status: 'promoted' } : it
+      ))
+    } catch (e) {
+      alert(`Promote failed: ${e instanceof Error ? e.message : 'Network error'}`)
+    }
+  }, [token])
 
   useEffect(() => {
     const onScroll = () => setShowScrollTop(window.scrollY > 400)
@@ -937,7 +918,7 @@ export default function LyraRadarPage() {
                   {mapPinnedId && (
                     <button className="radar-map-card-close" onClick={() => setMapPinnedId(null)} aria-label="Close">×</button>
                   )}
-                  <RadarCard item={mapActiveItem} onViewSite={setSelectedSite} onPromote={handlePromote} />
+                  <RadarCard item={mapActiveItem} onViewSite={setSelectedSite} onPromote={isFounder ? handlePromote : undefined} />
                 </div>
               )}
             </RadarMap>
@@ -965,7 +946,7 @@ export default function LyraRadarPage() {
             {/* Radar cards */}
             {items.filter((_, i) => i % columnCount === colIdx).map(item => (
               <div key={item.id} data-radar-id={item.id}>
-                <RadarCard item={item} onViewSite={setSelectedSite} onPromote={handlePromote} />
+                <RadarCard item={item} onViewSite={setSelectedSite} onPromote={isFounder ? handlePromote : undefined} />
               </div>
             ))}
           </div>
@@ -1001,12 +982,6 @@ export default function LyraRadarPage() {
         <SitePopupOverlay site={selectedSite} onClose={() => setSelectedSite(null)} />
       )}
 
-      <PinAuthModal
-        isOpen={showPinModal}
-        onClose={() => { setShowPinModal(false); pendingAuthAction.current = null }}
-        onSuccess={handleAuthSuccess}
-        variant="admin"
-      />
     </div>
   )
 }

@@ -9,7 +9,8 @@ export function DescriptionSection({
   rawDataLoading,
   sourceUrl,
   onAdminClick,
-  isEmpireMode = false
+  isEmpireMode = false,
+  isFounder = false,
 }: DescriptionSectionProps) {
   return (
     <>
@@ -41,8 +42,8 @@ export function DescriptionSection({
           </a>
         )}
         <div className="popup-links-spacer" />
-        {/* Admin button - subtle, on the right - only for sites */}
-        {!isEmpireMode && (
+        {/* Admin button - subtle, on the right - only for founder on sites */}
+        {isFounder && !isEmpireMode && (
           <button
             className="popup-link-item admin"
             onClick={onAdminClick}

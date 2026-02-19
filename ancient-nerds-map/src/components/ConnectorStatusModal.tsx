@@ -2,7 +2,7 @@
  * ConnectorStatusModal - Displays detailed status of all content connectors
  */
 
-import { useState, useEffect, useMemo, memo, useCallback } from 'react'
+import { useState, useMemo, memo, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import type { ConnectorStatus, ConnectorStatusType, QueryTestResult } from '../types/connectors'
 import { TEST_QUERY_LABELS, TEST_QUERY_ORDER } from '../types/connectors'
@@ -12,7 +12,6 @@ import {
   formatResponseTime,
   getConnectorsLedClass,
 } from '../hooks/useConnectorStatus'
-import PinAuthModal from './PinAuthModal'
 
 interface ConnectorStatusModalProps {
   isOpen: boolean
@@ -62,10 +61,6 @@ function ConnectorStatusModal({ isOpen, onClose }: ConnectorStatusModalProps) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [tabFilter, setTabFilter] = useState<TabFilter>('all')
   const [refreshing, setRefreshing] = useState(false)
-  const [showAuthModal, setShowAuthModal] = useState(false)
-  const [adminAuthed, setAdminAuthed] = useState(false)
-  // What to do after PIN auth succeeds
-  const [pendingAction, setPendingAction] = useState<'refresh' | 'showTests' | 'runAllTests' | { type: 'runSingleTest', id: string } | null>(null)
   // Test mode state
   const [showTests, setShowTests] = useState(false)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
@@ -90,70 +85,25 @@ function ConnectorStatusModal({ isOpen, onClose }: ConnectorStatusModalProps) {
     }
   }
 
-  // Gate an action behind admin PIN — if already authed, run immediately
-  const requireAdmin = useCallback((action: typeof pendingAction) => {
-    if (adminAuthed) {
-      // Already verified this session — run directly
-      setPendingAction(action)
-      // Trigger via effect below
-    } else {
-      setPendingAction(action)
-      setShowAuthModal(true)
-    }
-  }, [adminAuthed])
+  const handleRefreshClick = useCallback(async () => {
+    setRefreshing(true)
+    await refresh(true)
+    setRefreshing(false)
+  }, [refresh])
 
-  const handleAuthSuccess = useCallback(async () => {
-    setShowAuthModal(false)
-    setAdminAuthed(true)
-  }, [])
+  const handleRunAllTests = useCallback(async () => {
+    setRunningTests(true)
+    await runAllTests()
+    setRunningTests(false)
+  }, [runAllTests])
 
-  // Execute pending action once admin is authed
-  const executePendingAction = useCallback(async () => {
-    if (!adminAuthed || !pendingAction) return
-    const action = pendingAction
-    setPendingAction(null)
-
-    if (action === 'refresh') {
-      setRefreshing(true)
-      await refresh(true)
-      setRefreshing(false)
-    } else if (action === 'showTests') {
-      setShowTests(true)
-    } else if (action === 'runAllTests') {
-      setRunningTests(true)
-      await runAllTests()
-      setRunningTests(false)
-    } else if (typeof action === 'object' && action.type === 'runSingleTest') {
-      await runSingleTest(action.id)
-    }
-  }, [adminAuthed, pendingAction, refresh, runAllTests, runSingleTest])
-
-  // Fire pending action when auth completes
-  useEffect(() => {
-    if (adminAuthed && pendingAction) {
-      executePendingAction()
-    }
-  }, [adminAuthed, pendingAction, executePendingAction])
-
-  const handleRefreshClick = useCallback(() => {
-    requireAdmin('refresh')
-  }, [requireAdmin])
-
-  const handleRunAllTests = useCallback(() => {
-    requireAdmin('runAllTests')
-  }, [requireAdmin])
-
-  const handleRunSingleTest = useCallback((connectorId: string) => {
-    requireAdmin({ type: 'runSingleTest', id: connectorId })
-  }, [requireAdmin])
+  const handleRunSingleTest = useCallback(async (connectorId: string) => {
+    await runSingleTest(connectorId)
+  }, [runSingleTest])
 
   const handleShowTestsToggle = useCallback((checked: boolean) => {
-    if (checked && !adminAuthed) {
-      requireAdmin('showTests')
-    } else {
-      setShowTests(checked)
-    }
-  }, [adminAuthed, requireAdmin])
+    setShowTests(checked)
+  }, [])
 
   // Toggle row expansion
   const toggleRowExpansion = useCallback((connectorId: string) => {
@@ -422,17 +372,7 @@ function ConnectorStatusModal({ isOpen, onClose }: ConnectorStatusModalProps) {
     </div>
   )
 
-  return (
-    <>
-      {createPortal(modalContent, document.body)}
-      <PinAuthModal
-        isOpen={showAuthModal}
-        onClose={() => { setShowAuthModal(false); setPendingAction(null) }}
-        onSuccess={handleAuthSuccess}
-        variant="admin"
-      />
-    </>
-  )
+  return createPortal(modalContent, document.body)
 }
 
 interface ConnectorRowProps {

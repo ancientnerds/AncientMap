@@ -9,7 +9,7 @@ import os
 from datetime import UTC, datetime, timedelta
 
 import jwt
-from fastapi import HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 
 from pipeline.database import DiscordUser, get_session
 
@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 SECRET_KEY = os.getenv("API_SECRET_KEY", "")
 ALGORITHM = "HS256"
 TOKEN_EXPIRY_DAYS = 7
+FOUNDER_ROLE_ID = "933105341292486707"
 
 
 def create_token(user_id: str, discord_id: str) -> str:
@@ -93,3 +94,10 @@ def get_optional_user(request: Request) -> DiscordUser | None:
         if user:
             session.expunge(user)
         return user
+
+
+async def require_founder(user: DiscordUser = Depends(get_current_user)) -> DiscordUser:
+    """Dependency that requires the user to have the Founder role."""
+    if FOUNDER_ROLE_ID not in (user.roles or []):
+        raise HTTPException(status_code=403, detail="Founders only")
+    return user

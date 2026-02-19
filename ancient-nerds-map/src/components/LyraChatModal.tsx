@@ -27,7 +27,6 @@ import PageHeader from './layout/PageHeader'
 import NewsCard, { newsHighlightToCardProps } from './news/NewsCard'
 import SiteResultItem from './SiteResultItem'
 import { SitePopupOverlay } from './SitePopupOverlay'
-import LyraAuthGate from './LyraAuthGate'
 import { apiDetailToSiteData } from '../utils/siteApi'
 import { resolvePeriod } from '../data/sites'
 import type { SiteData } from '../data/sites'
@@ -282,17 +281,13 @@ export default function LyraChatModal({
   const [searchResults, setSearchResults] = useState<SiteData[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
 
-  // Auth state — Discord OAuth token from localStorage, or admin key from sessionStorage
+  // Auth state — Discord OAuth token from localStorage
   const [authToken, setAuthToken] = useState<string | null>(() =>
     localStorage.getItem('an_auth_token')
   )
-  const [adminKey, setAdminKey] = useState<string | null>(() =>
-    sessionStorage.getItem('lyra_admin_key')
-  )
   const [userCredits, setUserCredits] = useState<number | null>(null)
   const [isUnlimited, setIsUnlimited] = useState(false)
-  const isAuthenticated = !!authToken || !!adminKey
-  const authMode: 'discord' | 'admin' | null = authToken ? 'discord' : adminKey ? 'admin' : null
+  const isAuthenticated = !!authToken
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -520,14 +515,8 @@ export default function LyraChatModal({
     return () => window.removeEventListener('keydown', onKey)
   }, [isOpen, isStreaming, searchOpen, onClose, mode])
 
-  const handleAuthenticated = useCallback((key: string) => {
-    setAdminKey(key)
-  }, [])
-
   const clearAuth = useCallback(() => {
-    sessionStorage.removeItem('lyra_admin_key')
     localStorage.removeItem('an_auth_token')
-    setAdminKey(null)
     setAuthToken(null)
     setUserCredits(null)
     setIsUnlimited(false)
@@ -579,10 +568,10 @@ export default function LyraChatModal({
   const sendMessage = useCallback(async (text?: string) => {
     const messageText = text || input.trim()
     if (!messageText) return
-    if (!authMode) return
+    if (!authToken) return
 
-    // Check credits for Discord users (unlimited users bypass)
-    if (authMode === 'discord' && !isUnlimited && userCredits !== null && userCredits <= 0) {
+    // Check credits (unlimited users bypass)
+    if (!isUnlimited && userCredits !== null && userCredits <= 0) {
       setError(<>No credits remaining. Visit your <a href="/account.html" style={{ color: '#ff6b6b', textDecoration: 'underline' }}>Account page</a> for details.</>)
       return
     }
@@ -631,13 +620,11 @@ export default function LyraChatModal({
     abortRef.current = controller
 
     try {
-      const endpoint = authMode === 'discord' ? '/lyra/chat' : '/lyra/admin'
-      const bearerToken = authMode === 'discord' ? authToken! : adminKey!
-      const response = await fetch(`${config.api.baseUrl}${endpoint}`, {
+      const response = await fetch(`${config.api.baseUrl}/lyra/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${bearerToken}`,
+          'Authorization': `Bearer ${authToken}`,
         },
         body: JSON.stringify(body),
         signal: controller.signal,
@@ -812,7 +799,7 @@ export default function LyraChatModal({
       setIsStreaming(false)
       abortRef.current = null
     }
-  }, [input, authMode, authToken, adminKey, userCredits, isUnlimited, messages, contextType, contextId, contextYear, onHighlightSites, clearAuth, conversationId])
+  }, [input, authToken, userCredits, isUnlimited, messages, contextType, contextId, contextYear, onHighlightSites, clearAuth, conversationId])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -837,7 +824,7 @@ export default function LyraChatModal({
       currentPage="lyra"
       rightSection={
         <div className="lyra-chat-header-actions">
-          {authMode === 'discord' && userCredits !== null && (
+          {authToken && userCredits !== null && (
             <span className="lyra-credits-badge" title="Lyra credits remaining">
               {isUnlimited ? '∞' : userCredits.toLocaleString()} credits
             </span>
@@ -890,7 +877,7 @@ export default function LyraChatModal({
         </div>
       </div>
       <div className="lyra-chat-header-right">
-        {authMode === 'discord' && userCredits !== null && (
+        {authToken && userCredits !== null && (
           <span className="lyra-credits-badge" title="Lyra credits remaining">
             {isUnlimited ? '∞' : userCredits.toLocaleString()} credits
           </span>
@@ -994,7 +981,6 @@ export default function LyraChatModal({
                 </svg>
                 Continue with Discord
               </button>
-              <LyraAuthGate onAuthenticated={handleAuthenticated} />
             </div>
           </div>
         ) : (

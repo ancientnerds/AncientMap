@@ -17,7 +17,16 @@ interface ContributeModalProps {
 
 type SubmitStatus = 'idle' | 'submitting' | 'success' | 'queued' | 'error'
 
-// Turnstile types declared in PinAuthModal.tsx (shared)
+// Turnstile global type declaration
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (container: HTMLElement | string, options: Record<string, unknown>) => string
+      reset: (widgetId: string) => void
+      remove: (widgetId: string) => void
+    }
+  }
+}
 
 
 export default function ContributeModal({

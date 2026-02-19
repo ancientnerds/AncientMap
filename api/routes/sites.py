@@ -11,17 +11,16 @@ Supports:
 
 import json
 import logging
-import os
-import secrets
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from api.cache import cache_delete_pattern, cache_get, cache_set
-from pipeline.database import get_db
+from api.services.jwt_auth import require_founder
+from pipeline.database import DiscordUser, get_db
 from pipeline.normalizers.site_type import normalize_site_type
 
 logger = logging.getLogger(__name__)
@@ -649,14 +648,11 @@ async def get_snapshots(
 @router.post("/snapshots/{snapshot_id}/restore")
 async def restore_snapshot_endpoint(
     snapshot_id: str,
-    authorization: str | None = Header(None),
-    x_admin_pin: str | None = Header(None, alias="X-Admin-Pin"),
+    _user: DiscordUser = Depends(require_founder),
     db: Session = Depends(get_db),
 ):
-    """Restore all rows from a snapshot."""
+    """Restore all rows from a snapshot (founders only)."""
     from api.services.snapshots import restore_snapshot
-
-    _verify_admin(authorization, x_admin_pin)
 
     count = restore_snapshot(db, snapshot_id)
     if count == 0:
@@ -812,15 +808,6 @@ async def get_site_detail(
     }
 
 
-def _extract_bearer_token(authorization: str | None) -> str:
-    """Extract token from Authorization: Bearer <token> header."""
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Authorization header required")
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Authorization header must use Bearer scheme")
-    return authorization[7:]  # Remove "Bearer " prefix
-
-
 def _sync_to_radar(db: Session, site_id: str, site_update: 'SiteUpdateRequest', lat: float, lon: float) -> int:
     """Sync site changes to user_contributions via promoted_site_id FK. Returns synced count."""
     sync_result = db.execute(
@@ -851,45 +838,19 @@ def _sync_to_radar(db: Session, site_id: str, site_update: 'SiteUpdateRequest', 
     return len(sync_result.fetchall())
 
 
-def _verify_admin(authorization: str | None, x_admin_pin: str | None) -> str:
-    """Verify admin credentials. Returns edited_by label. Raises HTTPException on failure."""
-    from api.services.admin_auth import ADMIN_PIN
-
-    if authorization:
-        admin_key = _extract_bearer_token(authorization)
-        configured_admin_key = os.getenv("ADMIN_KEY", "")
-        if not configured_admin_key:
-            raise HTTPException(status_code=503, detail="Admin access not configured")
-        if not secrets.compare_digest(admin_key, configured_admin_key):
-            raise HTTPException(status_code=403, detail="Invalid admin key")
-        return "admin"
-    elif x_admin_pin:
-        if not ADMIN_PIN:
-            raise HTTPException(status_code=503, detail="Admin PIN not configured")
-        if not secrets.compare_digest(x_admin_pin, ADMIN_PIN):
-            raise HTTPException(status_code=403, detail="Invalid admin PIN")
-        return "audit"
-    else:
-        raise HTTPException(status_code=401, detail="Authorization required")
-
-
 @router.put("/{site_id}")
 async def update_site(
     site_id: str,
     site_update: SiteUpdateRequest,
-    authorization: str | None = Header(None, description="Bearer token for admin authentication"),
-    x_admin_pin: str | None = Header(None, alias="X-Admin-Pin"),
+    user: DiscordUser = Depends(require_founder),
     db: Session = Depends(get_db),
 ):
     """
-    Update a site's details (admin only).
+    Update a site's details (founders only).
 
     Updates name, description, location, coordinates, category, period, and source URL.
-    Accepts EITHER:
-    - Authorization: Bearer <ADMIN_KEY> header (existing)
-    - X-Admin-Pin: <4-digit PIN> header (DB audit page)
     """
-    edited_by = _verify_admin(authorization, x_admin_pin)
+    edited_by = user.username
 
     # First check if site exists
     check_query = text("SELECT id FROM unified_sites WHERE id::text = :site_id")
@@ -978,19 +939,18 @@ class BatchSiteUpdate(BaseModel):
 @router.post("/batch-update")
 async def batch_update_sites(
     updates: list[BatchSiteUpdate],
-    authorization: str | None = Header(None),
-    x_admin_pin: str | None = Header(None, alias="X-Admin-Pin"),
+    user: DiscordUser = Depends(require_founder),
     db: Session = Depends(get_db),
 ):
     """
-    Apply multiple site updates in a single transaction with snapshot.
+    Apply multiple site updates in a single transaction with snapshot (founders only).
 
     Creates a snapshot of all affected rows before applying changes.
     Syncs changes to radar (user_contributions) where applicable.
     """
     from api.services.snapshots import create_snapshot
 
-    edited_by = _verify_admin(authorization, x_admin_pin)
+    edited_by = user.username
 
     if not updates:
         raise HTTPException(status_code=400, detail="No updates provided")
@@ -1098,12 +1058,11 @@ class BatchUploadRequest(BaseModel):
 @router.post("/batch-upload")
 async def batch_upload_sites(
     body: BatchUploadRequest,
-    authorization: str | None = Header(None),
-    x_admin_pin: str | None = Header(None, alias="X-Admin-Pin"),
+    user: DiscordUser = Depends(require_founder),
     db: Session = Depends(get_db),
 ):
     """
-    Upload sites in bulk — inserts new sites and updates existing ones.
+    Upload sites in bulk — inserts new sites and updates existing ones (founders only).
 
     Creates a snapshot of all sites that will be updated before applying changes.
     """
@@ -1111,7 +1070,7 @@ async def batch_upload_sites(
 
     from api.services.snapshots import create_snapshot
 
-    edited_by = _verify_admin(authorization, x_admin_pin)
+    edited_by = user.username
 
     sites = body.sites
     target_source = body.target_source
