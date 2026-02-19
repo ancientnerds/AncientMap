@@ -12,8 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from api.cache import cache_get, cache_set
-from api.services.admin_auth import get_client_ip
-from api.services.rate_limiter import RateLimiter
+from api.services.rate_limiter import RateLimiter, get_client_ip
 from pipeline.database import get_db
 
 logger = logging.getLogger(__name__)

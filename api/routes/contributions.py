@@ -20,8 +20,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from api.cache import cache_delete_pattern
-from api.services.admin_auth import get_client_ip
-from api.services.rate_limiter import RateLimiter
+from api.services.rate_limiter import RateLimiter, get_client_ip
 from api.services.turnstile import verify_turnstile as _verify_turnstile_shared
 from pipeline.database import get_db
 

@@ -12,7 +12,23 @@ import logging
 import os
 import time
 
+from fastapi import Request
+
 logger = logging.getLogger(__name__)
+
+# When behind a reverse proxy (nginx), trust X-Forwarded-For.
+_BEHIND_PROXY = os.environ.get("TRUSTED_PROXY", "").strip() in ("1", "true", "yes")
+
+
+def get_client_ip(request: Request) -> str:
+    """Extract client IP. Trusts X-Forwarded-For only when TRUSTED_PROXY=1."""
+    ip = request.client.host if request.client else "unknown"
+    if _BEHIND_PROXY:
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            ip = forwarded.split(",")[-1].strip()
+    return ip
+
 
 # ---------------------------------------------------------------------------
 # Module-level Redis client (shared by all RateLimiter instances)
