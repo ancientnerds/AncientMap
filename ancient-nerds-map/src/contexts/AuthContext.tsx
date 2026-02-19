@@ -16,6 +16,7 @@ export interface AuthUser {
   roles: string[]
   credits: number
   is_og_nerd: boolean
+  is_founder: boolean
   created_at: string | null
 }
 
@@ -33,11 +34,30 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 const TOKEN_KEY = 'an_auth_token'
+const COOKIE_NAME = 'an_auth_token'
+
+function readCookie(name: string): string | null {
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`))
+  return match ? decodeURIComponent(match[1]) : null
+}
+
+function clearCookie(name: string) {
+  document.cookie = `${name}=; Max-Age=0; Path=/; SameSite=Lax; Secure`
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY))
-  const [isLoading, setIsLoading] = useState(!!localStorage.getItem(TOKEN_KEY))
+  const [token, setToken] = useState<string | null>(() => {
+    // Check cookie first (set by OAuth callback), then localStorage
+    const cookieToken = readCookie(COOKIE_NAME)
+    if (cookieToken) {
+      localStorage.setItem(TOKEN_KEY, cookieToken)
+      clearCookie(COOKIE_NAME)
+      return cookieToken
+    }
+    return localStorage.getItem(TOKEN_KEY)
+  })
+  const [isLoading, setIsLoading] = useState(!!localStorage.getItem(TOKEN_KEY) || !!readCookie(COOKIE_NAME))
 
   const clearAuth = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY)

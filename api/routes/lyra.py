@@ -19,6 +19,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from api.services.jwt_auth import get_current_user
+from api.services.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,11 @@ router = APIRouter()
 
 LYRA_ADMIN_KEY = os.getenv("LYRA_ADMIN_KEY", "")
 SSE_MAX_DURATION = 300  # Max SSE stream duration in seconds (5 minutes)
+FOUNDER_ROLE_ID = "933105341292486707"
+
+# Rate limits
+_chat_limiter = RateLimiter(max_requests=10, window_seconds=3600, namespace="lyra_chat")
+_admin_verify_limiter = RateLimiter(max_requests=5, window_seconds=3600, namespace="lyra_admin_verify")
 
 
 # ---------------------------------------------------------------------------
@@ -80,13 +86,38 @@ async def lyra_chat(request: LyraChatRequest, req: Request):
     The done event includes credits_remaining.
     """
     user = get_current_user(req)
+    is_founder = FOUNDER_ROLE_ID in (user.roles or [])
 
-    # Check credits
-    if user.credits <= 0:
-        raise HTTPException(status_code=402, detail="No credits remaining")
+    # Per-user rate limit (keyed by discord_id, not IP)
+    if not _chat_limiter.check(user.discord_id):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
+
+    # Founders bypass credits entirely
+    if is_founder:
+        return _stream_response(
+            message=request.message,
+            images=[img.model_dump() for img in request.images] if request.images else None,
+            history=[h.model_dump() for h in request.history] if request.history else None,
+            context_type=request.context_type,
+            context_id=request.context_id,
+            context_year=request.context_year,
+        )
+
+    # Atomic pre-deduct: lock row, check credits > 0, deduct 1 as deposit
+    from pipeline.database import DiscordUser as DBUser, get_session
+    with get_session() as session:
+        db_user = session.query(DBUser).filter(
+            DBUser.id == user.id,
+            DBUser.credits > 0,
+        ).with_for_update().first()
+        if not db_user:
+            raise HTTPException(status_code=402, detail="No credits remaining")
+        db_user.credits -= 1  # 1-credit deposit
+        deposit_remaining = db_user.credits
 
     return _stream_response_with_credits(
         user_id=user.id,
+        deposit_remaining=deposit_remaining,
         message=request.message,
         images=[img.model_dump() for img in request.images] if request.images else None,
         history=[h.model_dump() for h in request.history] if request.history else None,
@@ -97,13 +128,17 @@ async def lyra_chat(request: LyraChatRequest, req: Request):
 
 
 @router.post("/admin/verify")
-async def lyra_admin_verify(authorization: str | None = Header(None)):
+async def lyra_admin_verify(req: Request, authorization: str | None = Header(None)):
     """
     Lightweight key check — no LLM call, just verifies the Bearer token.
     Used by the frontend auth gate before opening the chat.
     """
     if not LYRA_ADMIN_KEY:
         raise HTTPException(status_code=503, detail="LYRA_ADMIN_KEY not configured")
+
+    client_ip = req.client.host if req.client else "unknown"
+    if not _admin_verify_limiter.check(client_ip):
+        raise HTTPException(status_code=429, detail="Too many attempts. Try again later.")
 
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing auth")
@@ -190,6 +225,7 @@ def _stream_response(
 
 def _stream_response_with_credits(
     user_id: uuid.UUID,
+    deposit_remaining: int,
     message: str,
     images: list[dict] | None,
     history: list[dict] | None,
@@ -197,7 +233,11 @@ def _stream_response_with_credits(
     context_id: str | None,
     context_year: int | None,
 ) -> StreamingResponse:
-    """Create an SSE streaming response with credit deduction on completion."""
+    """Create an SSE streaming response with atomic credit reconciliation on completion.
+
+    The caller has already pre-deducted 1 credit as a deposit. On the `done` event,
+    we calculate the real cost and reconcile: deduct the remainder or refund overpayment.
+    """
 
     async def generate():
         deadline = time.monotonic() + SSE_MAX_DURATION
@@ -218,7 +258,7 @@ def _stream_response_with_credits(
 
                 event_type = chunk.get("type", "token")
 
-                # Intercept "done" event to deduct credits and add credits_remaining
+                # Intercept "done" event to reconcile credits and log usage
                 if event_type == "done":
                     tokens = chunk.get("metadata", {}).get("tokens", {})
                     input_tokens = tokens.get("input", 0)
@@ -226,8 +266,8 @@ def _stream_response_with_credits(
                     voyage_tokens = tokens.get("voyage", 0)
                     credits_used = max(1, ceil((input_tokens + output_tokens) / 100))
 
-                    # Deduct credits and log usage
-                    credits_remaining = _deduct_credits(
+                    # Reconcile: 1 credit already deducted as deposit
+                    credits_remaining = _reconcile_credits(
                         user_id=user_id,
                         input_tokens=input_tokens,
                         output_tokens=output_tokens,
@@ -235,7 +275,6 @@ def _stream_response_with_credits(
                         credits_used=credits_used,
                     )
 
-                    # Add credits info to the done event metadata
                     if "metadata" not in chunk:
                         chunk["metadata"] = {}
                     chunk["metadata"]["credits_used"] = credits_used
@@ -258,22 +297,32 @@ def _stream_response_with_credits(
     )
 
 
-def _deduct_credits(
+def _reconcile_credits(
     user_id: uuid.UUID,
     input_tokens: int,
     output_tokens: int,
     voyage_tokens: int,
     credits_used: int,
 ) -> int:
-    """Deduct credits from user and log usage. Returns remaining credits."""
+    """Reconcile credits after streaming. 1 credit was already pre-deducted as deposit.
+
+    If real cost > 1: deduct the remainder.
+    If real cost == 1: no adjustment needed (deposit covers it).
+    Logs usage regardless.
+    Returns remaining credits.
+    """
     from pipeline.database import DiscordUser, TokenUsageLog, get_session
+
+    additional = credits_used - 1  # deposit was 1
 
     with get_session() as session:
         user = session.query(DiscordUser).filter(DiscordUser.id == user_id).with_for_update().first()
         if not user:
             return 0
 
-        user.credits = max(0, user.credits - credits_used)
+        if additional > 0:
+            user.credits = max(0, user.credits - additional)
+
         session.add(TokenUsageLog(
             user_id=user_id,
             input_tokens=input_tokens,

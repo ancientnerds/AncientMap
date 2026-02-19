@@ -579,8 +579,8 @@ export default function LyraChatModal({
     if (!messageText) return
     if (!authMode) return
 
-    // Check credits for Discord users
-    if (authMode === 'discord' && userCredits !== null && userCredits <= 0) {
+    // Check credits for Discord users (founders have credits === -1 meaning unlimited)
+    if (authMode === 'discord' && userCredits !== null && userCredits !== -1 && userCredits <= 0) {
       setError('No credits remaining. Visit your Account page for details.')
       return
     }
@@ -885,7 +885,7 @@ export default function LyraChatModal({
       <div className="lyra-chat-header-right">
         {authMode === 'discord' && userCredits !== null && (
           <span className="lyra-credits-badge" title="Lyra credits remaining">
-            {userCredits.toLocaleString()} credits
+            {userCredits === -1 ? '∞' : userCredits.toLocaleString()} credits
           </span>
         )}
         {messages.length > 0 && (

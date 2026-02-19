@@ -143,10 +143,22 @@
   width: fit-content;
 }
 
+.account-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .account-badge.og-nerd {
   background: rgba(192, 32, 35, 0.2);
   color: #c02023;
   border: 1px solid rgba(192, 32, 35, 0.3);
+}
+
+.account-badge.founder {
+  background: rgba(255, 185, 0, 0.15);
+  color: #ffb900;
+  border: 1px solid rgba(255, 185, 0, 0.3);
 }
 
 /* Credits section */

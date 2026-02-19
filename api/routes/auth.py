@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
 from api.services.jwt_auth import create_token, get_current_user
+from api.services.rate_limiter import RateLimiter
 from pipeline.database import CreditGrant, DiscordUser, TokenUsageLog, get_session
 
 logger = logging.getLogger(__name__)
@@ -33,9 +34,14 @@ DISCORD_REDIRECT_URI = os.getenv("DISCORD_REDIRECT_URI", "")
 DISCORD_GUILD_ID = os.getenv("DISCORD_GUILD_ID", "932330696956063765")
 OG_NERD_ROLE_ID = "972439407086944266"
 OG_NERD_CREDIT_AMOUNT = 1000
+FOUNDER_ROLE_ID = "933105341292486707"
 
 # Simple in-memory CSRF state store (short-lived, cleared on restart is fine)
 _oauth_states: dict[str, float] = {}
+_OAUTH_STATE_CAP = 1000
+
+# Rate limit on OAuth redirects: 5 per minute per IP
+_oauth_limiter = RateLimiter(max_requests=5, window_seconds=60, namespace="oauth_redirect")
 
 
 def _cleanup_states():
@@ -47,12 +53,20 @@ def _cleanup_states():
 
 
 @router.get("/discord")
-async def discord_oauth_redirect():
+async def discord_oauth_redirect(req: Request):
     """Redirect user to Discord OAuth2 authorization page."""
     if not DISCORD_CLIENT_ID or not DISCORD_REDIRECT_URI:
         raise HTTPException(status_code=503, detail="Discord OAuth not configured")
 
+    client_ip = req.client.host if req.client else "unknown"
+    if not _oauth_limiter.check(client_ip):
+        raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
+
     _cleanup_states()
+
+    if len(_oauth_states) >= _OAUTH_STATE_CAP:
+        raise HTTPException(status_code=429, detail="Too many pending logins. Try again later.")
+
     state = secrets.token_urlsafe(32)
     _oauth_states[state] = datetime.now(timezone.utc).timestamp()
 
@@ -169,7 +183,17 @@ async def discord_oauth_callback(code: str | None = None, state: str | None = No
 
         jwt_token = create_token(str(user.id), discord_id)
 
-    return RedirectResponse(url=f"/account.html?token={jwt_token}")
+    response = RedirectResponse(url="/account.html")
+    response.set_cookie(
+        key="an_auth_token",
+        value=jwt_token,
+        max_age=120,  # Short-lived: frontend reads it immediately on load
+        httponly=False,  # JS needs to read it
+        samesite="lax",
+        secure=True,
+        path="/",
+    )
+    return response
 
 
 @router.get("/me")
@@ -179,14 +203,18 @@ async def get_me(user: DiscordUser = Depends(get_current_user)):
     if user.avatar_hash:
         avatar_url = f"https://cdn.discordapp.com/avatars/{user.discord_id}/{user.avatar_hash}.png?size=128"
 
+    roles = user.roles or []
+    is_founder = FOUNDER_ROLE_ID in roles
+
     return {
         "id": str(user.id),
         "discord_id": user.discord_id,
         "username": user.username,
         "avatar_url": avatar_url,
-        "roles": user.roles or [],
-        "credits": user.credits,
-        "is_og_nerd": OG_NERD_ROLE_ID in (user.roles or []),
+        "roles": roles,
+        "credits": -1 if is_founder else user.credits,
+        "is_og_nerd": OG_NERD_ROLE_ID in roles,
+        "is_founder": is_founder,
         "created_at": user.created_at.isoformat() if user.created_at else None,
     }
 
@@ -194,10 +222,12 @@ async def get_me(user: DiscordUser = Depends(get_current_user)):
 @router.get("/credits")
 async def get_credits(user: DiscordUser = Depends(get_current_user)):
     """Get credits balance and recent usage history."""
+    is_founder = FOUNDER_ROLE_ID in (user.roles or [])
+
     with get_session() as session:
         # Refresh credits from DB (in case it was deducted by another request)
         db_user = session.query(DiscordUser).filter(DiscordUser.id == user.id).first()
-        credits = db_user.credits if db_user else user.credits
+        credits = -1 if is_founder else (db_user.credits if db_user else user.credits)
 
         # Recent usage (last 20)
         usage = session.query(TokenUsageLog).filter(
