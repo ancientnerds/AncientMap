@@ -23,6 +23,8 @@ TOKEN_EXPIRY_DAYS = 7
 
 def create_token(user_id: str, discord_id: str) -> str:
     """Create a signed JWT for an authenticated user."""
+    if not SECRET_KEY:
+        raise RuntimeError("API_SECRET_KEY not set — refusing to sign tokens with empty secret")
     payload = {
         "sub": discord_id,
         "user_id": user_id,

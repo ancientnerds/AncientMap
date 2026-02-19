@@ -27,32 +27,29 @@ interface GrantEntry {
 
 const REASON_LABELS: Record<string, string> = {
   og_nerd_role: 'OG Nerd Role',
+  founder_role: 'Founder Role',
   patreon_tier_1: 'Patreon Tier 1',
   patreon_tier_2: 'Patreon Tier 2',
   patreon_tier_3: 'Patreon Tier 3',
 }
 
 export default function AccountPage() {
-  const { user, token, isLoggedIn, isLoading, login, logout } = useAuth()
+  const { user, token, isLoggedIn, isLoading, logout } = useAuth()
   const [usage, setUsage] = useState<UsageEntry[]>([])
   const [grants, setGrants] = useState<GrantEntry[]>([])
   const [error, setError] = useState<string | null>(null)
 
-  // Handle OAuth callback: pick up ?token= from URL
+  // Handle OAuth error callback (?error= in URL). Token is now delivered via cookie
+  // and consumed by AuthContext on mount — no ?token= in URL anymore.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const urlToken = params.get('token')
     const urlError = params.get('error')
 
-    if (urlToken) {
-      login(urlToken)
-      // Clean the URL
-      window.history.replaceState({}, '', '/account.html')
-    } else if (urlError) {
+    if (urlError) {
       setError(`Login failed: ${urlError.replace(/_/g, ' ')}`)
       window.history.replaceState({}, '', '/account.html')
     }
-  }, [login])
+  }, [])
 
   // Fetch credits + usage when logged in
   const fetchCredits = useCallback(async () => {
@@ -127,18 +124,27 @@ export default function AccountPage() {
                 )}
                 <div className="account-card-info">
                   <h2 className="account-username">{user?.username}</h2>
-                  {user?.is_og_nerd && (
-                    <span className="account-badge og-nerd">OG Nerd</span>
-                  )}
+                  <div className="account-badges">
+                    {user?.is_founder && (
+                      <span className="account-badge founder">Founder</span>
+                    )}
+                    {user?.is_og_nerd && (
+                      <span className="account-badge og-nerd">OG Nerd</span>
+                    )}
+                  </div>
                 </div>
               </div>
 
               {/* Credits */}
               <div className="account-credits-section">
                 <div className="account-credits-label">Lyra Credits</div>
-                <div className="account-credits-value">{user?.credits?.toLocaleString() ?? 0}</div>
+                <div className="account-credits-value">
+                  {user?.credits === -1 ? '∞' : (user?.credits?.toLocaleString() ?? 0)}
+                </div>
                 <div className="account-credits-note">
-                  1 credit = 100 tokens (input + output)
+                  {user?.credits === -1
+                    ? 'Unlimited access — thank you, Founder!'
+                    : '1 credit = 100 tokens (input + output)'}
                 </div>
               </div>
 
