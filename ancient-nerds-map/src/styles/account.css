@@ -266,3 +266,248 @@
   color: #ef4444;
   font-weight: 600;
 }
+
+/* Admin panel */
+.admin-panel {
+  border-top: 1px solid rgba(0, 255, 46, 0.15);
+  padding-top: 24px;
+  margin-top: 8px;
+}
+
+.admin-search {
+  width: 100%;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #e0e0e0;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  outline: none;
+  margin-bottom: 12px;
+  box-sizing: border-box;
+}
+
+.admin-search:focus {
+  border-color: rgba(0, 255, 46, 0.4);
+}
+
+.admin-search::placeholder {
+  color: #666;
+}
+
+.admin-loading {
+  text-align: center;
+  padding: 16px;
+  color: #666;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+}
+
+.admin-error {
+  background: rgba(192, 32, 35, 0.15);
+  border: 1px solid rgba(192, 32, 35, 0.3);
+  color: #ff6b6b;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+}
+
+.admin-success {
+  background: rgba(0, 255, 46, 0.08);
+  border: 1px solid rgba(0, 255, 46, 0.2);
+  color: #00ff2e;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+}
+
+.admin-user-list {
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.admin-user-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.admin-user-row:last-child {
+  border-bottom: none;
+}
+
+.admin-user-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.admin-user-row.selected {
+  background: rgba(0, 255, 46, 0.08);
+  border-left: 2px solid #00ff2e;
+}
+
+.admin-user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.admin-user-avatar-placeholder {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(88, 101, 242, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: #5865F2;
+  flex-shrink: 0;
+}
+
+.admin-user-name {
+  flex: 1;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  color: #e0e0e0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-user-badges {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.admin-user-badges .account-badge {
+  font-size: 9px;
+  padding: 1px 6px;
+}
+
+.admin-user-credits {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 13px;
+  color: #ccc;
+  flex-shrink: 0;
+  min-width: 50px;
+  text-align: right;
+}
+
+/* Credit adjustment form */
+.admin-credit-form {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.admin-credit-form-header {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  color: #ccc;
+  margin-bottom: 10px;
+}
+
+.admin-credit-form-header strong {
+  color: #fff;
+}
+
+.admin-credit-form-current {
+  color: #888;
+  font-size: 12px;
+  margin-left: 4px;
+}
+
+.admin-credit-controls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.admin-action-select {
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+}
+
+.admin-amount-input {
+  flex: 1;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  outline: none;
+  min-width: 0;
+}
+
+.admin-amount-input:focus,
+.admin-action-select:focus {
+  border-color: rgba(0, 255, 46, 0.4);
+}
+
+.admin-apply-btn {
+  padding: 8px 18px;
+  background: rgba(0, 255, 46, 0.15);
+  border: 1px solid rgba(0, 255, 46, 0.3);
+  border-radius: 6px;
+  color: #00ff2e;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+.admin-apply-btn:hover {
+  background: rgba(0, 255, 46, 0.25);
+}
+
+.admin-shortcuts {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.admin-shortcut-btn {
+  padding: 5px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  color: #aaa;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.admin-shortcut-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}

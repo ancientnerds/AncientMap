@@ -12,12 +12,14 @@ Endpoints:
 import logging
 import os
 import secrets
+import uuid
 from datetime import UTC, datetime
 from math import ceil
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
 
 from api.services.jwt_auth import create_token, get_current_user
 from api.services.rate_limiter import RateLimiter
@@ -269,3 +271,81 @@ async def get_credits(user: DiscordUser = Depends(get_current_user)):
 async def logout():
     """No-op endpoint — JWT is stateless, frontend clears the token."""
     return {"ok": True}
+
+
+# --- Founder Admin ---
+
+async def require_founder(user: DiscordUser = Depends(get_current_user)) -> DiscordUser:
+    """Dependency that requires the user to have the Founder role."""
+    if FOUNDER_ROLE_ID not in (user.roles or []):
+        raise HTTPException(status_code=403, detail="Founders only")
+    return user
+
+
+class CreditAdjustRequest(BaseModel):
+    user_id: str
+    action: str  # "set" or "add"
+    amount: int
+
+
+@router.get("/admin/users")
+async def admin_list_users(
+    _founder: DiscordUser = Depends(require_founder),
+    q: str = Query(default="", max_length=100),
+):
+    """List users for admin panel. Optional search by username."""
+    with get_session() as session:
+        query = session.query(DiscordUser)
+        if q:
+            query = query.filter(DiscordUser.username.ilike(f"%{q}%"))
+        users = query.order_by(DiscordUser.last_login.desc()).limit(100).all()
+
+        return {
+            "users": [
+                {
+                    "id": str(u.id),
+                    "username": u.username,
+                    "avatar_url": (
+                        f"https://cdn.discordapp.com/avatars/{u.discord_id}/{u.avatar_hash}.png?size=64"
+                        if u.avatar_hash else None
+                    ),
+                    "credits": u.credits,
+                    "is_founder": FOUNDER_ROLE_ID in (u.roles or []),
+                    "is_og_nerd": OG_NERD_ROLE_ID in (u.roles or []),
+                    "last_login": u.last_login.isoformat() if u.last_login else None,
+                }
+                for u in users
+            ]
+        }
+
+
+@router.post("/admin/credits")
+async def admin_adjust_credits(
+    body: CreditAdjustRequest,
+    _founder: DiscordUser = Depends(require_founder),
+):
+    """Set or add credits for a user. set with -1 = unlimited."""
+    if body.action not in ("set", "add"):
+        raise HTTPException(status_code=400, detail="action must be 'set' or 'add'")
+
+    with get_session() as session:
+        user = session.query(DiscordUser).filter(
+            DiscordUser.id == uuid.UUID(body.user_id),
+        ).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        if body.action == "set":
+            user.credits = body.amount
+        else:
+            user.credits += body.amount
+
+        session.add(CreditGrant(
+            user_id=user.id,
+            amount=body.amount,
+            reason="founder_grant",
+        ))
+        session.flush()
+        new_credits = user.credits
+
+    return {"ok": True, "new_credits": new_credits}
