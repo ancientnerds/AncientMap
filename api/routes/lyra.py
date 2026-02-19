@@ -34,6 +34,10 @@ router = APIRouter()
 LYRA_ADMIN_KEY = os.getenv("LYRA_ADMIN_KEY", "")
 SSE_MAX_DURATION = 300  # Max SSE stream duration in seconds (5 minutes)
 
+# Anti-exploit: cap conversation history for low-credit users to bound max request cost
+LOW_CREDIT_THRESHOLD = 20   # credits below which history is truncated
+LOW_CREDIT_MAX_HISTORY = 5  # max history messages for low-credit users (~2-3 exchanges)
+
 # Rate limits
 _chat_limiter = RateLimiter(max_requests=10, window_seconds=3600, namespace="lyra_chat")
 _admin_verify_limiter = RateLimiter(max_requests=5, window_seconds=3600, namespace="lyra_admin_verify")
@@ -117,12 +121,17 @@ async def lyra_chat(request: LyraChatRequest, req: Request):
         db_user.credits -= 1  # 1-credit deposit
         deposit_remaining = db_user.credits
 
+    # Anti-exploit: limit history length for low-credit users to bound max cost
+    history = [h.model_dump() for h in request.history] if request.history else None
+    if deposit_remaining < LOW_CREDIT_THRESHOLD and history and len(history) > LOW_CREDIT_MAX_HISTORY:
+        history = history[-LOW_CREDIT_MAX_HISTORY:]
+
     return _stream_response_with_credits(
         user_id=user.id,
         deposit_remaining=deposit_remaining,
         message=request.message,
         images=[img.model_dump() for img in request.images] if request.images else None,
-        history=[h.model_dump() for h in request.history] if request.history else None,
+        history=history,
         context_type=request.context_type,
         context_id=request.context_id,
         context_year=request.context_year,
@@ -243,6 +252,7 @@ def _stream_response_with_credits(
 
     async def generate():
         deadline = time.monotonic() + SSE_MAX_DURATION
+        done_fired = False
         try:
             from api.services.lyra_agent import run_agent_stream
 
@@ -262,6 +272,7 @@ def _stream_response_with_credits(
 
                 # Intercept "done" event to reconcile credits and log usage
                 if event_type == "done":
+                    done_fired = True
                     tokens = chunk.get("metadata", {}).get("tokens", {})
                     input_tokens = tokens.get("input", 0)
                     output_tokens = tokens.get("output", 0)
@@ -286,6 +297,15 @@ def _stream_response_with_credits(
 
         except Exception as e:
             logger.error(f"Lyra stream error: {e}", exc_info=True)
+            # Refund the 1-credit deposit if done event never fired (no answer generated)
+            if not done_fired:
+                try:
+                    with get_db_session() as session:
+                        u = session.query(DBUser).filter(DBUser.id == user_id).with_for_update().first()
+                        if u:
+                            u.credits += 1
+                except Exception:
+                    logger.error("Failed to refund deposit after stream error", exc_info=True)
             yield f"event: error\ndata: {json.dumps({'type': 'error', 'error': 'An internal error occurred'})}\n\n"
 
     return StreamingResponse(
