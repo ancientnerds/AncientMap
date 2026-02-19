@@ -1881,49 +1881,49 @@ function AppContent() {
     return (
       <div className="mobile-overlay">
         <div className="mobile-overlay-content">
+          <img src="/an-logo.svg" alt="" className="mobile-logo-icon" />
           <div className="mobile-logo-main">ANCIENT NERDS</div>
           <div className="mobile-logo-sub">RESEARCH PLATFORM</div>
           <div className="mobile-message">
-            This interactive 3D globe experience is optimized for desktop browsers.
+            The 3D globe is optimized for desktop browsers.
           </div>
           <div className="mobile-hint">
-            For the best experience, please visit on a computer with a larger screen.
+            Explore our mobile-friendly pages below, or continue to the globe.
           </div>
           <div className="mobile-actions">
             <div className="mobile-actions-row">
               <a className="mobile-action-btn" href="/news.html">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1"></path>
-                  <path d="M18 14v4h4"></path>
-                  <circle cx="18" cy="18" r="4"></circle>
-                </svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1m2 13a2 2 0 0 1-2-2V7m2 13a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2" /></svg>
                 News Feed
               </a>
               <a className="mobile-action-btn" href="/radar.html">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="11" cy="11" r="8"></circle>
-                  <path d="M21 21l-4.35-4.35"></path>
-                </svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" /></svg>
                 Radar
               </a>
+            </div>
+            <div className="mobile-actions-row">
+              <a className="mobile-action-btn" href="/articles.html">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>
+                Articles
+              </a>
               <a className="mobile-action-btn" href="/lyra.html">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                </svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
                 Lyra
               </a>
             </div>
-            <button
-              className="mobile-action-btn"
-              onClick={() => setMobileWarningDismissed(true)}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10"></circle>
-                <path d="M2 12h20"></path>
-                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-              </svg>
-              3D Globe
-            </button>
+            <div className="mobile-actions-row">
+              <a className="mobile-action-btn" href="/db.html">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2C6.48 2 2 3.79 2 6v12c0 2.21 4.48 4 10 4s10-1.79 10-4V6c0-2.21-4.48-4-10-4zM2 12c0 2.21 4.48 4 10 4s10-1.79 10-4" /></svg>
+                Database
+              </a>
+              <button
+                className="mobile-action-btn mobile-action-globe"
+                onClick={() => setMobileWarningDismissed(true)}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M2 12h20" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>
+                3D Globe
+              </button>
+            </div>
           </div>
         </div>
       </div>
