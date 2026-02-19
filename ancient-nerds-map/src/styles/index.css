@@ -2511,6 +2511,38 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   pointer-events: auto;
 }
 
+/* Row 3: Page Navigation Links */
+.nav-links {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  background: var(--bg-card);
+  backdrop-filter: blur(var(--blur-amount));
+  -webkit-backdrop-filter: blur(var(--blur-amount));
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  pointer-events: auto;
+}
+
+.nav-link {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 4px 6px;
+  border-radius: 3px;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.nav-link:hover {
+  color: var(--primary-red);
+  background: rgba(192, 32, 35, 0.15);
+}
+
 .social-link {
   display: flex;
   align-items: center;
