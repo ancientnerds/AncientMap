@@ -34,7 +34,8 @@ async def seo_site_page(
     if not site["found"]:
         return HTMLResponse(content="Site not found", status_code=404)
 
-    base_url = str(request.base_url).rstrip('/')
+    # Nginx proxies over HTTP internally; force https for public URLs
+    base_url = str(request.base_url).rstrip('/').replace('http://', 'https://')
     title_escaped = html.escape(site["name"])
     desc_escaped = html.escape(site["description"])
     country_escaped = html.escape(site["country"])
