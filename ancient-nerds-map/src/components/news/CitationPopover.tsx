@@ -3,7 +3,7 @@
  *
  * Wraps NewsCard (size="sm") in a fixed-position container anchored
  * to the citation link. Stays open when the user mouses into the card.
- * When pinned: shows X close button, is draggable, doesn't auto-dismiss.
+ * When pinned: shows X close button overlay, draggable from anywhere, doesn't auto-dismiss.
  */
 
 import { useRef, useEffect, useState, useCallback } from 'react'
@@ -58,6 +58,9 @@ export default function CitationPopover({
 
   const onDragStart = useCallback((e: React.MouseEvent) => {
     if (!pinned) return
+    // Don't start drag on the close button or interactive elements
+    const target = e.target as HTMLElement
+    if (target.closest('.citation-popover-close') || target.closest('a') || target.closest('button')) return
     e.preventDefault()
     dragging.current = true
     dragStart.current = { x: e.clientX, y: e.clientY, ox: dragOffset.x, oy: dragOffset.y }
@@ -94,16 +97,15 @@ export default function CitationPopover({
       }}
       onMouseEnter={pinned ? undefined : onMouseEnter}
       onMouseLeave={pinned ? undefined : onMouseLeave}
+      onMouseDown={onDragStart}
     >
       {pinned && (
-        <div className="citation-popover-header" onMouseDown={onDragStart}>
-          <button className="citation-popover-close" onClick={onClose} title="Close">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
+        <button className="citation-popover-close" onClick={onClose} title="Close">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
       )}
       <NewsCard {...cardProps} size="sm" />
     </div>
