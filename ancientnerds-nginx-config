@@ -1,4 +1,4 @@
-# SEO: Detect crawler user-agents for pre-rendered site pages
+# SEO: Detect crawler user-agents for pre-rendered site pages (/?site={uuid})
 map $http_user_agent $is_bot {
     default 0;
     ~*(Googlebot|bingbot|Twitterbot|facebookexternalhit|LinkedInBot|Slackbot|Discordbot|WhatsApp|TelegramBot|Applebot|Pinterestbot|YandexBot|DuckDuckBot) 1;
