@@ -36,6 +36,70 @@ interface AdminUser {
   last_login: string | null
 }
 
+type CreditAction = 'add' | 'set' | 'remove'
+
+interface ActionOption {
+  value: CreditAction
+  label: string
+  desc: string
+  color: string
+}
+
+const CREDIT_ACTIONS: ActionOption[] = [
+  { value: 'add', label: 'Add', desc: 'Add credits to balance', color: '#22c55e' },
+  { value: 'set', label: 'Set to', desc: 'Set balance to exact amount', color: '#3b82f6' },
+  { value: 'remove', label: 'Remove', desc: 'Subtract credits from balance', color: '#ef4444' },
+]
+
+function ActionDropdown({ value, onChange }: {
+  value: CreditAction
+  onChange: (v: CreditAction) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const selected = CREDIT_ACTIONS.find(a => a.value === value)!
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  return (
+    <div className="action-dropdown" ref={ref}>
+      <button
+        className="action-dropdown-trigger"
+        onClick={() => setOpen(!open)}
+        style={{ borderColor: open ? selected.color : undefined }}
+      >
+        <span className="action-dropdown-dot" style={{ background: selected.color }} />
+        <span className="action-dropdown-label">{selected.label}</span>
+        <span className="action-dropdown-arrow">{open ? '\u25B4' : '\u25BE'}</span>
+      </button>
+      {open && (
+        <div className="action-dropdown-panel">
+          {CREDIT_ACTIONS.map(opt => (
+            <button
+              key={opt.value}
+              className={`action-dropdown-item ${opt.value === value ? 'active' : ''}`}
+              onClick={() => { onChange(opt.value); setOpen(false) }}
+            >
+              <span className="action-dropdown-dot" style={{ background: opt.color }} />
+              <div className="action-dropdown-item-text">
+                <span className="action-dropdown-item-label">{opt.label}</span>
+                <span className="action-dropdown-item-desc">{opt.desc}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 const REASON_LABELS: Record<string, string> = {
   og_nerd_role: 'OG Nerd Role',
   founder_role: 'Founder Role',
@@ -56,7 +120,7 @@ export default function AccountPage() {
   const [adminSearch, setAdminSearch] = useState('')
   const [adminLoading, setAdminLoading] = useState(false)
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
-  const [creditAction, setCreditAction] = useState<'set' | 'add'>('add')
+  const [creditAction, setCreditAction] = useState<CreditAction>('add')
   const [creditAmount, setCreditAmount] = useState(100)
   const [adminError, setAdminError] = useState<string | null>(null)
   const [adminSuccess, setAdminSuccess] = useState<string | null>(null)
@@ -131,7 +195,7 @@ export default function AccountPage() {
   }
 
   // Admin: adjust credits
-  const handleCreditAdjust = async (action: 'set' | 'add', amount: number) => {
+  const handleCreditAdjust = async (action: CreditAction, amount: number) => {
     if (!token || !selectedUser) return
     setAdminError(null)
     setAdminSuccess(null)
@@ -147,8 +211,9 @@ export default function AccountPage() {
       if (resp.ok) {
         const data = await resp.json()
         const newCredits = data.new_credits as number
+        const actionLabel = action === 'set' ? 'set to' : action === 'add' ? 'increased by' : 'decreased by'
         setAdminSuccess(
-          `${selectedUser.username}: credits ${action === 'set' ? 'set to' : 'increased by'} ${amount === -1 ? 'unlimited' : amount} → now ${newCredits === -1 ? '∞' : newCredits.toLocaleString()}`
+          `${selectedUser.username}: credits ${actionLabel} ${amount === -1 ? 'unlimited' : amount} → now ${newCredits === -1 ? '∞' : newCredits.toLocaleString()}`
         )
         // Update local list
         setAdminUsers(prev => prev.map(u =>
@@ -366,14 +431,7 @@ export default function AccountPage() {
                       </span>
                     </div>
                     <div className="admin-credit-controls">
-                      <select
-                        className="admin-action-select"
-                        value={creditAction}
-                        onChange={e => setCreditAction(e.target.value as 'set' | 'add')}
-                      >
-                        <option value="add">Add</option>
-                        <option value="set">Set to</option>
-                      </select>
+                      <ActionDropdown value={creditAction} onChange={setCreditAction} />
                       <input
                         type="number"
                         className="admin-amount-input"
@@ -388,17 +446,20 @@ export default function AccountPage() {
                       </button>
                     </div>
                     <div className="admin-shortcuts">
-                      <button className="admin-shortcut-btn" onClick={() => handleCreditAdjust('set', -1)}>
-                        Set Unlimited
-                      </button>
-                      <button className="admin-shortcut-btn" onClick={() => handleCreditAdjust('add', 100)}>
+                      <button className="admin-shortcut-btn add" onClick={() => handleCreditAdjust('add', 100)}>
                         +100
                       </button>
-                      <button className="admin-shortcut-btn" onClick={() => handleCreditAdjust('add', 500)}>
+                      <button className="admin-shortcut-btn add" onClick={() => handleCreditAdjust('add', 500)}>
                         +500
                       </button>
-                      <button className="admin-shortcut-btn" onClick={() => handleCreditAdjust('add', 1000)}>
+                      <button className="admin-shortcut-btn add" onClick={() => handleCreditAdjust('add', 1000)}>
                         +1000
+                      </button>
+                      <button className="admin-shortcut-btn set" onClick={() => handleCreditAdjust('set', -1)}>
+                        Set Unlimited
+                      </button>
+                      <button className="admin-shortcut-btn remove" onClick={() => handleCreditAdjust('set', 0)}>
+                        Remove Unlimited
                       </button>
                     </div>
                   </div>
