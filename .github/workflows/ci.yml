@@ -206,6 +206,19 @@ jobs:
             done
             echo "==> Migrations done."
 
+            # Update nginx config if changed
+            if echo "$CHANGED" | grep -q "^ancientnerds-nginx-config"; then
+              echo "==> Updating nginx config..."
+              sudo /bin/cp /var/www/ancientnerds/ancientnerds-nginx-config /etc/nginx/sites-available/ancientnerds.com
+              if sudo /usr/sbin/nginx -t; then
+                sudo /bin/systemctl reload nginx
+                echo "    Nginx reloaded"
+              else
+                echo "ERROR: nginx config test failed! Restoring previous config."
+                exit 1
+              fi
+            fi
+
             # Rebuild frontend if files changed OR dist is missing key assets
             if echo "$CHANGED" | grep -q "^ancient-nerds-map/" || [ ! -f ancient-nerds-map/dist/an-logo.svg ]; then
               echo "==> Building frontend..."
