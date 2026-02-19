@@ -3,8 +3,6 @@
  * Includes YouTube, Discord links plus Contribute, AI Agent and Sign In buttons
  */
 
-import HamburgerNav from '../../layout/HamburgerNav'
-
 interface SocialLinksProps {
   onContributeClick?: () => void
   isContributeMapPickerActive?: boolean
@@ -92,9 +90,6 @@ export function SocialLinks({
           </button>
         )}
 
-        {/* Navigation Menu */}
-        <HamburgerNav currentPage="globe" openInNewTab />
-
         {/* Sign In Button - Coming Soon */}
         <button
           className="action-btn signin-btn disabled"
@@ -106,6 +101,15 @@ export function SocialLinks({
             <circle cx="12" cy="7" r="4"></circle>
           </svg>
         </button>
+      </div>
+
+      {/* Row 3: Page Navigation */}
+      <div className="nav-links">
+        <a href="/news.html" target="_blank" rel="noopener noreferrer" className="nav-link" title="News Feed">News</a>
+        <a href="/radar.html" target="_blank" rel="noopener noreferrer" className="nav-link" title="Radar">Radar</a>
+        <a href="/articles.html" target="_blank" rel="noopener noreferrer" className="nav-link" title="Articles">Articles</a>
+        <a href="/lyra.html" target="_blank" rel="noopener noreferrer" className="nav-link" title="Lyra Chat">Lyra</a>
+        <a href="/db.html" target="_blank" rel="noopener noreferrer" className="nav-link" title="Database">DB</a>
       </div>
     </div>
   )
