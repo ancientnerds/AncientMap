@@ -154,7 +154,11 @@ body {
   width: clamp(140px, 40vw, 208px);
   height: auto;
   margin-bottom: -30px;
-  filter: drop-shadow(0 0 4px rgba(0,0,0,1)) drop-shadow(0 0 10px rgba(0,0,0,0.8));
+  filter:
+    drop-shadow(0 0 10px rgba(192, 32, 35, 0.5))
+    drop-shadow(0 0 20px rgba(192, 32, 35, 0.3))
+    drop-shadow(0 0 4px rgba(0,0,0,1))
+    drop-shadow(0 0 10px rgba(0,0,0,0.8));
 }
 
 .hero-title {
