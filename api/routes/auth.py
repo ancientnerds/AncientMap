@@ -207,17 +207,21 @@ async def discord_oauth_redirect(req: Request):
 async def discord_oauth_callback(code: str | None = None, state: str | None = None, error: str | None = None):
     """Handle Discord OAuth2 callback."""
     if error:
+        print(f"[AUTH DEBUG] Discord returned error: {error}", flush=True)
         return RedirectResponse(url="/account.html?error=access_denied")
 
     if not code or not state:
+        print("[AUTH DEBUG] Missing code or state", flush=True)
         return RedirectResponse(url="/account.html?error=missing_params")
 
     # Validate CSRF state
     if state not in _oauth_states:
+        print(f"[AUTH DEBUG] Invalid state — have {len(_oauth_states)} states stored", flush=True)
         return RedirectResponse(url="/account.html?error=invalid_state")
     del _oauth_states[state]
 
     if not DISCORD_CLIENT_ID or not DISCORD_CLIENT_SECRET or not DISCORD_REDIRECT_URI:
+        print(f"[AUTH DEBUG] Not configured: client_id={bool(DISCORD_CLIENT_ID)}, secret={bool(DISCORD_CLIENT_SECRET)}, redirect={bool(DISCORD_REDIRECT_URI)}", flush=True)
         return RedirectResponse(url="/account.html?error=not_configured")
 
     async with httpx.AsyncClient() as client:
@@ -234,6 +238,7 @@ async def discord_oauth_callback(code: str | None = None, state: str | None = No
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         if token_resp.status_code != 200:
+            print(f"[AUTH DEBUG] Discord token exchange failed: {token_resp.status_code} {token_resp.text}", flush=True)
             logger.error(f"Discord token exchange failed: {token_resp.status_code} {token_resp.text}")
             return RedirectResponse(url="/account.html?error=token_exchange_failed")
 
@@ -290,6 +295,8 @@ async def discord_oauth_callback(code: str | None = None, state: str | None = No
         process_credit_grants(session, user)
 
         jwt_token = create_token(str(user.id), discord_id)
+
+    print(f"[AUTH DEBUG] Login success for {username} (discord_id={discord_id}), setting cookie", flush=True)
 
     response = RedirectResponse(url="/account.html")
     response.set_cookie(
