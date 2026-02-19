@@ -231,15 +231,18 @@ export const OptionsPanel = forwardRef<HTMLDivElement, OptionsPanelProps>(({
           </button>
         )}
 
-        {/* Database Connection Indicator */}
+        {/* Database Connection Indicator - links to DB page */}
         {dataSourceIndicator && (
-          <div
+          <a
             className="database-status-indicator"
+            href="/db.html"
+            target="_blank"
+            rel="noopener noreferrer"
             title={
-              dataSourceIndicator === 'postgres' ? 'Connected to PostgreSQL - edits will persist' :
-              dataSourceIndicator === 'error' ? 'API not reachable - no data available' :
-              dataSourceIndicator === 'json' ? 'Using static files - database unavailable' :
-              'Using offline cache'
+              dataSourceIndicator === 'postgres' ? 'Connected to PostgreSQL — click to open Database page' :
+              dataSourceIndicator === 'error' ? 'API not reachable — click to open Database page' :
+              dataSourceIndicator === 'json' ? 'Using static files — click to open Database page' :
+              'Using offline cache — click to open Database page'
             }
           >
             <span className={`database-led ${
@@ -252,7 +255,7 @@ export const OptionsPanel = forwardRef<HTMLDivElement, OptionsPanelProps>(({
               dataSourceIndicator === 'error' ? 'Offline' :
               'Static'
             }</span>
-          </div>
+          </a>
         )}
 
         {/* Connectors Status Indicator */}

@@ -407,7 +407,13 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   font-size: 11px;
   font-weight: normal;
   letter-spacing: normal;
-  cursor: default;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.database-status-indicator:hover {
+  background: rgba(74, 222, 128, 0.15);
 }
 
 .database-led {
@@ -2511,38 +2517,6 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   pointer-events: auto;
 }
 
-/* Row 3: Page Navigation Links */
-.nav-links {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 2px;
-  padding: 4px 6px;
-  background: var(--bg-card);
-  backdrop-filter: blur(var(--blur-amount));
-  -webkit-backdrop-filter: blur(var(--blur-amount));
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  pointer-events: auto;
-}
-
-.nav-link {
-  font-family: 'Orbitron', sans-serif;
-  font-size: 9px;
-  font-weight: 500;
-  letter-spacing: 0.5px;
-  color: var(--text-secondary);
-  text-decoration: none;
-  padding: 4px 6px;
-  border-radius: 3px;
-  transition: color 0.2s ease, background 0.2s ease;
-}
-
-.nav-link:hover {
-  color: var(--primary-red);
-  background: rgba(192, 32, 35, 0.15);
-}
-
 .social-link {
   display: flex;
   align-items: center;
@@ -2577,6 +2551,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   border: none;
   border-radius: 4px;
   cursor: pointer;
+  text-decoration: none;
   transition: color 0.2s ease, background 0.2s ease;
 }
 
