@@ -162,6 +162,8 @@ body {
 }
 
 .hero-title {
+  position: relative;
+  z-index: 1;
   font-family: 'Orbitron', sans-serif;
   font-size: clamp(2rem, 4.5vw, 3.5rem);
   font-weight: 700;
