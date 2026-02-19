@@ -337,7 +337,7 @@ async def get_me(user: DiscordUser = Depends(get_current_user)):
         "username": user.username,
         "avatar_url": avatar_url,
         "roles": roles,
-        "credits": -1 if is_founder else credits,
+        "credits": credits,
         "is_og_nerd": OG_NERD_ROLE_ID in roles,
         "is_founder": is_founder,
         "created_at": user.created_at.isoformat() if user.created_at else None,
@@ -347,12 +347,10 @@ async def get_me(user: DiscordUser = Depends(get_current_user)):
 @router.get("/credits")
 async def get_credits(user: DiscordUser = Depends(get_current_user)):
     """Get credits balance and recent usage history."""
-    is_founder = FOUNDER_ROLE_ID in (user.roles or [])
-
     with get_session() as session:
         # Refresh credits from DB (in case it was deducted by another request)
         db_user = session.query(DiscordUser).filter(DiscordUser.id == user.id).first()
-        credits = -1 if is_founder else (db_user.credits if db_user else user.credits)
+        credits = db_user.credits if db_user else user.credits
 
         # Recent usage (last 20)
         usage = session.query(TokenUsageLog).filter(
