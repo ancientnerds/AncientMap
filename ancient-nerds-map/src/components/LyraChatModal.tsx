@@ -290,6 +290,7 @@ export default function LyraChatModal({
     sessionStorage.getItem('lyra_admin_key')
   )
   const [userCredits, setUserCredits] = useState<number | null>(null)
+  const [isFounder, setIsFounder] = useState(false)
   const isAuthenticated = !!authToken || !!adminKey
   const authMode: 'discord' | 'admin' | null = authToken ? 'discord' : adminKey ? 'admin' : null
 
@@ -440,7 +441,7 @@ export default function LyraChatModal({
     })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (data) setUserCredits(data.credits)
+        if (data) { setUserCredits(data.credits); setIsFounder(!!data.is_founder) }
         else {
           // Token expired/invalid — clear it
           localStorage.removeItem('an_auth_token')
@@ -529,6 +530,7 @@ export default function LyraChatModal({
     setAdminKey(null)
     setAuthToken(null)
     setUserCredits(null)
+    setIsFounder(false)
     setMessages([])
   }, [])
 
@@ -579,8 +581,8 @@ export default function LyraChatModal({
     if (!messageText) return
     if (!authMode) return
 
-    // Check credits for Discord users (founders have credits === -1 meaning unlimited)
-    if (authMode === 'discord' && userCredits !== null && userCredits !== -1 && userCredits <= 0) {
+    // Check credits for Discord users (founders bypass, credits=-1 means unlimited)
+    if (authMode === 'discord' && !isFounder && userCredits !== null && userCredits !== -1 && userCredits <= 0) {
       setError('No credits remaining. Visit your Account page for details.')
       return
     }
@@ -837,7 +839,7 @@ export default function LyraChatModal({
         <div className="lyra-chat-header-actions">
           {authMode === 'discord' && userCredits !== null && (
             <span className="lyra-credits-badge" title="Lyra credits remaining">
-              {userCredits === -1 ? '∞' : userCredits.toLocaleString()} credits
+              {isFounder || userCredits === -1 ? '∞' : userCredits.toLocaleString()} credits
             </span>
           )}
           {messages.length > 0 && (
@@ -890,7 +892,7 @@ export default function LyraChatModal({
       <div className="lyra-chat-header-right">
         {authMode === 'discord' && userCredits !== null && (
           <span className="lyra-credits-badge" title="Lyra credits remaining">
-            {userCredits === -1 ? '∞' : userCredits.toLocaleString()} credits
+            {isFounder || userCredits === -1 ? '∞' : userCredits.toLocaleString()} credits
           </span>
         )}
         {messages.length > 0 && (

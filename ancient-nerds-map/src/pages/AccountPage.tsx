@@ -299,9 +299,11 @@ export default function AccountPage() {
                   {user?.credits === -1 ? '∞' : (user?.credits?.toLocaleString() ?? 0)}
                 </div>
                 <div className="account-credits-note">
-                  {user?.credits === -1
+                  {user?.is_founder
                     ? 'Unlimited access — thank you, Founder!'
-                    : '1 credit = 100 tokens (input + output)'}
+                    : user?.credits === -1
+                      ? 'Unlimited access'
+                      : '1 credit = 100 tokens (input + output)'}
                 </div>
               </div>
 
