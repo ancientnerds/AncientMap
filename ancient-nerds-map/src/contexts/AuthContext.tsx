@@ -15,6 +15,7 @@ export interface AuthUser {
   avatar_url: string | null
   roles: string[]
   credits: number
+  is_unlimited: boolean
   is_og_nerd: boolean
   is_founder: boolean
   created_at: string | null
@@ -110,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       if (resp.ok) {
         const data = await resp.json()
-        setUser(prev => prev ? { ...prev, credits: data.credits } : null)
+        setUser(prev => prev ? { ...prev, credits: data.credits, is_unlimited: data.is_unlimited } : null)
       }
     } catch {
       // Ignore — non-critical

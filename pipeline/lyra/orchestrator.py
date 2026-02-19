@@ -1008,6 +1008,11 @@ def _run_migrations(engine) -> None:
         # Pipeline efficiency: cap screenshot retry attempts across cycles
         conn.execute(text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS screenshot_attempts INTEGER DEFAULT 0"))
 
+        # is_unlimited flag: decoupled from credits balance
+        conn.execute(text("ALTER TABLE discord_users ADD COLUMN IF NOT EXISTS is_unlimited BOOLEAN DEFAULT FALSE"))
+        # Migrate legacy credits=-1 to the new flag
+        conn.execute(text("UPDATE discord_users SET is_unlimited = TRUE, credits = 0 WHERE credits = -1"))
+
         # Role-based credit system: monthly grants with accumulation
         conn.execute(text("ALTER TABLE discord_users ADD COLUMN IF NOT EXISTS grant_anchor_date TIMESTAMP"))
         conn.execute(text("ALTER TABLE credit_grants ADD COLUMN IF NOT EXISTS grant_period VARCHAR(7)"))

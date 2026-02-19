@@ -31,12 +31,13 @@ interface AdminUser {
   username: string
   avatar_url: string | null
   credits: number
+  is_unlimited: boolean
   is_founder: boolean
   is_og_nerd: boolean
   last_login: string | null
 }
 
-type CreditAction = 'add' | 'set' | 'remove'
+type CreditAction = 'add' | 'set' | 'remove' | 'set_unlimited'
 
 interface ActionOption {
   value: CreditAction
@@ -104,6 +105,8 @@ const REASON_LABELS: Record<string, string> = {
   og_nerd_role: 'OG Nerd Role',
   founder_role: 'Founder Role',
   founder_grant: 'Founder Grant',
+  unlimited_set: 'Unlimited Enabled',
+  unlimited_removed: 'Unlimited Removed',
   monthly_patron_bronze: 'Patron Bronze (Monthly)',
   monthly_patron_silver: 'Patron Silver (Monthly)',
   monthly_patron_gold: 'Patron Gold (Monthly)',
@@ -211,15 +214,24 @@ export default function AccountPage() {
       if (resp.ok) {
         const data = await resp.json()
         const newCredits = data.new_credits as number
-        const actionLabel = action === 'set' ? 'set to' : action === 'add' ? 'increased by' : 'decreased by'
+        const newUnlimited = data.is_unlimited as boolean | undefined
+        const actionLabel = action === 'set_unlimited'
+          ? (amount !== 0 ? 'set to unlimited' : 'removed unlimited')
+          : action === 'set' ? 'set to' : action === 'add' ? 'increased by' : 'decreased by'
+        const creditsDisplay = newUnlimited ? '∞' : newCredits.toLocaleString()
         setAdminSuccess(
-          `${selectedUser.username}: credits ${actionLabel} ${amount === -1 ? 'unlimited' : amount} → now ${newCredits === -1 ? '∞' : newCredits.toLocaleString()}`
+          `${selectedUser.username}: credits ${actionLabel} ${action === 'set_unlimited' ? '' : amount} → now ${creditsDisplay}`
         )
         // Update local list
         setAdminUsers(prev => prev.map(u =>
-          u.id === selectedUser.id ? { ...u, credits: newCredits } : u
+          u.id === selectedUser.id
+            ? { ...u, credits: newCredits, is_unlimited: newUnlimited ?? u.is_unlimited }
+            : u
         ))
-        setSelectedUser(prev => prev ? { ...prev, credits: newCredits } : null)
+        setSelectedUser(prev => prev
+          ? { ...prev, credits: newCredits, is_unlimited: newUnlimited ?? prev.is_unlimited }
+          : null
+        )
       } else {
         const data = await resp.json().catch(() => null)
         setAdminError(data?.detail || 'Failed to adjust credits')
@@ -296,14 +308,12 @@ export default function AccountPage() {
               <div className="account-credits-section">
                 <div className="account-credits-label">Lyra Credits</div>
                 <div className="account-credits-value">
-                  {user?.credits === -1 ? '∞' : (user?.credits?.toLocaleString() ?? 0)}
+                  {user?.is_unlimited ? '∞' : (user?.credits?.toLocaleString() ?? 0)}
                 </div>
                 <div className="account-credits-note">
-                  {user?.is_founder
-                    ? 'Unlimited access — thank you, Founder!'
-                    : user?.credits === -1
-                      ? 'Unlimited access'
-                      : '1 credit = 100 tokens (input + output)'}
+                  {user?.is_unlimited
+                    ? `Unlimited access${user?.is_founder ? ' — thank you, Founder!' : ''}`
+                    : '1 credit = 100 tokens (input + output)'}
                 </div>
               </div>
 
@@ -415,7 +425,7 @@ export default function AccountPage() {
                           {u.is_og_nerd && <span className="account-badge og-nerd">OG</span>}
                         </div>
                         <span className="admin-user-credits">
-                          {u.credits === -1 ? '∞' : u.credits.toLocaleString()}
+                          {u.is_unlimited ? '∞' : u.credits.toLocaleString()}
                         </span>
                       </div>
                     ))}
@@ -431,7 +441,7 @@ export default function AccountPage() {
                     <div className="admin-credit-form-header">
                       Adjust credits for <strong>{selectedUser.username}</strong>
                       <span className="admin-credit-form-current">
-                        (current: {selectedUser.credits === -1 ? '∞' : selectedUser.credits.toLocaleString()})
+                        (current: {selectedUser.is_unlimited ? '∞' : selectedUser.credits.toLocaleString()})
                       </span>
                     </div>
                     <div className="admin-credit-controls">
@@ -459,13 +469,13 @@ export default function AccountPage() {
                       <button className="admin-shortcut-btn add" onClick={() => handleCreditAdjust('add', 1000)}>
                         +1000
                       </button>
-                      {selectedUser.credits !== -1 && (
-                        <button className="admin-shortcut-btn set" onClick={() => handleCreditAdjust('set', -1)}>
+                      {!selectedUser.is_unlimited && (
+                        <button className="admin-shortcut-btn set" onClick={() => handleCreditAdjust('set_unlimited', 1)}>
                           Set Unlimited
                         </button>
                       )}
-                      {selectedUser.credits === -1 && (
-                        <button className="admin-shortcut-btn remove" onClick={() => handleCreditAdjust('set', 0)}>
+                      {selectedUser.is_unlimited && (
+                        <button className="admin-shortcut-btn remove" onClick={() => handleCreditAdjust('set_unlimited', 0)}>
                           Remove Unlimited
                         </button>
                       )}

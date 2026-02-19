@@ -268,7 +268,7 @@ export default function LyraChatModal({
   const [messages, setMessages] = useState<LyraMessage[]>([])
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<React.ReactNode | null>(null)
   const [sidebarSites, setSidebarSites] = useState<SiteHighlight[]>([])
   const [sidebarNews, setSidebarNews] = useState<NewsHighlight[]>([])
   const [selectedSite, setSelectedSite] = useState<SiteData | null>(null)
@@ -290,7 +290,7 @@ export default function LyraChatModal({
     sessionStorage.getItem('lyra_admin_key')
   )
   const [userCredits, setUserCredits] = useState<number | null>(null)
-  const [isFounder, setIsFounder] = useState(false)
+  const [isUnlimited, setIsUnlimited] = useState(false)
   const isAuthenticated = !!authToken || !!adminKey
   const authMode: 'discord' | 'admin' | null = authToken ? 'discord' : adminKey ? 'admin' : null
 
@@ -441,7 +441,7 @@ export default function LyraChatModal({
     })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (data) { setUserCredits(data.credits); setIsFounder(!!data.is_founder) }
+        if (data) { setUserCredits(data.credits); setIsUnlimited(!!data.is_unlimited) }
         else {
           // Token expired/invalid — clear it
           localStorage.removeItem('an_auth_token')
@@ -530,7 +530,7 @@ export default function LyraChatModal({
     setAdminKey(null)
     setAuthToken(null)
     setUserCredits(null)
-    setIsFounder(false)
+    setIsUnlimited(false)
     setMessages([])
   }, [])
 
@@ -581,9 +581,9 @@ export default function LyraChatModal({
     if (!messageText) return
     if (!authMode) return
 
-    // Check credits for Discord users (founders bypass, credits=-1 means unlimited)
-    if (authMode === 'discord' && !isFounder && userCredits !== null && userCredits !== -1 && userCredits <= 0) {
-      setError('No credits remaining. Visit your Account page for details.')
+    // Check credits for Discord users (unlimited users bypass)
+    if (authMode === 'discord' && !isUnlimited && userCredits !== null && userCredits <= 0) {
+      setError(<>No credits remaining. Visit your <a href="/account.html" style={{ color: '#ff6b6b', textDecoration: 'underline' }}>Account page</a> for details.</>)
       return
     }
 
@@ -812,7 +812,7 @@ export default function LyraChatModal({
       setIsStreaming(false)
       abortRef.current = null
     }
-  }, [input, authMode, authToken, adminKey, userCredits, messages, contextType, contextId, contextYear, onHighlightSites, clearAuth, conversationId])
+  }, [input, authMode, authToken, adminKey, userCredits, isUnlimited, messages, contextType, contextId, contextYear, onHighlightSites, clearAuth, conversationId])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -839,7 +839,7 @@ export default function LyraChatModal({
         <div className="lyra-chat-header-actions">
           {authMode === 'discord' && userCredits !== null && (
             <span className="lyra-credits-badge" title="Lyra credits remaining">
-              {isFounder || userCredits === -1 ? '∞' : userCredits.toLocaleString()} credits
+              {isUnlimited ? '∞' : userCredits.toLocaleString()} credits
             </span>
           )}
           {messages.length > 0 && (
@@ -892,7 +892,7 @@ export default function LyraChatModal({
       <div className="lyra-chat-header-right">
         {authMode === 'discord' && userCredits !== null && (
           <span className="lyra-credits-badge" title="Lyra credits remaining">
-            {isFounder || userCredits === -1 ? '∞' : userCredits.toLocaleString()} credits
+            {isUnlimited ? '∞' : userCredits.toLocaleString()} credits
           </span>
         )}
         {messages.length > 0 && (

@@ -33,7 +33,6 @@ router = APIRouter()
 
 LYRA_ADMIN_KEY = os.getenv("LYRA_ADMIN_KEY", "")
 SSE_MAX_DURATION = 300  # Max SSE stream duration in seconds (5 minutes)
-FOUNDER_ROLE_ID = "933105341292486707"
 
 # Rate limits
 _chat_limiter = RateLimiter(max_requests=10, window_seconds=3600, namespace="lyra_chat")
@@ -88,31 +87,33 @@ async def lyra_chat(request: LyraChatRequest, req: Request):
     The done event includes credits_remaining.
     """
     user = get_current_user(req)
-    is_founder = FOUNDER_ROLE_ID in (user.roles or [])
 
     # Per-user rate limit (keyed by discord_id, not IP)
     if not _chat_limiter.check(user.discord_id):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
-    # Founders bypass credits entirely
-    if is_founder:
-        return _stream_response(
-            message=request.message,
-            images=[img.model_dump() for img in request.images] if request.images else None,
-            history=[h.model_dump() for h in request.history] if request.history else None,
-            context_type=request.context_type,
-            context_id=request.context_id,
-            context_year=request.context_year,
-        )
-
-    # Atomic pre-deduct: lock row, check credits > 0, deduct 1 as deposit
+    # Check unlimited flag and credits atomically
     with get_db_session() as session:
         db_user = session.query(DBUser).filter(
             DBUser.id == user.id,
-            DBUser.credits > 0,
         ).with_for_update().first()
         if not db_user:
             raise HTTPException(status_code=402, detail="No credits remaining")
+
+        # Unlimited users bypass credit deduction
+        if db_user.is_unlimited:
+            return _stream_response(
+                message=request.message,
+                images=[img.model_dump() for img in request.images] if request.images else None,
+                history=[h.model_dump() for h in request.history] if request.history else None,
+                context_type=request.context_type,
+                context_id=request.context_id,
+                context_year=request.context_year,
+            )
+
+        if db_user.credits <= 0:
+            raise HTTPException(status_code=402, detail="No credits remaining")
+
         db_user.credits -= 1  # 1-credit deposit
         deposit_remaining = db_user.credits
 

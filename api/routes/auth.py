@@ -41,18 +41,14 @@ FOUNDER_ROLE_ID = "933105341292486707"
 
 # --- Role-based credit configuration ---
 # Each Discord role that grants credits is defined here.
-# Types: "one_time" = single grant, "monthly" = recurring, "unlimited" = bypass credits
+# Types: "one_time" = single grant, "monthly" = recurring
+# Note: "unlimited" is now a per-user flag (is_unlimited), toggled by admins.
 CREDIT_ROLES: dict[str, dict] = {
     OG_NERD_ROLE_ID: {
         "name": "OG Nerd",
         "type": "one_time",
         "amount": 1000,
         "reason": "og_nerd_role",
-    },
-    FOUNDER_ROLE_ID: {
-        "name": "Founder",
-        "type": "unlimited",
-        "reason": "founder_role",
     },
     # Patreon tiers — add role IDs once they're configured in Discord:
     # "ROLE_ID": {
@@ -118,9 +114,6 @@ def process_credit_grants(session: Session, user: DiscordUser) -> None:
 
         role_type = config["type"]
         reason = config["reason"]
-
-        if role_type == "unlimited":
-            continue
 
         if role_type == "one_time":
             existing = session.query(CreditGrant).filter(
@@ -338,6 +331,7 @@ async def get_me(user: DiscordUser = Depends(get_current_user)):
         "avatar_url": avatar_url,
         "roles": roles,
         "credits": credits,
+        "is_unlimited": db_user.is_unlimited if db_user else False,
         "is_og_nerd": OG_NERD_ROLE_ID in roles,
         "is_founder": is_founder,
         "created_at": user.created_at.isoformat() if user.created_at else None,
@@ -384,6 +378,7 @@ async def get_credits(user: DiscordUser = Depends(get_current_user)):
 
     return {
         "credits": credits,
+        "is_unlimited": db_user.is_unlimited if db_user else False,
         "usage": usage_list,
         "grants": grants_list,
     }
@@ -432,6 +427,7 @@ async def admin_list_users(
                         if u.avatar_hash else None
                     ),
                     "credits": u.credits,
+                    "is_unlimited": u.is_unlimited,
                     "is_founder": FOUNDER_ROLE_ID in (u.roles or []),
                     "is_og_nerd": OG_NERD_ROLE_ID in (u.roles or []),
                     "last_login": u.last_login.isoformat() if u.last_login else None,
@@ -447,9 +443,9 @@ async def admin_adjust_credits(
     body: CreditAdjustRequest,
     _founder: DiscordUser = Depends(require_founder),
 ):
-    """Set, add, or remove credits for a user. set with -1 = unlimited."""
-    if body.action not in ("set", "add", "remove"):
-        raise HTTPException(status_code=400, detail="action must be 'set', 'add', or 'remove'")
+    """Set, add, remove credits, or toggle unlimited for a user."""
+    if body.action not in ("set", "add", "remove", "set_unlimited"):
+        raise HTTPException(status_code=400, detail="action must be 'set', 'add', 'remove', or 'set_unlimited'")
 
     with get_session() as session:
         user = session.query(DiscordUser).filter(
@@ -458,20 +454,37 @@ async def admin_adjust_credits(
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        if body.action == "set":
+        if body.action == "set_unlimited":
+            user.is_unlimited = body.amount != 0
+            session.add(CreditGrant(
+                user_id=user.id,
+                amount=0,
+                reason="unlimited_set" if user.is_unlimited else "unlimited_removed",
+            ))
+        elif body.action == "set":
             user.credits = body.amount
+            session.add(CreditGrant(
+                user_id=user.id,
+                amount=body.amount,
+                reason="founder_grant",
+            ))
         elif body.action == "add":
             user.credits += body.amount
+            session.add(CreditGrant(
+                user_id=user.id,
+                amount=body.amount,
+                reason="founder_grant",
+            ))
         elif body.action == "remove":
             user.credits = max(0, user.credits - body.amount)
+            session.add(CreditGrant(
+                user_id=user.id,
+                amount=-body.amount,
+                reason="founder_grant",
+            ))
 
-        grant_amount = body.amount if body.action != "remove" else -body.amount
-        session.add(CreditGrant(
-            user_id=user.id,
-            amount=grant_amount,
-            reason="founder_grant",
-        ))
         session.flush()
         new_credits = user.credits
+        is_unlimited = user.is_unlimited
 
-    return {"ok": True, "new_credits": new_credits}
+    return {"ok": True, "new_credits": new_credits, "is_unlimited": is_unlimited}
