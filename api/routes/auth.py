@@ -41,7 +41,7 @@ FOUNDER_ROLE_ID = "933105341292486707"
 
 # --- Role-based credit configuration ---
 # Each Discord role that grants credits is defined here.
-# type: "one_time" = single grant, "monthly" = recurring, "unlimited" = bypass credits
+# Types: "one_time" = single grant, "monthly" = recurring, "unlimited" = bypass credits
 CREDIT_ROLES: dict[str, dict] = {
     OG_NERD_ROLE_ID: {
         "name": "OG Nerd",
