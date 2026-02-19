@@ -6,8 +6,7 @@ Uses PyJWT with HS256 signing via API_SECRET_KEY.
 
 import logging
 import os
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from fastapi import HTTPException, Request
@@ -28,8 +27,8 @@ def create_token(user_id: str, discord_id: str) -> str:
     payload = {
         "sub": discord_id,
         "user_id": user_id,
-        "exp": datetime.now(timezone.utc) + timedelta(days=TOKEN_EXPIRY_DAYS),
-        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(UTC) + timedelta(days=TOKEN_EXPIRY_DAYS),
+        "iat": datetime.now(UTC),
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -40,10 +39,10 @@ def _decode_token(token: str) -> dict:
         raise HTTPException(status_code=503, detail="Auth not configured")
     try:
         return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    except jwt.ExpiredSignatureError as err:
+        raise HTTPException(status_code=401, detail="Token expired") from err
+    except jwt.InvalidTokenError as err:
+        raise HTTPException(status_code=401, detail="Invalid token") from err
 
 
 def _extract_bearer(request: Request) -> str | None:
@@ -74,7 +73,7 @@ def get_current_user(request: Request) -> DiscordUser:
         return user
 
 
-def get_optional_user(request: Request) -> Optional[DiscordUser]:
+def get_optional_user(request: Request) -> DiscordUser | None:
     """FastAPI dependency: return user if authenticated, None otherwise."""
     token = _extract_bearer(request)
     if not token:

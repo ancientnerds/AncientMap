@@ -12,7 +12,7 @@ Endpoints:
 import logging
 import os
 import secrets
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from math import ceil
 
 import httpx
@@ -46,7 +46,7 @@ _oauth_limiter = RateLimiter(max_requests=5, window_seconds=60, namespace="oauth
 
 def _cleanup_states():
     """Remove expired CSRF states (older than 10 minutes)."""
-    now = datetime.now(timezone.utc).timestamp()
+    now = datetime.now(UTC).timestamp()
     expired = [k for k, v in _oauth_states.items() if now - v > 600]
     for k in expired:
         del _oauth_states[k]
@@ -68,7 +68,7 @@ async def discord_oauth_redirect(req: Request):
         raise HTTPException(status_code=429, detail="Too many pending logins. Try again later.")
 
     state = secrets.token_urlsafe(32)
-    _oauth_states[state] = datetime.now(timezone.utc).timestamp()
+    _oauth_states[state] = datetime.now(UTC).timestamp()
 
     from urllib.parse import urlencode
     params = {
@@ -154,7 +154,7 @@ async def discord_oauth_callback(code: str | None = None, state: str | None = No
             user.username = username
             user.avatar_hash = avatar_hash
             user.roles = roles
-            user.last_login = datetime.now(timezone.utc)
+            user.last_login = datetime.now(UTC)
         else:
             user = DiscordUser(
                 discord_id=discord_id,
