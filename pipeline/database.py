@@ -994,6 +994,7 @@ class DiscordUser(Base):
     avatar_hash: Mapped[str | None] = mapped_column(String(100), nullable=True)
     roles: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     credits: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    grant_anchor_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     last_login: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
@@ -1016,12 +1017,14 @@ class CreditGrant(Base):
     )
     amount: Mapped[int] = mapped_column(Integer, nullable=False)
     reason: Mapped[str] = mapped_column(String(100), nullable=False)
+    grant_period: Mapped[str | None] = mapped_column(String(7), nullable=True)  # "2026-02" for monthly, NULL for one-time
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     user: Mapped["DiscordUser"] = relationship("DiscordUser", back_populates="credit_grants")
 
     __table_args__ = (
         Index("idx_credit_grants_user_reason", "user_id", "reason"),
+        UniqueConstraint("user_id", "reason", "grant_period", name="uq_credit_grants_user_reason_period"),
     )
 
     def __repr__(self) -> str:
