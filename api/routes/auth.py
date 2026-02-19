@@ -314,34 +314,40 @@ async def discord_oauth_callback(code: str | None = None, state: str | None = No
 @router.get("/me")
 async def get_me(user: DiscordUser = Depends(get_current_user)):
     """Get current authenticated user profile."""
-    # Process any pending credit grants (monthly accumulation, etc.)
-    with get_session() as session:
-        db_user = session.query(DiscordUser).filter(DiscordUser.id == user.id).first()
-        if db_user:
-            process_credit_grants(session, db_user)
-            credits = db_user.credits
-        else:
-            credits = user.credits
+    try:
+        # Process any pending credit grants (monthly accumulation, etc.)
+        with get_session() as session:
+            db_user = session.query(DiscordUser).filter(DiscordUser.id == user.id).first()
+            if db_user:
+                process_credit_grants(session, db_user)
+                credits = db_user.credits
+                is_unlimited = db_user.is_unlimited
+            else:
+                credits = user.credits
+                is_unlimited = False
 
-    avatar_url = None
-    if user.avatar_hash:
-        avatar_url = f"https://cdn.discordapp.com/avatars/{user.discord_id}/{user.avatar_hash}.png?size=128"
+        avatar_url = None
+        if user.avatar_hash:
+            avatar_url = f"https://cdn.discordapp.com/avatars/{user.discord_id}/{user.avatar_hash}.png?size=128"
 
-    roles = user.roles or []
-    is_founder = FOUNDER_ROLE_ID in roles
+        roles = user.roles or []
+        is_founder = FOUNDER_ROLE_ID in roles
 
-    return {
-        "id": str(user.id),
-        "discord_id": user.discord_id,
-        "username": user.username,
-        "avatar_url": avatar_url,
-        "roles": roles,
-        "credits": credits,
-        "is_unlimited": db_user.is_unlimited if db_user else False,
-        "is_og_nerd": OG_NERD_ROLE_ID in roles,
-        "is_founder": is_founder,
-        "created_at": user.created_at.isoformat() if user.created_at else None,
-    }
+        return {
+            "id": str(user.id),
+            "discord_id": user.discord_id,
+            "username": user.username,
+            "avatar_url": avatar_url,
+            "roles": roles,
+            "credits": credits,
+            "is_unlimited": is_unlimited,
+            "is_og_nerd": OG_NERD_ROLE_ID in roles,
+            "is_founder": is_founder,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+        }
+    except Exception as e:
+        print(f"[AUTH DEBUG] /me crashed: {type(e).__name__}: {e}", flush=True)
+        raise
 
 
 @router.get("/credits")
@@ -351,6 +357,7 @@ async def get_credits(user: DiscordUser = Depends(get_current_user)):
         # Refresh credits from DB (in case it was deducted by another request)
         db_user = session.query(DiscordUser).filter(DiscordUser.id == user.id).first()
         credits = db_user.credits if db_user else user.credits
+        is_unlimited = db_user.is_unlimited if db_user else False
 
         # Recent usage (last 20)
         usage = session.query(TokenUsageLog).filter(
@@ -384,7 +391,7 @@ async def get_credits(user: DiscordUser = Depends(get_current_user)):
 
     return {
         "credits": credits,
-        "is_unlimited": db_user.is_unlimited if db_user else False,
+        "is_unlimited": is_unlimited,
         "usage": usage_list,
         "grants": grants_list,
     }
