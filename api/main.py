@@ -28,6 +28,7 @@ from fastapi.staticfiles import StaticFiles
 from api.cache import cache_get, cache_set, get_redis_client
 from api.routes import (
     articles_html,
+    auth,
     content,
     contributions,
     lyra,
@@ -64,7 +65,7 @@ async def lifespan(app: FastAPI):
             from sqlalchemy import text as _text
             conn.execute(_text("ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS raw_data JSONB"))
             conn.execute(_text("ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS period_end INTEGER"))
-        logger.info("[STARTUP] Database tables verified")
+        logger.info("[STARTUP] Database tables verified (includes discord_users, credit_grants, token_usage_logs)")
     except Exception as e:
         logger.warning(f"[STARTUP] Table creation check failed: {e}")
 
@@ -196,6 +197,7 @@ app.include_router(articles_html.router, tags=["articles-html"])
 app.include_router(seo.router, tags=["seo"])
 
 # Include routers
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(sites.router, prefix="/api/sites", tags=["sites"])
 app.include_router(sources.router, prefix="/api/sources", tags=["sources"])
 app.include_router(og.router, prefix="/api/og", tags=["og"])

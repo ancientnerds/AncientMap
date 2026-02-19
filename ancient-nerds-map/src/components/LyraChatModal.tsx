@@ -282,11 +282,16 @@ export default function LyraChatModal({
   const [searchResults, setSearchResults] = useState<SiteData[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
 
-  // Auth state — hydrate from sessionStorage
+  // Auth state — Discord OAuth token from localStorage, or admin key from sessionStorage
+  const [authToken, setAuthToken] = useState<string | null>(() =>
+    localStorage.getItem('an_auth_token')
+  )
   const [adminKey, setAdminKey] = useState<string | null>(() =>
     sessionStorage.getItem('lyra_admin_key')
   )
-  const isAuthenticated = !!adminKey
+  const [userCredits, setUserCredits] = useState<number | null>(null)
+  const isAuthenticated = !!authToken || !!adminKey
+  const authMode: 'discord' | 'admin' | null = authToken ? 'discord' : adminKey ? 'admin' : null
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -427,6 +432,24 @@ export default function LyraChatModal({
     }
   }, [isOpen, isAuthenticated])
 
+  // Fetch credits when using Discord auth
+  useEffect(() => {
+    if (!authToken) return
+    fetch(`${config.api.baseUrl}/auth/me`, {
+      headers: { 'Authorization': `Bearer ${authToken}` },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data) setUserCredits(data.credits)
+        else {
+          // Token expired/invalid — clear it
+          localStorage.removeItem('an_auth_token')
+          setAuthToken(null)
+        }
+      })
+      .catch(() => {})
+  }, [authToken])
+
   // Debounced site search
   useEffect(() => {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
@@ -502,7 +525,10 @@ export default function LyraChatModal({
 
   const clearAuth = useCallback(() => {
     sessionStorage.removeItem('lyra_admin_key')
+    localStorage.removeItem('an_auth_token')
     setAdminKey(null)
+    setAuthToken(null)
+    setUserCredits(null)
     setMessages([])
   }, [])
 
@@ -551,7 +577,13 @@ export default function LyraChatModal({
   const sendMessage = useCallback(async (text?: string) => {
     const messageText = text || input.trim()
     if (!messageText) return
-    if (!adminKey) return
+    if (!authMode) return
+
+    // Check credits for Discord users
+    if (authMode === 'discord' && userCredits !== null && userCredits <= 0) {
+      setError('No credits remaining. Visit your Account page for details.')
+      return
+    }
 
     setError(null)
     setInput('')
@@ -597,11 +629,13 @@ export default function LyraChatModal({
     abortRef.current = controller
 
     try {
-      const response = await fetch(`${config.api.baseUrl}/lyra/admin`, {
+      const endpoint = authMode === 'discord' ? '/lyra/chat' : '/lyra/admin'
+      const bearerToken = authMode === 'discord' ? authToken! : adminKey!
+      const response = await fetch(`${config.api.baseUrl}${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${adminKey}`,
+          'Authorization': `Bearer ${bearerToken}`,
         },
         body: JSON.stringify(body),
         signal: controller.signal,
@@ -694,6 +728,10 @@ export default function LyraChatModal({
               } else if (type === 'done') {
                 const avgRelevance = data.metadata?.avg_relevance ?? null
                 const tokens = data.metadata?.tokens ?? undefined
+                // Update credits from done event (Discord auth only)
+                if (data.metadata?.credits_remaining !== undefined) {
+                  setUserCredits(data.metadata.credits_remaining)
+                }
                 setMessages(prev => {
                   const updated = prev.map(m =>
                     m.id === assistantId
@@ -772,7 +810,7 @@ export default function LyraChatModal({
       setIsStreaming(false)
       abortRef.current = null
     }
-  }, [input, adminKey, messages, contextType, contextId, contextYear, onHighlightSites, clearAuth, conversationId])
+  }, [input, authMode, authToken, adminKey, userCredits, messages, contextType, contextId, contextYear, onHighlightSites, clearAuth, conversationId])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -845,6 +883,11 @@ export default function LyraChatModal({
         </div>
       </div>
       <div className="lyra-chat-header-right">
+        {authMode === 'discord' && userCredits !== null && (
+          <span className="lyra-credits-badge" title="Lyra credits remaining">
+            {userCredits.toLocaleString()} credits
+          </span>
+        )}
         {messages.length > 0 && (
           <button className="lyra-chat-icon-btn" onClick={startNewChat} title="New chat">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -931,7 +974,21 @@ export default function LyraChatModal({
         {/* Auth gate or chat content */}
         {!isAuthenticated ? (
           <div className="lyra-chat-messages">
-            <LyraAuthGate onAuthenticated={handleAuthenticated} />
+            <div className="lyra-auth-gate">
+              <img src="/lyra.gif" alt="Lyra" className="lyra-auth-gate-avatar" />
+              <div className="lyra-auth-gate-name">Lyra Wiskerbyte</div>
+              <div className="lyra-auth-gate-subtitle">Sign in to chat</div>
+              <button
+                className="lyra-auth-discord-btn"
+                onClick={() => { window.location.href = `${config.api.baseUrl}/auth/discord` }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.36-.698.772-1.362 1.225-1.993a.076.076 0 0 0-.041-.107 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.12-.094.246-.194.373-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+                </svg>
+                Continue with Discord
+              </button>
+              <LyraAuthGate onAuthenticated={handleAuthenticated} />
+            </div>
           </div>
         ) : (
           <>

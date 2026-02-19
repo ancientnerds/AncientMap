@@ -18,6 +18,7 @@ pydantic>=2.5.0             # Data validation
 pydantic-settings>=2.1.0    # Settings management
 slowapi>=0.1.9              # Rate limiting
 python-multipart>=0.0.6     # Form data parsing
+PyJWT>=2.8.0                # JWT tokens for Discord OAuth
 
 # =============================================================================
 # DATA PROCESSING

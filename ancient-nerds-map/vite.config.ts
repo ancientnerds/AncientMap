@@ -51,6 +51,7 @@ export default defineConfig({
         lyra: resolve(__dirname, 'lyra.html'),
         db: resolve(__dirname, 'db.html'),
         articles: resolve(__dirname, 'articles.html'),
+        account: resolve(__dirname, 'account.html'),
       },
     },
   },
