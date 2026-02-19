@@ -1188,6 +1188,9 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   color: var(--primary-red);
   letter-spacing: 3.4px;
   text-shadow:
+    0 0 10px rgba(192, 32, 35, 0.5),
+    0 0 20px rgba(192, 32, 35, 0.3),
+    0 0 40px rgba(192, 32, 35, 0.15),
     0 0 3px rgba(0, 0, 0, 0.8),
     0 0 6px rgba(0, 0, 0, 0.5);
 }
