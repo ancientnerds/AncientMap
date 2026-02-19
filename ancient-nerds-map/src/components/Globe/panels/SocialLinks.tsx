@@ -90,6 +90,20 @@ export function SocialLinks({
           </button>
         )}
 
+        {/* Radar - opens in new tab */}
+        <a className="action-btn" href="/radar.html" target="_blank" rel="noopener noreferrer" title="Radar">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" />
+          </svg>
+        </a>
+
+        {/* Articles - opens in new tab */}
+        <a className="action-btn" href="/articles.html" target="_blank" rel="noopener noreferrer" title="Articles">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+          </svg>
+        </a>
+
         {/* Sign In Button - Coming Soon */}
         <button
           className="action-btn signin-btn disabled"
@@ -101,15 +115,6 @@ export function SocialLinks({
             <circle cx="12" cy="7" r="4"></circle>
           </svg>
         </button>
-      </div>
-
-      {/* Row 3: Page Navigation */}
-      <div className="nav-links">
-        <a href="/news.html" target="_blank" rel="noopener noreferrer" className="nav-link" title="News Feed">News</a>
-        <a href="/radar.html" target="_blank" rel="noopener noreferrer" className="nav-link" title="Radar">Radar</a>
-        <a href="/articles.html" target="_blank" rel="noopener noreferrer" className="nav-link" title="Articles">Articles</a>
-        <a href="/lyra.html" target="_blank" rel="noopener noreferrer" className="nav-link" title="Lyra Chat">Lyra</a>
-        <a href="/db.html" target="_blank" rel="noopener noreferrer" className="nav-link" title="Database">DB</a>
       </div>
     </div>
   )
