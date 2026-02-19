@@ -5,7 +5,7 @@
  * On first load after OAuth, reads ?token= from URL and stores it.
  */
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { config } from '../config'
 import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/layout/PageHeader'
@@ -25,9 +25,20 @@ interface GrantEntry {
   created_at: string
 }
 
+interface AdminUser {
+  id: string
+  username: string
+  avatar_url: string | null
+  credits: number
+  is_founder: boolean
+  is_og_nerd: boolean
+  last_login: string | null
+}
+
 const REASON_LABELS: Record<string, string> = {
   og_nerd_role: 'OG Nerd Role',
   founder_role: 'Founder Role',
+  founder_grant: 'Founder Grant',
   patreon_tier_1: 'Patreon Tier 1',
   patreon_tier_2: 'Patreon Tier 2',
   patreon_tier_3: 'Patreon Tier 3',
@@ -38,6 +49,17 @@ export default function AccountPage() {
   const [usage, setUsage] = useState<UsageEntry[]>([])
   const [grants, setGrants] = useState<GrantEntry[]>([])
   const [error, setError] = useState<string | null>(null)
+
+  // Admin state
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([])
+  const [adminSearch, setAdminSearch] = useState('')
+  const [adminLoading, setAdminLoading] = useState(false)
+  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
+  const [creditAction, setCreditAction] = useState<'set' | 'add'>('add')
+  const [creditAmount, setCreditAmount] = useState(100)
+  const [adminError, setAdminError] = useState<string | null>(null)
+  const [adminSuccess, setAdminSuccess] = useState<string | null>(null)
+  const searchTimer = useRef<ReturnType<typeof setTimeout>>()
 
   // Handle OAuth error callback (?error= in URL). Token is now delivered via cookie
   // and consumed by AuthContext on mount — no ?token= in URL anymore.
@@ -71,6 +93,75 @@ export default function AccountPage() {
   useEffect(() => {
     if (isLoggedIn) fetchCredits()
   }, [isLoggedIn, fetchCredits])
+
+  // Admin: fetch users
+  const fetchAdminUsers = useCallback(async (q = '') => {
+    if (!token) return
+    setAdminLoading(true)
+    setAdminError(null)
+    try {
+      const params = q ? `?q=${encodeURIComponent(q)}` : ''
+      const resp = await fetch(`${config.api.baseUrl}/auth/admin/users${params}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      })
+      if (resp.ok) {
+        const data = await resp.json()
+        setAdminUsers(data.users)
+      } else {
+        setAdminError('Failed to load users')
+      }
+    } catch {
+      setAdminError('Failed to load users')
+    } finally {
+      setAdminLoading(false)
+    }
+  }, [token])
+
+  // Fetch admin users on mount if founder
+  useEffect(() => {
+    if (isLoggedIn && user?.is_founder) fetchAdminUsers()
+  }, [isLoggedIn, user?.is_founder, fetchAdminUsers])
+
+  // Debounced search
+  const handleAdminSearch = (value: string) => {
+    setAdminSearch(value)
+    clearTimeout(searchTimer.current)
+    searchTimer.current = setTimeout(() => fetchAdminUsers(value), 300)
+  }
+
+  // Admin: adjust credits
+  const handleCreditAdjust = async (action: 'set' | 'add', amount: number) => {
+    if (!token || !selectedUser) return
+    setAdminError(null)
+    setAdminSuccess(null)
+    try {
+      const resp = await fetch(`${config.api.baseUrl}/auth/admin/credits`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ user_id: selectedUser.id, action, amount }),
+      })
+      if (resp.ok) {
+        const data = await resp.json()
+        const newCredits = data.new_credits as number
+        setAdminSuccess(
+          `${selectedUser.username}: credits ${action === 'set' ? 'set to' : 'increased by'} ${amount === -1 ? 'unlimited' : amount} → now ${newCredits === -1 ? '∞' : newCredits.toLocaleString()}`
+        )
+        // Update local list
+        setAdminUsers(prev => prev.map(u =>
+          u.id === selectedUser.id ? { ...u, credits: newCredits } : u
+        ))
+        setSelectedUser(prev => prev ? { ...prev, credits: newCredits } : null)
+      } else {
+        const data = await resp.json().catch(() => null)
+        setAdminError(data?.detail || 'Failed to adjust credits')
+      }
+    } catch {
+      setAdminError('Failed to adjust credits')
+    }
+  }
 
   const handleSignIn = () => {
     window.location.href = `${config.api.baseUrl}/auth/discord`
@@ -206,6 +297,109 @@ export default function AccountPage() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            )}
+
+            {/* Founder Admin Panel */}
+            {user?.is_founder && (
+              <div className="account-section admin-panel">
+                <h3 className="account-section-title">Admin — Credit Management</h3>
+
+                <input
+                  type="text"
+                  className="admin-search"
+                  placeholder="Search users by name..."
+                  value={adminSearch}
+                  onChange={e => handleAdminSearch(e.target.value)}
+                />
+
+                {adminError && <div className="admin-error">{adminError}</div>}
+                {adminSuccess && <div className="admin-success">{adminSuccess}</div>}
+
+                {adminLoading ? (
+                  <div className="admin-loading">Loading users...</div>
+                ) : (
+                  <div className="admin-user-list">
+                    {adminUsers.map(u => (
+                      <div
+                        key={u.id}
+                        className={`admin-user-row ${selectedUser?.id === u.id ? 'selected' : ''}`}
+                        onClick={() => {
+                          setSelectedUser(selectedUser?.id === u.id ? null : u)
+                          setAdminSuccess(null)
+                          setAdminError(null)
+                        }}
+                      >
+                        {u.avatar_url ? (
+                          <img src={u.avatar_url} alt={u.username} className="admin-user-avatar" />
+                        ) : (
+                          <div className="admin-user-avatar-placeholder">
+                            {u.username.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <span className="admin-user-name">{u.username}</span>
+                        <div className="admin-user-badges">
+                          {u.is_founder && <span className="account-badge founder">F</span>}
+                          {u.is_og_nerd && <span className="account-badge og-nerd">OG</span>}
+                        </div>
+                        <span className="admin-user-credits">
+                          {u.credits === -1 ? '∞' : u.credits.toLocaleString()}
+                        </span>
+                      </div>
+                    ))}
+                    {adminUsers.length === 0 && (
+                      <div className="admin-loading">No users found</div>
+                    )}
+                  </div>
+                )}
+
+                {/* Credit adjustment form */}
+                {selectedUser && (
+                  <div className="admin-credit-form">
+                    <div className="admin-credit-form-header">
+                      Adjust credits for <strong>{selectedUser.username}</strong>
+                      <span className="admin-credit-form-current">
+                        (current: {selectedUser.credits === -1 ? '∞' : selectedUser.credits.toLocaleString()})
+                      </span>
+                    </div>
+                    <div className="admin-credit-controls">
+                      <select
+                        className="admin-action-select"
+                        value={creditAction}
+                        onChange={e => setCreditAction(e.target.value as 'set' | 'add')}
+                      >
+                        <option value="add">Add</option>
+                        <option value="set">Set to</option>
+                      </select>
+                      <input
+                        type="number"
+                        className="admin-amount-input"
+                        value={creditAmount}
+                        onChange={e => setCreditAmount(parseInt(e.target.value) || 0)}
+                      />
+                      <button
+                        className="admin-apply-btn"
+                        onClick={() => handleCreditAdjust(creditAction, creditAmount)}
+                      >
+                        Apply
+                      </button>
+                    </div>
+                    <div className="admin-shortcuts">
+                      <button className="admin-shortcut-btn" onClick={() => handleCreditAdjust('set', -1)}>
+                        Set Unlimited
+                      </button>
+                      <button className="admin-shortcut-btn" onClick={() => handleCreditAdjust('add', 100)}>
+                        +100
+                      </button>
+                      <button className="admin-shortcut-btn" onClick={() => handleCreditAdjust('add', 500)}>
+                        +500
+                      </button>
+                      <button className="admin-shortcut-btn" onClick={() => handleCreditAdjust('add', 1000)}>
+                        +1000
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
