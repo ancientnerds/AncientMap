@@ -249,7 +249,8 @@ jobs:
               echo "==> Compose config changed, recreating services..."
               BUILD_HASH=$(git rev-parse --short HEAD) docker compose up -d --remove-orphans
             else
-              echo "==> No Docker changes"
+              echo "==> No Docker changes, ensuring services are running..."
+              docker compose up -d --remove-orphans
             fi
             echo "==> Waiting for API health..."
             for i in $(seq 1 12); do
