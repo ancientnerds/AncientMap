@@ -36,6 +36,9 @@ Pillow>=10.0.0
 # --- Content rendering ---
 markdown>=3.5.0
 
+# --- Auth ---
+PyJWT>=2.8.0
+
 # --- Utilities ---
 python-dotenv>=1.0.0
 pyyaml>=6.0.0

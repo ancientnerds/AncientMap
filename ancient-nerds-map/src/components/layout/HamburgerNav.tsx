@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { config } from '../../config'
 
 const NAV_ITEMS = [
   { page: 'globe', label: 'Globe', href: '/globe.html', icon: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM2 12h20M12 2a15 15 0 0 1 4 10 15 15 0 0 1-4 10 15 15 0 0 1-4-10A15 15 0 0 1 12 2z' },
@@ -9,9 +10,29 @@ const NAV_ITEMS = [
   { page: 'db', label: 'Database', href: '/db.html', icon: 'M12 2C6.48 2 2 3.79 2 6v12c0 2.21 4.48 4 10 4s10-1.79 10-4V6c0-2.21-4.48-4-10-4zM2 12c0 2.21 4.48 4 10 4s10-1.79 10-4' },
 ]
 
+// Account/Sign In icons
+const ACCOUNT_ICON = 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z'
+
 interface HamburgerNavProps {
   currentPage?: string
   openInNewTab?: boolean
+}
+
+/**
+ * Check if user is logged in by reading the auth token from localStorage.
+ * This avoids requiring AuthProvider on every page.
+ */
+function useAuthToken(): boolean {
+  const [isLoggedIn, setIsLoggedIn] = useState(() => !!localStorage.getItem('an_auth_token'))
+
+  useEffect(() => {
+    // Re-check on storage events (e.g. login in another tab)
+    const handler = () => setIsLoggedIn(!!localStorage.getItem('an_auth_token'))
+    window.addEventListener('storage', handler)
+    return () => window.removeEventListener('storage', handler)
+  }, [])
+
+  return isLoggedIn
 }
 
 export default function HamburgerNav({ currentPage, openInNewTab }: HamburgerNavProps) {
@@ -19,6 +40,7 @@ export default function HamburgerNav({ currentPage, openInNewTab }: HamburgerNav
   const btnRef = useRef<HTMLButtonElement>(null)
   const dropRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState({ top: 0, left: 0 })
+  const isLoggedIn = useAuthToken()
 
   const updatePos = useCallback(() => {
     if (!btnRef.current) return
@@ -44,6 +66,11 @@ export default function HamburgerNav({ currentPage, openInNewTab }: HamburgerNav
       document.removeEventListener('keydown', handleKey)
     }
   }, [open, updatePos])
+
+  // Build the auth link based on login state
+  const authItem = isLoggedIn
+    ? { page: 'account', label: 'Account', href: '/account.html', icon: ACCOUNT_ICON }
+    : { page: 'signin', label: 'Sign In', href: `${config.api.baseUrl}/auth/discord`, icon: ACCOUNT_ICON }
 
   return (
     <div className="hamburger-nav">
@@ -79,6 +106,18 @@ export default function HamburgerNav({ currentPage, openInNewTab }: HamburgerNav
               {item.label}
             </a>
           ))}
+          <div className="hamburger-divider" />
+          <a
+            href={authItem.href}
+            className={`hamburger-link${currentPage === authItem.page ? ' active' : ''}`}
+            onClick={() => setOpen(false)}
+            {...(openInNewTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d={authItem.icon} />
+            </svg>
+            {authItem.label}
+          </a>
         </div>
       )}
     </div>

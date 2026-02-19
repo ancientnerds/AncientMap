@@ -254,6 +254,12 @@
   color: var(--primary-red, #c02023);
 }
 
+.hamburger-divider {
+  height: 1px;
+  background: var(--border-color, rgba(0, 180, 180, 0.12));
+  margin: 4px 0;
+}
+
 /* Brand text is always visible — bubble shrinks instead */
 
 /* ── Page header speech bubble (lyra chat, no pointer, inline) ── */

@@ -2,8 +2,8 @@
 Lyra Chat API Routes.
 
 Endpoints:
-- POST /lyra/chat     — Turnstile + rate limit (20/hr/IP)
-- POST /lyra/admin    — Bearer LYRA_ADMIN_KEY (no rate limit)
+- POST /lyra/chat     — Discord OAuth login required, credits deducted
+- POST /lyra/admin    — Bearer LYRA_ADMIN_KEY (no rate limit, no credits)
 """
 
 import json
@@ -11,14 +11,14 @@ import logging
 import os
 import secrets
 import time
+import uuid
+from math import ceil
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from api.services.admin_auth import get_client_ip
-from api.services.rate_limiter import RateLimiter
-from api.services.turnstile import verify_turnstile
+from api.services.jwt_auth import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +30,6 @@ router = APIRouter()
 
 LYRA_ADMIN_KEY = os.getenv("LYRA_ADMIN_KEY", "")
 SSE_MAX_DURATION = 300  # Max SSE stream duration in seconds (5 minutes)
-
-_rate_limiter = RateLimiter(max_requests=int(os.getenv("LYRA_RATE_LIMIT", "20")), namespace="lyra")
 
 
 # ---------------------------------------------------------------------------
@@ -50,13 +48,12 @@ class _HistoryMessage(BaseModel):
 
 
 class LyraChatRequest(BaseModel):
-    """Request body for Lyra chat."""
+    """Request body for Lyra chat (login required, no Turnstile)."""
     message: str = Field(..., min_length=1, max_length=4000)
     images: list[_ImagePayload] | None = Field(default=None, max_length=5, description="Base64 images")
     context_type: str = Field(default="global", description="Where chat was opened: global, site, empire, news")
     context_id: str | None = Field(default=None, max_length=100, description="UUID of site, empire polity ID, or news item ID")
     context_year: int | None = Field(default=None, description="Year for empire context")
-    turnstile_token: str = Field(..., description="Cloudflare Turnstile token")
     history: list[_HistoryMessage] | None = Field(default=None, max_length=50, description="Conversation history [{role, content}]")
 
 
@@ -77,24 +74,19 @@ class LyraAdminRequest(BaseModel):
 @router.post("/chat")
 async def lyra_chat(request: LyraChatRequest, req: Request):
     """
-    Chat with Lyra. Requires Turnstile token. Rate limited to 20/hr/IP.
+    Chat with Lyra. Requires Discord login + credits.
 
-    Returns SSE stream with token, sites, and done events.
+    Returns SSE stream with token, sites, done events.
+    The done event includes credits_remaining.
     """
-    ip = get_client_ip(req)
+    user = get_current_user(req)
 
-    # 1. Turnstile verification
-    if not await verify_turnstile(request.turnstile_token, ip):
-        raise HTTPException(status_code=403, detail="Turnstile verification failed")
+    # Check credits
+    if user.credits <= 0:
+        raise HTTPException(status_code=402, detail="No credits remaining")
 
-    # 2. Rate limit
-    if not _rate_limiter.check(ip):
-        raise HTTPException(
-            status_code=429,
-            detail=f"Rate limit exceeded ({_rate_limiter.max_requests} requests/hour). Try again later.",
-        )
-
-    return _stream_response(
+    return _stream_response_with_credits(
+        user_id=user.id,
         message=request.message,
         images=[img.model_dump() for img in request.images] if request.images else None,
         history=[h.model_dump() for h in request.history] if request.history else None,
@@ -128,7 +120,7 @@ async def lyra_admin(
     authorization: str | None = Header(None),
 ):
     """
-    Admin chat with Lyra. No Turnstile, no rate limit.
+    Admin chat with Lyra. No login, no credits, no rate limit.
 
     Requires Authorization: Bearer <LYRA_ADMIN_KEY>.
     """
@@ -160,7 +152,7 @@ def _stream_response(
     context_id: str | None,
     context_year: int | None,
 ) -> StreamingResponse:
-    """Create an SSE streaming response from the Lyra agent."""
+    """Create an SSE streaming response from the Lyra agent (no credits tracking)."""
 
     async def generate():
         deadline = time.monotonic() + SSE_MAX_DURATION
@@ -194,3 +186,101 @@ def _stream_response(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+def _stream_response_with_credits(
+    user_id: uuid.UUID,
+    message: str,
+    images: list[dict] | None,
+    history: list[dict] | None,
+    context_type: str,
+    context_id: str | None,
+    context_year: int | None,
+) -> StreamingResponse:
+    """Create an SSE streaming response with credit deduction on completion."""
+
+    async def generate():
+        deadline = time.monotonic() + SSE_MAX_DURATION
+        try:
+            from api.services.lyra_agent import run_agent_stream
+
+            async for chunk in run_agent_stream(
+                message=message,
+                images=images,
+                history=history,
+                context_type=context_type,
+                context_id=context_id,
+                context_year=context_year,
+            ):
+                if time.monotonic() > deadline:
+                    yield f"event: error\ndata: {json.dumps({'type': 'error', 'error': 'Response time limit reached'})}\n\n"
+                    return
+
+                event_type = chunk.get("type", "token")
+
+                # Intercept "done" event to deduct credits and add credits_remaining
+                if event_type == "done":
+                    tokens = chunk.get("metadata", {}).get("tokens", {})
+                    input_tokens = tokens.get("input", 0)
+                    output_tokens = tokens.get("output", 0)
+                    voyage_tokens = tokens.get("voyage", 0)
+                    credits_used = max(1, ceil((input_tokens + output_tokens) / 100))
+
+                    # Deduct credits and log usage
+                    credits_remaining = _deduct_credits(
+                        user_id=user_id,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        voyage_tokens=voyage_tokens,
+                        credits_used=credits_used,
+                    )
+
+                    # Add credits info to the done event metadata
+                    if "metadata" not in chunk:
+                        chunk["metadata"] = {}
+                    chunk["metadata"]["credits_used"] = credits_used
+                    chunk["metadata"]["credits_remaining"] = credits_remaining
+
+                yield f"event: {event_type}\ndata: {json.dumps(chunk)}\n\n"
+
+        except Exception as e:
+            logger.error(f"Lyra stream error: {e}", exc_info=True)
+            yield f"event: error\ndata: {json.dumps({'type': 'error', 'error': 'An internal error occurred'})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+def _deduct_credits(
+    user_id: uuid.UUID,
+    input_tokens: int,
+    output_tokens: int,
+    voyage_tokens: int,
+    credits_used: int,
+) -> int:
+    """Deduct credits from user and log usage. Returns remaining credits."""
+    from pipeline.database import DiscordUser, TokenUsageLog, get_session
+
+    with get_session() as session:
+        user = session.query(DiscordUser).filter(DiscordUser.id == user_id).with_for_update().first()
+        if not user:
+            return 0
+
+        user.credits = max(0, user.credits - credits_used)
+        session.add(TokenUsageLog(
+            user_id=user_id,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            voyage_tokens=voyage_tokens,
+            credits_used=credits_used,
+        ))
+        remaining = user.credits
+
+    return remaining

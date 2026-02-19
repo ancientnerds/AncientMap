@@ -978,6 +978,83 @@ class SourceVersionPin(Base):
 
 
 # =============================================================================
+# Discord Auth & Credits
+# =============================================================================
+
+
+class DiscordUser(Base):
+    """Discord-authenticated user with Lyra credits."""
+    __tablename__ = "discord_users"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+    )
+    discord_id: Mapped[str] = mapped_column(String(30), unique=True, nullable=False, index=True)
+    username: Mapped[str] = mapped_column(String(100), nullable=False)
+    avatar_hash: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    roles: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    credits: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    last_login: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    credit_grants: Mapped[list["CreditGrant"]] = relationship("CreditGrant", back_populates="user")
+    token_usage_logs: Mapped[list["TokenUsageLog"]] = relationship("TokenUsageLog", back_populates="user")
+
+    def __repr__(self) -> str:
+        return f"<DiscordUser {self.username} ({self.discord_id})>"
+
+
+class CreditGrant(Base):
+    """Log of credit grants (OG Nerd role, future Patreon tiers, etc.)."""
+    __tablename__ = "credit_grants"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("discord_users.id", ondelete="CASCADE"), nullable=False,
+    )
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    user: Mapped["DiscordUser"] = relationship("DiscordUser", back_populates="credit_grants")
+
+    __table_args__ = (
+        Index("idx_credit_grants_user_reason", "user_id", "reason"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<CreditGrant {self.amount} to {self.user_id} ({self.reason})>"
+
+
+class TokenUsageLog(Base):
+    """Per-request token usage for Lyra chat."""
+    __tablename__ = "token_usage_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("discord_users.id", ondelete="CASCADE"), nullable=False,
+    )
+    input_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
+    output_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
+    voyage_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    credits_used: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    user: Mapped["DiscordUser"] = relationship("DiscordUser", back_populates="token_usage_logs")
+
+    __table_args__ = (
+        Index("idx_token_usage_user_date", "user_id", "created_at"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<TokenUsageLog {self.credits_used} credits by {self.user_id}>"
+
+
+# =============================================================================
 # Helper Functions
 # =============================================================================
 
