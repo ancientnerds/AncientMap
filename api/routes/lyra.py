@@ -20,6 +20,8 @@ from pydantic import BaseModel, Field
 
 from api.services.jwt_auth import get_current_user
 from api.services.rate_limiter import RateLimiter
+from pipeline.database import DiscordUser as DBUser
+from pipeline.database import get_session as get_db_session
 
 logger = logging.getLogger(__name__)
 
@@ -104,8 +106,7 @@ async def lyra_chat(request: LyraChatRequest, req: Request):
         )
 
     # Atomic pre-deduct: lock row, check credits > 0, deduct 1 as deposit
-    from pipeline.database import DiscordUser as DBUser, get_session
-    with get_session() as session:
+    with get_db_session() as session:
         db_user = session.query(DBUser).filter(
             DBUser.id == user.id,
             DBUser.credits > 0,
