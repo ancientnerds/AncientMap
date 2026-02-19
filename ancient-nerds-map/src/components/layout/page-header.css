@@ -227,10 +227,7 @@
 }
 
 .hamburger-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  z-index: 200;
+  z-index: 99999;
   background: var(--bg-main, #0a1520);
   border: 1px solid var(--border-color, rgba(0, 180, 180, 0.12));
   border-radius: 6px;

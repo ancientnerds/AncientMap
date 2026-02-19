@@ -310,6 +310,8 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 /* Filter panel no longer scrolls - children handle their own scrolling */
 
 .panel-header {
+  display: flex;
+  align-items: center;
   padding: 0;
   flex-shrink: 0;
 }

@@ -403,8 +403,8 @@ function FilterPanel({
           </div>
           <span className="beta-badge">BETA</span>
         </div>
+        <HamburgerNav currentPage="globe" openInNewTab />
       </div>
-      <HamburgerNav currentPage="globe" openInNewTab />
 
       {/* Search/Proximity Section */}
       <div className="glass-panel">

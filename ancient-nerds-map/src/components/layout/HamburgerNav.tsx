@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 
 const NAV_ITEMS = [
   { page: 'globe', label: 'Globe', href: '/globe.html', icon: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM2 12h20M12 2a15 15 0 0 1 4 10 15 15 0 0 1-4 10 15 15 0 0 1-4-10A15 15 0 0 1 12 2z' },
@@ -16,12 +16,23 @@ interface HamburgerNavProps {
 
 export default function HamburgerNav({ currentPage, openInNewTab }: HamburgerNavProps) {
   const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const dropRef = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+
+  const updatePos = useCallback(() => {
+    if (!btnRef.current) return
+    const rect = btnRef.current.getBoundingClientRect()
+    setPos({ top: rect.bottom + 4, left: rect.left })
+  }, [])
 
   useEffect(() => {
     if (!open) return
+    updatePos()
     const handleClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      if (btnRef.current?.contains(e.target as Node)) return
+      if (dropRef.current?.contains(e.target as Node)) return
+      setOpen(false)
     }
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false)
@@ -32,11 +43,12 @@ export default function HamburgerNav({ currentPage, openInNewTab }: HamburgerNav
       document.removeEventListener('mousedown', handleClick)
       document.removeEventListener('keydown', handleKey)
     }
-  }, [open])
+  }, [open, updatePos])
 
   return (
-    <div className="hamburger-nav" ref={ref}>
+    <div className="hamburger-nav">
       <button
+        ref={btnRef}
         className="hamburger-btn"
         onClick={() => setOpen(!open)}
         aria-label="Navigation menu"
@@ -48,7 +60,11 @@ export default function HamburgerNav({ currentPage, openInNewTab }: HamburgerNav
         </svg>
       </button>
       {open && (
-        <div className="hamburger-dropdown">
+        <div
+          ref={dropRef}
+          className="hamburger-dropdown"
+          style={{ position: 'fixed', top: pos.top, left: pos.left }}
+        >
           {NAV_ITEMS.map(item => (
             <a
               key={item.page}
