@@ -449,9 +449,9 @@ async def admin_adjust_credits(
     body: CreditAdjustRequest,
     _founder: DiscordUser = Depends(require_founder),
 ):
-    """Set or add credits for a user. set with -1 = unlimited."""
-    if body.action not in ("set", "add"):
-        raise HTTPException(status_code=400, detail="action must be 'set' or 'add'")
+    """Set, add, or remove credits for a user. set with -1 = unlimited."""
+    if body.action not in ("set", "add", "remove"):
+        raise HTTPException(status_code=400, detail="action must be 'set', 'add', or 'remove'")
 
     with get_session() as session:
         user = session.query(DiscordUser).filter(
@@ -462,12 +462,15 @@ async def admin_adjust_credits(
 
         if body.action == "set":
             user.credits = body.amount
-        else:
+        elif body.action == "add":
             user.credits += body.amount
+        elif body.action == "remove":
+            user.credits = max(0, user.credits - body.amount)
 
+        grant_amount = body.amount if body.action != "remove" else -body.amount
         session.add(CreditGrant(
             user_id=user.id,
-            amount=body.amount,
+            amount=grant_amount,
             reason="founder_grant",
         ))
         session.flush()
