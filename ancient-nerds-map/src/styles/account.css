@@ -2,6 +2,8 @@
 
 .account-page {
   min-height: 100vh;
+  height: 100vh;
+  overflow-y: auto;
   background: var(--bg-primary, #0a1520);
   color: #e0e0e0;
 }
