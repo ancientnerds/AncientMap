@@ -197,7 +197,7 @@ async def discord_oauth_redirect(req: Request):
         "response_type": "code",
         "scope": "identify guilds.members.read",
         "state": state,
-        "prompt": "none",
+        "prompt": "consent",
     }
     url = f"https://discord.com/api/oauth2/authorize?{urlencode(params)}"
     return RedirectResponse(url=url)
