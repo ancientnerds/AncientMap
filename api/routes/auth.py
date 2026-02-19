@@ -9,6 +9,7 @@ Endpoints:
 - POST /auth/logout          → no-op (JWT is stateless, frontend clears token)
 """
 
+import calendar
 import logging
 import os
 import secrets
@@ -20,6 +21,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from api.services.jwt_auth import create_token, get_current_user
 from api.services.rate_limiter import RateLimiter
@@ -35,8 +37,32 @@ DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "")
 DISCORD_REDIRECT_URI = os.getenv("DISCORD_REDIRECT_URI", "")
 DISCORD_GUILD_ID = os.getenv("DISCORD_GUILD_ID", "932330696956063765")
 OG_NERD_ROLE_ID = "972439407086944266"
-OG_NERD_CREDIT_AMOUNT = 1000
 FOUNDER_ROLE_ID = "933105341292486707"
+
+# --- Role-based credit configuration ---
+# Each Discord role that grants credits is defined here.
+# type: "one_time" = single grant, "monthly" = recurring, "unlimited" = bypass credits
+CREDIT_ROLES: dict[str, dict] = {
+    OG_NERD_ROLE_ID: {
+        "name": "OG Nerd",
+        "type": "one_time",
+        "amount": 1000,
+        "reason": "og_nerd_role",
+    },
+    FOUNDER_ROLE_ID: {
+        "name": "Founder",
+        "type": "unlimited",
+        "reason": "founder_role",
+    },
+    # Patreon tiers — add role IDs once they're configured in Discord:
+    # "ROLE_ID": {
+    #     "name": "Patron Bronze",
+    #     "type": "monthly",
+    #     "amount": 100,
+    #     "cap_multiplier": 3,
+    #     "reason": "monthly_patron_bronze",
+    # },
+}
 
 # Simple in-memory CSRF state store (short-lived, cleared on restart is fine)
 _oauth_states: dict[str, float] = {}
@@ -44,6 +70,106 @@ _OAUTH_STATE_CAP = 1000
 
 # Rate limit on OAuth redirects: 5 per minute per IP
 _oauth_limiter = RateLimiter(max_requests=5, window_seconds=60, namespace="oauth_redirect")
+
+
+def _clamp_day(year: int, month: int, day: int) -> int:
+    """Clamp a day to the max days in a given month (e.g. 31 in Feb → 28)."""
+    return min(day, calendar.monthrange(year, month)[1])
+
+
+def get_eligible_periods(anchor: datetime, now: datetime) -> list[str]:
+    """Return period strings ("YYYY-MM") from anchor to now where the anniversary day has passed.
+
+    Limited to the last 3 entries (accumulation window).
+    """
+    periods: list[str] = []
+    anchor_day = anchor.day
+    y, m = anchor.year, anchor.month
+
+    while True:
+        due_day = _clamp_day(y, m, anchor_day)
+        due_date = datetime(y, m, due_day, tzinfo=UTC)
+        if due_date > now:
+            break
+        periods.append(f"{y:04d}-{m:02d}")
+        # Advance one month
+        if m == 12:
+            y += 1
+            m = 1
+        else:
+            m += 1
+
+    # Cap to last 3 periods (accumulation window)
+    return periods[-3:]
+
+
+def process_credit_grants(session: Session, user: DiscordUser) -> None:
+    """Evaluate and apply credit grants for all roles the user has.
+
+    Handles one-time, monthly (with cap), and unlimited role types.
+    Safe to call repeatedly — idempotent via unique constraint.
+    """
+    roles = user.roles or []
+    now = datetime.now(UTC)
+
+    for role_id, config in CREDIT_ROLES.items():
+        if role_id not in roles:
+            continue
+
+        role_type = config["type"]
+        reason = config["reason"]
+
+        if role_type == "unlimited":
+            continue
+
+        if role_type == "one_time":
+            existing = session.query(CreditGrant).filter(
+                CreditGrant.user_id == user.id,
+                CreditGrant.reason == reason,
+                CreditGrant.grant_period.is_(None),
+            ).first()
+            if not existing:
+                amount = config["amount"]
+                user.credits += amount
+                session.add(CreditGrant(
+                    user_id=user.id,
+                    amount=amount,
+                    reason=reason,
+                    grant_period=None,
+                ))
+                logger.info(f"Granted {amount} credits to {user.username} ({reason})")
+
+        elif role_type == "monthly":
+            if user.grant_anchor_date is None:
+                user.grant_anchor_date = now
+
+            monthly_amount = config["amount"]
+            cap_multiplier = config.get("cap_multiplier", 3)
+            max_balance = monthly_amount * cap_multiplier
+
+            for period in get_eligible_periods(user.grant_anchor_date, now):
+                existing = session.query(CreditGrant).filter(
+                    CreditGrant.user_id == user.id,
+                    CreditGrant.reason == reason,
+                    CreditGrant.grant_period == period,
+                ).first()
+                if existing:
+                    continue
+
+                effective = min(monthly_amount, max(0, max_balance - user.credits))
+                if effective <= 0:
+                    continue
+
+                user.credits += effective
+                session.add(CreditGrant(
+                    user_id=user.id,
+                    amount=effective,
+                    reason=reason,
+                    grant_period=period,
+                ))
+                logger.info(f"Granted {effective} monthly credits to {user.username} ({reason}, period={period})")
+
+    session.flush()
 
 
 def _cleanup_states():
@@ -168,20 +294,8 @@ async def discord_oauth_callback(code: str | None = None, state: str | None = No
             session.add(user)
             session.flush()  # Get the user ID
 
-        # Grant OG Nerd credits if they have the role and haven't received this grant
-        if OG_NERD_ROLE_ID in roles:
-            existing_grant = session.query(CreditGrant).filter(
-                CreditGrant.user_id == user.id,
-                CreditGrant.reason == "og_nerd_role",
-            ).first()
-            if not existing_grant:
-                user.credits += OG_NERD_CREDIT_AMOUNT
-                session.add(CreditGrant(
-                    user_id=user.id,
-                    amount=OG_NERD_CREDIT_AMOUNT,
-                    reason="og_nerd_role",
-                ))
-                logger.info(f"Granted {OG_NERD_CREDIT_AMOUNT} credits to OG Nerd {username}")
+        # Evaluate and apply credit grants for all roles
+        process_credit_grants(session, user)
 
         jwt_token = create_token(str(user.id), discord_id)
 
@@ -201,6 +315,15 @@ async def discord_oauth_callback(code: str | None = None, state: str | None = No
 @router.get("/me")
 async def get_me(user: DiscordUser = Depends(get_current_user)):
     """Get current authenticated user profile."""
+    # Process any pending credit grants (monthly accumulation, etc.)
+    with get_session() as session:
+        db_user = session.query(DiscordUser).filter(DiscordUser.id == user.id).first()
+        if db_user:
+            process_credit_grants(session, db_user)
+            credits = db_user.credits
+        else:
+            credits = user.credits
+
     avatar_url = None
     if user.avatar_hash:
         avatar_url = f"https://cdn.discordapp.com/avatars/{user.discord_id}/{user.avatar_hash}.png?size=128"
@@ -214,7 +337,7 @@ async def get_me(user: DiscordUser = Depends(get_current_user)):
         "username": user.username,
         "avatar_url": avatar_url,
         "roles": roles,
-        "credits": -1 if is_founder else user.credits,
+        "credits": -1 if is_founder else credits,
         "is_og_nerd": OG_NERD_ROLE_ID in roles,
         "is_founder": is_founder,
         "created_at": user.created_at.isoformat() if user.created_at else None,
@@ -255,6 +378,7 @@ async def get_credits(user: DiscordUser = Depends(get_current_user)):
             {
                 "amount": g.amount,
                 "reason": g.reason,
+                "grant_period": g.grant_period,
                 "created_at": g.created_at.isoformat(),
             }
             for g in grants
@@ -313,6 +437,7 @@ async def admin_list_users(
                     "is_founder": FOUNDER_ROLE_ID in (u.roles or []),
                     "is_og_nerd": OG_NERD_ROLE_ID in (u.roles or []),
                     "last_login": u.last_login.isoformat() if u.last_login else None,
+                    "grant_anchor_date": u.grant_anchor_date.isoformat() if u.grant_anchor_date else None,
                 }
                 for u in users
             ]

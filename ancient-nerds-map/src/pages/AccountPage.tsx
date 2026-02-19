@@ -22,6 +22,7 @@ interface UsageEntry {
 interface GrantEntry {
   amount: number
   reason: string
+  grant_period: string | null
   created_at: string
 }
 
@@ -39,9 +40,9 @@ const REASON_LABELS: Record<string, string> = {
   og_nerd_role: 'OG Nerd Role',
   founder_role: 'Founder Role',
   founder_grant: 'Founder Grant',
-  patreon_tier_1: 'Patreon Tier 1',
-  patreon_tier_2: 'Patreon Tier 2',
-  patreon_tier_3: 'Patreon Tier 3',
+  monthly_patron_bronze: 'Patron Bronze (Monthly)',
+  monthly_patron_silver: 'Patron Silver (Monthly)',
+  monthly_patron_gold: 'Patron Gold (Monthly)',
 }
 
 export default function AccountPage() {
@@ -254,6 +255,7 @@ export default function AccountPage() {
                       <tr>
                         <th>Date</th>
                         <th>Reason</th>
+                        <th>Period</th>
                         <th>Credits</th>
                       </tr>
                     </thead>
@@ -262,6 +264,7 @@ export default function AccountPage() {
                         <tr key={i}>
                           <td>{new Date(g.created_at).toLocaleDateString()}</td>
                           <td>{REASON_LABELS[g.reason] || g.reason}</td>
+                          <td>{g.grant_period || '—'}</td>
                           <td className="account-credits-positive">+{g.amount.toLocaleString()}</td>
                         </tr>
                       ))}

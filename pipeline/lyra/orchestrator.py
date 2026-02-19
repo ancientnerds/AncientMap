@@ -1008,6 +1008,18 @@ def _run_migrations(engine) -> None:
         # Pipeline efficiency: cap screenshot retry attempts across cycles
         conn.execute(text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS screenshot_attempts INTEGER DEFAULT 0"))
 
+        # Role-based credit system: monthly grants with accumulation
+        conn.execute(text("ALTER TABLE discord_users ADD COLUMN IF NOT EXISTS grant_anchor_date TIMESTAMP"))
+        conn.execute(text("ALTER TABLE credit_grants ADD COLUMN IF NOT EXISTS grant_period VARCHAR(7)"))
+        conn.execute(text("""
+            DO $$ BEGIN
+                ALTER TABLE credit_grants
+                    ADD CONSTRAINT uq_credit_grants_user_reason_period
+                    UNIQUE (user_id, reason, grant_period);
+            EXCEPTION WHEN duplicate_table THEN NULL;
+            END $$
+        """))
+
         conn.commit()
 
 
