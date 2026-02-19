@@ -212,9 +212,8 @@ export default function AccountPage() {
         const data = await resp.json()
         const newCredits = data.new_credits as number
         const actionLabel = action === 'set' ? 'set to' : action === 'add' ? 'increased by' : 'decreased by'
-        const effectiveCredits = selectedUser.is_founder ? '∞ (Founder)' : newCredits === -1 ? '∞' : newCredits.toLocaleString()
         setAdminSuccess(
-          `${selectedUser.username}: credits ${actionLabel} ${amount === -1 ? 'unlimited' : amount} → now ${effectiveCredits}`
+          `${selectedUser.username}: credits ${actionLabel} ${amount === -1 ? 'unlimited' : amount} → now ${newCredits === -1 ? '∞' : newCredits.toLocaleString()}`
         )
         // Update local list
         setAdminUsers(prev => prev.map(u =>
@@ -331,7 +330,9 @@ export default function AccountPage() {
                           <td>{new Date(g.created_at).toLocaleDateString()}</td>
                           <td>{REASON_LABELS[g.reason] || g.reason}</td>
                           <td>{g.grant_period || '—'}</td>
-                          <td className="account-credits-positive">+{g.amount.toLocaleString()}</td>
+                          <td className={g.amount >= 0 ? 'account-credits-positive' : 'account-credits-negative'}>
+                            {g.amount > 0 ? '+' : ''}{g.amount.toLocaleString()}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -412,7 +413,7 @@ export default function AccountPage() {
                           {u.is_og_nerd && <span className="account-badge og-nerd">OG</span>}
                         </div>
                         <span className="admin-user-credits">
-                          {u.is_founder ? '∞' : u.credits === -1 ? '∞' : u.credits.toLocaleString()}
+                          {u.credits === -1 ? '∞' : u.credits.toLocaleString()}
                         </span>
                       </div>
                     ))}
@@ -428,7 +429,7 @@ export default function AccountPage() {
                     <div className="admin-credit-form-header">
                       Adjust credits for <strong>{selectedUser.username}</strong>
                       <span className="admin-credit-form-current">
-                        (current: {selectedUser.is_founder ? '∞ Founder' : selectedUser.credits === -1 ? '∞' : selectedUser.credits.toLocaleString()})
+                        (current: {selectedUser.credits === -1 ? '∞' : selectedUser.credits.toLocaleString()})
                       </span>
                     </div>
                     <div className="admin-credit-controls">
@@ -456,17 +457,15 @@ export default function AccountPage() {
                       <button className="admin-shortcut-btn add" onClick={() => handleCreditAdjust('add', 1000)}>
                         +1000
                       </button>
-                      {!selectedUser.is_founder && (
-                        <>
-                          <button className="admin-shortcut-btn set" onClick={() => handleCreditAdjust('set', -1)}>
-                            Set Unlimited
-                          </button>
-                          {selectedUser.credits === -1 && (
-                            <button className="admin-shortcut-btn remove" onClick={() => handleCreditAdjust('set', 0)}>
-                              Remove Unlimited
-                            </button>
-                          )}
-                        </>
+                      {selectedUser.credits !== -1 && (
+                        <button className="admin-shortcut-btn set" onClick={() => handleCreditAdjust('set', -1)}>
+                          Set Unlimited
+                        </button>
+                      )}
+                      {selectedUser.credits === -1 && (
+                        <button className="admin-shortcut-btn remove" onClick={() => handleCreditAdjust('set', 0)}>
+                          Remove Unlimited
+                        </button>
                       )}
                     </div>
                   </div>
