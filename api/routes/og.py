@@ -358,6 +358,45 @@ async def get_homepage_og_image():
     )
 
 
+def get_site_data(site_id: str, db: Session) -> dict:
+    """Look up site metadata from the database.
+
+    Returns dict with keys: name, description, country, lat, lon, site_type, found.
+    """
+    query = text("""
+        SELECT name, lat, lon, country, description, site_type
+        FROM unified_sites
+        WHERE id::text = :site_id
+    """)
+    result = db.execute(query, {"site_id": site_id})
+    row = result.fetchone()
+
+    if not row:
+        return {
+            "found": False,
+            "name": "Site Not Found",
+            "description": "This archaeological site could not be found.",
+            "country": "",
+            "lat": None,
+            "lon": None,
+            "site_type": None,
+        }
+
+    description = row.description or f"Archaeological site: {row.site_type or 'Unknown type'}"
+    if len(description) > 200:
+        description = description[:197] + "..."
+
+    return {
+        "found": True,
+        "name": row.name or "Unknown Site",
+        "description": description,
+        "country": row.country or "",
+        "lat": row.lat,
+        "lon": row.lon,
+        "site_type": row.site_type,
+    }
+
+
 @router.get("/share/{site_id}")
 async def get_share_page(
     site_id: str,
@@ -370,26 +409,10 @@ async def get_share_page(
         return HTMLResponse(content="Invalid site ID", status_code=400)
 
     base_url = str(request.base_url).rstrip('/')
-
-    query = text("""
-        SELECT name, lat, lon, country, description, site_type
-        FROM unified_sites
-        WHERE id::text = :site_id
-    """)
-
-    result = db.execute(query, {"site_id": site_id})
-    row = result.fetchone()
-
-    if not row:
-        title = "Site Not Found"
-        description = "This archaeological site could not be found."
-        country = ""
-    else:
-        title = row.name or "Unknown Site"
-        description = row.description or f"Archaeological site: {row.site_type or 'Unknown type'}"
-        if len(description) > 200:
-            description = description[:197] + "..."
-        country = row.country or ""
+    site = get_site_data(site_id, db)
+    title = site["name"]
+    description = site["description"]
+    country = site["country"]
 
     og_image_url = f"{base_url}/api/og/{site_id}"
     app_url = html.escape(f"/?site={site_id}")
