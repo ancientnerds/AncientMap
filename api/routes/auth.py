@@ -139,13 +139,24 @@ CREDIT_ROLES[ANCIENT_NERDS_ROLE_ID] = {
 }
 
 def get_user_tier(roles: list[str]) -> str:
-    """Return the highest tier name for a user's roles."""
+    """Return the highest tier name for a user's roles.
+
+    Priority: Patreon tiers first, then Discord-only tiers.
+    """
+    # Patreon tiers (highest first)
     if PATRON_SCHOLAR_ROLE_ID and PATRON_SCHOLAR_ROLE_ID in roles:
         return "scholar"
     if PATRON_ARCHAEOLOGIST_ROLE_ID and PATRON_ARCHAEOLOGIST_ROLE_ID in roles:
         return "archaeologist"
     if PATRON_EXPLORER_ROLE_ID and PATRON_EXPLORER_ROLE_ID in roles:
         return "explorer"
+    # Discord-only tiers
+    if FOUNDER_ROLE_ID in roles:
+        return "founder"
+    if TEAM_ROLE_ID in roles:
+        return "team"
+    if RESEARCHER_ROLE_ID in roles:
+        return "researcher"
     if OG_NERD_ROLE_ID in roles:
         return "og_nerd"
     return "free"
