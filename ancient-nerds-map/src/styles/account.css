@@ -151,18 +151,6 @@
   flex-wrap: wrap;
 }
 
-.account-badge.og-nerd {
-  background: rgba(248, 102, 0, 0.15);
-  color: #f86600;
-  border: 1px solid rgba(248, 102, 0, 0.3);
-}
-
-.account-badge.founder {
-  background: rgba(0, 255, 46, 0.12);
-  color: #00ff2e;
-  border: 1px solid rgba(0, 255, 46, 0.25);
-}
-
 /* Credits section */
 .account-credits-section {
   text-align: center;

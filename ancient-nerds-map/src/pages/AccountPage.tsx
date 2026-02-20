@@ -120,11 +120,11 @@ const REASON_LABELS: Record<string, string> = {
   ancient_nerds_role: 'Ancient Nerds Role',
 }
 
-// Discord role ID → display info for profile badges
+// Discord role ID → display info for profile badges (glass style: colored text on translucent bg)
 const ROLE_DISPLAY: Record<string, { name: string; color: string }> = {
-  '933105341292486707': { name: 'Founder', color: '#e02626' },
-  '972439407086944266': { name: 'OG Nerd', color: '#f59e0b' },
-  '933104896310378546': { name: 'Team', color: '#00ff2e' },
+  '933105341292486707': { name: 'Founder', color: '#00ff2e' },
+  '972439407086944266': { name: 'OG Nerd', color: '#f86600' },
+  '933104896310378546': { name: 'Team', color: '#00ffa5' },
   '933105424264220815': { name: 'Researcher', color: '#2ecc71' },
   '1083087065010417775': { name: 'Adeptus Major', color: '#ffb500' },
   '1083088517510484009': { name: 'Adeptus Minor', color: '#ffe400' },
@@ -132,9 +132,9 @@ const ROLE_DISPLAY: Record<string, { name: string; color: string }> = {
   '1083088426074640466': { name: 'Adept', color: '#eee247' },
   '1083088078379417630': { name: 'Neophyte', color: '#f1dd80' },
   '968574705760100392': { name: 'Ancient Nerds', color: '#db2424' },
-  '1083785196861657198': { name: 'Explorer', color: '#22c55e' },
-  '1083785565398380544': { name: 'Archaeologist', color: '#3b82f6' },
-  '1083785826586075278': { name: 'Scholar', color: '#a855f7' },
+  '1083785196861657198': { name: 'Explorer', color: '#c34586' },
+  '1083785565398380544': { name: 'Archaeologist', color: '#9553ff' },
+  '1083785826586075278': { name: 'Scholar', color: '#00b0fc' },
 }
 
 const DISCORD_INVITE_URL = 'https://discord.gg/ancientnerds'
@@ -340,7 +340,11 @@ export default function AccountPage() {
                       const info = ROLE_DISPLAY[roleId]
                       if (!info) return null
                       return (
-                        <span key={roleId} className="account-badge" style={{ background: info.color }}>
+                        <span key={roleId} className="account-badge" style={{
+                          background: `${info.color}1F`,
+                          color: info.color,
+                          border: `1px solid ${info.color}40`,
+                        }}>
                           {info.name}
                         </span>
                       )
