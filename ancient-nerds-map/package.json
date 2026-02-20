@@ -27,6 +27,9 @@
     "vite-plugin-pwa": "^1.2.0",
     "workbox-window": "^7.4.0"
   },
+  "overrides": {
+    "minimatch": ">=10.2.1"
+  },
   "devDependencies": {
     "@types/earcut": "^3.0.0",
     "@types/react": "^18.3.5",
