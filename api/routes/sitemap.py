@@ -20,7 +20,7 @@ router = APIRouter()
 BASE_URL = "https://ancientnerds.com"
 
 
-@router.get("/sitemap.xml")
+@router.api_route("/sitemap.xml", methods=["GET", "HEAD"])
 async def get_sitemap(db: Session = Depends(get_db)):
     """
     Generate dynamic sitemap with all archaeological sites.
@@ -161,7 +161,7 @@ async def get_sitemap(db: Session = Depends(get_db)):
     )
 
 
-@router.get("/sitemap-index.xml")
+@router.api_route("/sitemap-index.xml", methods=["GET", "HEAD"])
 async def get_sitemap_index():
     """
     Generate sitemap index for large sites.
