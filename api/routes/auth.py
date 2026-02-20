@@ -44,6 +44,16 @@ PATRON_EXPLORER_ROLE_ID = "1083785196861657198"
 PATRON_ARCHAEOLOGIST_ROLE_ID = "1083785565398380544"
 PATRON_SCHOLAR_ROLE_ID = "1083785826586075278"
 
+# One-time credit role IDs
+TEAM_ROLE_ID = "933104896310378546"
+RESEARCHER_ROLE_ID = "933105424264220815"
+ADEPTUS_MAJOR_ROLE_ID = "1083087065010417775"
+ADEPTUS_MINOR_ROLE_ID = "1083088517510484009"
+INITIATE_ROLE_ID = "1083088899494129695"
+ADEPT_ROLE_ID = "1083088426074640466"
+NEOPHYTE_ROLE_ID = "1083088078379417630"
+ANCIENT_NERDS_ROLE_ID = "968574705760100392"
+
 # --- Role-based credit configuration ---
 # Each Discord role that grants credits is defined here.
 # Types: "one_time" = single grant, "monthly" = recurring
@@ -79,6 +89,55 @@ CREDIT_ROLES[PATRON_SCHOLAR_ROLE_ID] = {
     "reason": "monthly_patron_scholar",
 }
 
+CREDIT_ROLES[TEAM_ROLE_ID] = {
+    "name": "Team",
+    "type": "one_time",
+    "amount": 5000,
+    "reason": "team_role",
+}
+CREDIT_ROLES[RESEARCHER_ROLE_ID] = {
+    "name": "Researcher",
+    "type": "one_time",
+    "amount": 3000,
+    "reason": "researcher_role",
+}
+CREDIT_ROLES[ADEPTUS_MAJOR_ROLE_ID] = {
+    "name": "Adeptus Major",
+    "type": "one_time",
+    "amount": 2000,
+    "reason": "adeptus_major_role",
+}
+CREDIT_ROLES[ADEPTUS_MINOR_ROLE_ID] = {
+    "name": "Adeptus Minor",
+    "type": "one_time",
+    "amount": 1500,
+    "reason": "adeptus_minor_role",
+}
+CREDIT_ROLES[INITIATE_ROLE_ID] = {
+    "name": "Initiate",
+    "type": "one_time",
+    "amount": 1000,
+    "reason": "initiate_role",
+}
+CREDIT_ROLES[ADEPT_ROLE_ID] = {
+    "name": "Adept",
+    "type": "one_time",
+    "amount": 500,
+    "reason": "adept_role",
+}
+CREDIT_ROLES[NEOPHYTE_ROLE_ID] = {
+    "name": "Neophyte",
+    "type": "one_time",
+    "amount": 300,
+    "reason": "neophyte_role",
+}
+CREDIT_ROLES[ANCIENT_NERDS_ROLE_ID] = {
+    "name": "Ancient Nerds",
+    "type": "one_time",
+    "amount": 300,
+    "reason": "ancient_nerds_role",
+}
+
 def get_user_tier(roles: list[str]) -> str:
     """Return the highest tier name for a user's roles."""
     if PATRON_SCHOLAR_ROLE_ID and PATRON_SCHOLAR_ROLE_ID in roles:
@@ -90,16 +149,6 @@ def get_user_tier(roles: list[str]) -> str:
     if OG_NERD_ROLE_ID in roles:
         return "og_nerd"
     return "free"
-
-
-# Rate limit per hour by tier
-TIER_RATE_LIMITS: dict[str, int] = {
-    "free": 10,
-    "og_nerd": 10,
-    "explorer": 20,
-    "archaeologist": 40,
-    "scholar": 100,
-}
 
 
 # Simple in-memory CSRF state store (short-lived, cleared on restart is fine)

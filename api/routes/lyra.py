@@ -16,7 +16,6 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from api.services.jwt_auth import get_current_user
-from api.services.rate_limiter import RateLimiter
 from pipeline.database import DiscordUser as DBUser
 from pipeline.database import get_session as get_db_session
 
@@ -33,23 +32,6 @@ SSE_MAX_DURATION = 300  # Max SSE stream duration in seconds (5 minutes)
 # Anti-exploit: cap conversation history for low-credit users to bound max request cost
 LOW_CREDIT_THRESHOLD = 20   # credits below which history is truncated
 LOW_CREDIT_MAX_HISTORY = 5  # max history messages for low-credit users (~2-3 exchanges)
-
-# Rate limits — tier-aware (per-user limiters keyed by discord_id:max_requests)
-_chat_limiters: dict[str, RateLimiter] = {}
-
-
-def _get_chat_limiter(user: "DBUser") -> RateLimiter:
-    """Get or create a tier-aware rate limiter for the user."""
-    from api.routes.auth import TIER_RATE_LIMITS, get_user_tier
-    tier = get_user_tier(user.roles or [])
-    max_req = TIER_RATE_LIMITS.get(tier, 10)
-    key = f"{user.discord_id}:{max_req}"
-    if key not in _chat_limiters:
-        _chat_limiters[key] = RateLimiter(
-            max_requests=max_req, window_seconds=3600, namespace=f"lyra_chat_{user.discord_id}",
-        )
-    return _chat_limiters[key]
-
 
 # ---------------------------------------------------------------------------
 # Request / Response models
@@ -89,11 +71,6 @@ async def lyra_chat(request: LyraChatRequest, req: Request):
     The done event includes credits_remaining.
     """
     user = get_current_user(req)
-
-    # Per-user rate limit (tier-aware, keyed by discord_id)
-    limiter = _get_chat_limiter(user)
-    if not limiter.check(user.discord_id):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     # Check unlimited flag and credits atomically
     with get_db_session() as session:
