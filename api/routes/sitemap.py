@@ -172,7 +172,7 @@ async def get_sitemap_index():
     xml_content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <sitemap>
-    <loc>{BASE_URL}/api/sitemap/sitemap.xml</loc>
+    <loc>{BASE_URL}/sitemap.xml</loc>
     <lastmod>{today}</lastmod>
   </sitemap>
 </sitemapindex>"""
