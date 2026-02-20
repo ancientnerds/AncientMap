@@ -105,7 +105,9 @@ Step 1 mechanical scans run on ALL files in these directories. Step 2 deep revie
 | `api/services/lyra_tools.py` | deep |
 | `api/services/lyra_prompts.py` | grep |
 | `api/services/rate_limiter.py` | deep |
-| `api/services/admin_auth.py` | deep |
+| `api/services/snapshots.py` | deep |
+| `api/routes/articles_html.py` | grep |
+| `api/routes/seo.py` | grep |
 | `api/services/turnstile.py` | deep |
 | `api/routes/auth.py` | deep |
 | `api/routes/patreon.py` | deep |

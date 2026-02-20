@@ -673,17 +673,16 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       cleanupEventHandlers()
       scene.traverse((object) => {
-        if (object instanceof THREE.Mesh) {
-          object.geometry?.dispose()
-          if (Array.isArray(object.material)) {
-            object.material.forEach((m) => {
-              m.map?.dispose()
-              m.dispose()
-            })
-          } else if (object.material) {
-            object.material.map?.dispose()
-            object.material.dispose()
+        const geo = (object as { geometry?: THREE.BufferGeometry }).geometry
+        if (geo) geo.dispose()
+        const mat = (object as { material?: THREE.Material | THREE.Material[] }).material
+        if (mat) {
+          const disposeMat = (m: THREE.Material) => {
+            ;(m as THREE.MeshBasicMaterial).map?.dispose()
+            m.dispose()
           }
+          if (Array.isArray(mat)) mat.forEach(disposeMat)
+          else disposeMat(mat)
         }
       })
       renderer.dispose()

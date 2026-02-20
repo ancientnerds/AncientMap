@@ -17,6 +17,7 @@ import os
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Request
+from sqlalchemy.exc import IntegrityError
 
 from api.routes.auth import CREDIT_ROLES
 from pipeline.database import CreditGrant, DiscordUser, PatreonEvent, get_session
@@ -95,7 +96,7 @@ async def patreon_webhook(request: Request):
             if discord_info and isinstance(discord_info, dict):
                 discord_id = discord_info.get("user_id")
 
-    # Idempotency check
+    # Single atomic transaction: idempotency check + event log + credit grant
     with get_session() as session:
         existing = session.query(PatreonEvent).filter(
             PatreonEvent.event_id == full_event_id,
@@ -111,40 +112,44 @@ async def patreon_webhook(request: Request):
             discord_id=discord_id,
             tier_amount_cents=tier_amount_cents,
         ))
-        session.commit()
+        # Flush to detect concurrent duplicate (IntegrityError) before credit logic
+        try:
+            session.flush()
+        except IntegrityError:
+            session.rollback()
+            return {"ok": True, "message": "Event already processed (concurrent)"}
 
-    if event_type == "members:pledge:delete":
-        logger.info(f"Patron cancelled: email={patron_email}, discord={discord_id}")
-        return {"ok": True, "message": "Pledge deletion logged"}
+        if event_type == "members:pledge:delete":
+            logger.info(f"Patron cancelled: email={patron_email}, discord={discord_id}")
+            return {"ok": True, "message": "Pledge deletion logged"}
 
-    if event_type not in ("members:pledge:create", "members:pledge:update"):
-        logger.info(f"Ignoring Patreon event: {event_type}")
-        return {"ok": True, "message": "Event type not handled"}
+        if event_type not in ("members:pledge:create", "members:pledge:update"):
+            logger.info(f"Ignoring Patreon event: {event_type}")
+            return {"ok": True, "message": "Event type not handled"}
 
-    # Try to grant credits immediately if we have a Discord ID
-    if not discord_id:
-        logger.warning(f"Patreon pledge event but no Discord ID: email={patron_email}")
-        return {"ok": True, "message": "No Discord ID — credits will be granted on next login"}
+        # Try to grant credits immediately if we have a Discord ID
+        if not discord_id:
+            logger.warning(f"Patreon pledge event but no Discord ID: email={patron_email}")
+            return {"ok": True, "message": "No Discord ID — credits will be granted on next login"}
 
-    reason = _TIER_CENTS_TO_REASON.get(tier_amount_cents)
-    if not reason:
-        logger.warning(f"Unknown tier amount: {tier_amount_cents} cents for discord={discord_id}")
-        return {"ok": True, "message": "Unknown tier amount"}
+        reason = _TIER_CENTS_TO_REASON.get(tier_amount_cents)
+        if not reason:
+            logger.warning(f"Unknown tier amount: {tier_amount_cents} cents for discord={discord_id}")
+            return {"ok": True, "message": "Unknown tier amount"}
 
-    # Find the CREDIT_ROLES config matching this tier's reason
-    role_config = next((cfg for cfg in CREDIT_ROLES.values() if cfg["reason"] == reason), None)
-    if not role_config:
-        logger.warning(f"No CREDIT_ROLES config for reason={reason}")
-        return {"ok": True, "message": "No matching credit config"}
+        # Find the CREDIT_ROLES config matching this tier's reason
+        role_config = next((cfg for cfg in CREDIT_ROLES.values() if cfg["reason"] == reason), None)
+        if not role_config:
+            logger.warning(f"No CREDIT_ROLES config for reason={reason}")
+            return {"ok": True, "message": "No matching credit config"}
 
-    monthly_amount = role_config["amount"]
-    cap_multiplier = role_config.get("cap_multiplier", 3)
-    max_balance = monthly_amount * cap_multiplier
+        monthly_amount = role_config["amount"]
+        cap_multiplier = role_config.get("cap_multiplier", 3)
+        max_balance = monthly_amount * cap_multiplier
 
-    with get_session() as session:
         user = session.query(DiscordUser).filter(
             DiscordUser.discord_id == discord_id,
-        ).first()
+        ).with_for_update().first()
         if not user:
             logger.info(f"Discord user {discord_id} not in DB yet — credits granted on next login")
             return {"ok": True, "message": "User not registered yet"}
@@ -157,12 +162,12 @@ async def patreon_webhook(request: Request):
             user.grant_anchor_date = now
 
         # Idempotency: check if this period + reason was already granted
-        existing = session.query(CreditGrant).filter(
+        existing_grant = session.query(CreditGrant).filter(
             CreditGrant.user_id == user.id,
             CreditGrant.reason == reason,
             CreditGrant.grant_period == period,
         ).first()
-        if existing:
+        if existing_grant:
             logger.info(f"Credits already granted for {user.username} ({reason}, period={period})")
             return {"ok": True, "message": "Credits already granted for this period"}
 
@@ -178,7 +183,5 @@ async def patreon_webhook(request: Request):
             logger.info(f"Webhook granted {effective} credits to {user.username} ({reason}, period={period})")
         else:
             logger.info(f"Credit cap reached for {user.username}, no grant ({reason}, period={period})")
-
-        session.commit()
 
     return {"ok": True, "message": "Credits processed"}

@@ -294,7 +294,7 @@ def _get_filter_llm():
     if _filter_llm is None:
         from langchain_anthropic import ChatAnthropic
         api_key = os.getenv("LYRA_ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
-        base_url = os.getenv("LYRA_ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
+        base_url = os.getenv("LYRA_ANTHROPIC_BASE_URL", "")
         kwargs: dict = {
             "model": LLM_MODEL,
             "max_tokens": 300,
@@ -344,7 +344,7 @@ def _get_llm():
     if LLM_PROVIDER == "anthropic":
         from langchain_anthropic import ChatAnthropic
         api_key = os.getenv("LYRA_ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
-        base_url = os.getenv("LYRA_ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
+        base_url = os.getenv("LYRA_ANTHROPIC_BASE_URL", "")
         is_native = not base_url or "anthropic.com" in base_url
         kwargs: dict = {"model": LLM_MODEL, "max_tokens": 1024, "streaming": True, "api_key": api_key}
         if is_native:
@@ -354,7 +354,7 @@ def _get_llm():
         _llm = ChatAnthropic(**kwargs)
     elif LLM_PROVIDER == "ollama":
         from langchain_ollama import ChatOllama
-        _llm = ChatOllama(model=LLM_MODEL, streaming=True)
+        _llm = ChatOllama(model=LLM_MODEL, streaming=True, num_predict=1024)
     elif LLM_PROVIDER == "openai":
         from langchain_openai import ChatOpenAI
         _llm = ChatOpenAI(model=LLM_MODEL, max_tokens=1024, streaming=True)
