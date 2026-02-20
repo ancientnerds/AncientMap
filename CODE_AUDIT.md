@@ -107,6 +107,10 @@ Step 1 mechanical scans run on ALL files in these directories. Step 2 deep revie
 | `api/services/rate_limiter.py` | deep |
 | `api/services/admin_auth.py` | deep |
 | `api/services/turnstile.py` | deep |
+| `api/routes/auth.py` | deep |
+| `api/routes/patreon.py` | deep |
+| `api/services/jwt_auth.py` | deep |
+| `api/services/discord_bot.py` | deep |
 | `api/cache.py` | deep |
 | `api/services/lyra_embeddings.py` | grep |
 | `pipeline/database.py` | deep |
@@ -147,6 +151,8 @@ Step 1 mechanical scans run on ALL files in these directories. Step 2 deep revie
 | `ancient-nerds-map/src/data/DataStore.ts` | grep |
 | `ancient-nerds-map/src/constants/colors.ts` | grep |
 | `ancient-nerds-map/src/utils/countryFlags.ts` | grep |
+| `ancient-nerds-map/src/contexts/AuthContext.tsx` | deep |
+| `ancient-nerds-map/src/pages/AccountPage.tsx` | deep |
 
 ### security (adds to above)
 
@@ -188,6 +194,12 @@ Run these searches across all files in scope. Each hit is a candidate finding.
 | `(?:SELECT\|INSERT\|UPDATE\|DELETE).*\.format\s*\(` | `*.py` | D2-SEC | SQL injection via .format() |
 | `(?i)(TODO\|FIXME\|HACK)\b` | `api/**`, `pipeline/lyra/**`, `ancient-nerds-map/src/**` | D3-MAINT | Technical debt (exempt `pipeline/connectors/` stubs) |
 | `console\.(log\|warn\|error)\s*\(` | `*.tsx`, `*.ts` | D6-DEAD | Debug logging left in production |
+| `localStorage.*token` | `*.tsx`, `*.ts` | D2-SEC | Token XSS exposure surface — verify no exfiltration paths |
+| `httponly.*False` or `httpOnly.*false` | `*.py` | D2-SEC | Non-httpOnly cookies (acceptable only for OAuth handoff cookie) |
+| `credits\s*[+-]=` without `FOR UPDATE` in same function | `*.py` | D2-SEC | Credit mutation without row locking |
+| `hmac\.new\(` without `compare_digest` nearby | `*.py` | D2-SEC | Timing-unsafe signature comparison |
+| `grant_anchor_date` mutations | `*.py` | D1-CORRECT | Verify anchor only resets on legitimate events (new/returning patron) |
+| `process_credit_grants\|CreditGrant` | `*.py` | D1-CORRECT | Verify all grant paths enforce idempotency and highest-tier-only |
 
 ---
 
@@ -260,6 +272,44 @@ Aligned with OWASP Top 10 2025 + LLM-specific risks.
 - **LLM07 System Prompt Leakage**: System prompt not extractable via "repeat your instructions" attacks. Check if defensive instructions exist.
 - **LLM10 Unbounded Consumption**: `max_tool_rounds = 5` caps tool loops. `max_tokens=1024` caps output. Verify these limits exist.
 - User input passed to LLM system prompts must be in the `HumanMessage`, never interpolated into `SystemMessage` content.
+
+**Auth & Payment Security (OWASP ASVS v4)**
+
+People pay real money for credits — this code needs the highest scrutiny for both correctness and security.
+
+*Authentication (ASVS V2/V3)*
+- OAuth CSRF state tokens are cryptographically random, short-lived, single-use
+- JWT signing key from env var, never empty/default — app refuses to start without it
+- JWT expiry is bounded (currently 7 days)
+- Cookies: `Secure=true`, `SameSite=Lax` minimum; `HttpOnly` where JS access not required
+- No token in URL query parameters or logs
+- Token revocation strategy documented (currently: stateless JWT, no revocation)
+
+*Authorization (ASVS V4)*
+- Admin/founder endpoints enforce role checks server-side (`require_founder` dependency), not just frontend visibility
+- Role data comes from Discord API on each login, not user-supplied
+- `is_unlimited` flag only settable via founder admin endpoint
+
+*Credit/Payment Integrity*
+- Credit grant idempotency enforced at both app level (query-before-insert) AND DB level (unique constraint on `user_id, reason, grant_period`)
+- Credit deduction uses `SELECT ... FOR UPDATE` row locking (no race conditions)
+- Monthly grants: only highest tier processed (no double-grants from multiple roles)
+- Tier lifecycle correctness: join, upgrade, downgrade, cancel, rejoin all produce correct grant amounts with no backdating
+- `grant_anchor_date` resets on patron role re-acquisition (prevents backdated credits)
+- Cap multiplier enforced (credits cannot accumulate beyond `amount * cap_multiplier`)
+- No credit clawback on cancellation (intentional — document this as a business decision, not a bug)
+
+*Webhook Security*
+- Patreon webhook signature verified via HMAC with `hmac.compare_digest` (timing-safe)
+- Webhook handler fails closed: returns 403 on bad signature, 503 if secret not configured
+- Idempotency table prevents replay/duplicate processing
+- Webhook grants credits directly by tier amount (not dependent on potentially-stale Discord roles)
+
+*Rate Limiting & Anti-Abuse*
+- OAuth redirect: rate-limited per IP, state store capped (anti-DoS)
+- Lyra chat: tier-aware per-user rate limiting
+- Discord bot: account age gate (7 days), per-user rate limiting, Discord-level cooldowns
+- `X-Forwarded-For` only trusted when `TRUSTED_PROXY=1`
 
 ---
 
@@ -389,6 +439,10 @@ These rules are derived from `CLAUDE.md`, `MEMORY.md`, and observed project patt
 | P8 | Never push to main without explicit user permission | Deployment safety |
 | P9 | Never change API query parameter defaults/limits without updating all frontend callers | Frontend sends hardcoded values (e.g. `limit=100000`) — changing the API constraint causes 422 errors and breaks the globe |
 | P10 | Never alter DB schema (column types, constraints, table names) without checking all queries that reference them | Schema changes can silently break API routes and pipeline code |
+| P11 | Credit mutations must use `SELECT ... FOR UPDATE` row locking | Concurrent requests can race to deduct from the same balance |
+| P12 | Webhook handlers must verify signatures and fail closed before any processing | Unsigned webhooks = free credits for anyone who can POST |
+| P13 | Credit grant idempotency must be enforced at both app level and DB constraint level | Defense-in-depth — app bugs shouldn't cause double grants |
+| P14 | Tier lifecycle (join/upgrade/downgrade/cancel/rejoin) must produce correct grants — verify by tracing all 5 scenarios | People pay for this; any bug = money lost or given away free |
 
 ---
 
@@ -415,11 +469,18 @@ Audit results follow this template. The following are **hypothetical examples** 
 | Critical findings = 0 | PASS / FAIL |
 | Major security findings (D2) = 0 | PASS / FAIL |
 | Hardcoded secrets = 0 | PASS / FAIL |
-| New anti-patterns (P1–P8) = 0 | PASS / FAIL |
+| New anti-patterns (P1–P14) = 0 | PASS / FAIL |
 | Docker images pinned | PASS / FAIL |
 | LLM prompt injection guards | PASS / FAIL |
 | Deprecated API usage (P6) = 0 | PASS / FAIL |
 | No eval/exec on external data | PASS / FAIL |
+| Credit grant idempotency (app + DB) | PASS / FAIL |
+| Credit deduction row locking | PASS / FAIL |
+| OAuth CSRF protection | PASS / FAIL |
+| Webhook signature verification | PASS / FAIL |
+| Admin endpoints server-side auth | PASS / FAIL |
+| JWT signing key enforced | PASS / FAIL |
+| Tier lifecycle correctness | PASS / FAIL |
 
 ## Findings
 
@@ -459,13 +520,20 @@ The audit passes only if ALL conditions are met:
 | Critical findings | 0 |
 | Major security findings (D2) | 0 |
 | Hardcoded secrets | 0 |
-| New anti-patterns (P1–P10 violations) | 0 |
+| New anti-patterns (P1–P14 violations) | 0 |
 | Docker images pinned | All |
 | LLM prompts have injection guards | All (currently 16) |
 | Deprecated API usage (P6) | 0 (no `datetime.utcnow()`, no removed stdlib) |
 | No `eval()`/`exec()`/`ast.literal_eval()` on external data | 0 |
 | API contract preserved (P9) | No changed defaults/limits without frontend update |
 | DB schema compatible (P10) | No broken queries from schema changes |
+| Credit grant idempotency (app + DB) | Both layers present |
+| Credit deduction row locking | `FOR UPDATE` on all paths |
+| OAuth CSRF protection | State tokens validated |
+| Webhook signature verification | HMAC + `compare_digest` |
+| Admin endpoints server-side auth | `require_founder` on all admin routes |
+| JWT signing key enforced | App refuses empty key |
+| Tier lifecycle correctness | No backdating, no double-grants |
 
 A failing quality gate means the code should not be deployed until findings are resolved.
 
@@ -537,6 +605,23 @@ Use this for fast scanning. Each item maps to a dimension above.
 - [ ] `.env` in `.gitignore`
 - [ ] CI jobs are blocking (no `|| true`)
 - [ ] No credentials in Docker build args
+
+### Auth & Payment (D2/D1)
+- [ ] OAuth CSRF state validated and single-use
+- [ ] JWT key from env var, app refuses empty key
+- [ ] JWT expiry bounded
+- [ ] Cookies have `Secure`, `SameSite` attributes
+- [ ] Admin endpoints use `require_founder` (server-side, not frontend-only)
+- [ ] Credit grants idempotent (app query + DB unique constraint)
+- [ ] Credit deductions use `SELECT ... FOR UPDATE`
+- [ ] Monthly grants: highest tier only, no double-grants
+- [ ] `grant_anchor_date` resets on new/returning patron (no backdating)
+- [ ] Webhook HMAC verified with `hmac.compare_digest`
+- [ ] Webhook fails closed (403/503 before processing)
+- [ ] Patreon idempotency table prevents replay
+- [ ] Rate limiting on OAuth redirects and chat endpoints
+- [ ] Token not in URL params or logs
+- [ ] `X-Forwarded-For` trusted only with `TRUSTED_PROXY=1`
 
 ---
 
