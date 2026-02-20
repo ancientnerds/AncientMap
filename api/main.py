@@ -129,11 +129,11 @@ async def lifespan(app: FastAPI):
 
             from api.services.discord_bot import start_bot
             asyncio.create_task(start_bot())
-            logger.info("[STARTUP] Discord bot task created")
+            print("[STARTUP] Discord bot task created", flush=True)
         else:
-            logger.info("[STARTUP] DISCORD_BOT_TOKEN not set, skipping bot")
+            print("[STARTUP] DISCORD_BOT_TOKEN not set, skipping bot", flush=True)
     except Exception as e:
-        logger.warning(f"[STARTUP] Discord bot startup failed (non-fatal): {e}")
+        print(f"[STARTUP] Discord bot startup failed (non-fatal): {e}", flush=True)
 
     get_redis_client()  # Initialize Redis connection
 
