@@ -10,7 +10,8 @@ Sitemap: https://ancientnerds.com/api/sitemap/sitemap.xml
 # Crawl-delay for polite crawling
 Crawl-delay: 1
 
-# Disallow API endpoints from being indexed
+# Disallow API endpoints from being indexed (except sitemaps)
+Allow: /api/sitemap/
 Disallow: /api/
 Disallow: /data/basemaps/
 Disallow: /data/historical/
