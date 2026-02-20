@@ -145,6 +145,8 @@ export default function AccountPage() {
   const [usage, setUsage] = useState<UsageEntry[]>([])
   const [grants, setGrants] = useState<GrantEntry[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [grantsExpanded, setGrantsExpanded] = useState(false)
+  const [usageExpanded, setUsageExpanded] = useState(false)
 
   // Admin state
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([])
@@ -397,64 +399,88 @@ export default function AccountPage() {
             </div>
 
             {/* Credit grants */}
-            {grants.length > 0 && (
-              <div className="account-section">
-                <h3 className="account-section-title">Credit Grants</h3>
-                <div className="account-table-wrap">
-                  <table className="account-table">
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Reason</th>
-                        <th>Period</th>
-                        <th>Credits</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {grants.map((g, i) => (
-                        <tr key={i}>
-                          <td>{new Date(g.created_at).toLocaleDateString()}</td>
-                          <td>{REASON_LABELS[g.reason] || g.reason}</td>
-                          <td>{g.grant_period || '—'}</td>
-                          <td className={g.amount >= 0 ? 'account-credits-positive' : 'account-credits-negative'}>
-                            {g.amount > 0 ? '+' : ''}{g.amount.toLocaleString()}
-                          </td>
+            {grants.length > 0 && (() => {
+              const sorted = [...grants].sort((a, b) =>
+                new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+              )
+              const visible = grantsExpanded ? sorted : sorted.slice(0, 10)
+              return (
+                <div className="account-section">
+                  <h3 className="account-section-title">Credit Grants</h3>
+                  <div className="account-table-wrap">
+                    <table className="account-table">
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Reason</th>
+                          <th>Period</th>
+                          <th>Credits</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {visible.map((g, i) => (
+                          <tr key={i}>
+                            <td>{new Date(g.created_at).toLocaleDateString()}</td>
+                            <td>{REASON_LABELS[g.reason] || g.reason}</td>
+                            <td>{g.grant_period || '—'}</td>
+                            <td className={g.amount >= 0 ? 'account-credits-positive' : 'account-credits-negative'}>
+                              {g.amount > 0 ? '+' : ''}{g.amount.toLocaleString()}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {sorted.length > 10 && (
+                    <button className="account-expand-btn" onClick={() => setGrantsExpanded(!grantsExpanded)}>
+                      <span className={`account-expand-arrow ${grantsExpanded ? 'expanded' : ''}`}>{'\u25B6'}</span>
+                      {grantsExpanded ? 'Show less' : `Show all ${sorted.length}`}
+                    </button>
+                  )}
                 </div>
-              </div>
-            )}
+              )
+            })()}
 
             {/* Usage history */}
-            {usage.length > 0 && (
-              <div className="account-section">
-                <h3 className="account-section-title">Recent Usage</h3>
-                <div className="account-table-wrap">
-                  <table className="account-table">
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Input</th>
-                        <th>Output</th>
-                        <th>Credits</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {usage.map((u, i) => (
-                        <tr key={i}>
-                          <td>{new Date(u.created_at).toLocaleDateString()}</td>
-                          <td>{u.input_tokens.toLocaleString()}</td>
-                          <td>{u.output_tokens.toLocaleString()}</td>
-                          <td className="account-credits-negative">-{u.credits_used}</td>
+            {usage.length > 0 && (() => {
+              const sorted = [...usage].sort((a, b) =>
+                new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+              )
+              const visible = usageExpanded ? sorted : sorted.slice(0, 10)
+              return (
+                <div className="account-section">
+                  <h3 className="account-section-title">Recent Usage</h3>
+                  <div className="account-table-wrap">
+                    <table className="account-table">
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Input</th>
+                          <th>Output</th>
+                          <th>Credits</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {visible.map((u, i) => (
+                          <tr key={i}>
+                            <td>{new Date(u.created_at).toLocaleDateString()}</td>
+                            <td>{u.input_tokens.toLocaleString()}</td>
+                            <td>{u.output_tokens.toLocaleString()}</td>
+                            <td className="account-credits-negative">-{u.credits_used}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {sorted.length > 10 && (
+                    <button className="account-expand-btn" onClick={() => setUsageExpanded(!usageExpanded)}>
+                      <span className={`account-expand-arrow ${usageExpanded ? 'expanded' : ''}`}>{'\u25B6'}</span>
+                      {usageExpanded ? 'Show less' : `Show all ${sorted.length}`}
+                    </button>
+                  )}
                 </div>
-              </div>
-            )}
+              )
+            })()}
 
             {/* Founder Admin Panel */}
             {user?.is_founder && (
