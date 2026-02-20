@@ -107,10 +107,29 @@ const REASON_LABELS: Record<string, string> = {
   founder_grant: 'Founder Grant',
   unlimited_set: 'Unlimited Enabled',
   unlimited_removed: 'Unlimited Removed',
-  monthly_patron_bronze: 'Patron Bronze (Monthly)',
-  monthly_patron_silver: 'Patron Silver (Monthly)',
-  monthly_patron_gold: 'Patron Gold (Monthly)',
+  monthly_patron_explorer: 'Patron Explorer (Monthly)',
+  monthly_patron_archaeologist: 'Patron Archaeologist (Monthly)',
+  monthly_patron_scholar: 'Patron Scholar (Monthly)',
 }
+
+const TIER_LABELS: Record<string, string> = {
+  free: 'Free',
+  og_nerd: 'OG Nerd',
+  explorer: 'Explorer',
+  archaeologist: 'Archaeologist',
+  scholar: 'Scholar',
+}
+
+const TIER_COLORS: Record<string, string> = {
+  free: '#6b7280',
+  og_nerd: '#f59e0b',
+  explorer: '#22c55e',
+  archaeologist: '#3b82f6',
+  scholar: '#a855f7',
+}
+
+const DISCORD_INVITE_URL = 'https://discord.gg/ancientnerds'
+const PATREON_URL = 'https://patreon.com/ancientnerds'
 
 export default function AccountPage() {
   const { user, token, isLoggedIn, isLoading, logout } = useAuth()
@@ -136,7 +155,11 @@ export default function AccountPage() {
     const urlError = params.get('error')
 
     if (urlError) {
-      setError(`Login failed: ${urlError.replace(/_/g, ' ')}`)
+      if (urlError === 'not_in_guild') {
+        setError('guild_required')
+      } else {
+        setError(`Login failed: ${urlError.replace(/_/g, ' ')}`)
+      }
       window.history.replaceState({}, '', '/account.html')
     }
   }, [])
@@ -263,7 +286,17 @@ export default function AccountPage() {
       </PageHeader>
 
       <div className="account-content">
-        {error && <div className="account-error">{error}</div>}
+        {error === 'guild_required' ? (
+          <div className="account-error">
+            You need to join our Discord server to sign in.{' '}
+            <a href={DISCORD_INVITE_URL} target="_blank" rel="noopener noreferrer"
+               style={{ color: '#7289da', textDecoration: 'underline' }}>
+              Join Discord
+            </a>
+          </div>
+        ) : error ? (
+          <div className="account-error">{error}</div>
+        ) : null}
 
         {!isLoggedIn ? (
           <div className="account-signin-container">
@@ -300,6 +333,13 @@ export default function AccountPage() {
                     {user?.is_og_nerd && (
                       <span className="account-badge og-nerd">OG Nerd</span>
                     )}
+                    {user?.tier && user.tier !== 'free' && user.tier !== 'og_nerd' && (
+                      <span className="account-badge" style={{
+                        background: TIER_COLORS[user.tier] || '#6b7280',
+                      }}>
+                        {TIER_LABELS[user.tier] || user.tier}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -315,6 +355,31 @@ export default function AccountPage() {
                     ? `Unlimited access${user?.is_founder ? ' — thank you, Founder!' : ''}`
                     : '1 credit = 100 tokens (input + output)'}
                 </div>
+                {user?.next_grant_date && (
+                  <div className="account-credits-note" style={{ marginTop: '4px', fontSize: '0.8em', opacity: 0.7 }}>
+                    Next credit grant: {new Date(user.next_grant_date).toLocaleDateString()}
+                  </div>
+                )}
+                {user && !user.is_unlimited && user.tier === 'free' && (
+                  <a
+                    href={PATREON_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="account-upgrade-link"
+                    style={{
+                      display: 'inline-block',
+                      marginTop: '8px',
+                      padding: '6px 14px',
+                      background: '#f96854',
+                      color: '#fff',
+                      borderRadius: '6px',
+                      fontSize: '0.85em',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    Upgrade on Patreon
+                  </a>
+                )}
               </div>
 
               <button className="account-logout-btn" onClick={logout}>

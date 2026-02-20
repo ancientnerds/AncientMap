@@ -36,7 +36,13 @@ DISCORD_CLIENT_ID = os.getenv("DISCORD_CLIENT_ID", "")
 DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "")
 DISCORD_REDIRECT_URI = os.getenv("DISCORD_REDIRECT_URI", "")
 DISCORD_GUILD_ID = os.getenv("DISCORD_GUILD_ID", "932330696956063765")
+DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "")
 OG_NERD_ROLE_ID = "972439407086944266"
+
+# Patreon tier role IDs (configured in Discord server)
+PATRON_EXPLORER_ROLE_ID = "1083785196861657198"
+PATRON_ARCHAEOLOGIST_ROLE_ID = "1083785565398380544"
+PATRON_SCHOLAR_ROLE_ID = "1083785826586075278"
 
 # --- Role-based credit configuration ---
 # Each Discord role that grants credits is defined here.
@@ -49,15 +55,52 @@ CREDIT_ROLES: dict[str, dict] = {
         "amount": 1000,
         "reason": "og_nerd_role",
     },
-    # Patreon tiers — add role IDs once they're configured in Discord:
-    # "ROLE_ID": {
-    #     "name": "Patron Bronze",
-    #     "type": "monthly",
-    #     "amount": 100,
-    #     "cap_multiplier": 3,
-    #     "reason": "monthly_patron_bronze",
-    # },
 }
+
+CREDIT_ROLES[PATRON_EXPLORER_ROLE_ID] = {
+    "name": "Patron Explorer",
+    "type": "monthly",
+    "amount": 5000,
+    "cap_multiplier": 1,
+    "reason": "monthly_patron_explorer",
+}
+CREDIT_ROLES[PATRON_ARCHAEOLOGIST_ROLE_ID] = {
+    "name": "Patron Archaeologist",
+    "type": "monthly",
+    "amount": 15000,
+    "cap_multiplier": 2,
+    "reason": "monthly_patron_archaeologist",
+}
+CREDIT_ROLES[PATRON_SCHOLAR_ROLE_ID] = {
+    "name": "Patron Scholar",
+    "type": "monthly",
+    "amount": 50000,
+    "cap_multiplier": 3,
+    "reason": "monthly_patron_scholar",
+}
+
+def get_user_tier(roles: list[str]) -> str:
+    """Return the highest tier name for a user's roles."""
+    if PATRON_SCHOLAR_ROLE_ID and PATRON_SCHOLAR_ROLE_ID in roles:
+        return "scholar"
+    if PATRON_ARCHAEOLOGIST_ROLE_ID and PATRON_ARCHAEOLOGIST_ROLE_ID in roles:
+        return "archaeologist"
+    if PATRON_EXPLORER_ROLE_ID and PATRON_EXPLORER_ROLE_ID in roles:
+        return "explorer"
+    if OG_NERD_ROLE_ID in roles:
+        return "og_nerd"
+    return "free"
+
+
+# Rate limit per hour by tier
+TIER_RATE_LIMITS: dict[str, int] = {
+    "free": 10,
+    "og_nerd": 10,
+    "explorer": 20,
+    "archaeologist": 40,
+    "scholar": 100,
+}
+
 
 # Simple in-memory CSRF state store (short-lived, cleared on restart is fine)
 _oauth_states: dict[str, float] = {}
@@ -107,6 +150,13 @@ def process_credit_grants(session: Session, user: DiscordUser) -> None:
     roles = user.roles or []
     now = datetime.now(UTC)
 
+    # Find the highest monthly tier the user holds (skip lower ones to prevent double grants)
+    monthly_roles_present = [
+        (rid, cfg) for rid, cfg in CREDIT_ROLES.items()
+        if rid in roles and cfg["type"] == "monthly"
+    ]
+    highest_monthly_role = max(monthly_roles_present, key=lambda x: x[1]["amount"])[0] if monthly_roles_present else None
+
     for role_id, config in CREDIT_ROLES.items():
         if role_id not in roles:
             continue
@@ -132,6 +182,9 @@ def process_credit_grants(session: Session, user: DiscordUser) -> None:
                 logger.info(f"Granted {amount} credits to {user.username} ({reason})")
 
         elif role_type == "monthly":
+            if role_id != highest_monthly_role:
+                continue
+
             if user.grant_anchor_date is None:
                 user.grant_anchor_date = now
 
@@ -195,7 +248,7 @@ async def discord_oauth_redirect(req: Request):
         "client_id": DISCORD_CLIENT_ID,
         "redirect_uri": DISCORD_REDIRECT_URI,
         "response_type": "code",
-        "scope": "identify guilds.members.read",
+        "scope": "identify guilds.members.read guilds.join",
         "state": state,
         "prompt": "consent",
     }
@@ -265,12 +318,46 @@ async def discord_oauth_callback(code: str | None = None, state: str | None = No
             member_data = member_resp.json()
             roles = member_data.get("roles", [])
         else:
-            logger.warning(f"Guild member fetch failed (user may not be in guild): {member_resp.status_code}")
+            # Not in guild — attempt auto-join via bot token
+            if DISCORD_BOT_TOKEN:
+                join_resp = await client.put(
+                    f"https://discord.com/api/v10/guilds/{DISCORD_GUILD_ID}/members/{discord_id}",
+                    headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
+                    json={"access_token": access_token},
+                )
+                if join_resp.status_code in (201, 204):
+                    logger.info(f"Auto-joined user {username} ({discord_id}) to guild")
+                    # Re-fetch member info to get roles
+                    member_resp2 = await client.get(
+                        f"https://discord.com/api/v10/users/@me/guilds/{DISCORD_GUILD_ID}/member",
+                        headers=auth_headers,
+                    )
+                    if member_resp2.status_code == 200:
+                        roles = member_resp2.json().get("roles", [])
+                else:
+                    logger.warning(f"Auto-join failed for {discord_id}: {join_resp.status_code}")
+
+            # If still not in guild after auto-join attempt, gate login
+            if not roles:
+                re_check = await client.get(
+                    f"https://discord.com/api/v10/users/@me/guilds/{DISCORD_GUILD_ID}/member",
+                    headers=auth_headers,
+                )
+                if re_check.status_code != 200:
+                    return RedirectResponse(url="/account.html?error=not_in_guild")
 
     # Upsert user in database
     with get_session() as session:
         user = session.query(DiscordUser).filter(DiscordUser.discord_id == discord_id).first()
         if user:
+            # Detect newly gained patron roles → reset anchor so no backdated credits
+            old_roles = set(user.roles or [])
+            new_roles = set(roles)
+            patron_role_ids = {PATRON_EXPLORER_ROLE_ID, PATRON_ARCHAEOLOGIST_ROLE_ID, PATRON_SCHOLAR_ROLE_ID}
+            newly_gained_patron = (new_roles & patron_role_ids) - (old_roles & patron_role_ids)
+            if newly_gained_patron:
+                user.grant_anchor_date = datetime.now(UTC)
+
             user.username = username
             user.avatar_hash = avatar_hash
             user.roles = roles
@@ -325,6 +412,28 @@ async def get_me(user: DiscordUser = Depends(get_current_user)):
 
         roles = user.roles or []
         is_founder = FOUNDER_ROLE_ID in roles
+        tier = get_user_tier(roles)
+
+        # Next grant date for monthly tiers
+        next_grant_date = None
+        if tier in ("explorer", "archaeologist", "scholar") and db_user and db_user.grant_anchor_date:
+            from datetime import timedelta
+            anchor = db_user.grant_anchor_date
+            now = datetime.now(UTC)
+            # Find next anniversary of anchor day
+            y, m = now.year, now.month
+            anchor_day = anchor.day
+            due_day = _clamp_day(y, m, anchor_day)
+            next_due = datetime(y, m, due_day, tzinfo=UTC)
+            if next_due <= now:
+                if m == 12:
+                    y += 1
+                    m = 1
+                else:
+                    m += 1
+                due_day = _clamp_day(y, m, anchor_day)
+                next_due = datetime(y, m, due_day, tzinfo=UTC)
+            next_grant_date = next_due.isoformat()
 
         return {
             "id": str(user.id),
@@ -336,6 +445,8 @@ async def get_me(user: DiscordUser = Depends(get_current_user)):
             "is_unlimited": is_unlimited,
             "is_og_nerd": OG_NERD_ROLE_ID in roles,
             "is_founder": is_founder,
+            "tier": tier,
+            "next_grant_date": next_grant_date,
             "created_at": user.created_at.isoformat() if user.created_at else None,
         }
     except Exception:

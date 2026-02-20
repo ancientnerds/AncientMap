@@ -34,6 +34,7 @@ from api.routes import (
     lyra,
     news,
     og,
+    patreon,
     public_v1,
     radar,
     seo,
@@ -116,6 +117,20 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"[STARTUP] Contribution migration failed (non-fatal): {e}")
 
+    # Start Discord bot (if token is configured)
+    try:
+        bot_token = os.environ.get("DISCORD_BOT_TOKEN", "")
+        if bot_token:
+            import asyncio
+
+            from api.services.discord_bot import start_bot
+            asyncio.create_task(start_bot())
+            logger.info("[STARTUP] Discord bot task created")
+        else:
+            logger.info("[STARTUP] DISCORD_BOT_TOKEN not set, skipping bot")
+    except Exception as e:
+        logger.warning(f"[STARTUP] Discord bot startup failed (non-fatal): {e}")
+
     get_redis_client()  # Initialize Redis connection
 
     # Pre-warm cache with default sites query (so first user gets instant response)
@@ -161,6 +176,11 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown
     logger.info("Shutting down...")
+    try:
+        from api.services.discord_bot import stop_bot
+        await stop_bot()
+    except Exception as e:
+        logger.warning(f"Discord bot shutdown error: {e}")
 
 
 app = FastAPI(
@@ -212,6 +232,7 @@ app.include_router(public_v1.router, prefix="/api/v1", tags=["Public API"])
 app.include_router(snapshots.router, prefix="/api/snapshots", tags=["snapshots"])
 app.include_router(vector_sync.router, prefix="/api/vector-sync", tags=["vector-sync"])
 app.include_router(wiki_images.router, prefix="/api/wiki-images", tags=["wiki-images"])
+app.include_router(patreon.router, prefix="/api/patreon", tags=["patreon"])
 
 # Serve wiki images as static files
 _wiki_images_dir = Path("public/data/images/wiki")
