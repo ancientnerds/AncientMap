@@ -194,7 +194,7 @@ def process_credit_grants(session: Session, user: DiscordUser) -> None:
     """Evaluate and apply credit grants for all roles the user has.
 
     Handles one-time, monthly (with cap), and unlimited role types.
-    Safe to call repeatedly — idempotent via unique constraint.
+    Safe to call repeatedly — idempotent via app-level check + row lock on DiscordUser.
     """
     roles = user.roles or []
     now = datetime.now(UTC)

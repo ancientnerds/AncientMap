@@ -1025,6 +1025,15 @@ def _run_migrations(engine) -> None:
             END $$
         """))
 
+        # The UNIQUE(user_id, reason, grant_period) constraint does NOT prevent
+        # duplicate one-time grants because NULL != NULL in PostgreSQL.
+        # Add a partial unique index covering the grant_period IS NULL case.
+        conn.execute(text("""
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_credit_grants_one_time
+            ON credit_grants (user_id, reason)
+            WHERE grant_period IS NULL
+        """))
+
         conn.commit()
 
 
