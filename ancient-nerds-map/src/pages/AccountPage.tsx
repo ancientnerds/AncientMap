@@ -34,6 +34,7 @@ interface AdminUser {
   is_unlimited: boolean
   is_founder: boolean
   is_og_nerd: boolean
+  roles: string[]
   last_login: string | null
 }
 
@@ -135,6 +136,23 @@ const ROLE_DISPLAY: Record<string, { name: string; color: string }> = {
   '1083785196861657198': { name: 'Explorer', color: '#c34586' },
   '1083785565398380544': { name: 'Archaeologist', color: '#9553ff' },
   '1083785826586075278': { name: 'Scholar', color: '#00b0fc' },
+}
+
+// Short labels for admin badge display
+const ROLE_SHORT: Record<string, string> = {
+  '933105341292486707': 'F',
+  '972439407086944266': 'OG',
+  '933104896310378546': 'TM',
+  '933105424264220815': 'RS',
+  '1083087065010417775': 'A+',
+  '1083088517510484009': 'A-',
+  '1083088899494129695': 'IN',
+  '1083088426074640466': 'AD',
+  '1083088078379417630': 'NP',
+  '968574705760100392': 'AN',
+  '1083785196861657198': 'EX',
+  '1083785565398380544': 'AR',
+  '1083785826586075278': 'SC',
 }
 
 const DISCORD_INVITE_URL = 'https://discord.gg/ancientnerds'
@@ -521,8 +539,21 @@ export default function AccountPage() {
                         )}
                         <span className="admin-user-name">{u.username}</span>
                         <div className="admin-user-badges">
-                          {u.is_founder && <span className="account-badge founder">F</span>}
-                          {u.is_og_nerd && <span className="account-badge og-nerd">OG</span>}
+                          {(u.roles || []).map(roleId => {
+                            const info = ROLE_DISPLAY[roleId]
+                            if (!info) return null
+                            const short = ROLE_SHORT[roleId] || info.name.slice(0, 2)
+                            return (
+                              <span
+                                key={roleId}
+                                className="account-badge"
+                                style={{ color: info.color, borderColor: `${info.color}44`, background: `${info.color}18` }}
+                                title={info.name}
+                              >
+                                {short}
+                              </span>
+                            )
+                          })}
                         </div>
                         <span className="admin-user-credits">
                           {u.is_unlimited ? '∞' : u.credits.toLocaleString()}

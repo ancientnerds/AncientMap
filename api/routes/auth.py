@@ -603,6 +603,7 @@ async def admin_list_users(
                     "is_unlimited": u.is_unlimited,
                     "is_founder": FOUNDER_ROLE_ID in (u.roles or []),
                     "is_og_nerd": OG_NERD_ROLE_ID in (u.roles or []),
+                    "roles": u.roles or [],
                     "last_login": u.last_login.isoformat() if u.last_login else None,
                     "grant_anchor_date": u.grant_anchor_date.isoformat() if u.grant_anchor_date else None,
                 }
