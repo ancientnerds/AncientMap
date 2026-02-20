@@ -267,6 +267,10 @@ jobs:
               echo " Attempt $i failed, retrying..."
             done
 
+            echo "==> Generating static sitemap..."
+            curl -sf http://localhost:8000/api/sitemap/sitemap.xml > ancient-nerds-map/dist/sitemap.xml
+            echo "    Sitemap written to dist/sitemap.xml"
+
             echo "==> Pruning unused Docker resources..."
             docker image prune -f 2>/dev/null || true
             docker builder prune -af 2>/dev/null || true

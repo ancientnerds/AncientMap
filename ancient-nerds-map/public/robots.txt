@@ -5,13 +5,12 @@ User-agent: *
 Allow: /
 
 # Sitemap location
-Sitemap: https://ancientnerds.com/api/sitemap/sitemap.xml
+Sitemap: https://ancientnerds.com/sitemap.xml
 
 # Crawl-delay for polite crawling
 Crawl-delay: 1
 
-# Disallow API endpoints from being indexed (except sitemaps)
-Allow: /api/sitemap/
+# Disallow API endpoints from being indexed
 Disallow: /api/
 Disallow: /data/basemaps/
 Disallow: /data/historical/

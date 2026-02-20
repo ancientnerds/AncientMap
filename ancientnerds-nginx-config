@@ -87,6 +87,13 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
     }
 
+    # Sitemap — static file, refreshed on each deploy
+    location = /sitemap.xml {
+        try_files /sitemap.xml =404;
+        add_header Content-Type "application/xml; charset=UTF-8";
+        add_header Cache-Control "public, max-age=86400";
+    }
+
     location / {
         try_files $uri $uri/ /index.html;
     }
