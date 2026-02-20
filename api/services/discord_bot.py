@@ -372,9 +372,11 @@ def _get_bot() -> LyraBot:
             followup_msg = await interaction.followup.send(
                 f"**{display_name}** asked: {question[:200]}", wait=True,
             )
-            # WebhookMessage lacks guild info — fetch the real Message object
-            real_msg = await interaction.channel.fetch_message(followup_msg.id)
-            thread = await real_msg.create_thread(name=thread_title)
+            # Create thread via HTTP API — WebhookMessage lacks guild info
+            thread = await interaction.channel.create_thread(
+                name=thread_title,
+                message=discord.Object(id=followup_msg.id),
+            )
             await _send_response(thread, text, sites)
         except ValueError as e:
             await interaction.followup.send(str(e), ephemeral=True)
