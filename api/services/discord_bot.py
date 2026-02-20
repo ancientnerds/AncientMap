@@ -368,8 +368,9 @@ def _get_bot() -> LyraBot:
 
             # Post anchor message and create thread for the conversation
             thread_title = question[:100]
+            display_name = interaction.user.display_name
             followup_msg = await interaction.followup.send(
-                f"**{question[:200]}**", wait=True,
+                f"**{display_name}** asked: {question[:200]}", wait=True,
             )
             # WebhookMessage lacks guild info — fetch the real Message object
             real_msg = await interaction.channel.fetch_message(followup_msg.id)
