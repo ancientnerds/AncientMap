@@ -294,7 +294,7 @@ def _get_filter_llm():
     if _filter_llm is None:
         from langchain_anthropic import ChatAnthropic
         api_key = os.getenv("LYRA_ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
-        base_url = os.getenv("LYRA_ANTHROPIC_BASE_URL", "")
+        base_url = os.getenv("LYRA_ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
         kwargs: dict = {
             "model": LLM_MODEL,
             "max_tokens": 300,
@@ -344,7 +344,7 @@ def _get_llm():
     if LLM_PROVIDER == "anthropic":
         from langchain_anthropic import ChatAnthropic
         api_key = os.getenv("LYRA_ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
-        base_url = os.getenv("LYRA_ANTHROPIC_BASE_URL", "")
+        base_url = os.getenv("LYRA_ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
         is_native = not base_url or "anthropic.com" in base_url
         kwargs: dict = {"model": LLM_MODEL, "max_tokens": 1024, "streaming": True, "api_key": api_key}
         if is_native:
