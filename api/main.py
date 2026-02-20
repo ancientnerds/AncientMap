@@ -56,6 +56,10 @@ async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
     import time
 
+    # Startup: verify critical configuration
+    from api.services.jwt_auth import verify_secret_key
+    verify_secret_key()
+
     # Startup: ensure new tables exist + warm up connections
     logger.info("Starting Ancient Nerds Map API...")
     try:

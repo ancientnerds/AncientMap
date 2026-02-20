@@ -55,6 +55,10 @@ def _get_ask_limiter(discord_id: str) -> RateLimiter:
 
     key = f"{discord_id}:{max_req}"
     if key not in _ask_limiters:
+        # Evict oldest entries when the cache exceeds 1000 users
+        if len(_ask_limiters) >= 1000:
+            oldest_key = next(iter(_ask_limiters))
+            del _ask_limiters[oldest_key]
         _ask_limiters[key] = RateLimiter(
             max_requests=max_req, window_seconds=3600, namespace=f"bot_ask_{discord_id}",
         )
@@ -125,7 +129,7 @@ async def _handle_ask(discord_id: str, question: str) -> str:
         ):
             event_type = chunk.get("type", "token")
             if event_type == "token":
-                full_text += chunk.get("text", "")
+                full_text += chunk.get("content", "")
             elif event_type == "done":
                 metadata = chunk.get("metadata", {})
     except Exception:

@@ -21,6 +21,15 @@ TOKEN_EXPIRY_DAYS = 7
 FOUNDER_ROLE_ID = "933105341292486707"
 
 
+def verify_secret_key() -> None:
+    """Verify API_SECRET_KEY is set. Call during app startup to fail fast."""
+    if not SECRET_KEY:
+        raise RuntimeError(
+            "API_SECRET_KEY environment variable is not set. "
+            "The API cannot start without a signing key for JWT tokens."
+        )
+
+
 def create_token(user_id: str, discord_id: str) -> str:
     """Create a signed JWT for an authenticated user."""
     if not SECRET_KEY:

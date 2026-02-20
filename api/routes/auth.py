@@ -265,10 +265,12 @@ async def discord_oauth_callback(code: str | None = None, state: str | None = No
     if not code or not state:
         return RedirectResponse(url="/account.html?error=missing_params")
 
-    # Validate CSRF state
-    if state not in _oauth_states:
+    # Validate CSRF state (must exist and be less than 10 minutes old)
+    state_ts = _oauth_states.pop(state, None)
+    if state_ts is None:
         return RedirectResponse(url="/account.html?error=invalid_state")
-    del _oauth_states[state]
+    if datetime.now(UTC).timestamp() - state_ts > 600:
+        return RedirectResponse(url="/account.html?error=expired_state")
 
     if not DISCORD_CLIENT_ID or not DISCORD_CLIENT_SECRET or not DISCORD_REDIRECT_URI:
         return RedirectResponse(url="/account.html?error=not_configured")
@@ -348,7 +350,7 @@ async def discord_oauth_callback(code: str | None = None, state: str | None = No
 
     # Upsert user in database
     with get_session() as session:
-        user = session.query(DiscordUser).filter(DiscordUser.discord_id == discord_id).first()
+        user = session.query(DiscordUser).filter(DiscordUser.discord_id == discord_id).with_for_update().first()
         if user:
             # Detect newly gained patron roles → reset anchor so no backdated credits
             old_roles = set(user.roles or [])
@@ -397,7 +399,7 @@ async def get_me(user: DiscordUser = Depends(get_current_user)):
     try:
         # Process any pending credit grants (monthly accumulation, etc.)
         with get_session() as session:
-            db_user = session.query(DiscordUser).filter(DiscordUser.id == user.id).first()
+            db_user = session.query(DiscordUser).filter(DiscordUser.id == user.id).with_for_update().first()
             if db_user:
                 process_credit_grants(session, db_user)
                 credits = db_user.credits
@@ -561,7 +563,7 @@ async def admin_adjust_credits(
     with get_session() as session:
         user = session.query(DiscordUser).filter(
             DiscordUser.id == uuid.UUID(body.user_id),
-        ).first()
+        ).with_for_update().first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
