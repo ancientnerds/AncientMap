@@ -5,7 +5,6 @@ Provides slash commands (/ask, /credits, /link) and DM support.
 Started as an asyncio task within the FastAPI lifespan.
 """
 
-import base64
 import logging
 import os
 import time
@@ -31,10 +30,6 @@ _DISCORD_EPOCH = 1420070400000  # ms
 # Anti-exploit: same low-credit cap as web
 LOW_CREDIT_THRESHOLD = 20
 LOW_CREDIT_MAX_HISTORY = 5
-
-# Image limits (same as web)
-_MAX_IMAGES = 5
-_MAX_IMAGE_BYTES = 2_000_000
 
 
 def _account_age_seconds(discord_id: str) -> float:
@@ -85,21 +80,6 @@ async def _build_history(
     return history
 
 
-async def _download_images(attachments: list[discord.Attachment]) -> list[dict] | None:
-    """Download Discord attachments as base64 data URIs."""
-    images: list[dict] = []
-    for att in attachments:
-        if not att.content_type or not att.content_type.startswith("image/"):
-            continue
-        if att.size > _MAX_IMAGE_BYTES:
-            continue
-        if len(images) >= _MAX_IMAGES:
-            break
-        data = await att.read()
-        b64 = base64.b64encode(data).decode()
-        images.append({"data": f"data:{att.content_type};base64,{b64}"})
-    return images or None
-
 
 def _build_sites_embed(sites: list[dict]) -> discord.Embed:
     """Build a compact embed showing referenced archaeological sites."""
@@ -126,7 +106,6 @@ async def _handle_ask(
     question: str,
     *,
     history: list[dict] | None = None,
-    images: list[dict] | None = None,
 ) -> tuple[str, list[dict]]:
     """Core ask logic shared by /ask command and DM handler.
 
@@ -179,7 +158,7 @@ async def _handle_ask(
     try:
         async for chunk in run_agent_stream(
             message=question,
-            images=images,
+            images=None,
             history=history,
             context_type="global",
             context_id=None,
@@ -290,15 +269,14 @@ class LyraBot(discord.Client):
             return
 
     async def _handle_dm_message(self, message: discord.Message):
-        """Handle a DM with conversation history and image support."""
+        """Handle a DM with conversation history."""
         discord_id = str(message.author.id)
 
         async with message.channel.typing():
             try:
                 history = await _build_history(message.channel, current_msg=message)
-                images = await _download_images(message.attachments) if message.attachments else None
                 text, sites = await _handle_ask(
-                    discord_id, message.content, history=history, images=images,
+                    discord_id, message.content, history=history,
                 )
                 for chunk in _split_response(text):
                     await message.reply(chunk)
@@ -317,9 +295,8 @@ class LyraBot(discord.Client):
         async with message.channel.typing():
             try:
                 history = await _build_history(message.channel, current_msg=message)
-                images = await _download_images(message.attachments) if message.attachments else None
                 text, sites = await _handle_ask(
-                    discord_id, message.content, history=history, images=images,
+                    discord_id, message.content, history=history,
                 )
                 await _send_response(message.channel, text, sites)
             except ValueError as e:
@@ -342,29 +319,14 @@ def _get_bot() -> LyraBot:
     _bot = LyraBot()
 
     @_bot.tree.command(name="ask", description="Ask Lyra about archaeology")
-    @app_commands.describe(
-        question="Your question for Lyra",
-        image="Optional image to include with your question",
-    )
-    async def ask_command(
-        interaction: discord.Interaction,
-        question: str,
-        image: discord.Attachment | None = None,
-    ):
+    @app_commands.describe(question="Your question for Lyra")
+    async def ask_command(interaction: discord.Interaction, question: str):
         discord_id = str(interaction.user.id)
 
         await interaction.response.defer(thinking=True)
 
         try:
-            # Download image if provided
-            images = None
-            if image and image.content_type and image.content_type.startswith("image/"):
-                if image.size <= _MAX_IMAGE_BYTES:
-                    data = await image.read()
-                    b64 = base64.b64encode(data).decode()
-                    images = [{"data": f"data:{image.content_type};base64,{b64}"}]
-
-            text, sites = await _handle_ask(discord_id, question, images=images)
+            text, sites = await _handle_ask(discord_id, question)
 
             # Try to create a thread for the conversation
             display_name = interaction.user.display_name
@@ -427,7 +389,17 @@ def _get_bot() -> LyraBot:
                 is_unlimited = user.is_unlimited
 
             tier = get_user_tier(roles)
-            tier_display = tier.replace("_", " ").title()
+            tier_names = {
+                "scholar": "Scholar (Patron)",
+                "archaeologist": "Archaeologist (Patron)",
+                "explorer": "Explorer (Patron)",
+                "founder": "Founder",
+                "team": "Team",
+                "researcher": "Researcher",
+                "og_nerd": "OG Nerd",
+                "free": "Free",
+            }
+            tier_display = tier_names.get(tier, tier.replace("_", " ").title())
 
             embed = discord.Embed(
                 title="Lyra Credits",
@@ -439,6 +411,12 @@ def _get_bot() -> LyraBot:
                 inline=True,
             )
             embed.add_field(name="Tier", value=tier_display, inline=True)
+            if tier != "scholar":
+                embed.add_field(
+                    name="Upgrade",
+                    value="[Subscribe on Patreon](https://www.patreon.com/join/AncientNerds)",
+                    inline=False,
+                )
             embed.set_footer(text="ancientnerds.com")
 
             await interaction.response.send_message(embed=embed, ephemeral=True)
