@@ -372,8 +372,9 @@ def _get_bot() -> LyraBot:
                 f"**{display_name}** asked: {question[:200]}", wait=True,
             )
             try:
+                thread_name = f"Lyra | {question[:90]}"
                 thread = await interaction.channel.create_thread(
-                    name=question[:100],
+                    name=thread_name,
                     message=discord.Object(id=followup_msg.id),
                 )
                 await _send_response(thread, text, sites)
@@ -404,39 +405,46 @@ def _get_bot() -> LyraBot:
     @_bot.tree.command(name="credits", description="Check your Lyra credit balance")
     @app_commands.checks.cooldown(1, 10.0)
     async def credits_command(interaction: discord.Interaction):
-        from api.routes.auth import get_user_tier
-        from pipeline.database import DiscordUser, get_session
+        try:
+            from api.routes.auth import get_user_tier
+            from pipeline.database import DiscordUser, get_session
 
-        discord_id = str(interaction.user.id)
+            discord_id = str(interaction.user.id)
 
-        with get_session() as session:
-            user = session.query(DiscordUser).filter(
-                DiscordUser.discord_id == discord_id,
-            ).first()
+            with get_session() as session:
+                user = session.query(DiscordUser).filter(
+                    DiscordUser.discord_id == discord_id,
+                ).first()
 
-        if not user:
-            await interaction.response.send_message(
-                "You haven't signed in yet. Visit [ancientnerds.com](https://ancientnerds.com/account.html) to connect your account.",
-                ephemeral=True,
+            if not user:
+                await interaction.response.send_message(
+                    "You haven't signed in yet. Visit [ancientnerds.com](https://ancientnerds.com/account.html) to connect your account.",
+                    ephemeral=True,
+                )
+                return
+
+            tier = get_user_tier(user.roles or [])
+            tier_display = tier.replace("_", " ").title()
+
+            embed = discord.Embed(
+                title="Lyra Credits",
+                color=0xC02023,
             )
-            return
+            embed.add_field(
+                name="Balance",
+                value="Unlimited" if user.is_unlimited else f"{user.credits:,}",
+                inline=True,
+            )
+            embed.add_field(name="Tier", value=tier_display, inline=True)
+            embed.set_footer(text="ancientnerds.com")
 
-        tier = get_user_tier(user.roles or [])
-        tier_display = tier.replace("_", " ").title()
-
-        embed = discord.Embed(
-            title="Lyra Credits",
-            color=0xC02023,
-        )
-        embed.add_field(
-            name="Balance",
-            value="Unlimited" if user.is_unlimited else f"{user.credits:,}",
-            inline=True,
-        )
-        embed.add_field(name="Tier", value=tier_display, inline=True)
-        embed.set_footer(text="ancientnerds.com")
-
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except Exception as e:
+            print(f"[DISCORD] /credits error: {e}", flush=True)
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    "Something went wrong checking credits.", ephemeral=True,
+                )
 
     @credits_command.error
     async def credits_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
@@ -446,7 +454,11 @@ def _get_bot() -> LyraBot:
                 ephemeral=True,
             )
         else:
-            logger.error(f"/credits command error: {error}")
+            print(f"[DISCORD] /credits command error: {error}", flush=True)
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    "Something went wrong.", ephemeral=True,
+                )
 
     @_bot.tree.command(name="link", description="Link your Discord to your Ancient Nerds account")
     @app_commands.checks.cooldown(1, 60.0)
