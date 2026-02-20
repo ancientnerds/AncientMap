@@ -578,16 +578,28 @@ class CreditAdjustRequest(BaseModel):
     amount: int
 
 
+class BulkCreditRequest(BaseModel):
+    role_id: str
+    amount: int
+
+
 @router.get("/admin/users")
 async def admin_list_users(
     _founder: DiscordUser = Depends(require_founder),
     q: str = Query(default="", max_length=100),
+    role: str = Query(default="", max_length=500),
 ):
-    """List users for admin panel. Optional search by username."""
+    """List users for admin panel. Optional search by username and/or role filter."""
     with get_session() as session:
         query = session.query(DiscordUser)
         if q:
             query = query.filter(DiscordUser.username.ilike(f"%{q}%"))
+        if role:
+            role_ids = [r.strip() for r in role.split(",") if r.strip()]
+            if role_ids:
+                from sqlalchemy import cast
+                from sqlalchemy.dialects.postgresql import ARRAY, TEXT
+                query = query.filter(DiscordUser.roles.op("?|")(cast(role_ids, ARRAY(TEXT))))
         users = query.order_by(DiscordUser.last_login.desc()).limit(100).all()
 
         return {
@@ -662,3 +674,44 @@ async def admin_adjust_credits(
         is_unlimited = user.is_unlimited
 
     return {"ok": True, "new_credits": new_credits, "is_unlimited": is_unlimited}
+
+
+@router.get("/admin/users/count-by-role")
+async def admin_count_by_role(
+    role_id: str = Query(..., max_length=50),
+    _founder: DiscordUser = Depends(require_founder),
+):
+    """Count users that have a specific role. Used for bulk grant preview."""
+    with get_session() as session:
+        count = session.query(DiscordUser).filter(
+            DiscordUser.roles.op("?")(role_id),
+        ).count()
+    return {"count": count}
+
+
+@router.post("/admin/credits/bulk")
+async def admin_bulk_credits(
+    body: BulkCreditRequest,
+    _founder: DiscordUser = Depends(require_founder),
+):
+    """Add credits to all users with a specific role."""
+    if body.amount <= 0:
+        raise HTTPException(status_code=400, detail="amount must be positive")
+
+    with get_session() as session:
+        users = session.query(DiscordUser).filter(
+            DiscordUser.roles.op("?")(body.role_id),
+        ).with_for_update().all()
+
+        for u in users:
+            u.credits += body.amount
+            session.add(CreditGrant(
+                user_id=u.id,
+                amount=body.amount,
+                reason="bulk_role_grant",
+            ))
+
+        session.flush()
+        affected = len(users)
+
+    return {"ok": True, "affected": affected}

@@ -119,6 +119,7 @@ const REASON_LABELS: Record<string, string> = {
   adept_role: 'Adept Role',
   neophyte_role: 'Neophyte Role',
   ancient_nerds_role: 'Ancient Nerds Role',
+  bulk_role_grant: 'Bulk Role Grant',
 }
 
 // Discord role ID → display info for profile badges (glass style: colored text on translucent bg)
@@ -176,6 +177,12 @@ export default function AccountPage() {
   const [adminError, setAdminError] = useState<string | null>(null)
   const [adminSuccess, setAdminSuccess] = useState<string | null>(null)
   const searchTimer = useRef<ReturnType<typeof setTimeout>>()
+  const [selectedRoles, setSelectedRoles] = useState<Set<string>>(new Set())
+  const [bulkExpanded, setBulkExpanded] = useState(false)
+  const [bulkRole, setBulkRole] = useState('')
+  const [bulkAmount, setBulkAmount] = useState(100)
+  const [bulkPreview, setBulkPreview] = useState<{ count: number } | null>(null)
+  const [bulkLoading, setBulkLoading] = useState(false)
 
   // Handle OAuth error callback (?error= in URL). Token is now delivered via cookie
   // and consumed by AuthContext on mount — no ?token= in URL anymore.
@@ -215,13 +222,17 @@ export default function AccountPage() {
   }, [isLoggedIn, fetchCredits])
 
   // Admin: fetch users
-  const fetchAdminUsers = useCallback(async (q = '') => {
+  const fetchAdminUsers = useCallback(async (q = '', roles?: Set<string>) => {
     if (!token) return
     setAdminLoading(true)
     setAdminError(null)
     try {
-      const params = q ? `?q=${encodeURIComponent(q)}` : ''
-      const resp = await fetch(`${config.api.baseUrl}/auth/admin/users${params}`, {
+      const searchParams = new URLSearchParams()
+      if (q) searchParams.set('q', q)
+      const roleSet = roles ?? selectedRoles
+      if (roleSet.size > 0) searchParams.set('role', [...roleSet].join(','))
+      const qs = searchParams.toString()
+      const resp = await fetch(`${config.api.baseUrl}/auth/admin/users${qs ? `?${qs}` : ''}`, {
         headers: { 'Authorization': `Bearer ${token}` },
       })
       if (resp.ok) {
@@ -235,7 +246,7 @@ export default function AccountPage() {
     } finally {
       setAdminLoading(false)
     }
-  }, [token])
+  }, [token, selectedRoles])
 
   // Fetch admin users on mount if founder
   useEffect(() => {
@@ -247,6 +258,65 @@ export default function AccountPage() {
     setAdminSearch(value)
     clearTimeout(searchTimer.current)
     searchTimer.current = setTimeout(() => fetchAdminUsers(value), 300)
+  }
+
+  // Toggle a role filter chip
+  const toggleRoleFilter = (roleId: string) => {
+    setSelectedRoles(prev => {
+      const next = new Set(prev)
+      if (next.has(roleId)) next.delete(roleId)
+      else next.add(roleId)
+      clearTimeout(searchTimer.current)
+      searchTimer.current = setTimeout(() => fetchAdminUsers(adminSearch, next), 150)
+      return next
+    })
+  }
+
+  // Bulk: fetch preview count
+  const fetchBulkPreview = async () => {
+    if (!token || !bulkRole) return
+    setBulkLoading(true)
+    setBulkPreview(null)
+    try {
+      const resp = await fetch(
+        `${config.api.baseUrl}/auth/admin/users/count-by-role?role_id=${encodeURIComponent(bulkRole)}`,
+        { headers: { 'Authorization': `Bearer ${token}` } },
+      )
+      if (resp.ok) {
+        const data = await resp.json()
+        setBulkPreview({ count: data.count })
+      }
+    } catch { /* ignore */ }
+    finally { setBulkLoading(false) }
+  }
+
+  // Bulk: apply grant
+  const applyBulkGrant = async () => {
+    if (!token || !bulkRole || !bulkPreview) return
+    setBulkLoading(true)
+    setAdminError(null)
+    setAdminSuccess(null)
+    try {
+      const resp = await fetch(`${config.api.baseUrl}/auth/admin/credits/bulk`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role_id: bulkRole, amount: bulkAmount }),
+      })
+      if (resp.ok) {
+        const data = await resp.json()
+        const roleName = ROLE_DISPLAY[bulkRole]?.name || bulkRole
+        setAdminSuccess(`Bulk grant: +${bulkAmount} credits to ${data.affected} ${roleName} users`)
+        setBulkPreview(null)
+        fetchAdminUsers(adminSearch)
+      } else {
+        const data = await resp.json().catch(() => null)
+        setAdminError(data?.detail || 'Bulk grant failed')
+      }
+    } catch {
+      setAdminError('Bulk grant failed')
+    } finally {
+      setBulkLoading(false)
+    }
   }
 
   // Admin: adjust credits
@@ -512,6 +582,83 @@ export default function AccountPage() {
                   value={adminSearch}
                   onChange={e => handleAdminSearch(e.target.value)}
                 />
+
+                {/* Bulk grant section */}
+                <div className="admin-bulk-section">
+                  <button
+                    className="account-expand-btn"
+                    onClick={() => setBulkExpanded(!bulkExpanded)}
+                    style={{ marginTop: 0, marginBottom: bulkExpanded ? 10 : 0 }}
+                  >
+                    <span className={`account-expand-arrow ${bulkExpanded ? 'expanded' : ''}`}>{'\u25B6'}</span>
+                    Bulk Grant
+                  </button>
+                  {bulkExpanded && (
+                    <div className="admin-bulk-controls">
+                      <select
+                        className="admin-bulk-select"
+                        value={bulkRole}
+                        onChange={e => { setBulkRole(e.target.value); setBulkPreview(null) }}
+                      >
+                        <option value="">Select role...</option>
+                        {Object.entries(ROLE_DISPLAY).map(([id, info]) => (
+                          <option key={id} value={id}>{info.name}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        className="admin-amount-input"
+                        value={bulkAmount}
+                        onChange={e => { setBulkAmount(parseInt(e.target.value) || 0); setBulkPreview(null) }}
+                        style={{ maxWidth: 100 }}
+                      />
+                      <button
+                        className="admin-apply-btn"
+                        onClick={fetchBulkPreview}
+                        disabled={!bulkRole || bulkAmount <= 0 || bulkLoading}
+                        style={{ opacity: (!bulkRole || bulkAmount <= 0) ? 0.4 : 1 }}
+                      >
+                        Preview
+                      </button>
+                    </div>
+                  )}
+                  {bulkPreview && bulkExpanded && (
+                    <div className="admin-bulk-preview">
+                      Add <strong>+{bulkAmount.toLocaleString()}</strong> credits to{' '}
+                      <strong>{bulkPreview.count}</strong>{' '}
+                      {ROLE_DISPLAY[bulkRole]?.name || 'unknown'} users?
+                      <button
+                        className="admin-apply-btn"
+                        onClick={applyBulkGrant}
+                        disabled={bulkLoading || bulkPreview.count === 0}
+                        style={{ marginLeft: 10 }}
+                      >
+                        {bulkLoading ? 'Applying...' : 'Apply'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Role filter chips */}
+                <div className="admin-role-filters">
+                  {Object.entries(ROLE_DISPLAY).map(([id, info]) => {
+                    const active = selectedRoles.has(id)
+                    return (
+                      <button
+                        key={id}
+                        className={`admin-role-chip ${active ? 'active' : ''}`}
+                        style={{
+                          borderColor: active ? info.color : `${info.color}44`,
+                          background: active ? `${info.color}25` : 'transparent',
+                          color: active ? info.color : `${info.color}99`,
+                        }}
+                        onClick={() => toggleRoleFilter(id)}
+                      >
+                        {ROLE_SHORT[id] || info.name.slice(0, 2)}
+                      </button>
+                    )
+                  })}
+                </div>
 
                 {adminError && <div className="admin-error">{adminError}</div>}
                 {adminSuccess && <div className="admin-success">{adminSuccess}</div>}
