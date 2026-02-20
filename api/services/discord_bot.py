@@ -415,15 +415,18 @@ def _get_bot() -> LyraBot:
                 user = session.query(DiscordUser).filter(
                     DiscordUser.discord_id == discord_id,
                 ).first()
+                if not user:
+                    await interaction.response.send_message(
+                        "You haven't signed in yet. Visit [ancientnerds.com](https://ancientnerds.com/account.html) to connect your account.",
+                        ephemeral=True,
+                    )
+                    return
+                # Read all values while session is open
+                roles = user.roles or []
+                credits = user.credits
+                is_unlimited = user.is_unlimited
 
-            if not user:
-                await interaction.response.send_message(
-                    "You haven't signed in yet. Visit [ancientnerds.com](https://ancientnerds.com/account.html) to connect your account.",
-                    ephemeral=True,
-                )
-                return
-
-            tier = get_user_tier(user.roles or [])
+            tier = get_user_tier(roles)
             tier_display = tier.replace("_", " ").title()
 
             embed = discord.Embed(
@@ -432,7 +435,7 @@ def _get_bot() -> LyraBot:
             )
             embed.add_field(
                 name="Balance",
-                value="Unlimited" if user.is_unlimited else f"{user.credits:,}",
+                value="Unlimited" if is_unlimited else f"{credits:,}",
                 inline=True,
             )
             embed.add_field(name="Tier", value=tier_display, inline=True)
