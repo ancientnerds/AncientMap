@@ -26,12 +26,12 @@ async def get_sitemap(db: Session = Depends(get_db)):
     Generate dynamic sitemap with all archaeological sites.
     Returns XML sitemap format for search engines.
     """
-    # Get all sites from database
+    # Only include Ancient Nerds Originals (curated sites), not bulk-imported sources
     query = text("""
         SELECT id, name, updated_at
         FROM unified_sites
+        WHERE source_id = 'ancient_nerds'
         ORDER BY name
-        LIMIT 50000
     """)
 
     result = db.execute(query)
