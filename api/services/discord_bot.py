@@ -366,18 +366,23 @@ def _get_bot() -> LyraBot:
 
             text, sites = await _handle_ask(discord_id, question, images=images)
 
-            # Post anchor message and create thread for the conversation
-            thread_title = question[:100]
+            # Try to create a thread for the conversation
             display_name = interaction.user.display_name
             followup_msg = await interaction.followup.send(
                 f"**{display_name}** asked: {question[:200]}", wait=True,
             )
-            # Create thread via HTTP API — WebhookMessage lacks guild info
-            thread = await interaction.channel.create_thread(
-                name=thread_title,
-                message=discord.Object(id=followup_msg.id),
-            )
-            await _send_response(thread, text, sites)
+            try:
+                thread = await interaction.channel.create_thread(
+                    name=question[:100],
+                    message=discord.Object(id=followup_msg.id),
+                )
+                await _send_response(thread, text, sites)
+            except discord.Forbidden:
+                # No thread permission — send response directly in channel
+                for chunk in _split_response(text):
+                    await interaction.followup.send(chunk)
+                if sites:
+                    await interaction.followup.send(embed=_build_sites_embed(sites))
         except ValueError as e:
             await interaction.followup.send(str(e), ephemeral=True)
         except Exception:
