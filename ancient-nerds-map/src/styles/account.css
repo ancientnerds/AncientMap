@@ -646,3 +646,83 @@
   background: rgba(239, 68, 68, 0.12);
   color: #f87171;
 }
+
+/* Role filter chips */
+.admin-role-filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+
+.admin-role-chip {
+  padding: 2px 8px;
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  border: 1px solid;
+  border-radius: 12px;
+  cursor: pointer;
+  background: transparent;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.admin-role-chip:hover {
+  filter: brightness(1.2);
+}
+
+/* Bulk grant section */
+.admin-bulk-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 10px;
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+.admin-bulk-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.admin-bulk-select {
+  flex: 1;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  outline: none;
+}
+
+.admin-bulk-select:focus {
+  border-color: rgba(0, 255, 46, 0.4);
+}
+
+.admin-bulk-select option {
+  background: #0a1520;
+  color: #e0e0e0;
+}
+
+.admin-bulk-preview {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-left: 3px solid rgba(59, 130, 246, 0.6);
+  background: rgba(59, 130, 246, 0.08);
+  border-radius: 0 6px 6px 0;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  color: #ccc;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.admin-bulk-preview strong {
+  color: #fff;
+}
