@@ -87,7 +87,7 @@ async def _build_history(
 
 async def _download_images(attachments: list[discord.Attachment]) -> list[dict] | None:
     """Download Discord attachments as base64 data URIs."""
-    images = []
+    images: list[dict] = []
     for att in attachments:
         if not att.content_type or not att.content_type.startswith("image/"):
             continue
