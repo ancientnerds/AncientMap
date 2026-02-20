@@ -21,8 +21,6 @@ logger = logging.getLogger(__name__)
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "")
 DISCORD_GUILD_ID = os.getenv("DISCORD_GUILD_ID", "932330696956063765")
 
-# Per-user rate limiters for slash commands
-_ask_limiters: dict[str, RateLimiter] = {}
 _credits_limiter = RateLimiter(max_requests=6, window_seconds=60, namespace="bot_credits")
 _link_limiter = RateLimiter(max_requests=1, window_seconds=60, namespace="bot_link")
 
@@ -36,33 +34,6 @@ def _account_age_seconds(discord_id: str) -> float:
     snowflake = int(discord_id)
     created_ms = ((snowflake >> 22) + _DISCORD_EPOCH)
     return time.time() - (created_ms / 1000)
-
-
-def _get_ask_limiter(discord_id: str) -> RateLimiter:
-    """Get or create a per-user rate limiter for /ask, tier-aware."""
-    from api.routes.auth import TIER_RATE_LIMITS, get_user_tier
-    from pipeline.database import DiscordUser, get_session
-
-    with get_session() as session:
-        user = session.query(DiscordUser).filter(
-            DiscordUser.discord_id == discord_id,
-        ).first()
-        if not user:
-            max_req = TIER_RATE_LIMITS["free"]
-        else:
-            tier = get_user_tier(user.roles or [])
-            max_req = TIER_RATE_LIMITS.get(tier, 10)
-
-    key = f"{discord_id}:{max_req}"
-    if key not in _ask_limiters:
-        # Evict oldest entries when the cache exceeds 1000 users
-        if len(_ask_limiters) >= 1000:
-            oldest_key = next(iter(_ask_limiters))
-            del _ask_limiters[oldest_key]
-        _ask_limiters[key] = RateLimiter(
-            max_requests=max_req, window_seconds=3600, namespace=f"bot_ask_{discord_id}",
-        )
-    return _ask_limiters[key]
 
 
 # Anti-exploit: same low-credit cap as web
@@ -207,12 +178,6 @@ class LyraBot(discord.Client):
 
         discord_id = str(message.author.id)
 
-        # Rate limit
-        limiter = _get_ask_limiter(discord_id)
-        if not limiter.check(discord_id):
-            await message.reply("You're sending messages too quickly. Please wait a bit.")
-            return
-
         async with message.channel.typing():
             try:
                 response = await _handle_ask(discord_id, message.content)
@@ -238,16 +203,8 @@ def _get_bot() -> LyraBot:
 
     @_bot.tree.command(name="ask", description="Ask Lyra about archaeology")
     @app_commands.describe(question="Your question for Lyra")
-    @app_commands.checks.cooldown(1, 30.0)
     async def ask_command(interaction: discord.Interaction, question: str):
         discord_id = str(interaction.user.id)
-
-        limiter = _get_ask_limiter(discord_id)
-        if not limiter.check(discord_id):
-            await interaction.response.send_message(
-                "You're asking too quickly. Please wait a bit.", ephemeral=True,
-            )
-            return
 
         await interaction.response.defer(thinking=True)
 

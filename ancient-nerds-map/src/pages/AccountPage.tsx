@@ -110,22 +110,31 @@ const REASON_LABELS: Record<string, string> = {
   monthly_patron_explorer: 'Patron Explorer (Monthly)',
   monthly_patron_archaeologist: 'Patron Archaeologist (Monthly)',
   monthly_patron_scholar: 'Patron Scholar (Monthly)',
+  team_role: 'Team Role',
+  researcher_role: 'Researcher Role',
+  adeptus_major_role: 'Adeptus Major Role',
+  adeptus_minor_role: 'Adeptus Minor Role',
+  initiate_role: 'Initiate Role',
+  adept_role: 'Adept Role',
+  neophyte_role: 'Neophyte Role',
+  ancient_nerds_role: 'Ancient Nerds Role',
 }
 
-const TIER_LABELS: Record<string, string> = {
-  free: 'Free',
-  og_nerd: 'OG Nerd',
-  explorer: 'Explorer',
-  archaeologist: 'Archaeologist',
-  scholar: 'Scholar',
-}
-
-const TIER_COLORS: Record<string, string> = {
-  free: '#6b7280',
-  og_nerd: '#f59e0b',
-  explorer: '#22c55e',
-  archaeologist: '#3b82f6',
-  scholar: '#a855f7',
+// Discord role ID → display info for profile badges
+const ROLE_DISPLAY: Record<string, { name: string; color: string }> = {
+  '933105341292486707': { name: 'Founder', color: '#e02626' },
+  '972439407086944266': { name: 'OG Nerd', color: '#f59e0b' },
+  '933104896310378546': { name: 'Team', color: '#00ff2e' },
+  '933105424264220815': { name: 'Researcher', color: '#2ecc71' },
+  '1083087065010417775': { name: 'Adeptus Major', color: '#ffb500' },
+  '1083088517510484009': { name: 'Adeptus Minor', color: '#ffe400' },
+  '1083088899494129695': { name: 'Initiate', color: '#e0c32b' },
+  '1083088426074640466': { name: 'Adept', color: '#eee247' },
+  '1083088078379417630': { name: 'Neophyte', color: '#f1dd80' },
+  '968574705760100392': { name: 'Ancient Nerds', color: '#db2424' },
+  '1083785196861657198': { name: 'Explorer', color: '#22c55e' },
+  '1083785565398380544': { name: 'Archaeologist', color: '#3b82f6' },
+  '1083785826586075278': { name: 'Scholar', color: '#a855f7' },
 }
 
 const DISCORD_INVITE_URL = 'https://discord.gg/ancientnerds'
@@ -327,19 +336,15 @@ export default function AccountPage() {
                 <div className="account-card-info">
                   <h2 className="account-username">{user?.username}</h2>
                   <div className="account-badges">
-                    {user?.is_founder && (
-                      <span className="account-badge founder">Founder</span>
-                    )}
-                    {user?.is_og_nerd && (
-                      <span className="account-badge og-nerd">OG Nerd</span>
-                    )}
-                    {user?.tier && user.tier !== 'free' && user.tier !== 'og_nerd' && (
-                      <span className="account-badge" style={{
-                        background: TIER_COLORS[user.tier] || '#6b7280',
-                      }}>
-                        {TIER_LABELS[user.tier] || user.tier}
-                      </span>
-                    )}
+                    {user?.roles?.map(roleId => {
+                      const info = ROLE_DISPLAY[roleId]
+                      if (!info) return null
+                      return (
+                        <span key={roleId} className="account-badge" style={{ background: info.color }}>
+                          {info.name}
+                        </span>
+                      )
+                    })}
                   </div>
                 </div>
               </div>
