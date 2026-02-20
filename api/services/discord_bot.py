@@ -267,10 +267,10 @@ class LyraBot(discord.Client):
         guild = discord.Object(id=int(DISCORD_GUILD_ID))
         self.tree.copy_global_to(guild=guild)
         await self.tree.sync(guild=guild)
-        logger.info(f"Discord bot slash commands synced to guild {DISCORD_GUILD_ID}")
+        print(f"[DISCORD] Slash commands synced to guild {DISCORD_GUILD_ID}", flush=True)
 
     async def on_ready(self):
-        logger.info(f"Discord bot ready as {self.user} (ID: {self.user.id})")
+        print(f"[DISCORD] Bot ready as {self.user} (ID: {self.user.id})", flush=True)
 
     async def on_message(self, message: discord.Message):
         """Handle DMs and thread follow-ups."""
@@ -461,13 +461,15 @@ def _get_bot() -> LyraBot:
 async def start_bot() -> None:
     """Start the Discord bot. Call from FastAPI lifespan."""
     if not DISCORD_BOT_TOKEN:
-        logger.info("DISCORD_BOT_TOKEN not set, skipping Discord bot startup")
+        print("[DISCORD] No token set, skipping bot startup", flush=True)
         return
 
     bot = _get_bot()
     try:
+        print("[DISCORD] Starting bot...", flush=True)
         await bot.start(DISCORD_BOT_TOKEN)
-    except Exception:
+    except Exception as e:
+        print(f"[DISCORD] Bot failed to start: {e}", flush=True)
         logger.exception("Discord bot failed to start")
 
 
