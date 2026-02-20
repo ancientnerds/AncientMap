@@ -1006,6 +1006,24 @@ class DiscordUser(Base):
         return f"<DiscordUser {self.username} ({self.discord_id})>"
 
 
+class PatreonEvent(Base):
+    """Patreon webhook events for idempotent processing."""
+    __tablename__ = "patreon_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+    )
+    event_id: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    event_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    patron_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    discord_id: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    tier_amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    processed_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    def __repr__(self) -> str:
+        return f"<PatreonEvent {self.event_id} ({self.event_type})>"
+
+
 class CreditGrant(Base):
     """Log of credit grants (OG Nerd role, future Patreon tiers, etc.)."""
     __tablename__ = "credit_grants"

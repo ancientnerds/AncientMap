@@ -34,8 +34,21 @@ SSE_MAX_DURATION = 300  # Max SSE stream duration in seconds (5 minutes)
 LOW_CREDIT_THRESHOLD = 20   # credits below which history is truncated
 LOW_CREDIT_MAX_HISTORY = 5  # max history messages for low-credit users (~2-3 exchanges)
 
-# Rate limits
-_chat_limiter = RateLimiter(max_requests=10, window_seconds=3600, namespace="lyra_chat")
+# Rate limits — tier-aware (per-user limiters keyed by discord_id:max_requests)
+_chat_limiters: dict[str, RateLimiter] = {}
+
+
+def _get_chat_limiter(user: "DBUser") -> RateLimiter:
+    """Get or create a tier-aware rate limiter for the user."""
+    from api.routes.auth import TIER_RATE_LIMITS, get_user_tier
+    tier = get_user_tier(user.roles or [])
+    max_req = TIER_RATE_LIMITS.get(tier, 10)
+    key = f"{user.discord_id}:{max_req}"
+    if key not in _chat_limiters:
+        _chat_limiters[key] = RateLimiter(
+            max_requests=max_req, window_seconds=3600, namespace=f"lyra_chat_{user.discord_id}",
+        )
+    return _chat_limiters[key]
 
 
 # ---------------------------------------------------------------------------
@@ -77,8 +90,9 @@ async def lyra_chat(request: LyraChatRequest, req: Request):
     """
     user = get_current_user(req)
 
-    # Per-user rate limit (keyed by discord_id, not IP)
-    if not _chat_limiter.check(user.discord_id):
+    # Per-user rate limit (tier-aware, keyed by discord_id)
+    limiter = _get_chat_limiter(user)
+    if not limiter.check(user.discord_id):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     # Check unlimited flag and credits atomically

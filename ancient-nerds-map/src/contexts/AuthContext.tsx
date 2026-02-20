@@ -18,6 +18,8 @@ export interface AuthUser {
   is_unlimited: boolean
   is_og_nerd: boolean
   is_founder: boolean
+  tier: string
+  next_grant_date: string | null
   created_at: string | null
 }
 
