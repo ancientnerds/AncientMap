@@ -354,7 +354,7 @@ def _get_llm():
         _llm = ChatAnthropic(**kwargs)
     elif LLM_PROVIDER == "ollama":
         from langchain_ollama import ChatOllama
-        _llm = ChatOllama(model=LLM_MODEL, streaming=True, num_predict=1024)
+        _llm = ChatOllama(model=LLM_MODEL, streaming=True)
     elif LLM_PROVIDER == "openai":
         from langchain_openai import ChatOpenAI
         _llm = ChatOpenAI(model=LLM_MODEL, max_tokens=1024, streaming=True)
