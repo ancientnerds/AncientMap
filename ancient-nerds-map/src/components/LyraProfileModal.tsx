@@ -156,7 +156,7 @@ export default function LyraProfileModal({ onClose }: Props) {
           </a>
           <div className="lyra-poster-name">
             <span className="lyra-poster-name-first">LYRA</span>
-            <span className="lyra-poster-name-last">WISKERBYTE</span>
+            <span className="lyra-poster-name-last">WHISKERBYTE</span>
           </div>
           <span className="lyra-poster-tag">Archaeological Agent</span>
           <div className="lyra-poster-status">
