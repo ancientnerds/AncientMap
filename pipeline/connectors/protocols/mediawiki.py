@@ -48,10 +48,12 @@ class MediaWikiProtocol:
 
         self._http_client = http_client
         self._owns_client = http_client is None
+        self._ref_count = 0
         self._last_request_time: float | None = None
         self._request_lock = asyncio.Lock()
 
     async def __aenter__(self):
+        self._ref_count += 1
         if self._owns_client and self._http_client is None:
             self._http_client = httpx.AsyncClient(
                 timeout=self.timeout,
@@ -60,7 +62,8 @@ class MediaWikiProtocol:
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self._owns_client and self._http_client:
+        self._ref_count -= 1
+        if self._ref_count <= 0 and self._owns_client and self._http_client:
             await self._http_client.aclose()
             self._http_client = None
 
