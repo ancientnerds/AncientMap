@@ -1028,6 +1028,19 @@ def _run_migrations(engine) -> None:
         # The UNIQUE(user_id, reason, grant_period) constraint does NOT prevent
         # duplicate one-time grants because NULL != NULL in PostgreSQL.
         # Add a partial unique index covering the grant_period IS NULL case.
+
+        # Deduplicate one-time grants before adding the unique index.
+        # Keep the oldest row (smallest created_at) per (user_id, reason).
+        conn.execute(text("""
+            DELETE FROM credit_grants a
+            USING credit_grants b
+            WHERE a.user_id = b.user_id
+              AND a.reason = b.reason
+              AND a.grant_period IS NULL
+              AND b.grant_period IS NULL
+              AND a.created_at > b.created_at
+        """))
+
         conn.execute(text("""
             CREATE UNIQUE INDEX IF NOT EXISTS uq_credit_grants_one_time
             ON credit_grants (user_id, reason)
