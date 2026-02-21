@@ -47,17 +47,12 @@ export function MapSection({
   onFullscreenToggle,
   onShareGoogleMaps,
   onShareSite,
-  siteId,
-  isStandalone = false,
   mapSectionRef
 }: MapSectionProps) {
   // Google Maps URLs - zoomed out 3 steps (18 -> 15)
   const googleMapsUrl = `https://www.google.com/maps/@${lat},${lng},15z/data=!3m1!1e3`
   const googleMapsEmbedUrl = `https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d4000!2d${lng}!3d${lat}!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e1!3m2!1sen!2sus!4v1234567890`
   const streetViewEmbedUrl = getStreetViewEmbedUrl(lat, lng)
-
-  // URL to open standalone popup in new tab (direct SPA link)
-  const sitePopupUrl = `${window.location.origin}${window.location.pathname}?site=${siteId}`
 
   // Get period mappings for this empire
   const periods = useMemo(() => {
@@ -348,22 +343,6 @@ export function MapSection({
             </svg>
           )}
         </button>
-        {/* Open in new tab */}
-        {!isStandalone && (
-          <a
-            href={sitePopupUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="map-action-btn"
-            title="Open in new tab"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-              <polyline points="15 3 21 3 21 9"></polyline>
-              <line x1="10" y1="14" x2="21" y2="3"></line>
-            </svg>
-          </a>
-        )}
         {/* Street View toggle button */}
         <button
           className={`map-action-btn street-view-toggle ${showStreetView ? 'active' : ''}`}

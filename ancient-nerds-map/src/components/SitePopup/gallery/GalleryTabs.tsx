@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef, useCallback } from 'react'
 import type { GalleryTabsProps, GalleryTab } from '../types'
 
 interface TabConfig {
@@ -27,9 +28,50 @@ export function GalleryTabs({
   isLoadingArtifacts = false,
   isLoadingBooks = false,
   isLoadingPapers = false,
-  isGalleryExpanded,
-  onExpandToggle
 }: GalleryTabsProps) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [canScrollLeft, setCanScrollLeft] = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(false)
+
+  const updateArrows = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    setCanScrollLeft(el.scrollLeft > 1)
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1)
+  }, [])
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    updateArrows()
+    el.addEventListener('scroll', updateArrows)
+    const ro = new ResizeObserver(updateArrows)
+    ro.observe(el)
+    return () => {
+      el.removeEventListener('scroll', updateArrows)
+      ro.disconnect()
+    }
+  }, [updateArrows])
+
+  const scroll = (direction: 'left' | 'right') => {
+    const el = scrollRef.current
+    if (!el) return
+    // Scroll by ~70% of visible width
+    const amount = el.clientWidth * 0.7
+    el.scrollBy({ left: direction === 'left' ? -amount : amount, behavior: 'smooth' })
+  }
+
+  const chevronLeft = (
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="7 1.5 3 5 7 8.5" />
+    </svg>
+  )
+  const chevronRight = (
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 1.5 7 5 3 8.5" />
+    </svg>
+  )
+
   const tabs: TabConfig[] = [
     {
       id: 'photos',
@@ -148,37 +190,30 @@ export function GalleryTabs({
 
   return (
     <div className="gallery-tabs">
-      {tabs.map(tab => (
-        <button
-          key={tab.id}
-          className={`gallery-tab ${activeTab === tab.id ? 'active' : ''}`}
-          onClick={() => onTabChange(tab.id)}
-        >
-          {tab.icon}
-          {tab.label}
-          <span className={`gallery-tab-count ${tab.isLoading ? 'loading' : ''}`}>
-            {tab.isLoading ? '...' : tab.count > 0 ? tab.count : ''}
-          </span>
+      {canScrollLeft && (
+        <button className="gallery-tabs-arrow left" onClick={() => scroll('left')} aria-label="Scroll tabs left">
+          {chevronLeft}
         </button>
-      ))}
-
-      {/* Expand button only shown when not expanded */}
-      {!isGalleryExpanded && (
-        <>
-          <div className="gallery-tabs-spacer" />
+      )}
+      <div className="gallery-tabs-scroll" ref={scrollRef}>
+        {tabs.map(tab => (
           <button
-            className="gallery-expand-btn"
-            onClick={onExpandToggle}
-            title="Expand"
+            key={tab.id}
+            className={`gallery-tab ${activeTab === tab.id ? 'active' : ''}`}
+            onClick={() => onTabChange(tab.id)}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="15 3 21 3 21 9"></polyline>
-              <polyline points="9 21 3 21 3 15"></polyline>
-              <line x1="21" y1="3" x2="14" y2="10"></line>
-              <line x1="3" y1="21" x2="10" y2="14"></line>
-            </svg>
+            {tab.icon}
+            {tab.label}
+            <span className={`gallery-tab-count ${tab.isLoading ? 'loading' : ''}`}>
+              {tab.isLoading ? '...' : tab.count > 0 ? tab.count : ''}
+            </span>
           </button>
-        </>
+        ))}
+      </div>
+      {canScrollRight && (
+        <button className="gallery-tabs-arrow right" onClick={() => scroll('right')} aria-label="Scroll tabs right">
+          {chevronRight}
+        </button>
       )}
     </div>
   )

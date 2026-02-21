@@ -1,34 +1,59 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import type { GalleryImage } from '../../ImageGallery'
 import type { GalleryTab, UnifiedGalleryItem } from '../types'
 import { contentService, type ContentTier } from '../../../services/connectors'
+import { fetchSiteImages } from '../../../services/imageService'
 import { useTieredFetch } from './useTieredFetch'
 import { dedupePhotos, selectCurrentItems } from './galleryUtils'
 import type { GalleryHookReturn, SketchfabModelCompat } from './galleryTypes'
 
 interface UseGalleryDataOptions {
+  siteId: string
   title: string
   location?: string
   lat: number
   lng: number
   sourceUrl?: string
-  prefetchedImages?: { wiki: GalleryImage[] } | null
   isOffline: boolean
-  isLoadingImages?: boolean
+  isStandalone?: boolean
 }
 
 export function useGalleryData({
+  siteId,
   title,
   location,
   lat,
   lng,
   sourceUrl,
-  prefetchedImages,
   isOffline,
-  isLoadingImages = false
+  isStandalone = false,
 }: UseGalleryDataOptions): GalleryHookReturn {
   const [activeGalleryTab, setActiveGalleryTab] = useState<GalleryTab>('photos')
-  const [isGalleryExpanded, setIsGalleryExpanded] = useState(false)
+  const [isGalleryExpanded, setIsGalleryExpanded] = useState(isStandalone)
+
+  // Internal Wikipedia image fetching
+  const [wikiImages, setWikiImages] = useState<GalleryImage[]>([])
+  const [isLoadingWikiImages, setIsLoadingWikiImages] = useState(false)
+
+  useEffect(() => {
+    if (!siteId || isOffline) return
+    setIsLoadingWikiImages(true)
+    fetchSiteImages(title, { location, siteId })
+      .then(result => {
+        setWikiImages(result.wikipedia.map(img => ({
+          thumb: img.thumb,
+          full: img.full,
+          title: img.title,
+          photographer: img.author,
+          photographerUrl: img.authorUrl,
+          wikimediaUrl: img.sourceUrl,
+          license: img.license,
+          source: 'wikipedia' as const,
+        })))
+      })
+      .catch(() => setWikiImages([]))
+      .finally(() => setIsLoadingWikiImages(false))
+  }, [siteId])
 
   const fetchFn = useCallback(
     (tier: ContentTier) => contentService.getContentForSiteTier({
@@ -44,9 +69,9 @@ export function useGalleryData({
 
   const tiered = useTieredFetch(fetchFn, `${title}-${lat}-${lng}`, !isOffline)
 
-  // Merge prefetched Wikipedia images with backend photos (deduped)
+  // Merge Wikipedia images with backend photos (deduped)
   const wikiItems: UnifiedGalleryItem[] = useMemo(() =>
-    (prefetchedImages?.wiki || []).map((img, i) => ({
+    wikiImages.map((img, i) => ({
       id: `wiki-${i}`,
       thumb: img.thumb,
       full: img.full,
@@ -54,7 +79,7 @@ export function useGalleryData({
       source: 'wikipedia' as const,
       original: img
     })),
-    [prefetchedImages]
+    [wikiImages]
   )
 
   const photoItems = useMemo(
@@ -88,7 +113,7 @@ export function useGalleryData({
     [sketchfabItems]
   )
 
-  const heroImage = prefetchedImages?.wiki?.[0] || null
+  const heroImage = wikiImages[0] || null
   const heroImageSrc = heroImage?.full || photoItems[0]?.full
 
   return {
@@ -96,7 +121,7 @@ export function useGalleryData({
     isGalleryExpanded, setIsGalleryExpanded,
     photoItems, videoItems, mapItems, sketchfabItems, artifactItems, artworkItems, bookItems, paperItems, mythItems,
     currentItems,
-    isLoadingImages: isLoadingImages || tiered.tier1Loading,
+    isLoadingImages: isLoadingWikiImages || tiered.tier1Loading,
     isLoadingVideos: tiered.tier2Loading,
     isLoadingMaps: tiered.tier4Loading,
     isLoadingModels: tiered.tier3Loading,

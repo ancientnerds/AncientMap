@@ -13,10 +13,7 @@ const NewsFeedPanel = lazy(() => import('./components/NewsFeedPanel'))
 import { SiteData, fetchSites, getCurrentSites, addSourceSites, SOURCE_COLORS, getDefaultEnabledSourceIds, getSourceColor, getCategoryColor, getPeriodColor, setDataSourceError, resolvePeriod } from './data/sites'
 import { DataStore } from './data/DataStore'
 import { SourceLoader } from './services/SourceLoader'
-import { ImageCache } from './services/ImageCache'
 import { config } from './config'
-import { fetchSiteImages, isWikipediaUrl, FetchSiteImagesResult } from './services/imageService'
-import type { GalleryImage } from './components/ImageGallery'
 import { apiDetailToSiteData } from './utils/siteApi'
 import { OfflineProvider, useOffline } from './contexts/OfflineContext'
 import { offlineFetch } from './services/OfflineFetch'
@@ -108,24 +105,6 @@ function getStandaloneSiteId(): string | null {
   return urlParams.get('site')
 }
 
-
-// Convert image search results to GalleryImage format (unified helper)
-function convertToGalleryImages(imagesResult: { wikipedia: Array<{ thumb: string, full: string, title?: string, author?: string, authorUrl?: string, sourceUrl?: string, license?: string }> }): {
-  wiki: GalleryImage[]
-} {
-  const wikiImages: GalleryImage[] = imagesResult.wikipedia.map(img => ({
-    thumb: img.thumb,
-    full: img.full,
-    title: img.title,
-    photographer: img.author,
-    photographerUrl: img.authorUrl,
-    wikimediaUrl: img.sourceUrl,
-    license: img.license,
-    source: 'wikipedia' as const,
-  }))
-
-  return { wiki: wikiImages }
-}
 
 function AppContent() {
   // Phone detection - block phones but allow tablets
@@ -310,9 +289,7 @@ function AppContent() {
   // Multi-popup support: track all open popups by site ID
   interface OpenPopup {
     site: SiteData
-    images: { wiki: GalleryImage[] } | null
     isMinimized: boolean
-    isLoadingImages: boolean
   }
   const [openPopups, setOpenPopups] = useState<Map<string, OpenPopup>>(new Map())
 
@@ -338,9 +315,6 @@ function AppContent() {
   const [sourcesMeta, setSourcesMeta] = useState<Record<string, SourceMeta>>({})
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null) // [lng, lat] from IP geolocation
   const [locationReady, setLocationReady] = useState(false) // True when location fetch completed (success or fail)
-
-  // Image prefetch cache - stores promises for images being fetched for selected sites
-  const imagePrefetchCache = useRef<Map<string, Promise<FetchSiteImagesResult>>>(new Map())
 
   // Proximity filter state
   const [proximityCenter, setProximityCenter] = useState<[number, number] | null>(null) // [lng, lat]
@@ -561,63 +535,20 @@ function AppContent() {
     setListFrozenSiteIds(siteIds)
   }, [])
 
-  // Async image loader - runs in background after popup opens
-  // Uses fast REST API (~400ms) to fetch all Wikipedia article images
-  const loadImagesForPopup = useCallback(async (siteData: SiteData) => {
-    const wikipediaUrl = siteData.sourceUrl && isWikipediaUrl(siteData.sourceUrl)
-      ? siteData.sourceUrl : undefined
-
-    let images: { wiki: GalleryImage[] } = { wiki: [] }
-
-    try {
-      const cachedPromise = imagePrefetchCache.current.get(siteData.id)
-      let imagesResult: FetchSiteImagesResult
-
-      if (cachedPromise) {
-        imagesResult = await cachedPromise
-      } else {
-        imagesResult = await fetchSiteImages(siteData.title, {
-          wikipediaUrl,
-          location: siteData.location,
-          siteId: siteData.id,
-        })
-      }
-      images = convertToGalleryImages(imagesResult)
-    } catch (err) {
-      console.warn('Failed to load images:', err)
-    }
-
-    // Update popup with full image set
-    setOpenPopups(prev => {
-      const next = new Map(prev)
-      const existing = next.get(siteData.id)
-      if (existing) {
-        next.set(siteData.id, { ...existing, images, isLoadingImages: false })
-      }
-      return next
-    })
-  }, [])
-
-  // Opens popup IMMEDIATELY, starts image loading in background
-  const openSitePopup = useCallback(async (siteData: SiteData) => {
-    // Open popup immediately with loading state
+  // Opens popup for a site
+  const openSitePopup = useCallback((siteData: SiteData) => {
     setOpenPopups(prev => {
       const next = new Map(prev)
       if (!next.has(siteData.id)) {
         next.set(siteData.id, {
           site: siteData,
-          images: null,
           isMinimized: false,
-          isLoadingImages: true
         })
       }
       return next
     })
     setIsLoadingDetail(false)
-
-    // Start async image loading (non-blocking)
-    loadImagesForPopup(siteData)
-  }, [loadImagesForPopup])
+  }, [])
 
   // Fetch site details and open popup
   const handleSiteClick = useCallback(async (site: SiteData | null) => {
@@ -804,7 +735,7 @@ function AppContent() {
 
           // Keep loading state while hero image loads
           setIsLoadingDetail(true)
-          await openSitePopup(siteData) // Same unified function as normal mode!
+          openSitePopup(siteData)
           setIsLoading(false)
         } catch (error) {
           console.error('Failed to load site:', error)
@@ -1380,76 +1311,6 @@ function AppContent() {
     setRandomModeActive(false) // Exit random mode on manual selection
   }, [listFrozenSiteIds])
 
-  // Pre-fetch images when sites are selected (before popup opens)
-  // This makes popup opening much faster for pre-selected sites
-  useEffect(() => {
-    listFrozenSiteIds.forEach(siteId => {
-      // Skip if already prefetching or cached
-      if (imagePrefetchCache.current.has(siteId)) return
-
-      const site = sites.find(s => s.id === siteId)
-      if (!site) return
-
-      // Get Wikipedia URL for image fetching
-      const wikipediaUrl = site.sourceUrl && isWikipediaUrl(site.sourceUrl)
-        ? site.sourceUrl : undefined
-
-      // Start prefetching in background - fetch metadata AND cache hero image
-      const fetchPromise = fetchSiteImages(site.title, {
-        wikipediaUrl,
-        location: site.location,
-        limit: 12,
-        siteId,
-      }).then(async (result) => {
-        // Also prefetch and cache the hero image immediately
-        const heroUrl = result.wikipedia[0]?.full
-        if (heroUrl) {
-          await ImageCache.preloadAndCache(heroUrl).catch(() => {})
-        }
-        return result
-      }).catch(() => {
-        return { wikipedia: [], europeana: [] }
-      })
-
-      imagePrefetchCache.current.set(siteId, fetchPromise)
-    })
-  }, [listFrozenSiteIds, sites])
-
-  // Pre-fetch images for top search results (cold start optimization)
-  // This reduces popup load time for sites appearing in search
-  useEffect(() => {
-    // Only prefetch top 5 results to avoid excessive requests
-    const topResults = searchResults.slice(0, 5)
-
-    topResults.forEach(site => {
-      // Skip if already prefetching or cached
-      if (imagePrefetchCache.current.has(site.id)) return
-
-      // Get Wikipedia URL for image fetching
-      const wikipediaUrl = site.sourceUrl && isWikipediaUrl(site.sourceUrl)
-        ? site.sourceUrl : undefined
-
-      // Start prefetching in background
-      const fetchPromise = fetchSiteImages(site.title, {
-        wikipediaUrl,
-        location: site.location,
-        limit: 12,
-        siteId: site.id,
-      }).then(async (result) => {
-        // Also prefetch and cache the hero image immediately
-        const heroUrl = result.wikipedia[0]?.full
-        if (heroUrl) {
-          await ImageCache.preloadAndCache(heroUrl).catch(() => {})
-        }
-        return result
-      }).catch(() => {
-        return { wikipedia: [], europeana: [] }
-      })
-
-      imagePrefetchCache.current.set(site.id, fetchPromise)
-    })
-  }, [searchResults])
-
   const undoSelection = useCallback(() => {
     if (!canUndoSelection) return
     setRedoSelection(listFrozenSiteIds) // Save current for redo
@@ -1868,9 +1729,7 @@ function AppContent() {
             // In standalone mode, closing goes back to main map
             window.location.href = '/globe.html'
           }}
-          prefetchedImages={standalonePopup.images}
           isStandalone={true}
-          isLoadingImages={false}
         />
       </div>
     )
@@ -2213,8 +2072,6 @@ function AppContent() {
           <SitePopup
             key={siteId}
             site={popup.site}
-            prefetchedImages={popup.images}
-            isLoadingImages={popup.isLoadingImages}
             onClose={() => closePopup(siteId)}
             onMinimizedChange={(isMin) => setPopupMinimized(siteId, isMin)}
             minimizedStackIndex={popup.isMinimized ? minimizedIndex : -1}
