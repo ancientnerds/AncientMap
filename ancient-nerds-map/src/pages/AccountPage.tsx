@@ -8,6 +8,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { config } from '../config'
 import { useAuth } from '../contexts/AuthContext'
+import { getCountryFlatFlagUrl } from '../utils/countryFlags'
 import PageHeader from '../components/layout/PageHeader'
 import '../styles/account.css'
 
@@ -36,6 +37,18 @@ interface AdminUser {
   is_og_nerd: boolean
   roles: string[]
   last_login: string | null
+}
+
+interface InteractionSite {
+  id: string
+  name: string
+  country: string | null
+  site_type: string | null
+  thumbnail_url: string | null
+  lat: number
+  lon: number
+  liked_at?: string
+  bookmarked_at?: string
 }
 
 type CreditAction = 'add' | 'set' | 'remove' | 'set_unlimited'
@@ -167,6 +180,10 @@ export default function AccountPage() {
   const [grantsExpanded, setGrantsExpanded] = useState(false)
   const [usageExpanded, setUsageExpanded] = useState(false)
 
+  // Liked & bookmarked sites
+  const [likedSites, setLikedSites] = useState<InteractionSite[]>([])
+  const [bookmarkedSites, setBookmarkedSites] = useState<InteractionSite[]>([])
+
   // Admin state
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([])
   const [adminSearch, setAdminSearch] = useState('')
@@ -220,6 +237,20 @@ export default function AccountPage() {
   useEffect(() => {
     if (isLoggedIn) fetchCredits()
   }, [isLoggedIn, fetchCredits])
+
+  // Fetch liked & bookmarked sites
+  useEffect(() => {
+    if (!isLoggedIn || !token) return
+    const headers = { 'Authorization': `Bearer ${token}` }
+    fetch(`${config.api.baseUrl}/interactions/me/likes`, { headers })
+      .then(r => r.ok ? r.json() : [])
+      .then(setLikedSites)
+      .catch(() => {})
+    fetch(`${config.api.baseUrl}/interactions/me/bookmarks`, { headers })
+      .then(r => r.ok ? r.json() : [])
+      .then(setBookmarkedSites)
+      .catch(() => {})
+  }, [isLoggedIn, token])
 
   // Admin: fetch users
   const fetchAdminUsers = useCallback(async (q = '', roles?: Set<string>) => {
@@ -485,6 +516,66 @@ export default function AccountPage() {
                 Sign Out
               </button>
             </div>
+
+            {/* Liked sites */}
+            {likedSites.length > 0 && (
+              <div className="account-section">
+                <h3 className="account-section-title">Liked Sites</h3>
+                <div className="account-site-grid">
+                  {likedSites.map(s => {
+                    const flagUrl = s.country ? getCountryFlatFlagUrl(s.country) : null
+                    return (
+                      <a key={s.id} href={`/site.html?id=${s.id}`} className="account-site-card">
+                        {s.thumbnail_url ? (
+                          <img src={s.thumbnail_url} alt="" className="account-site-thumb" />
+                        ) : (
+                          <div className="account-site-thumb-empty" />
+                        )}
+                        <div className="account-site-info">
+                          <span className="account-site-name">{s.name}</span>
+                          {s.country && (
+                            <span className="account-site-country">
+                              {flagUrl && <img src={flagUrl} alt="" className="account-site-flag" />}
+                              {s.country}
+                            </span>
+                          )}
+                        </div>
+                      </a>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Bookmarked sites */}
+            {bookmarkedSites.length > 0 && (
+              <div className="account-section">
+                <h3 className="account-section-title">Bookmarked Sites</h3>
+                <div className="account-site-grid">
+                  {bookmarkedSites.map(s => {
+                    const flagUrl = s.country ? getCountryFlatFlagUrl(s.country) : null
+                    return (
+                      <a key={s.id} href={`/site.html?id=${s.id}`} className="account-site-card">
+                        {s.thumbnail_url ? (
+                          <img src={s.thumbnail_url} alt="" className="account-site-thumb" />
+                        ) : (
+                          <div className="account-site-thumb-empty" />
+                        )}
+                        <div className="account-site-info">
+                          <span className="account-site-name">{s.name}</span>
+                          {s.country && (
+                            <span className="account-site-country">
+                              {flagUrl && <img src={flagUrl} alt="" className="account-site-flag" />}
+                              {s.country}
+                            </span>
+                          )}
+                        </div>
+                      </a>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Credit grants */}
             {grants.length > 0 && (() => {

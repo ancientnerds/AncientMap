@@ -41,7 +41,7 @@ async def seo_site_page(
     country_escaped = html.escape(site["country"])
     site_type_escaped = html.escape(site["site_type"] or "Archaeological site")
     og_image_url = f"{base_url}/api/og/{site_id}"
-    canonical_url = html.escape(f"{base_url}/?site={site_id}")
+    canonical_url = html.escape(f"{base_url}/site.html?id={site_id}")
 
     # JSON-LD structured data for Google rich results
     ld_json = {
@@ -49,7 +49,7 @@ async def seo_site_page(
         "@type": "Place",
         "name": site["name"],
         "description": site["description"],
-        "url": f"{base_url}/?site={site_id}",
+        "url": f"{base_url}/site.html?id={site_id}",
         "image": f"{base_url}/api/og/{site_id}",
     }
     if site["lat"] is not None and site["lon"] is not None:
@@ -117,7 +117,7 @@ async def seo_site_page(
     <h1>{title_escaped}</h1>
     <p class="meta">{site_type_escaped}{' &mdash; ' + country_escaped if site["country"] else ''}{' &mdash; ' + coord_str if coord_str else ''}</p>
     <p class="description">{desc_escaped}</p>
-    <p><a href="/?site={html.escape(site_id)}">View on Ancient Nerds Map</a></p>
+    <p><a href="/site.html?id={html.escape(site_id)}">View on Ancient Nerds Map</a></p>
 </body>
 </html>"""
 

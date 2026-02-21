@@ -120,7 +120,7 @@ async def get_sitemap(db: Session = Depends(get_db)):
     # Add each site
     for site in sites:
         site_id = str(site.id)
-        site_url = f"{BASE_URL}/?site={site_id}"
+        site_url = f"{BASE_URL}/site.html?id={site_id}"
         # Use updated_at if available, otherwise use today
         lastmod = site.updated_at.strftime("%Y-%m-%d") if site.updated_at else today
 
