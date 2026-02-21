@@ -1,0 +1,213 @@
+/* Site Page — CSS overrides for SitePopup in standalone page mode */
+
+/* .site-page IS the scroll container — fixed height + overflow-y: auto.
+   position:sticky on PageHeader sticks within this container.
+   html/body keep overflow:hidden from index.css (globe page needs it). */
+.site-page {
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: #050e12;
+}
+
+/* ========== Loading & Error States ========== */
+
+.site-page-loading,
+.site-page-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  gap: 16px;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.site-page-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--primary-red);
+  border-radius: 50%;
+  animation: site-page-spin 0.8s linear infinite;
+}
+
+@keyframes site-page-spin {
+  to { transform: rotate(360deg); }
+}
+
+.site-page-error h2 {
+  color: var(--text-primary);
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.site-page-error p {
+  max-width: 400px;
+  line-height: 1.6;
+}
+
+.site-page-back-link {
+  color: var(--primary-red);
+  text-decoration: none;
+  border: 1px solid rgba(192, 32, 35, 0.4);
+  padding: 8px 20px;
+  border-radius: 6px;
+  margin-top: 8px;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.site-page-back-link:hover {
+  background: rgba(192, 32, 35, 0.1);
+  border-color: var(--primary-red);
+}
+
+/* ========== Popup container overrides ========== */
+
+/* 0-3-0 specificity — beats .site-popup.standalone (0-2-0) and .site-popup.site-popup-large (0-2-0) in index.css */
+.site-page .site-popup.standalone {
+  max-width: none;
+  margin: 0;
+  max-height: none;
+  height: auto;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+  overflow: visible;
+  contain: none;
+  width: 100%;
+}
+
+/* Natural page scroll — remove popup scroll constraints */
+.site-page .popup-main-layout {
+  overflow: visible;
+  flex: none; /* flex:1 collapses to 0 in height:auto column container */
+}
+
+.site-page .popup-content-side {
+  overflow: visible;    /* Both axes — CSS spec converts visible→auto if only one axis is visible */
+}
+
+/* ========== Hero & text sizing for page context ========== */
+
+.site-page .popup-hero-header {
+  height: 250px;
+  cursor: default;
+}
+
+.site-page .popup-hero-content {
+  padding: 24px 32px;
+}
+
+.site-page .popup-title-overlay {
+  font-size: 28px;
+}
+
+.site-page .popup-body {
+  padding: 20px 32px;
+  flex: none;           /* Don't flex-grow in auto-height context */
+}
+
+.site-page .popup-description {
+  font-size: 15px;
+  line-height: 1.7;
+  flex: none;           /* Don't flex — take natural content height */
+  max-height: none;     /* No height limit on full page */
+}
+
+/* ========== Map side — taller ========== */
+
+.site-page .popup-maps-side {
+  min-height: 500px;
+}
+
+/* ========== Gallery overrides for page context ========== */
+/* Gallery starts expanded via state — .popup-gallery-section.expanded styles from index.css
+   handle the grid, item sizing, and haze overlay. Override the popup overlay behavior. */
+
+/* In the popup, expanded gallery overlays everything (position:absolute).
+   On the site page, gallery flows downward in normal document flow. */
+.site-page .popup-gallery-section.expanded {
+  position: static !important;
+  inset: auto !important;
+  z-index: auto !important;
+  border-radius: 0 !important;
+  overflow: visible !important;
+}
+
+/* Page scrolls natively — don't constrain gallery container height */
+.site-page .popup-gallery-section.expanded .gallery-grid-container {
+  overflow: visible;
+}
+
+/* ========== Header — ensure sticky header stays above popup content ========== */
+.site-page .page-header {
+  z-index: 200;
+}
+
+/* ========== Hide standalone close button ========== */
+
+.site-page .popup-standalone-close {
+  display: none;
+}
+
+
+/* ========== Tablet (≤1024px) ========== */
+
+@media (max-width: 1024px) {
+  .site-page .popup-main-layout {
+    flex-direction: column;
+  }
+
+  .site-page .popup-content-side {
+    flex: none;          /* In column layout, flex:1 1 0 collapses height; use natural height */
+  }
+
+  .site-page .popup-maps-side {
+    flex: none;          /* 50% of auto-height parent = 0; use min-height instead */
+  }
+
+  .site-page .popup-hero-header {
+    height: 200px;
+  }
+
+  .site-page .popup-hero-content {
+    padding: 20px 24px;
+  }
+
+  .site-page .popup-title-overlay {
+    font-size: 22px;
+  }
+}
+
+/* ========== Mobile (≤767px) ========== */
+
+@media (max-width: 767px) {
+  .site-page .popup-hero-header {
+    height: 150px;
+  }
+
+  .site-page .popup-hero-content {
+    padding: 16px;
+  }
+
+  .site-page .popup-title-overlay {
+    font-size: 18px;
+  }
+
+  .site-page .popup-description {
+    font-size: 16px;
+  }
+
+  .site-page .popup-maps-side {
+    min-height: 250px;
+  }
+
+  .site-page .popup-body {
+    padding: 16px;
+  }
+}
