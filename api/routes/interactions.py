@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, text
 
 from api.services.jwt_auth import get_current_user, get_optional_user
-from pipeline.database import DiscordUser, SiteBookmark, SiteLike, get_session
+from pipeline.database import DiscordUser, SiteBookmark, SiteLike, UnifiedSite, get_session
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -95,3 +95,49 @@ def toggle_bookmark(
         session.commit()
 
     return {"bookmarked": bookmarked}
+
+
+def _site_summary(site: UnifiedSite) -> dict:
+    return {
+        "id": str(site.id),
+        "name": site.name,
+        "country": site.country,
+        "site_type": site.site_type,
+        "thumbnail_url": site.thumbnail_url,
+        "lat": site.lat,
+        "lon": site.lon,
+    }
+
+
+@router.get("/me/likes")
+def get_my_likes(user: DiscordUser = Depends(get_current_user)):
+    """List all sites the current user has liked."""
+    with get_session() as session:
+        rows = (
+            session.query(UnifiedSite, SiteLike.created_at)
+            .join(SiteLike, SiteLike.site_id == UnifiedSite.id)
+            .filter(SiteLike.user_id == user.id)
+            .order_by(SiteLike.created_at.desc())
+            .all()
+        )
+        return [
+            {**_site_summary(site), "liked_at": liked_at.isoformat()}
+            for site, liked_at in rows
+        ]
+
+
+@router.get("/me/bookmarks")
+def get_my_bookmarks(user: DiscordUser = Depends(get_current_user)):
+    """List all sites the current user has bookmarked."""
+    with get_session() as session:
+        rows = (
+            session.query(UnifiedSite, SiteBookmark.created_at)
+            .join(SiteBookmark, SiteBookmark.site_id == UnifiedSite.id)
+            .filter(SiteBookmark.user_id == user.id)
+            .order_by(SiteBookmark.created_at.desc())
+            .all()
+        )
+        return [
+            {**_site_summary(site), "bookmarked_at": bm_at.isoformat()}
+            for site, bm_at in rows
+        ]
