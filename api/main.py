@@ -31,6 +31,7 @@ from api.routes import (
     auth,
     content,
     contributions,
+    interactions,
     lyra,
     news,
     og,
@@ -237,6 +238,7 @@ app.include_router(snapshots.router, prefix="/api/snapshots", tags=["snapshots"]
 app.include_router(vector_sync.router, prefix="/api/vector-sync", tags=["vector-sync"])
 app.include_router(wiki_images.router, prefix="/api/wiki-images", tags=["wiki-images"])
 app.include_router(patreon.router, prefix="/api/patreon", tags=["patreon"])
+app.include_router(interactions.router, prefix="/api/interactions", tags=["interactions"])
 
 # Serve wiki images as static files
 _wiki_images_dir = Path("public/data/images/wiki")

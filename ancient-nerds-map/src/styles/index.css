@@ -4115,6 +4115,10 @@ body.screenshot-mode .screenshot-mode-buttons {
   backdrop-filter: blur(8px);
 }
 
+a.popup-window-btn {
+  text-decoration: none;
+}
+
 .popup-window-btn:hover {
   background: rgba(255, 255, 255, 0.15);
   color: #ccc;
@@ -4133,6 +4137,18 @@ body.screenshot-mode .screenshot-mode-buttons {
   top: 8px;
   right: 8px;
   z-index: 1000;
+}
+
+/* Narrow/portrait viewport — stack content above map */
+@media (max-width: 700px) {
+  .popup-main-layout {
+    flex-direction: column;
+  }
+
+  .popup-maps-side {
+    flex: none;
+    min-height: 300px;
+  }
 }
 
 /* Maximized state */
@@ -4484,6 +4500,88 @@ body.screenshot-mode .screenshot-mode-buttons {
   gap: 8px;
 }
 
+/* Hero actions — like, bookmark, Lyra in top-right of hero */
+.hero-actions {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hero-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: -10px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  transition: all 0.15s;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.7));
+}
+
+.hero-action-btn:hover {
+  color: #fff;
+  transform: scale(1.12);
+}
+
+.hero-like-btn.active {
+  color: #e74c4c;
+}
+
+.hero-like-count {
+  font-weight: 600;
+  font-size: 12px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+.hero-bookmark-btn.active {
+  color: #f0b429;
+}
+
+/* Ask Lyra — avatar + label */
+.hero-ask-lyra {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.hero-ask-lyra:hover {
+  transform: scale(1.08);
+}
+
+.hero-ask-lyra img {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 180, 180, 0.4);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  transition: border-color 0.15s;
+}
+
+.hero-ask-lyra:hover img {
+  border-color: rgba(0, 180, 180, 0.8);
+}
+
+.hero-ask-lyra-label {
+  font-size: 9px;
+  font-weight: 600;
+  color: rgba(0, 200, 200, 0.85);
+  letter-spacing: 0.03em;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
 /* Source and badges inside hero */
 .popup-hero-content .popup-source {
   align-self: flex-start;
@@ -4582,7 +4680,7 @@ body.screenshot-mode .screenshot-mode-buttons {
   letter-spacing: 1px;
 }
 
-.site-popup .popup-location {
+.site-popup .popup-location-row {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -4590,26 +4688,26 @@ body.screenshot-mode .screenshot-mode-buttons {
   color: var(--text-secondary);
   margin-bottom: 8px;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
+.site-popup .popup-location-name {
+  margin-right: 4px;
+}
 
-.site-popup .popup-coordinates {
-  display: flex;
+.site-popup .popup-coords-inline {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin-bottom: 8px;
-  flex-shrink: 0;
 }
 
-.site-popup .popup-coordinates .coords-actions {
+.site-popup .popup-coords-inline .coords-actions {
   display: flex;
   gap: 2px;
   margin-left: 6px;
 }
 
-.site-popup .popup-coordinates .coords-action-btn {
+.site-popup .popup-coords-inline .coords-action-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4622,12 +4720,12 @@ body.screenshot-mode .screenshot-mode-buttons {
   transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
 }
 
-.site-popup .popup-coordinates .coords-action-btn:hover {
+.site-popup .popup-coords-inline .coords-action-btn:hover {
   opacity: 1;
   color: var(--primary-red);
 }
 
-.site-popup .popup-coordinates .coords-action-btn.copied {
+.site-popup .popup-coords-inline .coords-action-btn.copied {
   opacity: 1;
   color: #22c55e;
 }
@@ -8916,16 +9014,52 @@ body.hud-hidden .empire-borders-window {
    Gallery Tabs (Photos/Maps/Artifacts) - Unified Gallery System
    ========================================================================== */
 
+/* Tabs bar: wrapper holds scrollable tabs + pinned toggle button */
+.gallery-tabs-bar {
+  display: flex;
+  align-items: center;
+  background: rgba(0, 15, 20, 0.8);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+  transform: translateZ(0);
+}
+
 .gallery-tabs {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Inner scroll area — hidden overflow, scrolled programmatically via arrows */
+.gallery-tabs-scroll {
   display: flex;
   align-items: center;
   gap: 4px;
   padding: 8px 12px;
-  background: rgba(0, 15, 20, 0.8);
-  border-bottom: 1px solid var(--border-color);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Scroll arrows — small red chevrons, only shown when tabs overflow */
+.gallery-tabs-arrow {
   flex-shrink: 0;
-  /* Prevent sub-pixel jitter */
-  transform: translateZ(0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  align-self: stretch;
+  background: none;
+  border: none;
+  color: var(--primary-red);
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+
+.gallery-tabs-arrow:hover {
+  opacity: 1;
 }
 
 .gallery-tab {
@@ -8940,6 +9074,8 @@ body.hud-hidden .empire-borders-window {
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
   transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
   /* Prevent sub-pixel jitter */
   transform: translateZ(0);
@@ -8988,24 +9124,24 @@ body.hud-hidden .empire-borders-window {
   letter-spacing: 1px;
 }
 
-.gallery-tabs-spacer {
-  flex: 1;
-}
-
-.gallery-expand-btn {
+/* Toggle button — pinned right of tabs, always visible */
+.gallery-toggle-btn {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 6px;
+  width: 32px;
+  height: 32px;
+  margin-right: 8px;
   background: transparent;
   border: 1px solid var(--border-color);
   border-radius: 4px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+  transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
 }
 
-.gallery-expand-btn:hover {
+.gallery-toggle-btn:hover {
   border-color: var(--primary-red);
   color: var(--primary-red);
   background: rgba(192, 32, 35, 0.1);
@@ -9239,35 +9375,12 @@ body.hud-hidden .empire-borders-window {
   line-height: 1.2;
 }
 
-.gallery-collapse-btn {
-  position: absolute;
-  top: 44px; /* Below window controls */
-  right: 8px;
-  z-index: 150; /* Above gallery content but below window controls */
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 20, 25, 0.85);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
-}
-
-.gallery-collapse-btn:hover {
-  border-color: var(--primary-red);
-  color: var(--primary-red);
-  background: rgba(192, 32, 35, 0.1);
-}
-
-.popup-gallery-section.expanded .gallery-tabs {
-  padding: 8px 16px;
+.popup-gallery-section.expanded .gallery-tabs-bar {
   background: transparent;
+}
+
+.popup-gallery-section.expanded .gallery-tabs-scroll {
+  padding: 8px 16px;
 }
 
 .popup-gallery-section.expanded .gallery-grid-container {

@@ -89,7 +89,6 @@ import type { SitePopupProps, EmpireSeshatTab, AlternateSource } from './types'
 export default function SitePopup({
   site,
   onClose,
-  prefetchedImages,
   onSetProximity,
   onFlyTo,
   onHighlight,
@@ -97,7 +96,6 @@ export default function SitePopup({
   isStandalone = false,
   onMinimizedChange,
   minimizedStackIndex = -1,
-  isLoadingImages = false,
   onSiteUpdate,
   onAskLyra,
   empire,
@@ -266,14 +264,14 @@ export default function SitePopup({
 
   // Site gallery hook
   const siteGalleryHook = useGalleryData({
+    siteId: displaySite.id,
     title: displaySite.title,
     location: displaySite.location,
     lat,
     lng,
     sourceUrl: displaySite.sourceUrl,
-    prefetchedImages,
     isOffline,
-    isLoadingImages
+    isStandalone,
   })
 
   // Empire gallery hook - fetch images from Wikipedia and AWMC maps
@@ -466,6 +464,8 @@ export default function SitePopup({
       {!isStandalone && windowHook.windowState !== 'minimized' && (
         <WindowControls
           windowState={windowHook.windowState}
+          siteId={displaySite.id}
+          isEmpireMode={isEmpireMode}
           onMinimize={windowHook.handleMinimize}
           onMaximize={windowHook.handleMaximize}
           onClose={onClose}
@@ -523,7 +523,15 @@ export default function SitePopup({
             isEmpireMode={isEmpireMode}
             alternateSources={allSources}
             activeSiteId={displaySite.id}
+            siteId={displaySite.id}
             onSourceSelect={(alt) => setOverrideSite(!alt || alt.id === baseSite.id ? null : alternateToSiteData(alt))}
+            onAskLyra={onAskLyra ? () => {
+              if (isEmpireMode && empire) {
+                onAskLyra('empire', empire.id, empireYear)
+              } else if (site) {
+                onAskLyra('site', site.id)
+              }
+            } : undefined}
           />
 
           <div className="popup-body">
@@ -698,23 +706,6 @@ export default function SitePopup({
               />
             )}
 
-            {/* Ask Lyra button */}
-            {onAskLyra && (
-              <button
-                className="ask-lyra-btn"
-                style={{ marginTop: 8 }}
-                onClick={() => {
-                  if (isEmpireMode && empire) {
-                    onAskLyra('empire', empire.id, empireYear)
-                  } else if (site) {
-                    onAskLyra('site', site.id)
-                  }
-                }}
-              >
-                <img src="/lyra.gif" alt="" />
-                Ask Lyra
-              </button>
-            )}
           </div>
         </div>
 
@@ -743,8 +734,6 @@ export default function SitePopup({
             onFullscreenToggle={toggleMapFullscreen}
             onShareGoogleMaps={handleShareGoogleMaps}
             onShareSite={handleShareSite}
-            siteId={displaySite.id}
-            isStandalone={isStandalone}
             mapSectionRef={mapSectionRef}
           />
         </div>
@@ -752,29 +741,13 @@ export default function SitePopup({
 
       {/* Gallery Section */}
       <div className={`popup-gallery-section ${galleryHook.isGalleryExpanded ? 'expanded' : ''}`}>
-        {/* Collapse button */}
-        {galleryHook.isGalleryExpanded && (
-          <button
-            className="gallery-collapse-btn"
-            onClick={() => galleryHook.setIsGalleryExpanded(false)}
-            title="Collapse"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="4 14 10 14 10 20"></polyline>
-              <polyline points="20 10 14 10 14 4"></polyline>
-              <line x1="14" y1="10" x2="21" y2="3"></line>
-              <line x1="3" y1="21" x2="10" y2="14"></line>
-            </svg>
-          </button>
-        )}
-
         {/* Expanded header */}
-        {galleryHook.isGalleryExpanded && (
+        {galleryHook.isGalleryExpanded && !isStandalone && (
           <div
             className="gallery-expanded-header"
-            onMouseDown={!isStandalone ? windowHook.handleTitleBarMouseDown : undefined}
-            onDoubleClick={!isStandalone ? windowHook.handleTitleBarDoubleClick : undefined}
-            style={{ cursor: !isStandalone && windowHook.windowState !== 'maximized' ? 'move' : undefined }}
+            onMouseDown={windowHook.handleTitleBarMouseDown}
+            onDoubleClick={windowHook.handleTitleBarDoubleClick}
+            style={{ cursor: windowHook.windowState !== 'maximized' ? 'move' : undefined }}
           >
             <h2 className="gallery-expanded-title">{displaySite.title}</h2>
             <button
@@ -802,29 +775,52 @@ export default function SitePopup({
           </div>
         )}
 
-        {/* Gallery Tabs */}
-        <GalleryTabs
-          activeTab={galleryHook.activeGalleryTab}
-          onTabChange={galleryHook.setActiveGalleryTab}
-          photoCount={galleryHook.photoItems.length}
-          videoCount={galleryHook.videoItems.length}
-          mapCount={galleryHook.mapItems.length}
-          modelCount={galleryHook.sketchfabItems.length}
-          artifactCount={galleryHook.artifactItems.length}
-          artworkCount={galleryHook.artworkItems.length}
-          bookCount={galleryHook.bookItems.length}
-          paperCount={galleryHook.paperItems.length}
-          mythCount={galleryHook.mythItems.length}
-          isLoadingImages={galleryHook.isLoadingImages}
-          isLoadingVideos={galleryHook.isLoadingVideos}
-          isLoadingMaps={galleryHook.isLoadingMaps}
-          isLoadingModels={galleryHook.isLoadingModels}
-          isLoadingArtifacts={galleryHook.isLoadingArtifacts}
-          isLoadingBooks={galleryHook.isLoadingBooks}
-          isLoadingPapers={galleryHook.isLoadingPapers}
-          isGalleryExpanded={galleryHook.isGalleryExpanded}
-          onExpandToggle={() => galleryHook.setIsGalleryExpanded(true)}
-        />
+        {/* Gallery Tabs Bar — tabs scroll, toggle button always visible */}
+        <div className="gallery-tabs-bar">
+          <GalleryTabs
+            activeTab={galleryHook.activeGalleryTab}
+            onTabChange={galleryHook.setActiveGalleryTab}
+            photoCount={galleryHook.photoItems.length}
+            videoCount={galleryHook.videoItems.length}
+            mapCount={galleryHook.mapItems.length}
+            modelCount={galleryHook.sketchfabItems.length}
+            artifactCount={galleryHook.artifactItems.length}
+            artworkCount={galleryHook.artworkItems.length}
+            bookCount={galleryHook.bookItems.length}
+            paperCount={galleryHook.paperItems.length}
+            mythCount={galleryHook.mythItems.length}
+            isLoadingImages={galleryHook.isLoadingImages}
+            isLoadingVideos={galleryHook.isLoadingVideos}
+            isLoadingMaps={galleryHook.isLoadingMaps}
+            isLoadingModels={galleryHook.isLoadingModels}
+            isLoadingArtifacts={galleryHook.isLoadingArtifacts}
+            isLoadingBooks={galleryHook.isLoadingBooks}
+            isLoadingPapers={galleryHook.isLoadingPapers}
+          />
+          {!isStandalone && (
+            <button
+              className="gallery-toggle-btn"
+              onClick={() => galleryHook.setIsGalleryExpanded(!galleryHook.isGalleryExpanded)}
+              title={galleryHook.isGalleryExpanded ? 'Collapse gallery' : 'Expand gallery'}
+            >
+              {galleryHook.isGalleryExpanded ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="4 14 10 14 10 20"></polyline>
+                  <polyline points="20 10 14 10 14 4"></polyline>
+                  <line x1="14" y1="10" x2="21" y2="3"></line>
+                  <line x1="3" y1="21" x2="10" y2="14"></line>
+                </svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="15 3 21 3 21 9"></polyline>
+                  <polyline points="9 21 3 21 3 15"></polyline>
+                  <line x1="21" y1="3" x2="14" y2="10"></line>
+                  <line x1="3" y1="21" x2="10" y2="14"></line>
+                </svg>
+              )}
+            </button>
+          )}
+        </div>
 
         {/* Gallery Content */}
         <GalleryContent

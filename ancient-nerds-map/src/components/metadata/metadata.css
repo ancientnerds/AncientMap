@@ -47,13 +47,11 @@
 
 .meta-flag {
   width: auto;
-  border-radius: 2px;
   flex-shrink: 0;
 }
 
 .meta-flag-sm {
   height: 14px;
-  border-radius: 1px;
 }
 
 .meta-flag-md {
@@ -64,7 +62,6 @@
 .meta-flag-lg {
   height: 15px;
   vertical-align: middle;
-  border-radius: 1px;
 }
 
 /* Tooltip uses 20px flags */
