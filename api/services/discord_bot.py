@@ -1,5 +1,5 @@
 """
-Discord bot service for Lyra Wiskerbyte.
+Discord bot service for Lyra Whiskerbyte.
 
 Provides slash commands (/ask, /credits, /link) and DM support.
 Started as an asyncio task within the FastAPI lifespan.
@@ -231,7 +231,7 @@ async def _send_response(
 # ---------------------------------------------------------------------------
 
 class LyraBot(discord.Client):
-    """Discord bot client for Lyra Wiskerbyte."""
+    """Discord bot client for Lyra Whiskerbyte."""
 
     def __init__(self):
         intents = discord.Intents.default()

@@ -1046,7 +1046,7 @@ def main() -> None:
     args = parser.parse_args()
 
     setup_logging()
-    logger.info("Lyra Wiskerbyte pipeline starting...")
+    logger.info("Lyra Whiskerbyte pipeline starting...")
 
     settings = LyraSettings()
 
