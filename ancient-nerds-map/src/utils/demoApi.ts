@@ -80,7 +80,7 @@ export interface AppDemoSetters {
   setDemoMode: (on: boolean) => void
   setSelectedSources: (sources: string[]) => void
   handleLoadSources: (sourceIds: string[]) => void
-  openSitePopup: (site: SiteData) => Promise<void>
+  openSitePopup: (site: SiteData) => void
   closeAllPopups: () => void
   sitesRef: React.MutableRefObject<SiteData[]>
 }
@@ -113,7 +113,8 @@ export function registerAppDemoApi(setters: AppDemoSetters): void {
         console.warn(`[DemoAPI] Site not found: "${name}"`)
         return Promise.resolve()
       }
-      return setters.openSitePopup(site)
+      setters.openSitePopup(site)
+      return Promise.resolve()
     },
     closeAllPopups: () => setters.closeAllPopups(),
     setDemoTooltips: (visible) => {

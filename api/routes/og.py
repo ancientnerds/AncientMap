@@ -415,8 +415,8 @@ async def get_share_page(
     country = site["country"]
 
     og_image_url = f"{base_url}/api/og/{site_id}"
-    app_url = html.escape(f"/?site={site_id}")
-    canonical_url = html.escape(f"{base_url}/?site={site_id}")
+    app_url = html.escape(f"/site.html?id={site_id}")
+    canonical_url = html.escape(f"{base_url}/site.html?id={site_id}")
 
     # OG description: just country
     og_desc = country if country else description
