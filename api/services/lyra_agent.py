@@ -1,7 +1,7 @@
 """
 Lyra RAG Agent — LangChain agent with tool calling.
 
-Lyra Wiskerbyte is an archaeological agent who monitors YouTube channels,
+Lyra Whiskerbyte is an archaeological agent who monitors YouTube channels,
 extracts transcripts, and can chat about any of the 40K+ sites in the database.
 
 Swappable LLM via env vars:

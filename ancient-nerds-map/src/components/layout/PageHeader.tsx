@@ -51,7 +51,7 @@ export default function PageHeader({ children, rightSection, speechBubble, onAva
       {children}
       <img
         src="/lyra.png"
-        alt="Lyra Wiskerbyte"
+        alt="Lyra Whiskerbyte"
         className="page-header-avatar lyra-avatar-clickable"
         onClick={onAvatarClick}
       />

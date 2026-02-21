@@ -1,5 +1,5 @@
 /**
- * LyraProfileModal - Draggable agent dossier window for Lyra Wiskerbyte.
+ * LyraProfileModal - Draggable agent dossier window for Lyra Whiskerbyte.
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
@@ -151,7 +151,7 @@ export default function LyraProfileModal({ onClose }: Props) {
         <div className="lyra-poster-left">
           <div className="lyra-poster-banner">AGENT DOSSIER</div>
           <a className="lyra-poster-portrait" href={NFT_URL} target="_blank" rel="noopener noreferrer">
-            <img src="/lyra.gif" alt="Lyra Wiskerbyte" />
+            <img src="/lyra.gif" alt="Lyra Whiskerbyte" />
             <span className="lyra-poster-nft-badge">NFT #001</span>
           </a>
           <div className="lyra-poster-name">

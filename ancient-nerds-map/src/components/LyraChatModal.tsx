@@ -1,5 +1,5 @@
 /**
- * LyraChatModal — Chat with Lyra Wiskerbyte.
+ * LyraChatModal — Chat with Lyra Whiskerbyte.
  *
  * Features:
  * - Admin auth gate (Bearer key + Turnstile)
@@ -866,7 +866,7 @@ export default function LyraChatModal({
           onClick={() => setShowDossier(true)}
         />
         <div>
-          <div className="lyra-chat-header-name">Lyra Wiskerbyte</div>
+          <div className="lyra-chat-header-name">Lyra Whiskerbyte</div>
           {messages.length === 0 ? (
             <div className="lyra-chat-speech-bubble">
               I can search 750K+ sites, find news, and answer archaeology questions!
@@ -970,7 +970,7 @@ export default function LyraChatModal({
           <div className="lyra-chat-messages">
             <div className="lyra-auth-gate">
               <img src="/lyra.gif" alt="Lyra" className="lyra-auth-gate-avatar" />
-              <div className="lyra-auth-gate-name">Lyra Wiskerbyte</div>
+              <div className="lyra-auth-gate-name">Lyra Whiskerbyte</div>
               <div className="lyra-auth-gate-subtitle">Sign in to chat</div>
               <button
                 className="lyra-auth-discord-btn"
