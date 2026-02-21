@@ -57,6 +57,16 @@
   color: var(--text-primary, #e8e8e8);
   font-family: 'Orbitron', sans-serif;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.page-header-flag {
+  width: 18px;
+  height: 13px;
+  object-fit: cover;
+  vertical-align: -1px;
+  margin-right: 4px;
 }
 
 /* ── LIVE indicator wrapper — pushed to the far right ── */

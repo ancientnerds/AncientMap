@@ -98,7 +98,6 @@ export interface WindowResizeStart {
 export interface SitePopupProps {
   site?: SiteData
   onClose: () => void
-  prefetchedImages?: { wiki: GalleryImage[] } | null
   onSetProximity?: (coords: [number, number]) => void
   onFlyTo?: (coords: [number, number]) => void
   onHighlight?: (siteId: string | null) => void
@@ -106,7 +105,6 @@ export interface SitePopupProps {
   isStandalone?: boolean
   onMinimizedChange?: (isMinimized: boolean) => void
   minimizedStackIndex?: number
-  isLoadingImages?: boolean
   onSiteUpdate?: (siteId: string, updatedSite: SiteData) => void
   onAskLyra?: (contextType: 'site' | 'empire', contextId: string, contextYear?: number) => void
 
@@ -159,7 +157,9 @@ export interface HeroHeaderProps {
   isEmpireMode?: boolean
   alternateSources?: AlternateSource[]
   activeSiteId?: string
+  siteId?: string
   onSourceSelect?: (alt: AlternateSource | null) => void
+  onAskLyra?: () => void
 }
 
 export interface LocationSectionProps {
@@ -215,8 +215,6 @@ export interface MapSectionProps {
   onShareSite: () => void
 
   // Other
-  siteId: string
-  isStandalone?: boolean
   mapSectionRef: React.RefObject<HTMLDivElement>
 }
 
@@ -226,6 +224,8 @@ export type EmpireSeshatTab = 'overview' | 'stats' | 'military' | 'society' | 'h
 
 export interface WindowControlsProps {
   windowState: WindowState
+  siteId?: string
+  isEmpireMode?: boolean
   onMinimize: (e: React.MouseEvent) => void
   onMaximize: (e: React.MouseEvent) => void
   onClose: () => void
@@ -267,8 +267,6 @@ export interface GalleryTabsProps {
   isLoadingArtifacts?: boolean
   isLoadingBooks?: boolean
   isLoadingPapers?: boolean
-  isGalleryExpanded: boolean
-  onExpandToggle: () => void
 }
 
 export interface GalleryGridProps {

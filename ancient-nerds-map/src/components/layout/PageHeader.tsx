@@ -9,6 +9,7 @@ interface PageHeaderProps {
   speechBubble?: string
   onAvatarClick?: () => void
   currentPage?: string
+  hideLyra?: boolean
 }
 
 function LiveIndicator() {
@@ -39,7 +40,7 @@ function LiveIndicator() {
   )
 }
 
-export default function PageHeader({ children, rightSection, speechBubble, onAvatarClick, currentPage }: PageHeaderProps) {
+export default function PageHeader({ children, rightSection, speechBubble, onAvatarClick, currentPage, hideLyra }: PageHeaderProps) {
   return (
     <header className="page-header">
       <a href="/globe.html" className="page-header-brand">
@@ -49,12 +50,14 @@ export default function PageHeader({ children, rightSection, speechBubble, onAva
       <HamburgerNav currentPage={currentPage} />
       <div className="page-header-divider" />
       {children}
-      <img
-        src="/lyra.png"
-        alt="Lyra Whiskerbyte"
-        className="page-header-avatar lyra-avatar-clickable"
-        onClick={onAvatarClick}
-      />
+      {!hideLyra && (
+        <img
+          src="/lyra.png"
+          alt="Lyra Whiskerbyte"
+          className="page-header-avatar lyra-avatar-clickable"
+          onClick={onAvatarClick}
+        />
+      )}
       {speechBubble && <div className="page-header-bubble">{speechBubble}</div>}
       <div className="page-header-live-wrap">
         <LiveIndicator />

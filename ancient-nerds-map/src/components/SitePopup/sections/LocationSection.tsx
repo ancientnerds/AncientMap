@@ -12,19 +12,15 @@ export function LocationSection({
   onMinimize
 }: LocationSectionProps) {
   return (
-    <>
+    <div className="popup-location-row">
       {location && (
-        <div className="popup-location">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-            <circle cx="12" cy="10" r="3"></circle>
-          </svg>
+        <>
           <CountryFlag country={location} size="lg" />
-          {location}
-        </div>
+          <span className="popup-location-name">{location}</span>
+        </>
       )}
 
-      <div className="popup-coordinates">
+      <span className="popup-coords-inline">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <circle cx="12" cy="12" r="10"></circle>
           <line x1="2" y1="12" x2="22" y2="12"></line>
@@ -67,7 +63,7 @@ export function LocationSection({
             </button>
           )}
         </div>
-      </div>
-    </>
+      </span>
+    </div>
   )
 }

@@ -1077,6 +1077,53 @@ class TokenUsageLog(Base):
 
 
 # =============================================================================
+# Site Interactions (Likes & Bookmarks)
+# =============================================================================
+
+
+class SiteLike(Base):
+    """A user's like on an archaeological site (public, with count)."""
+    __tablename__ = "site_likes"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("discord_users.id", ondelete="CASCADE"), nullable=False,
+    )
+    site_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("unified_sites.id", ondelete="CASCADE"), nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "site_id", name="uq_site_like"),
+        Index("idx_site_likes_site", "site_id"),
+    )
+
+
+class SiteBookmark(Base):
+    """A user's private bookmark on an archaeological site."""
+    __tablename__ = "site_bookmarks"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("discord_users.id", ondelete="CASCADE"), nullable=False,
+    )
+    site_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("unified_sites.id", ondelete="CASCADE"), nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "site_id", name="uq_site_bookmark"),
+        Index("idx_site_bookmarks_user", "user_id"),
+    )
+
+
+# =============================================================================
 # Helper Functions
 # =============================================================================
 

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import type { HeroHeaderProps, AlternateSource } from '../types'
 import { MetadataBadge } from '../../metadata'
 import LazyImage from '../../LazyImage'
+import { useSiteInteractions } from '../../../hooks/useSiteInteractions'
 
 export function HeroHeader({
   title,
@@ -23,8 +24,14 @@ export function HeroHeader({
   isEmpireMode = false,
   alternateSources,
   activeSiteId,
-  onSourceSelect
+  siteId,
+  onSourceSelect,
+  onAskLyra
 }: HeroHeaderProps) {
+  const { likeCount, liked, bookmarked, toggleLike, toggleBookmark } = useSiteInteractions(
+    !isEmpireMode ? siteId : undefined,
+  )
+
   // For empires, we don't show category/period badges
   const showBadges = !isEmpireMode && category && period
 
@@ -209,6 +216,43 @@ export function HeroHeader({
             <MetadataBadge label={category!} color={catColor!} size="lg" />
             <MetadataBadge label={period!} color={periodColor!} size="lg" />
           </div>
+        )}
+      </div>
+
+      <div className="hero-actions" onMouseDown={(e) => e.stopPropagation()}>
+        {!isEmpireMode && siteId && (
+          <>
+            <button
+              className={`hero-action-btn hero-like-btn ${liked ? 'active' : ''}`}
+              onClick={(e) => { e.stopPropagation(); toggleLike() }}
+              title={liked ? 'Unlike this site' : 'Like this site'}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill={liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+              </svg>
+              {likeCount > 0 && <span className="hero-like-count">{likeCount}</span>}
+            </button>
+            <button
+              className={`hero-action-btn hero-bookmark-btn ${bookmarked ? 'active' : ''}`}
+              onClick={(e) => { e.stopPropagation(); toggleBookmark() }}
+              title={bookmarked ? 'Remove bookmark' : 'Bookmark this site'}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill={bookmarked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+              </svg>
+            </button>
+          </>
+        )}
+        {onAskLyra && (
+          <button
+            className="hero-ask-lyra"
+            onClick={(e) => { e.stopPropagation(); onAskLyra() }}
+            onMouseDown={(e) => e.stopPropagation()}
+            title="Ask Lyra about this site"
+          >
+            <img src="/lyra.png" alt="Lyra" />
+            <span className="hero-ask-lyra-label">Ask Lyra</span>
+          </button>
         )}
       </div>
     </div>
