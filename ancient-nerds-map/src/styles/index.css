@@ -4544,6 +4544,10 @@ a.popup-window-btn {
   color: #f0b429;
 }
 
+.hero-share-btn.active {
+  color: #22c55e;
+}
+
 /* Ask Lyra — avatar + label */
 .hero-ask-lyra {
   display: flex;

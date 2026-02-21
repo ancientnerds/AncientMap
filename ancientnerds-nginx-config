@@ -100,6 +100,21 @@ server {
         add_header Cache-Control "public, max-age=86400";
     }
 
+    # SEO: Pre-rendered HTML for crawlers hitting /site.html?id={uuid}
+    location = /site.html {
+        set $seo_redirect_site "";
+        if ($is_bot) {
+            set $seo_redirect_site "B";
+        }
+        if ($arg_id ~ "^[0-9a-fA-F-]{36}$") {
+            set $seo_redirect_site "${seo_redirect_site}S";
+        }
+        if ($seo_redirect_site = "BS") {
+            rewrite ^ /seo/site/$arg_id? last;
+        }
+        try_files $uri =404;
+    }
+
     location / {
         try_files $uri $uri/ /index.html;
     }
