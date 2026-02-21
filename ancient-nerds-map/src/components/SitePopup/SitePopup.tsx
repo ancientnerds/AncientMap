@@ -532,6 +532,8 @@ export default function SitePopup({
                 onAskLyra('site', site.id)
               }
             } : undefined}
+            onShareSite={handleShareSite}
+            siteShareSuccess={siteShareSuccess}
           />
 
           <div className="popup-body">
@@ -727,13 +729,11 @@ export default function SitePopup({
             showStreetView={showStreetView}
             isMapFullscreen={isMapFullscreen}
             shareSuccess={shareSuccess}
-            siteShareSuccess={siteShareSuccess}
             onGoogleMapsLoad={() => setGoogleMapsLoaded(true)}
             onGoogleMapsError={() => setGoogleMapsError(true)}
             onStreetViewToggle={() => setShowStreetView(!showStreetView)}
             onFullscreenToggle={toggleMapFullscreen}
             onShareGoogleMaps={handleShareGoogleMaps}
-            onShareSite={handleShareSite}
             mapSectionRef={mapSectionRef}
           />
         </div>

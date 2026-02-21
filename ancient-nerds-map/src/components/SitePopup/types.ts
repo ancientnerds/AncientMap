@@ -160,6 +160,8 @@ export interface HeroHeaderProps {
   siteId?: string
   onSourceSelect?: (alt: AlternateSource | null) => void
   onAskLyra?: () => void
+  onShareSite?: () => void
+  siteShareSuccess?: boolean
 }
 
 export interface LocationSectionProps {
@@ -204,7 +206,6 @@ export interface MapSectionProps {
   showStreetView: boolean
   isMapFullscreen: boolean
   shareSuccess: boolean
-  siteShareSuccess: boolean
 
   // Handlers
   onGoogleMapsLoad: () => void
@@ -212,7 +213,6 @@ export interface MapSectionProps {
   onStreetViewToggle: () => void
   onFullscreenToggle: () => void
   onShareGoogleMaps: () => void
-  onShareSite: () => void
 
   // Other
   mapSectionRef: React.RefObject<HTMLDivElement>
