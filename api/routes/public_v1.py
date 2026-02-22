@@ -17,8 +17,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from api.cache import cache_get, cache_set
 from api.build_info import BUILD_HASH
+from api.cache import cache_get, cache_set
 from api.schemas.public_v1 import (
     ChannelPublic,
     FacetSource,
@@ -33,8 +33,8 @@ from api.schemas.public_v1 import (
     SourceDetailResponse,
     SourcePublic,
     SourcesResponse,
-    StatusResponse,
     StatsResponse,
+    StatusResponse,
 )
 from api.services.rate_limiter import RateLimiter, get_client_ip
 from pipeline.database import get_db
