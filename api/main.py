@@ -9,7 +9,6 @@ Updated: BitNet LLM optimized for faster responses
 
 import logging
 import os
-import subprocess
 
 from dotenv import load_dotenv
 
@@ -46,6 +45,7 @@ from api.routes import (
     vector_sync,
     wiki_images,
 )
+from api.build_info import BUILD_HASH
 from api.routes.public_v1 import create_public_api
 from pipeline.config import get_settings
 
@@ -275,23 +275,6 @@ app.mount("/data/images/wiki", StaticFiles(directory=str(_wiki_images_dir)), nam
 _screenshots_dir = Path("public/data/news/screenshots")
 _screenshots_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/api/news/screenshots", StaticFiles(directory=str(_screenshots_dir)), name="news-screenshots")
-
-
-def _get_build_hash() -> str:
-    """Get build hash from env var or git."""
-    env_hash = os.environ.get("BUILD_HASH")
-    if env_hash:
-        return env_hash
-    try:
-        return subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"],
-            stderr=subprocess.DEVNULL,
-        ).decode().strip()
-    except Exception:
-        return "unknown"
-
-
-BUILD_HASH = _get_build_hash()
 
 
 @app.get("/")
