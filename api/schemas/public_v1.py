@@ -7,7 +7,6 @@ and include OpenAPI examples for auto-generated documentation.
 
 from pydantic import BaseModel, Field
 
-
 # =============================================================================
 # Sites
 # =============================================================================
