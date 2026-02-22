@@ -164,6 +164,7 @@ function FilterPanel({
   onMeasureUnitChange,
   onActiveTabChange,
 }: FilterPanelProps) {
+  const globeSearchRef = useRef<HTMLInputElement>(null)
   const [searchResultsMinimized, setSearchResultsMinimized] = useState(false)
   const [filterByMinimized, setFilterByMinimized] = useState(false)
   const [categoryFilter, setCategoryFilter] = useState('')
@@ -453,6 +454,7 @@ function FilterPanel({
                   <path d="m21 21-4.35-4.35"></path>
                 </svg>
                 <input
+                  ref={globeSearchRef}
                   type="text"
                   className="search-input"
                   placeholder="Search sites..."
@@ -468,6 +470,7 @@ function FilterPanel({
                   <button className="search-clear-btn" onClick={() => {
                     onSearchChange('')
                     onSiteListClick?.(null)  // Deselect any selected search result
+                    globeSearchRef.current?.focus()
                   }} title="Clear search">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <line x1="18" y1="6" x2="6" y2="18"></line>

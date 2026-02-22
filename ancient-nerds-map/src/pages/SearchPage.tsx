@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import PageHeader from '../components/layout/PageHeader'
 import { SiteCard, ViewOnGlobeLink } from '../components/SiteCard'
 import { SearchFilters } from '../components/SearchFilters'
@@ -14,6 +14,7 @@ import type { SourceMeta } from '../types/data'
 import '../styles/search-page.css'
 
 export default function SearchPage() {
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const [sites, setSites] = useState<SiteData[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
@@ -165,6 +166,7 @@ export default function SearchPage() {
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
             <input
+              ref={searchInputRef}
               type="text"
               className="search-bar-input"
               placeholder={isLoading ? 'Loading sites...' : 'Search archaeological sites...'}
@@ -173,6 +175,17 @@ export default function SearchPage() {
               disabled={isLoading}
               autoFocus
             />
+            {search.searchQuery && (
+              <button
+                className="search-bar-clear"
+                onClick={() => { search.setSearchQuery(''); searchInputRef.current?.focus() }}
+                title="Clear search"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            )}
             <button
               className={`news-page-chip${searchAllSources ? ' active' : ''}`}
               onClick={() => setSearchAllSources(!searchAllSources)}
