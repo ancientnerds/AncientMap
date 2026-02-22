@@ -165,7 +165,7 @@ export function ShareSiteLink({ siteId, title }: { siteId: string; title: string
     e.preventDefault()
     e.stopPropagation()
 
-    const shareUrl = `${window.location.origin}/api/og/share/${siteId}`
+    const shareUrl = `${window.location.origin}/site.html?id=${siteId}`
 
     if (navigator.share) {
       try {
