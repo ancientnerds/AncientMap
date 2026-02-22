@@ -36,28 +36,24 @@ async def seo_site_page(
 
     # Nginx proxies over HTTP internally; force https for public URLs
     base_url = str(request.base_url).rstrip('/').replace('http://', 'https://')
-    title_escaped = html.escape(site["name"])
     country_escaped = html.escape(site["country"])
     site_type_escaped = html.escape(site["site_type"] or "Archaeological site")
     og_image_url = f"{base_url}/api/og/{site_id}"
     canonical_url = html.escape(f"{base_url}/site.html?id={site_id}")
 
-    # Rich description: country · category · period · coords · description
-    desc_parts: list[str] = []
+    # Title: "Site Name | Country · Category"
+    title_parts: list[str] = []
     if site["country"]:
-        desc_parts.append(site["country"])
+        title_parts.append(site["country"])
     if site["site_type"]:
-        desc_parts.append(site["site_type"])
-    if site["period"]:
-        desc_parts.append(site["period"])
-    if site["lat"] is not None and site["lon"] is not None:
-        lat, lon = site["lat"], site["lon"]
-        lat_d = "N" if lat >= 0 else "S"
-        lon_d = "E" if lon >= 0 else "W"
-        desc_parts.append(f"{abs(lat):.4f}° {lat_d}, {abs(lon):.4f}° {lon_d}")
-    if site["description"]:
-        desc_parts.append(site["description"])
-    desc_escaped = html.escape(" · ".join(desc_parts) if desc_parts else "Archaeological site")
+        title_parts.append(site["site_type"])
+    og_title = site["name"]
+    if title_parts:
+        og_title += " | " + " · ".join(title_parts)
+    title_escaped = html.escape(og_title)
+
+    # Description: just the site description text
+    desc_escaped = html.escape(site["description"] or "Archaeological site on Ancient Nerds")
 
     # JSON-LD structured data for Google rich results
     ld_json = {
@@ -105,7 +101,7 @@ async def seo_site_page(
     <meta property="og:title" content="{title_escaped}">
     <meta property="og:description" content="{desc_escaped}">
     <meta property="og:image" content="{og_image_url}">
-    <meta property="og:site_name" content="Ancient Nerds">
+    <meta property="og:site_name" content="ANCIENT NERDS">
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">

@@ -31,6 +31,8 @@ export default function SearchPage() {
   const [loadingSources, setLoadingSources] = useState<Set<string>>(new Set())
   const [searchAllSources, setSearchAllSources] = useState(false)
   const [randomSites, setRandomSites] = useState<SiteData[]>([])
+  const randomPoolRef = useRef<SiteData[]>([])
+  const [randomVisible, setRandomVisible] = useState(0)
 
   // Load default source on mount
   useEffect(() => {
@@ -151,16 +153,19 @@ export default function SearchPage() {
 
   const handleRandom = useCallback(() => {
     if (sites.length === 0) return
-    const colWidth = 296 // 280px card + 16px gap
-    const rowHeight = 280 // approximate card height + gap
-    const headerHeight = 130 // sticky header + bar
-    const cols = Math.max(1, Math.floor(window.innerWidth / colWidth))
-    const rows = Math.max(1, Math.floor((window.innerHeight - headerHeight) / rowHeight))
-    const count = Math.min(50, Math.max(10, cols * rows))
+    setSearchAllSources(true)
     const shuffled = [...sites].sort(() => Math.random() - 0.5)
-    setRandomSites(shuffled.slice(0, count))
+    randomPoolRef.current = shuffled
+    setRandomSites(shuffled.slice(0, 50))
+    setRandomVisible(50)
     search.setSearchQuery('')
   }, [sites, search])
+
+  const handleLoadMoreRandom = useCallback(() => {
+    const next = randomVisible + 50
+    setRandomSites(randomPoolRef.current.slice(0, next))
+    setRandomVisible(next)
+  }, [randomVisible])
 
   const hasActiveFilters = selectedSources.length !== sources.length ||
     selectedCategories.length !== categories.length ||
@@ -185,14 +190,14 @@ export default function SearchPage() {
               className="search-bar-input"
               placeholder={isLoading ? 'Loading sites...' : 'Search archaeological sites...'}
               value={search.searchQuery}
-              onChange={e => { search.setSearchQuery(e.target.value); if (randomSites.length) setRandomSites([]) }}
+              onChange={e => { search.setSearchQuery(e.target.value); if (randomSites.length) { setRandomSites([]); randomPoolRef.current = []; setRandomVisible(0) } }}
               disabled={isLoading}
               autoFocus
             />
             {(search.searchQuery || randomSites.length > 0) && (
               <button
                 className="search-bar-clear"
-                onClick={() => { search.setSearchQuery(''); setRandomSites([]); searchInputRef.current?.focus() }}
+                onClick={() => { search.setSearchQuery(''); setRandomSites([]); randomPoolRef.current = []; setRandomVisible(0); searchInputRef.current?.focus() }}
                 title="Clear search"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -207,16 +212,11 @@ export default function SearchPage() {
               All sources
             </button>
             <button
-              className="search-bar-filter-btn"
+              className={`news-page-chip${randomSites.length > 0 ? ' active' : ''}`}
               onClick={handleRandom}
               disabled={isLoading}
               title="Show random sites"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="16 3 21 3 21 8" /><line x1="4" y1="20" x2="21" y2="3" />
-                <polyline points="21 16 21 21 16 21" /><line x1="15" y1="15" x2="21" y2="21" />
-                <line x1="4" y1="4" x2="9" y2="9" />
-              </svg>
               Random
             </button>
             <button
@@ -226,7 +226,7 @@ export default function SearchPage() {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
               </svg>
-              Filters
+              <span className="search-filter-label">Filters</span>
             </button>
           </div>
         </div>
@@ -302,6 +302,13 @@ export default function SearchPage() {
                 />
               ))}
             </div>
+            {randomVisible < randomPoolRef.current.length && (
+              <div className="search-load-more">
+                <button className="news-page-chip" onClick={handleLoadMoreRandom}>
+                  Load 50 more
+                </button>
+              </div>
+            )}
           </>
         )}
 
