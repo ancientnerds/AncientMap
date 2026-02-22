@@ -82,8 +82,8 @@ COPY ancient-nerds-map/src/data/seshat/ ./ancient-nerds-map/src/data/seshat/
 COPY font[s]/ ./fonts/
 COPY log[o]/ ./logo/
 
-# Create OG cache directory with correct permissions
-RUN mkdir -p /tmp/og-cache && chown appuser:appgroup /tmp/og-cache
+# Ensure appuser can write to /tmp for OG image cache
+RUN chmod 1777 /tmp
 
 # Set ownership
 RUN chown -R appuser:appgroup /app
