@@ -150,6 +150,14 @@
   margin-bottom: 16px;
 }
 
+/* Random chip — glow on hover when already active (re-shuffle) */
+.search-bar-inner .news-page-chip.active:hover {
+  background: rgba(192, 32, 35, 0.25);
+  border-color: var(--primary-red-hover);
+  color: var(--primary-red-hover);
+  box-shadow: 0 0 12px rgba(192, 32, 35, 0.3);
+}
+
 /* Load more button */
 .search-load-more {
   display: flex;
