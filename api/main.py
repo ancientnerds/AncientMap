@@ -178,35 +178,9 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"[STARTUP] Failed to pre-warm cache: {e}")
 
-    # Launch Playwright browser for OG image screenshots
-    try:
-        from playwright.async_api import async_playwright
-        pw = await async_playwright().start()
-        browser = await pw.chromium.launch(headless=True)
-        app.state.pw = pw
-        app.state.browser = browser
-        print("[STARTUP] Playwright browser launched for OG screenshots", flush=True)
-    except Exception as e:
-        app.state.pw = None
-        app.state.browser = None
-        print(f"[STARTUP] Playwright launch failed (OG will use PIL fallback): {e}", flush=True)
-
     yield
     # Shutdown
     logger.info("Shutting down...")
-
-    # Close Playwright browser
-    if getattr(app.state, "browser", None):
-        try:
-            await app.state.browser.close()
-        except Exception as e:
-            logger.warning(f"Playwright browser close error: {e}")
-    if getattr(app.state, "pw", None):
-        try:
-            await app.state.pw.stop()
-        except Exception as e:
-            logger.warning(f"Playwright stop error: {e}")
-
     try:
         from api.services.discord_bot import stop_bot
         await stop_bot()
