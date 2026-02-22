@@ -1,0 +1,485 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   API Documentation Page
+   Follows site UI standards: --bg-main, --border-color, --primary-red,
+   Orbitron headings, Inter body, same card/button patterns as news/db pages.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.api-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
+  background: var(--bg-main, #0a1520);
+  color: var(--text-primary, #e8e8e8);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Loading / error states */
+.api-status {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.5));
+  font-size: 13px;
+}
+.api-status-error {
+  color: var(--primary-red, #c02023);
+}
+
+/* Content container */
+.api-content {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 16px 20px 60px;
+}
+
+/* ── Info bar: base URL + rate pill ── */
+
+.api-info-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.api-base-url {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-card, rgba(0, 20, 25, 0.35));
+  border: 1px solid var(--border-color, rgba(0, 180, 180, 0.2));
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.api-base-url:hover {
+  border-color: rgba(0, 180, 180, 0.4);
+}
+
+.api-base-label {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.5));
+  flex-shrink: 0;
+}
+
+.api-base-url code {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 12px;
+  color: var(--text-primary, #e8e8e8);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.api-copy-hint {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.5));
+  flex-shrink: 0;
+  transition: color 0.2s;
+}
+.api-base-url:hover .api-copy-hint {
+  color: var(--primary-red, #c02023);
+}
+
+.api-rate-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(192, 32, 35, 0.3);
+  background: rgba(192, 32, 35, 0.06);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--primary-red, #c02023);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.api-rate-pill svg {
+  opacity: 0.7;
+}
+
+/* Intro text */
+.api-intro-text {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.5));
+  margin: 0 0 20px;
+}
+
+/* ── Section headings ── */
+
+.api-section {
+  margin-bottom: 24px;
+}
+
+.api-section-label {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.5));
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-color, rgba(0, 180, 180, 0.12));
+}
+
+/* ── Endpoint cards ── */
+
+.api-card {
+  background: var(--bg-card, rgba(0, 20, 25, 0.35));
+  border: 1px solid var(--border-color, rgba(0, 180, 180, 0.2));
+  border-radius: 8px;
+  margin-bottom: 8px;
+  transition: border-color 0.2s, background 0.2s;
+}
+.api-card:hover {
+  border-color: rgba(0, 180, 180, 0.35);
+}
+.api-card.expanded {
+  border-color: rgba(0, 180, 180, 0.35);
+  background: rgba(0, 20, 25, 0.5);
+}
+
+.api-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.api-method-badge {
+  padding: 2px 7px;
+  border-radius: 3px;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  flex-shrink: 0;
+}
+
+.api-path {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 12px;
+  color: var(--text-primary, #e8e8e8);
+  flex-shrink: 0;
+}
+
+.api-card-summary {
+  font-size: 11px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.5));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.api-card-chevron {
+  flex-shrink: 0;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.35));
+  transition: transform 0.2s;
+}
+.api-card-chevron.open {
+  transform: rotate(180deg);
+}
+
+/* Card body (expanded) */
+
+.api-card-body {
+  padding: 0 14px 14px;
+  border-top: 1px solid var(--border-color, rgba(0, 180, 180, 0.08));
+}
+
+.api-card-desc {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.5));
+  margin: 10px 0;
+  white-space: pre-line;
+}
+
+/* ── Parameter inputs ── */
+
+.api-card-params {
+  margin: 10px 0;
+}
+
+.api-card-params-label {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.4));
+  margin-bottom: 8px;
+}
+
+.api-param-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.api-param-row-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 140px;
+  flex-shrink: 0;
+}
+
+.api-param-name {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 11px;
+  color: var(--text-primary, #e8e8e8);
+}
+
+.api-param-req {
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--primary-red, #c02023);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.api-param-type {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.api-param-input {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-color, rgba(0, 180, 180, 0.15));
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 11px;
+  color: var(--text-primary, #e8e8e8);
+  outline: none;
+  transition: border-color 0.2s;
+}
+.api-param-input::placeholder {
+  color: rgba(255, 255, 255, 0.2);
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+}
+.api-param-input:focus {
+  border-color: rgba(0, 180, 180, 0.45);
+}
+
+/* ── Execute bar ── */
+
+.api-exec-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color, rgba(0, 180, 180, 0.08));
+}
+
+.api-exec-btn {
+  padding: 6px 16px;
+  border-radius: 4px;
+  border: 1px solid var(--primary-red, #c02023);
+  background: rgba(192, 32, 35, 0.12);
+  color: var(--primary-red, #c02023);
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+.api-exec-btn:hover:not(:disabled) {
+  background: rgba(192, 32, 35, 0.25);
+}
+.api-exec-btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.api-exec-secondary {
+  padding: 5px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color, rgba(0, 180, 180, 0.2));
+  background: transparent;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.5));
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+  flex-shrink: 0;
+}
+.api-exec-secondary:hover {
+  color: var(--text-primary, #e8e8e8);
+  border-color: rgba(0, 180, 180, 0.4);
+}
+
+.api-exec-url {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+/* ── Response panel ── */
+
+.api-response {
+  margin-top: 10px;
+  border: 1px solid var(--border-color, rgba(0, 180, 180, 0.15));
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.api-response-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid var(--border-color, rgba(0, 180, 180, 0.08));
+}
+
+.api-response-status {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+.api-response-status.ok {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.12);
+}
+.api-response-status.err {
+  color: var(--primary-red, #c02023);
+  background: rgba(192, 32, 35, 0.12);
+}
+
+.api-response-time {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.api-response-copy {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 3px;
+  border: 1px solid var(--border-color, rgba(0, 180, 180, 0.15));
+  background: transparent;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.4));
+  font-family: 'Inter', sans-serif;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+.api-response-copy:hover {
+  color: var(--text-primary, #e8e8e8);
+  border-color: rgba(0, 180, 180, 0.35);
+}
+
+.api-response-body {
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.3);
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.6);
+  overflow-x: auto;
+  max-height: 400px;
+  overflow-y: auto;
+  margin: 0;
+  white-space: pre;
+  tab-size: 2;
+}
+
+/* ── JSON syntax highlighting ── */
+
+.api-response-body .jh-key {
+  color: #5ccfe6;              /* teal — object keys */
+}
+.api-response-body .jh-str {
+  color: #bae67e;              /* green — string values */
+}
+.api-response-body .jh-num {
+  color: #d4bfff;              /* lavender — numbers */
+}
+.api-response-body .jh-bool {
+  color: #ffa759;              /* orange — true/false/null */
+}
+
+/* ── Responsive ── */
+
+@media (max-width: 640px) {
+  .api-content {
+    padding: 12px 10px 40px;
+  }
+
+  .api-info-bar {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .api-card-header {
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 8px 10px;
+  }
+
+  .api-card-summary {
+    width: 100%;
+    order: 3;
+  }
+
+  .api-card-body {
+    padding: 0 10px 10px;
+  }
+
+  .api-param-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+
+  .api-param-row-left {
+    min-width: 0;
+  }
+
+  .api-exec-bar {
+    flex-wrap: wrap;
+  }
+
+  .api-exec-url {
+    width: 100%;
+    order: 3;
+  }
+}

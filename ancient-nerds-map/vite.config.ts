@@ -53,12 +53,13 @@ export default defineConfig({
         articles: resolve(__dirname, 'articles.html'),
         account: resolve(__dirname, 'account.html'),
         site: resolve(__dirname, 'site.html'),
+        api: resolve(__dirname, 'api.html'),
       },
     },
   },
   server: {
     proxy: {
-      '/api': {
+      '/api/': {
         target: 'http://localhost:8000',
         changeOrigin: true,
         timeout: 60000, // 60 seconds - backend connectors can take time

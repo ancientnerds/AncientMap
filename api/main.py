@@ -36,7 +36,6 @@ from api.routes import (
     news,
     og,
     patreon,
-    public_v1,
     radar,
     seo,
     sitemap,
@@ -47,6 +46,7 @@ from api.routes import (
     vector_sync,
     wiki_images,
 )
+from api.routes.public_v1 import create_public_api
 from pipeline.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -233,7 +233,7 @@ app.include_router(streetview.router, prefix="/api/streetview", tags=["streetvie
 app.include_router(content.router, prefix="/api/content", tags=["content"])
 app.include_router(news.router, prefix="/api/news", tags=["news"])
 app.include_router(radar.router, prefix="/api/radar", tags=["radar"])
-app.include_router(public_v1.router, prefix="/api/v1", tags=["Public API"])
+app.mount("/api/v1", create_public_api())
 app.include_router(snapshots.router, prefix="/api/snapshots", tags=["snapshots"])
 app.include_router(vector_sync.router, prefix="/api/vector-sync", tags=["vector-sync"])
 app.include_router(wiki_images.router, prefix="/api/wiki-images", tags=["wiki-images"])
