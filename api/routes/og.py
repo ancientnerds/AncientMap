@@ -486,7 +486,7 @@ async def get_share_page(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{title_escaped} - Ancient Nerds Map</title>
+    <title>{title_escaped} - Ancient Nerds</title>
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
@@ -545,15 +545,17 @@ async def get_share_page(
 async def get_og_image(
     site_id: str,
     request: Request,
+    refresh: bool = False,
     db: Session = Depends(get_db),
 ):
     """Generate Open Graph image for a site.
 
     Uses Playwright to screenshot the real SiteCard component.
     Falls back to PIL-generated image if Playwright is unavailable.
+    Pass ?refresh=1 to bypass cache.
     """
-    # Check disk cache first
-    cached = _get_cached_image(site_id)
+    # Check disk cache first (skip if refresh requested)
+    cached = None if refresh else _get_cached_image(site_id)
     if cached:
         return Response(
             content=cached,

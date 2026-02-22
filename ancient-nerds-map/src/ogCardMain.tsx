@@ -4,7 +4,7 @@
  */
 
 import { createRoot } from 'react-dom/client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { SiteCard } from './components/SiteCard'
 import type { SiteData } from './data/sites'
 import './styles/index.css'
@@ -13,6 +13,8 @@ import './components/site-card.css'
 function OgCard() {
   const [site, setSite] = useState<SiteData | null>(null)
   const [error, setError] = useState(false)
+  const [ready, setReady] = useState(false)
+  const cardRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get('id')
@@ -25,29 +27,51 @@ function OgCard() {
           id: data.id,
           title: data.name || 'Unknown Site',
           location: data.country || '',
-          category: data.site_type || 'Unknown',
-          period: data.period_name || 'Unknown',
-          periodStart: data.period_start ?? undefined,
+          category: data.type || 'Unknown',
+          period: data.periodName || 'Unknown',
+          periodStart: data.periodStart ?? undefined,
           description: data.description || '',
-          image: data.thumbnail_url || undefined,
-          sourceId: data.source_id || '',
+          image: data.thumbnailUrl || undefined,
+          sourceId: data.sourceId || '',
           coordinates: [data.lon ?? 0, data.lat ?? 0],
         })
       })
       .catch(() => setError(true))
   }, [])
 
-  if (error) return <div data-ready>Error</div>
+  // Wait for images to load before signaling ready
+  useEffect(() => {
+    if (!site || ready) return
+    const el = cardRef.current
+    if (!el) return
 
+    const imgs = el.querySelectorAll('img')
+    if (imgs.length === 0) { setReady(true); return }
+
+    let loaded = 0
+    const total = imgs.length
+    const check = () => { if (++loaded >= total) setReady(true) }
+    imgs.forEach(img => {
+      if (img.complete) { check(); return }
+      img.addEventListener('load', check, { once: true })
+      img.addEventListener('error', check, { once: true })
+    })
+    // Fallback timeout — don't wait forever
+    const timer = setTimeout(() => setReady(true), 5000)
+    return () => clearTimeout(timer)
+  }, [site, ready])
+
+  if (error) return <div data-ready>Error</div>
   if (!site) return null
 
   return (
     <div
       id="og-card"
-      data-ready
-      style={{ width: 500, background: '#0a1419', padding: 0 }}
+      ref={cardRef}
+      data-ready={ready || undefined}
+      style={{ width: 500, background: '#0a1419', padding: 16 }}
     >
-      <SiteCard site={site} />
+      <SiteCard site={site} sourceName="Ancient Nerds" />
     </div>
   )
 }
