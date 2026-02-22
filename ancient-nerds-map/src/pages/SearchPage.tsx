@@ -30,6 +30,7 @@ export default function SearchPage() {
   const [loadedSourceIds, setLoadedSourceIds] = useState<Set<string>>(new Set())
   const [loadingSources, setLoadingSources] = useState<Set<string>>(new Set())
   const [searchAllSources, setSearchAllSources] = useState(false)
+  const [randomSites, setRandomSites] = useState<SiteData[]>([])
 
   // Load default source on mount
   useEffect(() => {
@@ -148,6 +149,19 @@ export default function SearchPage() {
     } catch { /* ignore */ }
   }, [sites])
 
+  const handleRandom = useCallback(() => {
+    if (sites.length === 0) return
+    const colWidth = 296 // 280px card + 16px gap
+    const rowHeight = 280 // approximate card height + gap
+    const headerHeight = 130 // sticky header + bar
+    const cols = Math.max(1, Math.floor(window.innerWidth / colWidth))
+    const rows = Math.max(1, Math.floor((window.innerHeight - headerHeight) / rowHeight))
+    const count = Math.min(50, Math.max(10, cols * rows))
+    const shuffled = [...sites].sort(() => Math.random() - 0.5)
+    setRandomSites(shuffled.slice(0, count))
+    search.setSearchQuery('')
+  }, [sites, search])
+
   const hasActiveFilters = selectedSources.length !== sources.length ||
     selectedCategories.length !== categories.length ||
     selectedCountries.length !== countries.length ||
@@ -171,14 +185,14 @@ export default function SearchPage() {
               className="search-bar-input"
               placeholder={isLoading ? 'Loading sites...' : 'Search archaeological sites...'}
               value={search.searchQuery}
-              onChange={e => search.setSearchQuery(e.target.value)}
+              onChange={e => { search.setSearchQuery(e.target.value); if (randomSites.length) setRandomSites([]) }}
               disabled={isLoading}
               autoFocus
             />
-            {search.searchQuery && (
+            {(search.searchQuery || randomSites.length > 0) && (
               <button
                 className="search-bar-clear"
-                onClick={() => { search.setSearchQuery(''); searchInputRef.current?.focus() }}
+                onClick={() => { search.setSearchQuery(''); setRandomSites([]); searchInputRef.current?.focus() }}
                 title="Clear search"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -191,6 +205,19 @@ export default function SearchPage() {
               onClick={() => setSearchAllSources(!searchAllSources)}
             >
               All sources
+            </button>
+            <button
+              className="search-bar-filter-btn"
+              onClick={handleRandom}
+              disabled={isLoading}
+              title="Show random sites"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="16 3 21 3 21 8" /><line x1="4" y1="20" x2="21" y2="3" />
+                <polyline points="21 16 21 21 16 21" /><line x1="15" y1="15" x2="21" y2="21" />
+                <line x1="4" y1="4" x2="9" y2="9" />
+              </svg>
+              Random
             </button>
             <button
               className={`search-bar-filter-btn${filtersOpen ? ' active' : ''}${hasActiveFilters ? ' has-filters' : ''}`}
@@ -224,12 +251,12 @@ export default function SearchPage() {
           </div>
         )}
 
-        {search.searchQuery.trim().length < 3 && !isLoading && (
+        {search.searchQuery.trim().length < 3 && !isLoading && randomSites.length === 0 && (
           <div className="search-prompt">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" opacity="0.3">
               <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
-            <p>Type at least 3 characters to search{searchAllSources ? ' across all sources' : ' Ancient Nerds originals'}</p>
+            <p>Type at least 3 characters to search{searchAllSources ? ' across all sources' : ' Ancient Nerds originals'}, or hit Random</p>
           </div>
         )}
 
@@ -256,6 +283,26 @@ export default function SearchPage() {
               )
             })}
           </div>
+        )}
+
+        {search.searchQuery.trim().length < 3 && randomSites.length > 0 && (
+          <>
+            <div className="search-results-count">
+              <span>{randomSites.length} random sites</span>
+            </div>
+            <div className="search-card-grid">
+              {randomSites.map(site => (
+                <SiteCard
+                  key={site.id}
+                  site={site}
+                  sourceName={sourceNameMap[site.sourceId]}
+                  sourceColor={getSourceColor(site.sourceId)}
+                  onClick={() => handleCardClick(site)}
+                  actions={<ViewOnGlobeLink siteId={site.id} />}
+                />
+              ))}
+            </div>
+          </>
         )}
 
         {search.searchQuery.trim().length >= 3 && !search.isSearching && search.searchResults.length === 0 && (
