@@ -33,6 +33,7 @@ export default function SearchPage() {
   const [randomSites, setRandomSites] = useState<SiteData[]>([])
   const randomPoolRef = useRef<SiteData[]>([])
   const [randomVisible, setRandomVisible] = useState(0)
+  const [randomPending, setRandomPending] = useState(false)
 
   // Load default source on mount
   useEffect(() => {
@@ -151,15 +152,41 @@ export default function SearchPage() {
     } catch { /* ignore */ }
   }, [sites])
 
-  const handleRandom = useCallback(() => {
-    if (sites.length === 0) return
-    const pool = searchAllSources ? sites : sites.filter(s => selectedSources.includes(s.sourceId))
+  const doShuffle = useCallback((allSites: SiteData[]) => {
+    const pool = searchAllSources ? allSites : allSites.filter(s => selectedSources.includes(s.sourceId))
     const shuffled = [...pool].sort(() => Math.random() - 0.5)
     randomPoolRef.current = shuffled
     setRandomSites(shuffled.slice(0, 50))
     setRandomVisible(50)
+  }, [searchAllSources, selectedSources])
+
+  const handleRandom = useCallback(() => {
+    if (sites.length === 0) return
     search.setSearchQuery('')
-  }, [sites, search, searchAllSources, selectedSources])
+
+    // If "All sources" is on, load any unloaded sources first
+    if (searchAllSources) {
+      const allSourceIds = sources.map(s => s.id)
+      const unloaded = allSourceIds.filter(id => !loadedSourceIds.has(id) && !loadingSources.has(id))
+      if (unloaded.length > 0) {
+        handleLoadSources(unloaded)
+        setRandomPending(true)
+        // Shuffle what we have now — will re-shuffle when all sources finish loading
+        doShuffle(sites)
+        return
+      }
+    }
+
+    doShuffle(sites)
+  }, [sites, search, searchAllSources, sources, loadedSourceIds, loadingSources, handleLoadSources, doShuffle])
+
+  // Re-shuffle when all pending sources finish loading
+  useEffect(() => {
+    if (randomPending && loadingSources.size === 0) {
+      setRandomPending(false)
+      doShuffle(sites)
+    }
+  }, [randomPending, loadingSources.size, sites, doShuffle])
 
   const handleLoadMoreRandom = useCallback(() => {
     const next = randomVisible + 50
