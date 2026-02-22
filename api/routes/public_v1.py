@@ -20,6 +20,8 @@ from sqlalchemy.orm import Session
 from api.cache import cache_get, cache_set
 from api.schemas.public_v1 import (
     ChannelPublic,
+    FacetSource,
+    FacetsResponse,
     NewsFeedPublicResponse,
     NewsItemPublic,
     NewsSiteRef,
@@ -551,6 +553,79 @@ def create_public_api() -> FastAPI:
 
         response = StatsResponse(total_sites=total, by_source=by_source)
         cache_set(cache_key, response.model_dump(), ttl=300)
+        return response
+
+    # =========================================================================
+    # 8. GET /facets — Distinct filter facets
+    # =========================================================================
+
+    @public_app.get(
+        "/facets",
+        summary="Get filter facets",
+        description=(
+            "Returns distinct categories, countries, and source metadata "
+            "for populating filter dropdowns without loading all sites."
+        ),
+        response_model=FacetsResponse,
+        tags=["Sites"],
+        dependencies=[Depends(rate_limit_dependency)],
+        responses={429: {"description": "Rate limit exceeded"}},
+    )
+    async def get_facets(db: Session = Depends(get_db)):
+        cache_key = "pubv1:facets"
+        cached = cache_get(cache_key)
+        if cached:
+            return cached
+
+        # Distinct site types
+        cat_result = db.execute(text(
+            "SELECT DISTINCT site_type FROM unified_sites "
+            "WHERE site_type IS NOT NULL AND site_type != '' "
+            "ORDER BY site_type"
+        ))
+        categories = [row[0] for row in cat_result]
+
+        # Distinct countries
+        country_result = db.execute(text(
+            "SELECT DISTINCT country FROM unified_sites "
+            "WHERE country IS NOT NULL AND country != '' "
+            "ORDER BY country"
+        ))
+        countries = [row[0] for row in country_result]
+
+        # Sources with counts
+        source_result = db.execute(text("""
+            SELECT
+                sm.id as source_id,
+                sm.name,
+                COALESCE(sm.color, :default_color) as color,
+                COALESCE(sc.count, 0) as site_count
+            FROM source_meta sm
+            LEFT JOIN (
+                SELECT source_id, COUNT(*) as count
+                FROM unified_sites
+                GROUP BY source_id
+            ) sc ON sm.id = sc.source_id
+            WHERE sm.enabled = true
+            ORDER BY COALESCE(sc.count, 0) DESC
+        """), {"default_color": _SOURCE_COLORS["default"]})
+
+        sources = [
+            FacetSource(
+                id=row.source_id,
+                name=row.name or row.source_id.replace("_", " ").title(),
+                color=row.color or _SOURCE_COLORS.get(row.source_id, _SOURCE_COLORS["default"]),
+                count=row.site_count,
+            )
+            for row in source_result
+        ]
+
+        response = FacetsResponse(
+            categories=categories,
+            countries=countries,
+            sources=sources,
+        )
+        cache_set(cache_key, response.model_dump(), ttl=600)
         return response
 
     return public_app

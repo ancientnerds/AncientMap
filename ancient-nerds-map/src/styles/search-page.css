@@ -1,0 +1,170 @@
+.search-page {
+  width: 100vw;
+  height: 100vh;
+  overflow-y: auto;
+  background: var(--bg-dark);
+  color: var(--text-primary);
+}
+
+.search-page-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 16px 40px;
+}
+
+/* Sticky search bar */
+.search-bar-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  padding: 12px 0;
+  background: var(--bg-dark);
+}
+
+.search-bar-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.search-bar-icon {
+  flex-shrink: 0;
+  opacity: 0.5;
+}
+
+.search-bar-input {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 1rem;
+  outline: none;
+  font-family: inherit;
+}
+
+.search-bar-input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.search-bar-input:disabled {
+  opacity: 0.5;
+}
+
+/* All sources toggle */
+.search-bar-all-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.search-bar-all-toggle input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--primary-red);
+}
+
+.search-bar-filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.search-bar-filter-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.search-bar-filter-btn.active {
+  background: rgba(192, 32, 35, 0.15);
+  border-color: var(--primary-red);
+  color: var(--primary-red);
+}
+
+.search-bar-filter-btn.has-filters::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary-red);
+}
+
+/* Filters panel */
+.search-filters-panel {
+  margin-bottom: 16px;
+}
+
+/* Results count */
+.search-results-count {
+  padding: 8px 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+/* Empty state / prompt */
+.search-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 80px 20px;
+  text-align: center;
+}
+
+.search-prompt p {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  max-width: 400px;
+}
+
+/* Card grid */
+.search-card-grid {
+  columns: 3 280px;
+  column-gap: 16px;
+}
+
+.search-card-grid > * {
+  break-inside: avoid;
+  margin-bottom: 16px;
+}
+
+/* Mobile: single column, compact spacing */
+@media (max-width: 640px) {
+  .search-page-content {
+    padding: 0 12px 32px;
+  }
+
+  .search-card-grid {
+    columns: 1;
+    column-gap: 12px;
+  }
+
+  .search-card-grid > * {
+    margin-bottom: 12px;
+  }
+
+  .search-bar-inner {
+    padding: 8px 12px;
+  }
+
+  .search-bar-input {
+    font-size: 0.95rem;
+  }
+}

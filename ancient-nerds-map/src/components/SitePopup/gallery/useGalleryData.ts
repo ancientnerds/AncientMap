@@ -15,7 +15,6 @@ interface UseGalleryDataOptions {
   lng: number
   sourceUrl?: string
   isOffline: boolean
-  isStandalone?: boolean
 }
 
 export function useGalleryData({
@@ -26,10 +25,9 @@ export function useGalleryData({
   lng,
   sourceUrl,
   isOffline,
-  isStandalone = false,
 }: UseGalleryDataOptions): GalleryHookReturn {
   const [activeGalleryTab, setActiveGalleryTab] = useState<GalleryTab>('photos')
-  const [isGalleryExpanded, setIsGalleryExpanded] = useState(isStandalone)
+  const [isGalleryExpanded, setIsGalleryExpanded] = useState(false)
 
   // Internal Wikipedia image fetching
   const [wikiImages, setWikiImages] = useState<GalleryImage[]>([])

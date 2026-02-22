@@ -21,7 +21,8 @@ export function GalleryContent({
   items,
   isLoading,
   isOffline,
-  onItemClick
+  onItemClick,
+  isExpanded,
 }: GalleryContentProps) {
 
   // Videos tab - grid with play overlay on each thumbnail
@@ -277,5 +278,5 @@ export function GalleryContent({
     )
   }
 
-  return <GalleryGrid items={items} onItemClick={onItemClick} />
+  return <GalleryGrid items={items} onItemClick={onItemClick} isExpanded={isExpanded} />
 }

@@ -52,6 +52,7 @@ export default defineConfig({
         db: resolve(__dirname, 'db.html'),
         articles: resolve(__dirname, 'articles.html'),
         account: resolve(__dirname, 'account.html'),
+        search: resolve(__dirname, 'search.html'),
         site: resolve(__dirname, 'site.html'),
         api: resolve(__dirname, 'api.html'),
       },

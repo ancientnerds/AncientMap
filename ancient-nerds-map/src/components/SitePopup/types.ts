@@ -272,6 +272,7 @@ export interface GalleryTabsProps {
 export interface GalleryGridProps {
   items: UnifiedGalleryItem[]
   onItemClick: (index: number) => void
+  isExpanded?: boolean
 }
 
 export interface GalleryContentProps {
@@ -280,6 +281,7 @@ export interface GalleryContentProps {
   isLoading: boolean
   isOffline: boolean
   onItemClick: (index: number) => void
+  isExpanded?: boolean
 }
 
 export interface AdminEditPanelProps {

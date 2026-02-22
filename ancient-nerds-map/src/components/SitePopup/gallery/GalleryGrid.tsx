@@ -5,7 +5,7 @@ import LazyImage from '../../LazyImage'
 
 const PAGE_SIZE = 50
 
-export function GalleryGrid({ items, onItemClick }: GalleryGridProps) {
+export function GalleryGrid({ items, onItemClick, isExpanded }: GalleryGridProps) {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
 
   // Reset when items change (new site selected)
@@ -37,7 +37,7 @@ export function GalleryGrid({ items, onItemClick }: GalleryGridProps) {
           </div>
         ))}
       </div>
-      {hasMore && (
+      {hasMore && isExpanded && (
         <button
           className="gallery-show-more"
           onClick={() => setVisibleCount(prev => prev + PAGE_SIZE)}
