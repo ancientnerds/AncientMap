@@ -10,7 +10,7 @@ const DisclaimerModal = lazy(() => import('./components/DisclaimerModal'))
 const LyraChatModal = lazy(() => import('./components/LyraChatModal'))
 const DownloadManager = lazy(() => import('./components/DownloadManager'))
 const NewsFeedPanel = lazy(() => import('./components/NewsFeedPanel'))
-import { SiteData, fetchSites, getCurrentSites, addSourceSites, SOURCE_COLORS, getDefaultEnabledSourceIds, getSourceColor, getCategoryColor, getPeriodColor, setDataSourceError, resolvePeriod } from './data/sites'
+import { SiteData, fetchSites, getCurrentSites, addSourceSites, SOURCE_COLORS, getDefaultEnabledSourceIds, getSourceColor, getCategoryColor, getPeriodColor, setDataSourceError } from './data/sites'
 import { DataStore } from './data/DataStore'
 import { SourceLoader } from './services/SourceLoader'
 import { config } from './config'
@@ -18,32 +18,11 @@ import { apiDetailToSiteData } from './utils/siteApi'
 import { OfflineProvider, useOffline } from './contexts/OfflineContext'
 import { offlineFetch } from './services/OfflineFetch'
 import { isDemoMode, registerAppDemoApi } from './utils/demoApi'
+import { normalizeForSearch, periodToYear, extractCountry } from './utils/searchUtils'
+import { haversineDistance } from './utils/geoMath'
+import { useSiteSearch } from './hooks/useSiteSearch'
 
 export type FilterMode = 'category' | 'age' | 'source' | 'country'
-
-// Helper to get approximate year from period string for filtering
-function periodToYear(period: string): number {
-  switch (period) {
-    case '< 4500 BC': return -5000
-    case '4500 - 3000 BC': return -3750
-    case '3000 - 1500 BC': return -2250
-    case '1500 - 500 BC': return -1000
-    case '500 BC - 1 AD': return -250
-    case '1 - 500 AD': return 250
-    case '500 - 1000 AD': return 750
-    case '1000 - 1500 AD': return 1250
-    case '1500+ AD': return 1750
-    default: return 0
-  }
-}
-
-// Extract country from location string (last part after comma, or whole string)
-function extractCountry(location: string | undefined): string {
-  if (!location) return 'Unknown'
-  const parts = location.split(',')
-  const country = parts[parts.length - 1].trim()
-  return country || 'Unknown'
-}
 
 // Generate consistent color for a country using hash (returns hex for Globe compatibility)
 function getCountryColor(country: string): string {
@@ -70,21 +49,6 @@ function getCountryColor(country: string): string {
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`
 }
 
-// Normalize string for search: lowercase + remove diacritics
-const normalizeForSearch = (str: string): string =>
-  str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-
-// Haversine formula for calculating great-circle distance between two points
-function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371 // Earth radius in km
-  const dLat = (lat2 - lat1) * Math.PI / 180
-  const dLng = (lng2 - lng1) * Math.PI / 180
-  const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLng / 2) ** 2
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-}
-
 interface SourceInfo {
   id: string
   name: string
@@ -103,6 +67,13 @@ interface SourceMeta {
 function getStandaloneSiteId(): string | null {
   const urlParams = new URLSearchParams(window.location.search)
   return urlParams.get('site')
+}
+
+// Check for focus mode (opened via ?focus= URL from search page)
+// Loads the globe normally, then centers on the site and opens its popup
+function getFocusSiteId(): string | null {
+  const urlParams = new URLSearchParams(window.location.search)
+  return urlParams.get('focus')
 }
 
 
@@ -138,6 +109,9 @@ function AppContent() {
 
   // Check if we're in standalone mode (URL has ?site=xxx)
   const [standaloneSiteId] = useState(() => getStandaloneSiteId())
+  // Focus mode: warp directly to site (from ?focus=)
+  const [focusSiteId] = useState(() => getFocusSiteId())
+  const focusHandledRef = useRef(false)
 
   const [sites, setSites] = useState<SiteData[]>([])
   const sitesRef = useRef<SiteData[]>([])
@@ -150,12 +124,7 @@ function AppContent() {
   const [selectedCountries, setSelectedCountries] = useState<string[]>([])
   const knownCountriesRef = useRef<Set<string>>(new Set()) // Track all countries ever seen
   const [selectedSources, setSelectedSources] = useState<string[]>(['ancient_nerds'])
-  const [searchQuery, setSearchQuery] = useState('')
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
-  const searchDebounceRef = useRef<NodeJS.Timeout | null>(null)
   const [searchAllSources, setSearchAllSources] = useState(false)
-  const [apiSearchResults, setApiSearchResults] = useState<SiteData[]>([])
-  const apiSearchAbortRef = useRef<AbortController | null>(null)
   const [applyFiltersToSearch, setApplyFiltersToSearch] = useState(true)
   const [searchWithinProximity, setSearchWithinProximity] = useState(false)
   const [filterMode, setFilterMode] = useState<FilterMode>('age')
@@ -377,61 +346,6 @@ function AppContent() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [selectedMeasurementId])
-
-  // Debounce search query to reduce globe updates while typing (200ms delay)
-  useEffect(() => {
-    if (searchDebounceRef.current) {
-      clearTimeout(searchDebounceRef.current)
-    }
-    searchDebounceRef.current = setTimeout(() => {
-      setDebouncedSearchQuery(searchQuery)
-    }, 200)
-    return () => {
-      if (searchDebounceRef.current) {
-        clearTimeout(searchDebounceRef.current)
-      }
-    }
-  }, [searchQuery])
-
-  // API search: fetch from backend when "All sources" is checked and query is long enough
-  useEffect(() => {
-    if (!searchAllSources || debouncedSearchQuery.trim().length < 3) {
-      setApiSearchResults([])
-      return
-    }
-
-    apiSearchAbortRef.current?.abort()
-    const controller = new AbortController()
-    apiSearchAbortRef.current = controller
-
-    const encoded = encodeURIComponent(debouncedSearchQuery.trim())
-    fetch(`${config.api.baseUrl}/sites/search?q=${encoded}&limit=50`, { signal: controller.signal })
-      .then(res => res.json())
-      .then(data => {
-        if (controller.signal.aborted) return
-        const parsed: SiteData[] = (data.sites || []).map((s: { id: string; n: string; la: number; lo: number; s: string; t?: string; p?: number; pn?: string; d?: string; c?: string; u?: string }) => ({
-          id: s.id,
-          title: s.n,
-          coordinates: [s.lo, s.la] as [number, number],
-          category: s.t || 'Unknown',
-          period: resolvePeriod(s.pn, s.p),
-          periodStart: s.p ?? null,
-          location: s.c || '',
-          description: s.d || '',
-          sourceId: s.s,
-          sourceUrl: s.u,
-        }))
-        setApiSearchResults(parsed)
-      })
-      .catch(err => {
-        if (err.name !== 'AbortError') {
-          console.warn('API search failed:', err)
-          setApiSearchResults([])
-        }
-      })
-
-    return () => controller.abort()
-  }, [searchAllSources, debouncedSearchQuery])
 
   // Random mode state - when true, only the random site dot is shown
   const [randomModeActive, setRandomModeActive] = useState(false)
@@ -777,6 +691,21 @@ function AppContent() {
         } catch { /* use default */ }
       }
 
+      // Focus mode: fetch site coordinates and use as initial position
+      // so the warp animation lands directly on the site
+      if (focusSiteId) {
+        try {
+          const res = await fetch(`${config.api.baseUrl}/sites/${focusSiteId}`)
+          if (res.ok) {
+            const detail = await res.json()
+            const site = apiDetailToSiteData(detail)
+            if (site.coordinates && !isNaN(site.coordinates[0]) && !isNaN(site.coordinates[1])) {
+              detectedLocation = site.coordinates
+            }
+          }
+        } catch { /* fall through to normal location */ }
+      }
+
       // Set location state BEFORE anything else
       if (detectedLocation) {
         setUserLocation(detectedLocation)
@@ -1024,169 +953,59 @@ function AppContent() {
     return [...new Set(filtered.map(s => extractCountry(s.location)).filter(c => c !== 'Unknown'))].sort()
   }, [sites, selectedSources, selectedCategories, categoriesFromActiveSources, ageRange])
 
-  // Generate search results for dropdown (uses debounced query to reduce updates while typing)
-  const searchResults = useMemo(() => {
-    if (!debouncedSearchQuery.trim()) return []
+  // Shared search hook — encapsulates debouncing, API search, and client-side filtering
+  const siteSearch = useSiteSearch({
+    sites,
+    sourceNameMap,
+    selectedSources,
+    selectedCategories,
+    allCategories: categoriesFromActiveSources,
+    selectedCountries,
+    allCountries: countries,
+    ageRange,
+    searchAllSources,
+    applyFiltersToSearch,
+    spatialFilter: searchWithinProximity && proximityCenter
+      ? { center: proximityCenter, radius: proximityRadius }
+      : null,
+    empireFilter: searchWithinEmpires && visibleEmpireIds.size > 0
+      ? { visibleEmpireIds, empireSliderYears, empirePolygons }
+      : null,
+  })
+  const { searchResults, apiSearchResults, searchQuery, setSearchQuery, debouncedQuery: debouncedSearchQuery } = siteSearch
 
-    // When "All sources" is checked and API results have arrived, use them.
-    // While API is loading (apiSearchResults still empty), fall through to
-    // client-side search so results never flash "No sites found".
-    if (searchAllSources && apiSearchResults.length > 0) {
-      return apiSearchResults.slice(0, 100).map(site => {
-        const category = site.category || 'Unknown'
-        const period = site.period || 'Unknown'
-        return {
-          id: site.id,
-          title: site.title,
-          category,
-          categoryColor: getCategoryColor(category),
-          location: site.location,
-          period,
-          periodColor: getPeriodColor(period),
-          sourceName: sourceNameMap[site.sourceId] || site.sourceId,
-          sourceColor: getSourceColor(site.sourceId),
-          sourceUrl: site.sourceUrl,
-        }
-      })
-    }
-
-    const query = normalizeForSearch(debouncedSearchQuery)
-    // When "All sources" is checked (API loading), search all loaded sites as preview
-    let sitesToSearch = searchAllSources
-      ? sites
-      : sites.filter(s => selectedSources.includes(s.sourceId))
-
-    // Apply filters to search results only if "Apply filters" is checked
-    if (applyFiltersToSearch) {
-      // Apply age range filter
-      if (ageRange[0] > -5000 || ageRange[1] < 1500) {
-        sitesToSearch = sitesToSearch.filter(site => {
-          const year = site.periodStart ?? periodToYear(site.period)
-          return year >= ageRange[0] && year <= ageRange[1]
-        })
-      }
-      // Apply category filter (always, not just in category mode)
-      if (selectedCategories.length < categoriesFromActiveSources.length && selectedCategories.length > 0) {
-        sitesToSearch = sitesToSearch.filter(site => selectedCategories.includes(site.category))
-      }
-      // Apply country filter (always, not just in country mode)
-      if (selectedCountries.length > 0 && selectedCountries.length < countries.length) {
-        sitesToSearch = sitesToSearch.filter(site => {
-          const country = extractCountry(site.location)
-          return selectedCountries.includes(country)
-        })
-      }
-    }
-
-    // Apply proximity filter when "Search within proximity" is checked and proximity is set
-    if (searchWithinProximity && proximityCenter) {
-      const [centerLng, centerLat] = proximityCenter
-      sitesToSearch = sitesToSearch.filter(site => {
-        const [siteLng, siteLat] = site.coordinates
-        const distance = haversineDistance(centerLat, centerLng, siteLat, siteLng)
-        return distance <= proximityRadius
-      })
-    }
-
-    // Apply empire filter when "Within empires" is checked and empires are visible
-    if (searchWithinEmpires && visibleEmpireIds.size > 0) {
-      const activeEmpirePolygons: EmpirePolygonData[] = []
-      for (const empireId of visibleEmpireIds) {
-        const currentYear = empireSliderYears[empireId]
-        if (currentYear !== undefined) {
-          const polygonData = empirePolygons.get(`${empireId}:${currentYear}`)
-          if (polygonData) {
-            activeEmpirePolygons.push(polygonData)
-          }
-        }
-      }
-
-      if (activeEmpirePolygons.length > 0) {
-        sitesToSearch = sitesToSearch.filter(site => {
-          // Use periodStart if available, fall back to period string
-          const siteYear = site.periodStart ?? periodToYear(site.period)
-          for (const empireData of activeEmpirePolygons) {
-            if (siteYear > empireData.year) {
-              continue
-            }
-            if (isSiteInEmpirePolygons(site.coordinates, [empireData])) {
-              return true
-            }
-          }
-          return false
-        })
-      }
-    }
-
-    // Spaceless variants for matching "göbekli tepe" → "gobeklitepe"
-    const querySpaceless = query.replace(/ /g, '')
-
-    // Filter and sort by relevance
-    const matchingSites = sitesToSearch
-      .filter(site => {
-        const titleNorm = normalizeForSearch(site.title)
-        return titleNorm.includes(query) ||
-          titleNorm.replace(/ /g, '').includes(querySpaceless) ||
-          (site.altNames && site.altNames.some(an => normalizeForSearch(an).includes(query) || normalizeForSearch(an).replace(/ /g, '').includes(querySpaceless))) ||
-          (site.location && normalizeForSearch(site.location).includes(query)) ||
-          (site.description && normalizeForSearch(site.description).includes(query))
-      })
-      .map(site => {
-        const titleNorm = normalizeForSearch(site.title)
-        const titleSpaceless = titleNorm.replace(/ /g, '')
-        // Calculate relevance score (higher = more relevant)
-        let score = 0
-        if (titleNorm === query) {
-          score = 100 // Exact title match
-        } else if (titleSpaceless === querySpaceless) {
-          score = 95 // Exact spaceless title match
-        } else if (titleNorm.startsWith(query)) {
-          score = 80 // Title starts with query
-        } else if (titleNorm.includes(query)) {
-          score = 60 // Title contains query
-        } else if (titleSpaceless.includes(querySpaceless)) {
-          score = 55 // Spaceless title contains query
-        } else if (site.altNames && site.altNames.some(an => normalizeForSearch(an).includes(query) || normalizeForSearch(an).replace(/ /g, '').includes(querySpaceless))) {
-          score = 50 // Alternate name match
-        } else if (site.location && normalizeForSearch(site.location).includes(query)) {
-          score = 40 // Location contains query
-        } else {
-          score = 20 // Description contains query
-        }
-        return { site, score }
-      })
-      .sort((a, b) => b.score - a.score) // Sort by score descending
-      .map(({ site }) => site)
-
-    return matchingSites
-      .slice(0, 100)
-      .map(site => {
-        // Ensure category and period have values (fallback to 'Unknown' for display)
-        const category = site.category || 'Unknown'
-        const period = site.period || 'Unknown'
-        return {
-          id: site.id,
-          title: site.title,
-          category,
-          categoryColor: getCategoryColor(category),
-          location: site.location,
-          period,
-          periodColor: getPeriodColor(period),
-          sourceName: sourceNameMap[site.sourceId] || site.sourceId,
-          sourceColor: getSourceColor(site.sourceId),
-          sourceUrl: site.sourceUrl,
-        }
-      })
-  }, [debouncedSearchQuery, searchAllSources, apiSearchResults, sites, selectedSources, sourceNameMap, sourceColorMap, applyFiltersToSearch, ageRange, selectedCategories, categoriesFromActiveSources, selectedCountries, countries, filterMode, searchWithinProximity, proximityCenter, proximityRadius, searchWithinEmpires, visibleEmpireIds, empireSliderYears, empirePolygons])
-
-  // Handle search result selection
+  // Handle search result selection (wraps hook helper with globe-specific fly-to)
   const handleSearchResultSelect = useCallback(async (siteId: string, openPopup: boolean) => {
-    // Try in-memory sites first
-    let site = sites.find(s => s.id === siteId)
+    await siteSearch.handleSearchResultSelect(siteId, openPopup, (site) => {
+      handleSiteClick(site)
+    })
+    // Fly to the site regardless of popup
+    const site = sites.find(s => s.id === siteId) || apiSearchResults.find(s => s.id === siteId)
+    if (site) {
+      setFlyToCoords(null)
+      setTimeout(() => setFlyToCoords(site.coordinates), 10)
+    }
+  }, [siteSearch, sites, apiSearchResults, handleSiteClick])
 
-    // If not in memory (API search result), check apiSearchResults or fetch from API
-    if (!site) {
-      site = apiSearchResults.find(s => s.id === siteId)
+  // Focus mode (first load): warp lands on the site, fill search bar and select dot
+  useEffect(() => {
+    if (!focusSiteId || focusHandledRef.current || sites.length === 0) return
+    focusHandledRef.current = true
+
+    const site = sites.find(s => s.id === focusSiteId)
+    if (!site) return
+
+    setSearchQuery(site.title)
+    setListFrozenSiteIds([site.id])
+  }, [focusSiteId, sites, setSearchQuery])
+
+  // Listen for postMessage from search page — switch site without reload
+  useEffect(() => {
+    const handler = async (e: MessageEvent) => {
+      if (e.data?.type !== 'focus-site' || !e.data?.siteId) return
+
+      const siteId = e.data.siteId as string
+      let site = sites.find(s => s.id === siteId)
       if (!site) {
         try {
           const res = await fetch(`${config.api.baseUrl}/sites/${siteId}`)
@@ -1194,18 +1013,18 @@ function AppContent() {
             const detail = await res.json()
             site = apiDetailToSiteData(detail)
           }
-        } catch { /* site stays undefined */ }
+        } catch { /* ignore */ }
       }
-    }
+      if (!site) return
 
-    if (site) {
+      setSearchQuery(site.title)
+      setListFrozenSiteIds([site.id])
       setFlyToCoords(null)
-      setTimeout(() => setFlyToCoords(site!.coordinates), 10)
-      if (openPopup) {
-        handleSiteClick(site)
-      }
+      requestAnimationFrame(() => setFlyToCoords(site!.coordinates))
     }
-  }, [sites, apiSearchResults, handleSiteClick])
+    window.addEventListener('message', handler)
+    return () => window.removeEventListener('message', handler)
+  }, [sites, setSearchQuery])
 
   // Handle random site selection - respects all search options (sources, filters, proximity)
   const handleRandomSite = useCallback(() => {
@@ -2148,7 +1967,6 @@ function AppContent() {
             onSiteHover={setHighlightedSiteId}
             onSiteClick={(siteName, lat, lon) => {
               setSearchQuery(siteName)
-              setDebouncedSearchQuery(siteName)
               setFlyToCoords(null)
               setTimeout(() => setFlyToCoords([lon, lat]), 10)
               const query = normalizeForSearch(siteName)

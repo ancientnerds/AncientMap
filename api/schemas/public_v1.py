@@ -133,3 +133,25 @@ class StatsResponse(BaseModel):
 
     total_sites: int = Field(description="Total archaeological sites in database", json_schema_extra={"example": 750000})
     by_source: dict[str, int] = Field(description="Site count per data source", json_schema_extra={"example": {"pleiades": 38000, "dare": 22000}})
+
+
+# =============================================================================
+# Facets
+# =============================================================================
+
+
+class FacetSource(BaseModel):
+    """Source info for faceted search."""
+
+    id: str = Field(description="Source identifier")
+    name: str = Field(description="Human-readable source name")
+    color: str = Field(description="Hex color for display")
+    count: int = Field(description="Number of sites from this source")
+
+
+class FacetsResponse(BaseModel):
+    """Distinct filter facets for populating dropdowns without loading all sites."""
+
+    categories: list[str] = Field(description="Distinct site types")
+    countries: list[str] = Field(description="Distinct country names")
+    sources: list[FacetSource] = Field(description="Available data sources with counts")

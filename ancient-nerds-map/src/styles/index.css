@@ -4133,7 +4133,7 @@ a.popup-window-btn {
 
 /* Standalone mode close button - same style as main popup */
 .popup-standalone-close {
-  position: fixed;
+  position: absolute;
   top: 8px;
   right: 8px;
   z-index: 1000;

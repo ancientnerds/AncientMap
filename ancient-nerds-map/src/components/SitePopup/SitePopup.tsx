@@ -271,7 +271,6 @@ export default function SitePopup({
     lng,
     sourceUrl: displaySite.sourceUrl,
     isOffline,
-    isStandalone,
   })
 
   // Empire gallery hook - fetch images from Wikipedia and AWMC maps
@@ -742,7 +741,7 @@ export default function SitePopup({
       {/* Gallery Section */}
       <div className={`popup-gallery-section ${galleryHook.isGalleryExpanded ? 'expanded' : ''}`}>
         {/* Expanded header */}
-        {galleryHook.isGalleryExpanded && !isStandalone && (
+        {galleryHook.isGalleryExpanded && (
           <div
             className="gallery-expanded-header"
             onMouseDown={windowHook.handleTitleBarMouseDown}
@@ -797,8 +796,7 @@ export default function SitePopup({
             isLoadingBooks={galleryHook.isLoadingBooks}
             isLoadingPapers={galleryHook.isLoadingPapers}
           />
-          {!isStandalone && (
-            <button
+          <button
               className="gallery-toggle-btn"
               onClick={() => galleryHook.setIsGalleryExpanded(!galleryHook.isGalleryExpanded)}
               title={galleryHook.isGalleryExpanded ? 'Collapse gallery' : 'Expand gallery'}
@@ -819,7 +817,6 @@ export default function SitePopup({
                 </svg>
               )}
             </button>
-          )}
         </div>
 
         {/* Gallery Content */}
@@ -829,6 +826,7 @@ export default function SitePopup({
           isLoading={galleryHook.isLoading}
           isOffline={isOffline}
           onItemClick={handleItemClick}
+          isExpanded={galleryHook.isGalleryExpanded}
         />
 
         {/* Gallery Footer: Connector Status + Dev Warning */}
