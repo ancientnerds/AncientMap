@@ -21,6 +21,12 @@ SCORING CRITERIA (be strict — most items should be 3-5):
  2 = Background context — methodology description, general history recap
  1 = Not archaeology — video games, space weather, modern politics, entertainment
 
+TOPIC FOCUS — THE ANCIENT WORLD:
+This site covers the ancient world: civilizations, cultures, and peoples (roughly 10,000 BC onward).
+- Deep prehistory (Homo erectus, early hominins, pre-human evolution, million-year-old fossils): max score 5 unless it directly changes our understanding of ancient human cultures
+- Paleoanthropology (hominin species classification, fossil skulls, evolutionary biology): max score 5
+- Ancient civilizations, cities, temples, artifacts, inscriptions, tombs: score normally
+
 AUTOMATIC SCORE 1 IF:
 - Content is from a video game, simulation, or fictional media
 - Content is about planets, space weather, or non-Earth features
