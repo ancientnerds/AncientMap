@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: AGPL-3.0-only
 # Ancient Nerds Map - API Dockerfile
 # Multi-stage build for optimized production image
 

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: AGPL-3.0-only
 # Ancient Nerds Map - Python Project Configuration
 
 [build-system]
@@ -10,7 +10,7 @@ name = "ancient-nerds-map"
 version = "1.0.0"
 description = "Archaeological sites data pipeline and API"
 readme = "README.md"
-license = {text = "MIT"}
+license = {text = "AGPL-3.0-only"}
 requires-python = ">=3.11"
 authors = [
     {name = "Ancient Nerds Team", email = "ancient.nerds@protonmail.com"}
@@ -21,7 +21,7 @@ classifiers = [
     "Environment :: Web Environment",
     "Framework :: FastAPI",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: GIS",
