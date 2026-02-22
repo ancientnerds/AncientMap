@@ -4875,7 +4875,7 @@ a.popup-window-btn {
 
 .badge {
   padding: 4px 10px;
-  border-radius: 4px;
+  border-radius: 12px;
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -11001,7 +11001,7 @@ body.hud-hidden .empire-borders-window {
   padding: 2px 6px;
   background: rgba(192, 32, 35, 0.2);
   color: var(--primary-red);
-  border-radius: 4px;
+  border-radius: 12px;
   margin-left: auto;
 }
 
@@ -12394,7 +12394,7 @@ body.news-feed-open .empire-borders-window {
   font-size: 9px;
   font-weight: 500;
   padding: 2px 6px;
-  border-radius: 3px;
+  border-radius: 12px;
   min-width: 18px;
   text-align: center;
 }
@@ -15684,12 +15684,15 @@ body.news-feed-open .empire-borders-window {
 }
 
 .article-video-link {
-  display: block;
+  display: inline;
   font-size: 12px;
   color: var(--primary-cyan, #00b4b4);
   text-decoration: none;
-  margin-top: 6px;
   transition: color 0.15s;
+}
+
+.article-figcaption-sep {
+  color: var(--text-tertiary, #64748b);
 }
 
 .article-video-link:hover {

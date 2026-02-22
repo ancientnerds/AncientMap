@@ -101,7 +101,6 @@ services:
       POSTGRES_HOST: db
       REDIS_HOST: redis
       QDRANT_HOST: qdrant
-      BUILD_HASH: ${BUILD_HASH:-}
       PATREON_WEBHOOK_SECRET: ${PATREON_WEBHOOK_SECRET:-}
     volumes:
       - ./public/data:/app/public/data
