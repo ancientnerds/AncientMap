@@ -24,10 +24,6 @@ COPY requirements-api.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements-api.txt
 
-# Install Playwright Chromium browser
-ENV PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers
-RUN playwright install --with-deps chromium
-
 # =============================================================================
 # Stage 2: Production
 # =============================================================================
@@ -35,29 +31,10 @@ FROM python:3.11-slim AS production
 
 WORKDIR /app
 
-# Install runtime dependencies (including Playwright/Chromium deps)
+# Install runtime dependencies only
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     curl \
-    # Chromium runtime dependencies
-    libnss3 \
-    libnspr4 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libdrm2 \
-    libdbus-1-3 \
-    libxkbcommon0 \
-    libatspi2.0-0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxrandr2 \
-    libgbm1 \
-    libpango-1.0-0 \
-    libcairo2 \
-    libasound2 \
-    libxshmfence1 \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -69,10 +46,6 @@ RUN groupadd --gid 1000 appgroup && \
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy Playwright browser binaries from builder
-COPY --from=builder /opt/pw-browsers /opt/pw-browsers
-ENV PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers
-
 # Copy application code
 COPY api/ ./api/
 COPY pipeline/ ./pipeline/
@@ -81,9 +54,6 @@ COPY ancient-nerds-map/src/data/seshat/ ./ancient-nerds-map/src/data/seshat/
 # Copy optional asset directories (may not exist in all environments)
 COPY font[s]/ ./fonts/
 COPY log[o]/ ./logo/
-
-# Ensure appuser can write to /tmp for OG image cache
-RUN chmod 1777 /tmp
 
 # Set ownership
 RUN chown -R appuser:appgroup /app
