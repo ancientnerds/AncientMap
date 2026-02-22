@@ -538,7 +538,7 @@
 
 .api-quickref-tag {
   padding: 2px 7px;
-  border-radius: 3px;
+  border-radius: 12px;
   background: rgba(0, 180, 180, 0.06);
   border: 1px solid rgba(0, 180, 180, 0.15);
   font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
@@ -548,7 +548,7 @@
 
 .api-quickref-more {
   padding: 2px 10px;
-  border-radius: 3px;
+  border-radius: 12px;
   border: 1px dashed rgba(0, 180, 180, 0.25);
   background: transparent;
   font-family: 'Inter', sans-serif;
