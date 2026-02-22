@@ -8,6 +8,21 @@ and include OpenAPI examples for auto-generated documentation.
 from pydantic import BaseModel, Field
 
 # =============================================================================
+# Status
+# =============================================================================
+
+
+class StatusResponse(BaseModel):
+    """API health and version information."""
+
+    status: str = Field(description="Service status", json_schema_extra={"example": "ok"})
+    version: str = Field(description="API version", json_schema_extra={"example": "1.0.0"})
+    commit: str = Field(description="Git commit hash of the running build", json_schema_extra={"example": "8c8b02f"})
+    total_sites: int = Field(description="Total archaeological sites in database (>0 = healthy)", json_schema_extra={"example": 750000})
+    source_count: int = Field(description="Number of active data sources", json_schema_extra={"example": 18})
+
+
+# =============================================================================
 # Sites
 # =============================================================================
 
@@ -24,6 +39,7 @@ class SiteResult(BaseModel):
     period_start: int | None = Field(None, description="Estimated start date (negative = BC)", json_schema_extra={"example": -3000})
     period_name: str | None = Field(None, description="Named period", json_schema_extra={"example": "Neolithic"})
     country: str | None = Field(None, description="Country name", json_schema_extra={"example": "United Kingdom"})
+    source_url: str | None = Field(None, description="Link to original source record")
 
 
 class SiteSearchResponse(BaseModel):
@@ -37,7 +53,6 @@ class SiteDetailResponse(SiteResult):
     """Full detail for a single archaeological site."""
 
     description: str | None = Field(None, description="Site description")
-    source_url: str | None = Field(None, description="Link to original source")
     thumbnail_url: str | None = Field(None, description="Thumbnail image URL")
     period_end: int | None = Field(None, description="Estimated end date (negative = BC)")
 
@@ -56,6 +71,23 @@ class SourcePublic(BaseModel):
     color: str = Field(description="Hex color for map display", json_schema_extra={"example": "#e74c3c"})
     category: str | None = Field(None, description="Source category", json_schema_extra={"example": "ancient_world"})
     description: str | None = Field(None, description="Brief description of the source")
+    license: str | None = Field(None, description="Data license (e.g. CC-BY-SA-4.0)")
+    url: str | None = Field(None, description="Source website URL")
+
+
+class SourceDetailResponse(BaseModel):
+    """Detailed breakdown for a single data source."""
+
+    id: str = Field(description="Source identifier", json_schema_extra={"example": "pleiades"})
+    name: str = Field(description="Human-readable source name", json_schema_extra={"example": "Pleiades"})
+    site_count: int = Field(description="Number of sites from this source", json_schema_extra={"example": 38000})
+    color: str = Field(description="Hex color for map display", json_schema_extra={"example": "#e74c3c"})
+    category: str | None = Field(None, description="Source category")
+    description: str | None = Field(None, description="Brief description of the source")
+    license: str | None = Field(None, description="Data license")
+    url: str | None = Field(None, description="Source website URL")
+    types: dict[str, int] = Field(description="Top site types with counts", json_schema_extra={"example": {"settlement": 12000, "temple": 3500}})
+    periods: dict[str, int] = Field(description="Period distribution with counts", json_schema_extra={"example": {"500 BC - 1 AD": 15000, "1 - 500 AD": 8000}})
 
 
 class SourcesResponse(BaseModel):
@@ -133,6 +165,7 @@ class StatsResponse(BaseModel):
 
     total_sites: int = Field(description="Total archaeological sites in database", json_schema_extra={"example": 750000})
     by_source: dict[str, int] = Field(description="Site count per data source", json_schema_extra={"example": {"pleiades": 38000, "dare": 22000}})
+    last_updated: str | None = Field(None, description="ISO 8601 timestamp of most recently updated site")
 
 
 # =============================================================================
@@ -147,6 +180,8 @@ class FacetSource(BaseModel):
     name: str = Field(description="Human-readable source name")
     color: str = Field(description="Hex color for display")
     count: int = Field(description="Number of sites from this source")
+    description: str | None = Field(None, description="Brief description of the source")
+    category: str | None = Field(None, description="Source category")
 
 
 class FacetsResponse(BaseModel):

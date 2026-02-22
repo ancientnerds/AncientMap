@@ -18,6 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from api.cache import cache_get, cache_set
+from api.build_info import BUILD_HASH
 from api.schemas.public_v1 import (
     ChannelPublic,
     FacetSource,
@@ -29,8 +30,10 @@ from api.schemas.public_v1 import (
     SiteDetailResponse,
     SiteResult,
     SiteSearchResponse,
+    SourceDetailResponse,
     SourcePublic,
     SourcesResponse,
+    StatusResponse,
     StatsResponse,
 )
 from api.services.rate_limiter import RateLimiter, get_client_ip
@@ -108,6 +111,43 @@ def create_public_api() -> FastAPI:
     async def public_error_handler(request: Request, exc: Exception):
         logger.error(f"Public API error on {request.url.path}: {exc}")
         return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
+    # =========================================================================
+    # 0. GET /status — Health & version info
+    # =========================================================================
+
+    @public_app.get(
+        "/status",
+        summary="Check API status",
+        description=(
+            "Returns API version, build commit, and database health.\n\n"
+            "`total_sites > 0` indicates the database is healthy and serving data."
+        ),
+        response_model=StatusResponse,
+        tags=["Status"],
+        dependencies=[Depends(rate_limit_dependency)],
+        responses={429: {"description": "Rate limit exceeded"}},
+    )
+    async def get_status(db: Session = Depends(get_db)):
+        cache_key = "pubv1:status"
+        cached = cache_get(cache_key)
+        if cached:
+            return cached
+
+        total = db.execute(text("SELECT COUNT(*) FROM unified_sites")).scalar()
+        source_count = db.execute(text(
+            "SELECT COUNT(*) FROM source_meta WHERE enabled = true"
+        )).scalar()
+
+        response = StatusResponse(
+            status="ok",
+            version="1.0.0",
+            commit=BUILD_HASH,
+            total_sites=total,
+            source_count=source_count,
+        )
+        cache_set(cache_key, response.model_dump(), ttl=60)
+        return response
 
     # =========================================================================
     # 1. GET /sites.geojson — GeoJSON FeatureCollection
@@ -249,7 +289,7 @@ def create_public_api() -> FastAPI:
         # Spaceless matching: compare with spaces/diacritics stripped
         query = text("""
             SELECT id::text, name, lat, lon, source_id, site_type,
-                   period_start, period_name, country
+                   period_start, period_name, country, source_url
             FROM unified_sites
             WHERE name ILIKE :pattern
             ORDER BY
@@ -275,6 +315,7 @@ def create_public_api() -> FastAPI:
                 period_start=row.period_start,
                 period_name=row.period_name,
                 country=row.country,
+                source_url=row.source_url,
             )
             for row in result
         ]
@@ -364,13 +405,16 @@ def create_public_api() -> FastAPI:
                 COALESCE(site_counts.count, 0) as site_count,
                 COALESCE(sm.color, :default_color) as color,
                 sm.category,
-                sm.description
+                sm.description,
+                sm.license,
+                sd.url
             FROM source_meta sm
             LEFT JOIN (
                 SELECT source_id, COUNT(*) as count
                 FROM unified_sites
                 GROUP BY source_id
             ) site_counts ON sm.id = site_counts.source_id
+            LEFT JOIN source_databases sd ON sm.id = sd.id
             WHERE sm.enabled = true
             ORDER BY COALESCE(site_counts.count, 0) DESC
         """)
@@ -384,11 +428,114 @@ def create_public_api() -> FastAPI:
                 color=row.color or _SOURCE_COLORS.get(row.source_id, _SOURCE_COLORS["default"]),
                 category=row.category,
                 description=row.description,
+                license=row.license,
+                url=row.url,
             )
             for row in result
         ]
 
         response = SourcesResponse(count=len(sources), sources=sources)
+        cache_set(cache_key, response.model_dump(), ttl=600)
+        return response
+
+    # =========================================================================
+    # 4b. GET /sources/{source_id} — Single source detail
+    # =========================================================================
+
+    @public_app.get(
+        "/sources/{source_id}",
+        summary="Get source details",
+        description=(
+            "Detailed breakdown for a single data source.\n\n"
+            "Includes site type distribution (top 20) and period distribution."
+        ),
+        response_model=SourceDetailResponse,
+        tags=["Sources"],
+        dependencies=[Depends(rate_limit_dependency)],
+        responses={
+            404: {"description": "Source not found"},
+            429: {"description": "Rate limit exceeded"},
+        },
+    )
+    async def get_source_detail(
+        source_id: str,
+        db: Session = Depends(get_db),
+    ):
+        cache_key = f"pubv1:source:{source_id}"
+        cached = cache_get(cache_key)
+        if cached:
+            return cached
+
+        # Get metadata from source_meta + source_databases
+        meta_query = text("""
+            SELECT
+                sm.id, sm.name, sm.color, sm.category, sm.description, sm.license,
+                sd.url
+            FROM source_meta sm
+            LEFT JOIN source_databases sd ON sm.id = sd.id
+            WHERE sm.id = :source_id AND sm.enabled = true
+        """)
+        meta = db.execute(meta_query, {"source_id": source_id}).fetchone()
+
+        # Count sites
+        count = db.execute(
+            text("SELECT COUNT(*) FROM unified_sites WHERE source_id = :source_id"),
+            {"source_id": source_id},
+        ).scalar()
+
+        if not meta and count == 0:
+            raise HTTPException(status_code=404, detail="Source not found")
+
+        # Type breakdown (top 20)
+        type_result = db.execute(text("""
+            SELECT site_type, COUNT(*) as count
+            FROM unified_sites
+            WHERE source_id = :source_id AND site_type IS NOT NULL
+            GROUP BY site_type
+            ORDER BY count DESC
+            LIMIT 20
+        """), {"source_id": source_id})
+        types = {row.site_type: row.count for row in type_result}
+
+        # Period breakdown
+        period_result = db.execute(text("""
+            SELECT
+                CASE
+                    WHEN period_start < -4500 THEN '< 4500 BC'
+                    WHEN period_start < -3000 THEN '4500 - 3000 BC'
+                    WHEN period_start < -1500 THEN '3000 - 1500 BC'
+                    WHEN period_start < -500 THEN '1500 - 500 BC'
+                    WHEN period_start < 1 THEN '500 BC - 1 AD'
+                    WHEN period_start < 500 THEN '1 - 500 AD'
+                    WHEN period_start < 1500 THEN '500 - 1500 AD'
+                    ELSE 'Unknown'
+                END as period,
+                COUNT(*) as count
+            FROM unified_sites
+            WHERE source_id = :source_id
+            GROUP BY period
+            ORDER BY MIN(COALESCE(period_start, 0))
+        """), {"source_id": source_id})
+        periods = {row.period: row.count for row in period_result}
+
+        name = source_id.replace("_", " ").title()
+        color = _SOURCE_COLORS.get(source_id, _SOURCE_COLORS["default"])
+        if meta:
+            name = meta.name or name
+            color = meta.color or color
+
+        response = SourceDetailResponse(
+            id=source_id,
+            name=name,
+            site_count=count,
+            color=color,
+            category=meta.category if meta else None,
+            description=meta.description if meta else None,
+            license=meta.license if meta else None,
+            url=meta.url if meta else None,
+            types=types,
+            periods=periods,
+        )
         cache_set(cache_key, response.model_dump(), ttl=600)
         return response
 
@@ -552,7 +699,12 @@ def create_public_api() -> FastAPI:
         """))
         by_source = {row.source_id: row.count for row in result}
 
-        response = StatsResponse(total_sites=total, by_source=by_source)
+        last_updated_row = db.execute(text(
+            "SELECT MAX(COALESCE(updated_at, created_at)) FROM unified_sites"
+        )).scalar()
+        last_updated = last_updated_row.isoformat() if last_updated_row else None
+
+        response = StatsResponse(total_sites=total, by_source=by_source, last_updated=last_updated)
         cache_set(cache_key, response.model_dump(), ttl=300)
         return response
 
@@ -604,7 +756,9 @@ def create_public_api() -> FastAPI:
                 sm.id as source_id,
                 sm.name,
                 COALESCE(sm.color, :default_color) as color,
-                COALESCE(sc.count, 0) as site_count
+                COALESCE(sc.count, 0) as site_count,
+                sm.description,
+                sm.category
             FROM source_meta sm
             LEFT JOIN (
                 SELECT source_id, COUNT(*) as count
@@ -621,6 +775,8 @@ def create_public_api() -> FastAPI:
                 name=row.name or row.source_id.replace("_", " ").title(),
                 color=row.color or _SOURCE_COLORS.get(row.source_id, _SOURCE_COLORS["default"]),
                 count=row.site_count,
+                description=row.description,
+                category=row.category,
             )
             for row in source_result
         ]

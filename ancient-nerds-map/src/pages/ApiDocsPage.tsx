@@ -35,6 +35,8 @@ interface FacetSource {
   name: string
   color: string
   count: number
+  description?: string
+  category?: string
 }
 
 interface FacetsData {
@@ -43,7 +45,7 @@ interface FacetsData {
   categories: string[]
 }
 
-const TAG_ORDER = ['Sites', 'Sources', 'News', 'Stats']
+const TAG_ORDER = ['Status', 'Sites', 'Sources', 'News', 'Stats']
 
 const PARAM_FACET_MAP: Record<string, keyof FacetsData> = {
   source: 'sources',
@@ -52,6 +54,9 @@ const PARAM_FACET_MAP: Record<string, keyof FacetsData> = {
 }
 
 const ENDPOINT_EXAMPLES: Record<string, { label: string; params: Record<string, string> }[]> = {
+  '/status': [
+    { label: 'Check status', params: {} },
+  ],
   '/sites.geojson': [
     { label: 'Roman sites in Italy', params: { source: 'pleiades', country: 'Italy' } },
     { label: 'UNESCO sites', params: { source: 'unesco' } },
@@ -60,6 +65,10 @@ const ENDPOINT_EXAMPLES: Record<string, { label: string; params: Record<string, 
   '/sites/search': [
     { label: 'Search Pompeii', params: { q: 'Pompeii' } },
     { label: 'Search Stonehenge', params: { q: 'Stonehenge' } },
+  ],
+  '/sources/{source_id}': [
+    { label: 'Pleiades', params: { source_id: 'pleiades' } },
+    { label: 'UNESCO', params: { source_id: 'unesco' } },
   ],
 }
 
@@ -162,6 +171,7 @@ function QuickReference({ facets }: { facets: FacetsData }) {
                   key={s.id}
                   className="api-quickref-pill"
                   style={{ borderColor: s.color, color: s.color }}
+                  title={s.description || s.name}
                 >
                   {s.id}
                   <span className="api-quickref-pill-count">{s.count.toLocaleString()}</span>
