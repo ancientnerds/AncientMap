@@ -57,8 +57,7 @@
   color: var(--text-primary, #e8e8e8);
   font-family: 'Orbitron', sans-serif;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex-shrink: 0;
 }
 
 .page-header-flag {

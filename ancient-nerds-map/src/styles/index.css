@@ -4137,6 +4137,8 @@ a.popup-window-btn {
   top: 8px;
   right: 8px;
   z-index: 1000;
+  display: flex;
+  gap: 4px;
 }
 
 /* Narrow/portrait viewport — stack content above map */
