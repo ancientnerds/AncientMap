@@ -2,7 +2,7 @@
   "name": "ancient-nerds-research-platform",
   "private": true,
   "version": "1.0.0",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
     "dev": "vite",

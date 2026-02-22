@@ -168,12 +168,11 @@ python -m pipeline.main preview pleiades --limit 20
 
 ## License
 
-This project aggregates open data from various sources. Each source has its own license:
-- Pleiades: CC-BY 3.0
-- UNESCO: Open with attribution
-- And more (see source documentation)
+**Source code**: [AGPL-3.0](LICENSE) — you may use, modify, and redistribute, but any derivative work (including server-side use) must also be released under AGPL-3.0.
 
-Please respect the attribution requirements of each data source.
+**Original content & data compilation**: [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) — non-commercial use with attribution to Ancient Nerds.
+
+**Third-party data**: This project aggregates data from 30+ sources, each with its own license (CC BY, CC0, ODbL, CC BY-NC, etc.). See [ATTRIBUTION.md](ATTRIBUTION.md) for the full list. Please respect each source's terms.
 
 ## Contributing
 

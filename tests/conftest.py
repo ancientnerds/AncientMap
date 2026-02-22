@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: AGPL-3.0-only
 """Pytest configuration and fixtures for Ancient Nerds Map tests."""
 
 import os
