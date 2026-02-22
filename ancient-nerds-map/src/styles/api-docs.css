@@ -437,6 +437,191 @@
   color: #ffa759;              /* orange — true/false/null */
 }
 
+/* ── Quick Reference panel ── */
+
+.api-quickref {
+  background: var(--bg-card, rgba(0, 20, 25, 0.35));
+  border: 1px solid var(--border-color, rgba(0, 180, 180, 0.2));
+  border-radius: 8px;
+  margin-bottom: 20px;
+  transition: border-color 0.2s;
+}
+.api-quickref.open {
+  border-color: rgba(0, 180, 180, 0.35);
+}
+
+.api-quickref-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.api-quickref-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-primary, #e8e8e8);
+  flex-shrink: 0;
+}
+
+.api-quickref-summary {
+  font-size: 11px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.4));
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.api-quickref-body {
+  padding: 0 14px 14px;
+  border-top: 1px solid var(--border-color, rgba(0, 180, 180, 0.08));
+}
+
+.api-quickref-group {
+  margin-top: 12px;
+}
+
+.api-quickref-group-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.api-quickref-group-label {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.5));
+}
+
+.api-quickref-group-hint {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.25);
+  font-style: italic;
+}
+
+.api-quickref-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.api-quickref-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid;
+  background: rgba(0, 0, 0, 0.2);
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.api-quickref-pill-count {
+  font-size: 9px;
+  opacity: 0.6;
+}
+
+.api-quickref-tag {
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: rgba(0, 180, 180, 0.06);
+  border: 1px solid rgba(0, 180, 180, 0.15);
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.api-quickref-more {
+  padding: 2px 10px;
+  border-radius: 3px;
+  border: 1px dashed rgba(0, 180, 180, 0.25);
+  background: transparent;
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+.api-quickref-more:hover {
+  color: var(--text-primary, #e8e8e8);
+  border-color: rgba(0, 180, 180, 0.45);
+}
+
+/* ── Parameter input enhancements ── */
+
+.api-param-input-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.api-param-input-wrap .api-param-input {
+  flex: 1;
+}
+
+.api-facet-hint {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 8px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(0, 180, 180, 0.08);
+  border: 1px solid rgba(0, 180, 180, 0.15);
+  color: rgba(0, 180, 180, 0.5);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Example buttons ── */
+
+.api-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 4px;
+}
+
+.api-examples-label {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.3);
+  align-self: center;
+  margin-right: 2px;
+}
+
+.api-example-btn {
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 180, 180, 0.25);
+  background: rgba(0, 180, 180, 0.06);
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  color: rgba(0, 180, 180, 0.7);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+.api-example-btn:hover {
+  background: rgba(0, 180, 180, 0.12);
+  color: rgba(0, 180, 180, 0.9);
+  border-color: rgba(0, 180, 180, 0.4);
+}
+
 /* ── Responsive ── */
 
 @media (max-width: 640px) {
@@ -481,5 +666,28 @@
   .api-exec-url {
     width: 100%;
     order: 3;
+  }
+
+  .api-quickref-toggle {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .api-quickref-summary {
+    width: 100%;
+    order: 3;
+  }
+
+  .api-quickref-tags {
+    gap: 4px;
+  }
+
+  .api-param-input-wrap {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .api-facet-hint {
+    align-self: flex-start;
   }
 }

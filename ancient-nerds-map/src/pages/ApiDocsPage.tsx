@@ -30,7 +30,38 @@ interface ParsedEndpoint {
   parameters: OpenAPIParam[]
 }
 
+interface FacetSource {
+  id: string
+  name: string
+  color: string
+  count: number
+}
+
+interface FacetsData {
+  sources: FacetSource[]
+  countries: string[]
+  categories: string[]
+}
+
 const TAG_ORDER = ['Sites', 'Sources', 'News', 'Stats']
+
+const PARAM_FACET_MAP: Record<string, keyof FacetsData> = {
+  source: 'sources',
+  country: 'countries',
+  type: 'categories',
+}
+
+const ENDPOINT_EXAMPLES: Record<string, { label: string; params: Record<string, string> }[]> = {
+  '/sites.geojson': [
+    { label: 'Roman sites in Italy', params: { source: 'pleiades', country: 'Italy' } },
+    { label: 'UNESCO sites', params: { source: 'unesco' } },
+    { label: 'Temples in Greece', params: { country: 'Greece', type: 'temple' } },
+  ],
+  '/sites/search': [
+    { label: 'Search Pompeii', params: { q: 'Pompeii' } },
+    { label: 'Search Stonehenge', params: { q: 'Stonehenge' } },
+  ],
+}
 
 /** Lightweight JSON syntax highlighter — no deps, just spans with class names. */
 function highlightJson(json: string): string {
@@ -70,7 +101,93 @@ function parseSpec(spec: OpenAPISpec): ParsedEndpoint[] {
   return endpoints
 }
 
-function EndpointCard({ ep }: { ep: ParsedEndpoint }) {
+function getDatalistOptions(paramName: string, facets: FacetsData): string[] {
+  const facetKey = PARAM_FACET_MAP[paramName]
+  if (!facetKey) return []
+  if (facetKey === 'sources') return facets.sources.map(s => s.id)
+  return facets[facetKey] as string[]
+}
+
+function QuickRefList({ items, label, hint }: { items: string[]; label: string; hint: string }) {
+  const [showAll, setShowAll] = useState(false)
+  const INITIAL = 20
+  const visible = showAll ? items : items.slice(0, INITIAL)
+  const remaining = items.length - INITIAL
+
+  return (
+    <div className="api-quickref-group">
+      <div className="api-quickref-group-header">
+        <span className="api-quickref-group-label">{label}</span>
+        <span className="api-quickref-group-hint">{hint}</span>
+      </div>
+      <div className="api-quickref-tags">
+        {visible.map(item => (
+          <code key={item} className="api-quickref-tag">{item}</code>
+        ))}
+        {!showAll && remaining > 0 && (
+          <button className="api-quickref-more" onClick={() => setShowAll(true)}>
+            +{remaining} more
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function QuickReference({ facets }: { facets: FacetsData }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div className={`api-quickref${open ? ' open' : ''}`}>
+      <button className="api-quickref-toggle" onClick={() => setOpen(!open)}>
+        <span className="api-quickref-title">Quick Reference</span>
+        <span className="api-quickref-summary">
+          {facets.sources.length} sources, {facets.countries.length} countries, {facets.categories.length} site types
+        </span>
+        <svg className={`api-card-chevron${open ? ' open' : ''}`} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="api-quickref-body">
+          <div className="api-quickref-group">
+            <div className="api-quickref-group-header">
+              <span className="api-quickref-group-label">Sources</span>
+              <span className="api-quickref-group-hint">use as the &quot;source&quot; parameter</span>
+            </div>
+            <div className="api-quickref-tags">
+              {facets.sources.map(s => (
+                <span
+                  key={s.id}
+                  className="api-quickref-pill"
+                  style={{ borderColor: s.color, color: s.color }}
+                >
+                  {s.id}
+                  <span className="api-quickref-pill-count">{s.count.toLocaleString()}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <QuickRefList
+            items={facets.categories}
+            label="Site Types"
+            hint='use as the "type" parameter'
+          />
+
+          <QuickRefList
+            items={facets.countries}
+            label="Countries"
+            hint='use as the "country" parameter'
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function EndpointCard({ ep, facets }: { ep: ParsedEndpoint; facets: FacetsData | null }) {
   const [expanded, setExpanded] = useState(false)
   const [paramValues, setParamValues] = useState<Record<string, string>>({})
   const [response, setResponse] = useState<{ status: number; time: number; body: string } | null>(null)
@@ -80,19 +197,23 @@ function EndpointCard({ ep }: { ep: ParsedEndpoint }) {
   const queryParams = ep.parameters.filter(p => p.in === 'query')
   const pathParams = ep.parameters.filter(p => p.in === 'path')
   const allParams = [...pathParams, ...queryParams]
+  const examples = ENDPOINT_EXAMPLES[ep.path] || []
 
   const setParam = (name: string, value: string) => {
     setParamValues(prev => ({ ...prev, [name]: value }))
   }
 
+  const fillExample = (params: Record<string, string>) => {
+    setParamValues(params)
+    if (!expanded) setExpanded(true)
+  }
+
   const buildUrl = () => {
     let url = `/api/v1${ep.path}`
-    // Substitute path params
     for (const p of pathParams) {
       const val = paramValues[p.name] || ''
       url = url.replace(`{${p.name}}`, encodeURIComponent(val))
     }
-    // Add query params
     const qs = queryParams
       .map(p => {
         const val = paramValues[p.name]
@@ -125,7 +246,6 @@ function EndpointCard({ ep }: { ep: ParsedEndpoint }) {
       setResponse({ status: 0, time: elapsed, body: `Network error: ${err}` })
     }
     setFetching(false)
-    // Scroll response into view
     setTimeout(() => responseRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50)
   }
 
@@ -153,31 +273,61 @@ function EndpointCard({ ep }: { ep: ParsedEndpoint }) {
         <div className="api-card-body">
           {ep.description && <p className="api-card-desc">{ep.description}</p>}
 
-          {/* Parameter inputs */}
           {allParams.length > 0 && (
             <div className="api-card-params">
               <div className="api-card-params-label">Parameters</div>
-              {allParams.map(p => (
-                <div key={p.name} className="api-param-row">
-                  <div className="api-param-row-left">
-                    <code className="api-param-name">{p.name}</code>
-                    {p.required && <span className="api-param-req">required</span>}
-                    <span className="api-param-type">{p.schema?.type || 'string'}</span>
+              {allParams.map(p => {
+                const dlOptions = facets ? getDatalistOptions(p.name, facets) : []
+                const dlId = dlOptions.length > 0 ? `dl-${ep.path}-${p.name}` : undefined
+                return (
+                  <div key={p.name} className="api-param-row">
+                    <div className="api-param-row-left">
+                      <code className="api-param-name">{p.name}</code>
+                      {p.required && <span className="api-param-req">required</span>}
+                      <span className="api-param-type">{p.schema?.type || 'string'}</span>
+                    </div>
+                    <div className="api-param-input-wrap">
+                      <input
+                        className="api-param-input"
+                        type="text"
+                        placeholder={p.description || p.name}
+                        value={paramValues[p.name] || ''}
+                        onChange={e => setParam(p.name, e.target.value)}
+                        onClick={e => e.stopPropagation()}
+                        list={dlId}
+                      />
+                      {dlId && (
+                        <>
+                          <datalist id={dlId}>
+                            {dlOptions.map(v => (
+                              <option key={v} value={v} />
+                            ))}
+                          </datalist>
+                          <span className="api-facet-hint">/facets</span>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <input
-                    className="api-param-input"
-                    type="text"
-                    placeholder={p.description || p.name}
-                    value={paramValues[p.name] || ''}
-                    onChange={e => setParam(p.name, e.target.value)}
-                    onClick={e => e.stopPropagation()}
-                  />
-                </div>
+                )
+              })}
+            </div>
+          )}
+
+          {examples.length > 0 && (
+            <div className="api-examples">
+              <span className="api-examples-label">Try:</span>
+              {examples.map(ex => (
+                <button
+                  key={ex.label}
+                  className="api-example-btn"
+                  onClick={() => fillExample(ex.params)}
+                >
+                  {ex.label}
+                </button>
               ))}
             </div>
           )}
 
-          {/* Execute bar */}
           <div className="api-exec-bar">
             <button
               className="api-exec-btn"
@@ -192,7 +342,6 @@ function EndpointCard({ ep }: { ep: ParsedEndpoint }) {
             <code className="api-exec-url">{buildUrl()}</code>
           </div>
 
-          {/* Response */}
           {response && (
             <div className="api-response">
               <div className="api-response-header">
@@ -217,6 +366,7 @@ function EndpointCard({ ep }: { ep: ParsedEndpoint }) {
 
 export default function ApiDocsPage() {
   const [endpoints, setEndpoints] = useState<ParsedEndpoint[]>([])
+  const [facets, setFacets] = useState<FacetsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
@@ -224,19 +374,20 @@ export default function ApiDocsPage() {
   const baseUrl = `${window.location.origin}/api/v1`
 
   useEffect(() => {
-    fetch('/api/v1/openapi.json')
-      .then(r => {
+    Promise.all([
+      fetch('/api/v1/openapi.json').then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
-      })
-      .then((spec: OpenAPISpec) => {
-        setEndpoints(parseSpec(spec))
-        setLoading(false)
-      })
-      .catch(err => {
-        setError(`Failed to load API spec: ${err.message}`)
-        setLoading(false)
-      })
+      }),
+      fetch('/api/v1/facets').then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([spec, facetsData]: [OpenAPISpec, FacetsData | null]) => {
+      setEndpoints(parseSpec(spec))
+      setFacets(facetsData)
+      setLoading(false)
+    }).catch(err => {
+      setError(`Failed to load API spec: ${err.message}`)
+      setLoading(false)
+    })
   }, [])
 
   const copyBaseUrl = () => {
@@ -245,7 +396,6 @@ export default function ApiDocsPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // Group by tag
   const byTag: Record<string, ParsedEndpoint[]> = {}
   for (const ep of endpoints) {
     const tag = ep.tags[0] || 'Other'
@@ -304,11 +454,13 @@ export default function ApiDocsPage() {
           All responses are JSON. Rate limit headers included in every response.
         </p>
 
+        {facets && <QuickReference facets={facets} />}
+
         {sortedTags.map(tag => (
           <div key={tag} className="api-section">
             <h2 className="api-section-label">{tag}</h2>
             {byTag[tag].map(ep => (
-              <EndpointCard key={`${ep.method}:${ep.path}`} ep={ep} />
+              <EndpointCard key={`${ep.method}:${ep.path}`} ep={ep} facets={facets} />
             ))}
           </div>
         ))}
