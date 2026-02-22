@@ -118,7 +118,8 @@ def create_public_api() -> FastAPI:
         summary="Get sites as GeoJSON",
         description=(
             "Returns archaeological sites as a GeoJSON FeatureCollection (RFC 7946).\n\n"
-            "Supports filtering by source, country, period, type, and bounding box."
+            "Supports filtering by source, country, period, type, and bounding box.\n\n"
+            "**Tip:** Use `/facets` to discover valid values for the `source`, `country`, and `type` filters."
         ),
         tags=["Sites"],
         dependencies=[Depends(rate_limit_dependency)],
@@ -127,11 +128,11 @@ def create_public_api() -> FastAPI:
     async def get_sites_geojson(
         response: Response,
         db: Session = Depends(get_db),
-        source: list[str] | None = Query(None, description="Filter by source IDs"),
-        country: str | None = Query(None, description="Filter by country name"),
-        period: int | None = Query(None, description="Max period_start year"),
-        type: str | None = Query(None, alias="type", description="Filter by site_type"),
-        bbox: str | None = Query(None, description="Bounding box: minlon,minlat,maxlon,maxlat"),
+        source: list[str] | None = Query(None, description="Filter by source IDs (e.g. ancient_nerds, pleiades, dare, unesco, wikidata). Accepts multiple values. Use /facets to list all available source IDs."),
+        country: str | None = Query(None, description="Filter by country name, case-insensitive (e.g. Italy, Greece, Egypt, Turkey). Use /facets to list all countries."),
+        period: int | None = Query(None, description="Max period_start year. Negative values = BC (e.g. -3000 for 3000 BC). Typical range: -5000 to 1500."),
+        type: str | None = Query(None, alias="type", description="Filter by site type (e.g. temple, settlement, fort, tomb, theater). Use /facets to list all types (returned as 'categories')."),
+        bbox: str | None = Query(None, description="Bounding box: minlon,minlat,maxlon,maxlat (e.g. -10.5,35.0,45.0,72.0 for Europe)"),
         limit: int = Query(10000, ge=1, le=50000, description="Max features returned"),
     ):
         parts = [
@@ -563,8 +564,12 @@ def create_public_api() -> FastAPI:
         "/facets",
         summary="Get filter facets",
         description=(
-            "Returns distinct categories, countries, and source metadata "
-            "for populating filter dropdowns without loading all sites."
+            "Discovery endpoint for all filter values.\n\n"
+            "Returns distinct site types (`categories`), country names, and source metadata "
+            "with site counts. Use these values as parameters in `/sites.geojson`:\n"
+            "- `categories` → `type` parameter\n"
+            "- `countries` → `country` parameter\n"
+            "- `sources[].id` → `source` parameter"
         ),
         response_model=FacetsResponse,
         tags=["Sites"],
