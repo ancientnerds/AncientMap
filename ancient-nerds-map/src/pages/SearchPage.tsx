@@ -153,13 +153,13 @@ export default function SearchPage() {
 
   const handleRandom = useCallback(() => {
     if (sites.length === 0) return
-    setSearchAllSources(true)
-    const shuffled = [...sites].sort(() => Math.random() - 0.5)
+    const pool = searchAllSources ? sites : sites.filter(s => selectedSources.includes(s.sourceId))
+    const shuffled = [...pool].sort(() => Math.random() - 0.5)
     randomPoolRef.current = shuffled
     setRandomSites(shuffled.slice(0, 50))
     setRandomVisible(50)
     search.setSearchQuery('')
-  }, [sites, search])
+  }, [sites, search, searchAllSources, selectedSources])
 
   const handleLoadMoreRandom = useCallback(() => {
     const next = randomVisible + 50
