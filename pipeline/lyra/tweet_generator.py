@@ -163,6 +163,9 @@ def generate_posts_for_video(
         fallback_idx = 0
         count = 0
         for post_data in posts_data:
+            if not isinstance(post_data, dict):
+                logger.warning(f"Malformed post data: {type(post_data).__name__}, skipping")
+                continue
             post_text = post_data.get("tweet", "")
             headline = post_data.get("headline", "")
             ts_range = post_data.get("timestamp_range")

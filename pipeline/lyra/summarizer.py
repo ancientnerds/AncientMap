@@ -299,6 +299,12 @@ def summarize_video(
         db_video.processed_at = datetime.now(UTC)
 
         for topic in key_topics:
+            if isinstance(topic, str):
+                logger.warning(f"Malformed topic in {video.id}: string instead of dict, recovering as headline")
+                topic = {"headline": topic[:100], "timestamp_range": None, "facts": [], "primary_site": None}
+            if not isinstance(topic, dict):
+                logger.warning(f"Malformed topic in {video.id}: {type(topic).__name__}, skipping")
+                continue
             ts_range = topic.get("timestamp_range")
             ts_seconds = None
             if ts_range:
