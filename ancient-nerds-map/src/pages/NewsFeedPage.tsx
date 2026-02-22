@@ -21,6 +21,53 @@ import '../components/news/news-cards.css'
 
 const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
 
+const COLLAPSED_MAX = 10
+
+function ExpandableFilterRow({ label, count, searchable, children }: {
+  label: string
+  count: number
+  searchable?: boolean
+  children: React.ReactNode
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const [filterText, setFilterText] = useState('')
+  const items = Array.isArray(children) ? children : [children]
+
+  // Filter items by search text if searchable
+  const filtered = searchable && filterText
+    ? items.filter(child => {
+        const text = (child as React.ReactElement)?.key?.toString().toLowerCase() ?? ''
+        return text.includes(filterText.toLowerCase())
+      })
+    : items
+
+  const visible = expanded || filterText ? filtered : filtered.slice(0, COLLAPSED_MAX)
+  const hasMore = filtered.length > COLLAPSED_MAX
+
+  return (
+    <div className="news-page-filter-row">
+      <span className="news-page-filter-label">{label}</span>
+      <div className="news-page-chips">
+        {searchable && count > COLLAPSED_MAX && (
+          <input
+            type="text"
+            className="news-filter-search"
+            placeholder={`Filter...`}
+            value={filterText}
+            onChange={e => setFilterText(e.target.value)}
+          />
+        )}
+        {visible}
+        {hasMore && !filterText && (
+          <button className="news-filter-expand" onClick={() => setExpanded(!expanded)}>
+            {expanded ? '− less' : `+ ${count - COLLAPSED_MAX} more`}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function NewsFeedPage() {
   const [items, setItems] = useState<NewsItemData[]>([])
   const [loading, setLoading] = useState(true)
@@ -356,20 +403,20 @@ export default function NewsFeedPage() {
             <div className="news-page-filters-body">
               {/* Channel row */}
               {filters.channels.length > 0 && (
-                <div className="news-page-filter-row">
-                  <span className="news-page-filter-label">Channel</span>
-                  <div className="news-page-chips">
-                    {filters.channels.map(ch => (
-                      <button
-                        key={ch.id}
-                        className={`news-page-chip${activeFilters.channel === ch.id ? ' active' : ''}`}
-                        onClick={() => handleFilterToggle('channel', ch.id)}
-                      >
-                        {ch.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <ExpandableFilterRow
+                  label="Channel"
+                  count={filters.channels.length}
+                >
+                  {filters.channels.map(ch => (
+                    <button
+                      key={ch.id}
+                      className={`news-page-chip${activeFilters.channel === ch.id ? ' active' : ''}`}
+                      onClick={() => handleFilterToggle('channel', ch.id)}
+                    >
+                      {ch.name}
+                    </button>
+                  ))}
+                </ExpandableFilterRow>
               )}
 
               {/* Category row */}
@@ -418,42 +465,44 @@ export default function NewsFeedPage() {
 
               {/* Country row */}
               {filters.countries.length > 0 && (
-                <div className="news-page-filter-row">
-                  <span className="news-page-filter-label">Country</span>
-                  <div className="news-page-chips">
-                    {filters.countries.map(c => {
-                      const flagUrl = getCountryFlatFlagUrl(c)
-                      return (
-                        <button
-                          key={c}
-                          className={`news-page-chip${activeFilters.country === c ? ' active' : ''}`}
-                          onClick={() => handleFilterToggle('country', c)}
-                        >
-                          {flagUrl && <img className="news-page-chip-flag" src={flagUrl} alt="" />}
-                          {c}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
+                <ExpandableFilterRow
+                  label="Country"
+                  count={filters.countries.length}
+                  searchable
+                >
+                  {filters.countries.map(c => {
+                    const flagUrl = getCountryFlatFlagUrl(c)
+                    return (
+                      <button
+                        key={c}
+                        className={`news-page-chip${activeFilters.country === c ? ' active' : ''}`}
+                        onClick={() => handleFilterToggle('country', c)}
+                      >
+                        {flagUrl && <img className="news-page-chip-flag" src={flagUrl} alt="" />}
+                        {c}
+                      </button>
+                    )
+                  })}
+                </ExpandableFilterRow>
               )}
 
               {/* Site row */}
               {filters.sites.length > 0 && (
-                <div className="news-page-filter-row">
-                  <span className="news-page-filter-label">Site</span>
-                  <div className="news-page-chips">
-                    {filters.sites.map(s => (
-                      <button
-                        key={s.id}
-                        className={`news-page-chip${activeFilters.site === s.id ? ' active' : ''}`}
-                        onClick={() => handleFilterToggle('site', s.id)}
-                      >
-                        {s.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <ExpandableFilterRow
+                  label="Site"
+                  count={filters.sites.length}
+                  searchable
+                >
+                  {filters.sites.map(s => (
+                    <button
+                      key={s.id}
+                      className={`news-page-chip${activeFilters.site === s.id ? ' active' : ''}`}
+                      onClick={() => handleFilterToggle('site', s.id)}
+                    >
+                      {s.name}
+                    </button>
+                  ))}
+                </ExpandableFilterRow>
               )}
 
               {/* Significance threshold row */}
