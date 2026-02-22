@@ -510,12 +510,13 @@ async def article_citations(article_id: int, db: Session = Depends(get_db)):
     result: dict[str, NewsItemResponse] = {}
     for cit_num, video_id, ts in parsed:
         matched = by_vid_ts.get((video_id, ts))
-        if not matched and video_id in by_vid:
-            # Fallback: closest timestamp match for this video
+        if not matched and video_id in by_vid and ts is not None:
+            # Fallback: closest timestamp within 60s window (avoid wrong matches
+            # when multiple news items come from the same long video)
             candidates = by_vid[video_id]
-            if ts is not None:
-                candidates.sort(key=lambda i: abs((i.timestamp_seconds or 0) - ts))
-            matched = candidates[0]
+            candidates.sort(key=lambda i: abs((i.timestamp_seconds or 0) - ts))
+            if abs((candidates[0].timestamp_seconds or 0) - ts) <= 60:
+                matched = candidates[0]
         if not matched:
             continue
 

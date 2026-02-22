@@ -4,12 +4,9 @@ Based on the following archaeological news digest, create:
 1. A headline (max 80 characters) that highlights the single most exciting discovery. Be specific — NOT "This Week in Archaeology" or generic titles. Name the discovery or site.
 2. A 2-3 sentence TLDR summary covering the week's top findings.
 
-Use this format:
-[HEADLINE]
-Your headline here
-
-[TLDR]
-Your TLDR here — the summary only, no label.
+Return a JSON object with "headline" and "tldr" fields:
+- "headline": your headline text (max 80 characters, specific, names the discovery or site)
+- "tldr": your TLDR summary (2-3 sentences, the summary only, no label)
 
 Content to analyze:
 {content}

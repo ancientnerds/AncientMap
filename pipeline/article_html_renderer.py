@@ -126,7 +126,8 @@ def slugify(title: str) -> str:
     slug = re.sub(r'[^\w\s-]', '', slug)
     slug = re.sub(r'[\s_]+', '-', slug)
     slug = re.sub(r'-+', '-', slug)
-    return slug.strip('-')[:120]
+    slug = re.sub(r'^-|-$', '', slug)
+    return slug[:120]
 
 
 def _nav_html() -> str:

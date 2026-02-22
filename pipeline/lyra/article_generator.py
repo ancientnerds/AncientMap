@@ -1,5 +1,6 @@
 """Weekly article generation from NewsItem topics — magazine-quality digest."""
 
+import json
 import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -13,7 +14,7 @@ from pipeline.database import (
     NewsVideo,
     get_session,
 )
-from pipeline.lyra.config import LyraSettings, call_api, get_anthropic_client
+from pipeline.lyra.config import LyraSettings, call_api, get_anthropic_client, parse_prefilled_json
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,16 @@ CATEGORY_LABELS = {
 CATEGORY_ORDER = list(CATEGORY_LABELS.keys())
 
 MAX_ITEMS = 25
+
+HEADLINE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "headline": {"type": "string"},
+        "tldr": {"type": "string"},
+    },
+    "required": ["headline", "tldr"],
+    "additionalProperties": False,
+}
 
 
 def _load_prompt(name: str) -> str:
@@ -130,6 +141,14 @@ def _group_and_cite(
     ordered_cats = [c for c in CATEGORY_ORDER if c in groups]
     remaining = [c for c in groups if c not in ordered_cats]
     ordered_cats.extend(sorted(remaining))
+
+    # Merge categories that all map to "In Brief" into a single bucket
+    in_brief_cats = [c for c in ordered_cats if c not in CATEGORY_LABELS]
+    if len(in_brief_cats) > 1:
+        first = in_brief_cats[0]
+        for cat in in_brief_cats[1:]:
+            groups[first].extend(groups[cat])
+            ordered_cats.remove(cat)
 
     # Assign monotonic citation numbers across all items
     citation = 1
@@ -287,6 +306,7 @@ def _verify_article(
             client,
             model=settings.model_verify,
             max_tokens=16384,
+            temperature=0.0,
             system=[{
                 "type": "text",
                 "text": (
@@ -298,21 +318,41 @@ def _verify_article(
                 "cache_control": {"type": "ephemeral"},
             }],
             messages=[{"role": "user", "content": prompt}],
-            prefill="[START_VERIFIED]\n",
+            prefill="[CHANGES]\n",
         )
     except anthropic.APIError as e:
         logger.warning(f"Article verification API error: {e}")
         return full_body
     text = next((b.text for b in response.content if hasattr(b, "text")), "")
 
-    # Prefill guarantees the response starts inside [START_VERIFIED].
-    # Strip [END_VERIFIED] and anything after it.
-    end_idx = text.find("[END_VERIFIED]")
+    # Prompt order: [CHANGES]...[/CHANGES] then [START_VERIFIED]...[END_VERIFIED]
+    # Extract the verified article between the markers.
+    start_idx = text.find("[START_VERIFIED]")
+    if start_idx == -1:
+        logger.warning("Verification response missing [START_VERIFIED] marker, using unverified body")
+        return full_body
+    article_text = text[start_idx + len("[START_VERIFIED]"):]
+
+    end_idx = article_text.find("[END_VERIFIED]")
     if end_idx != -1:
-        return text[:end_idx].strip()
-    # Missing end marker means truncation — fall back to unverified body
-    logger.warning("Verification response truncated (no [END_VERIFIED] marker), using unverified body")
-    return full_body
+        article_text = article_text[:end_idx]
+    else:
+        logger.warning("Verification response missing [END_VERIFIED] marker (truncated)")
+
+    article_text = article_text.strip()
+
+    # Post-extraction cleanup: strip any reasoning that leaked before the first heading
+    reasoning_patterns = ("I need to", "Let me verify", "Verification Results", "Checking ", "Looking at ")
+    if any(article_text.startswith(p) for p in reasoning_patterns):
+        heading_idx = article_text.find("## ")
+        if heading_idx > 0:
+            logger.warning("Stripping leaked reasoning from verification output")
+            article_text = article_text[heading_idx:]
+        else:
+            logger.warning("Verification output is reasoning, not article prose — using unverified body")
+            return full_body
+
+    return article_text if article_text else full_body
 
 
 def _generate_headline_tldr(
@@ -329,6 +369,7 @@ def _generate_headline_tldr(
             client,
             model=settings.model_article,
             max_tokens=1024,
+            temperature=0.0,
             system=[{
                 "type": "text",
                 "text": (
@@ -340,27 +381,25 @@ def _generate_headline_tldr(
                 "cache_control": {"type": "ephemeral"},
             }],
             messages=[{"role": "user", "content": prompt}],
-            prefill="[HEADLINE]\n",
+            output_config={"format": {"type": "json_schema", "schema": HEADLINE_SCHEMA}},
+            prefill="{",
         )
     except anthropic.APIError as e:
         logger.warning(f"Headline generation API error: {e}")
         return "Weekly Archaeological Digest", ""
     text = next((b.text for b in response.content if hasattr(b, "text")), "")
 
-    # Prefill guarantees the response starts after [HEADLINE].
-    # Split on [TLDR] marker to separate headline from summary.
-    headline = "Weekly Archaeological Digest"
-    tldr = ""
+    try:
+        result = parse_prefilled_json(text)
+        headline = result.get("headline", "").strip()
+        tldr = result.get("tldr", "").strip()
+    except (json.JSONDecodeError, KeyError, ValueError):
+        logger.warning(f"Failed to parse headline JSON: {text[:200]}")
+        headline = ""
+        tldr = ""
 
-    tldr_idx = text.find("[TLDR]")
-    if tldr_idx != -1:
-        headline = text[:tldr_idx].strip()
-        tldr = text[tldr_idx + len("[TLDR]"):].strip()
-    else:
-        # No TLDR marker — first line is headline, rest is TLDR
-        lines = text.strip().splitlines()
-        if lines:
-            headline = lines[0].strip()
+    if not headline:
+        headline = "Weekly Archaeological Digest"
 
     return headline, tldr
 
