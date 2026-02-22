@@ -357,12 +357,12 @@ def summarize_pending_videos(settings: LyraSettings) -> int:
         ).all()
         session.expunge_all()
 
-    # Query channel item counts for balancing
+    # Query channel item counts for balancing (only within the lookback window)
     with get_session() as session:
         channel_counts = dict(
             session.query(NewsVideo.channel_id, func.count(NewsItem.id))
             .join(NewsItem, NewsItem.video_id == NewsVideo.id)
-            .filter(NewsItem.post_text.isnot(None))
+            .filter(NewsItem.post_text.isnot(None), NewsVideo.published_at >= cutoff)
             .group_by(NewsVideo.channel_id)
             .all()
         )
