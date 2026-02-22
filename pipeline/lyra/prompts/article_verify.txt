@@ -12,15 +12,17 @@ YOUR TASK:
 7. Do NOT remove section headings or change the article structure.
 8. Keep the same writing style and tone.
 
-REQUIRED FORMAT — structure your response exactly like this:
+REQUIRED FORMAT — structure your response exactly like this, in this order:
+
+[CHANGES]
+<numbered list of changes made, or "No changes needed." if none>
+[/CHANGES]
 
 [START_VERIFIED]
 <the complete verified article here, with all sections, citations, and images intact>
 [END_VERIFIED]
 
-[CHANGES]
-<numbered list of changes made, or "No changes needed." if none>
-[/CHANGES]
+CRITICAL: Output ONLY the corrected article text between [START_VERIFIED] and [END_VERIFIED]. Do NOT include any reasoning, verification notes, thinking, or commentary between those markers — just the article prose with its headings, citations, and images.
 
 ARTICLE TO VERIFY:
 {article}
