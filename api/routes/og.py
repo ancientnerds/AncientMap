@@ -187,28 +187,23 @@ async def get_share_page(
     base_url = str(request.base_url).rstrip('/')
     base_url = base_url.replace("http://", "https://")
     site = get_site_data(site_id, db)
-    title = site["name"]
 
     og_image_url = f"{base_url}/api/og/{site_id}"
     app_url = html.escape(f"/site.html?id={site_id}")
     canonical_url = html.escape(f"{base_url}/site.html?id={site_id}")
 
-    # Build rich description like the SiteCard: country · category · period · coords · description
-    parts: list[str] = []
+    # Title: "Site Name | Country · Category"
+    title_parts: list[str] = []
     if site["country"]:
-        parts.append(site["country"])
+        title_parts.append(site["country"])
     if site["site_type"]:
-        parts.append(site["site_type"])
-    if site["period"]:
-        parts.append(site["period"])
-    if site["lat"] is not None and site["lon"] is not None:
-        lat, lon = site["lat"], site["lon"]
-        lat_dir = "N" if lat >= 0 else "S"
-        lon_dir = "E" if lon >= 0 else "W"
-        parts.append(f"{abs(lat):.4f}° {lat_dir}, {abs(lon):.4f}° {lon_dir}")
-    if site["description"]:
-        parts.append(site["description"])
-    og_desc = " · ".join(parts) if parts else "Archaeological site"
+        title_parts.append(site["site_type"])
+    title = site["name"]
+    if title_parts:
+        title += " | " + " · ".join(title_parts)
+
+    # Description: just the site description text
+    og_desc = site["description"] or "Archaeological site on Ancient Nerds"
 
     title_escaped = html.escape(title)
     og_desc_escaped = html.escape(og_desc)
@@ -226,7 +221,7 @@ async def get_share_page(
     <meta property="og:title" content="{title_escaped}">
     <meta property="og:description" content="{og_desc_escaped}">
     <meta property="og:image" content="{og_image_url}">
-    <meta property="og:site_name" content="Ancient Nerds">
+    <meta property="og:site_name" content="ANCIENT NERDS">
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
