@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import re
+import tempfile
 import time
 from pathlib import Path
 
@@ -41,7 +42,7 @@ TEXT_COLOR = (255, 255, 255)
 BRAND_COLOR = (255, 215, 0)  # Gold
 
 # Disk cache for Playwright screenshots
-OG_CACHE_DIR = Path("/tmp/og-cache")
+OG_CACHE_DIR = Path(tempfile.gettempdir()) / "og-cache"
 OG_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 OG_CACHE_MAX_AGE = 86400  # 24 hours
 
