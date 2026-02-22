@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import PageHeader from '../components/layout/PageHeader'
-import { SiteCard } from '../components/SiteCard'
+import { SiteCard, ViewOnGlobeLink } from '../components/SiteCard'
 import { SearchFilters } from '../components/SearchFilters'
 import { SitePopupOverlay } from '../components/SitePopupOverlay'
 import { useSiteSearch, type SourceInfo } from '../hooks/useSiteSearch'
@@ -154,12 +154,11 @@ export default function SearchPage() {
 
   return (
     <div className="search-page">
-      <PageHeader currentPage="search">
-        <span>Search</span>
-      </PageHeader>
-
-      <div className="search-page-content">
-        <div className="search-bar-sticky">
+      <div className="search-top-sticky">
+        <PageHeader currentPage="search" speechBubble="Search 750K+ archaeological sites instantly — click any card to see details or view it on the globe">
+          <span className="page-header-title">Search</span>
+        </PageHeader>
+        <div className="search-bar-wrap">
           <div className="search-bar-inner">
             <svg className="search-bar-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="11" cy="11" r="8" />
@@ -174,10 +173,12 @@ export default function SearchPage() {
               disabled={isLoading}
               autoFocus
             />
-            <label className="search-bar-all-toggle">
-              <input type="checkbox" checked={searchAllSources} onChange={e => setSearchAllSources(e.target.checked)} />
-              <span>All sources</span>
-            </label>
+            <button
+              className={`news-page-chip${searchAllSources ? ' active' : ''}`}
+              onClick={() => setSearchAllSources(!searchAllSources)}
+            >
+              All sources
+            </button>
             <button
               className={`search-bar-filter-btn${filtersOpen ? ' active' : ''}${hasActiveFilters ? ' has-filters' : ''}`}
               onClick={() => setFiltersOpen(!filtersOpen)}
@@ -189,7 +190,9 @@ export default function SearchPage() {
             </button>
           </div>
         </div>
+      </div>
 
+      <div className="search-page-content">
         {filtersOpen && (
           <div className="search-filters-panel">
             <SearchFilters
@@ -229,8 +232,14 @@ export default function SearchPage() {
                 image: result.image, sourceId: result.sourceId || '', coordinates: result.coordinates || [0, 0],
               }
               return (
-                <SiteCard key={result.id} site={siteForCard} sourceName={result.sourceName} sourceColor={result.sourceColor}
-                  onClick={() => handleCardClick(result)} />
+                <SiteCard
+                  key={result.id}
+                  site={siteForCard}
+                  sourceName={result.sourceName}
+                  sourceColor={result.sourceColor}
+                  onClick={() => handleCardClick(result)}
+                  actions={<ViewOnGlobeLink siteId={result.id} />}
+                />
               )
             })}
           </div>

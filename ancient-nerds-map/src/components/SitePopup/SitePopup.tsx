@@ -474,13 +474,26 @@ export default function SitePopup({
       {/* Standalone mode close button */}
       {isStandalone && (
         <div className="popup-standalone-close">
+          <a
+            className="popup-window-btn"
+            href={`/site.html?id=${displaySite.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Open full page"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+              <polyline points="15 3 21 3 21 9" />
+              <line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+          </a>
           <button
             className="popup-window-btn close-btn"
             onClick={() => {
               if (onClose) onClose()
               else window.location.href = 'https://ancientnerds.com'
             }}
-            title="Close and return to globe"
+            title="Close"
           >
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
               <line x1="2" y1="2" x2="10" y2="10" />
