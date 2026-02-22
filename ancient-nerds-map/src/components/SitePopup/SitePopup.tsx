@@ -377,8 +377,8 @@ export default function SitePopup({
       .finally(() => setRawDataLoading(false))
   }, [displaySite.id, displaySite.sourceId, isEmpireMode])
 
-  // Share URL with OG meta tags
-  const shareUrl = `${config.api.baseUrl}/og/share/${displaySite.id}`
+  // Share URL — nginx serves dynamic OG tags to crawlers on site.html
+  const shareUrl = `${window.location.origin}/site.html?id=${displaySite.id}`
 
   // Share site popup URL
   const handleShareSite = async () => {
