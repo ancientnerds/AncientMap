@@ -310,6 +310,7 @@ body {
 
 .feature-row .section-desc {
   margin: 0;
+  max-width: none;
 }
 
 .feature-image-main {
@@ -367,6 +368,37 @@ body {
 #articles-section .feature-image-main {
   aspect-ratio: auto;
   object-fit: contain;
+}
+
+/* ─── API Screenshots (side by side, equal height) ─── */
+
+.api-screenshots {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.api-screenshots img {
+  width: 100%;
+  aspect-ratio: 4/3;
+  object-fit: cover;
+  object-position: top left;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 0 40px var(--glow-cyan);
+  cursor: pointer;
+  transition: transform 0.3s;
+}
+
+.api-screenshots img:hover {
+  transform: scale(1.02);
+}
+
+@media (max-width: 900px) {
+  .api-screenshots {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ─── Cinematic Full-Width Section (Empires) ─── */
@@ -513,6 +545,8 @@ body {
 
 .split-card .section-desc {
   font-size: 0.95rem;
+  margin: 0;
+  max-width: none;
 }
 
 /* ─── Tools Grid ─── */
@@ -646,6 +680,11 @@ body {
   font-size: 0.78rem;
   color: var(--text-secondary);
   letter-spacing: 0.03em;
+}
+
+/* Desktop: detail text + locations in the text column, hidden below photo */
+.founders-below-photo {
+  display: none;
 }
 
 /* ─── Discord Section ─── */
@@ -871,6 +910,18 @@ body {
 
   .feature-row.reverse {
     direction: ltr;
+  }
+
+  /* Mobile: show detail + locations below photo, hide from text column */
+  .founders-below-photo {
+    display: flex;
+  }
+  .founders-below-photo.founders-detail {
+    display: block;
+  }
+  #founders-section > .feature-row > :first-child .founders-detail:not(.founders-below-photo),
+  #founders-section > .feature-row > :first-child .founders-locations:not(.founders-below-photo) {
+    display: none;
   }
 
   .tools-grid {
