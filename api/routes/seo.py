@@ -1,9 +1,9 @@
 """
 SEO pre-rendered pages for search engine crawlers.
 
-Serves full HTML with OG tags, structured data, and visible content
-so that /?site={uuid} URLs are indexable by Google et al.
-Nginx rewrites bot requests from /?site={uuid} to /seo/site/{uuid}.
+Serves full HTML with OG tags, structured data, and visible content.
+Nginx detects crawler user agents on /site.html?id={uuid} and rewrites
+to /seo/site/{uuid} which is handled here.
 """
 
 import html
@@ -37,11 +37,27 @@ async def seo_site_page(
     # Nginx proxies over HTTP internally; force https for public URLs
     base_url = str(request.base_url).rstrip('/').replace('http://', 'https://')
     title_escaped = html.escape(site["name"])
-    desc_escaped = html.escape(site["description"])
     country_escaped = html.escape(site["country"])
     site_type_escaped = html.escape(site["site_type"] or "Archaeological site")
     og_image_url = f"{base_url}/api/og/{site_id}"
     canonical_url = html.escape(f"{base_url}/site.html?id={site_id}")
+
+    # Rich description: country · category · period · coords · description
+    desc_parts: list[str] = []
+    if site["country"]:
+        desc_parts.append(site["country"])
+    if site["site_type"]:
+        desc_parts.append(site["site_type"])
+    if site["period"]:
+        desc_parts.append(site["period"])
+    if site["lat"] is not None and site["lon"] is not None:
+        lat, lon = site["lat"], site["lon"]
+        lat_d = "N" if lat >= 0 else "S"
+        lon_d = "E" if lon >= 0 else "W"
+        desc_parts.append(f"{abs(lat):.4f}° {lat_d}, {abs(lon):.4f}° {lon_d}")
+    if site["description"]:
+        desc_parts.append(site["description"])
+    desc_escaped = html.escape(" · ".join(desc_parts) if desc_parts else "Archaeological site")
 
     # JSON-LD structured data for Google rich results
     ld_json = {
@@ -79,7 +95,7 @@ async def seo_site_page(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{title_escaped} - Ancient Nerds Map</title>
+    <title>{title_escaped} - Ancient Nerds</title>
     <meta name="description" content="{desc_escaped}">
     <link rel="canonical" href="{canonical_url}">
 
@@ -89,15 +105,14 @@ async def seo_site_page(
     <meta property="og:title" content="{title_escaped}">
     <meta property="og:description" content="{desc_escaped}">
     <meta property="og:image" content="{og_image_url}">
-    <meta property="og:image:width" content="600">
-    <meta property="og:image:height" content="315">
-    <meta property="og:site_name" content="Ancient Nerds Map">
+    <meta property="og:site_name" content="Ancient Nerds">
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{title_escaped}">
     <meta name="twitter:description" content="{desc_escaped}">
     <meta name="twitter:image" content="{og_image_url}">
+    <meta name="twitter:site" content="@AncientNerdsDAO">
 
     <script type="application/ld+json">{ld_json_str}</script>
 
