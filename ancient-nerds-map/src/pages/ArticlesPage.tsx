@@ -187,15 +187,18 @@ function ArticleScreenshot({ src, alt, citationItems }: {
           </svg>
         </div>
       )}
-      <a
-        className="article-video-link"
-        href={`https://youtube.com/watch?v=${videoId}&t=${timestamp}s`}
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        &#9654; Watch on YouTube (at {formatTimestamp(timestamp)})
-      </a>
-      {alt && <figcaption className="article-figcaption">{alt}</figcaption>}
+      <figcaption className="article-figcaption">
+        {alt && <span>{alt}</span>}
+        {alt && <span className="article-figcaption-sep"> — </span>}
+        <a
+          className="article-video-link"
+          href={`https://youtube.com/watch?v=${videoId}&t=${timestamp}s`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          &#9654; Watch on YouTube (at {formatTimestamp(timestamp)})
+        </a>
+      </figcaption>
     </figure>
   )
 }

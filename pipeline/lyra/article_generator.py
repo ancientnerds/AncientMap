@@ -87,7 +87,7 @@ def _collect_article_items(
         .filter(
             NewsItem.created_at >= week_start,
             NewsItem.created_at <= week_end,
-            NewsItem.significance >= 6,
+            NewsItem.significance >= 7,
         )
         .order_by(NewsItem.significance.desc())
         .all()
