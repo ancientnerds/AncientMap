@@ -1,8 +1,8 @@
 """
 Open Graph Image Generator for Social Media Sharing.
 
-Generates preview images for Twitter/X, Facebook, etc.
-with site title and country overlaid on hero image.
+Screenshots the real SiteCard component via Playwright for pixel-perfect
+OG preview images. Falls back to PIL-generated images if Playwright is unavailable.
 """
 
 import html
@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import re
+import time
 from pathlib import Path
 
 import httpx
@@ -31,13 +32,67 @@ FONT_DIR = Path(os.environ.get("FONT_DIR", Path(__file__).parent.parent.parent /
 # Logo directory
 LOGO_DIR = Path(__file__).parent.parent.parent / "logo"
 
-# OG image dimensions (smaller, optimized)
+# OG image dimensions (for PIL fallback)
 OG_WIDTH = 600
 OG_HEIGHT = 315
 
 # Colors - matching popup style
 TEXT_COLOR = (255, 255, 255)
 BRAND_COLOR = (255, 215, 0)  # Gold
+
+# Disk cache for Playwright screenshots
+OG_CACHE_DIR = Path("/tmp/og-cache")
+OG_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+OG_CACHE_MAX_AGE = 86400  # 24 hours
+
+# Base URL for Playwright to load the OG card page
+OG_CARD_BASE_URL = os.environ.get("OG_CARD_BASE_URL", "https://ancientnerds.com")
+
+
+def _get_cached_image(site_id: str) -> bytes | None:
+    """Return cached WebP bytes if fresh, else None."""
+    cache_path = OG_CACHE_DIR / f"{site_id}.webp"
+    if not cache_path.exists():
+        return None
+    age = time.time() - cache_path.stat().st_mtime
+    if age > OG_CACHE_MAX_AGE:
+        cache_path.unlink(missing_ok=True)
+        return None
+    return cache_path.read_bytes()
+
+
+def _save_cached_image(site_id: str, data: bytes) -> None:
+    """Save WebP bytes to disk cache."""
+    cache_path = OG_CACHE_DIR / f"{site_id}.webp"
+    cache_path.write_bytes(data)
+
+
+async def _playwright_screenshot(browser, site_id: str) -> bytes | None:
+    """Take a Playwright screenshot of the OG card page. Returns WebP bytes or None."""
+    page = None
+    try:
+        page = await browser.new_page(viewport={"width": 520, "height": 800})
+        url = f"{OG_CARD_BASE_URL}/og-card.html?id={site_id}"
+        await page.goto(url, wait_until="networkidle", timeout=15000)
+        await page.wait_for_selector("[data-ready]", timeout=10000)
+        card = await page.query_selector("#og-card")
+        if not card:
+            return None
+        screenshot_bytes = await card.screenshot(type="png")
+        # Convert PNG to WebP via Pillow for smaller size
+        img = Image.open(io.BytesIO(screenshot_bytes))
+        buf = io.BytesIO()
+        img.save(buf, format="WEBP", quality=85)
+        return buf.getvalue()
+    except Exception as e:
+        logger.warning(f"Playwright screenshot failed for {site_id}: {e}")
+        return None
+    finally:
+        if page:
+            try:
+                await page.close()
+            except Exception:
+                pass
 
 
 async def fetch_wikipedia_image(site_name: str) -> Image.Image | None:
@@ -192,7 +247,7 @@ def generate_og_image(
     country: str | None,
     hero_image: Image.Image | None = None,
 ) -> bytes:
-    """Generate OG image with title and country only."""
+    """Generate OG image with title and country only (PIL fallback)."""
 
     # Start with hero image or fallback
     if hero_image:
@@ -288,14 +343,12 @@ def generate_og_image(
     if country:
         bbox = draw.textbbox((0, 0), country, font=country_font)
         country_width = bbox[2] - bbox[0]
-        bbox[3] - bbox[1]
 
         while country_width > country_max_width and country_size > 16:
             country_size -= 2
             country_font = get_font(country_size)
             bbox = draw.textbbox((0, 0), country, font=country_font)
             country_width = bbox[2] - bbox[0]
-            bbox[3] - bbox[1]
 
     # Country (bottom)
     if country:
@@ -409,6 +462,8 @@ async def get_share_page(
         return HTMLResponse(content="Invalid site ID", status_code=400)
 
     base_url = str(request.base_url).rstrip('/')
+    # Force HTTPS in production
+    base_url = base_url.replace("http://", "https://")
     site = get_site_data(site_id, db)
     title = site["name"]
     description = site["description"]
@@ -438,14 +493,14 @@ async def get_share_page(
     <meta property="og:title" content="{title_escaped}">
     <meta property="og:description" content="{og_desc_escaped}">
     <meta property="og:image" content="{og_image_url}">
-    <meta property="og:image:width" content="1200">
-    <meta property="og:image:height" content="630">
+    <meta property="og:site_name" content="Ancient Nerds">
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{title_escaped}">
     <meta name="twitter:description" content="{og_desc_escaped}">
     <meta name="twitter:image" content="{og_image_url}">
+    <meta name="twitter:site" content="@AncientNerdsDAO">
 
     <!-- Redirect to app -->
     <meta http-equiv="refresh" content="0;url={app_url}">
@@ -488,9 +543,36 @@ async def get_share_page(
 @router.get("/{site_id}")
 async def get_og_image(
     site_id: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
-    """Generate Open Graph image for a site."""
+    """Generate Open Graph image for a site.
+
+    Uses Playwright to screenshot the real SiteCard component.
+    Falls back to PIL-generated image if Playwright is unavailable.
+    """
+    # Check disk cache first
+    cached = _get_cached_image(site_id)
+    if cached:
+        return Response(
+            content=cached,
+            media_type="image/webp",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+
+    # Try Playwright screenshot
+    browser = getattr(request.app.state, "browser", None)
+    if browser:
+        screenshot = await _playwright_screenshot(browser, site_id)
+        if screenshot:
+            _save_cached_image(site_id, screenshot)
+            return Response(
+                content=screenshot,
+                media_type="image/webp",
+                headers={"Cache-Control": "public, max-age=86400"},
+            )
+
+    # PIL fallback
     query = text("""
         SELECT name, country
         FROM unified_sites
@@ -518,5 +600,3 @@ async def get_og_image(
         media_type="image/jpeg",
         headers={"Cache-Control": "public, max-age=86400"},
     )
-
-
