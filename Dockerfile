@@ -91,6 +91,10 @@ RUN chown -R appuser:appgroup /app
 # Switch to non-root user
 USER appuser
 
+# Build hash (passed via --build-arg or docker compose)
+ARG BUILD_HASH=unknown
+ENV BUILD_HASH=${BUILD_HASH}
+
 # Environment configuration
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
