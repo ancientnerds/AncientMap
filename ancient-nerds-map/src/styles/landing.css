@@ -377,6 +377,8 @@ body {
   grid-template-columns: 1fr 1fr;
   gap: 12px;
   overflow: hidden;
+  margin-top: 32px;
+  margin-bottom: 32px;
 }
 
 .api-screenshots img {
