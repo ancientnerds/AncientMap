@@ -55,6 +55,7 @@ export default defineConfig({
         search: resolve(__dirname, 'search.html'),
         site: resolve(__dirname, 'site.html'),
         api: resolve(__dirname, 'api.html'),
+        ogCard: resolve(__dirname, 'og-card.html'),
       },
     },
   },
