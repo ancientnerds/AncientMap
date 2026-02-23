@@ -37,8 +37,6 @@ export interface EmpirePopupData {
   id: string
   name: string
   region: string
-  startYear: number
-  endYear: number
   color: number
   peakYear?: number
   peakArea?: number

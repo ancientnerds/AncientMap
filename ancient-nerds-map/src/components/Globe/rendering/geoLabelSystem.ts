@@ -24,6 +24,13 @@ import { type VectorLayerVisibility } from '../../../config/vectorLayers'
 
 const EARTH_RADIUS_KM = GEO.EARTH_RADIUS_KM
 
+// Reusable Vector3s for bounding-box collision (avoids allocations in hot loop)
+const _tempUp = new THREE.Vector3()
+const _tempRight = new THREE.Vector3()
+const _tempTX = new THREE.Vector3()
+const _tempTY = new THREE.Vector3()
+const _tempRel = new THREE.Vector3()
+
 // =============================================================================
 // TYPE DEFINITIONS
 // =============================================================================
@@ -525,17 +532,32 @@ export function updateGeoLabels(ctx: GeoLabelContext): void {
       const a = group[i]
       if (collidedSet.has(a.id)) continue
 
+      // Build tangent plane basis at label a's position (reused for all j)
+      const normal = a.position.clone().normalize()
+      const tangentX = _tempTX.crossVectors(_tempUp.set(0, 1, 0), normal)
+      if (tangentX.lengthSq() < 0.000001) {
+        tangentX.crossVectors(_tempRight.set(1, 0, 0), normal)
+      }
+      tangentX.normalize()
+      const tangentY = _tempTY.crossVectors(normal, tangentX).normalize()
+
+      const aHalfW = a.radius * a.aspect
+      const aHalfH = a.radius
+
       for (let j = i + 1; j < group.length; j++) {
         const b = group[j]
         if (collidedSet.has(b.id)) continue
 
-        // Check angular distance on unit sphere
-        const dot = a.position.dot(b.position)
-        const angularDist = Math.acos(Math.min(1, Math.max(-1, dot)))
-        const minDist = a.radius + b.radius
+        // Project b onto tangent plane at a
+        const rel = _tempRel.copy(b.position).sub(a.position)
+        const dx = Math.abs(rel.dot(tangentX))
+        const dy = Math.abs(rel.dot(tangentY))
 
-        if (angularDist < minDist) {
-          // Regular collision - hide lower priority (b, since sorted)
+        const bHalfW = b.radius * b.aspect
+        const bHalfH = b.radius
+
+        // Bounding box overlap: both axes must overlap
+        if (dx < aHalfW + bHalfW && dy < aHalfH + bHalfH) {
           collidedSet.add(b.id)
         }
       }

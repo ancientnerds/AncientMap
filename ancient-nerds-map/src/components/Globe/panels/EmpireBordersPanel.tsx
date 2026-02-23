@@ -42,6 +42,9 @@ interface EmpireBordersPanelProps {
   onSelectAll: () => void
   onSelectNone: () => void
   onSelectInvert: () => void
+
+  // Empire metadata from pipeline (date ranges)
+  empireMetadata: Map<string, { startYear: number; endYear: number; defaultYear: number }>
 }
 
 export function EmpireBordersPanel({
@@ -65,7 +68,8 @@ export function EmpireBordersPanel({
   globalTimelineYear,
   globalTimelineRange,
   onGlobalTimelineYearChange,
-  onGlobalTimelineYearInput
+  onGlobalTimelineYearInput,
+  empireMetadata
 }: EmpireBordersPanelProps) {
   if (!isOpen) return null
 
@@ -176,12 +180,13 @@ export function EmpireBordersPanel({
                 {EMPIRES.filter(e => e.region === region).map(empire => {
                   const isVisible = visibleEmpires.has(empire.id)
                   const yearOptions = empireYearOptions[empire.id] || []
-                  const currentYear = empireYears[empire.id] || empire.startYear
+                  const meta = empireMetadata.get(empire.id)
+                  const currentYear = empireYears[empire.id] || meta?.startYear || yearOptions[0] || 0
                   const yearIndex = yearOptions.indexOf(currentYear)
 
                   // In global timeline mode, hide empires that don't exist at the current year
-                  if (globalTimelineEnabled && isVisible) {
-                    if (globalTimelineYear < empire.startYear || globalTimelineYear > empire.endYear) {
+                  if (globalTimelineEnabled && isVisible && meta) {
+                    if (globalTimelineYear < meta.startYear || globalTimelineYear > meta.endYear) {
                       return null
                     }
                   }

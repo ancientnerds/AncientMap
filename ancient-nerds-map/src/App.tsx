@@ -3,7 +3,7 @@ import Globe from './components/Globe'
 import FilterPanel from './components/FilterPanel'
 import { EmpirePolygonData, computeBoundingBox, isSiteInEmpirePolygons } from './utils/geometry'
 import SitePopup, { EmpirePopupData } from './components/SitePopup'
-import { EMPIRES, EmpireConfig } from './config/empireData'
+import { EMPIRES } from './config/empireData'
 // Lazy-load modals for faster initial load
 const ContributeModal = lazy(() => import('./components/ContributeModal'))
 const DisclaimerModal = lazy(() => import('./components/DisclaimerModal'))
@@ -530,27 +530,6 @@ function AppContent() {
 
   // ========== Empire Popup Functions ==========
 
-  // Generate year options for empire slider (every 50 years)
-  const generateEmpireYearOptions = useCallback((config: EmpireConfig): number[] => {
-    const years: number[] = []
-    const step = 50
-    // Ensure startYear is included
-    years.push(config.startYear)
-    // Add intermediate years
-    let year = Math.ceil(config.startYear / step) * step
-    while (year < config.endYear) {
-      if (year > config.startYear) {
-        years.push(year)
-      }
-      year += step
-    }
-    // Ensure endYear is included
-    if (config.endYear > years[years.length - 1]) {
-      years.push(config.endYear)
-    }
-    return years
-  }, [])
-
   // Open empire popup - takes empire ID and looks up config
   const openEmpirePopup = useCallback((empireId: string, defaultYear?: number, realYearOptions?: number[]) => {
     // Don't open if already open
@@ -563,22 +542,18 @@ function AppContent() {
       return
     }
 
-    // Get available years for this empire - prefer real data years from Globe
-    const currentYear = empireSliderYears[empireId] ?? empireConfig.startYear
-    // Use real year options from Globe metadata if available, otherwise generate
+    // Use real year options from Globe metadata (always available when empire is loaded)
     const yearOptions = realYearOptions && realYearOptions.length > 0
       ? realYearOptions
-      : generateEmpireYearOptions(empireConfig)
+      : []
+    const currentYear = empireSliderYears[empireId] ?? defaultYear ?? yearOptions[0] ?? 0
 
     // Create empire popup data
     const empireData: EmpirePopupData = {
       id: empireConfig.id,
       name: empireConfig.name,
       region: empireConfig.region,
-      startYear: empireConfig.startYear,
-      endYear: empireConfig.endYear,
       color: empireConfig.color,
-      // Peak year/area could come from metadata if available
     }
 
     setOpenEmpirePopups(prev => {
@@ -592,7 +567,7 @@ function AppContent() {
       })
       return next
     })
-  }, [openEmpirePopups, empireSliderYears, generateEmpireYearOptions])
+  }, [openEmpirePopups, empireSliderYears])
 
   // Close empire popup
   const closeEmpirePopup = useCallback((empireId: string) => {
