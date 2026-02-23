@@ -10,13 +10,14 @@ import * as THREE from 'three'
 import { EMPIRES } from '../../../config/empireData'
 import { LAYER_CONFIG } from '../../../config/vectorLayers'
 import { offlineFetch } from '../../../services/OfflineFetch'
-import { pointInGeoJSONGeometry } from '../../../utils/geometry'
+import { pointInGeoJSONGeometry, pointInPolygon } from '../../../utils/geometry'
 import { formatYear, formatYearPeriod } from '../../../utils/geoUtils'
 import { FadeManager } from '../../../utils/FadeManager'
 import {
   createGlobeTangentLabel,
   fadeLabelIn,
   drawUnifiedLabel,
+  updateGlobeLabelScale,
   type GlobeLabelMesh,
 } from '../../../utils/LabelRenderer'
 import {
@@ -105,8 +106,14 @@ export interface GlobeRenderContext {
   // Show ancient cities ref (synced from state)
   showAncientCitiesRef: React.MutableRefObject<boolean>
 
+  // kmPerPixel ref (for initial label scale)
+  kmPerPixelRef: React.MutableRefObject<number>
+
   // Empire fill meshes ref (for hover effects)
   empireFillMeshesRef: React.MutableRefObject<Record<string, THREE.Mesh[]>>
+
+  // Raw GeoJSON cache for Mapbox sync
+  empireGeoJSONRef: React.MutableRefObject<Record<string, any>>
 
   // latLngTo3D conversion function
   latLngTo3D: (lat: number, lng: number, r: number) => THREE.Vector3
@@ -163,6 +170,27 @@ export function getPolygonFillPositions(
     centLng /= count
     centLat /= count
 
+    // For concave polygons, the arithmetic centroid may be outside the polygon.
+    // Fan triangulation from an external point creates triangles that cross the
+    // boundary, producing incorrect XOR stencil results. If centroid is outside,
+    // find a point that IS inside by testing midpoints of edges.
+    if (!pointInPolygon([centLng, centLat], outerRing)) {
+      let found = false
+      // Try midpoints of each edge, nudged toward centroid
+      for (let i = 0; i < outerRing.length - 1 && !found; i++) {
+        const midLng = (outerRing[i][0] + outerRing[i + 1][0]) / 2
+        const midLat = (outerRing[i][1] + outerRing[i + 1][1]) / 2
+        // Nudge slightly toward centroid to avoid landing exactly on edge
+        const testLng = midLng + (centLng - midLng) * 0.1
+        const testLat = midLat + (centLat - midLat) * 0.1
+        if (pointInPolygon([testLng, testLat], outerRing)) {
+          centLng = testLng
+          centLat = testLat
+          found = true
+        }
+      }
+    }
+
     const positions: number[] = []
     const centroid3D = latLngTo3D(centLat, centLng, radius)
 
@@ -218,11 +246,12 @@ export function getPolygonFillPositions(
  */
 export async function loadEmpireBorders(
   empireId: string,
-  ctx: GlobeRenderContext
-): Promise<void> {
-  if (!ctx.sceneRef.current) return
+  ctx: GlobeRenderContext,
+  targetYear?: number
+): Promise<number | undefined> {
+  if (!ctx.sceneRef.current) return undefined
   const empire = EMPIRES.find(e => e.id === empireId)
-  if (!empire || ctx.loadedEmpires.has(empireId)) return
+  if (!empire || ctx.loadedEmpires.has(empireId)) return undefined
 
   ctx.setLoadingEmpires(prev => new Set(prev).add(empireId))
 
@@ -242,21 +271,36 @@ export async function loadEmpireBorders(
     ctx.setEmpireCentroids(prev => ({ ...prev, [empireId]: metadata.centroids }))
     const defaultYear = metadata.defaultYear
     ctx.setEmpireDefaultYears(prev => ({ ...prev, [empireId]: defaultYear }))
-    ctx.setEmpireYears(prev => ({ ...prev, [empireId]: defaultYear }))
 
-    // Load the default year's boundaries (pass years directly since state hasn't updated yet)
-    await loadEmpireBordersForYear(empireId, defaultYear, empire.color, true, ctx, years)
+    // If a targetYear is provided (e.g. from global timeline), find the closest available year
+    // Otherwise use the default (peak extent) year
+    let loadYear = defaultYear
+    if (targetYear !== undefined && years.length > 0) {
+      // Prefer past years (show historical borders, not future territory)
+      const pastYears = years.filter((y: number) => y <= targetYear)
+      loadYear = pastYears.length > 0
+        ? Math.max(...pastYears)
+        : years.reduce((prev: number, curr: number) =>
+            Math.abs(curr - targetYear) < Math.abs(prev - targetYear) ? curr : prev
+          , years[0])
+    }
+    ctx.setEmpireYears(prev => ({ ...prev, [empireId]: loadYear }))
 
-    // Load ancient cities for default year
-    loadAncientCities(empireId, defaultYear, ctx)
+    // Load the year's boundaries (pass years directly since state hasn't updated yet)
+    await loadEmpireBordersForYear(empireId, loadYear, empire.color, true, ctx, years)
 
-    // Load region labels for default year
-    loadRegionLabels(empireId, defaultYear, ctx)
+    // Load ancient cities for this year
+    loadAncientCities(empireId, loadYear, ctx)
+
+    // Load region labels for this year
+    loadRegionLabels(empireId, loadYear, ctx)
 
     ctx.setLoadedEmpires(prev => new Set(prev).add(empireId))
+    return loadYear
 
   } catch (error) {
     console.warn(`Failed to load ${empire?.name}:`, error)
+    return undefined
   } finally {
     ctx.setLoadingEmpires(prev => {
       const next = new Set(prev)
@@ -298,6 +342,9 @@ export function removeEmpireFromGlobe(
 
   // Clear fill meshes ref for this empire
   delete ctx.empireFillMeshesRef.current[empireId]
+
+  // Clear cached GeoJSON for this empire
+  delete ctx.empireGeoJSONRef.current[empireId]
 }
 
 /**
@@ -346,8 +393,12 @@ export async function loadEmpireBordersForYear(
     const material = createFrontMaterial(color, 0.9)
     // Back material for borders at 10% opacity (same as coastlines)
     const backMaterial = createBackMaterial(color, 0.9)
-    const stencilMaterial_ = createStencilMaterial()
-    const fillMaterial = createEmpireFillMaterial(color, 0.15)
+    // Each empire gets its own stencil bit so overlapping empires don't cancel each other
+    // 8 stencil bits support up to 8 simultaneous empires; wrap around for more
+    const empireIdx = EMPIRES.findIndex(e => e.id === empireId)
+    const stencilBit = 1 << (empireIdx % 8)
+    const stencilMaterial_ = createStencilMaterial(stencilBit)
+    const fillMaterial = createEmpireFillMaterial(color, 0.15, stencilBit)
 
     if (ctx.sceneRef.current) {
       material.uniforms.uCameraPos.value.copy(ctx.sceneRef.current.camera.position)
@@ -376,21 +427,35 @@ export async function loadEmpireBordersForYear(
       return true
     })
 
-    // STEP 3: Collect ALL fill positions from UNIQUE features into ONE merged array
-    const allFillPositions: number[] = []
+    // STEP 3: Collect fill positions PER POLYGON PART (not merged)
+    // Each polygon gets its own stencil+fill mesh pair so fan triangles from
+    // different polygons can't interfere via the XOR stencil rule.
+    // Within a single polygon, XOR correctly handles holes (inner rings).
+    // Deduplicate polygon parts across features (some GeoJSON files repeat them).
+    const perPolygonFillPositions: number[][] = []
+    const seenPolygons = new Set<string>()
 
     uniqueFeatures.forEach((feature: any) => {
       const geomType = feature.geometry?.type
       if (!geomType) return
 
-      // Collect fill positions (merge all polygon parts)
+      const processPolygon = (coords: number[][][]) => {
+        // Deduplicate polygon parts across features
+        const polyKey = JSON.stringify(coords)
+        if (seenPolygons.has(polyKey)) return
+        seenPolygons.add(polyKey)
+
+        const positions = getPolygonFillPositions(coords, fillRadius, ctx.latLngTo3D)
+        if (positions.length > 0) {
+          perPolygonFillPositions.push(positions)
+        }
+      }
+
       if (geomType === 'Polygon') {
-        const positions = getPolygonFillPositions(feature.geometry.coordinates, fillRadius, ctx.latLngTo3D)
-        allFillPositions.push(...positions)
+        processPolygon(feature.geometry.coordinates)
       } else if (geomType === 'MultiPolygon') {
         feature.geometry.coordinates.forEach((polygon: number[][][]) => {
-          const positions = getPolygonFillPositions(polygon, fillRadius, ctx.latLngTo3D)
-          allFillPositions.push(...positions)
+          processPolygon(polygon)
         })
       }
     })
@@ -398,38 +463,44 @@ export async function loadEmpireBordersForYear(
     // STEP 4: Remove old geometry AFTER new data is ready (prevents flickering)
     removeEmpireFromGlobe(empireId, ctx)
 
-    // STEP 5: Create stencil-based fill using two-pass rendering
-    if (allFillPositions.length > 0) {
+    // Cache raw GeoJSON for Mapbox sync (after remove, which deletes old cache)
+    ctx.empireGeoJSONRef.current[empireId] = data
+
+    // STEP 5: Create stencil-based fill using two-pass rendering PER POLYGON
+    // Each polygon gets its own stencil+fill pair to prevent cross-polygon XOR artifacts
+    const empireIndex = EMPIRES.findIndex(e => e.id === empireId)
+    const baseRenderOrder = 20 + (empireIndex >= 0 ? empireIndex * 20 : 0)
+
+    if (!ctx.empireFillMeshesRef.current[empireId]) {
+      ctx.empireFillMeshesRef.current[empireId] = []
+    }
+
+    perPolygonFillPositions.forEach((polyPositions, polyIdx) => {
       const geometry = new THREE.BufferGeometry()
-      geometry.setAttribute('position', new THREE.Float32BufferAttribute(allFillPositions, 3))
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(polyPositions, 3))
       geometry.computeVertexNormals()
 
-      // Pass 1: Stencil write mesh - renders fan triangles to stencil buffer only
-      // Uses INVERT operation so odd-numbered overlaps are "inside" (even-odd fill rule)
-      // IMPORTANT: Each empire needs unique renderOrder pair to prevent stencil buffer interference
-      // When multiple empires are visible, they must render stencil+fill consecutively
-      const empireIndex = EMPIRES.findIndex(e => e.id === empireId)
-      const baseRenderOrder = 100 + (empireIndex >= 0 ? empireIndex * 2 : 0)
+      // Each feature's stencil+fill pair uses consecutive renderOrders
+      // Features within the same empire share the same stencil bit but render sequentially
+      const polyRenderOrder = baseRenderOrder + polyIdx * 2
 
+      // Pass 1: Stencil write mesh
       const stencilMesh = new THREE.Mesh(geometry, stencilMaterial_)
       stencilMesh.userData.empireId = empireId
-      stencilMesh.renderOrder = baseRenderOrder  // Unique per empire
+      stencilMesh.renderOrder = polyRenderOrder
       globe.add(stencilMesh)
 
-      // Pass 2: Color fill mesh - tests stencil and draws color
-      // Uses the same geometry - only pixels where stencil != 0 will be drawn
+      // Pass 2: Color fill mesh (clears stencil after drawing via ZeroStencilOp)
       const fillMesh = new THREE.Mesh(geometry, fillMaterial)
       fillMesh.userData.empireId = empireId
-      fillMesh.userData.isFillMesh = true  // Mark as fill mesh for hover detection
-      fillMesh.renderOrder = baseRenderOrder + 1  // Immediately after this empire's stencil
+      fillMesh.userData.isFillMesh = true
+      fillMesh.renderOrder = polyRenderOrder + 1
       globe.add(fillMesh)
 
-      // Store fill mesh for hover effects
-      if (!ctx.empireFillMeshesRef.current[empireId]) {
-        ctx.empireFillMeshesRef.current[empireId] = []
-      }
-      ctx.empireFillMeshesRef.current[empireId].push(fillMesh)
-    } else {
+      ctx.empireFillMeshesRef.current[empireId]!.push(fillMesh)
+    })
+
+    if (perPolygonFillPositions.length === 0) {
       console.warn(`[Empire Fill] ${empireId}: No fill positions generated`)
     }
 
@@ -480,7 +551,7 @@ export async function loadEmpireBordersForYear(
     // Create label (pass yearOptions for initial load before state updates)
     if (createLabel && data.properties?.centroid) {
       const [lat, lng] = data.properties.centroid
-      createEmpireLabel(empireId, empire.name, lat, lng, empire.startYear, empire.endYear, year, ctx, yearOptions)
+      createEmpireLabel(empireId, empire.name, lat, lng, undefined, undefined, year, ctx, yearOptions)
       // Re-run collision detection to block geo labels near empire labels
       setTimeout(() => ctx.updateGeoLabelsRef.current?.(), 0)
     }
@@ -588,6 +659,12 @@ export function createEmpireLabel(
 
   // Create globe-tangent mesh (rotates with globe, faces outward)
   const mesh = createGlobeTangentLabel(texture, position, baseScale, aspect, 1400)  // Higher than geo labels (1000)
+
+  // Set correct scale immediately to prevent one-frame flash at default (1,1,1)
+  const kmPerPixel = ctx.kmPerPixelRef.current
+  if (kmPerPixel > 0) {
+    updateGlobeLabelScale(mesh, kmPerPixel)
+  }
 
   // Start with opacity 0 to prevent flash, then fade in
   const material = mesh.material as THREE.ShaderMaterial
@@ -707,6 +784,8 @@ export function updateEmpireLabelText(
 
   // Update aspect ratio for proper scaling (base scale stays the same)
   existingMesh.userData.aspect = textWidth / textHeight
+  // Immediately sync scale to prevent one-frame stretch artifact
+  existingMesh.scale.x = existingMesh.scale.y * existingMesh.userData.aspect
 }
 
 /**
