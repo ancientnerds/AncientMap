@@ -52,6 +52,7 @@ def _build_context_prompt(context_type: str, context_id: str | None, context_yea
     """Build additional context for the system prompt based on where the user opened the chat."""
     if context_type == "global" or not context_id:
         return ""
+    logger.debug(f"Building context prompt: type={context_type}, id={context_id}, year={context_year}")
 
     if context_type == "site":
         # Pre-fetch site data for context \u2014 placed as structured data, not as
@@ -82,15 +83,21 @@ def _build_context_prompt(context_type: str, context_id: str | None, context_yea
         data = _load_seshat_data()
         polity = data.get("polities", {}).get(context_id)
         if polity:
+            name = polity.get('name', context_id)
             year_info = f" at year {context_year}" if context_year else ""
             return (
                 f"\n\n## Current Context \u2014 Empire\n"
-                f"The user is viewing: **{polity.get('name', context_id)}**{year_info}\n"
+                f"The user is viewing: **{name}**{year_info}\n"
+                f"- Seshat polity ID: {context_id}\n"
                 f"- Period: {polity.get('startYear', '?')} to {polity.get('endYear', '?')}\n"
                 f"- Capital: {polity.get('capital', 'unknown')}\n"
                 f"- Population: {polity.get('population', 'unknown')}\n"
-                f"Answer questions in the context of this empire."
+                f"Use get_empire_data('{context_id}') for detailed warfare, social, and economy data.\n\n"
+                f"**IMPORTANT**: When the user says 'their', 'they', 'this empire', 'it', or 'the empire' "
+                f"\u2014 they are referring to **{name}**. Answer questions in the context of this empire."
             )
+        else:
+            logger.warning(f"Empire context: polity '{context_id}' not found in Seshat data")
 
     if context_type == "news":
         try:
