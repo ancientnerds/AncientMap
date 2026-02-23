@@ -330,7 +330,7 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
         type: 'empire',
         id: empireId,
         loaded: 0,
-        total: empire.estimatedSize,
+        total: EmpireCache.estimateEmpireSize(empireId),
         label: empire.name
       })
       resetSpeedTracking()
@@ -645,12 +645,9 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
                         onClick={() => !isDownloading && toggleEmpire(empire.id)}
                       >
                         {renderCheckbox(selectedEmpires.has(empire.id))}
-                        <span className="item-color" style={{ backgroundColor: empire.color }} />
+                        <span className="item-color" style={{ backgroundColor: `#${empire.color.toString(16).padStart(6, '0')}` }} />
                         <span className="item-name">{empire.name}</span>
                         {downloadState?.empires.includes(empire.id) && <span className="cached-badge">Cached</span>}
-                        <span className="item-meta">
-                          {empire.fileCount} files ({formatBytes(empire.estimatedSize)})
-                        </span>
                       </div>
                     ))}
                   </div>

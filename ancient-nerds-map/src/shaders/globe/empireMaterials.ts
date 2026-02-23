@@ -4,7 +4,7 @@ import * as THREE from 'three'
  * Stencil material for fan triangulation - writes to stencil buffer only
  * Used for even-odd fill rule polygon rendering of empire territories
  */
-export function createStencilMaterial(): THREE.ShaderMaterial {
+export function createStencilMaterial(stencilBit: number = 0xFF): THREE.ShaderMaterial {
   const mat = new THREE.ShaderMaterial({
     uniforms: {
       uCameraPos: { value: new THREE.Vector3() },
@@ -42,14 +42,16 @@ export function createStencilMaterial(): THREE.ShaderMaterial {
         gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);  // Doesn't matter, colorWrite is false
       }
     `,
-    transparent: false,
+    transparent: true,   // Must be true so stencil+fill sort together by renderOrder in transparent pass
     depthWrite: false,
     depthTest: true,
     colorWrite: false,  // Don't write to color buffer
     side: THREE.DoubleSide,
     stencilWrite: true,
+    stencilWriteMask: stencilBit,      // Only write to this empire's bit
     stencilFunc: THREE.AlwaysStencilFunc,
-    stencilRef: 1,
+    stencilFuncMask: stencilBit,       // Only test this empire's bit
+    stencilRef: stencilBit,
     stencilZPass: THREE.InvertStencilOp,  // XOR/Invert for even-odd fill rule
     stencilZFail: THREE.KeepStencilOp,
     stencilFail: THREE.KeepStencilOp
@@ -112,7 +114,7 @@ export function createLandMaskStencilMaterial(): THREE.ShaderMaterial {
  * Uses additive blending so overlapping empires mix colors together
  * Features: sun lighting boost for satellite mode
  */
-export function createEmpireFillMaterial(color: number, opacity: number = 0.15): THREE.ShaderMaterial {
+export function createEmpireFillMaterial(color: number, opacity: number = 0.15, stencilBit: number = 0xFF): THREE.ShaderMaterial {
   const mat = new THREE.ShaderMaterial({
     uniforms: {
       uColor: { value: new THREE.Color(color) },
@@ -187,11 +189,13 @@ export function createEmpireFillMaterial(color: number, opacity: number = 0.15):
     depthTest: false,
     side: THREE.DoubleSide,
     blending: THREE.NormalBlending,
-    // STENCIL BUFFER: Draw where stencil is non-zero (odd count = inside polygon)
+    // STENCIL BUFFER: Draw where this empire's stencil bit is set (odd count = inside polygon)
     stencilWrite: true,
-    stencilFunc: THREE.NotEqualStencilFunc,  // Only draw where stencil != 0
+    stencilWriteMask: stencilBit,            // Only clear this empire's bit
+    stencilFunc: THREE.NotEqualStencilFunc,  // Only draw where this bit != 0
+    stencilFuncMask: stencilBit,             // Only test this empire's bit
     stencilRef: 0,
-    stencilZPass: THREE.ZeroStencilOp,       // Reset stencil after drawing to allow next empire
+    stencilZPass: THREE.ZeroStencilOp,       // Reset this empire's stencil bit after drawing
   })
   return mat
 }

@@ -9,6 +9,7 @@ import { SiteData, SOURCE_COLORS, getCategoryColor } from '../../../data/sites'
 import { FilterMode } from '../../../App'
 import { getThreeJsView, viewToMapbox, latLngToCartesian } from '../../../utils/geoMath'
 import { MapboxGlobeService, type MapboxMarkerData } from '../../../services/MapboxGlobeService'
+import { EMPIRES } from '../../../config/empireData'
 import { CAMERA } from '../../../config/globeConstants'
 
 // =============================================================================
@@ -152,6 +153,20 @@ export interface SelectedSitesSyncEffectDeps {
   listFrozenSiteIds: string[]
   sitesRef: React.MutableRefObject<SiteData[]>
   mapboxServiceRef: React.MutableRefObject<MapboxGlobeService | null>
+}
+
+/**
+ * All refs and state needed by the Mapbox empire borders sync effect.
+ */
+export interface EmpireBordersSyncEffectDeps {
+  showMapbox: boolean
+  visibleEmpires: Set<string>
+  empireYears: Record<string, number>
+  globalTimelineEnabled: boolean
+  globalTimelineYear: number
+  empireGeoJSONRef: React.MutableRefObject<Record<string, any>>
+  mapboxServiceRef: React.MutableRefObject<MapboxGlobeService | null>
+  empireMetadata: Map<string, { startYear: number; endYear: number; defaultYear: number }>
 }
 
 // =============================================================================
@@ -876,5 +891,57 @@ export function createSelectedSitesSyncEffect(
     mapboxService.setSelectedSites(selectedSites)
   } else {
     mapboxService.clearSelectedSites()
+  }
+}
+
+/**
+ * Creates the Mapbox empire borders sync effect body.
+ * Syncs empire border GeoJSON to Mapbox when in Mapbox mode.
+ *
+ * Usage in useEffect:
+ *   useEffect(() => createEmpireBordersSyncEffect(deps),
+ *     [showMapbox, visibleEmpires, empireYears, globalTimelineEnabled, globalTimelineYear])
+ */
+export function createEmpireBordersSyncEffect(
+  deps: EmpireBordersSyncEffectDeps
+): void {
+  const mapboxService = deps.mapboxServiceRef.current
+  if (!mapboxService?.getIsInitialized()) return
+
+  if (!deps.showMapbox) {
+    mapboxService.clearEmpireBorders()
+    return
+  }
+
+  // Collect all visible empires with their GeoJSON data
+  const empiresData: Array<{ empireId: string; geojson: any; color: number; visible: boolean }> = []
+
+  deps.visibleEmpires.forEach(empireId => {
+    const empire = EMPIRES.find(e => e.id === empireId)
+    if (!empire) return
+
+    const geojson = deps.empireGeoJSONRef.current[empireId]
+    if (!geojson) return
+
+    // If global timeline is enabled, check if empire exists at the current year
+    let visible = true
+    if (deps.globalTimelineEnabled) {
+      const year = deps.globalTimelineYear
+      const meta = deps.empireMetadata.get(empireId)
+      visible = meta ? (year >= meta.startYear && year <= meta.endYear) : false
+    }
+
+    empiresData.push({
+      empireId,
+      geojson,
+      color: empire.color,
+      visible,
+    })
+  })
+
+  if (empiresData.length > 0) {
+    mapboxService.setEmpireBorders(empiresData)
+  } else {
+    mapboxService.clearEmpireBorders()
   }
 }

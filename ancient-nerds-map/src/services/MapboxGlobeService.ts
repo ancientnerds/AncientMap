@@ -5,7 +5,7 @@
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { MAPBOX, rotateMapboxToken, getMapboxToken } from '../config/mapboxConstants'
-import { applyDarkTealTheme as applyTealTheme, setupDarkFog } from '../utils/mapboxTheme'
+import { applyDarkTealTheme as applyTealTheme, setupDarkFog, hexToRgba } from '../utils/mapboxTheme'
 
 export type MapboxTileType = 'dark' | 'satellite'
 export type ColorMode = 'category' | 'age' | 'source' | 'country'
@@ -50,6 +50,14 @@ export class MapboxGlobeService {
     coords: [number, number]
     color: string
     snapped: boolean
+  }> = []
+
+  // Store empire borders for restoration after style change
+  private currentEmpireBorders: Array<{
+    empireId: string
+    geojson: any
+    color: number
+    visible: boolean
   }> = []
 
   private wheelHandler: ((e: WheelEvent) => void) | null = null
@@ -478,6 +486,11 @@ export class MapboxGlobeService {
       // Restore measurements if we had any
       if (this.currentMeasurements.length > 0 || this.currentSinglePoints.length > 0) {
         this.setMeasurementLines(this.currentMeasurements, this.currentSinglePoints)
+      }
+
+      // Restore empire borders if we had any
+      if (this.currentEmpireBorders.length > 0) {
+        this.setEmpireBorders(this.currentEmpireBorders)
       }
     })
   }
@@ -986,6 +999,118 @@ export class MapboxGlobeService {
   }
 
   // =========================================================================
+  // EMPIRE BORDERS OVERLAY
+  // =========================================================================
+
+  /**
+   * Set empire borders to display on the map
+   * Merges all visible empire features into one FeatureCollection with data-driven styling
+   * Uses in-place data updates when source already exists to avoid flicker
+   */
+  setEmpireBorders(empires: Array<{ empireId: string; geojson: any; color: number; visible: boolean }>): void {
+    // Store for restoration after style change
+    this.currentEmpireBorders = empires.map(e => ({ ...e }))
+
+    if (!this.map || !this.isInitialized) return
+
+    // Filter to visible empires with valid GeoJSON
+    const visibleEmpires = empires.filter(e => e.visible && e.geojson?.features)
+
+    if (visibleEmpires.length === 0) {
+      this.clearEmpireBorders()
+      return
+    }
+
+    // Merge all visible empire features into ONE FeatureCollection
+    // Tag each feature with empireId and colors for data-driven styling
+    const allFeatures: GeoJSON.Feature[] = []
+    for (const empire of visibleEmpires) {
+      const borderColor = hexToRgba(empire.color, 0.9)
+      const fillColor = hexToRgba(empire.color, 0.15)
+
+      for (const feature of empire.geojson.features) {
+        if (!feature.geometry) continue
+        allFeatures.push({
+          type: 'Feature',
+          properties: {
+            ...feature.properties,
+            empireId: empire.empireId,
+            borderColor,
+            fillColor,
+          },
+          geometry: feature.geometry,
+        })
+      }
+    }
+
+    const geojson: GeoJSON.FeatureCollection = {
+      type: 'FeatureCollection',
+      features: allFeatures,
+    }
+
+    // Update existing source in place to avoid remove/add flicker
+    const source = this.map.getSource('empire-borders') as mapboxgl.GeoJSONSource
+    if (source) {
+      source.setData(geojson)
+      return
+    }
+
+    // First time - create source and layers
+    this.map.addSource('empire-borders', {
+      type: 'geojson',
+      data: geojson,
+    })
+
+    // Fill layer - subtle colored fill for empire territories
+    // Insert BELOW sites-shadow so sites render on top of empire borders
+    const beforeLayer = this.map.getLayer('sites-shadow') ? 'sites-shadow' : undefined
+    this.map.addLayer({
+      id: 'empire-borders-fill',
+      type: 'fill',
+      source: 'empire-borders',
+      filter: ['any',
+        ['==', ['geometry-type'], 'Polygon'],
+        ['==', ['geometry-type'], 'MultiPolygon'],
+      ],
+      paint: {
+        'fill-color': ['get', 'fillColor'],
+        'fill-opacity': 1,
+      },
+    }, beforeLayer)
+
+    // Border line layer - colored empire borders
+    this.map.addLayer({
+      id: 'empire-borders-line',
+      type: 'line',
+      source: 'empire-borders',
+      paint: {
+        'line-color': ['get', 'borderColor'],
+        'line-width': 2,
+        'line-opacity': 1,
+      },
+    }, beforeLayer)
+  }
+
+  /**
+   * Clear empire borders from the map
+   */
+  clearEmpireBorders(): void {
+    this.currentEmpireBorders = []
+
+    if (!this.map) return
+
+    if (this.map.getLayer('empire-borders-fill')) {
+      this.map.removeLayer('empire-borders-fill')
+    }
+    if (this.map.getLayer('empire-borders-line')) {
+      this.map.removeLayer('empire-borders-line')
+    }
+    if (this.map.getSource('empire-borders')) {
+      this.map.removeSource('empire-borders')
+    }
+  }
+
+  // =========================================================================
   // MEASUREMENT OVERLAYS (lines and markers)
   // =========================================================================
 
@@ -1402,6 +1527,7 @@ export class MapboxGlobeService {
 
   dispose(): void {
     this.clearSites()
+    this.clearEmpireBorders()
     this.siteClickCallback = null
     this.zoomChangeCallback = null
     this.wheelZoomCallback = null
@@ -1414,6 +1540,7 @@ export class MapboxGlobeService {
     this.currentSelectedSites = []
     this.currentMeasurements = []
     this.currentSinglePoints = []
+    this.currentEmpireBorders = []
     document.body.classList.remove('mapbox-primary-mode')
 
     if (this.map) {

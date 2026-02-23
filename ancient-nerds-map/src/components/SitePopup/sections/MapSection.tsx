@@ -52,6 +52,10 @@ export function MapSection({
   const googleMapsEmbedUrl = `https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d4000!2d${lng}!3d${lat}!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e1!3m2!1sen!2sus!4v1234567890`
   const streetViewEmbedUrl = getStreetViewEmbedUrl(lat, lng)
 
+  // Animated slider position state (for empire mode)
+  const [animatedSliderValue, setAnimatedSliderValue] = useState(0)
+  const [displayYear, setDisplayYear] = useState<number | null>(null)
+
   // Get period mappings for this empire
   const periods = useMemo(() => {
     if (!empire) return []
@@ -59,26 +63,25 @@ export function MapSection({
   }, [empire?.id])
 
   // Calculate which period is currently active
-  const currentYear = empireYear || empire?.peakYear || empire?.startYear || 0
+  const currentYear = displayYear ?? empireYear ?? empire?.peakYear ?? 0
   const activePeriodIndex = useMemo(() => {
     if (!periods.length) return -1
-    // Search from end so later periods take priority at boundaries
-    // (e.g., -664 is both end of Third Intermediate and start of Late Period)
-    for (let i = periods.length - 1; i >= 0; i--) {
+    // Search from start so earlier periods win at boundaries
+    // (e.g., year 395 is both end of Roman Dominate and start of Western Roman -
+    //  clicking Dominate picks 395 as its last year, so the earlier period should match)
+    for (let i = 0; i < periods.length; i++) {
       if (currentYear >= periods[i].yearStart && currentYear <= periods[i].yearEnd) {
         return i
       }
     }
     return -1
   }, [periods, currentYear])
-
-  // Animated slider position state (for empire mode)
-  const [animatedSliderValue, setAnimatedSliderValue] = useState(0)
   const animationRef = useRef<number | null>(null)
   const isUserDragging = useRef(false)
   const skipNextAnimation = useRef(false)
   const lastMouseDownTime = useRef(0)
   const ignoreInputUntil = useRef(0)
+  const lastThrottledLoadRef = useRef(0)
 
   // Calculate target year index for empire slider (computed outside conditional for hooks)
   const yearOptions = empireYearOptions || []
@@ -141,7 +144,7 @@ export function MapSection({
       <div className="empire-minimap-section">
         <EmpireMinimap
           empireId={empire.id}
-          year={empireYear || empire.startYear}
+          year={displayYear ?? empireYear ?? empire.peakYear ?? 0}
           empireColor={empire.color}
         />
 
@@ -168,7 +171,7 @@ export function MapSection({
                       // This is a double-click - block input events and jump to default year
                       ignoreInputUntil.current = now + 300
 
-                      const defaultYear = empireDefaultYear ?? empire.startYear
+                      const defaultYear = empireDefaultYear ?? empire.peakYear ?? yearOptions[0]
                       if (defaultYear !== undefined && yearOptions.length > 0) {
                         // Cancel any running animation
                         if (animationRef.current) {
@@ -194,22 +197,52 @@ export function MapSection({
                     lastMouseDownTime.current = now
                     isUserDragging.current = true
                   }}
-                  onMouseUp={() => { isUserDragging.current = false }}
+                  onMouseUp={(e) => {
+                    isUserDragging.current = false
+                    const idx = parseInt((e.target as HTMLInputElement).value)
+                    const year = yearOptions[idx]
+                    if (year !== undefined) {
+                      onEmpireYearChange(year)
+                    }
+                    setDisplayYear(null)
+                  }}
                   onTouchStart={() => { isUserDragging.current = true }}
-                  onTouchEnd={() => { isUserDragging.current = false }}
+                  onTouchEnd={(e) => {
+                    isUserDragging.current = false
+                    const idx = parseInt((e.target as HTMLInputElement).value)
+                    const year = yearOptions[idx]
+                    if (year !== undefined) {
+                      onEmpireYearChange(year)
+                    }
+                    setDisplayYear(null)
+                  }}
                   onInput={(e) => {
                     // Ignore input during double-click handling
                     if (Date.now() < ignoreInputUntil.current) return
                     const idx = parseInt((e.target as HTMLInputElement).value)
                     setAnimatedSliderValue(idx)
-                  }}
-                  onChange={(e) => {
-                    // Ignore change during double-click handling
-                    if (Date.now() < ignoreInputUntil.current) return
-                    const idx = parseInt(e.target.value)
                     const year = yearOptions[idx]
                     if (year !== undefined) {
-                      onEmpireYearChange(year)
+                      // Update display year immediately for responsive text + minimap
+                      setDisplayYear(year)
+                      // Throttle globe data load to every 50ms
+                      const now = Date.now()
+                      if (now - lastThrottledLoadRef.current >= 50) {
+                        lastThrottledLoadRef.current = now
+                        onEmpireYearChange(year)
+                      }
+                    }
+                  }}
+                  onChange={(e) => {
+                    // Handle single-click on track (not drag) - fires after onInput
+                    if (Date.now() < ignoreInputUntil.current) return
+                    if (!isUserDragging.current) {
+                      const idx = parseInt(e.target.value)
+                      const year = yearOptions[idx]
+                      if (year !== undefined) {
+                        onEmpireYearChange(year)
+                        setDisplayYear(null)
+                      }
                     }
                   }}
                 />
