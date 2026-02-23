@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 # Auto-retrieval
 # ---------------------------------------------------------------------------
 
-def _auto_retrieve(query: str, context_type: str) -> tuple[str, list[dict], list[dict], float | None, int]:
+def _auto_retrieve(query: str, context_type: str, empire_name: str | None = None) -> tuple[str, list[dict], list[dict], float | None, int]:
     """Run automatic hybrid retrieval BEFORE the LLM sees the message.
 
     Searches BOTH Qdrant collections on every query:
@@ -60,9 +60,12 @@ def _auto_retrieve(query: str, context_type: str) -> tuple[str, list[dict], list
     total_voyage_tokens = 0
     context_parts: list[str] = []
 
+    # Prepend empire name to search query so Qdrant returns relevant results
+    search_query = f"{empire_name} — {query}" if empire_name else query
+
     # --- Sites collection (always, unless context is news-only) ---
     if context_type != "news":
-        results, vt = _hybrid_search(query, collection="sites", limit=5)
+        results, vt = _hybrid_search(search_query, collection="sites", limit=5)
         total_voyage_tokens += vt
         site_results = results
         for r in results:
@@ -85,7 +88,7 @@ def _auto_retrieve(query: str, context_type: str) -> tuple[str, list[dict], list
 
     # --- News collection (always — semantic news retrieval) ---
     news_limit = 5 if context_type == "news" else 3
-    news_raw, vt = _hybrid_search(query, collection="news", limit=news_limit)
+    news_raw, vt = _hybrid_search(search_query, collection="news", limit=news_limit)
     total_voyage_tokens += vt
     if news_raw:
         news_results = news_raw
@@ -449,12 +452,23 @@ async def run_agent_stream(
     total_input_tokens = 0
     total_output_tokens = 0
     total_voyage_tokens = 0
+    logger.info(f"Lyra chat: context_type={context_type}, context_id={context_id}, context_year={context_year}")
+
     if message and len(message.strip()) > 2:
+        # Look up empire name for augmenting search queries
+        empire_name = None
+        if context_type == "empire" and context_id:
+            from api.services.lyra_tools import _load_seshat_data
+            sd = _load_seshat_data()
+            polity = sd.get("polities", {}).get(context_id)
+            if polity:
+                empire_name = polity.get("name")
+
         # Auto-retrieve sites + news from Qdrant (isolated so Qdrant failures don't kill the response)
         auto_site_results: list[dict] = []
         auto_news_results: list[dict] = []
         try:
-            retrieved_context, auto_site_results, auto_news_results, avg_relevance, vt = _auto_retrieve(message, context_type)
+            retrieved_context, auto_site_results, auto_news_results, avg_relevance, vt = _auto_retrieve(message, context_type, empire_name=empire_name)
             total_voyage_tokens += vt
         except Exception as e:
             logger.error(f"Auto-retrieve failed (Qdrant/Voyage issue, falling back to filter-based news): {e}")
