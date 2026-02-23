@@ -60,7 +60,7 @@ export function useEmpireBorders(options: UseEmpireBordersOptions = {}) {
   const [empireCentroids, setEmpireCentroids] = useState<Record<string, Record<string, [number, number]>>>({})
 
   // Global timeline
-  const [globalTimelineEnabled, setGlobalTimelineEnabled] = useState(false)
+  const [globalTimelineEnabled, setGlobalTimelineEnabled] = useState(true)
   const [globalTimelineYear, setGlobalTimelineYear] = useState(-500)
 
   // Labels toggle
@@ -110,10 +110,16 @@ export function useEmpireBorders(options: UseEmpireBordersOptions = {}) {
   // Empire hover state
   const hoveredEmpireRef = useRef<string | null>(null)
 
+  // Raw GeoJSON cache for Mapbox sync
+  const empireGeoJSONRef = useRef<Record<string, any>>({})
+
   // Data cache refs
   const regionDataRef = useRef<Record<string, Array<{ name: string; lat: number; lng: number; years: number[] }>> | null>(null)
   const ancientCitiesDataRef = useRef<Record<string, Array<{ name: string; lat: number; lng: number; years: number[]; type: string }>>>({})
   const empirePolygonFeaturesRef = useRef<Record<string, Array<{ geometry: { type: string; coordinates: any } }>>>({})
+
+  // Tracks which year's GeoJSON is actually loaded/rendered (vs empireYears which is display state)
+  const empireLoadedYearsRef = useRef<Record<string, number>>({})
 
   // Abort controllers for cancellation
   const empireLoadAbortRef = useRef<Record<string, AbortController>>({})
@@ -136,14 +142,9 @@ export function useEmpireBorders(options: UseEmpireBordersOptions = {}) {
   }, [visibleEmpires.size])
 
   // Calculate global timeline range from visible empires
-  const globalTimelineRange = (() => {
-    const enabledEmpires = EMPIRES.filter(e => visibleEmpires.has(e.id))
-    if (enabledEmpires.length === 0) return { min: -3000, max: 1900 }
-    return {
-      min: Math.min(...enabledEmpires.map(e => e.startYear)),
-      max: Math.max(...enabledEmpires.map(e => e.endYear))
-    }
-  })()
+  // Note: This is not currently used — Globe.tsx has its own calculation using empireMetadata.
+  // Kept for potential future use by other consumers of this hook.
+  const globalTimelineRange = { min: -3000, max: 1500 }
 
   // Toggle empire visibility
   const toggleEmpire = useCallback((empireId: string) => {
@@ -189,10 +190,10 @@ export function useEmpireBorders(options: UseEmpireBordersOptions = {}) {
         next.delete(empireId)
       } else {
         next.add(empireId)
-        // Sync age range when enabling
-        const empire = EMPIRES.find(e => e.id === empireId)
-        if (empire) {
-          onAgeRangeSync?.([empire.startYear, empire.endYear])
+        // Sync age range when enabling — uses yearOptions from loaded metadata
+        const options = empireYearOptionsRef.current[empireId]
+        if (options && options.length > 0) {
+          onAgeRangeSync?.([options[0], options[options.length - 1]])
         }
       }
       return next
@@ -335,10 +336,14 @@ export function useEmpireBorders(options: UseEmpireBordersOptions = {}) {
     regionDataRef,
     ancientCitiesDataRef,
     empirePolygonFeaturesRef,
+    empireGeoJSONRef,
 
     // Abort/debounce refs
     empireLoadAbortRef,
     empireYearDebounceRef,
-    globalTimelineThrottleRef
+    globalTimelineThrottleRef,
+
+    // Loaded GeoJSON year tracking (separate from display year)
+    empireLoadedYearsRef
   }
 }

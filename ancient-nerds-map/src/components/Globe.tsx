@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { SiteData, getDataSource } from '../data/sites'
 import { FilterMode } from '../App'
@@ -36,6 +36,7 @@ import {
   createMeasurementsSyncEffect,
   createProximityCircleSyncEffect,
   createSelectedSitesSyncEffect,
+  createEmpireBordersSyncEffect,
   type MapboxInitEffectDeps,
   type AutoSwitchEffectDeps,
   type ModeSwitchEffectDeps,
@@ -43,6 +44,7 @@ import {
   type MeasurementsSyncEffectDeps,
   type ProximityCircleSyncEffectDeps,
   type SelectedSitesSyncEffectDeps,
+  type EmpireBordersSyncEffectDeps,
 } from './Globe/rendering/mapboxEffects'
 import {
   loadGeoLabels as loadGeoLabelsImpl,
@@ -218,8 +220,9 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     empireBordersWindowOpen, setEmpireBordersWindowOpen, empireBordersHeight, setEmpireBordersHeight,
     empireBorderLinesRef, empireLabelsRef, regionLabelsRef, ancientCitiesRef,
     empireFillMeshesRef, hoveredEmpireRef,
-    regionDataRef, ancientCitiesDataRef, empirePolygonFeaturesRef,
-    empireLoadAbortRef, empireYearDebounceRef, globalTimelineThrottleRef
+    regionDataRef, ancientCitiesDataRef, empirePolygonFeaturesRef, empireGeoJSONRef,
+    empireLoadAbortRef, empireYearDebounceRef,
+    empireLoadedYearsRef
   } = empires
 
   const [vectorLayers, setVectorLayers] = useState<VectorLayerVisibility>({
@@ -366,15 +369,42 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     }
   }, [sites])
 
-  // Calculate dynamic range for global timeline from enabled empires
+  // Empire metadata from pipeline-generated metadata.json (source of truth for date ranges)
+  const [empireMetadata, setEmpireMetadata] = useState<Map<string, { startYear: number; endYear: number; defaultYear: number }>>(new Map())
+  useEffect(() => {
+    fetch('/data/historical/metadata.json')
+      .then(r => r.json())
+      .then((data: { empires: Record<string, Array<{ id: string; startYear: number; endYear: number; defaultYear: number }>> }) => {
+        const map = new Map<string, { startYear: number; endYear: number; defaultYear: number }>()
+        for (const empires of Object.values(data.empires)) {
+          for (const e of empires) {
+            map.set(e.id, { startYear: e.startYear, endYear: e.endYear, defaultYear: e.defaultYear })
+          }
+        }
+        setEmpireMetadata(map)
+      })
+      .catch(() => { /* metadata loads when available */ })
+  }, [])
+
+  // Calculate dynamic range for global timeline from enabled empires (using metadata)
   const globalTimelineRange = useMemo(() => {
-    const enabledEmpires = EMPIRES.filter(e => visibleEmpires.has(e.id))
-    if (enabledEmpires.length === 0) return { min: -3000, max: 1900 }
-    return {
-      min: Math.min(...enabledEmpires.map(e => e.startYear)),
-      max: Math.max(...enabledEmpires.map(e => e.endYear))
+    const enabledIds = EMPIRES.filter(e => visibleEmpires.has(e.id)).map(e => e.id)
+    if (enabledIds.length === 0) return { min: -3000, max: 1500 }
+    const starts: number[] = []
+    const ends: number[] = []
+    for (const id of enabledIds) {
+      const meta = empireMetadata.get(id)
+      if (meta) {
+        starts.push(meta.startYear)
+        ends.push(meta.endYear)
+      }
     }
-  }, [visibleEmpires])
+    if (starts.length === 0) return { min: -3000, max: 1500 }
+    return {
+      min: Math.min(...starts),
+      max: Math.min(1500, Math.max(...ends))
+    }
+  }, [visibleEmpires, empireMetadata])
 
   // Clamp globalTimelineYear to valid range when range changes
   useEffect(() => {
@@ -1076,8 +1106,8 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     if (globalTimelineEnabled) {
       const effectivelyVisible = new Set<string>()
       visibleEmpires.forEach(empireId => {
-        const empire = EMPIRES.find(e => e.id === empireId)
-        if (empire && globalTimelineYear >= empire.startYear && globalTimelineYear <= empire.endYear) {
+        const meta = empireMetadata.get(empireId)
+        if (meta && globalTimelineYear >= meta.startYear && globalTimelineYear <= meta.endYear) {
           effectivelyVisible.add(empireId)
         }
       })
@@ -1085,7 +1115,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     } else {
       onVisibleEmpiresChange?.(visibleEmpires)
     }
-  }, [visibleEmpires, globalTimelineEnabled, globalTimelineYear, onVisibleEmpiresChange])
+  }, [visibleEmpires, globalTimelineEnabled, globalTimelineYear, onVisibleEmpiresChange, empireMetadata])
 
   // Sync empire years to parent for "Within empires" filtering
   // Note: This is now called AFTER polygon data loads (in loadEmpireBordersForYear)
@@ -1376,6 +1406,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     regionDataRef,
     ancientCitiesDataRef,
     empirePolygonFeaturesRef,
+    empireGeoJSONRef,
     empireLoadAbortRef,
     visibleEmpiresRef,
     satelliteModeRef,
@@ -1385,6 +1416,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     empireLabelPositionDebounceRef,
     showEmpireLabelsRef,
     showAncientCitiesRef,
+    kmPerPixelRef,
     latLngTo3D: latLngTo3DRef,
     showEmpireLabels,
     showAncientCities,
@@ -1404,9 +1436,19 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     loadedEmpires
   ])
   // Load empire metadata and default year boundaries
-  const loadEmpireBorders = useCallback(async (empireId: string) => {
+  const loadEmpireBorders = useCallback(async (empireId: string, targetYear?: number) => {
     const ctx = buildEmpireRenderContext()
-    return loadEmpireBordersImpl(empireId, ctx)
+    const loadedYear = await loadEmpireBordersImpl(empireId, ctx, targetYear)
+    // Track which year's GeoJSON was actually loaded
+    if (loadedYear !== undefined) {
+      empireLoadedYearsRef.current[empireId] = loadedYear
+    }
+    // After async load, apply timeline visibility if a targetYear was requested.
+    // Without this, newly loaded empires appear visible even if they shouldn't exist
+    // at the current timeline year (e.g. clicking "All" at 520 BC would show Carolingian).
+    if (targetYear !== undefined) {
+      applyTimelineVisibilityForEmpireRef.current?.(empireId, targetYear)
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buildEmpireRenderContext])
 
@@ -1479,9 +1521,11 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     const currentYears: number[] = []
 
     for (const empire of syncedEmpires) {
-      startYears.push(empire.startYear)
+      const meta = empireMetadata.get(empire.id)
+      const metaStart = meta?.startYear ?? 0
+      startYears.push(metaStart)
 
-      const currentYear = empireYears[empire.id] ?? empire.startYear
+      const currentYear = empireYears[empire.id] ?? metaStart
       const yearOptions = empireYearOptions[empire.id]
 
       if (yearOptions && yearOptions.length > 0) {
@@ -1523,6 +1567,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
         })
         // Clear all empire geometry
         removeEmpireFromGlobe(id)
+        delete empireLoadedYearsRef.current[id]
         setLoadedEmpires(prev => {
           const next = new Set(prev)
           next.delete(id)
@@ -1539,7 +1584,9 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
         removeRegionLabels(id)
       } else {
         next.add(id)
-        loadEmpireBorders(id)  // Load if not already loaded (will add geometry to scene)
+        // Load at global timeline year if enabled, otherwise default (peak extent)
+        const timelineYear = globalTimelineEnabled ? globalTimelineYear : undefined
+        loadEmpireBorders(id, timelineYear)  // Load if not already loaded (will add geometry to scene)
         // Load cities and region labels for current year
         const currentYear = empireYears[id]
         if (currentYear !== undefined && empire) {
@@ -1570,9 +1617,10 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
 
     // Load boundaries for the new year
     await loadEmpireBordersForYear(empireId, year, empire.color, false)
+    empireLoadedYearsRef.current[empireId] = year
 
     // Update label text immediately (without changing position)
-    updateEmpireLabelText(empireId, empire.name, empire.startYear, empire.endYear, year)
+    updateEmpireLabelText(empireId, empire.name, undefined, undefined, year)
 
     // Debounce label position update - only move after 1 second of no changes
     if (empireLabelPositionDebounceRef.current[empireId]) {
@@ -1615,66 +1663,131 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     })
   }
 
-  // Global timeline change handler - updates all visible empires to show appropriate year
-  const handleGlobalTimelineChange = useCallback((year: number) => {
+  // Per-empire timeline visibility logic, stored in a ref so it can be called from both
+  // handleGlobalTimelineVisibility (slider drag) and loadEmpireBorders (async completion).
+  // Using a ref avoids useCallback dependency issues — always reads latest state via refs.
+  const applyTimelineVisibilityForEmpireRef = useRef<(empireId: string, year: number) => void>()
+  const globalTimelineDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const handleGlobalTimelineDataLoadRef = useRef<(year: number) => void>()
+  applyTimelineVisibilityForEmpireRef.current = (empireId: string, year: number) => {
+    const empire = EMPIRES.find(e => e.id === empireId)
+    if (!empire) return
+
+    const meta = empireMetadata.get(empireId)
+    const existsAtYear = meta ? (year >= meta.startYear && year <= meta.endYear) : false
+
+    // Hide/show border lines
+    const lines = empireBorderLinesRef.current[empireId]
+    if (lines) {
+      lines.forEach(line => { line.visible = existsAtYear })
+    }
+
+    // Hide/show fills and back lines (traverse scene for objects with this empireId)
+    sceneRef.current?.scene.traverse((obj) => {
+      if (obj.userData.empireId === empireId) {
+        // For back lines (renderOrder < 0), also check satellite mode
+        if (obj.renderOrder < 0) {
+          obj.visible = existsAtYear && !satelliteModeRef.current
+        } else {
+          obj.visible = existsAtYear
+        }
+      }
+    })
+
+    // Hide/show empire label
+    const label = empireLabelsRef.current[empireId]
+    if (label && showEmpireLabelsRef.current) {
+      label.visible = existsAtYear
+    }
+
+    // Hide/show region labels
+    const regionLabels = regionLabelsRef.current[empireId]
+    if (regionLabels && showEmpireLabelsRef.current) {
+      regionLabels.forEach(rl => { rl.visible = existsAtYear })
+    }
+
+    // Hide/show ancient cities
+    const cities = ancientCitiesRef.current[empireId]
+    if (cities && showAncientCitiesRef.current) {
+      cities.forEach(city => { city.visible = existsAtYear })
+    }
+
+    // Update empire years display state + label text (no GeoJSON fetch)
+    if (existsAtYear) {
+      const options = empireYearOptions[empireId] || []
+      if (options.length > 0) {
+        // Prefer past years (show historical borders, not future territory)
+        const pastYears = options.filter(y => y <= year)
+        const closestYear = pastYears.length > 0
+          ? Math.max(...pastYears)
+          : options.reduce((prev, curr) =>
+              Math.abs(curr - year) < Math.abs(prev - year) ? curr : prev
+            , options[0])
+        // Update display state only (no data load)
+        setEmpireYears(prev => ({ ...prev, [empireId]: closestYear }))
+        // Update label text to reflect new year
+        updateEmpireLabelText(empireId, empire.name, undefined, undefined, closestYear, options)
+      }
+    }
+  }
+
+  // Global timeline VISIBILITY handler - cheap, toggles Three.js objects + updates label text
+  // Called on every input event (slider drag) - also debounces GeoJSON data loads at 50ms
+  const handleGlobalTimelineVisibility = useCallback((year: number) => {
     setGlobalTimelineYear(year)
-    // Update each visible empire to show the appropriate year
+    // Immediate: cheap visibility toggle
+    visibleEmpires.forEach(empireId => {
+      applyTimelineVisibilityForEmpireRef.current?.(empireId, year)
+    })
+    // Debounced (50ms): actual GeoJSON data load for real-time border updates
+    if (globalTimelineDebounceRef.current) {
+      clearTimeout(globalTimelineDebounceRef.current)
+    }
+    globalTimelineDebounceRef.current = setTimeout(() => {
+      handleGlobalTimelineDataLoadRef.current?.(year)
+    }, 50)
+  }, [visibleEmpires])
+
+  // Global timeline DATA LOAD handler - expensive, loads GeoJSON for all visible empires
+  // Called on mouseup/touchend only (slider release)
+  const handleGlobalTimelineDataLoad = useCallback((year: number) => {
+    setGlobalTimelineYear(year)
     visibleEmpires.forEach(empireId => {
       const empire = EMPIRES.find(e => e.id === empireId)
       if (!empire) return
 
-      const existsAtYear = year >= empire.startYear && year <= empire.endYear
+      const meta = empireMetadata.get(empireId)
+      const existsAtYear = meta ? (year >= meta.startYear && year <= meta.endYear) : false
+      if (!existsAtYear) return
 
-      // Hide/show border lines
-      const lines = empireBorderLinesRef.current[empireId]
-      if (lines) {
-        lines.forEach(line => { line.visible = existsAtYear })
-      }
-
-      // Hide/show fills and back lines (traverse scene for objects with this empireId)
-      sceneRef.current?.scene.traverse((obj) => {
-        if (obj.userData.empireId === empireId) {
-          // For back lines (renderOrder < 0), also check satellite mode
-          if (obj.renderOrder < 0) {
-            obj.visible = existsAtYear && !satelliteModeRef.current
-          } else {
-            obj.visible = existsAtYear
-          }
-        }
-      })
-
-      // Hide/show empire label
-      const label = empireLabelsRef.current[empireId]
-      if (label && showEmpireLabelsRef.current) {
-        label.visible = existsAtYear
-      }
-
-      // Hide/show region labels
-      const regionLabels = regionLabelsRef.current[empireId]
-      if (regionLabels && showEmpireLabelsRef.current) {
-        regionLabels.forEach(rl => { rl.visible = existsAtYear })
-      }
-
-      // Hide/show ancient cities
-      const cities = ancientCitiesRef.current[empireId]
-      if (cities && showAncientCitiesRef.current) {
-        cities.forEach(city => { city.visible = existsAtYear })
-      }
-
-      // If empire exists at this year, update to closest available year
-      if (existsAtYear) {
-        const options = empireYearOptions[empireId] || []
-        if (options.length > 0) {
-          const closestYear = options.reduce((prev, curr) =>
-            Math.abs(curr - year) < Math.abs(prev - year) ? curr : prev
-          , options[0])
-          if (closestYear !== undefined && closestYear !== empireYears[empireId]) {
-            changeEmpireYear(empireId, closestYear)
-          }
+      const options = empireYearOptions[empireId] || []
+      if (options.length > 0) {
+        // Prefer past years (show historical borders, not future territory)
+        const pastYears = options.filter(y => y <= year)
+        const closestYear = pastYears.length > 0
+          ? Math.max(...pastYears)
+          : options.reduce((prev, curr) =>
+              Math.abs(curr - year) < Math.abs(prev - year) ? curr : prev
+            , options[0])
+        // Compare against actually loaded GeoJSON year, not display year
+        // (visibility handler already updates empireYears, so that comparison always fails)
+        if (closestYear !== undefined && closestYear !== empireLoadedYearsRef.current[empireId]) {
+          changeEmpireYear(empireId, closestYear)
+          empireLoadedYearsRef.current[empireId] = closestYear
         }
       }
     })
-  }, [visibleEmpires, empireYearOptions, empireYears, changeEmpireYear])
+  }, [visibleEmpires, empireYearOptions, changeEmpireYear])
+
+  // Keep data load ref current so debounced callback always calls latest version
+  handleGlobalTimelineDataLoadRef.current = handleGlobalTimelineDataLoad
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (globalTimelineDebounceRef.current) clearTimeout(globalTimelineDebounceRef.current)
+    }
+  }, [])
 
   // Handle external empire year requests (from popup period buttons)
   useEffect(() => {
@@ -1925,6 +2038,22 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     createSelectedSitesSyncEffect(deps)
   }, [showMapbox, listFrozenSiteIds])
 
+  // Mapbox empire borders sync - push empire GeoJSON to Mapbox when in Mapbox mode
+  useEffect(() => {
+    const deps: EmpireBordersSyncEffectDeps = {
+      showMapbox,
+      visibleEmpires,
+      empireYears,
+      globalTimelineEnabled,
+      globalTimelineYear,
+      empireGeoJSONRef,
+      mapboxServiceRef,
+      empireMetadata,
+    }
+    createEmpireBordersSyncEffect(deps)
+    // loadedEmpires triggers re-run after async GeoJSON fetch completes
+  }, [showMapbox, visibleEmpires, empireYears, globalTimelineEnabled, globalTimelineYear, loadedEmpires, empireMetadata])
+
   // Cleanup FadeManager on unmount
   useEffect(() => {
     return () => fadeManagerRef.current.dispose()
@@ -2128,17 +2257,14 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
         onUpdateEmpireYearDisplay={(empireId, year) => {
           setEmpireYears(prev => ({ ...prev, [empireId]: year }))
           const empire = EMPIRES.find(e => e.id === empireId)
-          if (empire) {
-            updateEmpireLabelText(empireId, empire.name, empire.startYear, empire.endYear, year, empireYearOptions[empireId])
-          }
+          if (empire) updateEmpireLabelText(empireId, empire.name, undefined, undefined, year, empireYearOptions[empireId])
         }}
         onEmpireYearSliderInput={(empireId, year) => {
           setEmpireYears(prev => ({ ...prev, [empireId]: year }))
           const empire = EMPIRES.find(e => e.id === empireId)
-          if (empire) {
-            updateEmpireLabelText(empireId, empire.name, empire.startYear, empire.endYear, year, empireYearOptions[empireId])
-          }
+          if (empire) updateEmpireLabelText(empireId, empire.name, undefined, undefined, year, empireYearOptions[empireId])
         }}
+        empireMetadata={empireMetadata}
         expandedRegions={expandedRegions}
         onToggleRegion={(region) => {
           setExpandedRegions(prev => {
@@ -2151,21 +2277,13 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
         onToggleGlobalTimeline={(enabled) => {
           setGlobalTimelineEnabled(enabled)
           if (enabled) {
-            handleGlobalTimelineChange(globalTimelineYear)
+            handleGlobalTimelineDataLoad(globalTimelineYear)
           }
         }}
         globalTimelineYear={globalTimelineYear}
         globalTimelineRange={globalTimelineRange}
-        onGlobalTimelineYearChange={handleGlobalTimelineChange}
-        onGlobalTimelineYearInput={(year) => {
-          setGlobalTimelineYear(year)
-          // Throttle expensive updates to every 50ms
-          const now = Date.now()
-          if (now - globalTimelineThrottleRef.current >= 50) {
-            globalTimelineThrottleRef.current = now
-            handleGlobalTimelineChange(year)
-          }
-        }}
+        onGlobalTimelineYearChange={handleGlobalTimelineDataLoad}
+        onGlobalTimelineYearInput={handleGlobalTimelineVisibility}
         onSelectAll={handleSelectAllEmpires}
         onSelectNone={handleSelectNoEmpires}
         onSelectInvert={handleSelectInvertEmpires}
