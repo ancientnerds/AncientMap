@@ -63,8 +63,8 @@ def _auto_retrieve(query: str, context_type: str, empire_name: str | None = None
     # Prepend empire name to search query so Qdrant returns relevant results
     search_query = f"{empire_name} — {query}" if empire_name else query
 
-    # --- Sites collection (always, unless context is news-only) ---
-    if context_type != "news":
+    # --- Sites collection (skip for empire context — Qdrant has sites, not empire data) ---
+    if context_type not in ("news", "empire"):
         results, vt = _hybrid_search(search_query, collection="sites", limit=5)
         total_voyage_tokens += vt
         site_results = results
@@ -382,7 +382,12 @@ def _build_messages(
     retrieved_context: str = "",
 ) -> list[BaseMessage]:
     """Build the message list for the LLM."""
-    system_text = LYRA_SYSTEM_PROMPT + _build_context_prompt(context_type, context_id, context_year) + retrieved_context
+    # Empire context goes AFTER retrieved context so it takes precedence over noisy results
+    context_prompt = _build_context_prompt(context_type, context_id, context_year)
+    if context_type == "empire":
+        system_text = LYRA_SYSTEM_PROMPT + retrieved_context + context_prompt
+    else:
+        system_text = LYRA_SYSTEM_PROMPT + context_prompt + retrieved_context
     messages: list[BaseMessage] = [SystemMessage(content=system_text)]
 
     # Add conversation history (validated: role whitelist + content length cap)
