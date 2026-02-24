@@ -13975,6 +13975,15 @@ body.news-feed-open .empire-borders-window {
   object-fit: cover;
 }
 
+/* Images rendered inside markdown (e.g. YouTube thumbnails from transcript search) */
+.lyra-chat-msg-text img {
+  max-width: 280px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  margin: 4px 0;
+  display: block;
+}
+
 /* Site buttons in messages */
 .lyra-chat-msg-sites {
   display: flex;

@@ -259,7 +259,8 @@ export default function DbAuditPage() {
   // Qdrant sync
   interface QdrantCollection { pg_count: number; qdrant_count: number; delta: number }
   interface QdrantReindex { running: boolean; started_at: string | null; collection: string | null; last_completed_at: string | null; last_duration_seconds: number | null; last_result: string | null }
-  interface QdrantStatus { qdrant_available: boolean; collections: { sites: QdrantCollection; news: QdrantCollection }; reindex: QdrantReindex }
+  interface QdrantEmpires { empire_count: number; boundary_count: number }
+  interface QdrantStatus { qdrant_available: boolean; collections: { sites: QdrantCollection; news: QdrantCollection; transcripts: QdrantCollection }; empires: QdrantEmpires; reindex: QdrantReindex }
   const [qdrantStatus, setQdrantStatus] = useState<QdrantStatus | null>(null)
   const [qdrantOpen, setQdrantOpen] = useState(false)
   const qdrantRef = useRef<HTMLDivElement>(null)
@@ -944,7 +945,7 @@ export default function DbAuditPage() {
                 className={`db-qdrant-pill ${
                   qdrantStatus.reindex.running ? 'db-qdrant-indexing' :
                   !qdrantStatus.qdrant_available ? 'db-qdrant-offline' :
-                  (qdrantStatus.collections.sites.delta !== 0 || qdrantStatus.collections.news.delta !== 0) ? 'db-qdrant-stale' :
+                  (qdrantStatus.collections.sites.delta !== 0 || qdrantStatus.collections.news.delta !== 0 || qdrantStatus.collections.transcripts.delta !== 0) ? 'db-qdrant-stale' :
                   'db-qdrant-ok'
                 }`}
                 onClick={() => setQdrantOpen(o => !o)}
@@ -955,14 +956,14 @@ export default function DbAuditPage() {
                 <span>Qdrant: {
                   qdrantStatus.reindex.running ? 'indexing...' :
                   !qdrantStatus.qdrant_available ? 'offline' :
-                  (qdrantStatus.collections.sites.delta === 0 && qdrantStatus.collections.news.delta === 0) ? 'OK' :
-                  `${qdrantStatus.collections.sites.delta + qdrantStatus.collections.news.delta > 0 ? '-' : '+'}${Math.abs(qdrantStatus.collections.sites.delta + qdrantStatus.collections.news.delta)}`
+                  (qdrantStatus.collections.sites.delta === 0 && qdrantStatus.collections.news.delta === 0 && qdrantStatus.collections.transcripts.delta === 0) ? 'OK' :
+                  `${qdrantStatus.collections.sites.delta + qdrantStatus.collections.news.delta + qdrantStatus.collections.transcripts.delta > 0 ? '-' : '+'}${Math.abs(qdrantStatus.collections.sites.delta + qdrantStatus.collections.news.delta + qdrantStatus.collections.transcripts.delta)}`
                 }</span>
               </button>
               {qdrantOpen && (
                 <div className="db-qdrant-dropdown">
                   <div className="db-qdrant-section-title">Collection Counts</div>
-                  {(['sites', 'news'] as const).map(col => {
+                  {(['sites', 'news', 'transcripts'] as const).map(col => {
                     const c = qdrantStatus.collections[col]
                     return (
                       <div key={col} className="db-qdrant-row">
@@ -980,6 +981,16 @@ export default function DbAuditPage() {
                       </div>
                     )
                   })}
+                  {qdrantStatus.empires && qdrantStatus.empires.empire_count > 0 && (
+                    <div className="db-qdrant-row">
+                      <span className="db-qdrant-col-name">empires</span>
+                      <span className="db-qdrant-counts">
+                        <span title="Empires">{qdrantStatus.empires.empire_count}</span>
+                        <span className="db-qdrant-sep">/</span>
+                        <span title="Boundary snapshots">{qdrantStatus.empires.boundary_count.toLocaleString()}</span>
+                      </span>
+                    </div>
+                  )}
                   {qdrantStatus.reindex.last_completed_at && (
                     <div className="db-qdrant-meta">
                       Last indexed {formatRelativeDate(qdrantStatus.reindex.last_completed_at)}
@@ -1000,6 +1011,7 @@ export default function DbAuditPage() {
                       <button onClick={() => handleReindex()}>Reindex All</button>
                       <button onClick={() => handleReindex('sites')}>Sites</button>
                       <button onClick={() => handleReindex('news')}>News</button>
+                      <button onClick={() => handleReindex('transcripts')}>Transcripts</button>
                       <button onClick={() => handleReindex(undefined, true)}>Rebuild All</button>
                     </div>
                   )}
