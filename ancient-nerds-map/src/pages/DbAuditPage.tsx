@@ -1055,7 +1055,7 @@ export default function DbAuditPage() {
           ) : user ? (
             <span className="db-auth-badge">View Only</span>
           ) : (
-            <a className="db-unlock-btn" href={`${config.api.baseUrl}/auth/discord`}>
+            <a className="db-unlock-btn" href={`${config.api.baseUrl}/auth/discord?return_to=${encodeURIComponent(window.location.pathname + window.location.search)}`}>
               Sign in
             </a>
           )}

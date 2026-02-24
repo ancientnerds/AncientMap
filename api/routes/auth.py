@@ -163,7 +163,8 @@ def get_user_tier(roles: list[str]) -> str:
 
 
 # Simple in-memory CSRF state store (short-lived, cleared on restart is fine)
-_oauth_states: dict[str, float] = {}
+# Each value is (timestamp, return_to_path)
+_oauth_states: dict[str, tuple[float, str]] = {}
 _OAUTH_STATE_CAP = 1000
 
 # Rate limit on OAuth redirects: 5 per minute per IP
@@ -280,13 +281,13 @@ def process_credit_grants(session: Session, user: DiscordUser) -> None:
 def _cleanup_states():
     """Remove expired CSRF states (older than 10 minutes)."""
     now = datetime.now(UTC).timestamp()
-    expired = [k for k, v in _oauth_states.items() if now - v > 600]
+    expired = [k for k, v in _oauth_states.items() if now - v[0] > 600]
     for k in expired:
         del _oauth_states[k]
 
 
 @router.get("/discord")
-async def discord_oauth_redirect(req: Request):
+async def discord_oauth_redirect(req: Request, return_to: str | None = None):
     """Redirect user to Discord OAuth2 authorization page."""
     if not DISCORD_CLIENT_ID or not DISCORD_REDIRECT_URI:
         raise HTTPException(status_code=503, detail="Discord OAuth not configured")
@@ -300,8 +301,12 @@ async def discord_oauth_redirect(req: Request):
     if len(_oauth_states) >= _OAUTH_STATE_CAP:
         raise HTTPException(status_code=429, detail="Too many pending logins. Try again later.")
 
+    # Sanitize return_to: must be a relative path, no open redirect
+    if not return_to or not return_to.startswith("/") or return_to.startswith("//"):
+        return_to = "/account.html"
+
     state = secrets.token_urlsafe(32)
-    _oauth_states[state] = datetime.now(UTC).timestamp()
+    _oauth_states[state] = (datetime.now(UTC).timestamp(), return_to)
 
     from urllib.parse import urlencode
     params = {
@@ -326,9 +331,10 @@ async def discord_oauth_callback(code: str | None = None, state: str | None = No
         return RedirectResponse(url="/account.html?error=missing_params")
 
     # Validate CSRF state (must exist and be less than 10 minutes old)
-    state_ts = _oauth_states.pop(state, None)
-    if state_ts is None:
+    state_entry = _oauth_states.pop(state, None)
+    if state_entry is None:
         return RedirectResponse(url="/account.html?error=invalid_state")
+    state_ts, return_to = state_entry
     if datetime.now(UTC).timestamp() - state_ts > 600:
         return RedirectResponse(url="/account.html?error=expired_state")
 
@@ -440,7 +446,7 @@ async def discord_oauth_callback(code: str | None = None, state: str | None = No
 
         jwt_token = create_token(str(user.id), discord_id)
 
-    response = RedirectResponse(url="/account.html")
+    response = RedirectResponse(url=return_to)
     response.set_cookie(
         key="an_auth_token",
         value=jwt_token,

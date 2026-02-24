@@ -72,7 +72,7 @@ export default function HamburgerNav({ currentPage, openInNewTab }: HamburgerNav
   // Build the auth link based on login state
   const authItem = isLoggedIn
     ? { page: 'account', label: 'Account', href: '/account.html', icon: ACCOUNT_ICON }
-    : { page: 'signin', label: 'Sign In', href: `${config.api.baseUrl}/auth/discord`, icon: ACCOUNT_ICON }
+    : { page: 'signin', label: 'Sign In', href: `${config.api.baseUrl}/auth/discord?return_to=${encodeURIComponent(window.location.pathname + window.location.search)}`, icon: ACCOUNT_ICON }
 
   return (
     <div className="hamburger-nav">

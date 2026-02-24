@@ -45,7 +45,7 @@ export function useSiteInteractions(siteId: string | undefined): SiteInteraction
   const requireAuth = useCallback((): string | null => {
     const token = localStorage.getItem(TOKEN_KEY)
     if (!token) {
-      window.location.href = `${config.api.baseUrl}/auth/discord`
+      window.location.href = `${config.api.baseUrl}/auth/discord?return_to=${encodeURIComponent(window.location.pathname + window.location.search)}`
       return null
     }
     return token
