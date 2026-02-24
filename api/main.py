@@ -13,6 +13,10 @@ import os
 logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(name)s | %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
+
+from loguru import logger as _loguru_logger
+_loguru_logger.disable("pipeline.connectors.registry")
 
 from dotenv import load_dotenv
 
