@@ -307,7 +307,7 @@ def play_expedition_stage(
     player_won = result["winner"] == "challenger"
 
     lore = exp["lore"][stage - 1] if stage <= len(exp["lore"]) else ""
-    rewards = {"credits": 0, "xp": 0, "pack": None, "pack_cards": None}
+    rewards: dict[str, object] = {"credits": 0, "xp": 0, "pack": None, "pack_cards": None}
 
     if player_won:
         progress.current_stage = stage
