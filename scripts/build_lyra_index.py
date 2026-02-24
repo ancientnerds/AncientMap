@@ -44,8 +44,6 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import (
     Distance,
     Modifier,
-    NamedSparseVector,
-    NamedVector,
     PointStruct,
     SparseVector,
     SparseVectorParams,
@@ -128,7 +126,10 @@ def index_sites(client: QdrantClient, embeddings, sparse_model, rebuild: bool = 
     collection = "sites"
 
     if rebuild:
-        client.delete_collection(collection)
+        try:
+            client.delete_collection(collection)
+        except Exception:
+            pass
 
     ensure_collection(client, collection, VECTOR_SIZE)
     create_payload_indexes(client, collection, ["country", "period_name", "site_type"])
@@ -242,7 +243,10 @@ def index_news(client: QdrantClient, embeddings, sparse_model, rebuild: bool = F
     collection = "news"
 
     if rebuild:
-        client.delete_collection(collection)
+        try:
+            client.delete_collection(collection)
+        except Exception:
+            pass
 
     ensure_collection(client, collection, VECTOR_SIZE)
     create_payload_indexes(client, collection, ["channel", "category"])
@@ -780,7 +784,7 @@ def index_empires(client: QdrantClient, embeddings, sparse_model, *, rebuild: bo
         except Exception:
             pass
 
-    ensure_collection(client, collection)
+    ensure_collection(client, collection, VECTOR_SIZE)
     create_payload_indexes(client, collection, ["polity_id", "region"])
     existing_ids = get_existing_ids(client, collection)
 

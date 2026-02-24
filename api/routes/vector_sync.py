@@ -128,12 +128,14 @@ async def vector_sync_status():
             "transcripts": {
                 "pg_count": pg_transcripts,
                 "qdrant_count": qdrant_transcripts,
-                "delta": pg_transcripts - qdrant_transcripts,
+                "delta": None,
+                "note": "Qdrant count is chunks, PG count is videos — delta not comparable",
             },
             "articles": {
                 "pg_count": pg_articles,
                 "qdrant_count": qdrant_articles,
-                "delta": pg_articles - qdrant_articles,
+                "delta": None,
+                "note": "Qdrant count is chunks, PG count is articles — delta not comparable",
             },
             "empires": {
                 "pg_count": seshat_polity_count,
