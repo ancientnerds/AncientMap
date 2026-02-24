@@ -333,8 +333,8 @@ function extractCountryFromLocation(location: string): string {
   return parts[parts.length - 1].trim()
 }
 
-/** Get the country code for a country name or location string (internal use) */
-function getCountryCode(countryOrLocation: string): string | null {
+/** Get the country code for a country name or location string */
+export function getCountryCode(countryOrLocation: string): string | null {
   if (!countryOrLocation) return null
 
   // Try exact match first (for country name)

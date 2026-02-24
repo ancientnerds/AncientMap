@@ -1,0 +1,203 @@
+"""CLI stat generator — compute stats for all Ancient Nerds sites.
+
+Usage:
+    python -m api.cardgame.generator
+
+Queries all sites with source_id='ancient_nerds', computes stats via stats.py,
+and bulk-upserts into card_stats.
+"""
+
+import sys
+from collections import Counter
+
+from sqlalchemy import func, text
+
+from api.cardgame.models import CardStats
+from api.cardgame.stats import compute_all_stats
+from pipeline.database import (
+    SiteBookmark,
+    SiteContentLink,
+    SiteLike,
+    UnifiedSite,
+    WikiImage,
+    get_session,
+)
+from pipeline.historical_boundaries.tagger import tag_site
+
+
+def _count_combos(session) -> dict[tuple[str | None, str | None], int]:
+    """Count (site_type, period_name) combos across all Ancient Nerds sites."""
+    rows = (
+        session.query(
+            UnifiedSite.site_type,
+            UnifiedSite.period_name,
+            func.count().label("cnt"),
+        )
+        .filter(UnifiedSite.source_id == "ancient_nerds")
+        .group_by(UnifiedSite.site_type, UnifiedSite.period_name)
+        .all()
+    )
+    return {(r.site_type, r.period_name): r.cnt for r in rows}
+
+
+def _get_content_stats(session, site_id) -> tuple[int, int, bool]:
+    """Return (content_link_count, distinct_content_types, has_3d_model)."""
+    links = (
+        session.query(SiteContentLink)
+        .filter(SiteContentLink.site_id == site_id)
+        .all()
+    )
+    content_types = set()
+    has_3d = False
+    for link in links:
+        content_types.add(link.content_type)
+        if link.content_type == "model" or link.content_source == "sketchfab":
+            has_3d = True
+    return len(links), len(content_types), has_3d
+
+
+def _get_wiki_image_count(session, site_id) -> int:
+    return (
+        session.query(func.count())
+        .select_from(WikiImage)
+        .filter(WikiImage.site_id == site_id)
+        .scalar()
+    ) or 0
+
+
+def _get_engagement(session, site_id) -> tuple[int, int]:
+    """Return (like_count, bookmark_count)."""
+    likes = (
+        session.query(func.count())
+        .select_from(SiteLike)
+        .filter(SiteLike.site_id == site_id)
+        .scalar()
+    ) or 0
+    bookmarks = (
+        session.query(func.count())
+        .select_from(SiteBookmark)
+        .filter(SiteBookmark.site_id == site_id)
+        .scalar()
+    ) or 0
+    return likes, bookmarks
+
+
+def _is_unesco(site) -> bool:
+    """Check if site is a UNESCO World Heritage Site.
+
+    Checks description and source_url for UNESCO references.
+    """
+    checks = [site.description or "", site.source_url or ""]
+    for text_val in checks:
+        if "unesco" in text_val.lower() or "world heritage" in text_val.lower():
+            return True
+    return False
+
+
+def generate_stats() -> None:
+    """Compute stats for card-worthy Ancient Nerds sites.
+
+    Only sites with ALL required fields become cards:
+    thumbnail, description, period_start, period_name, site_type, country.
+    """
+    with get_session() as session:
+        sites = (
+            session.query(UnifiedSite)
+            .filter(
+                UnifiedSite.source_id == "ancient_nerds",
+                UnifiedSite.thumbnail_url.isnot(None),
+                UnifiedSite.thumbnail_url != "",
+                UnifiedSite.description.isnot(None),
+                UnifiedSite.description != "",
+                UnifiedSite.period_start.isnot(None),
+                UnifiedSite.period_name.isnot(None),
+                UnifiedSite.period_name != "",
+                UnifiedSite.site_type.isnot(None),
+                UnifiedSite.site_type != "",
+                UnifiedSite.country.isnot(None),
+                UnifiedSite.country != "",
+            )
+            .all()
+        )
+        total = len(sites)
+        print(f"[CARDGAME] Found {total} card-worthy sites (with image, desc, period, type, country)", flush=True)
+
+        if total == 0:
+            print("[CARDGAME] No sites found. Exiting.", flush=True)
+            return
+
+        # Pre-compute combo counts
+        combo_counts = _count_combos(session)
+        print(f"[CARDGAME] Computed {len(combo_counts)} type/period combos", flush=True)
+
+        # Track rarity distribution
+        tier_counter: Counter = Counter()
+        created = 0
+        updated = 0
+
+        for i, site in enumerate(sites):
+            # Gather data for stat computation
+            content_link_count, content_type_count, has_3d = _get_content_stats(session, site.id)
+            wiki_image_count = _get_wiki_image_count(session, site.id)
+            like_count, bookmark_count = _get_engagement(session, site.id)
+            combo_key = (site.site_type, site.period_name)
+            combo_count = combo_counts.get(combo_key, 1)
+
+            stats = compute_all_stats(
+                period_start=site.period_start,
+                period_end=site.period_end,
+                site_type=site.site_type,
+                has_description=bool(site.description),
+                has_thumbnail=bool(site.thumbnail_url),
+                content_link_count=content_link_count,
+                wiki_image_count=wiki_image_count,
+                has_source_url=bool(site.source_url),
+                combo_count=combo_count,
+                is_unesco=_is_unesco(site),
+                like_count=like_count,
+                bookmark_count=bookmark_count,
+                content_type_count=content_type_count,
+                has_3d_model=has_3d,
+                country=site.country,
+            )
+
+            # Tag with empires
+            empires = tag_site(
+                lat=site.lat,
+                lon=site.lon,
+                period_start=site.period_start,
+            )
+            stats["empires"] = empires
+            stats["empire_count"] = len(empires)
+
+            # Upsert
+            existing = session.get(CardStats, site.id)
+            if existing:
+                for key, value in stats.items():
+                    setattr(existing, key, value)
+                updated += 1
+            else:
+                session.add(CardStats(site_id=site.id, **stats))
+                created += 1
+
+            tier_counter[stats["rarity_tier"]] += 1
+
+            if (i + 1) % 500 == 0:
+                print(f"[CARDGAME] Processed {i + 1}/{total} sites...", flush=True)
+                session.flush()
+
+        session.flush()
+
+    # Print distribution report
+    print(f"\n[CARDGAME] Done! Created {created}, updated {updated} card stats.", flush=True)
+    print("[CARDGAME] Rarity distribution:", flush=True)
+    from api.cardgame.constants import RARITY_NAMES
+    for tier in sorted(tier_counter.keys()):
+        name = RARITY_NAMES.get(tier, f"Tier {tier}")
+        count = tier_counter[tier]
+        pct = count / total * 100
+        print(f"  {name}: {count} ({pct:.1f}%)", flush=True)
+
+
+if __name__ == "__main__":
+    generate_stats()

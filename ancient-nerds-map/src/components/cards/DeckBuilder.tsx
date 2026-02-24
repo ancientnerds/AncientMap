@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import type { CardData, DeckData, SynergyDescription } from '../../types/cards'
 import { apiFetch } from '../../utils/cardApi'
-import { RARITY_CLASSES } from '../../constants/cards'
+import { GameCard } from './GameCard'
 import CollectionBrowser from './CollectionBrowser'
 
 interface DeckBuilderProps {
@@ -251,24 +251,15 @@ export default function DeckBuilder({ token }: DeckBuilderProps) {
             <div className="deck-empty">Click [+] on cards to add them to your deck.</div>
           ) : (
             <div className="deck-card-list">
-              {deckCards.map((c, i) => {
-                const rarityClass = RARITY_CLASSES[c.rarity_tier] || 'rarity-common'
-                return (
-                  <div key={c.site_id} className={`deck-list-item ${rarityClass}`}>
-                    <span className="deck-list-num">{i + 1}.</span>
-                    {c.thumbnail_url && (
-                      <img src={c.thumbnail_url} alt="" className="deck-list-thumb" />
-                    )}
-                    <div className="deck-list-info">
-                      <span className="deck-list-name">{c.name}</span>
-                      <span className="deck-list-power">Power: {c.total_power}</span>
-                    </div>
-                    <button className="deck-list-remove" onClick={() => removeCard(c.site_id)}>
-                      &minus;
-                    </button>
-                  </div>
-                )
-              })}
+              {deckCards.map((c, i) => (
+                <GameCard
+                  key={c.site_id}
+                  card={c}
+                  variant="row"
+                  index={i + 1}
+                  onRemove={() => removeCard(c.site_id)}
+                />
+              ))}
             </div>
           )}
 

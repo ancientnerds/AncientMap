@@ -45,6 +45,8 @@ class CardStats(Base):
     rarity_tier: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     category_group: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     civilization: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    empires: Mapped[list | None] = mapped_column(JSONB, default=list, server_default="[]")
+    empire_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
     site: Mapped["UnifiedSite"] = relationship("UnifiedSite", lazy="joined")
 
@@ -99,6 +101,7 @@ class CardDeck(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     card_ids: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    commander_empire_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -244,6 +247,45 @@ class ExpeditionProgress(Base):
     __table_args__ = (
         UniqueConstraint("user_id", "expedition_id", name="uq_expedition_progress"),
         Index("idx_expedition_progress_user", "user_id"),
+    )
+
+
+class EmpireCard(Base):
+    """Static empire card definitions — one row per empire."""
+
+    __tablename__ = "empire_cards"
+
+    empire_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    region: Mapped[str] = mapped_column(String(100), nullable=False)
+    start_year: Mapped[int] = mapped_column(Integer, nullable=False)
+    end_year: Mapped[int] = mapped_column(Integer, nullable=False)
+    peak_area: Mapped[int] = mapped_column(Integer, default=0)
+    thematic_stat: Mapped[str] = mapped_column(String(50), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    color: Mapped[int] = mapped_column(Integer, default=0x888888)
+
+
+class EmpireCollection(Base):
+    """Empire cards owned by a user."""
+
+    __tablename__ = "empire_collections"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("discord_users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    empire_id: Mapped[str] = mapped_column(String(50), nullable=False)
+    acquired_via: Mapped[str] = mapped_column(String(50), nullable=False)
+    acquired_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "empire_id", name="uq_empire_collection"),
+        Index("idx_empire_collections_user", "user_id"),
     )
 
 

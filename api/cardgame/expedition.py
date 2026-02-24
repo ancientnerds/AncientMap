@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from api.cardgame.constants import (
     EXPEDITION_COMPLETE_PACK,
     EXPEDITION_COOLDOWN_SECONDS,
+    EXPEDITION_EMPIRE_REWARDS,
     EXPEDITION_STAGES,
     EXPEDITION_WIN_CREDITS,
     PACK_PRICES,
@@ -17,6 +18,7 @@ from api.cardgame.models import (
     CardDeck,
     CardPlayerStats,
     CardStats,
+    EmpireCollection,
     ExpeditionProgress,
 )
 from pipeline.database import CreditGrant, DiscordUser
@@ -301,13 +303,18 @@ def play_expedition_stage(
 
     from api.cardgame.battle import resolve_battle
     battle_seed = f"expedition_{expedition_id}_{user.id}_{stage}_{datetime.now(UTC).isoformat()}"
-    result = resolve_battle(player_cards, npc_deck, battle_seed)
+    # Pass player's commander if they have one on their active deck
+    player_commander = deck_row.commander_empire_id if deck_row else None
+    result = resolve_battle(
+        player_cards, npc_deck, battle_seed,
+        challenger_commander=player_commander,
+    )
 
     progress.last_stage_played_at = datetime.now(UTC)
     player_won = result["winner"] == "challenger"
 
     lore = exp["lore"][stage - 1] if stage <= len(exp["lore"]) else ""
-    rewards: dict[str, object] = {"credits": 0, "xp": 0, "pack": None, "pack_cards": None}
+    rewards: dict[str, object] = {"credits": 0, "xp": 0, "pack": None, "pack_cards": None, "empire_card": None}
 
     if player_won:
         progress.current_stage = stage
@@ -342,6 +349,29 @@ def play_expedition_stage(
                 reason=f"expedition_{expedition_id}_completion_pack",
             ))
             rewards["pack_cards"] = open_pack(session, user, EXPEDITION_COMPLETE_PACK)
+
+            # Award empire card if this expedition has one
+            empire_id = EXPEDITION_EMPIRE_REWARDS.get(expedition_id)
+            if empire_id:
+                existing = (
+                    session.query(EmpireCollection)
+                    .filter(
+                        EmpireCollection.user_id == user.id,
+                        EmpireCollection.empire_id == empire_id,
+                    )
+                    .first()
+                )
+                if not existing:
+                    session.add(EmpireCollection(
+                        user_id=user.id,
+                        empire_id=empire_id,
+                        acquired_via=f"expedition_{expedition_id}",
+                    ))
+                from api.cardgame.constants import EMPIRE_DISPLAY_NAMES
+                rewards["empire_card"] = {
+                    "empire_id": empire_id,
+                    "name": EMPIRE_DISPLAY_NAMES.get(empire_id, empire_id),
+                }
 
     return {
         "expedition": exp["name"],

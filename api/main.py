@@ -55,6 +55,7 @@ from api.routes import (
     vector_sync,
     wiki_images,
 )
+from api.cardgame.routes import router as cardgame_router
 from api.routes.public_v1 import create_public_api
 from pipeline.config import get_settings
 
@@ -258,6 +259,7 @@ app.include_router(vector_sync.router, prefix="/api/vector-sync", tags=["vector-
 app.include_router(wiki_images.router, prefix="/api/wiki-images", tags=["wiki-images"])
 app.include_router(patreon.router, prefix="/api/patreon", tags=["patreon"])
 app.include_router(interactions.router, prefix="/api/interactions", tags=["interactions"])
+app.include_router(cardgame_router, prefix="/api/cards", tags=["cards"])
 
 # Serve wiki images as static files
 _wiki_images_dir = Path("public/data/images/wiki")
