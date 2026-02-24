@@ -236,6 +236,7 @@ export const CATEGORY_GROUP_ORDER: CategoryGroup[] = [
 ]
 
 // Map categories to their groups (case-insensitive keys created below)
+// Keep in sync with: api/cardgame/constants.py _GROUP_DEFINITIONS
 const CATEGORY_TO_GROUP: Record<string, CategoryGroup> = {
   // Settlements - Oranges & Reds
   'city': 'Settlements',

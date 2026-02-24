@@ -12,6 +12,7 @@ from pipeline.normalizers.site_type import normalize_site_type
 # we replicate that grouping here explicitly.
 # ---------------------------------------------------------------------------
 
+# Keep in sync with: src/constants/colors.ts CATEGORY_TO_GROUP
 _GROUP_DEFINITIONS: dict[str, list[str]] = {
     "Settlements": [
         "city", "town", "village", "settlement", "urban", "villa",
@@ -138,7 +139,7 @@ RARITY_TIERS: list[tuple[int, int, str]] = [
 
 RARITY_NAMES: dict[int, str] = {t: name for _, t, name in RARITY_TIERS}
 
-# Discord embed colors per rarity tier
+# Discord embed colors only — frontend card colors are in rarity.ts
 RARITY_COLORS: dict[int, int] = {
     1: 0x9E9E9E,   # Common — grey
     2: 0x4CAF50,   # Uncommon — green
@@ -365,44 +366,14 @@ EMPIRE_THEMATIC_STATS: dict[str, str] = {
     "elam": "antiquity",
 }
 
+# Period strings and display names computed from the single source of truth
+from pipeline.historical_boundaries.empire_metadata import (
+    EMPIRE_METADATA,
+    get_empire_period,
+)
+
 EMPIRE_DISPLAY_NAMES: dict[str, str] = {
-    "roman": "Roman Empire",
-    "egyptian": "Egyptian Kingdom",
-    "greek": "Greek City-States",
-    "han": "Han Dynasty",
-    "maurya": "Maurya Empire",
-    "akkadian": "Akkadian Empire",
-    "kush": "Kingdom of Kush",
-    "axum": "Aksumite Empire",
-    "maya": "Maya Civilization",
-    "inca": "Inca Empire",
-    "aztec": "Aztec Empire",
-    "byzantine": "Byzantine Empire",
-    "achaemenid": "Achaemenid Persia",
-    "assyrian": "Assyrian Empire",
-    "babylonian": "Babylonian Empire",
-    "hittite": "Hittite Empire",
-    "minoan": "Minoan Civilization",
-    "mycenaean": "Mycenaean Greece",
-    "phoenician": "Phoenicia",
-    "carthaginian": "Carthaginian Empire",
-    "macedonian": "Macedonian Empire",
-    "seleucid": "Seleucid Empire",
-    "parthian": "Parthian Empire",
-    "kushan": "Kushan Empire",
-    "sassanid": "Sassanid Empire",
-    "shang": "Shang Dynasty",
-    "zhou": "Zhou Dynasty",
-    "qin": "Qin Dynasty",
-    "indus_valley": "Indus Valley (Harappan)",
-    "gupta": "Gupta Empire",
-    "zapotec": "Zapotec Civilization",
-    "teotihuacan": "Teotihuacan",
-    "olmec": "Olmec Civilization",
-    "carolingian": "Carolingian Empire",
-    "etruscan": "Etruscan Civilization",
-    "mitanni": "Mitanni",
-    "elam": "Elam",
+    eid: meta["name"] for eid, meta in EMPIRE_METADATA.items()
 }
 
 # Commander bonuses
@@ -507,4 +478,8 @@ EMPIRE_DESCRIPTIONS: dict[str, str] = {
     "etruscan": "The Etruscans preceded and deeply influenced Rome, contributing the arch, the toga, gladiatorial combat, and much of Roman religious practice.",
     "mitanni": "A Hurrian-speaking empire that rivaled Egypt and the Hittites. The Mitanni were among the first to use war chariots as a decisive military force.",
     "elam": "One of the oldest civilizations in the world, Elam developed its own writing system and repeatedly clashed with and influenced Mesopotamian cultures.",
+}
+
+EMPIRE_PERIODS: dict[str, str] = {
+    eid: get_empire_period(eid) for eid in EMPIRE_METADATA
 }

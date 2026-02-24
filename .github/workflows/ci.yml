@@ -91,6 +91,9 @@ jobs:
       - name: Lint with ruff
         run: ruff check api/ pipeline/
 
+      - name: Verify shared data is up to date
+        run: python pipeline/generate_shared_data.py --verify
+
       - name: Type check with mypy
         run: mypy api/ --no-error-summary
 

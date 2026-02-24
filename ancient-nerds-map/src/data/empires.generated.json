@@ -1,0 +1,224 @@
+[
+  {
+    "id": "egyptian",
+    "name": "Egyptian Kingdom",
+    "region": "Ancient Near East",
+    "color": 16766720
+  },
+  {
+    "id": "akkadian",
+    "name": "Akkadian Empire",
+    "region": "Ancient Near East",
+    "color": 16752762
+  },
+  {
+    "id": "elam",
+    "name": "Elam",
+    "region": "Ancient Near East",
+    "color": 15115340
+  },
+  {
+    "id": "babylonian",
+    "name": "Babylonian Empire",
+    "region": "Ancient Near East",
+    "color": 16757575
+  },
+  {
+    "id": "assyrian",
+    "name": "Assyrian Empire",
+    "region": "Ancient Near East",
+    "color": 16739179
+  },
+  {
+    "id": "hittite",
+    "name": "Hittite Empire",
+    "region": "Ancient Near East",
+    "color": 16755200
+  },
+  {
+    "id": "mitanni",
+    "name": "Mitanni",
+    "region": "Ancient Near East",
+    "color": 13935988
+  },
+  {
+    "id": "minoan",
+    "name": "Minoan Civilization",
+    "region": "Mediterranean",
+    "color": 2142890
+  },
+  {
+    "id": "mycenaean",
+    "name": "Mycenaean Greece",
+    "region": "Mediterranean",
+    "color": 4772300
+  },
+  {
+    "id": "phoenician",
+    "name": "Phoenicia",
+    "region": "Mediterranean",
+    "color": 9662683
+  },
+  {
+    "id": "etruscan",
+    "name": "Etruscan Civilization",
+    "region": "Mediterranean",
+    "color": 14381203
+  },
+  {
+    "id": "greek",
+    "name": "Greek City-States",
+    "region": "Mediterranean",
+    "color": 16752762
+  },
+  {
+    "id": "macedonian",
+    "name": "Macedonian Empire",
+    "region": "Mediterranean",
+    "color": 16746598
+  },
+  {
+    "id": "carthaginian",
+    "name": "Carthaginian Empire",
+    "region": "Mediterranean",
+    "color": 16755336
+  },
+  {
+    "id": "roman",
+    "name": "Roman Empire",
+    "region": "Mediterranean",
+    "color": 16742263
+  },
+  {
+    "id": "byzantine",
+    "name": "Byzantine Empire",
+    "region": "Mediterranean",
+    "color": 16751018
+  },
+  {
+    "id": "achaemenid",
+    "name": "Achaemenid Persia",
+    "region": "Persian/Central Asia",
+    "color": 49151
+  },
+  {
+    "id": "seleucid",
+    "name": "Seleucid Empire",
+    "region": "Persian/Central Asia",
+    "color": 52945
+  },
+  {
+    "id": "parthian",
+    "name": "Parthian Empire",
+    "region": "Persian/Central Asia",
+    "color": 4251856
+  },
+  {
+    "id": "kushan",
+    "name": "Kushan Empire",
+    "region": "Persian/Central Asia",
+    "color": 6266528
+  },
+  {
+    "id": "sassanid",
+    "name": "Sassanid Empire",
+    "region": "Persian/Central Asia",
+    "color": 8388564
+  },
+  {
+    "id": "shang",
+    "name": "Shang Dynasty",
+    "region": "East Asia",
+    "color": 16766720
+  },
+  {
+    "id": "zhou",
+    "name": "Zhou Dynasty",
+    "region": "East Asia",
+    "color": 16769333
+  },
+  {
+    "id": "qin",
+    "name": "Qin Dynasty",
+    "region": "East Asia",
+    "color": 16734003
+  },
+  {
+    "id": "han",
+    "name": "Han Dynasty",
+    "region": "East Asia",
+    "color": 16737095
+  },
+  {
+    "id": "indus_valley",
+    "name": "Indus Valley (Harappan)",
+    "region": "South Asia",
+    "color": 6737322
+  },
+  {
+    "id": "maurya",
+    "name": "Maurya Empire",
+    "region": "South Asia",
+    "color": 8388352
+  },
+  {
+    "id": "gupta",
+    "name": "Gupta Empire",
+    "region": "South Asia",
+    "color": 65407
+  },
+  {
+    "id": "kush",
+    "name": "Kingdom of Kush",
+    "region": "Africa",
+    "color": 16747520
+  },
+  {
+    "id": "axum",
+    "name": "Aksumite Empire",
+    "region": "Africa",
+    "color": 13468991
+  },
+  {
+    "id": "olmec",
+    "name": "Olmec Civilization",
+    "region": "Americas",
+    "color": 2263842
+  },
+  {
+    "id": "zapotec",
+    "name": "Zapotec Civilization",
+    "region": "Americas",
+    "color": 3978097
+  },
+  {
+    "id": "teotihuacan",
+    "name": "Teotihuacan",
+    "region": "Americas",
+    "color": 3050327
+  },
+  {
+    "id": "maya",
+    "name": "Maya Civilization",
+    "region": "Americas",
+    "color": 65407
+  },
+  {
+    "id": "aztec",
+    "name": "Aztec Empire",
+    "region": "Americas",
+    "color": 8190976
+  },
+  {
+    "id": "inca",
+    "name": "Inca Empire",
+    "region": "Americas",
+    "color": 8388352
+  },
+  {
+    "id": "carolingian",
+    "name": "Carolingian Empire",
+    "region": "Medieval Europe",
+    "color": 6591981
+  }
+]

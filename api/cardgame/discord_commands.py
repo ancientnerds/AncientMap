@@ -12,6 +12,7 @@ import discord
 from discord import app_commands
 
 from api.cardgame.constants import (
+    BATTLE_MAX_STAKE,
     PACK_PRICES,
     RARITY_COLORS,
     RARITY_NAMES,
@@ -114,6 +115,15 @@ def register_commands(bot: discord.Client) -> None:
                 embed.add_field(name="Total Power", value=str(card.total_power), inline=True)
                 embed.add_field(name="Rarity", value=f"{rarity_name} (Tier {card.rarity_tier})", inline=True)
                 embed.add_field(name="Type", value=card.category_group, inline=True)
+
+                # Empire affiliations
+                from api.cardgame.constants import EMPIRE_DISPLAY_NAMES
+                card_empires = card.empires or []
+                if card_empires:
+                    empire_names = [EMPIRE_DISPLAY_NAMES.get(e, e) for e in card_empires]
+                    embed.add_field(name="Empires", value=", ".join(empire_names), inline=False)
+                else:
+                    embed.add_field(name="Empires", value="Pre-Empire Site (Ancient Anchor)", inline=False)
 
                 if site.thumbnail_url:
                     embed.set_thumbnail(url=site.thumbnail_url)
@@ -398,6 +408,18 @@ def register_commands(bot: discord.Client) -> None:
                         return
 
                     embed = discord.Embed(title=f"Deck: {deck.name}", color=0xC02023)
+
+                    # Commander info
+                    from api.cardgame.constants import EMPIRE_DISPLAY_NAMES, EMPIRE_THEMATIC_STATS
+                    if deck.commander_empire_id:
+                        cmd_name = EMPIRE_DISPLAY_NAMES.get(deck.commander_empire_id, deck.commander_empire_id)
+                        cmd_stat = EMPIRE_THEMATIC_STATS.get(deck.commander_empire_id, "")
+                        embed.add_field(
+                            name="Commander",
+                            value=f"{cmd_name} (+1 {cmd_stat.replace('_', ' ').title()} to homeland sites)",
+                            inline=False,
+                        )
+
                     lines = []
                     for cid_str in deck.card_ids:
                         try:
@@ -410,6 +432,22 @@ def register_commands(bot: discord.Client) -> None:
                             rarity_name = RARITY_NAMES.get(card.rarity_tier, "?")
                             lines.append(f"**{site.name}** — {rarity_name} | Power: {card.total_power}")
                     embed.description = "\n".join(lines) if lines else "Empty deck"
+
+                    # Show active synergies
+                    deck_cards = []
+                    for cid_str in deck.card_ids:
+                        try:
+                            card = session.get(CardStats, uuid.UUID(cid_str))
+                            if card:
+                                deck_cards.append(card)
+                        except ValueError:
+                            continue
+                    if deck_cards:
+                        from api.cardgame.synergies import describe_synergies
+                        synergy_lines = describe_synergies(deck_cards, commander_empire_id=deck.commander_empire_id)
+                        if synergy_lines:
+                            embed.add_field(name="Active Synergies", value="\n".join(synergy_lines), inline=False)
+
                     embed.set_footer(text="ancientnerds.com")
                     await interaction.followup.send(embed=embed, ephemeral=True)
 
@@ -451,6 +489,12 @@ def register_commands(bot: discord.Client) -> None:
 
         if stake < 0:
             await interaction.response.send_message("Stake must be 0 or more.", ephemeral=True)
+            return
+
+        if stake > BATTLE_MAX_STAKE:
+            await interaction.response.send_message(
+                f"Maximum stake is {BATTLE_MAX_STAKE:,} credits.", ephemeral=True,
+            )
             return
 
         await interaction.response.defer()
@@ -716,6 +760,234 @@ def register_commands(bot: discord.Client) -> None:
                 f"Please wait {error.retry_after:.0f}s.", ephemeral=True,
             )
 
+    # -------------------------------------------------------------------
+    # /empire <name> — View an empire card's details
+    # -------------------------------------------------------------------
+    @bot.tree.command(name="empire", description="View an empire card's details")
+    @app_commands.describe(name="Empire name to look up")
+    @app_commands.checks.cooldown(1, 5.0)
+    async def empire_command(interaction: discord.Interaction, name: str):
+        await interaction.response.defer(ephemeral=True)
+        try:
+            from api.cardgame.constants import (
+                EMPIRE_DESCRIPTIONS,
+                EMPIRE_DISPLAY_NAMES,
+                EMPIRE_THEMATIC_STATS,
+            )
+            from pipeline.historical_boundaries.empire_metadata import EMPIRE_METADATA
+
+            # Fuzzy match empire name
+            name_lower = name.lower()
+            matched_id = None
+            for eid, display_name in EMPIRE_DISPLAY_NAMES.items():
+                if name_lower in display_name.lower() or name_lower in eid.lower():
+                    matched_id = eid
+                    break
+
+            if not matched_id:
+                await interaction.followup.send(
+                    f"No empire found matching '{name}'. Try: Roman, Egyptian, Greek, Han, etc.",
+                    ephemeral=True,
+                )
+                return
+
+            meta = EMPIRE_METADATA.get(matched_id, {})
+            display_name = EMPIRE_DISPLAY_NAMES.get(matched_id, matched_id)
+            thematic_stat = EMPIRE_THEMATIC_STATS.get(matched_id, "unknown")
+            description = EMPIRE_DESCRIPTIONS.get(matched_id, "")
+            color = meta.get("color", 0x888888)
+            region = meta.get("region", "Unknown")
+            start = meta.get("startYear", 0)
+            end = meta.get("endYear", 0)
+
+            def _year_fmt(y: int) -> str:
+                return f"{abs(y)} BCE" if y < 0 else f"{y} CE"
+
+            embed = discord.Embed(
+                title=display_name,
+                description=description,
+                color=color,
+            )
+            embed.add_field(name="Region", value=region, inline=True)
+            embed.add_field(name="Period", value=f"{_year_fmt(start)} – {_year_fmt(end)}", inline=True)
+            embed.add_field(
+                name="Thematic Stat",
+                value=thematic_stat.replace("_", " ").title(),
+                inline=True,
+            )
+            embed.add_field(
+                name="Commander Bonus",
+                value=f"+1 {thematic_stat.replace('_', ' ').title()} to up to 3 homeland sites",
+                inline=False,
+            )
+            embed.set_footer(text="Earned by completing expeditions | ancientnerds.com")
+
+            await interaction.followup.send(embed=embed, ephemeral=True)
+
+        except Exception as e:
+            logger.exception(f"/empire error: {e}")
+            await interaction.followup.send("Something went wrong.", ephemeral=True)
+
+    @empire_command.error
+    async def empire_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+        if isinstance(error, app_commands.CommandOnCooldown):
+            await interaction.response.send_message(
+                f"Please wait {error.retry_after:.0f}s.", ephemeral=True,
+            )
+
+    # -------------------------------------------------------------------
+    # /empires — List collected empire cards
+    # -------------------------------------------------------------------
+    @bot.tree.command(name="empires", description="View your collected empire cards")
+    @app_commands.checks.cooldown(1, 5.0)
+    async def empires_command(interaction: discord.Interaction):
+        discord_id = str(interaction.user.id)
+        await interaction.response.defer(ephemeral=True)
+        try:
+            user = _get_user_or_none(discord_id)
+            if not user:
+                await interaction.followup.send(
+                    "Sign in at ancientnerds.com first.", ephemeral=True,
+                )
+                return
+
+            from api.cardgame.constants import EMPIRE_DISPLAY_NAMES, EMPIRE_THEMATIC_STATS
+            from api.cardgame.models import EmpireCollection
+            from pipeline.database import get_session
+
+            with get_session() as session:
+                owned = (
+                    session.query(EmpireCollection)
+                    .filter(EmpireCollection.user_id == user.id)
+                    .order_by(EmpireCollection.acquired_at)
+                    .all()
+                )
+
+            if not owned:
+                await interaction.followup.send(
+                    "No empire cards yet! Complete expeditions to earn them.",
+                    ephemeral=True,
+                )
+                return
+
+            embed = discord.Embed(
+                title=f"Your Empire Cards ({len(owned)})",
+                color=0xFFC107,
+            )
+            lines = []
+            for ec in owned:
+                name = EMPIRE_DISPLAY_NAMES.get(ec.empire_id, ec.empire_id)
+                stat = EMPIRE_THEMATIC_STATS.get(ec.empire_id, "?")
+                lines.append(f"**{name}** — {stat.replace('_', ' ').title()} | via {ec.acquired_via}")
+            embed.description = "\n".join(lines)
+            embed.set_footer(text="Use /deck set-commander to equip one | ancientnerds.com")
+
+            await interaction.followup.send(embed=embed, ephemeral=True)
+
+        except Exception as e:
+            logger.exception(f"/empires error: {e}")
+            await interaction.followup.send("Something went wrong.", ephemeral=True)
+
+    @empires_command.error
+    async def empires_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+        if isinstance(error, app_commands.CommandOnCooldown):
+            await interaction.response.send_message(
+                f"Please wait {error.retry_after:.0f}s.", ephemeral=True,
+            )
+
+    # -------------------------------------------------------------------
+    # /set-commander <empire> — Equip a commander to your active deck
+    # -------------------------------------------------------------------
+    @bot.tree.command(name="set-commander", description="Equip an empire commander to your active deck")
+    @app_commands.describe(empire="Empire name (or 'none' to remove)")
+    @app_commands.checks.cooldown(1, 5.0)
+    async def set_commander_command(interaction: discord.Interaction, empire: str):
+        discord_id = str(interaction.user.id)
+        await interaction.response.defer(ephemeral=True)
+        try:
+            user = _get_user_or_none(discord_id)
+            if not user:
+                await interaction.followup.send(
+                    "Sign in at ancientnerds.com first.", ephemeral=True,
+                )
+                return
+
+            from api.cardgame.constants import EMPIRE_DISPLAY_NAMES
+            from api.cardgame.models import CardDeck, EmpireCollection
+            from pipeline.database import get_session
+
+            with get_session() as session:
+                deck = (
+                    session.query(CardDeck)
+                    .filter(CardDeck.user_id == user.id, CardDeck.is_active)
+                    .first()
+                )
+                if not deck:
+                    await interaction.followup.send(
+                        "No active deck. Create one at ancientnerds.com/cards first.",
+                        ephemeral=True,
+                    )
+                    return
+
+                if empire.lower() in ("none", "remove", "clear"):
+                    deck.commander_empire_id = None
+                    await interaction.followup.send(
+                        "Commander removed from your active deck.",
+                        ephemeral=True,
+                    )
+                    return
+
+                # Fuzzy match empire name
+                empire_lower = empire.lower()
+                matched_id = None
+                for eid, display_name in EMPIRE_DISPLAY_NAMES.items():
+                    if empire_lower in display_name.lower() or empire_lower in eid.lower():
+                        matched_id = eid
+                        break
+
+                if not matched_id:
+                    await interaction.followup.send(
+                        f"No empire found matching '{empire}'. Use /empires to see your collection.",
+                        ephemeral=True,
+                    )
+                    return
+
+                # Check user owns it
+                owned = (
+                    session.query(EmpireCollection)
+                    .filter(
+                        EmpireCollection.user_id == user.id,
+                        EmpireCollection.empire_id == matched_id,
+                    )
+                    .first()
+                )
+                if not owned:
+                    await interaction.followup.send(
+                        f"You don't own the {EMPIRE_DISPLAY_NAMES[matched_id]} empire card. "
+                        "Complete expeditions to earn empire cards!",
+                        ephemeral=True,
+                    )
+                    return
+
+                deck.commander_empire_id = matched_id
+                display_name = EMPIRE_DISPLAY_NAMES[matched_id]
+
+            await interaction.followup.send(
+                f"**{display_name}** set as Commander for your active deck!",
+                ephemeral=True,
+            )
+
+        except Exception as e:
+            logger.exception(f"/set-commander error: {e}")
+            await interaction.followup.send("Something went wrong.", ephemeral=True)
+
+    @set_commander_command.error
+    async def set_commander_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+        if isinstance(error, app_commands.CommandOnCooldown):
+            await interaction.response.send_message(
+                f"Please wait {error.retry_after:.0f}s.", ephemeral=True,
+            )
+
 
 # ---------------------------------------------------------------------------
 # Duel Accept/Decline UI with Snap mechanic (Phase B)
@@ -854,7 +1126,13 @@ class DuelView(discord.ui.View):
                 d_cards = [c for c in d_cards if c is not None]
 
                 # Resolve battle (deterministic, instant)
-                result = resolve_battle(c_cards, d_cards, self.battle_id)
+                c_commander = c_deck_row.commander_empire_id if c_deck_row else None
+                d_commander = d_deck_row.commander_empire_id if d_deck_row else None
+                result = resolve_battle(
+                    c_cards, d_cards, self.battle_id,
+                    challenger_commander=c_commander,
+                    defender_commander=d_commander,
+                )
 
             # Disable accept/decline buttons
             for item in self.children:
@@ -1353,6 +1631,9 @@ class ExpeditionListView(discord.ui.View):
                     reward_parts.append(f"+{result['rewards']['xp']} XP")
                 if result["rewards"]["pack"]:
                     reward_parts.append(f"Completion reward: **{result['rewards']['pack'].title()} Pack!**")
+                if result["rewards"].get("empire_card"):
+                    ec = result["rewards"]["empire_card"]
+                    reward_parts.append(f"Empire Card unlocked: **{ec['name']}**!")
                 if reward_parts:
                     embed.add_field(name="Rewards", value="\n".join(reward_parts))
 
