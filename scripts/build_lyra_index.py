@@ -2,10 +2,11 @@
 """
 Build Lyra Vector Index — Qdrant collections for hybrid semantic search.
 
-Creates three collections with named vectors:
+Creates four collections with named vectors:
   - sites: dense (voyage-4-large, 1024-dim) + bm25 (sparse, IDF-weighted)
   - news: dense (voyage-4-large, 1024-dim) + bm25 (sparse, IDF-weighted)
   - transcripts: dense (voyage-4-large, 1024-dim) + bm25 (sparse, IDF-weighted)
+  - articles: dense (voyage-4-large, 1024-dim) + bm25 (sparse, IDF-weighted)
 
 Queries use voyage-4 for dense (shared embedding space, cheaper) + Qdrant/bm25 for sparse.
 RRF fusion merges results, then Voyage rerank-2.5-lite scores the top-K.
@@ -17,6 +18,7 @@ Usage:
   python scripts/build_lyra_index.py --collection sites
   python scripts/build_lyra_index.py --collection news
   python scripts/build_lyra_index.py --collection transcripts
+  python scripts/build_lyra_index.py --collection articles
   python scripts/build_lyra_index.py --rebuild  # wipe and rebuild
 """
 
@@ -513,9 +515,156 @@ def index_transcripts(client: QdrantClient, embeddings, sparse_model, rebuild: b
     logger.info(f"Done indexing {total_indexed} transcript chunks")
 
 
+def _chunk_article(content: str, chunk_size: int = 2000, overlap: int = 400) -> list[dict]:
+    """Split article markdown into overlapping chunks on paragraph boundaries.
+
+    Each chunk is a dict with keys: text, chunk_index.
+    """
+    paragraphs = content.split("\n\n")
+    if not paragraphs:
+        return []
+
+    chunks = []
+    chunk_idx = 0
+    start_para = 0
+
+    while start_para < len(paragraphs):
+        current_text = ""
+        end_para = start_para
+        while end_para < len(paragraphs):
+            candidate = current_text + paragraphs[end_para] + "\n\n"
+            if len(candidate) > chunk_size and end_para > start_para:
+                break
+            current_text = candidate
+            end_para += 1
+
+        if not current_text.strip():
+            start_para = end_para
+            continue
+
+        chunks.append({
+            "text": current_text.strip(),
+            "chunk_index": chunk_idx,
+        })
+        chunk_idx += 1
+
+        if end_para >= len(paragraphs):
+            break
+
+        # Step back for overlap
+        overlap_text = ""
+        overlap_start = end_para
+        for j in range(end_para - 1, start_para - 1, -1):
+            overlap_text = paragraphs[j] + "\n\n" + overlap_text
+            if len(overlap_text) >= overlap:
+                overlap_start = j
+                break
+        start_para = overlap_start if overlap_start > start_para else end_para
+
+    return chunks
+
+
+def index_articles(client: QdrantClient, embeddings, sparse_model, rebuild: bool = False):
+    """Index weekly digest articles into Qdrant for semantic search."""
+    collection = "articles"
+
+    if rebuild:
+        try:
+            client.delete_collection(collection)
+        except Exception:
+            pass
+
+    ensure_collection(client, collection, VECTOR_SIZE)
+    create_payload_indexes(client, collection, ["article_id"])
+
+    existing_ids = set() if rebuild else get_existing_ids(client, collection)
+    logger.info(f"Articles collection has {len(existing_ids)} existing points")
+
+    sql = """
+        SELECT id, title, content, summary,
+               week_start::text AS week_start, week_end::text AS week_end,
+               video_ids, published_at::text AS published_at
+        FROM news_articles
+        ORDER BY published_at DESC
+    """
+
+    with get_session() as session:
+        result = session.execute(text(sql))
+        rows = result.fetchall()
+
+    logger.info(f"Found {len(rows)} articles in database")
+
+    # Chunk all articles and filter out already-indexed
+    all_chunks = []
+    for r in rows:
+        if not r.content:
+            continue
+        chunks = _chunk_article(r.content)
+        for chunk in chunks:
+            point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"article-{r.id}-{chunk['chunk_index']}"))
+            if point_id in existing_ids:
+                continue
+            chunk["point_id"] = point_id
+            chunk["article_id"] = r.id
+            chunk["title"] = r.title
+            chunk["summary"] = r.summary or ""
+            chunk["week_start"] = r.week_start
+            chunk["week_end"] = r.week_end
+            chunk["published_at"] = r.published_at
+            all_chunks.append(chunk)
+
+    logger.info(f"New article chunks to index: {len(all_chunks)}")
+
+    if not all_chunks:
+        logger.info("Nothing to index for articles")
+        return
+
+    total_indexed = 0
+    for i in range(0, len(all_chunks), BATCH_SIZE):
+        batch = all_chunks[i : i + BATCH_SIZE]
+
+        texts = []
+        for c in batch:
+            texts.append(f"{c['title']} | {c['text']}")
+
+        dense_vectors = embeddings.embed_documents(texts)
+        sparse_vectors = list(sparse_model.embed(texts))
+
+        points = []
+        for c, dense_vec, sparse_vec in zip(batch, dense_vectors, sparse_vectors):
+            points.append(
+                PointStruct(
+                    id=c["point_id"],
+                    vector={
+                        "dense": dense_vec,
+                        "bm25": SparseVector(
+                            indices=sparse_vec.indices.tolist(),
+                            values=sparse_vec.values.tolist(),
+                        ),
+                    },
+                    payload={
+                        "article_id": c["article_id"],
+                        "title": c["title"],
+                        "summary": c["summary"][:300],
+                        "chunk_index": c["chunk_index"],
+                        "week_start": c["week_start"],
+                        "week_end": c["week_end"],
+                        "published_at": c["published_at"],
+                        "text_preview": c["text"][:300],
+                    },
+                )
+            )
+
+        client.upsert(collection_name=collection, points=points)
+        total_indexed += len(points)
+        logger.info(f"Indexed {total_indexed}/{len(all_chunks)} article chunks")
+
+    logger.info(f"Done indexing {total_indexed} article chunks")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Build Lyra vector index")
-    parser.add_argument("--collection", choices=["sites", "news", "transcripts"], help="Only index this collection")
+    parser.add_argument("--collection", choices=["sites", "news", "transcripts", "articles"], help="Only index this collection")
     parser.add_argument("--rebuild", action="store_true", help="Wipe and rebuild from scratch")
     args = parser.parse_args()
 
@@ -533,6 +682,9 @@ def main():
 
     if args.collection is None or args.collection == "transcripts":
         index_transcripts(client, embeddings, sparse_model, rebuild=args.rebuild)
+
+    if args.collection is None or args.collection == "articles":
+        index_articles(client, embeddings, sparse_model, rebuild=args.rebuild)
 
     logger.info("All done!")
 

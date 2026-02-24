@@ -47,12 +47,16 @@ async def vector_sync_status():
         pg_transcripts = session.execute(
             text("SELECT COUNT(*) FROM news_videos WHERE transcript_text IS NOT NULL AND status IN ('transcribed', 'summarized')")
         ).scalar()
+        pg_articles = session.execute(
+            text("SELECT COUNT(*) FROM news_articles")
+        ).scalar()
 
     # Qdrant counts
     qdrant_available = True
     qdrant_sites = 0
     qdrant_news = 0
     qdrant_transcripts = 0
+    qdrant_articles = 0
     try:
         from api.services.lyra_embeddings import get_qdrant_client
 
@@ -70,6 +74,11 @@ async def vector_sync_status():
         try:
             info = client.get_collection("transcripts")
             qdrant_transcripts = info.points_count
+        except Exception:
+            pass
+        try:
+            info = client.get_collection("articles")
+            qdrant_articles = info.points_count
         except Exception:
             pass
     except Exception:
@@ -105,6 +114,11 @@ async def vector_sync_status():
                 "pg_count": pg_transcripts,
                 "qdrant_count": qdrant_transcripts,
                 "delta": pg_transcripts - qdrant_transcripts,
+            },
+            "articles": {
+                "pg_count": pg_articles,
+                "qdrant_count": qdrant_articles,
+                "delta": pg_articles - qdrant_articles,
             },
         },
         "empires": {
