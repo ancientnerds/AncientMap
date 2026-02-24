@@ -27,7 +27,7 @@ from pipeline.database import (
     UserContribution,
     get_session,
 )
-from pipeline.lyra.config import LyraSettings, call_api, get_anthropic_client, parse_prefilled_json
+from pipeline.lyra.config import LyraSettings, _get_settings, call_api, get_anthropic_client, parse_prefilled_json
 from pipeline.lyra.site_matcher import fill_contrib_from_site
 from pipeline.lyra.site_researcher import research_site
 from pipeline.normalizers.dates import passes_date_cutoff
@@ -315,8 +315,8 @@ def _process_single(
         client, settings.model_identify, user_prompt,
         schema=IDENTIFY_SITE_SCHEMA,
         system_prompt=system_prompt,
-        max_tokens=settings.identify_thinking_budget + 1024,
-        thinking={"type": "enabled", "budget_tokens": settings.identify_thinking_budget},
+        max_tokens=settings.max_tokens,
+        thinking={"type": "enabled", "budget_tokens": settings.max_tokens - 1024},
     )
     if not identification:
         contribution.enrichment_status = "failed"
@@ -497,7 +497,7 @@ def _call_ai(
     """
     create_kwargs: dict = {
         "model": model,
-        "max_tokens": kwargs.pop("max_tokens", 8192),
+        "max_tokens": kwargs.pop("max_tokens", _get_settings().max_tokens),
         "messages": [{"role": "user", "content": prompt}],
     }
 
@@ -802,7 +802,7 @@ def _pick_wikidata_entity(
         response = call_api(
             client,
             model=model,
-            max_tokens=32,
+            max_tokens=_get_settings().max_tokens,
             temperature=0.0,
             system=[{
                 "type": "text",
@@ -1124,7 +1124,7 @@ def _escalate_to_sonnet(
         response = call_api(
             client,
             model=settings.model_identify_escalation,
-            max_tokens=8192,
+            max_tokens=settings.max_tokens,
             temperature=0.0,
             system=[{
                 "type": "text",

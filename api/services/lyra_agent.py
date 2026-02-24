@@ -34,6 +34,7 @@ from api.services.lyra_tools import (
     _hybrid_search,
 )
 from pipeline.database import get_session
+from pipeline.lyra.config import get_max_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -299,7 +300,7 @@ def _get_filter_llm():
         base_url = os.getenv("LYRA_ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
         kwargs: dict = {
             "model": LLM_MODEL,
-            "max_tokens": 300,
+            "max_tokens": get_max_tokens(),
             "temperature": 0.01,
             "api_key": api_key,
         }
@@ -348,7 +349,7 @@ def _get_llm():
         api_key = os.getenv("LYRA_ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
         base_url = os.getenv("LYRA_ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
         is_native = not base_url or "anthropic.com" in base_url
-        kwargs: dict = {"model": LLM_MODEL, "max_tokens": 1024, "streaming": True, "api_key": api_key}
+        kwargs: dict = {"model": LLM_MODEL, "max_tokens": get_max_tokens(), "streaming": True, "api_key": api_key}
         if is_native:
             kwargs["stream_usage"] = True
         if base_url:
@@ -359,7 +360,7 @@ def _get_llm():
         _llm = ChatOllama(model=LLM_MODEL, streaming=True)
     elif LLM_PROVIDER == "openai":
         from langchain_openai import ChatOpenAI
-        _llm = ChatOpenAI(model=LLM_MODEL, max_tokens=1024, streaming=True)
+        _llm = ChatOpenAI(model=LLM_MODEL, max_tokens=get_max_tokens(), streaming=True)
     else:
         raise ValueError(f"Unknown LYRA_LLM_PROVIDER: {LLM_PROVIDER}")
 

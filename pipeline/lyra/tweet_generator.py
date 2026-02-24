@@ -99,7 +99,7 @@ def generate_posts_for_video(
         response = call_api(
             client,
             model=settings.model_post,
-            max_tokens=4096,
+            max_tokens=settings.max_tokens,
             temperature=0.3,
             system=[{
                 "type": "text",
