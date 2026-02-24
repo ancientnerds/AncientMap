@@ -140,17 +140,97 @@ function ConfidenceBadge({ value }: { value: number }) {
   )
 }
 
+/* ---- Inline YouTube video embed (thumbnail → iframe) ---- */
+
+function LyraInlineVideo({ news, children }: { news: NewsHighlight; children?: React.ReactNode }) {
+  const [expanded, setExpanded] = useState(false)
+  const [playing, setPlaying] = useState(false)
+
+  const videoId = news.video_id
+  const ts = news.timestamp_seconds
+  const ytUrl = ts != null
+    ? `https://www.youtube.com/watch?v=${videoId}&t=${ts}`
+    : `https://www.youtube.com/watch?v=${videoId}`
+  const embedUrl = ts != null
+    ? `https://www.youtube.com/embed/${videoId}?start=${ts}&autoplay=1`
+    : `https://www.youtube.com/embed/${videoId}?autoplay=1`
+  const thumbUrl = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
+
+  const formatTs = (s: number) => {
+    const m = Math.floor(s / 60)
+    const sec = s % 60
+    return `${m}:${String(sec).padStart(2, '0')}`
+  }
+
+  return (
+    <span className="lyra-inline-video-wrap" style={{ display: 'inline' }}>
+      <button
+        className="lyra-inline-video"
+        onClick={() => setExpanded(!expanded)}
+        title={news.headline || `Watch on YouTube`}
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M8 5v14l11-7z"/>
+        </svg>
+        {children}
+      </button>
+      {expanded && (
+        <span className="lyra-inline-video-embed" style={{ display: 'block' }}>
+          {!playing ? (
+            <span
+              className="lyra-inline-video-thumb"
+              onClick={() => setPlaying(true)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter') setPlaying(true) }}
+            >
+              <img src={thumbUrl} alt={news.headline || 'Video thumbnail'} />
+              <span className="lyra-inline-video-play-overlay">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="white">
+                  <path d="M8 5v14l11-7z"/>
+                </svg>
+              </span>
+              {ts != null && (
+                <span className="lyra-inline-video-ts">{formatTs(ts)}</span>
+              )}
+            </span>
+          ) : (
+            <span className="lyra-inline-video-iframe-wrap">
+              <iframe
+                src={embedUrl}
+                title={news.headline || 'YouTube video'}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </span>
+          )}
+          <a
+            className="lyra-inline-video-external"
+            href={ytUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Watch on YouTube {ts != null && `at ${formatTs(ts)}`} ↗
+          </a>
+        </span>
+      )}
+    </span>
+  )
+}
+
 /* ---- Typewriter: reveals content char-by-char like fast human typing ---- */
 
 function TypewriterMessage({
   content,
   isStreaming,
   sidebarSites,
+  sidebarNews,
   mdComponents,
 }: {
   content: string
   isStreaming: boolean
   sidebarSites: SiteHighlight[]
+  sidebarNews: NewsHighlight[]
   mdComponents: React.ComponentProps<typeof ReactMarkdown>['components']
 }) {
   // For already-complete messages (loaded from history), show everything immediately
@@ -237,7 +317,7 @@ function TypewriterMessage({
 
   const isTyping = isStreaming || revealedLen < content.length
   const partialContent = isTyping ? content.substring(0, revealedLen) : content
-  const displayedContent = enrichLyraContent(partialContent, sidebarSites)
+  const displayedContent = enrichLyraContent(partialContent, sidebarSites, sidebarNews)
 
   return (
     <div ref={containerRef} className={`lyra-chat-msg-text${isTyping ? ' streaming' : ''}`}>
@@ -245,7 +325,7 @@ function TypewriterMessage({
         const colonIndex = url.indexOf(':');
         if (colonIndex === -1) return url;
         const protocol = url.trim().slice(0, colonIndex);
-        if (['http', 'https', 'mailto'].includes(protocol.toLowerCase())) return url;
+        if (['http', 'https', 'mailto', 'lyra-video'].includes(protocol.toLowerCase())) return url;
         return '';
       }}>
         {displayedContent || '\u200B'}
@@ -403,6 +483,13 @@ export default function LyraChatModal({
           </span>
         )
       }
+      // Video link: lyra-video:INDEX
+      if (href?.startsWith('lyra-video:')) {
+        const idx = parseInt(href.slice('lyra-video:'.length), 10)
+        const newsItem = sidebarNews[idx]
+        if (!newsItem) return <span>{children}</span>
+        return <LyraInlineVideo news={newsItem}>{children}</LyraInlineVideo>
+      }
       // Normal link
       return <a {...props} href={href} target="_blank" rel="noopener noreferrer">{children}</a>
     },
@@ -413,7 +500,7 @@ export default function LyraChatModal({
       }
       return <img src={src} alt={alt} {...props} />
     },
-  }), [onHighlightSites, onFlyToSite])
+  }), [onHighlightSites, onFlyToSite, sidebarNews])
 
   // Auto-scroll: always smooth — typewriter controls reveal speed
   const lastMsg = messages[messages.length - 1]
@@ -1050,6 +1137,7 @@ export default function LyraChatModal({
                                   content={msg.content}
                                   isStreaming={!!msg.isStreaming}
                                   sidebarSites={sidebarSites}
+                                  sidebarNews={sidebarNews}
                                   mdComponents={mdComponents}
                                 />
                               ) : (

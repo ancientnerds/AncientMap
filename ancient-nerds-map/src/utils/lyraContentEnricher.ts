@@ -7,7 +7,7 @@
  * These are then rendered by react-markdown custom components in LyraChatModal.
  */
 
-import type { SiteHighlight } from '../types/ai'
+import type { SiteHighlight, NewsHighlight } from '../types/ai'
 import { COUNTRY_CODES, getCountryFlatFlagUrl } from './countryFlags'
 
 // Build sorted country names list (longest first to avoid partial matches)
@@ -16,6 +16,13 @@ const COUNTRY_NAMES = Object.keys(COUNTRY_CODES).sort((a, b) => b.length - a.len
 // Escape special regex chars
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+// Format seconds → "m:ss" label
+function formatTimestamp(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${m}:${String(s).padStart(2, '0')}`
 }
 
 /**
@@ -124,7 +131,7 @@ export function extractUnlinkedSiteNames(content: string, existingSites: SiteHig
  * Order matters: coordinates first (they contain brackets that could interfere),
  * then sites (hijack existing links, then plain text), then countries.
  */
-export function enrichLyraContent(content: string, sites: SiteHighlight[]): string {
+export function enrichLyraContent(content: string, sites: SiteHighlight[], news?: NewsHighlight[]): string {
   let result = content
 
   // 1. Coordinates: [lat, lon] or [lat,lon] → custom link
@@ -196,6 +203,44 @@ export function enrichLyraContent(content: string, sites: SiteHighlight[]): stri
       return `![flag](${flagUrl})${match}`
     })
     replacedCountries.add(name.toLowerCase())
+  }
+
+  // 4. YouTube video references → lyra-video:INDEX links
+  if (news && news.length > 0) {
+    // 4a. Direct [youtube: VIDEO_ID] markers (if LLM echoes them from context)
+    result = result.replace(
+      /\[youtube:\s*([a-zA-Z0-9_-]{11})\]/g,
+      (_match, videoId) => {
+        const idx = news.findIndex(n => n.video_id === videoId)
+        if (idx === -1) return _match
+        const n = news[idx]
+        const ts = n.timestamp_seconds
+        const tsLabel = ts != null ? ` ${formatTimestamp(ts)}` : ''
+        return `[▶ ${n.channel || 'Video'}${tsLabel}](lyra-video:${idx})`
+      }
+    )
+
+    // 4b. Channel names → link first occurrence to matching news item
+    const linkedChannels = new Set<string>()
+    for (let i = 0; i < news.length; i++) {
+      const ch = news[i].channel
+      if (!ch || ch.length < 4 || linkedChannels.has(ch.toLowerCase())) continue
+      const escaped = escapeRegex(ch)
+      const regex = new RegExp(
+        `(?<!\\[)(?<!\\]\\()(?<![\\p{L}\\d])(${escaped})(?![\\p{L}\\d])(?!\\]|\\()`,
+        'giu'
+      )
+      let replaced = false
+      const before = result
+      result = result.replace(regex, (match) => {
+        if (replaced) return match
+        replaced = true
+        const ts = news[i].timestamp_seconds
+        const tsLabel = ts != null ? ` ${formatTimestamp(ts)}` : ''
+        return `[▶ ${match}${tsLabel}](lyra-video:${i})`
+      })
+      if (result !== before) linkedChannels.add(ch.toLowerCase())
+    }
   }
 
   return result
