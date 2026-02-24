@@ -30,6 +30,7 @@ from fastapi.staticfiles import StaticFiles
 
 from api.build_info import BUILD_HASH
 from api.cache import cache_get, cache_set, get_redis_client
+from api.cardgame.routes import router as cards_router
 from api.routes import (
     articles_html,
     auth,
@@ -243,8 +244,6 @@ app.include_router(vector_sync.router, prefix="/api/vector-sync", tags=["vector-
 app.include_router(wiki_images.router, prefix="/api/wiki-images", tags=["wiki-images"])
 app.include_router(patreon.router, prefix="/api/patreon", tags=["patreon"])
 app.include_router(interactions.router, prefix="/api/interactions", tags=["interactions"])
-
-from api.cardgame.routes import router as cards_router
 app.include_router(cards_router, prefix="/api/cards", tags=["cards"])
 
 # Serve wiki images as static files
