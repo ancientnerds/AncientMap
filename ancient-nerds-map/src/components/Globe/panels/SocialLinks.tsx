@@ -164,7 +164,7 @@ export function SocialLinks({
                   className="signin-discord-btn"
                   onClick={() => {
                     setShowLogin(false)
-                    window.location.href = `${config.api.baseUrl}/auth/discord`
+                    window.location.href = `${config.api.baseUrl}/auth/discord?return_to=${encodeURIComponent(window.location.pathname + window.location.search)}`
                   }}
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
