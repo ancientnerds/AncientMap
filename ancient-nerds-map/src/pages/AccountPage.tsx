@@ -312,12 +312,20 @@ export default function AccountPage() {
     setClaimingDaily(true)
     setDailyResult(null)
     try {
-      const data = await apiFetch<{ credits: number; card: CardData | null; daily_streak: number }>(
-        '/cards/daily', token, { method: 'POST' },
-      )
+      const data = await apiFetch<{
+        credits: number
+        card: CardData | null
+        daily_streak: number
+        streak_reward: { type: string; value: string; streak: number } | null
+      }>('/cards/daily', token, { method: 'POST' })
       const parts = [`+${data.credits} credits`]
       if (data.card) parts.push(`Card: ${data.card.name}`)
       parts.push(`Streak: ${data.daily_streak} days`)
+      if (data.streak_reward) {
+        const r = data.streak_reward
+        if (r.type === 'credits') parts.push(`Streak bonus: +${r.value} credits!`)
+        else if (r.type === 'pack') parts.push(`Streak bonus: ${r.value.charAt(0).toUpperCase() + r.value.slice(1)} Pack!`)
+      }
       setDailyResult(parts.join(' | '))
       loadPlayerStats()
     } catch (e: any) {

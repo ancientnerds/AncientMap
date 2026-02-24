@@ -1,5 +1,27 @@
 import type { CardData } from '../../types/cards'
 import { RARITY_CLASSES } from '../../constants/cards'
+import { STAR_LEVELS } from '../../constants/cards'
+
+function StarDisplay({ level, xp }: { level: number; xp: number }) {
+  const nextThreshold = STAR_LEVELS[level + 1] ?? 0
+  const currentThreshold = STAR_LEVELS[level] ?? 0
+  const progress = nextThreshold > 0 ? (xp - currentThreshold) / (nextThreshold - currentThreshold) : 0
+
+  return (
+    <div className="card-stars">
+      {Array.from({ length: 5 }, (_, i) => (
+        <span key={i} className={i < level ? 'star-filled' : 'star-empty'}>
+          {i < level ? '\u2605' : '\u2606'}
+        </span>
+      ))}
+      {nextThreshold > 0 && xp > 0 && (
+        <div className="star-progress" title={`${xp - currentThreshold}/${nextThreshold - currentThreshold} to next star`}>
+          <div className="star-progress-fill" style={{ width: `${Math.min(100, progress * 100)}%` }} />
+        </div>
+      )}
+    </div>
+  )
+}
 
 export function CardTile({ card, onClick, action }: {
   card: CardData
@@ -21,6 +43,9 @@ export function CardTile({ card, onClick, action }: {
           {card.rarity_name} &middot; {card.category_group}
         </div>
         <div className="card-power">Power: {card.total_power}</div>
+        {card.star_level != null && card.star_level >= 1 && (
+          <StarDisplay level={card.star_level} xp={card.card_xp ?? 0} />
+        )}
       </div>
       {action && <div className="card-tile-action">{action}</div>}
     </div>

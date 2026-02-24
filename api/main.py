@@ -80,6 +80,16 @@ async def lifespan(app: FastAPI):
             from sqlalchemy import text as _text
             conn.execute(_text("ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS raw_data JSONB"))
             conn.execute(_text("ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS period_end INTEGER"))
+            # Prevent negative credit balances at the DB level
+            conn.execute(_text("""
+                DO $$ BEGIN
+                    ALTER TABLE discord_users ADD CONSTRAINT credits_non_negative CHECK (credits >= 0);
+                EXCEPTION WHEN duplicate_object THEN NULL;
+                END $$
+            """))
+            conn.execute(_text(
+                "ALTER TABLE expedition_progress ADD COLUMN IF NOT EXISTS last_stage_played_at TIMESTAMP"
+            ))
         logger.info("[STARTUP] Database tables verified (includes discord_users, credit_grants, token_usage_logs)")
     except Exception as e:
         logger.warning(f"[STARTUP] Table creation check failed: {e}")

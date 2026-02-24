@@ -18,6 +18,8 @@ export interface CardData {
   civilization: string | null
   acquired_via?: string
   acquired_at?: string
+  star_level?: number
+  card_xp?: number
   lat?: number
   lon?: number
 }
@@ -40,12 +42,14 @@ export interface PlayerStats {
   xp: number
   daily_streak: number
   packs_opened: number
+  level?: number
+  xp_progress?: number
+  xp_to_next?: number
 }
 
 export interface LeaderboardEntry {
   username: string
   avatar_hash: string | null
-  discord_id: string | null
   wins: number
   losses: number
   draws: number
