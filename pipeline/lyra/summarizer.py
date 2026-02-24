@@ -118,7 +118,7 @@ def _check_relevance(
         response = call_api(
             client,
             model=settings.model_relevance,
-            max_tokens=8192,
+            max_tokens=settings.max_tokens,
             temperature=0.0,
             system=[{
                 "type": "text",
@@ -254,7 +254,7 @@ def summarize_video(
         response = call_api(
             client,
             model=settings.model_summarize,
-            max_tokens=4096,
+            max_tokens=settings.max_tokens,
             temperature=0.0,
             system=[{
                 "type": "text",

@@ -264,7 +264,7 @@ def _write_section(
         response = call_api(
             client,
             model=settings.model_article,
-            max_tokens=8192,
+            max_tokens=settings.max_tokens,
             system=[{
                 "type": "text",
                 "text": (
@@ -305,7 +305,7 @@ def _verify_article(
         response = call_api(
             client,
             model=settings.model_verify,
-            max_tokens=16384,
+            max_tokens=settings.max_tokens,
             temperature=0.0,
             system=[{
                 "type": "text",
@@ -368,7 +368,7 @@ def _generate_headline_tldr(
         response = call_api(
             client,
             model=settings.model_article,
-            max_tokens=1024,
+            max_tokens=settings.max_tokens,
             temperature=0.0,
             system=[{
                 "type": "text",

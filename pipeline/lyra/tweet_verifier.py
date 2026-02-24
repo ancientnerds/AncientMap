@@ -8,7 +8,7 @@ from pathlib import Path
 import anthropic
 
 from pipeline.database import NewsItem, NewsVideo, get_session
-from pipeline.lyra.config import LyraSettings, call_api, get_anthropic_client, parse_prefilled_json
+from pipeline.lyra.config import LyraSettings, _get_settings, call_api, get_anthropic_client, parse_prefilled_json
 from pipeline.lyra.transcript_fetcher import extract_transcript_segment, parse_timestamp_to_seconds
 
 logger = logging.getLogger(__name__)
@@ -84,7 +84,7 @@ def verify_single_post(
         response = call_api(
             client,
             model=model,
-            max_tokens=8192,
+            max_tokens=_get_settings().max_tokens,
             temperature=0.0,
             system=[{
                 "type": "text",

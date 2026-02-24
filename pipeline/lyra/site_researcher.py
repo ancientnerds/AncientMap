@@ -169,14 +169,14 @@ def _pre_research(
         response = call_api(
             client,
             model=settings.model_identify,
-            max_tokens=settings.research_thinking_budget + 1024,
+            max_tokens=settings.max_tokens,
             messages=[{"role": "user", "content": prompt}],
             system=[{
                 "type": "text",
                 "text": PRE_RESEARCH_SYSTEM,
                 "cache_control": {"type": "ephemeral"},
             }],
-            thinking={"type": "enabled", "budget_tokens": settings.research_thinking_budget},
+            thinking={"type": "enabled", "budget_tokens": settings.max_tokens - 1024},
             prefill="{",
         )
     except anthropic.APIError as e:
@@ -496,7 +496,7 @@ def _select_best_candidate(
         response = call_api(
             client,
             model=settings.model_identify,
-            max_tokens=8192,
+            max_tokens=settings.max_tokens,
             messages=[{"role": "user", "content": prompt}],
             system=[{
                 "type": "text",

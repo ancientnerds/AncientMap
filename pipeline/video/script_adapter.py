@@ -212,7 +212,7 @@ def generate_script(article_id: int, settings: LyraSettings | None = None) -> di
         response = call_api(
             client,
             model=settings.model_article,
-            max_tokens=8192,
+            max_tokens=settings.max_tokens,
             system=[{
                 "type": "text",
                 "text": (

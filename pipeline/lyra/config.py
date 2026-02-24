@@ -45,12 +45,13 @@ class LyraSettings(BaseSettings):
     model_rescore: str = "MiniMax-M2.5"
     model_relevance: str = "MiniMax-M2.5"
 
+    # Max output tokens per LLM call (65536 = MiniMax M2.5 model max)
+    max_tokens: int = 65536
+
     # Site identification settings
     min_score_for_promotion: int = 55
     max_identifications_per_cycle: int = 20
     pg_trgm_threshold: float = 0.35
-    identify_thinking_budget: int = 4096
-    research_thinking_budget: int = 4096
     max_research_names: int = 5
     geonames_username: str = "ancientnerds"
 
@@ -97,6 +98,11 @@ def _get_settings() -> LyraSettings:
     if _cached_settings is None:
         _cached_settings = LyraSettings()
     return _cached_settings
+
+
+def get_max_tokens() -> int:
+    """Return the configured max_tokens value."""
+    return _get_settings().max_tokens
 
 
 def _is_native_anthropic(settings: "LyraSettings") -> bool:
@@ -249,9 +255,9 @@ def call_api(
                 used_tool_calling = True
 
         # Guard 3: Enforce min max_tokens (MiniMax thinks by default, eating
-        # the token budget; calls under 4096 risk truncation on verbose items)
+        # the token budget; calls under settings.max_tokens risk truncation)
         if "max_tokens" in kwargs and not has_thinking:
-            kwargs["max_tokens"] = max(4096, kwargs["max_tokens"])
+            kwargs["max_tokens"] = max(settings.max_tokens, kwargs["max_tokens"])
 
     # Append assistant prefill message to force structured output start
     if prefill:
