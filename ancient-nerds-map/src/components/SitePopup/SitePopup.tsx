@@ -56,7 +56,7 @@ async function getEmpireWikipediaSummary(empireName: string): Promise<WikipediaS
 
 // Seshat data service
 import { getSeshatDataForEmpire, getWikipediaUrl, getSeshatPolityName } from '../../services/seshatService'
-import { getAvailablePeriodsForEmpire } from '../../config/seshatMapping'
+import { getAvailablePeriodsForEmpire, getSeshatPolityIdForYear } from '../../config/seshatMapping'
 import type { SeshatPolityData } from '../../types/seshat'
 
 // Components
@@ -539,7 +539,7 @@ export default function SitePopup({
             onSourceSelect={(alt) => setOverrideSite(!alt || alt.id === baseSite.id ? null : alternateToSiteData(alt))}
             onAskLyra={onAskLyra ? () => {
               if (isEmpireMode && empire) {
-                onAskLyra('empire', empire.id, empireYear)
+                onAskLyra('empire', getSeshatPolityIdForYear(empire.id, empireYear) || empire.id, empireYear)
               } else if (site) {
                 onAskLyra('site', site.id)
               }

@@ -55,6 +55,8 @@ export default defineConfig({
         search: resolve(__dirname, 'search.html'),
         site: resolve(__dirname, 'site.html'),
         api: resolve(__dirname, 'api.html'),
+        cards: resolve(__dirname, 'cards.html'),
+        game: resolve(__dirname, 'game.html'),
       },
     },
   },

@@ -458,6 +458,9 @@ def _get_bot() -> LyraBot:
         else:
             logger.error(f"/link command error: {error}")
 
+    from api.cardgame import register_commands
+    register_commands(_bot)
+
     return _bot
 
 

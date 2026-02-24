@@ -4,20 +4,20 @@
       {
         "id": "axum",
         "name": "Aksumite Empire",
-        "startYear": 93,
+        "startYear": 1278,
         "endYear": 1933,
         "color": 13468991,
         "defaultYear": 1919,
-        "yearCount": 28
+        "yearCount": 20
       },
       {
         "id": "kush",
         "name": "Kingdom of Kush",
-        "startYear": -688,
+        "startYear": 46,
         "endYear": 230,
         "color": 16747520,
         "defaultYear": 140,
-        "yearCount": 13
+        "yearCount": 11
       }
     ],
     "Americas": [
@@ -60,20 +60,20 @@
       {
         "id": "teotihuacan",
         "name": "Teotihuacan",
-        "startYear": 27,
+        "startYear": 380,
         "endYear": 698,
         "color": 3050327,
-        "defaultYear": 27,
-        "yearCount": 4
+        "defaultYear": 380,
+        "yearCount": 3
       },
       {
         "id": "zapotec",
         "name": "Zapotec Civilization",
-        "startYear": -396,
+        "startYear": 358,
         "endYear": 893,
         "color": 3978097,
-        "defaultYear": 57,
-        "yearCount": 7
+        "defaultYear": 358,
+        "yearCount": 4
       }
     ],
     "Ancient Near East": [
@@ -108,19 +108,19 @@
         "id": "egyptian",
         "name": "Egyptian Empire",
         "startYear": -2851,
-        "endYear": 1951,
+        "endYear": -29,
         "color": 16766720,
         "defaultYear": -325,
-        "yearCount": 61
+        "yearCount": 55
       },
       {
         "id": "elam",
         "name": "Elam",
-        "startYear": -2951,
+        "startYear": -2151,
         "endYear": -608,
         "color": 15115340,
         "defaultYear": -1126,
-        "yearCount": 16
+        "yearCount": 15
       },
       {
         "id": "hittite",
@@ -145,11 +145,11 @@
       {
         "id": "han",
         "name": "Han Dynasty",
-        "startYear": -1421,
-        "endYear": 1196,
+        "startYear": -200,
+        "endYear": 230,
         "color": 16737095,
         "defaultYear": 98,
-        "yearCount": 52
+        "yearCount": 40
       },
       {
         "id": "qin",
@@ -173,10 +173,10 @@
         "id": "zhou",
         "name": "Zhou Dynasty",
         "startYear": -901,
-        "endYear": 1036,
+        "endYear": -304,
         "color": 16769333,
-        "defaultYear": 581,
-        "yearCount": 17
+        "defaultYear": -901,
+        "yearCount": 7
       }
     ],
     "Medieval Europe": [
@@ -222,10 +222,10 @@
         "id": "greek",
         "name": "Greek City-States",
         "startYear": -1051,
-        "endYear": 1974,
+        "endYear": 80,
         "color": 16752762,
         "defaultYear": -321,
-        "yearCount": 76
+        "yearCount": 70
       },
       {
         "id": "macedonian",
@@ -267,10 +267,10 @@
         "id": "roman",
         "name": "Roman Empire",
         "startYear": -419,
-        "endYear": 2024,
+        "endYear": 472,
         "color": 16742263,
         "defaultYear": 121,
-        "yearCount": 125
+        "yearCount": 122
       }
     ],
     "Persian/Central Asia": [

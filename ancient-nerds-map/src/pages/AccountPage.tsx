@@ -11,6 +11,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
 import { apiFetch } from '../utils/cardApi'
 import type { PlayerStats, CardData } from '../types/cards'
+import { EmpireCard } from '../components/cards/GameCard'
 import CollectionBrowser from '../components/cards/CollectionBrowser'
 import DeckBuilder from '../components/cards/DeckBuilder'
 import PageHeader from '../components/layout/PageHeader'
@@ -176,13 +177,14 @@ const ROLE_SHORT: Record<string, string> = {
 const DISCORD_INVITE_URL = 'https://discord.gg/ancientnerds'
 const PATREON_URL = 'https://patreon.com/ancientnerds'
 
-type AccountTab = 'profile' | 'likes' | 'bookmarks' | 'collection' | 'decks' | 'admin'
+type AccountTab = 'profile' | 'likes' | 'bookmarks' | 'collection' | 'empires' | 'decks' | 'admin'
 
 const TAB_LABELS: Record<AccountTab, string> = {
   profile: 'Profile',
   likes: 'Likes',
   bookmarks: 'Bookmarks',
   collection: 'Collection',
+  empires: 'Empires',
   decks: 'Decks',
   admin: 'Admin',
 }
@@ -191,6 +193,61 @@ function getTabFromHash(): AccountTab {
   const hash = window.location.hash.replace('#', '') as AccountTab
   if (hash && hash in TAB_LABELS) return hash
   return 'profile'
+}
+
+// ---------------------------------------------------------------------------
+// Empire Collection Tab
+// ---------------------------------------------------------------------------
+interface EmpireEntry {
+  empire_id: string
+  name: string
+  region: string
+  thematic_stat: string
+  description: string
+  acquired_via: string | null
+  acquired_at: string | null
+}
+
+function EmpireCollectionTab({ token }: { token: string | null }) {
+  const [empires, setEmpires] = useState<EmpireEntry[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!token) return
+    setLoading(true)
+    apiFetch<{ empires: EmpireEntry[] }>('/cards/empires', token)
+      .then(data => setEmpires(data.empires))
+      .catch(() => setEmpires([]))
+      .finally(() => setLoading(false))
+  }, [token])
+
+  if (loading) return <div className="cards-loading">Loading empire cards...</div>
+  if (empires.length === 0) {
+    return (
+      <div className="deck-empty">
+        No empire cards yet! Complete expeditions to earn them.
+      </div>
+    )
+  }
+
+  return (
+    <div className="empire-collection">
+      <div className="empire-grid">
+        {empires.map(e => (
+          <EmpireCard
+            key={e.empire_id}
+            empire={{
+              name: e.name,
+              region: e.region,
+              thematicStat: e.thematic_stat,
+              desc: e.description,
+              acquiredVia: e.acquired_via ?? undefined,
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  )
 }
 
 export default function AccountPage() {
@@ -497,11 +554,11 @@ export default function AccountPage() {
   }
 
   // Determine which tabs to show
-  const visibleTabs: AccountTab[] = ['profile', 'likes', 'bookmarks', 'collection', 'decks']
+  const visibleTabs: AccountTab[] = ['profile', 'likes', 'bookmarks', 'collection', 'empires', 'decks']
   if (user?.is_founder) visibleTabs.push('admin')
 
   // Wide tabs need more horizontal space
-  const isWideTab = tab === 'collection' || tab === 'decks'
+  const isWideTab = tab === 'collection' || tab === 'empires' || tab === 'decks'
 
   if (isLoading) {
     return (
@@ -845,6 +902,11 @@ export default function AccountPage() {
             {/* ============ COLLECTION TAB ============ */}
             {tab === 'collection' && (
               <CollectionBrowser token={token} />
+            )}
+
+            {/* ============ EMPIRES TAB ============ */}
+            {tab === 'empires' && (
+              <EmpireCollectionTab token={token} />
             )}
 
             {/* ============ DECKS TAB ============ */}

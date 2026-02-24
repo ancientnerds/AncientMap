@@ -22,6 +22,8 @@ export interface CardData {
   card_xp?: number
   lat?: number
   lon?: number
+  empires?: string[]
+  empire_count?: number
 }
 
 export interface DeckData {
@@ -29,7 +31,18 @@ export interface DeckData {
   name: string
   is_active: boolean
   card_ids: string[]
+  commander_empire_id: string | null
   created_at: string | null
+}
+
+export interface EmpireCardData {
+  empire_id: string
+  name: string
+  region: string
+  thematic_stat: string
+  description: string
+  acquired_via?: string
+  acquired_at?: string
 }
 
 export interface PlayerStats {

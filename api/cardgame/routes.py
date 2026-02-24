@@ -5,7 +5,18 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
-from api.cardgame.constants import PACK_PRICES, RARITY_NAMES, get_level
+from sqlalchemy import func
+
+from api.cardgame.constants import (
+    EMPIRE_DESCRIPTIONS,
+    EMPIRE_DISPLAY_NAMES,
+    EMPIRE_PERIODS,
+    EMPIRE_THEMATIC_STATS,
+    PACK_PRICES,
+    RARITY_NAMES,
+    get_level,
+)
+from pipeline.historical_boundaries.empire_metadata import EMPIRE_METADATA
 from api.cardgame.models import (
     CardBattle,
     CardCollection,
@@ -16,6 +27,7 @@ from api.cardgame.models import (
 from api.services.jwt_auth import get_current_user, get_optional_user
 from api.services.rate_limiter import RateLimiter
 from pipeline.database import DiscordUser, UnifiedSite, get_session
+from pipeline.utils.country_lookup import normalize_country
 
 router = APIRouter()
 
@@ -71,6 +83,7 @@ def _card_stats_to_dict(card: CardStats, site: UnifiedSite | None = None) -> dic
         d.update({
             "name": site.name,
             "country": site.country,
+            "country_code": normalize_country(site.country) if site.country else None,
             "period_name": site.period_name,
             "period_start": site.period_start,
             "thumbnail_url": site.thumbnail_url,
@@ -93,6 +106,43 @@ def _get_client_ip(request: Request) -> str:
 # ---------------------------------------------------------------------------
 # Public endpoints
 # ---------------------------------------------------------------------------
+
+@router.get("/random")
+async def get_random_cards(count: int = Query(100, ge=1, le=200)):
+    """Get random site cards (public, no auth)."""
+    with get_session() as session:
+        rows = (
+            session.query(CardStats, UnifiedSite)
+            .join(UnifiedSite, CardStats.site_id == UnifiedSite.id)
+            .order_by(func.random())
+            .limit(count)
+            .all()
+        )
+        cards = []
+        for card, site in rows:
+            d = _card_stats_to_dict(card, site)
+            d["star_level"] = 0
+            d["card_xp"] = 0
+            cards.append(d)
+        return {"cards": cards}
+
+
+@router.get("/empires/all")
+async def get_all_empires():
+    """Get all empire cards (public, no auth)."""
+    empires = []
+    for empire_id, name in EMPIRE_DISPLAY_NAMES.items():
+        meta = EMPIRE_METADATA.get(empire_id, {})
+        empires.append({
+            "id": empire_id,
+            "name": name,
+            "region": meta.get("region", ""),
+            "thematic_stat": EMPIRE_THEMATIC_STATS.get(empire_id, "mystery"),
+            "period": EMPIRE_PERIODS.get(empire_id, ""),
+            "description": EMPIRE_DESCRIPTIONS.get(empire_id, ""),
+        })
+    return {"empires": empires}
+
 
 @router.get("/stats/{site_id}")
 async def get_card_stats(site_id: str):

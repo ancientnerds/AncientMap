@@ -200,7 +200,7 @@ EMPIRE_NAME_PATTERNS = {
 
     # East Asia
     'shang': [r'Shang.*'],
-    'zhou': [r'.*Zhou.*'],
+    'zhou': [r'(Western|Eastern) Zhou.*', r'Zhou Dynasty', r'Later Zhou'],
     'qin': [r'Qin Dynasty', r'Qin Empire'],  # Careful: not "Qing"
     'han': [r'Han Dynasty', r'.*Han.*Dynasty'],
 
@@ -228,61 +228,43 @@ EMPIRE_NAME_PATTERNS = {
 # Legacy alias for backwards compatibility
 EMPIRE_MAPPINGS = EMPIRE_NAME_PATTERNS
 
-# Empire metadata (for UI display)
-EMPIRE_METADATA = {
-    # Ancient Near East (7)
-    'egyptian': {'name': 'Egyptian Empire', 'region': 'Ancient Near East', 'startYear': -3100, 'endYear': -30, 'color': 0xFFD700},
-    'akkadian': {'name': 'Akkadian Empire', 'region': 'Ancient Near East', 'startYear': -2334, 'endYear': -2154, 'color': 0xFFA07A},
-    'elam': {'name': 'Elam', 'region': 'Ancient Near East', 'startYear': -3200, 'endYear': -601, 'color': 0xE6A44C},
-    'babylonian': {'name': 'Babylonian', 'region': 'Ancient Near East', 'startYear': -1894, 'endYear': -539, 'color': 0xFFB347},
-    'assyrian': {'name': 'Assyrian Empire', 'region': 'Ancient Near East', 'startYear': -2500, 'endYear': -609, 'color': 0xFF6B6B},
-    'hittite': {'name': 'Hittite Empire', 'region': 'Ancient Near East', 'startYear': -1600, 'endYear': -1178, 'color': 0xFFAA00},
-    'mitanni': {'name': 'Mitanni', 'region': 'Ancient Near East', 'startYear': -1500, 'endYear': -1241, 'color': 0xD4A574},
 
-    # Mediterranean (9)
-    'minoan': {'name': 'Minoan Civilization', 'region': 'Mediterranean', 'startYear': -1600, 'endYear': -1401, 'color': 0x20B2AA},
-    'mycenaean': {'name': 'Mycenaean Greece', 'region': 'Mediterranean', 'startYear': -1500, 'endYear': -1101, 'color': 0x48D1CC},
-    'phoenician': {'name': 'Phoenicia', 'region': 'Mediterranean', 'startYear': -700, 'endYear': -616, 'color': 0x9370DB},
-    'etruscan': {'name': 'Etruscan Civilization', 'region': 'Mediterranean', 'startYear': -750, 'endYear': -265, 'color': 0xDB7093},
-    'greek': {'name': 'Greek City-States', 'region': 'Mediterranean', 'startYear': -800, 'endYear': -338, 'color': 0xFFA07A},
-    'macedonian': {'name': 'Macedonian Empire', 'region': 'Mediterranean', 'startYear': -338, 'endYear': -168, 'color': 0xFF8866},
-    'carthaginian': {'name': 'Carthaginian Empire', 'region': 'Mediterranean', 'startYear': -814, 'endYear': -146, 'color': 0xFFAA88},
-    'roman': {'name': 'Roman Empire', 'region': 'Mediterranean', 'startYear': -509, 'endYear': 476, 'color': 0xFF7777},
-    'byzantine': {'name': 'Byzantine Empire', 'region': 'Mediterranean', 'startYear': 330, 'endYear': 1453, 'color': 0xFF99AA},
+def find_contiguous_range(years: list[int], max_gap: int = 300) -> tuple[list[int], int, int]:
+    """Find the largest contiguous era (no gap > max_gap between consecutive years).
 
-    # Persian/Central Asia (5)
-    'achaemenid': {'name': 'Achaemenid Persia', 'region': 'Persian/Central Asia', 'startYear': -550, 'endYear': -330, 'color': 0x00BFFF},
-    'seleucid': {'name': 'Seleucid Empire', 'region': 'Persian/Central Asia', 'startYear': -312, 'endYear': -63, 'color': 0x00CED1},
-    'parthian': {'name': 'Parthian Empire', 'region': 'Persian/Central Asia', 'startYear': -247, 'endYear': 224, 'color': 0x40E0D0},
-    'kushan': {'name': 'Kushan Empire', 'region': 'Persian/Central Asia', 'startYear': 43, 'endYear': 237, 'color': 0x5F9EA0},
-    'sassanid': {'name': 'Sassanid Empire', 'region': 'Persian/Central Asia', 'startYear': 224, 'endYear': 651, 'color': 0x7FFFD4},
+    Cliopatria tracks polities as geographic continuities — "Roman Empire" includes
+    modern Italy, "Egyptian" includes modern Egypt. This creates data spanning thousands
+    of years with a gap where the ancient polity ended and the modern state began.
 
-    # East Asia (4)
-    'shang': {'name': 'Shang Dynasty', 'region': 'East Asia', 'startYear': -1600, 'endYear': -1046, 'color': 0xFFD700},
-    'zhou': {'name': 'Zhou Dynasty', 'region': 'East Asia', 'startYear': -1046, 'endYear': -256, 'color': 0xFFE135},
-    'qin': {'name': 'Qin Dynasty', 'region': 'East Asia', 'startYear': -221, 'endYear': -206, 'color': 0xFF5733},
-    'han': {'name': 'Han Dynasty', 'region': 'East Asia', 'startYear': -206, 'endYear': 220, 'color': 0xFF6347},
+    This function splits the year list into eras at large gaps and returns the era
+    with the most data points, which is the actual historical polity we care about.
 
-    # South Asia (3)
-    'indus_valley': {'name': 'Indus Valley (Harappan)', 'region': 'South Asia', 'startYear': -3000, 'endYear': -1701, 'color': 0x66CDAA},
-    'maurya': {'name': 'Maurya Empire', 'region': 'South Asia', 'startYear': -322, 'endYear': -185, 'color': 0x7FFF00},
-    'gupta': {'name': 'Gupta Empire', 'region': 'South Asia', 'startYear': 320, 'endYear': 550, 'color': 0x00FF7F},
+    Returns (filtered_years, start, end).
+    """
+    if not years:
+        return [], 0, 0
 
-    # Africa (2)
-    'kush': {'name': 'Kingdom of Kush', 'region': 'Africa', 'startYear': -1070, 'endYear': 350, 'color': 0xFF8C00},
-    'axum': {'name': 'Aksumite Empire', 'region': 'Africa', 'startYear': 100, 'endYear': 940, 'color': 0xCD853F},
+    sorted_years = sorted(years)
 
-    # Americas (6)
-    'olmec': {'name': 'Olmec Civilization', 'region': 'Americas', 'startYear': -650, 'endYear': -351, 'color': 0x228B22},
-    'zapotec': {'name': 'Zapotec Civilization', 'region': 'Americas', 'startYear': -500, 'endYear': 900, 'color': 0x3CB371},
-    'teotihuacan': {'name': 'Teotihuacan', 'region': 'Americas', 'startYear': -50, 'endYear': 704, 'color': 0x2E8B57},
-    'maya': {'name': 'Maya Civilization', 'region': 'Americas', 'startYear': -2000, 'endYear': 1500, 'color': 0x00FF7F},
-    'aztec': {'name': 'Aztec Empire', 'region': 'Americas', 'startYear': 1428, 'endYear': 1521, 'color': 0x7CFC00},
-    'inca': {'name': 'Inca Empire', 'region': 'Americas', 'startYear': 1438, 'endYear': 1533, 'color': 0x7FFF00},
+    if len(sorted_years) == 1:
+        return sorted_years, sorted_years[0], sorted_years[0]
 
-    # Medieval Europe (1)
-    'carolingian': {'name': 'Carolingian Empire', 'region': 'Medieval Europe', 'startYear': 751, 'endYear': 888, 'color': 0x6495ED},
-}
+    # Split into eras at large gaps
+    eras: list[list[int]] = []
+    current_era = [sorted_years[0]]
+    for i in range(1, len(sorted_years)):
+        if sorted_years[i] - sorted_years[i - 1] > max_gap:
+            eras.append(current_era)
+            current_era = [sorted_years[i]]
+        else:
+            current_era.append(sorted_years[i])
+    eras.append(current_era)
+
+    # Pick the era with the most data points
+    largest_era = max(eras, key=len)
+    return largest_era, largest_era[0], largest_era[-1]
+
+from pipeline.historical_boundaries.empire_metadata import EMPIRE_METADATA
 
 
 # =============================================================================
@@ -572,28 +554,43 @@ def process_empire(data: dict, empire_id: str, output_dir: Path) -> dict | None:
     # Get metadata from config or derive from data
     meta = EMPIRE_METADATA.get(empire_id, {})
 
-    # Create metadata.json
+    # Apply gap detection to filter out modern-era data bleed
+    # Cliopatria tracks geographic continuities, so "Roman Empire" includes modern Italy.
+    # This splits at gaps >300 years and keeps the largest (historical) era.
+    contiguous_years, start_year, end_year = find_contiguous_range(years)
+
+    if len(contiguous_years) < len(years):
+        logger.info(f"  Gap detection: {len(years)} years → {len(contiguous_years)} (range {start_year} to {end_year})")
+
+    # Re-calculate peak year within the contiguous range
+    contiguous_areas = {y: areas_by_year.get(y, 0) for y in contiguous_years}
+    if contiguous_areas and any(a > 0 for a in contiguous_areas.values()):
+        peak_year = max(contiguous_areas.keys(), key=lambda y: contiguous_areas[y])
+    else:
+        peak_year = max(contiguous_years, key=lambda y: len(features_by_year.get(y, [])))
+
+    # Create metadata.json — only include contiguous years
     metadata = {
         'id': empire_id,
         'name': meta.get('name', empire_id.replace('_', ' ').title()),
         'region': meta.get('region', 'Unknown'),
-        'years': years,
+        'years': contiguous_years,
         'defaultYear': peak_year,
         'peakYear': peak_year,
         'peakArea': areas_by_year.get(peak_year, 0),
-        'startYear': min(years),
-        'endYear': max(years),
+        'startYear': start_year,
+        'endYear': end_year,
         'color': meta.get('color', 0x888888),
-        'centroids': centroids,
-        'featureCount': {str(y): len(features_by_year[y]) for y in years},
-        'areaByYear': {str(y): areas_by_year.get(y, 0) for y in years},
+        'centroids': {str(y): centroids[str(y)] for y in contiguous_years if str(y) in centroids},
+        'featureCount': {str(y): len(features_by_year[y]) for y in contiguous_years},
+        'areaByYear': {str(y): areas_by_year.get(y, 0) for y in contiguous_years},
     }
 
     metadata_path = empire_dir / 'metadata.json'
     with open(metadata_path, 'w', encoding='utf-8') as f:
         json.dump(metadata, f, indent=2)
 
-    logger.info(f"  Exported {len(years)} time periods: {min(years)} to {max(years)}")
+    logger.info(f"  Exported {len(contiguous_years)} time periods: {start_year} to {end_year}")
 
     return metadata
 

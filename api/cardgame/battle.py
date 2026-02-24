@@ -27,16 +27,20 @@ def resolve_battle(
     challenger_deck: list[CardStats],
     defender_deck: list[CardStats],
     battle_id: str,
+    challenger_commander: str | None = None,
+    defender_commander: str | None = None,
 ) -> dict:
     """Resolve a 5-round battle between two decks.
 
-    Applies synergy bonuses from category, regional, temporal, and cross-combo
-    synergies before comparing stats each round.
+    Applies synergy bonuses from category, crossroads, anchor, commander,
+    temporal, and cross-combo synergies before comparing stats each round.
 
     Args:
         challenger_deck: List of CardStats (up to 10 cards)
         defender_deck: List of CardStats (up to 10 cards)
         battle_id: Used as random seed for reproducibility
+        challenger_commander: Commander empire_id for challenger (optional)
+        defender_commander: Commander empire_id for defender (optional)
 
     Returns:
         {rounds, winner, challenger_wins, defender_wins,
@@ -51,8 +55,8 @@ def resolve_battle(
     rng.shuffle(d_deck)
 
     # Compute synergy bonuses for both decks
-    c_synergies = compute_synergies(c_deck)
-    d_synergies = compute_synergies(d_deck)
+    c_synergies = compute_synergies(c_deck, commander_empire_id=challenger_commander)
+    d_synergies = compute_synergies(d_deck, commander_empire_id=defender_commander)
 
     # Pick 5 stats in random order
     stats_order = list(STAT_NAMES)
@@ -138,8 +142,8 @@ def resolve_battle(
         "winner": overall_winner,
         "challenger_wins": c_wins,
         "defender_wins": d_wins,
-        "challenger_synergies": describe_synergies(challenger_deck),
-        "defender_synergies": describe_synergies(defender_deck),
+        "challenger_synergies": describe_synergies(challenger_deck, commander_empire_id=challenger_commander),
+        "defender_synergies": describe_synergies(defender_deck, commander_empire_id=defender_commander),
     }
 
 
