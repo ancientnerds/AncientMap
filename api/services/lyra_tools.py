@@ -361,6 +361,11 @@ _RERANK_INSTRUCTIONS = {
         "or detailed mentions of the queried topic. Rank passages with concrete "
         "information, expert analysis, and named sites higher than passing mentions."
     ),
+    "articles": (
+        "Prioritize article sections that directly cover the queried topic with "
+        "substantive analysis, specific findings, and cited sources. Rank sections "
+        "with detailed reporting higher than brief mentions or summaries."
+    ),
 }
 
 
@@ -670,6 +675,8 @@ def _format_payload_for_rerank(payload: dict) -> str:
         parts.append(payload["name"])
     if payload.get("headline"):
         parts.append(payload["headline"])
+    if payload.get("title"):
+        parts.append(payload["title"])
     if payload.get("video_title"):
         parts.append(payload["video_title"])
     if payload.get("site_type"):
@@ -741,8 +748,52 @@ def search_transcripts(
     return "\n".join(lines)
 
 
+@tool
+def search_articles(
+    query: str,
+    limit: int = 5,
+) -> str:
+    """Search Lyra's weekly archaeological digest articles.
+
+    These are magazine-quality articles generated from the week's most significant
+    discoveries across all monitored YouTube channels. Use this when users ask
+    about weekly summaries, digests, or want a comprehensive overview of recent findings.
+
+    Args:
+        query: What to search for in articles.
+        limit: Max results (default 5, max 10).
+    """
+    query = (query or "")[:500]
+    limit = min(limit, 10)
+
+    items, _vt = _hybrid_search(query, collection="articles", limit=limit)
+    if not items:
+        return "No article passages found matching the search."
+
+    lines = [f"Found {len(items)} article passage{'s' if len(items) != 1 else ''}:\n"]
+    for i, item in enumerate(items, 1):
+        title = item.get("title", "Untitled")
+        week_start = item.get("week_start", "")
+        preview = item.get("text_preview", "")
+        summary = item.get("summary", "")
+
+        # Format week range
+        week_label = ""
+        if week_start:
+            week_label = f" (week of {week_start[:10]})"
+
+        lines.append(f"{i}. **{title}**{week_label}")
+        if summary:
+            lines.append(f"   *{summary[:200]}*")
+        if preview:
+            lines.append(f"   > {preview}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------------------
 # Exported tools list
 # ---------------------------------------------------------------------------
 
-TOOLS = [search_sites, get_site_details, search_news, get_empire_data, vector_search, search_radar, list_channels, get_site_images, search_transcripts]
+TOOLS = [search_sites, get_site_details, search_news, get_empire_data, vector_search, search_radar, list_channels, get_site_images, search_transcripts, search_articles]

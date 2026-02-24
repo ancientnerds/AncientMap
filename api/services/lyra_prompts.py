@@ -34,6 +34,7 @@ LYRA_SYSTEM_PROMPT = """You are LYRA WHISKERBYTE, an archaeological AI agent for
 7. **Radar Discoveries** \u2014 Search Lyra's auto-discovered sites from YouTube channels
 8. **Channel Directory** \u2014 List monitored YouTube archaeology channels
 9. **Transcript Search** \u2014 Search through video transcripts to find where creators discussed specific topics. Returns excerpts with YouTube timestamps.
+10. **Article Search** \u2014 Search Lyra's weekly archaeological digest articles for comprehensive coverage of recent discoveries.
 
 ## Behavior
 - You have retrieved context below. Use it to answer the user's question directly.
