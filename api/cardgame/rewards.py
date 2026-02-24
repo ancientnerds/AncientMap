@@ -142,8 +142,8 @@ def claim_starter_deck(session: Session, user: DiscordUser) -> list[dict]:
 
     # Pick 10 well-distributed cards: prefer diverse groups and low tiers
     # Get one card per category group, then fill remaining slots
-    groups_seen = set()
-    starter_cards = []
+    groups_seen: set[str] = set()
+    starter_cards: list[CardStats] = []
 
     # First: one card per group (Common/Uncommon)
     for tier in [1, 2]:
