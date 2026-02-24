@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
-from api.cardgame.constants import PACK_PRICES, RARITY_NAMES
+from api.cardgame.constants import PACK_PRICES, RARITY_NAMES, get_level
 from api.cardgame.models import (
     CardBattle,
     CardCollection,
@@ -21,6 +21,9 @@ router = APIRouter()
 
 _pack_limiter = RateLimiter(max_requests=10, window_seconds=60, namespace="card_packs")
 _quiz_limiter = RateLimiter(max_requests=10, window_seconds=60, namespace="card_quiz")
+_daily_limiter = RateLimiter(max_requests=5, window_seconds=60, namespace="card_daily")
+_starter_limiter = RateLimiter(max_requests=3, window_seconds=60, namespace="card_starter")
+_expedition_limiter = RateLimiter(max_requests=10, window_seconds=60, namespace="card_expedition")
 
 
 # ---------------------------------------------------------------------------
@@ -79,7 +82,12 @@ def _card_stats_to_dict(card: CardStats, site: UnifiedSite | None = None) -> dic
 
 
 def _get_client_ip(request: Request) -> str:
-    return request.headers.get("x-forwarded-for", request.client.host).split(",")[0].strip()
+    """Extract client IP. Only trust X-Forwarded-For from loopback (nginx proxy)."""
+    if request.client and request.client.host in ("127.0.0.1", "::1"):
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
 
 
 # ---------------------------------------------------------------------------
@@ -129,7 +137,6 @@ async def get_leaderboard(
             result.append({
                 "username": user.username if user else "Unknown",
                 "avatar_hash": user.avatar_hash if user else None,
-                "discord_id": user.discord_id if user else None,
                 "wins": ps.wins,
                 "losses": ps.losses,
                 "draws": ps.draws,
@@ -264,7 +271,8 @@ async def create_or_update_deck(
     user: DiscordUser = Depends(get_current_user),
 ):
     """Create or update a deck (max 3 per user, max 10 cards)."""
-    if len(body.card_ids) > 10:
+    card_ids = list(dict.fromkeys(body.card_ids))  # deduplicate preserving order
+    if len(card_ids) > 10:
         raise HTTPException(status_code=400, detail="Deck can have at most 10 cards")
 
     with get_session() as session:
@@ -275,7 +283,7 @@ async def create_or_update_deck(
             .filter(CardCollection.user_id == user.id)
             .all()
         }
-        for cid in body.card_ids:
+        for cid in card_ids:
             if cid not in owned:
                 raise HTTPException(status_code=400, detail=f"You don't own card {cid}")
 
@@ -291,7 +299,7 @@ async def create_or_update_deck(
         deck = CardDeck(
             user_id=user.id,
             name=body.name,
-            card_ids=body.card_ids,
+            card_ids=card_ids,
         )
         session.add(deck)
         session.flush()
@@ -310,7 +318,8 @@ async def update_deck(
     user: DiscordUser = Depends(get_current_user),
 ):
     """Update an existing deck's name and cards."""
-    if len(body.card_ids) > 10:
+    card_ids = list(dict.fromkeys(body.card_ids))  # deduplicate preserving order
+    if len(card_ids) > 10:
         raise HTTPException(status_code=400, detail="Deck can have at most 10 cards")
 
     try:
@@ -330,12 +339,12 @@ async def update_deck(
             .filter(CardCollection.user_id == user.id)
             .all()
         }
-        for cid in body.card_ids:
+        for cid in card_ids:
             if cid not in owned:
                 raise HTTPException(status_code=400, detail=f"You don't own card {cid}")
 
         deck.name = body.name
-        deck.card_ids = body.card_ids
+        deck.card_ids = card_ids
 
         return {
             "id": str(deck.id),
@@ -397,11 +406,14 @@ async def get_player_stats(user: DiscordUser = Depends(get_current_user)):
     with get_session() as session:
         ps = session.get(CardPlayerStats, user.id)
         if not ps:
+            level, xp_progress, xp_to_next = get_level(0)
             return {
                 "total_cards": 0, "wins": 0, "losses": 0, "draws": 0,
                 "win_streak": 0, "best_streak": 0, "xp": 0,
                 "daily_streak": 0, "packs_opened": 0,
+                "level": level, "xp_progress": xp_progress, "xp_to_next": xp_to_next,
             }
+        level, xp_progress, xp_to_next = get_level(ps.xp)
         return {
             "total_cards": ps.total_cards,
             "wins": ps.wins,
@@ -412,12 +424,17 @@ async def get_player_stats(user: DiscordUser = Depends(get_current_user)):
             "xp": ps.xp,
             "daily_streak": ps.daily_streak,
             "packs_opened": ps.packs_opened,
+            "level": level,
+            "xp_progress": xp_progress,
+            "xp_to_next": xp_to_next,
         }
 
 
 @router.post("/starter")
-async def claim_starter(user: DiscordUser = Depends(get_current_user)):
+async def claim_starter(request: Request, user: DiscordUser = Depends(get_current_user)):
     """Claim starter deck (once per user)."""
+    if not _starter_limiter.check(_get_client_ip(request)):
+        raise HTTPException(status_code=429, detail="Too many requests, slow down")
     from api.cardgame.rewards import AlreadyHasStarterError, claim_starter_deck
 
     with get_session() as session:
@@ -434,8 +451,10 @@ async def claim_starter(user: DiscordUser = Depends(get_current_user)):
 
 
 @router.post("/daily")
-async def claim_daily_endpoint(user: DiscordUser = Depends(get_current_user)):
+async def claim_daily_endpoint(request: Request, user: DiscordUser = Depends(get_current_user)):
     """Claim daily reward."""
+    if not _daily_limiter.check(_get_client_ip(request)):
+        raise HTTPException(status_code=429, detail="Too many requests, slow down")
     from api.cardgame.rewards import AlreadyClaimedError, claim_daily
 
     with get_session() as session:
@@ -582,9 +601,12 @@ async def list_expeditions(
 @router.post("/expeditions/{expedition_id}/play")
 async def play_expedition(
     expedition_id: str,
+    request: Request,
     user: DiscordUser = Depends(get_current_user),
 ):
     """Play the next stage of an expedition."""
+    if not _expedition_limiter.check(_get_client_ip(request)):
+        raise HTTPException(status_code=429, detail="Too many requests, slow down")
     from api.cardgame.expedition import play_expedition_stage
 
     with get_session() as session:

@@ -125,7 +125,7 @@ function LeaderboardSection() {
           </thead>
           <tbody>
             {entries.map((e, i) => (
-              <tr key={e.discord_id ?? i}>
+              <tr key={`${e.username}-${i}`}>
                 <td>{i + 1}</td>
                 <td>{e.username}</td>
                 <td>{e.wins}/{e.losses}/{e.draws}</td>

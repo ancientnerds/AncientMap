@@ -52,15 +52,13 @@ export default function CollectionBrowser({ token, mode = 'browse', excludeIds, 
     <div className="cards-section">
       <div className="cards-toolbar">
         <span className="cards-count">{total} cards</span>
-        {mode === 'pick' && (
-          <input
-            type="text"
-            className="collection-search"
-            placeholder="Search cards..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        )}
+        <input
+          type="text"
+          className="collection-search"
+          placeholder="Search cards..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
         <select value={rarity ?? ''} onChange={e => { setRarity(e.target.value ? Number(e.target.value) : null); setPage(1) }}>
           <option value="">All rarities</option>
           <option value="1">Common</option>
