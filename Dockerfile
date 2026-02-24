@@ -49,6 +49,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Copy application code
 COPY api/ ./api/
 COPY pipeline/ ./pipeline/
+COPY scripts/ ./scripts/
 # Copy Seshat polity data (used by Lyra agent for empire knowledge)
 COPY ancient-nerds-map/src/data/seshat/ ./ancient-nerds-map/src/data/seshat/
 # Copy optional asset directories (may not exist in all environments)
