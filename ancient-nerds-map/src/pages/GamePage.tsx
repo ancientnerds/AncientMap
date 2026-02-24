@@ -4,6 +4,10 @@
  */
 
 import { useState } from 'react'
+import type { CardData } from '../types/cards'
+import { GameCard, EmpireCard } from '../components/cards/GameCard'
+import { RARITY_TIERS as RARITY_TIERS_MAP } from '../constants/rarity'
+import gameConstants from '../data/game-constants.generated.json'
 import PageHeader from '../components/layout/PageHeader'
 import '../styles/game.css'
 
@@ -19,13 +23,20 @@ const STAT_DESCRIPTIONS = [
   { name: 'Legacy', range: '1–10', desc: 'Lasting impact: age span, UNESCO status, community engagement.' },
 ]
 
-const RARITY_TIERS = [
-  { tier: 1, name: 'Common', color: '#9E9E9E', desc: 'Well-known sites with standard documentation' },
-  { tier: 2, name: 'Uncommon', color: '#4CAF50', desc: 'Sites with above-average mystery or cultural reach' },
-  { tier: 3, name: 'Rare', color: '#2196F3', desc: 'Significant sites with rich content and history' },
-  { tier: 4, name: 'Epic', color: '#9C27B0', desc: 'Extraordinary sites — UNESCO listed, 3D-scanned, or deeply mysterious' },
-  { tier: 5, name: 'Legendary', color: '#FFC107', desc: 'The rarest cards — Pompeii, Gobekli Tepe, Machu Picchu' },
-]
+const RARITY_DESCRIPTIONS: Record<number, string> = {
+  1: 'Well-known sites with standard documentation',
+  2: 'Sites with above-average mystery or cultural reach',
+  3: 'Significant sites with rich content and history',
+  4: 'Extraordinary sites — UNESCO listed, 3D-scanned, or deeply mysterious',
+  5: 'The rarest cards — Pompeii, Gobekli Tepe, Machu Picchu',
+}
+
+const RARITY_TIERS = [1, 2, 3, 4, 5].map(tier => ({
+  tier,
+  name: RARITY_TIERS_MAP[tier].name,
+  color: RARITY_TIERS_MAP[tier].color,
+  desc: RARITY_DESCRIPTIONS[tier],
+}))
 
 const CATEGORY_GROUPS = [
   { name: 'Fortifications', icon: '\u{1f3f0}', primary: 'Fortification', beats: 'Settlements' },
@@ -51,31 +62,7 @@ const SYNERGY_TYPES = [
   { name: 'Trade Network', trigger: '3 empires all pairwise connected by trade routes', bonus: 'Routes upgrade to +2 Legacy instead of +1', example: 'Han + Roman + Kushan \u2192 Silk Road Network \u2192 +2 Legacy each' },
 ]
 
-const TRADE_ROUTES_DATA = [
-  { name: 'Silk Road', empireA: 'Han Dynasty', empireB: 'Roman Empire', goods: 'silk, spices, glassware' },
-  { name: 'Incense Route', empireA: 'Aksumite Empire', empireB: 'Roman Empire', goods: 'frankincense, ivory, gold' },
-  { name: 'Nile Corridor', empireA: 'Egyptian Kingdom', empireB: 'Kingdom of Kush', goods: 'gold, ebony, exotic animals' },
-  { name: 'Royal Road', empireA: 'Achaemenid Persia', empireB: 'Greek City-States', goods: 'tribute, ideas, diplomats' },
-  { name: 'Amber Road', empireA: 'Roman Empire', empireB: 'Carolingian Empire', goods: 'amber, furs, metalwork' },
-  { name: 'Lapis Lazuli Road', empireA: 'Indus Valley', empireB: 'Akkadian Empire', goods: 'lapis lazuli, textiles, grain' },
-  { name: 'Obsidian Network', empireA: 'Olmec Civilization', empireB: 'Maya Civilization', goods: 'obsidian, jade, cacao' },
-  { name: 'Tin Route', empireA: 'Phoenicia', empireB: 'Minoan Civilization', goods: 'tin, copper, purple dye' },
-  { name: 'Spice Trade', empireA: 'Roman Empire', empireB: 'Maurya Empire', goods: 'pepper, gems, cotton' },
-  { name: 'Gandhara Corridor', empireA: 'Kushan Empire', empireB: 'Han Dynasty', goods: 'Buddhism, art, horses' },
-  { name: 'Red Sea Circuit', empireA: 'Egyptian Kingdom', empireB: 'Aksumite Empire', goods: 'myrrh, gold, papyrus' },
-  { name: 'Punic Exchange', empireA: 'Carthaginian Empire', empireB: 'Greek City-States', goods: 'grain, pottery, metals' },
-  { name: 'Fertile Crescent Link', empireA: 'Babylonian Empire', empireB: 'Hittite Empire', goods: 'tin, textiles, diplomacy' },
-  { name: 'Anatolian Bridge', empireA: 'Hittite Empire', empireB: 'Mycenaean Greece', goods: 'copper, iron, olive oil' },
-  { name: 'Persian Gulf Trade', empireA: 'Elam', empireB: 'Akkadian Empire', goods: 'timber, stone, bitumen' },
-  { name: 'Hellenistic Corridor', empireA: 'Seleucid Empire', empireB: 'Macedonian Empire', goods: 'Greek culture, coinage' },
-  { name: 'Sassanid Silk Road', empireA: 'Sassanid Empire', empireB: 'Byzantine Empire', goods: 'silk, spices, religion' },
-  { name: 'Zhou Bronze Road', empireA: 'Zhou Dynasty', empireB: 'Shang Dynasty', goods: 'bronze, oracle bones, ritual vessels' },
-  { name: 'Mesoamerican Tribute', empireA: 'Aztec Empire', empireB: 'Maya Civilization', goods: 'cacao, feathers, jade' },
-  { name: 'Gupta Maritime Trade', empireA: 'Gupta Empire', empireB: 'Sassanid Empire', goods: 'spices, textiles, philosophy' },
-  { name: 'Kushan Silk Route', empireA: 'Kushan Empire', empireB: 'Roman Empire', goods: 'silk, horses, gemstones' },
-  { name: 'Nubian Trade', empireA: 'Aksumite Empire', empireB: 'Kingdom of Kush', goods: 'salt, gold, slaves' },
-  { name: 'Aegean Bronze Trade', empireA: 'Babylonian Empire', empireB: 'Mycenaean Greece', goods: 'tin, textiles, amber' },
-]
+const TRADE_ROUTES_DATA = gameConstants.tradeRoutes
 
 const TRADE_NETWORK_TRIANGLES = [
   { name: 'Silk Road Network', empires: 'Han Dynasty + Roman Empire + Kushan Empire', routes: 'Silk Road + Gandhara Corridor + Kushan Silk Route' },
@@ -83,12 +70,21 @@ const TRADE_NETWORK_TRIANGLES = [
   { name: 'Bronze Age Network', empires: 'Babylonian Empire + Hittite Empire + Mycenaean Greece', routes: 'Fertile Crescent Link + Anatolian Bridge + Aegean Bronze Trade' },
 ]
 
-const PACKS = [
-  { name: 'Common', cost: 500, cards: 3, guarantees: '3 Common+', color: '#9E9E9E' },
-  { name: 'Uncommon', cost: 1500, cards: 3, guarantees: '1 Uncommon+, 2 Common+', color: '#4CAF50' },
-  { name: 'Rare', cost: 5000, cards: 5, guarantees: '1 Rare+, 2 Uncommon+, 2 Common+', color: '#2196F3' },
-  { name: 'Epic', cost: 15000, cards: 5, guarantees: '1 Epic+, 1 Rare+, 3 Common+', color: '#9C27B0' },
-]
+const PACK_GUARANTEES: Record<string, string> = {
+  common: '3 Common+',
+  uncommon: '1 Uncommon+, 2 Common+',
+  rare: '1 Rare+, 2 Uncommon+, 2 Common+',
+  epic: '1 Epic+, 1 Rare+, 3 Common+',
+}
+const PACK_TIER: Record<string, number> = { common: 1, uncommon: 2, rare: 3, epic: 4 }
+
+const PACKS = Object.entries(gameConstants.packPrices).map(([key, p]) => ({
+  name: key.charAt(0).toUpperCase() + key.slice(1),
+  cost: p.cost,
+  cards: p.cards,
+  guarantees: PACK_GUARANTEES[key],
+  color: RARITY_TIERS_MAP[PACK_TIER[key]].color,
+}))
 
 const EXPEDITIONS = [
   'The Nile Valley', 'The Aegean World', 'Mesoamerican Empires',
@@ -112,242 +108,122 @@ const DISCORD_COMMANDS = [
 ]
 
 // ---------------------------------------------------------------------------
-// Card Mockup data
+// Card Mockup data (using CardData shape for the unified GameCard component)
 // ---------------------------------------------------------------------------
 
-interface MockupCard {
-  name: string
-  rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
-  rarityLabel: string
-  image: string
-  typeBadge: { label: string; color: string }
-  periodBadge: { label: string; color: string }
-  country: string
-  countryCode: string
-  coords: string
-  desc: string
-  stats: { antiquity: number; fortification: number; cultural: number; mystery: number; legacy: number }
-  bonuses?: Partial<{ antiquity: number; fortification: number; cultural: number; mystery: number; legacy: number }>
-  starLevel: number
-  dupsFilled: number
-  longTitle?: boolean
+interface MockupCardExt extends CardData {
+  bonuses?: Partial<Record<string, number>>
+  description?: string
+  coords?: string
+  typeBadgeColor?: string
+  periodBadgeColor?: string
+  dupsFilled?: number
 }
 
-const FIBO_DUPES = [2, 3, 5, 8, 13, 0] // dupes needed for next star, indexed by current starLevel
-
-const MOCKUP_CARDS: MockupCard[] = [
+const MOCKUP_CARDS: MockupCardExt[] = [
   {
-    name: 'Gobekli Tepe',
-    rarity: 'legendary',
-    rarityLabel: 'Legendary',
-    image: 'https://upload.wikimedia.org/wikipedia/commons/d/d5/G%C3%B6bekli_Tepe%2C_Urfa.jpg',
-    typeBadge: { label: 'Temple', color: '#e6b800' },
-    periodBadge: { label: '< 4500 BC', color: '#ff0000' },
-    country: 'Turkey',
-    countryCode: 'tr',
+    site_id: 'mockup-gobekli', name: 'Gobekli Tepe', country: 'Turkey',
+    period_name: '< 4500 BC', period_start: -10000, site_type: 'Temple',
+    thumbnail_url: 'https://upload.wikimedia.org/wikipedia/commons/d/d5/G%C3%B6bekli_Tepe%2C_Urfa.jpg',
+    antiquity: 10, fortification: 3, cultural_influence: 9, mystery: 10, legacy: 8,
+    total_power: 40, rarity_tier: 5, rarity_name: 'Legendary',
+    category_group: 'Religious', civilization: null, star_level: 5, card_xp: 0,
+    bonuses: { fortification: 2, cultural_influence: 1, legacy: 2 },
+    typeBadgeColor: '#e6b800', periodBadgeColor: '#ff0000',
     coords: '37.2233\u00b0 N, 38.9224\u00b0 E',
-    desc: 'A Neolithic archaeological site comprising of a number of large circular structures supported by massive stone pillars — many richly decorated with abstract anthropomorphic details and animal reliefs.',
-    stats: { antiquity: 10, fortification: 3, cultural: 9, mystery: 10, legacy: 8 },
-    bonuses: { fortification: 2, cultural: 1, legacy: 2 },
-    starLevel: 5, dupsFilled: 0,
+    description: 'A Neolithic archaeological site comprising of a number of large circular structures supported by massive stone pillars \u2014 many richly decorated with abstract anthropomorphic details and animal reliefs.',
+    dupsFilled: 0,
   },
   {
-    name: 'Machu Picchu',
-    rarity: 'legendary',
-    rarityLabel: 'Legendary',
-    image: 'https://upload.wikimedia.org/wikipedia/commons/1/13/Before_Machu_Picchu.jpg',
-    typeBadge: { label: 'Fortress/Citadel', color: '#dd1111' },
-    periodBadge: { label: '1000 - 1500 AD', color: '#ffdd00' },
-    country: 'Peru',
-    countryCode: 'pe',
+    site_id: 'mockup-machu', name: 'Machu Picchu', country: 'Peru',
+    period_name: '1000 - 1500 AD', period_start: 1450, site_type: 'Fortress/Citadel',
+    thumbnail_url: 'https://upload.wikimedia.org/wikipedia/commons/1/13/Before_Machu_Picchu.jpg',
+    antiquity: 2, fortification: 10, cultural_influence: 9, mystery: 8, legacy: 9,
+    total_power: 38, rarity_tier: 5, rarity_name: 'Legendary',
+    category_group: 'Fortifications', civilization: null, star_level: 4, card_xp: 0,
+    bonuses: { antiquity: 1, cultural_influence: 1, mystery: 1, legacy: 1 },
+    typeBadgeColor: '#dd1111', periodBadgeColor: '#ffdd00',
     coords: '13.1631\u00b0 S, 72.5450\u00b0 W',
-    desc: 'An ancient Inca citadel located on a 2,430 metre mountain range. Often referred to as the "Lost City of the Incas", it is the most familiar icon of Inca civilization.',
-    stats: { antiquity: 2, fortification: 10, cultural: 9, mystery: 8, legacy: 9 },
-    bonuses: { antiquity: 1, cultural: 1, mystery: 1, legacy: 1 },
-    starLevel: 4, dupsFilled: 9,
+    description: 'An ancient Inca citadel located on a 2,430 metre mountain range. Often referred to as the "Lost City of the Incas", it is the most familiar icon of Inca civilization.',
+    dupsFilled: 9,
   },
   {
-    name: 'Karnak Temple Complex',
-    rarity: 'epic',
-    rarityLabel: 'Epic',
-    image: 'https://upload.wikimedia.org/wikipedia/commons/f/f2/Karnak_Temples.jpg',
-    typeBadge: { label: 'Temple Complex', color: '#ffc300' },
-    periodBadge: { label: '3000 - 1500 BC', color: '#ff4400' },
-    country: 'Egypt',
-    countryCode: 'eg',
+    site_id: 'mockup-karnak', name: 'Karnak Temple Complex', country: 'Egypt',
+    period_name: '3000 - 1500 BC', period_start: -2000, site_type: 'Temple Complex',
+    thumbnail_url: 'https://upload.wikimedia.org/wikipedia/commons/f/f2/Karnak_Temples.jpg',
+    antiquity: 8, fortification: 3, cultural_influence: 9, mystery: 7, legacy: 8,
+    total_power: 35, rarity_tier: 4, rarity_name: 'Epic',
+    category_group: 'Religious', civilization: null, star_level: 3, card_xp: 0,
+    bonuses: { antiquity: 1, cultural_influence: 1, legacy: 1 },
+    typeBadgeColor: '#ffc300', periodBadgeColor: '#ff4400',
     coords: '25.7188\u00b0 N, 32.6573\u00b0 E',
-    desc: 'The Karnak Temple Complex comprises a vast mix of decayed temples, pylons, chapels, and other buildings near Luxor. Construction began during the reign of Senusret I.',
-    stats: { antiquity: 8, fortification: 3, cultural: 9, mystery: 7, legacy: 8 },
-    bonuses: { antiquity: 1, cultural: 1, legacy: 1 },
-    starLevel: 3, dupsFilled: 5,
-    longTitle: true,
+    description: 'The Karnak Temple Complex comprises a vast mix of decayed temples, pylons, chapels, and other buildings near Luxor. Construction began during the reign of Senusret I.',
+    dupsFilled: 5,
   },
   {
-    name: 'Chichen Itza',
-    rarity: 'epic',
-    rarityLabel: 'Epic',
-    image: 'https://upload.wikimedia.org/wikipedia/commons/5/51/Chichen_Itza_3.jpg',
-    typeBadge: { label: 'Pyramid Complex', color: '#dd2277' },
-    periodBadge: { label: '500 - 1000 AD', color: '#ffcc00' },
-    country: 'Mexico',
-    countryCode: 'mx',
+    site_id: 'mockup-chichen', name: 'Chichen Itza', country: 'Mexico',
+    period_name: '500 - 1000 AD', period_start: 600, site_type: 'Pyramid Complex',
+    thumbnail_url: 'https://upload.wikimedia.org/wikipedia/commons/5/51/Chichen_Itza_3.jpg',
+    antiquity: 4, fortification: 7, cultural_influence: 9, mystery: 8, legacy: 7,
+    total_power: 35, rarity_tier: 4, rarity_name: 'Epic',
+    category_group: 'Monuments', civilization: null, star_level: 2, card_xp: 0,
+    bonuses: { cultural_influence: 1, mystery: 1 },
+    typeBadgeColor: '#dd2277', periodBadgeColor: '#ffcc00',
     coords: '20.6843\u00b0 N, 88.5678\u00b0 W',
-    desc: 'A large pre-Columbian city built by the Maya people. Its most iconic structure is the step pyramid known as El Castillo, one of the New Seven Wonders of the World.',
-    stats: { antiquity: 4, fortification: 7, cultural: 9, mystery: 8, legacy: 7 },
-    bonuses: { cultural: 1, mystery: 1 },
-    starLevel: 2, dupsFilled: 3,
+    description: 'A large pre-Columbian city built by the Maya people. Its most iconic structure is the step pyramid known as El Castillo, one of the New Seven Wonders of the World.',
+    dupsFilled: 3,
   },
   {
-    name: 'Knossos',
-    rarity: 'rare',
-    rarityLabel: 'Rare',
-    image: 'https://upload.wikimedia.org/wikipedia/commons/8/8e/Armon_Knossos_P1060093.JPG',
-    typeBadge: { label: 'Settlement', color: '#ff5500' },
-    periodBadge: { label: '< 4500 BC', color: '#ff0000' },
-    country: 'Greece',
-    countryCode: 'gr',
+    site_id: 'mockup-knossos', name: 'Knossos', country: 'Greece',
+    period_name: '< 4500 BC', period_start: -7000, site_type: 'Settlement',
+    thumbnail_url: 'https://upload.wikimedia.org/wikipedia/commons/8/8e/Armon_Knossos_P1060093.JPG',
+    antiquity: 10, fortification: 5, cultural_influence: 7, mystery: 6, legacy: 5,
+    total_power: 33, rarity_tier: 3, rarity_name: 'Rare',
+    category_group: 'Settlements', civilization: null, star_level: 1, card_xp: 0,
+    bonuses: { cultural_influence: 1 },
+    typeBadgeColor: '#ff5500', periodBadgeColor: '#ff0000',
     coords: '35.2981\u00b0 N, 25.1631\u00b0 E',
-    desc: 'A Bronze Age archaeological site in Crete. The site was a major center of the Minoan civilization, known for its association with the myth of Theseus and the Minotaur.',
-    stats: { antiquity: 10, fortification: 5, cultural: 7, mystery: 6, legacy: 5 },
-    bonuses: { cultural: 1 },
-    starLevel: 1, dupsFilled: 1,
+    description: 'A Bronze Age archaeological site in Crete. The site was a major center of the Minoan civilization, known for its association with the myth of Theseus and the Minotaur.',
+    dupsFilled: 1,
   },
   {
-    name: 'Uxmal',
-    rarity: 'rare',
-    rarityLabel: 'Rare',
-    image: 'https://upload.wikimedia.org/wikipedia/commons/e/e5/Uxmal_Pyramid_of_the_Magician.jpg',
-    typeBadge: { label: 'Settlement', color: '#ff5500' },
-    periodBadge: { label: '500 - 1000 AD', color: '#ffcc00' },
-    country: 'Mexico',
-    countryCode: 'mx',
+    site_id: 'mockup-uxmal', name: 'Uxmal', country: 'Mexico',
+    period_name: '500 - 1000 AD', period_start: 700, site_type: 'Settlement',
+    thumbnail_url: 'https://upload.wikimedia.org/wikipedia/commons/e/e5/Uxmal_Pyramid_of_the_Magician.jpg',
+    antiquity: 4, fortification: 5, cultural_influence: 8, mystery: 7, legacy: 4,
+    total_power: 28, rarity_tier: 3, rarity_name: 'Rare',
+    category_group: 'Settlements', civilization: null, star_level: 1, card_xp: 0,
+    bonuses: { cultural_influence: 1 },
+    typeBadgeColor: '#ff5500', periodBadgeColor: '#ffcc00',
     coords: '20.3594\u00b0 N, 89.7714\u00b0 W',
-    desc: 'An ancient Maya city of the classical period located in present-day Mexico. It is considered one of the most important archaeological sites of Maya culture.',
-    stats: { antiquity: 4, fortification: 5, cultural: 8, mystery: 7, legacy: 4 },
-    bonuses: { cultural: 1 },
-    starLevel: 1, dupsFilled: 2,
+    description: 'An ancient Maya city of the classical period located in present-day Mexico. It is considered one of the most important archaeological sites of Maya culture.',
+    dupsFilled: 2,
   },
   {
-    name: 'Newgrange',
-    rarity: 'uncommon',
-    rarityLabel: 'Uncommon',
-    image: 'https://upload.wikimedia.org/wikipedia/commons/0/0f/Irelands_history.jpg',
-    typeBadge: { label: 'Necropolis', color: '#8833dd' },
-    periodBadge: { label: '4500 - 3000 BC', color: '#ff2200' },
-    country: 'Ireland',
-    countryCode: 'ie',
+    site_id: 'mockup-newgrange', name: 'Newgrange', country: 'Ireland',
+    period_name: '4500 - 3000 BC', period_start: -3200, site_type: 'Necropolis',
+    thumbnail_url: 'https://upload.wikimedia.org/wikipedia/commons/0/0f/Irelands_history.jpg',
+    antiquity: 9, fortification: 2, cultural_influence: 5, mystery: 4, legacy: 3,
+    total_power: 23, rarity_tier: 2, rarity_name: 'Uncommon',
+    category_group: 'Burial & Death', civilization: null, star_level: 0, card_xp: 0,
+    typeBadgeColor: '#8833dd', periodBadgeColor: '#ff2200',
     coords: '53.6947\u00b0 N, 6.4756\u00b0 W',
-    desc: 'A Prehistoric monument in County Meath. It is an exceptionally grand passage tomb built during the Neolithic Period, around 3200 BC, overlooking the River Boyne.',
-    stats: { antiquity: 9, fortification: 2, cultural: 5, mystery: 4, legacy: 3 },
-    starLevel: 0, dupsFilled: 1,
+    description: 'A Prehistoric monument in County Meath. It is an exceptionally grand passage tomb built during the Neolithic Period, around 3200 BC, overlooking the River Boyne.',
+    dupsFilled: 1,
   },
   {
-    name: 'Amphitheatre of Pompeii',
-    rarity: 'common',
-    rarityLabel: 'Common',
-    image: 'https://upload.wikimedia.org/wikipedia/commons/8/80/Ancient_Roman_Pompeii_-_Pompeji_-_Campania_-_Italy_-_July_10th_2013_-_45.jpg',
-    typeBadge: { label: 'Megalithic', color: '#0066bb' },
-    periodBadge: { label: '500 BC - 1 AD', color: '#ff8800' },
-    country: 'Italy',
-    countryCode: 'it',
+    site_id: 'mockup-pompeii', name: 'Amphitheatre of Pompeii', country: 'Italy',
+    period_name: '500 BC - 1 AD', period_start: -70, site_type: 'Megalithic',
+    thumbnail_url: 'https://upload.wikimedia.org/wikipedia/commons/8/80/Ancient_Roman_Pompeii_-_Pompeji_-_Campania_-_Italy_-_July_10th_2013_-_45.jpg',
+    antiquity: 5, fortification: 8, cultural_influence: 3, mystery: 1, legacy: 1,
+    total_power: 18, rarity_tier: 1, rarity_name: 'Common',
+    category_group: 'Megalithic', civilization: null, star_level: 0, card_xp: 0,
+    typeBadgeColor: '#0066bb', periodBadgeColor: '#ff8800',
     coords: '40.7508\u00b0 N, 14.4869\u00b0 E',
-    desc: 'One of the oldest surviving Roman amphitheatres, located in the ancient city of Pompeii near Naples. Buried by the eruption of Mount Vesuvius in 79 AD.',
-    stats: { antiquity: 5, fortification: 8, cultural: 3, mystery: 1, legacy: 1 },
-    starLevel: 0, dupsFilled: 0,
-    longTitle: true,
+    description: 'One of the oldest surviving Roman amphitheatres, located in the ancient city of Pompeii near Naples. Buried by the eruption of Mount Vesuvius in 79 AD.',
+    dupsFilled: 0,
   },
 ]
-
-const STAT_META: { key: keyof MockupCard['stats']; label: string; icon: string; cssClass: string }[] = [
-  { key: 'antiquity', label: 'Antiquity', icon: '\u23f1', cssClass: 'antiquity' },
-  { key: 'fortification', label: 'Fortification', icon: '\u2694', cssClass: 'fortification' },
-  { key: 'cultural', label: 'Cultural', icon: '\u2605', cssClass: 'cultural' },
-  { key: 'mystery', label: 'Mystery', icon: '\u2754', cssClass: 'mystery' },
-  { key: 'legacy', label: 'Legacy', icon: '\u{1f3c6}', cssClass: 'legacy' },
-]
-
-// ---------------------------------------------------------------------------
-// Card Mockup component
-// ---------------------------------------------------------------------------
-
-function CardMockup({ card }: { card: MockupCard }) {
-  const bonusTotal = Object.values(card.bonuses ?? {}).reduce((sum: number, b) => sum + (b ?? 0), 0)
-  const power = card.stats.antiquity + card.stats.fortification + card.stats.cultural + card.stats.mystery + card.stats.legacy + bonusTotal
-  const dupsNeeded = FIBO_DUPES[card.starLevel] ?? 0
-
-  return (
-    <div className={`game-card ${card.rarity}`}>
-      <div className="game-card-ribbon">{card.rarityLabel}</div>
-      <div className="game-card-hero">
-        <img src={card.image} alt={card.name} loading="lazy" />
-        <div className="game-card-vignette" />
-        <div className="game-card-hero-content">
-          <div className={`game-card-title${card.longTitle ? ' long' : ''}`}>{card.name}</div>
-          <div className="game-card-badges">
-            <span className="game-card-badge" style={{ borderColor: card.typeBadge.color, color: card.typeBadge.color }}>
-              {card.typeBadge.label}
-            </span>
-            <span className="game-card-badge" style={{ borderColor: card.periodBadge.color, color: card.periodBadge.color }}>
-              {card.periodBadge.label}
-            </span>
-          </div>
-        </div>
-      </div>
-      <div className="game-card-body">
-        <div className="game-card-country">
-          <img src={`https://flagcdn.com/w40/${card.countryCode}.webp`} alt={card.countryCode.toUpperCase()} />
-          {card.country}
-          <span className="game-card-coords">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" />
-              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-            </svg>
-            {card.coords}
-          </span>
-        </div>
-        <div className="game-card-desc">{card.desc}</div>
-      </div>
-      <div className="game-card-stats">
-        {STAT_META.map(s => {
-          const base = card.stats[s.key]
-          const bonus = card.bonuses?.[s.key] ?? 0
-          const total = Math.min(10, base + bonus)
-          return (
-            <div key={s.key} className="game-stat-row">
-              <span className="game-stat-icon">{s.icon}</span>
-              <span className="game-stat-label">{s.label}</span>
-              <div className="game-stat-bar">
-                <div className={`game-stat-fill ${s.cssClass}`} style={{ width: `${base * 10}%` }} />
-                {bonus > 0 && <div className="game-stat-fill-bonus" style={{ width: `${bonus * 10}%` }} />}
-              </div>
-              <span className={`game-stat-val${bonus > 0 ? ' game-stat-val-boosted' : ''}`}>{total}</span>
-            </div>
-          )
-        })}
-      </div>
-      <div className="game-card-footer">
-        <div className="game-card-footer-stars">
-          {Array.from({ length: 5 }, (_, i) => (
-            <span key={i} className={i < card.starLevel ? 'star-filled' : 'star-empty'}>
-              {i < card.starLevel ? '\u2605' : '\u2606'}
-            </span>
-          ))}
-          {dupsNeeded > 0 && (
-            <div className="game-dup-icons">
-              {Array.from({ length: dupsNeeded }, (_, i) => (
-                <div key={i} className={`game-dup-icon${i < card.dupsFilled ? ' filled' : ''}`} />
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="game-card-power-badge">
-          <span className="game-card-power-icon">{'\u26a1'}</span>
-          <span className="game-card-power">{power}</span>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 // ---------------------------------------------------------------------------
 // Section components
@@ -419,7 +295,17 @@ function CardsSection() {
 
       <div className="game-cards-showcase">
         {MOCKUP_CARDS.map(card => (
-          <CardMockup key={card.name} card={card} />
+          <GameCard
+            key={card.site_id}
+            card={card}
+            variant="showcase"
+            bonuses={card.bonuses}
+            description={card.description}
+            coords={card.coords}
+            typeBadgeColor={card.typeBadgeColor}
+            periodBadgeColor={card.periodBadgeColor}
+            dupsFilled={card.dupsFilled}
+          />
         ))}
       </div>
 
@@ -508,8 +394,8 @@ interface EmpireMockup {
   statIcon: string
   statColor: string
   desc: string
-  color: string     // accent color (CSS)
-  colorGlow: string // glow color (CSS rgba)
+  color: string
+  colorGlow: string
 }
 
 const EMPIRE_MOCKUP_CARDS: EmpireMockup[] = [
@@ -587,30 +473,6 @@ const EMPIRE_MOCKUP_CARDS: EmpireMockup[] = [
   },
 ]
 
-function EmpireCardMockup({ empire }: { empire: EmpireMockup }) {
-  return (
-    <div className="empire-mockup" style={{ '--empire-color': empire.color, '--empire-glow': empire.colorGlow } as React.CSSProperties}>
-      <div className="empire-mockup-accent" />
-      <div className="empire-mockup-header">
-        <div className="empire-mockup-icon">{'\u{1f451}'}</div>
-        <div className="empire-mockup-name">{empire.name}</div>
-        <div className="empire-mockup-region">{empire.region}</div>
-      </div>
-      <div className="empire-mockup-period">{empire.period}</div>
-      <div className="empire-mockup-desc">{empire.desc}</div>
-      <div className="empire-mockup-stat">
-        <span className="empire-mockup-stat-icon" style={{ color: empire.statColor }}>{empire.statIcon}</span>
-        <span className="empire-mockup-stat-label">Thematic Stat</span>
-        <span className="empire-mockup-stat-value" style={{ color: empire.statColor }}>{empire.thematicStat}</span>
-      </div>
-      <div className="empire-mockup-footer">
-        <span className="empire-mockup-commander-label">Commander Bonus</span>
-        <span className="empire-mockup-commander-bonus">+1 {empire.thematicStat} to 3 homeland sites</span>
-      </div>
-    </div>
-  )
-}
-
 function EmpiresSection() {
   return (
     <section className="game-section" id="empires">
@@ -622,7 +484,7 @@ function EmpiresSection() {
 
       <div className="empire-cards-showcase">
         {EMPIRE_MOCKUP_CARDS.map(e => (
-          <EmpireCardMockup key={e.id} empire={e} />
+          <EmpireCard key={e.id} empire={e} />
         ))}
       </div>
 
@@ -856,10 +718,10 @@ function PacksSection() {
             <tr><th>Pack</th><th>Cost</th><th>At Least 1 Legendary</th><th>Approx.</th></tr>
           </thead>
           <tbody>
-            <tr><td style={{ color: '#9E9E9E' }}>Common</td><td>500</td><td className="game-legendary-cell">~1%</td><td>~1 in 96</td></tr>
-            <tr><td style={{ color: '#4CAF50' }}>Uncommon</td><td>1,500</td><td className="game-legendary-cell">~1.4%</td><td>~1 in 73</td></tr>
-            <tr><td style={{ color: '#2196F3' }}>Rare</td><td>5,000</td><td className="game-legendary-cell">~3.7%</td><td>~1 in 27</td></tr>
-            <tr><td style={{ color: '#9C27B0' }}>Epic</td><td>15,000</td><td className="game-legendary-cell">~10%</td><td>~1 in 10</td></tr>
+            <tr><td style={{ color: RARITY_TIERS_MAP[1].color }}>Common</td><td>500</td><td className="game-legendary-cell">~1%</td><td>~1 in 96</td></tr>
+            <tr><td style={{ color: RARITY_TIERS_MAP[2].color }}>Uncommon</td><td>1,500</td><td className="game-legendary-cell">~1.4%</td><td>~1 in 73</td></tr>
+            <tr><td style={{ color: RARITY_TIERS_MAP[3].color }}>Rare</td><td>5,000</td><td className="game-legendary-cell">~3.7%</td><td>~1 in 27</td></tr>
+            <tr><td style={{ color: RARITY_TIERS_MAP[4].color }}>Epic</td><td>15,000</td><td className="game-legendary-cell">~10%</td><td>~1 in 10</td></tr>
           </tbody>
         </table>
       </div>

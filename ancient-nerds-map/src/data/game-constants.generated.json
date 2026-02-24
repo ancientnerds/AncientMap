@@ -1,0 +1,168 @@
+{
+  "starLevels": {
+    "1": 2,
+    "2": 5,
+    "3": 10,
+    "4": 18,
+    "5": 31
+  },
+  "maxStarLevel": 5,
+  "packPrices": {
+    "common": {
+      "cost": 500,
+      "cards": 3
+    },
+    "uncommon": {
+      "cost": 1500,
+      "cards": 3
+    },
+    "rare": {
+      "cost": 5000,
+      "cards": 5
+    },
+    "epic": {
+      "cost": 15000,
+      "cards": 5
+    }
+  },
+  "tradeRoutes": [
+    {
+      "name": "Silk Road",
+      "empireA": "Han Dynasty",
+      "empireB": "Roman Empire",
+      "goods": "silk, spices, glassware"
+    },
+    {
+      "name": "Incense Route",
+      "empireA": "Aksumite Empire",
+      "empireB": "Roman Empire",
+      "goods": "frankincense, ivory, gold"
+    },
+    {
+      "name": "Nile Corridor",
+      "empireA": "Egyptian Kingdom",
+      "empireB": "Kingdom of Kush",
+      "goods": "gold, ebony, exotic animals"
+    },
+    {
+      "name": "Royal Road",
+      "empireA": "Achaemenid Persia",
+      "empireB": "Greek City-States",
+      "goods": "tribute, ideas, diplomats"
+    },
+    {
+      "name": "Amber Road",
+      "empireA": "Roman Empire",
+      "empireB": "Carolingian Empire",
+      "goods": "amber, furs, metalwork"
+    },
+    {
+      "name": "Lapis Lazuli Road",
+      "empireA": "Indus Valley (Harappan)",
+      "empireB": "Akkadian Empire",
+      "goods": "lapis lazuli, textiles, grain"
+    },
+    {
+      "name": "Obsidian Network",
+      "empireA": "Olmec Civilization",
+      "empireB": "Maya Civilization",
+      "goods": "obsidian, jade, cacao"
+    },
+    {
+      "name": "Tin Route",
+      "empireA": "Phoenicia",
+      "empireB": "Minoan Civilization",
+      "goods": "tin, copper, purple dye"
+    },
+    {
+      "name": "Spice Trade",
+      "empireA": "Roman Empire",
+      "empireB": "Maurya Empire",
+      "goods": "pepper, gems, cotton"
+    },
+    {
+      "name": "Gandhara Corridor",
+      "empireA": "Kushan Empire",
+      "empireB": "Han Dynasty",
+      "goods": "Buddhism, art, horses"
+    },
+    {
+      "name": "Red Sea Circuit",
+      "empireA": "Egyptian Kingdom",
+      "empireB": "Aksumite Empire",
+      "goods": "myrrh, gold, papyrus"
+    },
+    {
+      "name": "Punic Exchange",
+      "empireA": "Carthaginian Empire",
+      "empireB": "Greek City-States",
+      "goods": "grain, pottery, metals"
+    },
+    {
+      "name": "Fertile Crescent Link",
+      "empireA": "Babylonian Empire",
+      "empireB": "Hittite Empire",
+      "goods": "tin, textiles, diplomacy"
+    },
+    {
+      "name": "Anatolian Bridge",
+      "empireA": "Hittite Empire",
+      "empireB": "Mycenaean Greece",
+      "goods": "copper, iron, olive oil"
+    },
+    {
+      "name": "Persian Gulf Trade",
+      "empireA": "Elam",
+      "empireB": "Akkadian Empire",
+      "goods": "timber, stone, bitumen"
+    },
+    {
+      "name": "Hellenistic Corridor",
+      "empireA": "Seleucid Empire",
+      "empireB": "Macedonian Empire",
+      "goods": "Greek culture, coinage"
+    },
+    {
+      "name": "Sassanid Silk Road",
+      "empireA": "Sassanid Empire",
+      "empireB": "Byzantine Empire",
+      "goods": "silk, spices, religion"
+    },
+    {
+      "name": "Zhou Bronze Road",
+      "empireA": "Zhou Dynasty",
+      "empireB": "Shang Dynasty",
+      "goods": "bronze, oracle bones, ritual vessels"
+    },
+    {
+      "name": "Mesoamerican Tribute",
+      "empireA": "Aztec Empire",
+      "empireB": "Maya Civilization",
+      "goods": "cacao, feathers, jade"
+    },
+    {
+      "name": "Gupta Maritime Trade",
+      "empireA": "Gupta Empire",
+      "empireB": "Sassanid Empire",
+      "goods": "spices, textiles, philosophy"
+    },
+    {
+      "name": "Kushan Silk Route",
+      "empireA": "Kushan Empire",
+      "empireB": "Roman Empire",
+      "goods": "silk, horses, gemstones"
+    },
+    {
+      "name": "Nubian Trade",
+      "empireA": "Aksumite Empire",
+      "empireB": "Kingdom of Kush",
+      "goods": "salt, gold, slaves"
+    },
+    {
+      "name": "Aegean Bronze Trade",
+      "empireA": "Babylonian Empire",
+      "empireB": "Mycenaean Greece",
+      "goods": "tin, textiles, amber"
+    }
+  ]
+}
