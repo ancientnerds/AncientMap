@@ -14502,6 +14502,102 @@ body.news-feed-open .empire-borders-window {
   display: block;
 }
 
+/* ---- Inline YouTube video links & embeds ---- */
+
+.lyra-inline-video {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: #ff4444;
+  font: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  padding: 0 2px;
+  border-bottom: 1px dashed rgba(255, 68, 68, 0.4);
+  transition: color 0.15s, border-color 0.15s;
+}
+.lyra-inline-video:hover {
+  color: #ff6666;
+  border-bottom-color: #ff6666;
+}
+.lyra-inline-video svg {
+  flex-shrink: 0;
+}
+
+.lyra-inline-video-embed {
+  margin: 8px 0 4px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.3);
+  max-width: 480px;
+}
+
+.lyra-inline-video-thumb {
+  display: block;
+  position: relative;
+  cursor: pointer;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+}
+.lyra-inline-video-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.lyra-inline-video-play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  transition: background 0.2s;
+}
+.lyra-inline-video-thumb:hover .lyra-inline-video-play-overlay {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.lyra-inline-video-ts {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  background: #ff4444;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.02em;
+}
+
+.lyra-inline-video-iframe-wrap {
+  display: block;
+  position: relative;
+  aspect-ratio: 16 / 9;
+}
+.lyra-inline-video-iframe-wrap iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+.lyra-inline-video-external {
+  display: block;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+.lyra-inline-video-external:hover {
+  color: rgba(255, 255, 255, 0.7);
+}
+
 /* Message footer (confidence + tokens) */
 .lyra-chat-msg-footer {
   display: flex;
