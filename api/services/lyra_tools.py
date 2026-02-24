@@ -366,6 +366,11 @@ _RERANK_INSTRUCTIONS = {
         "substantive analysis, specific findings, and cited sources. Rank sections "
         "with detailed reporting higher than brief mentions or summaries."
     ),
+    "empires": (
+        "Prioritize empires/civilizations that best match the queried time period, "
+        "geographic region, or specific attributes (warfare, economy, governance). "
+        "Rank empires with directly relevant characteristics higher than tangential matches."
+    ),
 }
 
 
@@ -461,14 +466,14 @@ def vector_search(
     period: str | None = None,
     site_type: str | None = None,
 ) -> str:
-    """Deep semantic search across sites, news, or transcripts using hybrid dense+BM25 vectors.
+    """Deep semantic search across sites, news, transcripts, articles, or empires using hybrid dense+BM25 vectors.
 
     Use this for follow-up deep dives beyond the auto-retrieved context.
     Supports metadata filters for targeted searches.
 
     Args:
         query: Natural language query.
-        collection: Which collection to search: 'sites', 'news', or 'transcripts'.
+        collection: Which collection to search: 'sites', 'news', 'transcripts', 'articles', or 'empires'.
         limit: Max results (default 5).
         country: Filter by country name (e.g. 'Turkey', 'Egypt').
         period: Filter by period name (e.g. 'Bronze Age', 'Neolithic').
@@ -693,6 +698,14 @@ def _format_payload_for_rerank(payload: dict) -> str:
         parts.append(payload["text_preview"][:300])
     if payload.get("channel"):
         parts.append(f"Channel: {payload['channel']}")
+    if payload.get("polity_id"):
+        parts.append(f"Polity: {payload['polity_id']}")
+    if payload.get("region"):
+        parts.append(f"Region: {payload['region']}")
+    if payload.get("capital"):
+        parts.append(f"Capital: {payload['capital']}")
+    if payload.get("start_year") is not None:
+        parts.append(f"Period: {payload.get('start_year')} to {payload.get('end_year')}")
     return " | ".join(parts)
 
 
@@ -792,8 +805,60 @@ def search_articles(
     return "\n".join(lines)
 
 
+@tool
+def search_empires(
+    query: str,
+    limit: int = 5,
+) -> str:
+    """Search ancient empires and civilizations using Seshat historical data.
+
+    Use this to find empires by attributes like warfare technology, economy,
+    geographic region, time period, or any other characteristic. Returns matched
+    empires with key facts and Seshat polity IDs for deeper lookup with get_empire_data.
+
+    Args:
+        query: What to search for (e.g. 'largest army', 'iron age mesopotamia', 'naval power').
+        limit: Max results (default 5, max 10).
+    """
+    query = (query or "")[:500]
+    limit = min(limit, 10)
+
+    items, _vt = _hybrid_search(query, collection="empires", limit=limit)
+    if not items:
+        return "No empires found matching the search."
+
+    lines = [f"Found {len(items)} empire{'s' if len(items) != 1 else ''}:\n"]
+    for i, item in enumerate(items, 1):
+        name = item.get("name", "Unknown")
+        polity_id = item.get("polity_id", "")
+        start = item.get("start_year", "?")
+        end = item.get("end_year", "?")
+        capital = item.get("capital", "unknown")
+        territory = item.get("territory")
+        population = item.get("population")
+        region = item.get("region", "")
+        languages = item.get("languages", [])
+
+        lines.append(f"{i}. **{name}** ({start} to {end})")
+        lines.append(f"   - Polity ID: `{polity_id}`")
+        lines.append(f"   - Capital: {capital} | Region: {region}")
+        if territory:
+            lines.append(f"   - Territory: {territory:,} sq km")
+        if population:
+            lines.append(f"   - Population: {population:,}")
+        if languages:
+            lines.append(f"   - Languages: {', '.join(languages)}")
+        wiki = item.get("wikipedia_url")
+        if wiki:
+            lines.append(f"   - [Wikipedia]({wiki})")
+        lines.append(f"   Use `get_empire_data('{polity_id}')` for full warfare, economy, and crisis data.")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------------------
 # Exported tools list
 # ---------------------------------------------------------------------------
 
-TOOLS = [search_sites, get_site_details, search_news, get_empire_data, vector_search, search_radar, list_channels, get_site_images, search_transcripts, search_articles]
+TOOLS = [search_sites, get_site_details, search_news, get_empire_data, vector_search, search_radar, list_channels, get_site_images, search_transcripts, search_articles, search_empires]

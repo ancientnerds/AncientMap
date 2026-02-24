@@ -2,11 +2,12 @@
 """
 Build Lyra Vector Index — Qdrant collections for hybrid semantic search.
 
-Creates four collections with named vectors:
+Creates five collections with named vectors:
   - sites: dense (voyage-4-large, 1024-dim) + bm25 (sparse, IDF-weighted)
   - news: dense (voyage-4-large, 1024-dim) + bm25 (sparse, IDF-weighted)
   - transcripts: dense (voyage-4-large, 1024-dim) + bm25 (sparse, IDF-weighted)
   - articles: dense (voyage-4-large, 1024-dim) + bm25 (sparse, IDF-weighted)
+  - empires: dense (voyage-4-large, 1024-dim) + bm25 (sparse, IDF-weighted)
 
 Queries use voyage-4 for dense (shared embedding space, cheaper) + Qdrant/bm25 for sparse.
 RRF fusion merges results, then Voyage rerank-2.5-lite scores the top-K.
@@ -19,15 +20,18 @@ Usage:
   python scripts/build_lyra_index.py --collection news
   python scripts/build_lyra_index.py --collection transcripts
   python scripts/build_lyra_index.py --collection articles
+  python scripts/build_lyra_index.py --collection empires
   python scripts/build_lyra_index.py --rebuild  # wipe and rebuild
 """
 
 import argparse
+import json
 import logging
 import os
 import re
 import sys
 import uuid
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -662,9 +666,204 @@ def index_articles(client: QdrantClient, embeddings, sparse_model, rebuild: bool
     logger.info(f"Done indexing {total_indexed} article chunks")
 
 
+def _build_empire_text(polity_id: str, p: dict) -> str:
+    """Build rich embedding text from all polity fields for semantic search."""
+    parts = [p.get("name", polity_id)]
+
+    alt_names = p.get("alternateNames", [])
+    if alt_names:
+        parts.append(f"Also known as: {', '.join(alt_names)}")
+
+    start = p.get("startYear", "?")
+    end = p.get("endYear", "?")
+    parts.append(f"Period: {start} to {end}")
+
+    if p.get("capital"):
+        parts.append(f"Capital: {p['capital']}")
+    if p.get("territory"):
+        parts.append(f"Territory: {p['territory']} sq km")
+    if p.get("population"):
+        parts.append(f"Population: {p['population']}")
+    if p.get("languages"):
+        parts.append(f"Languages: {', '.join(p['languages'])}")
+    if p.get("religions"):
+        parts.append(f"Religions: {', '.join(p['religions'])}")
+    if p.get("centralization"):
+        parts.append(f"Centralization: {p['centralization']}")
+
+    # Warfare
+    warfare = p.get("warfare", {})
+    if warfare:
+        war_parts = []
+        for cat_key in ("fortifications", "projectileWeapons", "handheldWeapons", "armor", "naval", "warfareAnimals"):
+            cat = warfare.get(cat_key, {})
+            if isinstance(cat, dict):
+                items = [k for k, v in cat.items() if v is True]
+                if items:
+                    label = re.sub(r"([A-Z])", r" \1", cat_key).strip().title()
+                    war_parts.append(f"{label}: {', '.join(items)}")
+        if warfare.get("metals"):
+            war_parts.append(f"Metals: {', '.join(warfare['metals'])}")
+        if war_parts:
+            parts.append("Warfare: " + "; ".join(war_parts))
+
+    # Economy
+    economy = p.get("economy", {})
+    if economy:
+        econ_parts = []
+        if economy.get("scripts"):
+            econ_parts.append(f"Scripts: {', '.join(economy['scripts'])}")
+        for feat in ("writingSystem", "coinage", "storedWealth", "longDistanceTrade", "roads",
+                      "irrigationSystems", "markets", "foodStorageSites", "bridges", "canals"):
+            if economy.get(feat) is True:
+                label = re.sub(r"([A-Z])", r" \1", feat).strip().lower()
+                econ_parts.append(label)
+        if economy.get("tradeRoutes"):
+            econ_parts.append(f"Trade routes: {', '.join(economy['tradeRoutes'])}")
+        if econ_parts:
+            parts.append("Economy: " + "; ".join(econ_parts))
+
+    # Crisis events
+    crisis = p.get("crisis", {})
+    events = crisis.get("crisisEvents", [])
+    if events:
+        ev_strs = []
+        for ev in events[:5]:
+            ev_str = ev.get("name", "unknown")
+            if ev.get("type"):
+                ev_str += f" ({ev['type']})"
+            if ev.get("description"):
+                ev_str += f": {ev['description'][:100]}"
+            ev_strs.append(ev_str)
+        parts.append("Crisis events: " + "; ".join(ev_strs))
+
+    # Governance
+    gov_parts = []
+    if p.get("administrativeLevels"):
+        gov_parts.append(f"{p['administrativeLevels']} administrative levels")
+    if p.get("militaryLevels"):
+        gov_parts.append(f"{p['militaryLevels']} military levels")
+    if p.get("religiousLevels"):
+        gov_parts.append(f"{p['religiousLevels']} religious levels")
+    if gov_parts:
+        parts.append("Governance: " + ", ".join(gov_parts))
+
+    return " | ".join(parts)
+
+
+def index_empires(client: QdrantClient, embeddings, sparse_model, *, rebuild: bool = False):
+    """Index Seshat polities into the 'empires' collection."""
+    collection = "empires"
+
+    # Load polities JSON
+    candidates = [
+        Path("ancient-nerds-map/src/data/seshat/polities.json"),
+        Path("/app/ancient-nerds-map/src/data/seshat/polities.json"),
+    ]
+    polities_data = None
+    for path in candidates:
+        if path.exists():
+            polities_data = json.loads(path.read_text(encoding="utf-8"))
+            break
+
+    if not polities_data:
+        logger.warning("polities.json not found — skipping empires indexing")
+        return
+
+    polities = polities_data.get("polities", {})
+    logger.info(f"Found {len(polities)} polities in Seshat data")
+
+    if rebuild:
+        try:
+            client.delete_collection(collection)
+            logger.info(f"Deleted collection '{collection}' for rebuild")
+        except Exception:
+            pass
+
+    ensure_collection(client, collection)
+    create_payload_indexes(client, collection, ["polity_id", "region"])
+    existing_ids = get_existing_ids(client, collection)
+
+    # Build points
+    new_points = []
+    for polity_id, p in polities.items():
+        point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"empire-{polity_id}"))
+        if point_id in existing_ids:
+            continue
+        embed_text = _build_empire_text(polity_id, p)
+        new_points.append({
+            "point_id": point_id,
+            "polity_id": polity_id,
+            "embed_text": embed_text,
+            "polity": p,
+        })
+
+    logger.info(f"New empires to index: {len(new_points)}")
+    if not new_points:
+        logger.info("Nothing to index for empires")
+        return
+
+    # Embed and upsert (46 polities fit in one batch)
+    texts = [pt["embed_text"] for pt in new_points]
+    dense_vectors = embeddings.embed_documents(texts)
+    sparse_vectors = list(sparse_model.embed(texts))
+
+    points = []
+    for pt, dense_vec, sparse_vec in zip(new_points, dense_vectors, sparse_vectors):
+        p = pt["polity"]
+        # Derive a region from the polity ID prefix (eg_ → Egypt, it_ → Italy, etc.)
+        region = polity_id_to_region(pt["polity_id"])
+        points.append(
+            PointStruct(
+                id=pt["point_id"],
+                vector={
+                    "dense": dense_vec,
+                    "bm25": SparseVector(
+                        indices=sparse_vec.indices.tolist(),
+                        values=sparse_vec.values.tolist(),
+                    ),
+                },
+                payload={
+                    "polity_id": pt["polity_id"],
+                    "name": p.get("name", pt["polity_id"]),
+                    "alternate_names": p.get("alternateNames", []),
+                    "start_year": p.get("startYear"),
+                    "end_year": p.get("endYear"),
+                    "peak_year": p.get("peakYear"),
+                    "capital": p.get("capital"),
+                    "territory": p.get("territory"),
+                    "population": p.get("population"),
+                    "languages": p.get("languages", []),
+                    "religions": p.get("religions", []),
+                    "centralization": p.get("centralization"),
+                    "region": region,
+                    "seshat_url": p.get("seshatUrl"),
+                    "wikipedia_url": p.get("wikipediaUrl"),
+                    "text_preview": pt["embed_text"][:500],
+                },
+            )
+        )
+
+    client.upsert(collection_name=collection, points=points)
+    logger.info(f"Indexed {len(points)} empires")
+
+
+def polity_id_to_region(polity_id: str) -> str:
+    """Map a polity ID prefix to a readable region name."""
+    prefix = polity_id.split("_")[0] if "_" in polity_id else polity_id
+    region_map = {
+        "eg": "Egypt", "iq": "Mesopotamia", "it": "Italy/Rome", "gr": "Greece",
+        "ir": "Persia/Iran", "cn": "China", "in": "India", "tr": "Anatolia/Turkey",
+        "mx": "Mesoamerica", "pe": "South America", "gb": "Britain",
+        "fr": "France/Gaul", "et": "East Africa", "sd": "Sudan/Nubia",
+        "kh": "Southeast Asia", "mn": "Mongolia", "jp": "Japan", "kr": "Korea",
+    }
+    return region_map.get(prefix, "Other")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Build Lyra vector index")
-    parser.add_argument("--collection", choices=["sites", "news", "transcripts", "articles"], help="Only index this collection")
+    parser.add_argument("--collection", choices=["sites", "news", "transcripts", "articles", "empires"], help="Only index this collection")
     parser.add_argument("--rebuild", action="store_true", help="Wipe and rebuild from scratch")
     args = parser.parse_args()
 
@@ -685,6 +884,9 @@ def main():
 
     if args.collection is None or args.collection == "articles":
         index_articles(client, embeddings, sparse_model, rebuild=args.rebuild)
+
+    if args.collection is None or args.collection == "empires":
+        index_empires(client, embeddings, sparse_model, rebuild=args.rebuild)
 
     logger.info("All done!")
 

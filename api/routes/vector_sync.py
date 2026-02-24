@@ -28,7 +28,7 @@ _reindex_state: dict = {
 
 
 class ReindexRequest(BaseModel):
-    collection: str | None = None  # "sites" | "news" | None (both)
+    collection: str | None = None  # "sites" | "news" | "transcripts" | "articles" | "empires" | None (all)
     rebuild: bool = False
 
 
@@ -57,6 +57,7 @@ async def vector_sync_status():
     qdrant_news = 0
     qdrant_transcripts = 0
     qdrant_articles = 0
+    qdrant_empires = 0
     try:
         from api.services.lyra_embeddings import get_qdrant_client
 
@@ -81,6 +82,11 @@ async def vector_sync_status():
             qdrant_articles = info.points_count
         except Exception:
             pass
+        try:
+            info = client.get_collection("empires")
+            qdrant_empires = info.points_count
+        except Exception:
+            pass
     except Exception:
         qdrant_available = False
 
@@ -94,6 +100,15 @@ async def vector_sync_status():
         for region_empires in meta.get("empires", {}).values():
             for emp in region_empires:
                 boundary_count += emp.get("yearCount", 0)
+    except Exception:
+        pass
+
+    # Seshat polity count (source for empires Qdrant collection)
+    seshat_polity_count = 0
+    try:
+        polities_path = Path(__file__).resolve().parents[2] / "ancient-nerds-map" / "src" / "data" / "seshat" / "polities.json"
+        polities_data = json.loads(polities_path.read_text())
+        seshat_polity_count = len(polities_data.get("polities", {}))
     except Exception:
         pass
 
@@ -119,6 +134,11 @@ async def vector_sync_status():
                 "pg_count": pg_articles,
                 "qdrant_count": qdrant_articles,
                 "delta": pg_articles - qdrant_articles,
+            },
+            "empires": {
+                "pg_count": seshat_polity_count,
+                "qdrant_count": qdrant_empires,
+                "delta": seshat_polity_count - qdrant_empires,
             },
         },
         "empires": {
