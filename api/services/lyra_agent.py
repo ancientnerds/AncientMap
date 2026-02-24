@@ -324,8 +324,9 @@ async def _extract_news_filters(query: str) -> dict:
             SystemMessage(content=prompt),
             HumanMessage(content=query),
         ])
-        # model_dump excludes None fields, giving us only the filters that apply
-        return {k: v for k, v in result.model_dump().items() if v is not None}
+        # Handle both Pydantic model and raw dict (MiniMax proxy may return dict)
+        raw = result if isinstance(result, dict) else result.model_dump()
+        return {k: v for k, v in raw.items() if v is not None}
     except Exception:
         logger.warning(f"Failed to extract news filters for query: {query}")
         return {}
