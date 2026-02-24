@@ -307,6 +307,7 @@ def search_news(
             "date": r.created_at,
         }
         if r.timestamp_seconds:
+            item["timestamp_seconds"] = r.timestamp_seconds
             item["youtube_link"] = f"https://youtu.be/{r.video_id}?t={r.timestamp_seconds}"
         items.append(item)
 

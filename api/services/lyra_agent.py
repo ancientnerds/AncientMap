@@ -498,6 +498,7 @@ async def run_agent_stream(
                 "significance": r.get("significance"),
                 "date": str(r["date"]) if r.get("date") else None,
                 "site_name": r.get("site_mentioned"),
+                "timestamp_seconds": r.get("timestamp_seconds"),
                 "source": "qdrant",
             })
 
@@ -688,6 +689,7 @@ async def run_agent_stream(
                                     "significance": item.get("significance"),
                                     "date": item.get("date"),
                                     "site_name": item.get("site_mentioned"),
+                                    "timestamp_seconds": item.get("timestamp_seconds"),
                                 }
                                 key = f"{news_entry['video_id']}::{news_entry['headline']}"
                                 if key not in existing_keys:
