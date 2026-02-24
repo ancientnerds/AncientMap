@@ -27,7 +27,13 @@ from pipeline.database import (
     UserContribution,
     get_session,
 )
-from pipeline.lyra.config import LyraSettings, _get_settings, call_api, get_anthropic_client, parse_prefilled_json
+from pipeline.lyra.config import (
+    LyraSettings,
+    _get_settings,
+    call_api,
+    get_anthropic_client,
+    parse_prefilled_json,
+)
 from pipeline.lyra.site_matcher import fill_contrib_from_site
 from pipeline.lyra.site_researcher import research_site
 from pipeline.normalizers.dates import passes_date_cutoff
