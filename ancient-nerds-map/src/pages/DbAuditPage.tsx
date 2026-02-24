@@ -973,9 +973,7 @@ export default function DbAuditPage() {
                   {(['sites', 'news', 'transcripts', 'articles', 'empires'] as const).map(col => {
                     const c = qdrantStatus.collections[col]
                     const isChunked = !!c.note
-                    const effectiveDelta = isChunked
-                      ? (c.qdrant_count === 0 && c.pg_count > 0 ? c.pg_count : 0)
-                      : c.delta
+                    const chunkedDelta = c.qdrant_count === 0 && c.pg_count > 0 ? c.pg_count : 0
                     return (
                       <div key={col} className="db-qdrant-row">
                         <span className="db-qdrant-col-name">{col}</span>
@@ -986,8 +984,8 @@ export default function DbAuditPage() {
                             </span>
                             {c.qdrant_count > 0 ? (
                               <span className="db-qdrant-note" title={c.note!}>{c.qdrant_count.toLocaleString()} chunks</span>
-                            ) : effectiveDelta > 0 ? (
-                              <span className="db-qdrant-delta stale">-{effectiveDelta.toLocaleString()}</span>
+                            ) : chunkedDelta > 0 ? (
+                              <span className="db-qdrant-delta stale">-{chunkedDelta.toLocaleString()}</span>
                             ) : null}
                           </>
                         ) : (
@@ -997,9 +995,9 @@ export default function DbAuditPage() {
                               <span className="db-qdrant-sep">/</span>
                               <span title="PostgreSQL">{c.pg_count.toLocaleString()}</span>
                             </span>
-                            {effectiveDelta != null && effectiveDelta !== 0 && (
-                              <span className={`db-qdrant-delta ${effectiveDelta > 0 ? 'stale' : 'over'}`}>
-                                {effectiveDelta > 0 ? `-${effectiveDelta.toLocaleString()}` : `+${Math.abs(effectiveDelta).toLocaleString()}`}
+                            {c.delta != null && c.delta !== 0 && (
+                              <span className={`db-qdrant-delta ${c.delta > 0 ? 'stale' : 'over'}`}>
+                                {c.delta > 0 ? `-${c.delta.toLocaleString()}` : `+${Math.abs(c.delta).toLocaleString()}`}
                               </span>
                             )}
                           </>
