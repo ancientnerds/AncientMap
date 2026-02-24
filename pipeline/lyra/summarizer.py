@@ -333,10 +333,17 @@ def summarize_video(
                 if segment and len(segment) > 20:
                     transcript_segment = segment[:500]
 
+            # Compose summary from headline + first few facts
+            summary_parts = [f"{headline}."]
+            for fact in facts[:3]:
+                if isinstance(fact, str) and fact.strip():
+                    summary_parts.append(fact.strip())
+            composed_summary = " ".join(summary_parts)
+
             item = NewsItem(
                 video_id=video.id,
                 headline=headline,
-                summary="",
+                summary=composed_summary,
                 facts=facts,
                 timestamp_range=ts_range,
                 timestamp_seconds=ts_seconds,

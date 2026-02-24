@@ -42,12 +42,14 @@ logger = logging.getLogger(__name__)
 # Auto-retrieval
 # ---------------------------------------------------------------------------
 
-def _auto_retrieve(query: str, context_type: str, empire_name: str | None = None) -> tuple[str, list[dict], list[dict], float | None, int]:
+def _auto_retrieve(query: str, context_type: str) -> tuple[str, list[dict], list[dict], float | None, int]:
     """Run automatic hybrid retrieval BEFORE the LLM sees the message.
 
     Searches BOTH Qdrant collections on every query:
     - Sites collection (limit=5) for archaeological site context + map highlighting
     - News collection (limit=3) for semantically relevant news items
+
+    Not called for empire context — empire questions use get_empire_data tool instead.
 
     Returns:
         Tuple of (formatted context string, list of site result dicts for map highlighting,
@@ -60,12 +62,9 @@ def _auto_retrieve(query: str, context_type: str, empire_name: str | None = None
     total_voyage_tokens = 0
     context_parts: list[str] = []
 
-    # Prepend empire name to search query so Qdrant returns relevant results
-    search_query = f"{empire_name} — {query}" if empire_name else query
-
-    # --- Sites collection (skip for empire context — Qdrant has sites, not empire data) ---
-    if context_type not in ("news", "empire"):
-        results, vt = _hybrid_search(search_query, collection="sites", limit=5)
+    # --- Sites collection (skip for news context) ---
+    if context_type != "news":
+        results, vt = _hybrid_search(query, collection="sites", limit=5)
         total_voyage_tokens += vt
         site_results = results
         for r in results:
@@ -77,7 +76,7 @@ def _auto_retrieve(query: str, context_type: str, empire_name: str | None = None
                 name = r.get("name", "?")
                 period = r.get("period_name", "")
                 country = r.get("country", "")
-                desc = r.get("description", "")[:150]
+                desc = r.get("description", "")[:300]
                 lat = r.get("lat", "")
                 lon = r.get("lon", "")
                 line = f"- **{name}** ({period}, {country}) [{lat}, {lon}]"
@@ -88,7 +87,7 @@ def _auto_retrieve(query: str, context_type: str, empire_name: str | None = None
 
     # --- News collection (always — semantic news retrieval) ---
     news_limit = 5 if context_type == "news" else 3
-    news_raw, vt = _hybrid_search(search_query, collection="news", limit=news_limit)
+    news_raw, vt = _hybrid_search(query, collection="news", limit=news_limit)
     total_voyage_tokens += vt
     if news_raw:
         news_results = news_raw
@@ -459,21 +458,13 @@ async def run_agent_stream(
     total_voyage_tokens = 0
     logger.info(f"Lyra chat: context_type={context_type}, context_id={context_id}, context_year={context_year}")
 
-    if message and len(message.strip()) > 2:
-        # Look up empire name for augmenting search queries
-        empire_name = None
-        if context_type == "empire" and context_id:
-            from api.services.lyra_tools import _load_seshat_data
-            sd = _load_seshat_data()
-            polity = sd.get("polities", {}).get(context_id)
-            if polity:
-                empire_name = polity.get("name")
-
+    if message and len(message.strip()) > 2 and context_type != "empire":
         # Auto-retrieve sites + news from Qdrant (isolated so Qdrant failures don't kill the response)
+        # Skipped for empire context — empire questions use get_empire_data tool (Seshat data), not Qdrant/news
         auto_site_results: list[dict] = []
         auto_news_results: list[dict] = []
         try:
-            retrieved_context, auto_site_results, auto_news_results, avg_relevance, vt = _auto_retrieve(message, context_type, empire_name=empire_name)
+            retrieved_context, auto_site_results, auto_news_results, avg_relevance, vt = _auto_retrieve(message, context_type)
             total_voyage_tokens += vt
         except Exception as e:
             logger.error(f"Auto-retrieve failed (Qdrant/Voyage issue, falling back to filter-based news): {e}")

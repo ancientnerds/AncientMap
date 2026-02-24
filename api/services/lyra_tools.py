@@ -142,7 +142,7 @@ def search_sites(
         if r.thumbnail_url:
             site["thumbnail_url"] = r.thumbnail_url
         if r.description:
-            site["description"] = r.description[:200]
+            site["description"] = r.description[:400]
         sites.append(site)
 
     return json.dumps(sites, ensure_ascii=False)
@@ -356,6 +356,11 @@ _RERANK_INSTRUCTIONS = {
         "directly address the query topic. Rank items with specific site names, "
         "dates, and factual claims higher than general commentary."
     ),
+    "transcripts": (
+        "Prioritize transcript passages that contain specific discussions, quotes, "
+        "or detailed mentions of the queried topic. Rank passages with concrete "
+        "information, expert analysis, and named sites higher than passing mentions."
+    ),
 }
 
 
@@ -366,6 +371,7 @@ def _hybrid_search(
     country: str | None = None,
     period: str | None = None,
     site_type: str | None = None,
+    channel: str | None = None,
 ) -> tuple[list[dict], int]:
     """Run hybrid dense+BM25 search with RRF fusion and Voyage reranking.
 
@@ -403,6 +409,8 @@ def _hybrid_search(
         conditions.append(models.FieldCondition(key="period_name", match=models.MatchText(text=period)))
     if site_type:
         conditions.append(models.FieldCondition(key="site_type", match=models.MatchText(text=site_type)))
+    if channel:
+        conditions.append(models.FieldCondition(key="channel", match=models.MatchText(text=channel)))
     query_filter = models.Filter(must=conditions) if conditions else None  # type: ignore[arg-type]
 
     # Step 3: Hybrid query \u2014 prefetch dense + BM25, fuse with RRF
@@ -448,14 +456,14 @@ def vector_search(
     period: str | None = None,
     site_type: str | None = None,
 ) -> str:
-    """Deep semantic search across sites or news using hybrid dense+BM25 vectors.
+    """Deep semantic search across sites, news, or transcripts using hybrid dense+BM25 vectors.
 
     Use this for follow-up deep dives beyond the auto-retrieved context.
     Supports metadata filters for targeted searches.
 
     Args:
         query: Natural language query.
-        collection: Which collection to search: 'sites' or 'news'.
+        collection: Which collection to search: 'sites', 'news', or 'transcripts'.
         limit: Max results (default 5).
         country: Filter by country name (e.g. 'Turkey', 'Egypt').
         period: Filter by period name (e.g. 'Bronze Age', 'Neolithic').
@@ -662,6 +670,8 @@ def _format_payload_for_rerank(payload: dict) -> str:
         parts.append(payload["name"])
     if payload.get("headline"):
         parts.append(payload["headline"])
+    if payload.get("video_title"):
+        parts.append(payload["video_title"])
     if payload.get("site_type"):
         parts.append(f"Type: {payload['site_type']}")
     if payload.get("period_name"):
@@ -672,13 +682,67 @@ def _format_payload_for_rerank(payload: dict) -> str:
         parts.append(payload["description"][:300])
     if payload.get("summary"):
         parts.append(payload["summary"][:300])
+    if payload.get("text_preview"):
+        parts.append(payload["text_preview"][:300])
     if payload.get("channel"):
         parts.append(f"Channel: {payload['channel']}")
     return " | ".join(parts)
+
+
+@tool
+def search_transcripts(
+    query: str,
+    channel: str | None = None,
+    limit: int = 5,
+) -> str:
+    """Search video transcript passages for specific discussions, quotes, or mentions.
+
+    Returns excerpts with YouTube deep-link timestamps. Use this when users ask
+    what creators have said about a topic, or to find specific discussions in videos.
+
+    Args:
+        query: What to search for in transcripts.
+        channel: Filter by channel name (optional).
+        limit: Max results (default 5, max 10).
+    """
+    query = (query or "")[:500]
+    limit = min(limit, 10)
+
+    # Use hybrid search on transcripts collection
+    items, _vt = _hybrid_search(query, collection="transcripts", limit=limit, channel=channel)
+    if not items:
+        return "No transcript passages found matching the search."
+
+    # Format as markdown with YouTube deep links
+    lines = [f"Found {len(items)} transcript passage{'s' if len(items) != 1 else ''}:\n"]
+    for i, item in enumerate(items, 1):
+        video_id = item.get("video_id", "")
+        video_title = item.get("video_title", "Unknown video")
+        ch = item.get("channel", "")
+        start = item.get("start_seconds", 0)
+        preview = item.get("text_preview", "")
+
+        # Format timestamp as MM:SS
+        mins, secs = divmod(start, 60)
+        ts_str = f"{mins}:{secs:02d}"
+
+        yt_link = f"https://youtu.be/{video_id}?t={start}" if video_id else ""
+        thumb = f"https://img.youtube.com/vi/{video_id}/mqdefault.jpg" if video_id else ""
+
+        lines.append(f"{i}. **{ch}** — \"{video_title}\" (at {ts_str})")
+        if thumb:
+            lines.append(f"   ![thumbnail]({thumb})")
+        if preview:
+            lines.append(f"   > {preview}")
+        if yt_link:
+            lines.append(f"   Watch: {yt_link}")
+        lines.append("")
+
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
 # Exported tools list
 # ---------------------------------------------------------------------------
 
-TOOLS = [search_sites, get_site_details, search_news, get_empire_data, vector_search, search_radar, list_channels, get_site_images]
+TOOLS = [search_sites, get_site_details, search_news, get_empire_data, vector_search, search_radar, list_channels, get_site_images, search_transcripts]

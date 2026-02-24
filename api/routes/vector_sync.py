@@ -1,9 +1,11 @@
 """Vector DB (Qdrant) sync status and reindex endpoints."""
 
 import asyncio
+import json
 import sys
 import time
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -42,11 +44,15 @@ async def vector_sync_status():
         pg_news = session.execute(
             text("SELECT COUNT(*) FROM news_items")
         ).scalar()
+        pg_transcripts = session.execute(
+            text("SELECT COUNT(*) FROM news_videos WHERE transcript_text IS NOT NULL AND status IN ('transcribed', 'summarized')")
+        ).scalar()
 
     # Qdrant counts
     qdrant_available = True
     qdrant_sites = 0
     qdrant_news = 0
+    qdrant_transcripts = 0
     try:
         from api.services.lyra_embeddings import get_qdrant_client
 
@@ -61,8 +67,26 @@ async def vector_sync_status():
             qdrant_news = info.points_count
         except Exception:
             pass
+        try:
+            info = client.get_collection("transcripts")
+            qdrant_transcripts = info.points_count
+        except Exception:
+            pass
     except Exception:
         qdrant_available = False
+
+    # Empire boundary counts (static GeoJSON files, not in Qdrant)
+    empire_count = 0
+    boundary_count = 0
+    try:
+        meta_path = Path(__file__).resolve().parents[2] / "ancient-nerds-map" / "public" / "data" / "historical" / "metadata.json"
+        meta = json.loads(meta_path.read_text())
+        empire_count = meta.get("totalEmpires", 0)
+        for region_empires in meta.get("empires", {}).values():
+            for emp in region_empires:
+                boundary_count += emp.get("yearCount", 0)
+    except Exception:
+        pass
 
     return {
         "qdrant_available": qdrant_available,
@@ -77,6 +101,15 @@ async def vector_sync_status():
                 "qdrant_count": qdrant_news,
                 "delta": pg_news - qdrant_news,
             },
+            "transcripts": {
+                "pg_count": pg_transcripts,
+                "qdrant_count": qdrant_transcripts,
+                "delta": pg_transcripts - qdrant_transcripts,
+            },
+        },
+        "empires": {
+            "empire_count": empire_count,
+            "boundary_count": boundary_count,
         },
         "reindex": {
             "running": _reindex_state["running"],
