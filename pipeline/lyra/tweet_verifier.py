@@ -8,7 +8,13 @@ from pathlib import Path
 import anthropic
 
 from pipeline.database import NewsItem, NewsVideo, get_session
-from pipeline.lyra.config import LyraSettings, _get_settings, call_api, get_anthropic_client, parse_prefilled_json
+from pipeline.lyra.config import (
+    LyraSettings,
+    _get_settings,
+    call_api,
+    get_anthropic_client,
+    parse_prefilled_json,
+)
 from pipeline.lyra.transcript_fetcher import extract_transcript_segment, parse_timestamp_to_seconds
 
 logger = logging.getLogger(__name__)
