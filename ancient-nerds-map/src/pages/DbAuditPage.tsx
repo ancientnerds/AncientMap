@@ -257,7 +257,7 @@ export default function DbAuditPage() {
   const [uploading, setUploading] = useState(false)
 
   // Qdrant sync
-  interface QdrantCollection { pg_count: number; qdrant_count: number; delta: number }
+  interface QdrantCollection { pg_count: number; qdrant_count: number; delta: number | null; note?: string }
   interface QdrantReindex { running: boolean; started_at: string | null; collection: string | null; last_completed_at: string | null; last_duration_seconds: number | null; last_result: string | null }
   interface QdrantEmpires { empire_count: number; boundary_count: number }
   interface QdrantStatus { qdrant_available: boolean; collections: { sites: QdrantCollection; news: QdrantCollection; transcripts: QdrantCollection; articles: QdrantCollection; empires: QdrantCollection }; empires: QdrantEmpires; reindex: QdrantReindex }
@@ -945,7 +945,7 @@ export default function DbAuditPage() {
                 className={`db-qdrant-pill ${
                   qdrantStatus.reindex.running ? 'db-qdrant-indexing' :
                   !qdrantStatus.qdrant_available ? 'db-qdrant-offline' :
-                  (qdrantStatus.collections.sites.delta !== 0 || qdrantStatus.collections.news.delta !== 0 || qdrantStatus.collections.transcripts.delta !== 0 || qdrantStatus.collections.articles.delta !== 0 || qdrantStatus.collections.empires.delta !== 0) ? 'db-qdrant-stale' :
+                  (qdrantStatus.collections.sites.delta !== 0 || qdrantStatus.collections.news.delta !== 0 || (qdrantStatus.collections.empires.delta != null && qdrantStatus.collections.empires.delta !== 0)) ? 'db-qdrant-stale' :
                   'db-qdrant-ok'
                 }`}
                 onClick={() => setQdrantOpen(o => !o)}
@@ -956,8 +956,11 @@ export default function DbAuditPage() {
                 <span>Qdrant: {
                   qdrantStatus.reindex.running ? 'indexing...' :
                   !qdrantStatus.qdrant_available ? 'offline' :
-                  (qdrantStatus.collections.sites.delta === 0 && qdrantStatus.collections.news.delta === 0 && qdrantStatus.collections.transcripts.delta === 0 && qdrantStatus.collections.articles.delta === 0 && qdrantStatus.collections.empires.delta === 0) ? 'OK' :
-                  `${qdrantStatus.collections.sites.delta + qdrantStatus.collections.news.delta + qdrantStatus.collections.transcripts.delta + qdrantStatus.collections.articles.delta + qdrantStatus.collections.empires.delta > 0 ? '-' : '+'}${Math.abs(qdrantStatus.collections.sites.delta + qdrantStatus.collections.news.delta + qdrantStatus.collections.transcripts.delta + qdrantStatus.collections.articles.delta + qdrantStatus.collections.empires.delta)}`
+                  (() => {
+                    const comparableDeltas = [qdrantStatus.collections.sites.delta, qdrantStatus.collections.news.delta, qdrantStatus.collections.empires.delta].filter((d): d is number => d != null)
+                    const totalDelta = comparableDeltas.reduce((a, b) => a + b, 0)
+                    return totalDelta === 0 ? 'OK' : `${totalDelta > 0 ? '-' : '+'}${Math.abs(totalDelta)}`
+                  })()
                 }</span>
               </button>
               {qdrantOpen && (
@@ -973,11 +976,12 @@ export default function DbAuditPage() {
                           <span className="db-qdrant-sep">/</span>
                           <span title="PostgreSQL">{c.pg_count.toLocaleString()}</span>
                         </span>
-                        {c.delta !== 0 && (
+                        {c.delta != null && c.delta !== 0 && (
                           <span className={`db-qdrant-delta ${c.delta > 0 ? 'stale' : 'over'}`}>
                             {c.delta > 0 ? `-${c.delta}` : `+${Math.abs(c.delta)}`}
                           </span>
                         )}
+                        {c.note && <span className="db-qdrant-note" title={c.note}>chunks</span>}
                       </div>
                     )
                   })}

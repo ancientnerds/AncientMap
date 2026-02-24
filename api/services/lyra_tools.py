@@ -465,6 +465,7 @@ def vector_search(
     country: str | None = None,
     period: str | None = None,
     site_type: str | None = None,
+    channel: str | None = None,
 ) -> str:
     """Deep semantic search across sites, news, transcripts, articles, or empires using hybrid dense+BM25 vectors.
 
@@ -478,11 +479,13 @@ def vector_search(
         country: Filter by country name (e.g. 'Turkey', 'Egypt').
         period: Filter by period name (e.g. 'Bronze Age', 'Neolithic').
         site_type: Filter by site type (e.g. 'settlement', 'temple').
+        channel: Filter by channel name (e.g. 'World of Antiquity'). Works on news and transcripts collections.
     """
     query = (query or "")[:500]
     items, _vt = _hybrid_search(
         query, collection=collection, limit=limit,
         country=country, period=period, site_type=site_type,
+        channel=channel,
     )
     if not items:
         return f"No semantic matches in '{collection}' collection."
@@ -843,9 +846,15 @@ def search_empires(
         lines.append(f"   - Polity ID: `{polity_id}`")
         lines.append(f"   - Capital: {capital} | Region: {region}")
         if territory:
-            lines.append(f"   - Territory: {territory:,} sq km")
+            if isinstance(territory, (int, float)):
+                lines.append(f"   - Territory: {territory:,} sq km")
+            else:
+                lines.append(f"   - Territory: {territory} sq km")
         if population:
-            lines.append(f"   - Population: {population:,}")
+            if isinstance(population, (int, float)):
+                lines.append(f"   - Population: {population:,}")
+            else:
+                lines.append(f"   - Population: {population}")
         if languages:
             lines.append(f"   - Languages: {', '.join(languages)}")
         wiki = item.get("wikipedia_url")

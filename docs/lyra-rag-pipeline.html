@@ -433,7 +433,7 @@
     <div class="label">Voyage Models</div>
   </div>
   <div class="stat-card">
-    <div class="value" style="color: var(--yellow);">8</div>
+    <div class="value" style="color: var(--yellow);">11</div>
     <div class="label">RAG Agent Tools</div>
   </div>
   <div class="stat-card">
@@ -1181,6 +1181,7 @@ ESCALATION_SCHEMA:
           Runs BEFORE the LLM. Dual hybrid search: sites collection (top 5) + news collection (top 3) on every query.
           Returns formatted context + site results for map highlighting (relevance &ge; 0.3) + semantic news for sidebar cards.
           SQL-based news fetch (_get_related_news + LLM filter extraction) adds complementary results.
+          <br><em style="color: var(--dim); font-size: 11px;">Auto-retrieve searches 2 of 5 total collections. The remaining 3 (transcripts, articles, empires) are available via tool calls.</em>
         </div>
       </div>
 
@@ -1218,6 +1219,9 @@ ESCALATION_SCHEMA:
           Cross-encoder second pass. Collection-specific instructions <strong>prepended to query string</strong>:<br>
           &bull; Sites: "Prioritize sites matching queried time period, type, and region..."<br>
           &bull; News: "Prioritize recent discoveries with specific site names, dates, factual claims..."<br>
+          &bull; Transcripts: "Prioritize passages with concrete information, expert analysis, and named sites..."<br>
+          &bull; Articles: "Prioritize sections with substantive analysis, specific findings, and cited sources..."<br>
+          &bull; Empires: "Prioritize empires matching queried time period, region, or specific attributes..."<br>
           Top 20 &rarr; <strong>top 5</strong> with relevance scores (0.0&ndash;1.0).
         </div>
       </div>
@@ -1294,8 +1298,22 @@ ESCALATION_SCHEMA:
           <div class="node-title" style="font-size: 12px;">get_site_images</div>
           <div class="node-desc">Wikimedia Commons images for a site</div>
         </div>
+        <div class="node node-tool" style="border: 1px dashed var(--green);">
+          <div class="node-title" style="font-size: 12px;">search_transcripts <span class="badge badge-new">new</span></div>
+          <div class="node-desc">Hybrid search on transcript chunks w/ YouTube deep links</div>
+        </div>
+      </div>
+      <div class="split-3" style="opacity: 0.8;">
+        <div class="node node-tool" style="border: 1px dashed var(--green);">
+          <div class="node-title" style="font-size: 12px;">search_articles <span class="badge badge-new">new</span></div>
+          <div class="node-desc">Search weekly digest article chunks</div>
+        </div>
+        <div class="node node-tool" style="border: 1px dashed var(--green);">
+          <div class="node-title" style="font-size: 12px;">search_empires <span class="badge badge-new">new</span></div>
+          <div class="node-desc">Find empires by attributes (warfare, economy, region)</div>
+        </div>
         <div class="node node-tool" style="opacity: 0.3;">
-          <div class="node-title" style="font-size: 12px; color: var(--dim);">8 tools total</div>
+          <div class="node-title" style="font-size: 12px; color: var(--dim);">11 tools total</div>
           <div class="node-desc">Extensible via @tool decorator</div>
         </div>
       </div>
@@ -1432,6 +1450,20 @@ ESCALATION_SCHEMA:
           <div class="node-desc">headline + summary + facts + transcript_segment + channel</div>
         </div>
       </div>
+      <div class="split-3" style="margin-top: 8px;">
+        <div class="node node-db">
+          <div class="node-title">transcript chunks <span class="badge badge-new">new</span></div>
+          <div class="node-desc">2K-char overlapping chunks from video transcripts. Indexed by video_id + channel.</div>
+        </div>
+        <div class="node node-db">
+          <div class="node-title">article chunks <span class="badge badge-new">new</span></div>
+          <div class="node-desc">2K-char overlapping chunks from weekly digest articles. Indexed by article_id.</div>
+        </div>
+        <div class="node node-db">
+          <div class="node-title">Seshat polities (46 empires) <span class="badge badge-new">new</span></div>
+          <div class="node-desc">Rich polity data: warfare, economy, governance, crisis events. From <code>polities.json</code>.</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1459,10 +1491,14 @@ ESCALATION_SCHEMA:
     <div class="stage-label">storage</div>
     <div class="stage-content">
       <div class="node node-search">
-        <div class="node-title">Qdrant Collections</div>
+        <div class="node-title">Qdrant &mdash; 5 Collections <span class="badge badge-upgraded">expanded</span></div>
         <div class="node-desc">
-          Two named vectors per point: <code>"dense"</code> (1024-dim COSINE) + <code>"bm25"</code> (sparse IDF).<br>
-          Payload indexes: country, period_name, site_type, channel, category.
+          Each collection has two named vectors: <code>"dense"</code> (1024-dim COSINE) + <code>"bm25"</code> (sparse IDF).<br><br>
+          <strong>sites</strong> &mdash; payload indexes: country, period_name, site_type<br>
+          <strong>news</strong> &mdash; payload indexes: channel, category<br>
+          <strong>transcripts</strong> &mdash; payload indexes: channel, video_id (chunk-based)<br>
+          <strong>articles</strong> &mdash; payload indexes: article_id (chunk-based)<br>
+          <strong>empires</strong> &mdash; payload indexes: polity_id, region
         </div>
       </div>
     </div>
@@ -1498,9 +1534,9 @@ ESCALATION_SCHEMA:
     <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--orange);">2,360ms</div>
     <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">fastembed load + Voyage init + Qdrant connection</div>
 
-    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text); font-weight: 700;">Auto-retrieve total (2 collections)</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text); font-weight: 700;">Auto-retrieve total (2 of 5 collections)</div>
     <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--accent); font-weight: 700;">~1,120ms</div>
-    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">2x p50 (sites + news sequentially)</div>
+    <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">2x p50 (sites + news). Tool-triggered searches can hit all 5 collections.</div>
 
     <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">LLM first token (MiniMax M2.5)</div>
     <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--cyan);">~300ms</div>

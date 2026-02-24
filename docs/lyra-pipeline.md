@@ -421,3 +421,81 @@ The orchestrator runs `main()` which:
 2. Seeds `source_meta` ('lyra') and `news_channels` (35 YouTube channels)
 3. Applies versioned resets (v4-v15 + named resets) to re-queue items when prompts/logic change
 4. Enters infinite loop: run pipeline every hour, generate article weekly, heartbeat after each cycle
+
+---
+
+## Vector Search (Qdrant)
+
+The RAG agent uses hybrid semantic search powered by Qdrant. Five collections index different data types for retrieval.
+
+### Collections
+
+| Collection | Source Data | PG Table | Granularity | Payload Indexes |
+|------------|-----------|----------|-------------|-----------------|
+| `sites` | Curated archaeological sites | `unified_sites` (source='ancient_nerds') | 1 point per site | country, period_name, site_type |
+| `news` | AI-extracted news items | `news_items` | 1 point per item | channel, category |
+| `transcripts` | Video transcript text | `news_videos` (transcribed/summarized) | Overlapping 2K-char chunks | channel, video_id |
+| `articles` | Weekly digest articles | `news_articles` | Overlapping 2K-char chunks | article_id |
+| `empires` | Seshat historical polities | `polities.json` (46 polities) | 1 point per polity | polity_id, region |
+
+Each collection stores two named vectors per point:
+- **dense**: voyage-4-large embeddings (1024-dim, COSINE distance)
+- **bm25**: Qdrant/fastembed sparse vectors (IDF-weighted)
+
+### Indexing Script
+
+```bash
+# Index all collections (incremental — skips existing)
+python scripts/build_lyra_index.py
+
+# Index a single collection
+python scripts/build_lyra_index.py --collection sites
+python scripts/build_lyra_index.py --collection news
+python scripts/build_lyra_index.py --collection transcripts
+python scripts/build_lyra_index.py --collection articles
+python scripts/build_lyra_index.py --collection empires
+
+# Wipe and rebuild from scratch
+python scripts/build_lyra_index.py --rebuild
+python scripts/build_lyra_index.py --collection transcripts --rebuild
+```
+
+The script (`scripts/build_lyra_index.py`) uses voyage-4-large for dense embeddings (highest quality) and Qdrant's built-in BM25 sparse model via fastembed for sparse vectors.
+
+### Hybrid Search Pipeline
+
+```mermaid
+flowchart LR
+    Q["User Query"] --> DE["voyage-4\n(dense embed)"]
+    Q --> SE["Qdrant/bm25\n(sparse embed)"]
+    DE --> PF1["Prefetch\ndense top 20"]
+    SE --> PF2["Prefetch\nBM25 top 20"]
+    PF1 --> RRF["RRF Fusion\nmerged top 20"]
+    PF2 --> RRF
+    RRF --> RR["Voyage rerank-2.5-lite\ntop K with scores"]
+```
+
+1. **Embed query** — Dense via voyage-4 (query-optimized, shared space with voyage-4-large) + sparse via Qdrant/bm25 (local fastembed)
+2. **Prefetch** — Dense ANN top 20 + BM25 inverted index top 20, with optional metadata filters
+3. **RRF fusion** — Reciprocal Rank Fusion merges both result lists
+4. **Rerank** — Voyage rerank-2.5-lite cross-encoder scores each (query, document) pair. Collection-specific instructions prepended to query for optimal ranking.
+
+### Lyra RAG Tools
+
+11 tools are available to the agent, mapped to collections:
+
+| Tool | Collection | Description |
+|------|-----------|-------------|
+| `search_sites` | — (SQL) | Structured SQL search with period/country/type filters |
+| `get_site_details` | — (SQL) | Full site info by UUID or name |
+| `search_news` | — (SQL) | Recent news by keyword, channel, days_back |
+| `get_empire_data` | — (JSON) | Full Seshat polity data by ID |
+| `vector_search` | any | Deep-dive hybrid search with metadata filters |
+| `search_radar` | — (SQL) | Lyra's auto-discovered sites |
+| `list_channels` | — (SQL) | Monitored YouTube channels |
+| `get_site_images` | — (SQL) | Wikimedia Commons images for a site |
+| `search_transcripts` | transcripts | Hybrid search on transcript chunks with YouTube deep links |
+| `search_articles` | articles | Hybrid search on weekly digest article chunks |
+| `search_empires` | empires | Hybrid search on Seshat polity data |
+
+Auto-retrieve runs before the LLM on every query, searching sites (top 5) + news (top 3). The remaining collections (transcripts, articles, empires) are available via tool calls.
