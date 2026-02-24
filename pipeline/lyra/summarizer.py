@@ -33,6 +33,7 @@ SUMMARY_SCHEMA = {
     "properties": {
         "key_topics": {
             "type": "array",
+            "maxItems": 20,
             "items": {
                 "type": "object",
                 "properties": {
@@ -288,6 +289,13 @@ def summarize_video(
         logger.warning(f"No key topics found for {video.id}")
         return False
 
+    if len(key_topics) > topic_limit:
+        logger.warning(
+            f"LLM returned {len(key_topics)} topics for {video.id}, "
+            f"truncating to {topic_limit}"
+        )
+        key_topics = key_topics[:topic_limit]
+
     # Save summary JSON and create news items
     with get_session() as session:
         db_video = session.get(NewsVideo, video.id)
@@ -299,9 +307,6 @@ def summarize_video(
         db_video.processed_at = datetime.now(UTC)
 
         for topic in key_topics:
-            if isinstance(topic, str):
-                logger.warning(f"Malformed topic in {video.id}: string instead of dict, recovering as headline")
-                topic = {"headline": topic[:100], "timestamp_range": None, "facts": [], "primary_site": None}
             if not isinstance(topic, dict):
                 logger.warning(f"Malformed topic in {video.id}: {type(topic).__name__}, skipping")
                 continue
