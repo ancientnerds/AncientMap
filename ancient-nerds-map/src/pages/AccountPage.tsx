@@ -1,5 +1,5 @@
 /**
- * AccountPage — User account with Discord profile and Lyra credits.
+ * AccountPage — User hub with Discord profile, card collection, deck builder.
  * Accessed via /account.html (separate Vite entry point).
  *
  * On first load after OAuth, reads ?token= from URL and stores it.
@@ -9,6 +9,10 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { config } from '../config'
 import { useAuth } from '../contexts/AuthContext'
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
+import { apiFetch } from '../utils/cardApi'
+import type { PlayerStats, CardData } from '../types/cards'
+import CollectionBrowser from '../components/cards/CollectionBrowser'
+import DeckBuilder from '../components/cards/DeckBuilder'
 import PageHeader from '../components/layout/PageHeader'
 import '../styles/account.css'
 
@@ -135,7 +139,7 @@ const REASON_LABELS: Record<string, string> = {
   bulk_role_grant: 'Bulk Role Grant',
 }
 
-// Discord role ID → display info for profile badges (glass style: colored text on translucent bg)
+// Discord role ID -> display info for profile badges (glass style: colored text on translucent bg)
 const ROLE_DISPLAY: Record<string, { name: string; color: string }> = {
   '933105341292486707': { name: 'Founder', color: '#00ff2e' },
   '972439407086944266': { name: 'OG Nerd', color: '#f86600' },
@@ -172,13 +176,37 @@ const ROLE_SHORT: Record<string, string> = {
 const DISCORD_INVITE_URL = 'https://discord.gg/ancientnerds'
 const PATREON_URL = 'https://patreon.com/ancientnerds'
 
+type AccountTab = 'profile' | 'likes' | 'bookmarks' | 'collection' | 'decks' | 'admin'
+
+const TAB_LABELS: Record<AccountTab, string> = {
+  profile: 'Profile',
+  likes: 'Likes',
+  bookmarks: 'Bookmarks',
+  collection: 'Collection',
+  decks: 'Decks',
+  admin: 'Admin',
+}
+
+function getTabFromHash(): AccountTab {
+  const hash = window.location.hash.replace('#', '') as AccountTab
+  if (hash && hash in TAB_LABELS) return hash
+  return 'profile'
+}
+
 export default function AccountPage() {
   const { user, token, isLoggedIn, isLoading, logout } = useAuth()
+  const [tab, setTab] = useState<AccountTab>(getTabFromHash)
   const [usage, setUsage] = useState<UsageEntry[]>([])
   const [grants, setGrants] = useState<GrantEntry[]>([])
   const [error, setError] = useState<string | null>(null)
   const [grantsExpanded, setGrantsExpanded] = useState(false)
   const [usageExpanded, setUsageExpanded] = useState(false)
+
+  // Player stats (card game)
+  const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null)
+  const [claimingDaily, setClaimingDaily] = useState(false)
+  const [dailyResult, setDailyResult] = useState<string | null>(null)
+  const [claimingStarter, setClaimingStarter] = useState(false)
 
   // Liked & bookmarked sites
   const [likedSites, setLikedSites] = useState<InteractionSite[]>([])
@@ -201,8 +229,19 @@ export default function AccountPage() {
   const [bulkPreview, setBulkPreview] = useState<{ count: number } | null>(null)
   const [bulkLoading, setBulkLoading] = useState(false)
 
-  // Handle OAuth error callback (?error= in URL). Token is now delivered via cookie
-  // and consumed by AuthContext on mount — no ?token= in URL anymore.
+  // Hash-based tab routing
+  const changeTab = (t: AccountTab) => {
+    setTab(t)
+    window.history.replaceState(null, '', `#${t}`)
+  }
+
+  useEffect(() => {
+    const onHash = () => setTab(getTabFromHash())
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
+
+  // Handle OAuth error callback
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const urlError = params.get('error')
@@ -238,6 +277,21 @@ export default function AccountPage() {
     if (isLoggedIn) fetchCredits()
   }, [isLoggedIn, fetchCredits])
 
+  // Fetch player stats
+  const loadPlayerStats = useCallback(async () => {
+    if (!token) return
+    try {
+      const data = await apiFetch<PlayerStats>('/cards/player-stats', token)
+      setPlayerStats(data)
+    } catch {
+      // Non-critical — card game may not be set up
+    }
+  }, [token])
+
+  useEffect(() => {
+    if (isLoggedIn) loadPlayerStats()
+  }, [isLoggedIn, loadPlayerStats])
+
   // Fetch liked & bookmarked sites
   useEffect(() => {
     if (!isLoggedIn || !token) return
@@ -251,6 +305,42 @@ export default function AccountPage() {
       .then(setBookmarkedSites)
       .catch(() => {})
   }, [isLoggedIn, token])
+
+  // Daily reward
+  const claimDaily = async () => {
+    if (!token) return
+    setClaimingDaily(true)
+    setDailyResult(null)
+    try {
+      const data = await apiFetch<{ credits: number; card: CardData | null; daily_streak: number }>(
+        '/cards/daily', token, { method: 'POST' },
+      )
+      const parts = [`+${data.credits} credits`]
+      if (data.card) parts.push(`Card: ${data.card.name}`)
+      parts.push(`Streak: ${data.daily_streak} days`)
+      setDailyResult(parts.join(' | '))
+      loadPlayerStats()
+    } catch (e: any) {
+      setDailyResult(e.message || 'Failed')
+    } finally {
+      setClaimingDaily(false)
+    }
+  }
+
+  // Starter deck
+  const claimStarter = async () => {
+    if (!token) return
+    setClaimingStarter(true)
+    try {
+      await apiFetch('/cards/starter', token, { method: 'POST' })
+      loadPlayerStats()
+      changeTab('collection')
+    } catch (e: any) {
+      console.error('Starter claim failed:', e.message)
+    } finally {
+      setClaimingStarter(false)
+    }
+  }
 
   // Admin: fetch users
   const fetchAdminUsers = useCallback(async (q = '', roles?: Set<string>) => {
@@ -371,9 +461,9 @@ export default function AccountPage() {
         const actionLabel = action === 'set_unlimited'
           ? (amount !== 0 ? 'set to unlimited' : 'removed unlimited')
           : action === 'set' ? 'set to' : action === 'add' ? 'increased by' : 'decreased by'
-        const creditsDisplay = newUnlimited ? '∞' : newCredits.toLocaleString()
+        const creditsDisplay = newUnlimited ? '\u221E' : newCredits.toLocaleString()
         setAdminSuccess(
-          `${selectedUser.username}: credits ${actionLabel} ${action === 'set_unlimited' ? '' : amount} → now ${creditsDisplay}`
+          `${selectedUser.username}: credits ${actionLabel} ${action === 'set_unlimited' ? '' : amount} \u2192 now ${creditsDisplay}`
         )
         // Update local list
         setAdminUsers(prev => prev.map(u =>
@@ -398,6 +488,13 @@ export default function AccountPage() {
     window.location.href = `${config.api.baseUrl}/auth/discord`
   }
 
+  // Determine which tabs to show
+  const visibleTabs: AccountTab[] = ['profile', 'likes', 'bookmarks', 'collection', 'decks']
+  if (user?.is_founder) visibleTabs.push('admin')
+
+  // Wide tabs need more horizontal space
+  const isWideTab = tab === 'collection' || tab === 'decks'
+
   if (isLoading) {
     return (
       <div className="account-page">
@@ -415,7 +512,7 @@ export default function AccountPage() {
         <span className="page-header-title">Account</span>
       </PageHeader>
 
-      <div className="account-content">
+      <div className={`account-content ${isWideTab ? 'account-content-wide' : ''}`}>
         {error === 'guild_required' ? (
           <div className="account-error">
             You need to join our Discord server to sign in.{' '}
@@ -444,225 +541,311 @@ export default function AccountPage() {
           </div>
         ) : (
           <div className="account-profile">
-            {/* Profile card */}
-            <div className="account-card">
-              <div className="account-card-header">
-                {user?.avatar_url ? (
-                  <img src={user.avatar_url} alt={user.username} className="account-avatar" />
-                ) : (
-                  <div className="account-avatar-placeholder">
-                    {user?.username?.charAt(0)?.toUpperCase() || '?'}
+            {/* Tab navigation */}
+            <nav className="account-tabs">
+              {visibleTabs.map(t => (
+                <button
+                  key={t}
+                  className={`account-tab ${tab === t ? 'active' : ''}`}
+                  onClick={() => changeTab(t)}
+                >
+                  {TAB_LABELS[t]}
+                  {t === 'likes' && likedSites.length > 0 && (
+                    <span className="account-tab-count">{likedSites.length}</span>
+                  )}
+                  {t === 'bookmarks' && bookmarkedSites.length > 0 && (
+                    <span className="account-tab-count">{bookmarkedSites.length}</span>
+                  )}
+                </button>
+              ))}
+            </nav>
+
+            {/* ============ PROFILE TAB ============ */}
+            {tab === 'profile' && (
+              <>
+                {/* Profile card */}
+                <div className="account-card">
+                  <div className="account-card-header">
+                    {user?.avatar_url ? (
+                      <img src={user.avatar_url} alt={user.username} className="account-avatar" />
+                    ) : (
+                      <div className="account-avatar-placeholder">
+                        {user?.username?.charAt(0)?.toUpperCase() || '?'}
+                      </div>
+                    )}
+                    <div className="account-card-info">
+                      <h2 className="account-username">{user?.username}</h2>
+                      <div className="account-badges">
+                        {user?.roles?.map(roleId => {
+                          const info = ROLE_DISPLAY[roleId]
+                          if (!info) return null
+                          return (
+                            <span key={roleId} className="account-badge" style={{
+                              background: `${info.color}1F`,
+                              color: info.color,
+                              border: `1px solid ${info.color}40`,
+                            }}>
+                              {info.name}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    </div>
                   </div>
-                )}
-                <div className="account-card-info">
-                  <h2 className="account-username">{user?.username}</h2>
-                  <div className="account-badges">
-                    {user?.roles?.map(roleId => {
-                      const info = ROLE_DISPLAY[roleId]
-                      if (!info) return null
+
+                  {/* Credits + XP side by side */}
+                  <div className="account-stats-row">
+                    <div className="account-stat-block">
+                      <div className="account-credits-label">Lyra Credits</div>
+                      <div className="account-credits-value">
+                        {user?.is_unlimited ? '\u221E' : (user?.credits?.toLocaleString() ?? 0)}
+                      </div>
+                      <div className="account-credits-note">
+                        {user?.is_unlimited
+                          ? `Unlimited access${user?.is_founder ? ' \u2014 thank you, Founder!' : ''}`
+                          : '1 credit = 100 tokens'}
+                      </div>
+                      {user?.next_grant_date && (
+                        <div className="account-credits-note" style={{ marginTop: '4px', fontSize: '0.8em', opacity: 0.7 }}>
+                          Next grant: {new Date(user.next_grant_date).toLocaleDateString()}
+                        </div>
+                      )}
+                      {user && !user.is_unlimited && user.tier === 'free' && (
+                        <a
+                          href={PATREON_URL}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="account-upgrade-link"
+                          style={{
+                            display: 'inline-block',
+                            marginTop: '8px',
+                            padding: '6px 14px',
+                            background: '#f96854',
+                            color: '#fff',
+                            borderRadius: '6px',
+                            fontSize: '0.85em',
+                            textDecoration: 'none',
+                          }}
+                        >
+                          Upgrade on Patreon
+                        </a>
+                      )}
+                    </div>
+                    {playerStats && (
+                      <div className="account-stat-block">
+                        <div className="account-credits-label">Card Game</div>
+                        <div className="account-card-stats-grid">
+                          <div className="account-mini-stat">
+                            <span className="account-mini-stat-value">{playerStats.xp}</span>
+                            <span className="account-mini-stat-label">XP</span>
+                          </div>
+                          <div className="account-mini-stat">
+                            <span className="account-mini-stat-value">{playerStats.total_cards}</span>
+                            <span className="account-mini-stat-label">Cards</span>
+                          </div>
+                          <div className="account-mini-stat">
+                            <span className="account-mini-stat-value">{playerStats.wins}/{playerStats.losses}</span>
+                            <span className="account-mini-stat-label">W/L</span>
+                          </div>
+                          <div className="account-mini-stat">
+                            <span className="account-mini-stat-value">{playerStats.daily_streak}d</span>
+                            <span className="account-mini-stat-label">Streak</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Daily reward + Starter buttons */}
+                  <div className="account-card-actions">
+                    <button
+                      className="account-action-btn daily"
+                      onClick={claimDaily}
+                      disabled={claimingDaily}
+                    >
+                      {claimingDaily ? 'Claiming...' : 'Daily Reward'}
+                    </button>
+                    {playerStats?.total_cards === 0 && (
+                      <button
+                        className="account-action-btn starter"
+                        onClick={claimStarter}
+                        disabled={claimingStarter}
+                      >
+                        {claimingStarter ? 'Claiming...' : 'Claim Starter Deck'}
+                      </button>
+                    )}
+                  </div>
+                  {dailyResult && <div className="account-daily-result">{dailyResult}</div>}
+
+                  <button className="account-logout-btn" onClick={logout}>
+                    Sign Out
+                  </button>
+                </div>
+
+                {/* Credit grants */}
+                {grants.length > 0 && (() => {
+                  const sorted = [...grants].sort((a, b) =>
+                    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                  )
+                  const visible = grantsExpanded ? sorted : sorted.slice(0, 10)
+                  return (
+                    <div className="account-section">
+                      <h3 className="account-section-title">Credit Grants</h3>
+                      <div className="account-table-wrap">
+                        <table className="account-table">
+                          <thead>
+                            <tr>
+                              <th>Date</th>
+                              <th>Reason</th>
+                              <th>Period</th>
+                              <th>Credits</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {visible.map((g, i) => (
+                              <tr key={i}>
+                                <td>{new Date(g.created_at).toLocaleDateString()}</td>
+                                <td>{REASON_LABELS[g.reason] || g.reason}</td>
+                                <td>{g.grant_period || '\u2014'}</td>
+                                <td className={g.amount >= 0 ? 'account-credits-positive' : 'account-credits-negative'}>
+                                  {g.amount > 0 ? '+' : ''}{g.amount.toLocaleString()}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {sorted.length > 10 && (
+                        <button className="account-expand-btn" onClick={() => setGrantsExpanded(!grantsExpanded)}>
+                          <span className={`account-expand-arrow ${grantsExpanded ? 'expanded' : ''}`}>{'\u25B6'}</span>
+                          {grantsExpanded ? 'Show less' : `Show all ${sorted.length}`}
+                        </button>
+                      )}
+                    </div>
+                  )
+                })()}
+
+                {/* Usage history */}
+                {usage.length > 0 && (() => {
+                  const sorted = [...usage].sort((a, b) =>
+                    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                  )
+                  const visible = usageExpanded ? sorted : sorted.slice(0, 10)
+                  return (
+                    <div className="account-section">
+                      <h3 className="account-section-title">Recent Usage</h3>
+                      <div className="account-table-wrap">
+                        <table className="account-table">
+                          <thead>
+                            <tr>
+                              <th>Date</th>
+                              <th>Input</th>
+                              <th>Output</th>
+                              <th>Credits</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {visible.map((u, i) => (
+                              <tr key={i}>
+                                <td>{new Date(u.created_at).toLocaleDateString()}</td>
+                                <td>{u.input_tokens.toLocaleString()}</td>
+                                <td>{u.output_tokens.toLocaleString()}</td>
+                                <td className="account-credits-negative">-{u.credits_used}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {sorted.length > 10 && (
+                        <button className="account-expand-btn" onClick={() => setUsageExpanded(!usageExpanded)}>
+                          <span className={`account-expand-arrow ${usageExpanded ? 'expanded' : ''}`}>{'\u25B6'}</span>
+                          {usageExpanded ? 'Show less' : `Show all ${sorted.length}`}
+                        </button>
+                      )}
+                    </div>
+                  )
+                })()}
+              </>
+            )}
+
+            {/* ============ LIKES TAB ============ */}
+            {tab === 'likes' && (
+              <div className="account-section">
+                {likedSites.length === 0 ? (
+                  <div className="account-empty-tab">No liked sites yet. Explore the map and like sites you find interesting!</div>
+                ) : (
+                  <div className="account-site-grid">
+                    {likedSites.map(s => {
+                      const flagUrl = s.country ? getCountryFlatFlagUrl(s.country) : null
                       return (
-                        <span key={roleId} className="account-badge" style={{
-                          background: `${info.color}1F`,
-                          color: info.color,
-                          border: `1px solid ${info.color}40`,
-                        }}>
-                          {info.name}
-                        </span>
+                        <a key={s.id} href={`/site.html?id=${s.id}`} className="account-site-card">
+                          {s.thumbnail_url ? (
+                            <img src={s.thumbnail_url} alt="" className="account-site-thumb" />
+                          ) : (
+                            <div className="account-site-thumb-empty" />
+                          )}
+                          <div className="account-site-info">
+                            <span className="account-site-name">{s.name}</span>
+                            {s.country && (
+                              <span className="account-site-country">
+                                {flagUrl && <img src={flagUrl} alt="" className="account-site-flag" />}
+                                {s.country}
+                              </span>
+                            )}
+                          </div>
+                        </a>
                       )
                     })}
                   </div>
-                </div>
-              </div>
-
-              {/* Credits */}
-              <div className="account-credits-section">
-                <div className="account-credits-label">Lyra Credits</div>
-                <div className="account-credits-value">
-                  {user?.is_unlimited ? '∞' : (user?.credits?.toLocaleString() ?? 0)}
-                </div>
-                <div className="account-credits-note">
-                  {user?.is_unlimited
-                    ? `Unlimited access${user?.is_founder ? ' — thank you, Founder!' : ''}`
-                    : '1 credit = 100 tokens (input + output)'}
-                </div>
-                {user?.next_grant_date && (
-                  <div className="account-credits-note" style={{ marginTop: '4px', fontSize: '0.8em', opacity: 0.7 }}>
-                    Next credit grant: {new Date(user.next_grant_date).toLocaleDateString()}
-                  </div>
                 )}
-                {user && !user.is_unlimited && user.tier === 'free' && (
-                  <a
-                    href={PATREON_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="account-upgrade-link"
-                    style={{
-                      display: 'inline-block',
-                      marginTop: '8px',
-                      padding: '6px 14px',
-                      background: '#f96854',
-                      color: '#fff',
-                      borderRadius: '6px',
-                      fontSize: '0.85em',
-                      textDecoration: 'none',
-                    }}
-                  >
-                    Upgrade on Patreon
-                  </a>
-                )}
-              </div>
-
-              <button className="account-logout-btn" onClick={logout}>
-                Sign Out
-              </button>
-            </div>
-
-            {/* Liked sites */}
-            {likedSites.length > 0 && (
-              <div className="account-section">
-                <h3 className="account-section-title">Liked Sites</h3>
-                <div className="account-site-grid">
-                  {likedSites.map(s => {
-                    const flagUrl = s.country ? getCountryFlatFlagUrl(s.country) : null
-                    return (
-                      <a key={s.id} href={`/site.html?id=${s.id}`} className="account-site-card">
-                        {s.thumbnail_url ? (
-                          <img src={s.thumbnail_url} alt="" className="account-site-thumb" />
-                        ) : (
-                          <div className="account-site-thumb-empty" />
-                        )}
-                        <div className="account-site-info">
-                          <span className="account-site-name">{s.name}</span>
-                          {s.country && (
-                            <span className="account-site-country">
-                              {flagUrl && <img src={flagUrl} alt="" className="account-site-flag" />}
-                              {s.country}
-                            </span>
-                          )}
-                        </div>
-                      </a>
-                    )
-                  })}
-                </div>
               </div>
             )}
 
-            {/* Bookmarked sites */}
-            {bookmarkedSites.length > 0 && (
+            {/* ============ BOOKMARKS TAB ============ */}
+            {tab === 'bookmarks' && (
               <div className="account-section">
-                <h3 className="account-section-title">Bookmarked Sites</h3>
-                <div className="account-site-grid">
-                  {bookmarkedSites.map(s => {
-                    const flagUrl = s.country ? getCountryFlatFlagUrl(s.country) : null
-                    return (
-                      <a key={s.id} href={`/site.html?id=${s.id}`} className="account-site-card">
-                        {s.thumbnail_url ? (
-                          <img src={s.thumbnail_url} alt="" className="account-site-thumb" />
-                        ) : (
-                          <div className="account-site-thumb-empty" />
-                        )}
-                        <div className="account-site-info">
-                          <span className="account-site-name">{s.name}</span>
-                          {s.country && (
-                            <span className="account-site-country">
-                              {flagUrl && <img src={flagUrl} alt="" className="account-site-flag" />}
-                              {s.country}
-                            </span>
+                {bookmarkedSites.length === 0 ? (
+                  <div className="account-empty-tab">No bookmarked sites yet. Bookmark sites to save them for later!</div>
+                ) : (
+                  <div className="account-site-grid">
+                    {bookmarkedSites.map(s => {
+                      const flagUrl = s.country ? getCountryFlatFlagUrl(s.country) : null
+                      return (
+                        <a key={s.id} href={`/site.html?id=${s.id}`} className="account-site-card">
+                          {s.thumbnail_url ? (
+                            <img src={s.thumbnail_url} alt="" className="account-site-thumb" />
+                          ) : (
+                            <div className="account-site-thumb-empty" />
                           )}
-                        </div>
-                      </a>
-                    )
-                  })}
-                </div>
+                          <div className="account-site-info">
+                            <span className="account-site-name">{s.name}</span>
+                            {s.country && (
+                              <span className="account-site-country">
+                                {flagUrl && <img src={flagUrl} alt="" className="account-site-flag" />}
+                                {s.country}
+                              </span>
+                            )}
+                          </div>
+                        </a>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Credit grants */}
-            {grants.length > 0 && (() => {
-              const sorted = [...grants].sort((a, b) =>
-                new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-              )
-              const visible = grantsExpanded ? sorted : sorted.slice(0, 10)
-              return (
-                <div className="account-section">
-                  <h3 className="account-section-title">Credit Grants</h3>
-                  <div className="account-table-wrap">
-                    <table className="account-table">
-                      <thead>
-                        <tr>
-                          <th>Date</th>
-                          <th>Reason</th>
-                          <th>Period</th>
-                          <th>Credits</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {visible.map((g, i) => (
-                          <tr key={i}>
-                            <td>{new Date(g.created_at).toLocaleDateString()}</td>
-                            <td>{REASON_LABELS[g.reason] || g.reason}</td>
-                            <td>{g.grant_period || '—'}</td>
-                            <td className={g.amount >= 0 ? 'account-credits-positive' : 'account-credits-negative'}>
-                              {g.amount > 0 ? '+' : ''}{g.amount.toLocaleString()}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  {sorted.length > 10 && (
-                    <button className="account-expand-btn" onClick={() => setGrantsExpanded(!grantsExpanded)}>
-                      <span className={`account-expand-arrow ${grantsExpanded ? 'expanded' : ''}`}>{'\u25B6'}</span>
-                      {grantsExpanded ? 'Show less' : `Show all ${sorted.length}`}
-                    </button>
-                  )}
-                </div>
-              )
-            })()}
+            {/* ============ COLLECTION TAB ============ */}
+            {tab === 'collection' && (
+              <CollectionBrowser token={token} />
+            )}
 
-            {/* Usage history */}
-            {usage.length > 0 && (() => {
-              const sorted = [...usage].sort((a, b) =>
-                new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-              )
-              const visible = usageExpanded ? sorted : sorted.slice(0, 10)
-              return (
-                <div className="account-section">
-                  <h3 className="account-section-title">Recent Usage</h3>
-                  <div className="account-table-wrap">
-                    <table className="account-table">
-                      <thead>
-                        <tr>
-                          <th>Date</th>
-                          <th>Input</th>
-                          <th>Output</th>
-                          <th>Credits</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {visible.map((u, i) => (
-                          <tr key={i}>
-                            <td>{new Date(u.created_at).toLocaleDateString()}</td>
-                            <td>{u.input_tokens.toLocaleString()}</td>
-                            <td>{u.output_tokens.toLocaleString()}</td>
-                            <td className="account-credits-negative">-{u.credits_used}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  {sorted.length > 10 && (
-                    <button className="account-expand-btn" onClick={() => setUsageExpanded(!usageExpanded)}>
-                      <span className={`account-expand-arrow ${usageExpanded ? 'expanded' : ''}`}>{'\u25B6'}</span>
-                      {usageExpanded ? 'Show less' : `Show all ${sorted.length}`}
-                    </button>
-                  )}
-                </div>
-              )
-            })()}
+            {/* ============ DECKS TAB ============ */}
+            {tab === 'decks' && (
+              <DeckBuilder token={token} />
+            )}
 
-            {/* Founder Admin Panel */}
-            {user?.is_founder && (
+            {/* ============ ADMIN TAB ============ */}
+            {tab === 'admin' && user?.is_founder && (
               <div className="account-section admin-panel">
                 <h3 className="account-section-title">Admin — Credit Management</h3>
 
@@ -794,7 +977,7 @@ export default function AccountPage() {
                           })}
                         </div>
                         <span className="admin-user-credits">
-                          {u.is_unlimited ? '∞' : u.credits.toLocaleString()}
+                          {u.is_unlimited ? '\u221E' : u.credits.toLocaleString()}
                         </span>
                       </div>
                     ))}
@@ -810,7 +993,7 @@ export default function AccountPage() {
                     <div className="admin-credit-form-header">
                       Adjust credits for <strong>{selectedUser.username}</strong>
                       <span className="admin-credit-form-current">
-                        (current: {selectedUser.is_unlimited ? '∞' : selectedUser.credits.toLocaleString()})
+                        (current: {selectedUser.is_unlimited ? '\u221E' : selectedUser.credits.toLocaleString()})
                       </span>
                     </div>
                     <div className="admin-credit-controls">
