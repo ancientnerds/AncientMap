@@ -945,7 +945,7 @@ export default function DbAuditPage() {
                 className={`db-qdrant-pill ${
                   qdrantStatus.reindex.running ? 'db-qdrant-indexing' :
                   !qdrantStatus.qdrant_available ? 'db-qdrant-offline' :
-                  (qdrantStatus.collections.sites.delta !== 0 || qdrantStatus.collections.news.delta !== 0 || (qdrantStatus.collections.empires.delta != null && qdrantStatus.collections.empires.delta !== 0)) ? 'db-qdrant-stale' :
+                  (qdrantStatus.collections.sites.delta !== 0 || qdrantStatus.collections.news.delta !== 0 || (qdrantStatus.collections.empires.delta != null && qdrantStatus.collections.empires.delta !== 0) || (qdrantStatus.collections.transcripts.qdrant_count === 0 && qdrantStatus.collections.transcripts.pg_count > 0) || (qdrantStatus.collections.articles.qdrant_count === 0 && qdrantStatus.collections.articles.pg_count > 0)) ? 'db-qdrant-stale' :
                   'db-qdrant-ok'
                 }`}
                 onClick={() => setQdrantOpen(o => !o)}
@@ -957,8 +957,12 @@ export default function DbAuditPage() {
                   qdrantStatus.reindex.running ? 'indexing...' :
                   !qdrantStatus.qdrant_available ? 'offline' :
                   (() => {
+                    const chunkedDelta = (['transcripts', 'articles'] as const).reduce((sum, col) => {
+                      const cc = qdrantStatus.collections[col]
+                      return sum + (cc.qdrant_count === 0 && cc.pg_count > 0 ? cc.pg_count : 0)
+                    }, 0)
                     const comparableDeltas = [qdrantStatus.collections.sites.delta, qdrantStatus.collections.news.delta, qdrantStatus.collections.empires.delta].filter((d): d is number => d != null)
-                    const totalDelta = comparableDeltas.reduce((a, b) => a + b, 0)
+                    const totalDelta = comparableDeltas.reduce((a, b) => a + b, 0) + chunkedDelta
                     return totalDelta === 0 ? 'OK' : `${totalDelta > 0 ? '-' : '+'}${Math.abs(totalDelta)}`
                   })()
                 }</span>
@@ -968,20 +972,38 @@ export default function DbAuditPage() {
                   <div className="db-qdrant-section-title">Collection Counts</div>
                   {(['sites', 'news', 'transcripts', 'articles', 'empires'] as const).map(col => {
                     const c = qdrantStatus.collections[col]
+                    const isChunked = !!c.note
+                    const effectiveDelta = isChunked
+                      ? (c.qdrant_count === 0 && c.pg_count > 0 ? c.pg_count : 0)
+                      : c.delta
                     return (
                       <div key={col} className="db-qdrant-row">
                         <span className="db-qdrant-col-name">{col}</span>
-                        <span className="db-qdrant-counts">
-                          <span title="Qdrant">{c.qdrant_count.toLocaleString()}</span>
-                          <span className="db-qdrant-sep">/</span>
-                          <span title="PostgreSQL">{c.pg_count.toLocaleString()}</span>
-                        </span>
-                        {c.delta != null && c.delta !== 0 && (
-                          <span className={`db-qdrant-delta ${c.delta > 0 ? 'stale' : 'over'}`}>
-                            {c.delta > 0 ? `-${c.delta}` : `+${Math.abs(c.delta)}`}
-                          </span>
+                        {isChunked ? (
+                          <>
+                            <span className="db-qdrant-counts">
+                              <span title="Sources">{c.pg_count.toLocaleString()}</span>
+                            </span>
+                            {c.qdrant_count > 0 ? (
+                              <span className="db-qdrant-note" title={c.note!}>{c.qdrant_count.toLocaleString()} chunks</span>
+                            ) : effectiveDelta > 0 ? (
+                              <span className="db-qdrant-delta stale">-{effectiveDelta.toLocaleString()}</span>
+                            ) : null}
+                          </>
+                        ) : (
+                          <>
+                            <span className="db-qdrant-counts">
+                              <span title="Qdrant">{c.qdrant_count.toLocaleString()}</span>
+                              <span className="db-qdrant-sep">/</span>
+                              <span title="PostgreSQL">{c.pg_count.toLocaleString()}</span>
+                            </span>
+                            {effectiveDelta != null && effectiveDelta !== 0 && (
+                              <span className={`db-qdrant-delta ${effectiveDelta > 0 ? 'stale' : 'over'}`}>
+                                {effectiveDelta > 0 ? `-${effectiveDelta.toLocaleString()}` : `+${Math.abs(effectiveDelta).toLocaleString()}`}
+                              </span>
+                            )}
+                          </>
                         )}
-                        {c.note && <span className="db-qdrant-note" title={c.note}>chunks</span>}
                       </div>
                     )
                   })}
