@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 160" width="600" height="160">
+  <defs>
+    <!-- Drop shadow for ANCIENT NERDS -->
+    <filter id="drop" x="-5%" y="-5%" width="115%" height="130%">
+      <feDropShadow dx="2" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.7"/>
+    </filter>
+    <!-- Warm glow for Lost Empires -->
+    <filter id="glow" x="-5%" y="-10%" width="115%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#ff8c00" flood-opacity="0.4"/>
+    </filter>
+    <!-- Aged texture gradient for Lost Empires -->
+    <linearGradient id="aged" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffd700"/>
+      <stop offset="40%" stop-color="#ffaa00"/>
+      <stop offset="100%" stop-color="#cc7700"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ANCIENT NERDS — red, sci-fi/tech font, drop shadow -->
+  <text
+    x="300" y="62"
+    text-anchor="middle"
+    font-family="'Orbitron', 'Rajdhani', 'Exo 2', 'Share Tech', 'Segoe UI', sans-serif"
+    font-size="52"
+    font-weight="700"
+    letter-spacing="6"
+    fill="#c02023"
+    filter="url(#drop)"
+  >ANCIENT NERDS</text>
+
+  <!-- Lost Empires — gold/orange, aged serif font -->
+  <text
+    x="300" y="128"
+    text-anchor="middle"
+    font-family="'Cinzel', 'Trajan Pro', 'Playfair Display', 'Palatino Linotype', 'Book Antiqua', 'Georgia', serif"
+    font-size="56"
+    font-weight="400"
+    letter-spacing="4"
+    fill="url(#aged)"
+    filter="url(#glow)"
+  >Lost Empires</text>
+</svg>

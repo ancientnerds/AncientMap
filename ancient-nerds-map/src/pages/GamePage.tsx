@@ -914,7 +914,7 @@ export default function GamePage() {
   return (
     <div className="game-page">
       <PageHeader currentPage="game" speechBubble="Think you can beat my expedition decks? I built them from the best sites in each region.">
-        <span className="page-header-title">Lost Empires</span>
+        <img src="/lost-empires-logo.svg" alt="Ancient Nerds: Lost Empires" className="game-logo" />
       </PageHeader>
 
       <div className="game-layout">
