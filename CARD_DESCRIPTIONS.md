@@ -12,32 +12,50 @@ A procedure for generating punchy 120-character card descriptions for all Forgot
 **Step 1 — Check progress**
 
 1. Read `output/card_descriptions.json`. If missing, create it with content: `{"descriptions": {}}`
-2. Count completed descriptions vs total sites in `output/card_sites.json`.
-3. Report: `Progress: X / Y descriptions complete (Z% done)`
-4. If all done → skip to Step 4.
+2. Scan `output/card_descriptions_batch_*.json` for any batch files not yet merged. If found, merge them first (see Step 3c).
+3. Count completed descriptions vs total sites in `output/card_sites.json`.
+4. Report: `Progress: X / Y descriptions complete (Z% done)`
+5. If all done → skip to Step 4.
 
-**Step 2 — Pick next batch**
+**Step 2 — Prepare parallel batches**
 
 1. Read `output/card_sites.json` (full site list).
 2. Read `output/card_descriptions.json` (completed descriptions).
-3. Filter out sites whose `site_id` is already in the descriptions dict.
-4. Take the next **200** unprocessed sites.
-5. Report: `Processing batch of N sites (IDs: first_name ... last_name)`
+3. Filter out sites whose `site_id` is already in the descriptions dict → get `remaining` list.
+4. Split `remaining` into **10 equal chunks** by index (chunk 0 = indices 0–N, chunk 1 = N+1–2N, etc.). No overlap.
+5. Write each chunk to `output/batch_input_NNN.json` (array of site objects, NNN = 001–010).
+6. Report: `Prepared 10 batches of ~M sites each. Total remaining: R`
 
-**Step 3 — Generate descriptions**
+**Step 3 — Generate descriptions (parallel agents)**
 
-For each site in the batch, using the input data (name, period_name, period_start, site_type, description/wiki excerpt):
+Launch **10 agents in parallel** (subagent_type: `general-purpose`), each with:
+- Its own batch input file to read (`output/batch_input_NNN.json`)
+- Its own output file to write (`output/card_descriptions_batch_NNN.json`)
+- The full Tone & Style Guide (copy the guide into the agent prompt — agents don't share context)
 
-1. Write a **max 120-character** description following the Tone & Style Guide below.
-2. Validate that the description is <= 120 characters. If over, shorten it.
-3. Add to the descriptions dict: `descriptions[site_id] = "the description"`
+Each agent's prompt must include:
+1. Read `output/batch_input_NNN.json`
+2. For each site, write a **max 120-character** description following the Tone & Style Guide
+3. Validate every description is <= 120 chars. If over, shorten it.
+4. Write the result to `output/card_descriptions_batch_NNN.json` as: `{"site_id": "description", ...}`
+5. Print a summary: `Batch NNN complete. Wrote X descriptions.`
 
-After processing all sites in the batch:
+**Step 3b — Wait and verify**
 
-1. Merge the new descriptions into `output/card_descriptions.json` and save.
-2. Report: `Batch complete. Wrote N new descriptions. Total: X / Y`
+After all agents finish:
+1. Read each `output/card_descriptions_batch_NNN.json`
+2. Check: total descriptions across all batch files == total sites in all input files
+3. Check: no duplicate `site_id` across batches (there shouldn't be, but verify)
+4. Check: every description is <= 120 chars and non-empty
+5. Report any gaps or issues
 
-**Loop**: Go back to Step 1. Repeat until all sites are processed.
+**Step 3c — Merge**
+
+1. Read `output/card_descriptions.json` (existing descriptions)
+2. Read all `output/card_descriptions_batch_*.json` files
+3. Merge everything into `output/card_descriptions.json`
+4. Delete the batch input and output files (cleanup)
+5. Report: `Merged N new descriptions. Total: X / Y (Z%)`
 
 **Step 4 — Validate all descriptions**
 
