@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { CAMERA, GLOBE, RENDER_ORDER } from '../../../config/globeConstants'
+import { BRAND_ASSETS } from '../../../constants/brand'
 
 /** Options passed to initializeScene for configuring the scene. */
 export interface SceneInitOptions {
@@ -706,7 +707,7 @@ export function initializeScene(
     }
   }
   logoImg.onerror = (err) => console.error('Failed to load AN logo:', err)
-  logoImg.src = '/an-logo.svg'
+  logoImg.src = BRAND_ASSETS.logo
 
   // OrbitControls Setup (using constants from config)
   const controls = new OrbitControls(camera, renderer.domElement)

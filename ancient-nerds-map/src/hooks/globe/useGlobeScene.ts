@@ -9,6 +9,7 @@ import { useRef, useEffect, useState, useCallback } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { CAMERA, GLOBE, RENDER_ORDER } from '../../config/globeConstants'
+import { BRAND_ASSETS } from '../../constants/brand'
 
 export interface SceneRefs {
   renderer: THREE.WebGLRenderer
@@ -435,7 +436,7 @@ export function useGlobeScene(options: UseGlobeSceneOptions) {
       }
     }
     logoImg.onerror = (err) => console.error('Failed to load AN logo:', err)
-    logoImg.src = '/an-logo.svg'
+    logoImg.src = BRAND_ASSETS.logo
 
     // ----- Controls -----
     const controls = new OrbitControls(camera, renderer.domElement)

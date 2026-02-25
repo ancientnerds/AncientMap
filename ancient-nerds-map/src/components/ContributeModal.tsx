@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { config } from '../config'
+import { BRAND_NAME, BRAND_TAGLINE } from '../constants/brand'
 import { OfflineStorage } from '../services/OfflineStorage'
 import SiteForm from './SiteForm'
 import type { SiteFormValues } from './SiteForm'
@@ -288,7 +289,7 @@ export default function ContributeModal({
             <p>Your contribution has been submitted for review.</p>
 
             <div className="success-socials">
-              <p className="socials-invite">Join <span className="brand-name">ANCIENT NERDS</span> - Modern Tech for Ancient Mysteries</p>
+              <p className="socials-invite">Join <span className="brand-name">{BRAND_NAME}</span> - {BRAND_TAGLINE}</p>
               <div className="socials-links">
                 <a href="https://discord.gg/8bAjKKCue4" target="_blank" rel="noopener noreferrer" title="Discord">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
