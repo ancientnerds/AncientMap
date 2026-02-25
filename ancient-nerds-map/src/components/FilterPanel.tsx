@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, memo, useCallback } from 'react'
 import { getCategoryColor, getCategoryGroup, CATEGORY_GROUP_ORDER, type CategoryGroup } from '../data/sites'
+import { BRAND_NAME, BRAND_SUBTITLE } from '../constants/brand'
 import { FilterMode } from '../App'
 import { AnimatedCounter } from './AnimatedCounter'
 import { useOffline } from '../contexts/OfflineContext'
@@ -398,8 +399,8 @@ function FilterPanel({
       <div className="panel-header">
         <div className="logo-wrapper">
           <div className="glass-panel logo-panel">
-            <div className="logo-main">ANCIENT NERDS</div>
-            <div className="logo-sub">RESEARCH PLATFORM</div>
+            <div className="logo-main">{BRAND_NAME}</div>
+            <div className="logo-sub">{BRAND_SUBTITLE}</div>
           </div>
           <span className="beta-badge">BETA</span>
         </div>

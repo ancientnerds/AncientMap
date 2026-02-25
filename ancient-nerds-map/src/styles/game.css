@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   Lost Empires — Game Rules Page
+   Forgotten Worlds — Game Rules Page
    Follows site UI standards: --bg-main, --border-color, --primary-red,
    Orbitron headings, Inter body, same card/button patterns as other pages.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -15,14 +15,49 @@
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
+.game-logo-wrap {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin: 0 0 1.5rem;
+}
+
 .game-logo {
-  max-width: 420px;
+  max-width: 520px;
   width: 100%;
   height: auto;
   display: block;
+  flex-shrink: 1;
 }
+
+.game-coming-soon {
+  flex-shrink: 0;
+  transform: rotate(-12deg);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #a8b2bc;
+  border: 3px solid #a8b2bc;
+  border-radius: 6px;
+  padding: 6px 14px;
+  white-space: nowrap;
+  text-transform: uppercase;
+  opacity: 0.85;
+  box-shadow:
+    0 0 8px rgba(168, 178, 188, 0.2),
+    inset 0 0 8px rgba(168, 178, 188, 0.06);
+  pointer-events: none;
+}
+
 @media (max-width: 600px) {
-  .game-logo { max-width: 280px; }
+  .game-logo { max-width: 320px; }
+  .game-coming-soon {
+    font-size: 0.55rem;
+    padding: 4px 8px;
+    border-width: 2px;
+    letter-spacing: 1px;
+  }
 }
 
 /* Layout: sidebar TOC + main content */

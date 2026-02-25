@@ -15,11 +15,13 @@ import { DataStore } from './data/DataStore'
 import { SourceLoader } from './services/SourceLoader'
 import { config } from './config'
 import { apiDetailToSiteData } from './utils/siteApi'
+import { BRAND_NAME, BRAND_SUBTITLE, BRAND_ASSETS } from './constants/brand'
 import { OfflineProvider, useOffline } from './contexts/OfflineContext'
 import { offlineFetch } from './services/OfflineFetch'
 import { isDemoMode, registerAppDemoApi } from './utils/demoApi'
 import { normalizeForSearch, periodToYear, extractCountry } from './utils/searchUtils'
 import { haversineDistance } from './utils/geoMath'
+import { reportAchievementEvent } from './utils/cardApi'
 import { useSiteSearch } from './hooks/useSiteSearch'
 
 export type FilterMode = 'category' | 'age' | 'source' | 'country'
@@ -1076,6 +1078,7 @@ function AppContent() {
     const randomIndex = Math.floor(Math.random() * availableSites.length)
     const randomSite = availableSites[randomIndex]
     setSearchQuery(randomSite.title)
+    reportAchievementEvent('random_site_used')
 
     // Fly to the site and select it to show the tooltip
     // Save current selection for undo before Random changes it
@@ -1266,6 +1269,7 @@ function AppContent() {
   const handleProximitySet = useCallback((coords: [number, number]) => {
     setProximityCenter(coords)
     setIsSettingProximityOnGlobe(false) // Auto-disable after setting
+    reportAchievementEvent('proximity_used')
   }, [])
 
   // Handle proximity hover coordinates from globe
@@ -1534,9 +1538,9 @@ function AppContent() {
     return (
       <div className="mobile-overlay">
         <div className="mobile-overlay-content">
-          <img src="/an-logo.svg" alt="" className="mobile-logo-icon" />
-          <div className="mobile-logo-main">ANCIENT NERDS</div>
-          <div className="mobile-logo-sub">RESEARCH PLATFORM</div>
+          <img src={BRAND_ASSETS.logo} alt="" className="mobile-logo-icon" />
+          <div className="mobile-logo-main">{BRAND_NAME}</div>
+          <div className="mobile-logo-sub">{BRAND_SUBTITLE}</div>
           <div className="mobile-message">
             The 3D globe is optimized for desktop browsers.
           </div>
@@ -1593,7 +1597,7 @@ function AppContent() {
         >
           <div className="loading-spinner-container">
             <div className="loading-spinner" />
-            <img src="/an-logo.svg" alt="Ancient Nerds" className="loading-logo" />
+            <img src={BRAND_ASSETS.logo} alt="Ancient Nerds" className="loading-logo" />
           </div>
           <div className="loading-text">{layersReady ? 'READY' : loadingStatus.toUpperCase()}</div>
           {(downloadSpeed || downloadedMB > 0) && (

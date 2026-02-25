@@ -1,5 +1,6 @@
 import { type ReactNode, useState, useEffect } from 'react'
 import { config } from '../../config'
+import { BRAND_NAME, BRAND_ASSETS } from '../../constants/brand'
 import HamburgerNav from './HamburgerNav'
 import './page-header.css'
 
@@ -44,8 +45,8 @@ export default function PageHeader({ children, rightSection, speechBubble, onAva
   return (
     <header className="page-header">
       <a href="/globe.html" className="page-header-brand">
-        <img src="/an-logo.svg" alt="" className="page-header-logo" />
-        <span className="page-header-brand-text">ANCIENT NERDS</span>
+        <img src={BRAND_ASSETS.logo} alt="" className="page-header-logo" />
+        <span className="page-header-brand-text">{BRAND_NAME}</span>
       </a>
       <HamburgerNav currentPage={currentPage} />
       <div className="page-header-divider" />

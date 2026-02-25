@@ -1,5 +1,5 @@
 /**
- * GamePage — Lost Empires card game rules and guide.
+ * GamePage — Forgotten Worlds card game rules and guide.
  * Static informational page, no auth required.
  */
 
@@ -7,6 +7,7 @@ import { useState } from 'react'
 import type { CardData } from '../types/cards'
 import { GameCard, EmpireCard } from '../components/cards/GameCard'
 import { RARITY_TIERS as RARITY_TIERS_MAP } from '../constants/rarity'
+import { SUB_BRANDS, BRAND_ASSETS } from '../constants/brand'
 import gameConstants from '../data/game-constants.generated.json'
 import PageHeader from '../components/layout/PageHeader'
 import '../styles/game.css'
@@ -249,9 +250,9 @@ const SECTIONS: { id: SectionId; label: string }[] = [
 function OverviewSection() {
   return (
     <section className="game-section" id="overview">
-      <h2>What is Lost Empires?</h2>
+      <h2>What is Forgotten Worlds?</h2>
       <p>
-        Lost Empires is a collectible card game where every card is a <strong>real archaeological site</strong>.
+        Forgotten Worlds is a collectible card game where every card is a <strong>real archaeological site</strong>.
         Collect from over 3,900 sites spanning every continent and 10,000 years of human history — from
         Gobekli Tepe to Machu Picchu, from Stonehenge to Great Zimbabwe.
       </p>
@@ -878,7 +879,7 @@ function DiscordSection() {
   return (
     <section className="game-section" id="discord">
       <h2>Discord Commands</h2>
-      <p>Play Lost Empires directly in the Ancient Nerds Discord server.</p>
+      <p>Play Forgotten Worlds directly in the Ancient Nerds Discord server.</p>
       <div className="game-discord-table">
         <table>
           <thead><tr><th>Command</th><th>Description</th></tr></thead>
@@ -913,8 +914,8 @@ export default function GamePage() {
 
   return (
     <div className="game-page">
-      <PageHeader currentPage="game" speechBubble="Think you can beat my expedition decks? I built them from the best sites in each region.">
-        <img src="/lost-empires-logo.svg" alt="Ancient Nerds: Lost Empires" className="game-logo" />
+      <PageHeader currentPage="game" speechBubble="Every card is a real archaeological site. Collect them, build synergy decks, and battle your friends!">
+        <span className="page-header-title">Card Game</span>
       </PageHeader>
 
       <div className="game-layout">
@@ -932,6 +933,10 @@ export default function GamePage() {
         </nav>
 
         <main className="game-content">
+          <div className="game-logo-wrap">
+            <img src={BRAND_ASSETS.forgottenWorldsLogo} alt={`Ancient Nerds: ${SUB_BRANDS.forgottenWorlds}`} className="game-logo" />
+            <span className="game-coming-soon">COMING SOON</span>
+          </div>
           <OverviewSection />
           <CardsSection />
           <TypeAdvantageSection />
