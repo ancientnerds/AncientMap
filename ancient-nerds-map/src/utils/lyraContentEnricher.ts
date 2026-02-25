@@ -1,7 +1,7 @@
 /**
  * Pre-processes Lyra's markdown response to insert:
  * - Copyable coordinates: [coord:lat,lon](lyra-coord:lat,lon)
- * - Country flags: ![flag](/flags-flat/xx.webp) CountryName
+ * - Country flags: [CountryName](flag:code)
  * - YouTube video embeds: [▶ Channel](lyra-video:INDEX)
  *
  * Site links are emitted directly by the LLM as [Site Name](site:UUID)
@@ -9,7 +9,7 @@
  */
 
 import type { NewsHighlight } from '../types/ai'
-import { COUNTRY_CODES, getCountryFlatFlagUrl } from './countryFlags'
+import { COUNTRY_CODES, getCountryCode } from './countryFlags'
 
 // Build sorted country names list (longest first to avoid partial matches)
 const COUNTRY_NAMES = Object.keys(COUNTRY_CODES).sort((a, b) => b.length - a.length)
@@ -42,13 +42,14 @@ export function enrichLyraContent(content: string, news?: NewsHighlight[]): stri
     (_match, lat, lon) => `[${lat}, ${lon}](lyra-coord:${lat},${lon})`
   )
 
-  // 2. Country names → flag image + name (longest first)
+  // 2. Country names → flag link (longest first)
+  //    Uses link syntax [Country](flag:code) instead of image syntax to stay inline
   //    Only first occurrence of each country, avoid re-replacing inside links
   const replacedCountries = new Set<string>()
   for (const name of COUNTRY_NAMES) {
     if (replacedCountries.has(name.toLowerCase())) continue
-    const flagUrl = getCountryFlatFlagUrl(name)
-    if (!flagUrl) continue
+    const code = getCountryCode(name)
+    if (!code) continue
 
     const escaped = escapeRegex(name)
     const regex = new RegExp(
@@ -56,7 +57,7 @@ export function enrichLyraContent(content: string, news?: NewsHighlight[]): stri
       'giu'
     )
     result = result.replace(regex, (match) => {
-      return `![flag](${flagUrl})${match}`
+      return `[${match}](flag:${code})`
     })
     replacedCountries.add(name.toLowerCase())
   }

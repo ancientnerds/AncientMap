@@ -14351,6 +14351,9 @@ body.news-feed-open .empire-borders-window {
 }
 
 .lyra-inline-site-wrap {
+  display: inline;
+}
+.lyra-inline-site-wrap:hover {
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -14393,8 +14396,10 @@ body.news-feed-open .empire-borders-window {
   display: block;
 }
 
-/* Inline country flags in Lyra messages — needs .lyra-chat-msg-text prefix
-   to beat the generic `.lyra-chat-msg-text img` rule (specificity 0,1,1) */
+/* Inline country flags in Lyra messages — rendered via [Country](flag:code) links */
+.lyra-inline-flag-wrap {
+  display: inline;
+}
 .lyra-chat-msg-text img.lyra-inline-flag {
   display: inline-block;
   height: 12px;
