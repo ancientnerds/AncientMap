@@ -47,6 +47,7 @@ class CardStats(Base):
     civilization: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     empires: Mapped[list | None] = mapped_column(JSONB, default=list, server_default="[]")
     empire_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    card_description: Mapped[str | None] = mapped_column(String(150), nullable=True)
 
     site: Mapped["UnifiedSite"] = relationship("UnifiedSite", lazy="joined")
 

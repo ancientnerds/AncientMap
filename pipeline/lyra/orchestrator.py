@@ -1047,6 +1047,11 @@ def _run_migrations(engine) -> None:
             WHERE grant_period IS NULL
         """))
 
+        # Card descriptions column for Forgotten Worlds card game
+        conn.execute(text(
+            "ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS card_description VARCHAR(150)"
+        ))
+
         conn.commit()
 
 

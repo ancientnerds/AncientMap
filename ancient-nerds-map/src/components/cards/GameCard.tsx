@@ -308,6 +308,9 @@ export function GameCardDetail({ card, onClose, bonuses }: {
         <p className="gc-detail-rarity" style={{ color: rarity.color }}>
           {rarity.name} &middot; Tier {card.rarity_tier}
         </p>
+        {card.card_description && (
+          <p className="gc-detail-desc">{card.card_description}</p>
+        )}
         <div className="gc-detail-stats">
           {STAT_META.map(s => (
             <StatBar

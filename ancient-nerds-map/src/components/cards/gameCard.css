@@ -537,6 +537,14 @@
   font-weight: 500;
 }
 
+.gc-detail-desc {
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.65);
+  margin: 0 0 1rem;
+  font-style: italic;
+}
+
 .gc-detail-stats {
   display: flex;
   flex-direction: column;
