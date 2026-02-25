@@ -1,5 +1,5 @@
 /**
- * GamePage — Ruins & Relics card game rules and guide.
+ * GamePage — Lost Empires card game rules and guide.
  * Static informational page, no auth required.
  */
 
@@ -249,9 +249,9 @@ const SECTIONS: { id: SectionId; label: string }[] = [
 function OverviewSection() {
   return (
     <section className="game-section" id="overview">
-      <h2>What is Ruins & Relics?</h2>
+      <h2>What is Lost Empires?</h2>
       <p>
-        Ruins & Relics is a collectible card game where every card is a <strong>real archaeological site</strong>.
+        Lost Empires is a collectible card game where every card is a <strong>real archaeological site</strong>.
         Collect from over 3,900 sites spanning every continent and 10,000 years of human history — from
         Gobekli Tepe to Machu Picchu, from Stonehenge to Great Zimbabwe.
       </p>
@@ -878,7 +878,7 @@ function DiscordSection() {
   return (
     <section className="game-section" id="discord">
       <h2>Discord Commands</h2>
-      <p>Play Ruins & Relics directly in the Ancient Nerds Discord server.</p>
+      <p>Play Lost Empires directly in the Ancient Nerds Discord server.</p>
       <div className="game-discord-table">
         <table>
           <thead><tr><th>Command</th><th>Description</th></tr></thead>
@@ -914,7 +914,7 @@ export default function GamePage() {
   return (
     <div className="game-page">
       <PageHeader currentPage="game" speechBubble="Think you can beat my expedition decks? I built them from the best sites in each region.">
-        <span className="page-header-title">Ruins & Relics</span>
+        <span className="page-header-title">Lost Empires</span>
       </PageHeader>
 
       <div className="game-layout">
