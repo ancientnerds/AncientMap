@@ -173,6 +173,7 @@ class CardPlayerStats(Base):
     daily_streak: Mapped[int] = mapped_column(Integer, default=0)
     last_daily: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     packs_opened: Mapped[int] = mapped_column(Integer, default=0)
+    feature_flags: Mapped[dict | None] = mapped_column(JSONB, default=dict, server_default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
@@ -286,6 +287,53 @@ class EmpireCollection(Base):
     __table_args__ = (
         UniqueConstraint("user_id", "empire_id", name="uq_empire_collection"),
         Index("idx_empire_collections_user", "user_id"),
+    )
+
+
+class Achievement(Base):
+    """Static achievement definitions, seeded on startup."""
+
+    __tablename__ = "achievements"
+
+    id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    category: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    tier: Mapped[str] = mapped_column(String(10), nullable=False)
+    reward_credits: Mapped[int] = mapped_column(Integer, default=0)
+    reward_xp: Mapped[int] = mapped_column(Integer, default=0)
+    reward_card_tier: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reward_card_count: Mapped[int] = mapped_column(Integer, default=0)
+    icon: Mapped[str] = mapped_column(String(10), nullable=False, default="")
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    hidden: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+
+
+class UserAchievement(Base):
+    """Per-user achievement unlock records."""
+
+    __tablename__ = "user_achievements"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("discord_users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    achievement_id: Mapped[str] = mapped_column(
+        String(80),
+        ForeignKey("achievements.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    unlocked_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    claimed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "achievement_id", name="uq_user_achievement"),
+        Index("idx_user_achievements_user", "user_id"),
     )
 
 

@@ -1322,3 +1322,219 @@
   gap: 12px;
 }
 
+/* ============ ACHIEVEMENTS TAB ============ */
+
+.account-tab-count-alert {
+  background: var(--primary-red, #c02023) !important;
+  color: #fff !important;
+}
+
+.achievements-tab {
+  padding: 0.5rem 0;
+}
+
+.achievements-progress {
+  margin-bottom: 20px;
+}
+
+.achievements-progress-bar {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.achievements-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #cd7f32, #ffd700);
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+.achievements-progress-text {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 6px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  color: #888;
+}
+
+.achievements-unclaimed-badge {
+  background: var(--primary-red, #c02023);
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.achievements-categories {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 20px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.achievements-category-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  color: #888;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.achievements-category-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ccc;
+}
+
+.achievements-category-btn.active {
+  background: rgba(192, 32, 35, 0.15);
+  border-color: rgba(192, 32, 35, 0.4);
+  color: #fff;
+}
+
+.achievements-category-icon {
+  font-size: 14px;
+}
+
+.achievements-category-count {
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+.achievements-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.achievement-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.achievement-card.locked {
+  opacity: 0.45;
+  filter: grayscale(0.6);
+}
+
+.achievement-card.claimable {
+  border-color: rgba(255, 215, 0, 0.4);
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.08);
+}
+
+.achievement-card.claimed {
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.achievement-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.achievement-icon {
+  font-size: 28px;
+}
+
+.achievement-tier-badge {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: #111;
+}
+
+.achievement-card-body {
+  flex: 1;
+}
+
+.achievement-name {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 4px;
+}
+
+.achievement-desc {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  color: #888;
+  line-height: 1.4;
+}
+
+.achievement-rewards {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.achievement-reward-tag {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  color: #aaa;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.achievement-claim-btn {
+  width: 100%;
+  padding: 8px 0;
+  background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%);
+  border: none;
+  border-radius: 8px;
+  color: #111;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+}
+
+.achievement-claim-btn:hover {
+  opacity: 0.9;
+}
+
+.achievement-claim-btn:active {
+  transform: scale(0.98);
+}
+
+.achievement-claim-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.achievement-claimed-badge {
+  text-align: center;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: #22c55e;
+  padding: 6px 0;
+}
+

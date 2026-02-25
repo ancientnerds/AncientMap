@@ -444,6 +444,10 @@ async def discord_oauth_callback(code: str | None = None, state: str | None = No
         # Evaluate and apply credit grants for all roles
         process_credit_grants(session, user)
 
+        # Check login achievement
+        from api.cardgame.achievements import check_achievements
+        check_achievements(session, user.id, "login")
+
         jwt_token = create_token(str(user.id), discord_id)
 
     response = RedirectResponse(url=return_to)

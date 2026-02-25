@@ -3,6 +3,8 @@
  * Part of the Map Layers panel for historical visualization features
  */
 
+import { reportAchievementEvent } from '../../../utils/cardApi'
+
 interface HistoricalLayersSectionProps {
   // Paleoshoreline
   paleoshorelineVisible: boolean
@@ -48,7 +50,7 @@ export function HistoricalLayersSection({
         <input
           type="checkbox"
           checked={paleoshorelineVisible}
-          onChange={onPaleoshorelineToggle}
+          onChange={() => { onPaleoshorelineToggle(); if (!paleoshorelineVisible) reportAchievementEvent('sea_level_adjusted') }}
           disabled={isLoadingPaleoshoreline || showMapbox}
         />
         <span

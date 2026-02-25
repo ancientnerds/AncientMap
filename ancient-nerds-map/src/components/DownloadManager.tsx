@@ -8,6 +8,7 @@ import { OfflineStorage, DownloadState, CompactSite } from '../services/OfflineS
 import { BasemapCache, BasemapType } from '../services/BasemapCache'
 import { VectorLayerCache } from '../services/VectorLayerCache'
 import { EmpireCache } from '../services/EmpireCache'
+import { reportAchievementEvent } from '../utils/cardApi'
 import { ImageCache } from '../services/ImageCache'
 import { config } from '../config'
 import './DownloadManager.css'
@@ -360,6 +361,8 @@ export default function DownloadManager({ isOpen, onClose, sources, isOffline, o
 
       const estimate = await OfflineStorage.getStorageEstimate()
       setStorageUsed(estimate.used)
+
+      reportAchievementEvent('offline_downloaded')
     } catch (error) {
       console.error('Download error:', error)
     } finally {

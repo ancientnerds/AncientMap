@@ -20,9 +20,10 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from api.cache import cache_delete_pattern
+from api.services.jwt_auth import get_optional_user
 from api.services.rate_limiter import RateLimiter, get_client_ip
 from api.services.turnstile import verify_turnstile as _verify_turnstile_shared
-from pipeline.database import get_db
+from pipeline.database import DiscordUser, get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -205,6 +206,7 @@ async def create_contribution(
     contribution: ContributionCreate,
     request: Request,
     db: Session = Depends(get_db),
+    user: DiscordUser | None = Depends(get_optional_user),
 ):
     """
     Submit a new site contribution.
@@ -274,10 +276,19 @@ async def create_contribution(
 
     logger.info(f"New submission: {name} (ID: {contribution_id})")
 
+    # Check contribution achievements if user is logged in
+    new_achievements = []
+    if user:
+        from api.cardgame.achievements import check_achievements
+        from pipeline.database import get_session
+        with get_session() as ach_session:
+            new_achievements = check_achievements(ach_session, user.id, "contribution")
+
     return {
         "success": True,
         "id": contribution_id,
         "message": "Thank you! Your contribution has been submitted for review.",
+        "achievements_unlocked": new_achievements,
     }
 
 
