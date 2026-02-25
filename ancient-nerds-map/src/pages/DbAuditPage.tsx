@@ -1499,7 +1499,9 @@ export default function DbAuditPage() {
                   {/* Image thumbnail */}
                   <td className="db-td db-td-img">
                     {(site.i || heroStatus[site.id]?.path) ? (
-                      <img src={site.i || heroStatus[site.id]?.path} className="db-thumb" alt="" loading="lazy" />
+                      <span className="db-thumb-wrap">
+                        <img src={site.i || heroStatus[site.id]?.path} className="db-thumb" alt="" loading="lazy" />
+                      </span>
                     ) : <span className="db-missing">&mdash;</span>}
                   </td>
 
