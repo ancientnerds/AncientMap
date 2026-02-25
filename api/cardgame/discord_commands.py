@@ -1097,8 +1097,12 @@ class DuelView(discord.ui.View):
                     self.stop()
                     return
 
-                challenger = session.get(DiscordUser, battle.challenger_id)
-                defender = session.get(DiscordUser, battle.defender_id)
+                challenger = session.query(DiscordUser).filter(
+                    DiscordUser.id == battle.challenger_id,
+                ).with_for_update().first()
+                defender = session.query(DiscordUser).filter(
+                    DiscordUser.id == battle.defender_id,
+                ).with_for_update().first()
 
                 # Escrow stakes
                 if battle.stake_credits > 0:
@@ -1323,11 +1327,20 @@ class SnapView(discord.ui.View):
         from pipeline.database import DiscordUser, get_session
 
         with get_session() as session:
-            battle = session.get(CardBattle, uuid.UUID(self.battle_id))
-            if battle and battle.status == "active":
+            battle = (
+                session.query(CardBattle)
+                .filter(CardBattle.id == uuid.UUID(self.battle_id), CardBattle.status == "active")
+                .with_for_update()
+                .first()
+            )
+            if battle:
                 battle.snap_multiplier = snap_multiplier
-                challenger = session.get(DiscordUser, battle.challenger_id)
-                defender = session.get(DiscordUser, battle.defender_id)
+                challenger = session.query(DiscordUser).filter(
+                    DiscordUser.id == battle.challenger_id,
+                ).with_for_update().first()
+                defender = session.query(DiscordUser).filter(
+                    DiscordUser.id == battle.defender_id,
+                ).with_for_update().first()
                 apply_battle_result(session, battle, self.result, challenger, defender)
 
 
@@ -1366,12 +1379,21 @@ class SnapResponseView(discord.ui.View):
         from pipeline.database import DiscordUser, get_session
 
         with get_session() as session:
-            battle = session.get(CardBattle, uuid.UUID(self.battle_id))
-            if battle and battle.status == "active":
+            battle = (
+                session.query(CardBattle)
+                .filter(CardBattle.id == uuid.UUID(self.battle_id), CardBattle.status == "active")
+                .with_for_update()
+                .first()
+            )
+            if battle:
                 battle.snap_multiplier = 2
                 # Escrow additional stake from both players
-                challenger = session.get(DiscordUser, battle.challenger_id)
-                defender = session.get(DiscordUser, battle.defender_id)
+                challenger = session.query(DiscordUser).filter(
+                    DiscordUser.id == battle.challenger_id,
+                ).with_for_update().first()
+                defender = session.query(DiscordUser).filter(
+                    DiscordUser.id == battle.defender_id,
+                ).with_for_update().first()
 
                 additional = battle.stake_credits  # double means pay original again
                 if challenger.credits >= additional and defender.credits >= additional:
@@ -1404,11 +1426,20 @@ class SnapResponseView(discord.ui.View):
 
         # Retreat = forfeit at original stakes. Snapper wins by default.
         with get_session() as session:
-            battle = session.get(CardBattle, uuid.UUID(self.battle_id))
-            if battle and battle.status == "active":
+            battle = (
+                session.query(CardBattle)
+                .filter(CardBattle.id == uuid.UUID(self.battle_id), CardBattle.status == "active")
+                .with_for_update()
+                .first()
+            )
+            if battle:
                 battle.snap_multiplier = 1
-                challenger = session.get(DiscordUser, battle.challenger_id)
-                defender = session.get(DiscordUser, battle.defender_id)
+                challenger = session.query(DiscordUser).filter(
+                    DiscordUser.id == battle.challenger_id,
+                ).with_for_update().first()
+                defender = session.query(DiscordUser).filter(
+                    DiscordUser.id == battle.defender_id,
+                ).with_for_update().first()
 
                 # Override result: snapper wins by retreat
                 retreat_result = dict(self.result)
@@ -1436,11 +1467,20 @@ class SnapResponseView(discord.ui.View):
         from pipeline.database import DiscordUser, get_session
 
         with get_session() as session:
-            battle = session.get(CardBattle, uuid.UUID(self.battle_id))
-            if battle and battle.status == "active":
+            battle = (
+                session.query(CardBattle)
+                .filter(CardBattle.id == uuid.UUID(self.battle_id), CardBattle.status == "active")
+                .with_for_update()
+                .first()
+            )
+            if battle:
                 battle.snap_multiplier = 1
-                challenger = session.get(DiscordUser, battle.challenger_id)
-                defender = session.get(DiscordUser, battle.defender_id)
+                challenger = session.query(DiscordUser).filter(
+                    DiscordUser.id == battle.challenger_id,
+                ).with_for_update().first()
+                defender = session.query(DiscordUser).filter(
+                    DiscordUser.id == battle.defender_id,
+                ).with_for_update().first()
 
                 retreat_result = dict(self.result)
                 if self.snapper_id == self.challenger_id:

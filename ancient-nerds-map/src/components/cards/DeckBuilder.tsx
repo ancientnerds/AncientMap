@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import type { CardData, DeckData, SynergyDescription } from '../../types/cards'
 import { apiFetch } from '../../utils/cardApi'
 import { GameCard } from './GameCard'
@@ -40,6 +40,11 @@ export default function DeckBuilder({ token }: DeckBuilderProps) {
 
   useEffect(() => { loadDecks() }, [loadDecks])
 
+  // Cleanup synergy debounce timer on unmount
+  useEffect(() => {
+    return () => clearTimeout(synergyTimer.current)
+  }, [])
+
   // When selecting a deck slot, load its cards
   const selectDeck = useCallback(async (idx: number) => {
     setActiveDeckIdx(idx)
@@ -73,7 +78,7 @@ export default function DeckBuilder({ token }: DeckBuilderProps) {
 
   useEffect(() => {
     if (decks.length > 0) selectDeck(0)
-  }, [decks.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [decks, selectDeck])
 
   // Debounced synergy preview
   const fetchSynergies = useCallback(async (cardIds: string[]) => {
@@ -142,8 +147,8 @@ export default function DeckBuilder({ token }: DeckBuilderProps) {
         setSuccess('Deck created!')
       }
       await loadDecks()
-    } catch (e: any) {
-      setError(e.message || 'Failed to save deck')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save deck')
     } finally {
       setSaving(false)
     }
@@ -157,8 +162,8 @@ export default function DeckBuilder({ token }: DeckBuilderProps) {
       await apiFetch(`/cards/decks/${deck.id}/activate`, token, { method: 'PUT' })
       setSuccess('Deck activated!')
       await loadDecks()
-    } catch (e: any) {
-      setError(e.message || 'Failed to activate deck')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to activate deck')
     }
   }
 
@@ -173,8 +178,8 @@ export default function DeckBuilder({ token }: DeckBuilderProps) {
       setSynergies([])
       setActiveDeckIdx(0)
       await loadDecks()
-    } catch (e: any) {
-      setError(e.message || 'Failed to delete deck')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete deck')
     }
   }
 
@@ -189,7 +194,7 @@ export default function DeckBuilder({ token }: DeckBuilderProps) {
   }
 
   const currentDeck = decks[activeDeckIdx]
-  const deckCardIds = new Set(deckCards.map(c => c.site_id))
+  const deckCardIds = useMemo(() => new Set(deckCards.map(c => c.site_id)), [deckCards])
 
   if (loading) return <div className="cards-loading">Loading decks...</div>
 

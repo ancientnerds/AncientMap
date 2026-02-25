@@ -22,7 +22,9 @@ export const STAT_COLORS: Record<string, { gradient: string }> = {
   legacy:             { gradient: 'linear-gradient(90deg, #8833dd, #aa66ee)' },
 }
 
-export const STAT_META: { key: string; label: string; icon: string; cardDataKey: string }[] = [
+export type StatKey = 'antiquity' | 'fortification' | 'cultural_influence' | 'mystery' | 'legacy'
+
+export const STAT_META: { key: string; label: string; icon: string; cardDataKey: StatKey }[] = [
   { key: 'antiquity',          label: 'Antiquity',  icon: '\u23f1', cardDataKey: 'antiquity' },
   { key: 'fortification',      label: 'Fortification', icon: '\u2694', cardDataKey: 'fortification' },
   { key: 'cultural_influence', label: 'Cultural',   icon: '\u2605', cardDataKey: 'cultural_influence' },

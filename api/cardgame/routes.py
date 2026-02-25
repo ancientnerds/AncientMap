@@ -3,8 +3,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel
-
+from pydantic import BaseModel, Field
 from sqlalchemy import func
 
 from api.cardgame.constants import (
@@ -16,7 +15,6 @@ from api.cardgame.constants import (
     RARITY_NAMES,
     get_level,
 )
-from pipeline.historical_boundaries.empire_metadata import EMPIRE_METADATA
 from api.cardgame.models import (
     CardBattle,
     CardCollection,
@@ -27,6 +25,7 @@ from api.cardgame.models import (
 from api.services.jwt_auth import get_current_user, get_optional_user
 from api.services.rate_limiter import RateLimiter
 from pipeline.database import DiscordUser, UnifiedSite, get_session
+from pipeline.historical_boundaries.empire_metadata import EMPIRE_METADATA
 from pipeline.utils.country_lookup import normalize_country
 
 router = APIRouter()
@@ -43,21 +42,17 @@ _expedition_limiter = RateLimiter(max_requests=10, window_seconds=60, namespace=
 # ---------------------------------------------------------------------------
 
 class PackOpenRequest(BaseModel):
-    pack_type: str
+    pack_type: str = Field(max_length=20)
 
 
 class DeckCreateRequest(BaseModel):
-    name: str
-    card_ids: list[str]
-
-
-class DeckActivateRequest(BaseModel):
-    pass
+    name: str = Field(max_length=100)
+    card_ids: list[str] = Field(max_length=10)
 
 
 class QuizAnswerRequest(BaseModel):
-    session_id: str
-    answers: list[str]
+    session_id: str = Field(max_length=50)
+    answers: list[str] = Field(max_length=20)
 
 
 # ---------------------------------------------------------------------------
@@ -108,7 +103,7 @@ def _get_client_ip(request: Request) -> str:
 # ---------------------------------------------------------------------------
 
 @router.get("/random")
-async def get_random_cards(count: int = Query(100, ge=1, le=200)):
+def get_random_cards(count: int = Query(100, ge=1, le=200)):
     """Get random site cards (public, no auth)."""
     with get_session() as session:
         rows = (
@@ -128,7 +123,7 @@ async def get_random_cards(count: int = Query(100, ge=1, le=200)):
 
 
 @router.get("/empires/all")
-async def get_all_empires():
+def get_all_empires():
     """Get all empire cards (public, no auth)."""
     empires = []
     for empire_id, name in EMPIRE_DISPLAY_NAMES.items():
@@ -145,7 +140,7 @@ async def get_all_empires():
 
 
 @router.get("/stats/{site_id}")
-async def get_card_stats(site_id: str):
+def get_card_stats(site_id: str):
     """Get card stats for any site (public)."""
     try:
         sid = uuid.UUID(site_id)
@@ -162,13 +157,16 @@ async def get_card_stats(site_id: str):
 
 
 @router.get("/leaderboard")
-async def get_leaderboard(
+def get_leaderboard(
     sort: str = Query("wins", regex="^(wins|cards|power|streak)$"),
     limit: int = Query(20, ge=1, le=100),
 ):
     """Top players leaderboard (public)."""
     with get_session() as session:
-        query = session.query(CardPlayerStats)
+        query = (
+            session.query(CardPlayerStats, DiscordUser)
+            .join(DiscordUser, CardPlayerStats.user_id == DiscordUser.id)
+        )
 
         if sort == "wins":
             query = query.order_by(CardPlayerStats.wins.desc())
@@ -182,8 +180,7 @@ async def get_leaderboard(
         rows = query.limit(limit).all()
 
         result = []
-        for ps in rows:
-            user = session.get(DiscordUser, ps.user_id)
+        for ps, user in rows:
             result.append({
                 "username": user.username if user else "Unknown",
                 "avatar_hash": user.avatar_hash if user else None,
@@ -204,7 +201,7 @@ async def get_leaderboard(
 # ---------------------------------------------------------------------------
 
 @router.get("/collection")
-async def get_collection(
+def get_collection(
     user: DiscordUser = Depends(get_current_user),
     rarity: int | None = Query(None, ge=1, le=5),
     group: str | None = Query(None),
@@ -256,7 +253,7 @@ async def get_collection(
 
 
 @router.post("/pack/open")
-async def open_pack_endpoint(
+def open_pack_endpoint(
     body: PackOpenRequest,
     request: Request,
     user: DiscordUser = Depends(get_current_user),
@@ -292,7 +289,7 @@ async def open_pack_endpoint(
 
 
 @router.get("/decks")
-async def get_decks(user: DiscordUser = Depends(get_current_user)):
+def get_decks(user: DiscordUser = Depends(get_current_user)):
     """List user's decks."""
     with get_session() as session:
         decks = (
@@ -316,7 +313,7 @@ async def get_decks(user: DiscordUser = Depends(get_current_user)):
 
 
 @router.post("/decks")
-async def create_or_update_deck(
+def create_or_update_deck(
     body: DeckCreateRequest,
     user: DiscordUser = Depends(get_current_user),
 ):
@@ -362,7 +359,7 @@ async def create_or_update_deck(
 
 
 @router.put("/decks/{deck_id}")
-async def update_deck(
+def update_deck(
     deck_id: str,
     body: DeckCreateRequest,
     user: DiscordUser = Depends(get_current_user),
@@ -404,7 +401,7 @@ async def update_deck(
 
 
 @router.delete("/decks/{deck_id}")
-async def delete_deck(
+def delete_deck(
     deck_id: str,
     user: DiscordUser = Depends(get_current_user),
 ):
@@ -424,7 +421,7 @@ async def delete_deck(
 
 
 @router.put("/decks/{deck_id}/activate")
-async def activate_deck(
+def activate_deck(
     deck_id: str,
     user: DiscordUser = Depends(get_current_user),
 ):
@@ -451,7 +448,7 @@ async def activate_deck(
 
 
 @router.get("/player-stats")
-async def get_player_stats(user: DiscordUser = Depends(get_current_user)):
+def get_player_stats(user: DiscordUser = Depends(get_current_user)):
     """Get current user's player stats."""
     with get_session() as session:
         ps = session.get(CardPlayerStats, user.id)
@@ -481,7 +478,7 @@ async def get_player_stats(user: DiscordUser = Depends(get_current_user)):
 
 
 @router.post("/starter")
-async def claim_starter(request: Request, user: DiscordUser = Depends(get_current_user)):
+def claim_starter(request: Request, user: DiscordUser = Depends(get_current_user)):
     """Claim starter deck (once per user)."""
     if not _starter_limiter.check(_get_client_ip(request)):
         raise HTTPException(status_code=429, detail="Too many requests, slow down")
@@ -501,7 +498,7 @@ async def claim_starter(request: Request, user: DiscordUser = Depends(get_curren
 
 
 @router.post("/daily")
-async def claim_daily_endpoint(request: Request, user: DiscordUser = Depends(get_current_user)):
+def claim_daily_endpoint(request: Request, user: DiscordUser = Depends(get_current_user)):
     """Claim daily reward."""
     if not _daily_limiter.check(_get_client_ip(request)):
         raise HTTPException(status_code=429, detail="Too many requests, slow down")
@@ -521,7 +518,7 @@ async def claim_daily_endpoint(request: Request, user: DiscordUser = Depends(get
 
 
 @router.get("/packs")
-async def get_pack_info():
+def get_pack_info():
     """Get available pack types and prices (public)."""
     return {
         "packs": {
@@ -542,7 +539,7 @@ async def get_pack_info():
 # ---------------------------------------------------------------------------
 
 @router.post("/deck-synergies")
-async def preview_deck_synergies(
+def preview_deck_synergies(
     body: DeckCreateRequest,
     user: DiscordUser = Depends(get_current_user),
 ):
@@ -576,7 +573,7 @@ async def preview_deck_synergies(
 # ---------------------------------------------------------------------------
 
 @router.post("/quiz/start")
-async def start_quiz(
+def start_quiz(
     request: Request,
     user: DiscordUser = Depends(get_current_user),
 ):
@@ -600,7 +597,7 @@ async def start_quiz(
 
 
 @router.post("/quiz/submit")
-async def submit_quiz(
+def submit_quiz(
     body: QuizAnswerRequest,
     user: DiscordUser = Depends(get_current_user),
 ):
@@ -627,7 +624,7 @@ async def submit_quiz(
 # ---------------------------------------------------------------------------
 
 @router.get("/expeditions")
-async def list_expeditions(
+def list_expeditions(
     user: DiscordUser = Depends(get_optional_user),
 ):
     """List all expeditions with optional user progress."""
@@ -649,7 +646,7 @@ async def list_expeditions(
 
 
 @router.post("/expeditions/{expedition_id}/play")
-async def play_expedition(
+def play_expedition(
     expedition_id: str,
     request: Request,
     user: DiscordUser = Depends(get_current_user),

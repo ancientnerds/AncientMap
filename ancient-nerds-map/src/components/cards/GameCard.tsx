@@ -11,7 +11,7 @@
 
 import type { CardData } from '../../types/cards'
 import { STAR_LEVELS, MAX_STAR_LEVEL, DUPES_FOR_NEXT } from '../../constants/cards'
-import { RARITY_TIERS, STAT_COLORS, STAT_META, STAT_ACCENTS, RARITY_POWER_COLORS, RARITY_RIBBON_BG } from '../../constants/rarity'
+import { RARITY_TIERS, STAT_COLORS, STAT_META, STAT_ACCENTS, RARITY_POWER_COLORS, RARITY_RIBBON_BG, type StatKey } from '../../constants/rarity'
 import { getCountryCode } from '../../utils/countryFlags'
 import './gameCard.css'
 
@@ -23,8 +23,8 @@ function getRarity(tier: number) {
   return RARITY_TIERS[tier] ?? RARITY_TIERS[1]
 }
 
-function getStatValue(card: CardData, key: string): number {
-  return (card as any)[key] ?? 0
+function getStatValue(card: CardData, key: StatKey): number {
+  return card[key]
 }
 
 // ---------------------------------------------------------------------------
@@ -39,8 +39,9 @@ export function StarDisplay({ level, xp, dupsFilled, showDups = false }: {
 }) {
   const nextThreshold = STAR_LEVELS[level + 1] ?? 0
   const currentThreshold = STAR_LEVELS[level] ?? 0
-  const progress = nextThreshold > 0 && xp != null
-    ? (xp - currentThreshold) / (nextThreshold - currentThreshold)
+  const range = nextThreshold - currentThreshold
+  const progress = range > 0 && xp != null
+    ? (xp - currentThreshold) / range
     : 0
   const dupsNeeded = DUPES_FOR_NEXT[level] ?? 0
 
