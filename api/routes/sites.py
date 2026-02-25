@@ -521,6 +521,44 @@ async def get_clustered_sites(
     }
 
 
+@router.get("/random")
+async def random_sites(
+    limit: int = Query(50, ge=1, le=200, description="Number of random sites"),
+    db: Session = Depends(get_db),
+):
+    """Return random sites from all sources using PostgreSQL TABLESAMPLE."""
+    query = text("""
+        SELECT
+            id::text, name, lat, lon, source_id, site_type,
+            period_start, period_name, description, country, source_url
+        FROM unified_sites
+        TABLESAMPLE SYSTEM(1)
+        LIMIT :limit
+    """)
+    result = db.execute(query, {"limit": limit})
+    sites = []
+    for row in result:
+        site = {
+            "id": row.id,
+            "n": row.name,
+            "la": row.lat,
+            "lo": row.lon,
+            "s": row.source_id,
+            "t": row.site_type,
+            "p": row.period_start,
+        }
+        if row.period_name:
+            site["pn"] = row.period_name
+        if row.description:
+            site["d"] = row.description
+        if row.country:
+            site["c"] = row.country
+        if row.source_url:
+            site["u"] = row.source_url
+        sites.append(site)
+    return {"count": len(sites), "sites": sites}
+
+
 @router.get("/search")
 async def search_sites(
     q: str = Query(..., min_length=2, description="Search query"),
