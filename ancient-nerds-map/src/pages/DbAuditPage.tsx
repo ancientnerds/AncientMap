@@ -199,13 +199,14 @@ export default function DbAuditPage() {
   const [error, setError] = useState('')
 
   // Hero image status
-  const [heroStatus, setHeroStatus] = useState<Record<string, boolean>>({})
+  const [heroStatus, setHeroStatus] = useState<Record<string, { path: string; original_url: string; attribution_url: string }>>({})
   const [heroPopup, setHeroPopup] = useState<{ siteId: string; rect: DOMRect } | null>(null)
   const [heroImageUrl, setHeroImageUrl] = useState('')
   const [heroAttrUrl, setHeroAttrUrl] = useState('')
   const [heroSaving, setHeroSaving] = useState(false)
   const [heroError, setHeroError] = useState('')
   const heroPopoverRef = useRef<HTMLDivElement>(null)
+  const [imgExpanded, setImgExpanded] = useState(false)
 
   // Filters & sort
   const [searchQuery, setSearchQuery] = useState('')
@@ -960,7 +961,9 @@ export default function DbAuditPage() {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.detail || `HTTP ${res.status}`)
       }
-      setHeroStatus(prev => ({ ...prev, [heroPopup.siteId]: true }))
+      const data = await res.json()
+      const sid = heroPopup.siteId
+      setHeroStatus(prev => ({ ...prev, [sid]: { path: data.path, original_url: heroImageUrl, attribution_url: heroAttrUrl } }))
       setHeroPopup(null)
       setHeroImageUrl('')
       setHeroAttrUrl('')
@@ -976,10 +979,11 @@ export default function DbAuditPage() {
     if (!isFounder) return
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
     setHeroPopup({ siteId, rect })
-    setHeroImageUrl('')
-    setHeroAttrUrl('')
+    const existing = heroStatus[siteId]
+    setHeroImageUrl(existing?.original_url || '')
+    setHeroAttrUrl(existing?.attribution_url || '')
     setHeroError('')
-  }, [isFounder])
+  }, [isFounder, heroStatus])
 
   if (loading) {
     return (
@@ -1352,7 +1356,7 @@ export default function DbAuditPage() {
 
       {/* Table */}
       <div className="db-table-wrap">
-        <table className="db-table">
+        <table className={`db-table ${imgExpanded ? 'db-img-expanded' : ''}`}>
           <thead>
             <tr>
               <th className="db-th" onClick={() => handleSort('name')}>Name{sortArrow('name')}</th>
@@ -1362,7 +1366,7 @@ export default function DbAuditPage() {
               <th className="db-th" onClick={() => handleSort('country')}>Country{sortArrow('country')}</th>
               <th className="db-th db-th-nosort">Desc</th>
               <th className="db-th db-th-nosort">URL</th>
-              <th className="db-th db-th-nosort">Img</th>
+              <th className={`db-th db-th-img ${imgExpanded ? 'db-th-img-active' : ''}`} onClick={() => setImgExpanded(v => !v)} title="Toggle image preview">Img</th>
               <th className="db-th db-th-nosort db-th-hero">H</th>
               <th className="db-th db-th-nosort">User</th>
               <th className="db-th db-th-nosort db-th-db">DB</th>
@@ -1494,8 +1498,8 @@ export default function DbAuditPage() {
 
                   {/* Image thumbnail */}
                   <td className="db-td db-td-img">
-                    {site.i ? (
-                      <img src={site.i} className="db-thumb" alt="" loading="lazy" />
+                    {(site.i || heroStatus[site.id]?.path) ? (
+                      <img src={site.i || heroStatus[site.id]?.path} className="db-thumb" alt="" loading="lazy" />
                     ) : <span className="db-missing">&mdash;</span>}
                   </td>
 
@@ -1505,7 +1509,7 @@ export default function DbAuditPage() {
                     onClick={e => openHeroPopup(site.id, e)}
                   >
                     {heroStatus[site.id]
-                      ? <span className="db-hero-yes" title="Has hero image">&#10003;</span>
+                      ? <span className="db-hero-yes" title={heroStatus[site.id].path}>&#10003;</span>
                       : <span className="db-hero-no" title="No hero image">&#10007;</span>}
                   </td>
 
