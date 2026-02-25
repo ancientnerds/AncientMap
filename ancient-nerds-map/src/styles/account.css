@@ -1325,7 +1325,42 @@
   }
 
   .achievements-grid {
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .achievement-card {
+    padding: 10px;
+    gap: 6px;
+    border-radius: 8px;
+  }
+
+  .achievement-icon {
+    font-size: 22px;
+  }
+
+  .achievement-tier-badge {
+    font-size: 8px;
+    padding: 1px 5px;
+  }
+
+  .achievement-name {
+    font-size: 12px;
+  }
+
+  .achievement-desc {
+    font-size: 11px;
+  }
+
+  .achievement-reward-tag {
+    font-size: 10px;
+    padding: 1px 6px;
+  }
+
+  .achievement-claim-btn {
+    padding: 6px 0;
+    font-size: 11px;
+    border-radius: 6px;
   }
 
   .empire-grid {
