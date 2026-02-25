@@ -11,6 +11,7 @@ Supports:
 
 import json
 import logging
+import random
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -526,37 +527,67 @@ async def random_sites(
     limit: int = Query(50, ge=1, le=200, description="Number of random sites"),
     db: Session = Depends(get_db),
 ):
-    """Return random sites from all sources using PostgreSQL TABLESAMPLE."""
-    query = text("""
-        SELECT
-            id::text, name, lat, lon, source_id, site_type,
-            period_start, period_name, description, country, source_url
-        FROM unified_sites
-        TABLESAMPLE SYSTEM(1)
-        LIMIT :limit
-    """)
-    result = db.execute(query, {"limit": limit})
-    sites = []
-    for row in result:
-        site = {
-            "id": row.id,
-            "n": row.name,
-            "la": row.lat,
-            "lo": row.lon,
-            "s": row.source_id,
-            "t": row.site_type,
-            "p": row.period_start,
-        }
-        if row.period_name:
-            site["pn"] = row.period_name
-        if row.description:
-            site["d"] = row.description
-        if row.country:
-            site["c"] = row.country
-        if row.source_url:
-            site["u"] = row.source_url
-        sites.append(site)
-    return {"count": len(sites), "sites": sites}
+    """Return random sites proportionally sampled across all sources."""
+    # Step 1: get per-source counts
+    counts_result = db.execute(text(
+        "SELECT source_id, COUNT(*) AS cnt FROM unified_sites GROUP BY source_id"
+    ))
+    source_counts = [(row.source_id, row.cnt) for row in counts_result]
+    if not source_counts:
+        return {"count": 0, "sites": []}
+
+    total = sum(cnt for _, cnt in source_counts)
+    min_per_source = 2
+
+    # Step 2: allocate slots proportionally with a minimum per source
+    allocations: dict[str, int] = {}
+    for src, cnt in source_counts:
+        share = max(min_per_source, round(cnt / total * limit))
+        allocations[src] = share
+
+    # Scale down if over budget
+    alloc_total = sum(allocations.values())
+    if alloc_total > limit:
+        factor = limit / alloc_total
+        allocations = {src: max(1, round(n * factor)) for src, n in allocations.items()}
+
+    # Step 3: sample from each source
+    all_sites = []
+    for src, n in allocations.items():
+        query = text("""
+            SELECT id::text, name, lat, lon, source_id, site_type,
+                   period_start, period_name, description, country, source_url
+            FROM unified_sites
+            WHERE source_id = :src
+            ORDER BY RANDOM()
+            LIMIT :n
+        """)
+        result = db.execute(query, {"src": src, "n": n})
+        for row in result:
+            site = {
+                "id": row.id,
+                "n": row.name,
+                "la": row.lat,
+                "lo": row.lon,
+                "s": row.source_id,
+                "t": row.site_type,
+                "p": row.period_start,
+            }
+            if row.period_name:
+                site["pn"] = row.period_name
+            if row.description:
+                site["d"] = row.description
+            if row.country:
+                site["c"] = row.country
+            if row.source_url:
+                site["u"] = row.source_url
+            all_sites.append(site)
+
+    # Shuffle the combined results so sources are interleaved
+    random.shuffle(all_sites)
+    all_sites = all_sites[:limit]
+
+    return {"count": len(all_sites), "sites": all_sites}
 
 
 @router.get("/search")
