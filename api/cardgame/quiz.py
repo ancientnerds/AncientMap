@@ -221,7 +221,7 @@ def generate_quiz(session: Session, user_id) -> dict:
         raise QuizLimitReachedError(f"Daily quiz limit ({QUIZ_DAILY_LIMIT}) reached")
 
     rng = random.Random()  # noqa: S311 — game logic
-    questions = []
+    questions: list[dict] = []
     attempts = 0
 
     while len(questions) < QUIZ_QUESTIONS_PER_SESSION and attempts < 30:
