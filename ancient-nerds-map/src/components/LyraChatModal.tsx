@@ -13,7 +13,7 @@
  * - Token usage display
  */
 
-import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense, Children, isValidElement } from 'react'
 import { createPortal } from 'react-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -24,7 +24,7 @@ import { enrichLyraContent } from '../utils/lyraContentEnricher'
 import { formatRelativeDate } from '../utils/formatters'
 import PageHeader from './layout/PageHeader'
 import SiteResultItem from './SiteResultItem'
-import { LyraSitePopup } from './LyraSitePopup'
+import { SitePopupOverlay } from './SitePopupOverlay'
 import { apiDetailToSiteData } from '../utils/siteApi'
 import { resolvePeriod } from '../data/sites'
 import type { SiteData } from '../data/sites'
@@ -40,6 +40,7 @@ interface Props {
   contextYear?: number
   onHighlightSites?: (siteIds: string[]) => void
   onFlyToSite?: (coords: [number, number]) => void
+  onOpenSitePopup?: (site: SiteData) => void
   mode?: 'modal' | 'page'
 }
 
@@ -341,6 +342,7 @@ export default function LyraChatModal({
   contextYear,
   onHighlightSites,
   onFlyToSite,
+  onOpenSitePopup,
   mode = 'modal',
 }: Props) {
   const [messages, setMessages] = useState<LyraMessage[]>([])
@@ -418,7 +420,8 @@ export default function LyraChatModal({
                   if (res.ok) {
                     const detail = await res.json()
                     const siteData = apiDetailToSiteData(detail)
-                    setSelectedSite(siteData)
+                    if (onOpenSitePopup) onOpenSitePopup(siteData)
+                    else setSelectedSite(siteData)
                     // Fly to site using API coordinates, or legacy coords as fallback
                     const lon = siteData.coordinates?.[0] ?? legacyLon
                     const lat = siteData.coordinates?.[1] ?? legacyLat
@@ -507,7 +510,16 @@ export default function LyraChatModal({
       }
       return <img src={src} alt={alt} {...props} />
     },
-  }), [onHighlightSites, onFlyToSite]) // sidebarNews accessed via ref — no re-render on news events
+    p: ({ children }: { children?: React.ReactNode }) => {
+      // If paragraph contains a flag image, render as <span> to keep flag inline with text
+      const arr = Children.toArray(children)
+      const hasFlag = arr.some(c =>
+        isValidElement(c) && (c.props as Record<string, unknown>)?.className === 'lyra-inline-flag'
+      )
+      if (hasFlag) return <span>{children}</span>
+      return <p>{children}</p>
+    },
+  }), [onHighlightSites, onFlyToSite, onOpenSitePopup]) // sidebarNews accessed via ref — no re-render on news events
 
   // Auto-scroll: only if user hasn't scrolled up
   const lastMsg = messages[messages.length - 1]
@@ -1231,7 +1243,9 @@ export default function LyraChatModal({
                             const res = await fetch(`${config.api.baseUrl}/sites/${site.id}`)
                             if (res.ok) {
                               const detail = await res.json()
-                              setSelectedSite(apiDetailToSiteData(detail))
+                              const sd = apiDetailToSiteData(detail)
+                              if (onOpenSitePopup) onOpenSitePopup(sd)
+                              else setSelectedSite(sd)
                             }
                           } catch (err) {
                             console.error('Failed to fetch site detail:', err)
@@ -1304,8 +1318,8 @@ export default function LyraChatModal({
     return (
       <div className="lyra-chat-page">
         {modalContent}
-        {selectedSite && (
-          <LyraSitePopup site={selectedSite} onClose={() => setSelectedSite(null)} />
+        {selectedSite && !onOpenSitePopup && (
+          <SitePopupOverlay site={selectedSite} onClose={() => setSelectedSite(null)} />
         )}
         {dossierModal}
       </div>
@@ -1315,8 +1329,8 @@ export default function LyraChatModal({
   return createPortal(
     <div ref={focusTrapRef} className="lyra-chat-overlay" role="dialog" aria-modal="true" aria-label="Chat with Lyra" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
       {modalContent}
-      {selectedSite && (
-        <LyraSitePopup site={selectedSite} onClose={() => setSelectedSite(null)} />
+      {selectedSite && !onOpenSitePopup && (
+        <SitePopupOverlay site={selectedSite} onClose={() => setSelectedSite(null)} />
       )}
       {dossierModal}
     </div>,

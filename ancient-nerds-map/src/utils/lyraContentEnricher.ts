@@ -55,12 +55,8 @@ export function enrichLyraContent(content: string, news?: NewsHighlight[]): stri
       `(?<!\\[)(?<!/)(?<![\\p{L}\\d])(${escaped})(?![\\p{L}\\d])(?!\\]|\\()`,
       'giu'
     )
-    result = result.replace(regex, (match, _g1, offset) => {
-      // If the flag would start a new line, prefix with a non-breaking space
-      // so markdown doesn't render it as a block-level <p><img>
-      const atLineStart = offset === 0 || result[offset - 1] === '\n'
-      const prefix = atLineStart ? '&nbsp;' : ''
-      return `${prefix}![flag](${flagUrl})${match}`
+    result = result.replace(regex, (match) => {
+      return `![flag](${flagUrl})${match}`
     })
     replacedCountries.add(name.toLowerCase())
   }

@@ -2014,6 +2014,7 @@ function AppContent() {
             setFlyToCoords(null)
             setTimeout(() => setFlyToCoords(coords), 10)
           }}
+          onOpenSitePopup={openSitePopup}
         />
       </Suspense>
     </>
