@@ -35,6 +35,7 @@ from fastapi.staticfiles import StaticFiles
 
 from api.build_info import BUILD_HASH
 from api.cache import cache_get, cache_set, get_redis_client
+from api.cardgame.routes import router as cardgame_router
 from api.routes import (
     articles_html,
     auth,
@@ -55,7 +56,6 @@ from api.routes import (
     vector_sync,
     wiki_images,
 )
-from api.cardgame.routes import router as cardgame_router
 from api.routes.public_v1 import create_public_api
 from pipeline.config import get_settings
 
