@@ -10,7 +10,8 @@ import { config } from '../config'
 import { useAuth } from '../contexts/AuthContext'
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
 import { apiFetch } from '../utils/cardApi'
-import type { PlayerStats, CardData } from '../types/cards'
+import type { PlayerStats, CardData, AchievementData } from '../types/cards'
+import AchievementToast, { handleAchievementResponse } from '../components/AchievementToast'
 import { EmpireCard } from '../components/cards/GameCard'
 import CollectionBrowser from '../components/cards/CollectionBrowser'
 import DeckBuilder from '../components/cards/DeckBuilder'
@@ -177,12 +178,13 @@ const ROLE_SHORT: Record<string, string> = {
 const DISCORD_INVITE_URL = 'https://discord.gg/ancientnerds'
 const PATREON_URL = 'https://patreon.com/ancientnerds'
 
-type AccountTab = 'profile' | 'likes' | 'bookmarks' | 'collection' | 'empires' | 'decks' | 'admin'
+type AccountTab = 'profile' | 'likes' | 'bookmarks' | 'achievements' | 'collection' | 'empires' | 'decks' | 'admin'
 
 const TAB_LABELS: Record<AccountTab, string> = {
   profile: 'Profile',
   likes: 'Likes',
   bookmarks: 'Bookmarks',
+  achievements: 'Achievements',
   collection: 'Collection',
   empires: 'Empires',
   decks: 'Decks',
@@ -250,6 +252,152 @@ function EmpireCollectionTab({ token }: { token: string | null }) {
   )
 }
 
+// ---------------------------------------------------------------------------
+// Achievement Categories
+// ---------------------------------------------------------------------------
+
+const ACHIEVEMENT_CATEGORIES = [
+  { id: 'all', label: 'All', icon: '' },
+  { id: 'explorer', label: 'Explorer', icon: '\U0001f30d' },
+  { id: 'scholar', label: 'Scholar', icon: '\U0001f4da' },
+  { id: 'collector', label: 'Collector', icon: '\U0001f0cf' },
+  { id: 'warrior', label: 'Warrior', icon: '\u2694\ufe0f' },
+  { id: 'archaeologist', label: 'Archaeologist', icon: '\u26cf\ufe0f' },
+  { id: 'historian', label: 'Historian', icon: '\U0001f4dc' },
+  { id: 'expeditioner', label: 'Expeditioner', icon: '\U0001f9ed' },
+  { id: 'patron', label: 'Patron', icon: '\U0001f451' },
+  { id: 'cartographer', label: 'Cartographer', icon: '\U0001f5fa' },
+  { id: 'curator', label: 'Curator', icon: '\u2764\ufe0f' },
+]
+
+const TIER_BADGE: Record<string, { label: string; color: string }> = {
+  bronze: { label: 'Bronze', color: '#cd7f32' },
+  silver: { label: 'Silver', color: '#c0c0c0' },
+  gold: { label: 'Gold', color: '#ffd700' },
+  platinum: { label: 'Platinum', color: '#e5e4e2' },
+}
+
+const RARITY_NAMES: Record<number, string> = {
+  1: 'Common', 2: 'Uncommon', 3: 'Rare', 4: 'Epic', 5: 'Legendary',
+}
+
+function AchievementsTab({
+  achievements, filter, setFilter, onClaim, claimingId, loaded,
+}: {
+  achievements: AchievementData[]
+  filter: string
+  setFilter: (f: string) => void
+  onClaim: (id: string) => void
+  claimingId: string | null
+  loaded: boolean
+}) {
+  const filtered = filter === 'all'
+    ? achievements
+    : achievements.filter(a => a.category === filter)
+
+  const totalUnlocked = achievements.filter(a => a.unlocked).length
+  const totalUnclaimed = achievements.filter(a => a.unlocked && !a.claimed).length
+
+  if (!loaded) {
+    return <div className="account-loading">Loading achievements...</div>
+  }
+
+  return (
+    <div className="achievements-tab">
+      {/* Progress bar */}
+      <div className="achievements-progress">
+        <div className="achievements-progress-bar">
+          <div
+            className="achievements-progress-fill"
+            style={{ width: `${(totalUnlocked / Math.max(achievements.length, 1)) * 100}%` }}
+          />
+        </div>
+        <div className="achievements-progress-text">
+          <span>{totalUnlocked}/{achievements.length} unlocked</span>
+          {totalUnclaimed > 0 && (
+            <span className="achievements-unclaimed-badge">{totalUnclaimed} unclaimed</span>
+          )}
+        </div>
+      </div>
+
+      {/* Category filter */}
+      <div className="achievements-categories">
+        {ACHIEVEMENT_CATEGORIES.map(cat => {
+          const count = cat.id === 'all'
+            ? achievements.length
+            : achievements.filter(a => a.category === cat.id).length
+          const unlocked = cat.id === 'all'
+            ? totalUnlocked
+            : achievements.filter(a => a.category === cat.id && a.unlocked).length
+          return (
+            <button
+              key={cat.id}
+              className={`achievements-category-btn ${filter === cat.id ? 'active' : ''}`}
+              onClick={() => setFilter(cat.id)}
+            >
+              {cat.icon && <span className="achievements-category-icon">{cat.icon}</span>}
+              <span>{cat.label}</span>
+              <span className="achievements-category-count">{unlocked}/{count}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Achievement grid */}
+      <div className="achievements-grid">
+        {filtered.map(a => {
+          const tier = TIER_BADGE[a.tier] || TIER_BADGE.bronze
+          const isLocked = !a.unlocked
+          const canClaim = a.unlocked && !a.claimed
+          return (
+            <div
+              key={a.id}
+              className={`achievement-card ${isLocked ? 'locked' : ''} ${canClaim ? 'claimable' : ''} ${a.claimed ? 'claimed' : ''}`}
+            >
+              <div className="achievement-card-header">
+                <span className="achievement-icon">{a.icon}</span>
+                <span className="achievement-tier-badge" style={{ background: tier.color }}>
+                  {tier.label}
+                </span>
+              </div>
+              <div className="achievement-card-body">
+                <div className="achievement-name">{a.name}</div>
+                <div className="achievement-desc">{a.description}</div>
+              </div>
+              <div className="achievement-rewards">
+                {a.reward_credits > 0 && (
+                  <span className="achievement-reward-tag">{a.reward_credits} cr</span>
+                )}
+                {a.reward_xp > 0 && (
+                  <span className="achievement-reward-tag">{a.reward_xp} xp</span>
+                )}
+                {a.reward_card_tier && a.reward_card_count > 0 && (
+                  <span className="achievement-reward-tag">
+                    {a.reward_card_count}x {RARITY_NAMES[a.reward_card_tier] || 'Card'}
+                  </span>
+                )}
+              </div>
+              {canClaim && (
+                <button
+                  className="achievement-claim-btn"
+                  onClick={() => onClaim(a.id)}
+                  disabled={claimingId === a.id}
+                >
+                  {claimingId === a.id ? 'Claiming...' : 'Claim'}
+                </button>
+              )}
+              {a.claimed && (
+                <div className="achievement-claimed-badge">Claimed</div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+
 export default function AccountPage() {
   const { user, token, isLoggedIn, isLoading, logout } = useAuth()
   const [tab, setTab] = useState<AccountTab>(getTabFromHash)
@@ -268,6 +416,12 @@ export default function AccountPage() {
   // Liked & bookmarked sites
   const [likedSites, setLikedSites] = useState<InteractionSite[]>([])
   const [bookmarkedSites, setBookmarkedSites] = useState<InteractionSite[]>([])
+
+  // Achievements state
+  const [achievements, setAchievements] = useState<AchievementData[]>([])
+  const [achievementsLoaded, setAchievementsLoaded] = useState(false)
+  const [achievementFilter, setAchievementFilter] = useState<string>('all')
+  const [claimingAchievement, setClaimingAchievement] = useState<string | null>(null)
 
   // Admin state
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([])
@@ -368,6 +522,38 @@ export default function AccountPage() {
       .catch(() => {})
   }, [isLoggedIn, token])
 
+  // Fetch achievements when tab is opened
+  useEffect(() => {
+    if (tab !== 'achievements' || !token || achievementsLoaded) return
+    apiFetch<{ achievements: AchievementData[] }>('/cards/achievements', token)
+      .then(data => {
+        setAchievements(data.achievements)
+        setAchievementsLoaded(true)
+      })
+      .catch(() => {})
+  }, [tab, token, achievementsLoaded])
+
+  const claimAchievement = async (achievementId: string) => {
+    if (!token || claimingAchievement) return
+    setClaimingAchievement(achievementId)
+    try {
+      await apiFetch<{ credits: number; xp: number; cards: CardData[] | null; credits_remaining: number }>(
+        `/cards/achievements/${achievementId}/claim`, token, { method: 'POST' }
+      )
+      // Update the achievement in local state
+      setAchievements(prev => prev.map(a =>
+        a.id === achievementId ? { ...a, claimed: true, claimed_at: new Date().toISOString() } : a
+      ))
+      // Refresh player stats and credits
+      loadPlayerStats()
+      fetchCredits()
+    } catch {
+      // Silently handle — button will un-disable
+    } finally {
+      setClaimingAchievement(null)
+    }
+  }
+
   // Daily reward
   const claimDaily = async () => {
     if (!token) return
@@ -389,6 +575,7 @@ export default function AccountPage() {
         else if (r.type === 'pack') parts.push(`Streak bonus: ${r.value.charAt(0).toUpperCase() + r.value.slice(1)} Pack!`)
       }
       setDailyResult(parts.join(' | '))
+      handleAchievementResponse(data as unknown as Record<string, unknown>)
       loadPlayerStats()
     } catch (e) {
       setDailyResult(e instanceof Error ? e.message : 'Failed')
@@ -402,7 +589,8 @@ export default function AccountPage() {
     if (!token) return
     setClaimingStarter(true)
     try {
-      await apiFetch('/cards/starter', token, { method: 'POST' })
+      const starterData = await apiFetch<Record<string, unknown>>('/cards/starter', token, { method: 'POST' })
+      handleAchievementResponse(starterData)
       loadPlayerStats()
       changeTab('collection')
     } catch (e) {
@@ -559,11 +747,11 @@ export default function AccountPage() {
   }
 
   // Determine which tabs to show
-  const visibleTabs: AccountTab[] = ['profile', 'likes', 'bookmarks', 'collection', 'empires', 'decks']
+  const visibleTabs: AccountTab[] = ['profile', 'likes', 'bookmarks', 'achievements', 'collection', 'empires', 'decks']
   if (user?.is_founder) visibleTabs.push('admin')
 
   // Wide tabs need more horizontal space
-  const isWideTab = tab === 'collection' || tab === 'empires' || tab === 'decks'
+  const isWideTab = tab === 'collection' || tab === 'empires' || tab === 'decks' || tab === 'achievements'
 
   if (isLoading) {
     return (
@@ -578,6 +766,7 @@ export default function AccountPage() {
 
   return (
     <div className="account-page">
+      <AchievementToast />
       <PageHeader currentPage="account">
         <span className="page-header-title">Account</span>
       </PageHeader>
@@ -625,6 +814,11 @@ export default function AccountPage() {
                   )}
                   {t === 'bookmarks' && bookmarkedSites.length > 0 && (
                     <span className="account-tab-count">{bookmarkedSites.length}</span>
+                  )}
+                  {t === 'achievements' && achievements.filter(a => a.unlocked && !a.claimed).length > 0 && (
+                    <span className="account-tab-count account-tab-count-alert">
+                      {achievements.filter(a => a.unlocked && !a.claimed).length}
+                    </span>
                   )}
                 </button>
               ))}
@@ -902,6 +1096,18 @@ export default function AccountPage() {
                   </div>
                 )}
               </div>
+            )}
+
+            {/* ============ ACHIEVEMENTS TAB ============ */}
+            {tab === 'achievements' && (
+              <AchievementsTab
+                achievements={achievements}
+                filter={achievementFilter}
+                setFilter={setAchievementFilter}
+                onClaim={claimAchievement}
+                claimingId={claimingAchievement}
+                loaded={achievementsLoaded}
+              />
             )}
 
             {/* ============ COLLECTION TAB ============ */}

@@ -22,6 +22,7 @@ import { isDemoMode, registerAppDemoApi } from './utils/demoApi'
 import { normalizeForSearch, periodToYear, extractCountry } from './utils/searchUtils'
 import { haversineDistance } from './utils/geoMath'
 import { reportAchievementEvent } from './utils/cardApi'
+import AchievementToast from './components/AchievementToast'
 import { useSiteSearch } from './hooks/useSiteSearch'
 
 export type FilterMode = 'category' | 'age' | 'source' | 'country'
@@ -2026,6 +2027,7 @@ function App() {
   return (
     <OfflineProvider>
       <AppContent />
+      <AchievementToast />
     </OfflineProvider>
   )
 }

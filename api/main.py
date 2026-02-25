@@ -91,7 +91,17 @@ async def lifespan(app: FastAPI):
             conn.execute(_text(
                 "ALTER TABLE expedition_progress ADD COLUMN IF NOT EXISTS last_stage_played_at TIMESTAMP"
             ))
+            conn.execute(_text(
+                "ALTER TABLE card_player_stats ADD COLUMN IF NOT EXISTS feature_flags JSONB DEFAULT '{}'"
+            ))
         logger.info("[STARTUP] Database tables verified (includes discord_users, credit_grants, token_usage_logs)")
+
+        # Seed achievement definitions (idempotent upsert)
+        from pipeline.database import get_session as _get_session
+        with _get_session() as _session:
+            from api.cardgame.achievements import seed_achievements
+            count = seed_achievements(_session)
+            logger.info(f"[STARTUP] Seeded {count} achievement definitions")
     except Exception as e:
         logger.warning(f"[STARTUP] Table creation check failed: {e}")
 

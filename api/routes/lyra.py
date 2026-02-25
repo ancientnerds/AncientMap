@@ -210,6 +210,8 @@ def _stream_response_with_credits(
                         output_tokens=output_tokens,
                         voyage_tokens=voyage_tokens,
                         credits_used=credits_used,
+                        context_type=context_type,
+                        has_images=bool(images),
                     )
 
                     if "metadata" not in chunk:
@@ -249,6 +251,8 @@ def _reconcile_credits(
     output_tokens: int,
     voyage_tokens: int,
     credits_used: int,
+    context_type: str = "global",
+    has_images: bool = False,
 ) -> int:
     """Reconcile credits after streaming. 1 credit was already pre-deducted as deposit.
 
@@ -277,5 +281,12 @@ def _reconcile_credits(
             credits_used=credits_used,
         ))
         remaining = user.credits
+
+        # Check Lyra-related achievements (fire and forget — no way to send back via SSE)
+        from api.cardgame.achievements import check_achievements
+        check_achievements(session, user_id, "lyra_chat", context={
+            "context_type": context_type,
+            "has_images": has_images,
+        })
 
     return remaining

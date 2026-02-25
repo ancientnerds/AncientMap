@@ -5,6 +5,7 @@
 
 import type { ReactNode } from 'react'
 import { LAYER_CONFIG, type VectorLayerKey, type VectorLayerVisibility } from '../../../config/vectorLayers'
+import { reportAchievementEvent } from '../../../utils/cardApi'
 
 interface MapLayersPanelProps {
   // Children (e.g., HistoricalLayersSection)
@@ -87,7 +88,7 @@ export function MapLayersPanel({
                 <input
                   type="checkbox"
                   checked={tileLayers.satellite}
-                  onChange={() => onTileLayerToggle('satellite')}
+                  onChange={() => { onTileLayerToggle('satellite'); if (!tileLayers.satellite) reportAchievementEvent('satellite_enabled') }}
                 />
                 <span
                   className="layer-color-indicator"

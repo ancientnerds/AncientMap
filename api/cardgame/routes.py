@@ -281,10 +281,14 @@ def open_pack_endpoint(
         except InsufficientCreditsError as e:
             raise HTTPException(status_code=402, detail=str(e)) from None
 
+        from api.cardgame.achievements import check_achievements
+        new_achievements = check_achievements(session, db_user.id, "pack_open")
+
         return {
             "cards": cards,
             "credits_remaining": db_user.credits,
             "pack_type": body.pack_type,
+            "achievements_unlocked": new_achievements,
         }
 
 
@@ -494,7 +498,10 @@ def claim_starter(request: Request, user: DiscordUser = Depends(get_current_user
         except AlreadyHasStarterError as e:
             raise HTTPException(status_code=409, detail=str(e)) from None
 
-        return {"cards": cards, "count": len(cards)}
+        from api.cardgame.achievements import check_achievements
+        new_achievements = check_achievements(session, db_user.id, "starter_claim")
+
+        return {"cards": cards, "count": len(cards), "achievements_unlocked": new_achievements}
 
 
 @router.post("/daily")
@@ -513,6 +520,10 @@ def claim_daily_endpoint(request: Request, user: DiscordUser = Depends(get_curre
             result = claim_daily(session, db_user)
         except AlreadyClaimedError as e:
             raise HTTPException(status_code=409, detail=str(e)) from None
+
+        from api.cardgame.achievements import check_achievements
+        new_achievements = check_achievements(session, db_user.id, "daily_claim")
+        result["achievements_unlocked"] = new_achievements
 
         return result
 
@@ -616,6 +627,10 @@ def submit_quiz(
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from None
 
+        from api.cardgame.achievements import check_achievements
+        new_achievements = check_achievements(session, db_user.id, "quiz_submit")
+        result["achievements_unlocked"] = new_achievements
+
         return result
 
 
@@ -666,4 +681,174 @@ def play_expedition(
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from None
 
+        from api.cardgame.achievements import check_achievements
+        new_achievements = check_achievements(session, db_user.id, "expedition_stage")
+        result["achievements_unlocked"] = new_achievements
+
         return result
+
+
+# ---------------------------------------------------------------------------
+# Achievement endpoints
+# ---------------------------------------------------------------------------
+
+_achievement_limiter = RateLimiter(max_requests=10, window_seconds=60, namespace="achievements")
+_achievement_event_limiter = RateLimiter(max_requests=30, window_seconds=60, namespace="achievement_events")
+
+
+class AchievementEventRequest(BaseModel):
+    event_type: str = Field(max_length=50)
+    layer_count: int | None = None
+
+
+@router.get("/achievements")
+def get_achievements(
+    user: DiscordUser | None = Depends(get_optional_user),
+):
+    """Full achievement list with user unlock/claim status.
+
+    If authenticated, runs a retroactive full check to auto-unlock
+    achievements the user already qualifies for.
+    """
+    from api.cardgame.achievements import ACHIEVEMENTS, check_achievements
+    from api.cardgame.models import UserAchievement
+
+    unlocked_map: dict[str, dict] = {}
+
+    if user:
+        with get_session() as session:
+            # Retroactive check — unlocks anything the user already qualifies for
+            check_achievements(session, user.id, "full_check")
+
+            rows = (
+                session.query(UserAchievement)
+                .filter(UserAchievement.user_id == user.id)
+                .all()
+            )
+            for ua in rows:
+                unlocked_map[ua.achievement_id] = {
+                    "unlocked_at": ua.unlocked_at.isoformat() if ua.unlocked_at else None,
+                    "claimed": ua.claimed,
+                    "claimed_at": ua.claimed_at.isoformat() if ua.claimed_at else None,
+                }
+
+    achievements = []
+    for aid, a in ACHIEVEMENTS.items():
+        entry = {
+            "id": aid,
+            "category": a["category"],
+            "name": a["name"],
+            "description": a["description"],
+            "tier": a["tier"],
+            "reward_credits": a["reward_credits"],
+            "reward_xp": a["reward_xp"],
+            "reward_card_tier": a["reward_card_tier"],
+            "reward_card_count": a["reward_card_count"],
+            "icon": a["icon"],
+            "sort_order": a["sort_order"],
+            "hidden": a["hidden"],
+        }
+        u = unlocked_map.get(aid)
+        if u:
+            entry["unlocked"] = True
+            entry["unlocked_at"] = u["unlocked_at"]
+            entry["claimed"] = u["claimed"]
+            entry["claimed_at"] = u["claimed_at"]
+        else:
+            entry["unlocked"] = False
+            entry["claimed"] = False
+        achievements.append(entry)
+
+    return {"achievements": achievements, "total": len(achievements)}
+
+
+@router.post("/achievements/{achievement_id}/claim")
+def claim_achievement(
+    achievement_id: str,
+    request: Request,
+    user: DiscordUser = Depends(get_current_user),
+):
+    """Claim rewards for an unlocked achievement."""
+    if not _achievement_limiter.check(_get_client_ip(request)):
+        raise HTTPException(status_code=429, detail="Too many requests, slow down")
+
+    from api.cardgame.achievements import claim_achievement_reward
+
+    with get_session() as session:
+        db_user = session.query(DiscordUser).filter(DiscordUser.id == user.id).first()
+        if not db_user:
+            raise HTTPException(status_code=401, detail="User not found")
+
+        try:
+            result = claim_achievement_reward(session, db_user, achievement_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from None
+
+        result["credits_remaining"] = db_user.credits
+        return result
+
+
+@router.get("/achievements/summary")
+def get_achievements_summary(
+    user: DiscordUser = Depends(get_current_user),
+):
+    """Quick counts: total unlocked, total available, unclaimed count."""
+    from api.cardgame.achievements import ACHIEVEMENTS
+    from api.cardgame.models import UserAchievement
+
+    with get_session() as session:
+        total_unlocked = (
+            session.query(UserAchievement)
+            .filter(UserAchievement.user_id == user.id)
+            .count()
+        )
+        unclaimed = (
+            session.query(UserAchievement)
+            .filter(
+                UserAchievement.user_id == user.id,
+                UserAchievement.claimed.is_(False),
+            )
+            .count()
+        )
+
+    return {
+        "total_available": len(ACHIEVEMENTS),
+        "total_unlocked": total_unlocked,
+        "unclaimed": unclaimed,
+    }
+
+
+@router.post("/achievements/event")
+def report_achievement_event(
+    body: AchievementEventRequest,
+    request: Request,
+    user: DiscordUser = Depends(get_current_user),
+):
+    """Frontend-triggered events for Cartographer/Explorer achievements."""
+    if not _achievement_event_limiter.check(_get_client_ip(request)):
+        raise HTTPException(status_code=429, detail="Too many requests")
+
+    from api.cardgame.achievements import check_achievements
+    from api.cardgame.models import CardPlayerStats
+
+    context = {"event_type": body.event_type}
+    if body.layer_count is not None:
+        context["layer_count"] = body.layer_count
+
+    with get_session() as session:
+        # Persist the event in feature_flags for retroactive checks
+        ps = session.get(CardPlayerStats, user.id)
+        if not ps:
+            ps = CardPlayerStats(user_id=user.id)
+            session.add(ps)
+            session.flush()
+
+        flags = dict(ps.feature_flags or {})
+        flags[body.event_type] = True
+        if body.layer_count is not None:
+            flags["max_layers"] = max(flags.get("max_layers", 0), body.layer_count)
+        ps.feature_flags = flags
+
+        new_achievements = check_achievements(session, user.id, "frontend_event", context)
+
+    return {"achievements_unlocked": new_achievements}

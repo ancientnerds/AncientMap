@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { config } from '../config'
+import { handleAchievementResponse } from '../components/AchievementToast'
 
 const TOKEN_KEY = 'an_auth_token'
 
@@ -70,6 +71,7 @@ export function useSiteInteractions(siteId: string | undefined): SiteInteraction
         if (data) {
           setLiked(data.liked)
           setLikeCount(data.like_count)
+          handleAchievementResponse(data)
         }
       })
       .catch(() => {
@@ -96,6 +98,7 @@ export function useSiteInteractions(siteId: string | undefined): SiteInteraction
       .then(data => {
         if (data) {
           setBookmarked(data.bookmarked)
+          handleAchievementResponse(data)
         }
       })
       .catch(() => {

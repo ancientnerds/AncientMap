@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { SiteData, PERIOD_COLORS, getSourceColor, getCategoryColor, getSourceInfo } from '../../data/sites'
 import { config } from '../../config'
 import { useOffline } from '../../contexts/OfflineContext'
+import { reportAchievementEvent } from '../../utils/cardApi'
 import { hasMetadataFields } from '../../config/sourceFields'
 
 // Unified content service for gallery items
@@ -743,7 +744,7 @@ export default function SitePopup({
             shareSuccess={shareSuccess}
             onGoogleMapsLoad={() => setGoogleMapsLoaded(true)}
             onGoogleMapsError={() => setGoogleMapsError(true)}
-            onStreetViewToggle={() => setShowStreetView(!showStreetView)}
+            onStreetViewToggle={() => { if (!showStreetView) reportAchievementEvent('street_view_opened'); setShowStreetView(!showStreetView) }}
             onFullscreenToggle={toggleMapFullscreen}
             onShareGoogleMaps={handleShareGoogleMaps}
             mapSectionRef={mapSectionRef}

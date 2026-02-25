@@ -1,0 +1,114 @@
+/* Achievement toast notifications */
+
+.achievement-toast-container {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+  max-width: 360px;
+}
+
+.achievement-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(15, 25, 40, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-left: 4px solid #cd7f32;
+  border-radius: 10px;
+  backdrop-filter: blur(12px);
+  animation: toast-slide-in 0.4s ease-out;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.achievement-toast.exiting {
+  animation: toast-slide-out 0.4s ease-in forwards;
+}
+
+@keyframes toast-slide-in {
+  from {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes toast-slide-out {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+}
+
+.achievement-toast-icon {
+  font-size: 28px;
+  flex-shrink: 0;
+}
+
+.achievement-toast-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.achievement-toast-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #ffd700;
+  margin-bottom: 2px;
+}
+
+.achievement-toast-name {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.achievement-toast-rewards {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.achievement-toast-reward {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  color: #aaa;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.achievement-toast-close {
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 4px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.achievement-toast-close:hover {
+  color: #fff;
+}

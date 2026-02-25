@@ -83,3 +83,40 @@ export interface SynergyDescription {
   count: number
   bonus: string
 }
+
+export interface AchievementData {
+  id: string
+  category: string
+  name: string
+  description: string
+  tier: string
+  reward_credits: number
+  reward_xp: number
+  reward_card_tier: number | null
+  reward_card_count: number
+  icon: string
+  sort_order: number
+  hidden: boolean
+  unlocked: boolean
+  unlocked_at?: string | null
+  claimed: boolean
+  claimed_at?: string | null
+}
+
+export interface AchievementUnlock {
+  id: string
+  name: string
+  description: string
+  tier: string
+  icon: string
+  reward_credits: number
+  reward_xp: number
+  reward_card_tier: number | null
+  reward_card_count: number
+}
+
+export interface AchievementSummary {
+  total_available: number
+  total_unlocked: number
+  unclaimed: number
+}

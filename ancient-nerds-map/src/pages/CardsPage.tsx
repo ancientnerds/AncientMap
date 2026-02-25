@@ -12,6 +12,8 @@ import { CardTile } from '../components/cards/CardTile'
 import CollectionBrowser from '../components/cards/CollectionBrowser'
 import type { CardData, DeckData, LeaderboardEntry, PackInfo, PlayerStats } from '../types/cards'
 import { apiFetch } from '../utils/cardApi'
+import { handleAchievementResponse } from '../components/AchievementToast'
+import AchievementToast from '../components/AchievementToast'
 import '../styles/cards.css'
 
 type Tab = 'collection' | 'decks' | 'leaderboard' | 'packs'
@@ -164,6 +166,7 @@ function PacksSection({ token, onOpen }: { token: string | null; onOpen: () => v
         body: JSON.stringify({ pack_type: packType }),
       })
       setResult(data.cards)
+      handleAchievementResponse(data as unknown as Record<string, unknown>)
       onOpen()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to open pack')
@@ -237,7 +240,8 @@ export default function CardsPage() {
     if (!token) return
     setClaimingStarter(true)
     try {
-      await apiFetch('/cards/starter', token, { method: 'POST' })
+      const starterData = await apiFetch<Record<string, unknown>>('/cards/starter', token, { method: 'POST' })
+      handleAchievementResponse(starterData)
       loadStats()
       setTab('collection')
     } catch (e) {
@@ -259,6 +263,7 @@ export default function CardsPage() {
       if (data.card) parts.push(`Card: ${data.card.name}`)
       parts.push(`Streak: ${data.daily_streak} days`)
       setDailyResult(parts.join(' | '))
+      handleAchievementResponse(data as unknown as Record<string, unknown>)
       loadStats()
     } catch (e) {
       setDailyResult(e instanceof Error ? e.message : 'Failed')
@@ -327,6 +332,7 @@ export default function CardsPage() {
           </>
         )}
       </div>
+      <AchievementToast />
     </div>
   )
 }

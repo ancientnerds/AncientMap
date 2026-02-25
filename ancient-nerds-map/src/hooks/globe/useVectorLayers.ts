@@ -11,6 +11,7 @@ import {
   type VectorLayerKey,
   type VectorLayerVisibility
 } from '../../config/vectorLayers'
+import { reportAchievementEvent } from '../../utils/cardApi'
 import { type DetailLevel } from '../../config/globeConstants'
 
 interface VectorLayerRefs {
@@ -90,10 +91,15 @@ export function useVectorLayers(options: UseVectorLayersOptions) {
     setVectorLayers(prev => {
       const newVisible = !prev[key]
       onLayerVisibilityChange?.(key, newVisible)
-      return {
-        ...prev,
-        [key]: newVisible
+      const next = { ...prev, [key]: newVisible }
+      // Track layer count for cartographer_layers achievement
+      if (newVisible) {
+        const count = Object.values(next).filter(Boolean).length
+        if (count >= 5) {
+          reportAchievementEvent('layers_enabled', null, { layer_count: count })
+        }
       }
+      return next
     })
   }, [onLayerVisibilityChange])
 

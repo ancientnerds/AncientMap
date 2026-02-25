@@ -68,9 +68,15 @@ def toggle_like(
         like_count = session.query(func.count(SiteLike.id)).filter(
             SiteLike.site_id == site_id,
         ).scalar()
+
+        new_achievements = []
+        if liked:
+            from api.cardgame.achievements import check_achievements
+            new_achievements = check_achievements(session, user.id, "site_like")
+
         session.commit()
 
-    return {"liked": liked, "like_count": like_count}
+    return {"liked": liked, "like_count": like_count, "achievements_unlocked": new_achievements}
 
 
 @router.post("/sites/{site_id}/bookmark")
@@ -92,9 +98,14 @@ def toggle_bookmark(
             session.add(SiteBookmark(user_id=user.id, site_id=site_id))
             bookmarked = True
 
+        new_achievements = []
+        if bookmarked:
+            from api.cardgame.achievements import check_achievements
+            new_achievements = check_achievements(session, user.id, "site_bookmark")
+
         session.commit()
 
-    return {"bookmarked": bookmarked}
+    return {"bookmarked": bookmarked, "achievements_unlocked": new_achievements}
 
 
 def _site_summary(site: UnifiedSite) -> dict:

@@ -5,6 +5,7 @@
 
 import { useState, useCallback, useRef } from 'react'
 import type * as THREE from 'three'
+import { reportAchievementEvent } from '../../utils/cardApi'
 
 export interface MeasurePoint {
   coords: [number, number]  // [lat, lng]
@@ -101,6 +102,7 @@ export function useMeasurementTool(options: MeasurementToolOptions = {}) {
 
     setMeasurements(prev => [...prev, newMeasurement])
     setCurrentMeasurePoints([])
+    reportAchievementEvent('measurement_used')
 
     // Cycle to next color
     const currentIndex = MEASUREMENT_COLORS.indexOf(currentMeasurementColor)
