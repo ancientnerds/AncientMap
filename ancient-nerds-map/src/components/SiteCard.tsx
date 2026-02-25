@@ -13,8 +13,7 @@
 
 import { useState } from 'react'
 import LazyImage from './LazyImage'
-import { SiteBadges } from './metadata/SiteBadges'
-import { getCountryFlatFlagUrl } from '../utils/countryFlags'
+import { SiteBadges, CountryFlag, CopyButton } from './metadata'
 import { extractCountry } from '../utils/searchUtils'
 import { formatCoord } from '../utils/formatters'
 import { getSourceColor } from '../data/sites'
@@ -37,10 +36,10 @@ export interface SiteCardProps {
 
 export function SiteCard({ site, sourceName, sourceColor, onClick, actions, compact }: SiteCardProps) {
   const country = extractCountry(site.location)
-  const flagUrl = country !== 'Unknown' ? getCountryFlatFlagUrl(country) : null
   const [lng, lat] = site.coordinates
   const hasCoords = !isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0)
   const resolvedColor = sourceColor || getSourceColor(site.sourceId)
+  const coordsText = hasCoords ? `${formatCoord(lat, true)}, ${formatCoord(lng, false)}` : ''
 
   return (
     <div
@@ -54,23 +53,38 @@ export function SiteCard({ site, sourceName, sourceColor, onClick, actions, comp
         <div className="site-card-hero">
           <div className="site-card-hero-shimmer" />
           <LazyImage src={site.image} alt={site.title} overlay className="site-card-hero-img" />
-          <h3 className="site-card-title">{site.title}</h3>
+          <div className="site-card-vignette" />
+          <div className="site-card-title-row">
+            <h3 className="site-card-title">{site.title}</h3>
+            {!compact && <CopyButton text={site.title} title="Copy name" size={11} />}
+          </div>
         </div>
       )}
 
       <div className="site-card-body">
-        {!site.image && <h3 className="site-card-title-plain">{site.title}</h3>}
+        {!site.image && (
+          <div className="site-card-title-row">
+            <h3 className="site-card-title-plain">{site.title}</h3>
+            {!compact && <CopyButton text={site.title} title="Copy name" size={11} />}
+          </div>
+        )}
 
         <div className="site-card-location">
           {country !== 'Unknown' && (
             <span className="site-card-country">
-              {flagUrl && <img src={flagUrl} alt="" className="site-card-flag" loading="lazy" />}
+              <CountryFlag country={country} size="sm" />
               <span>{country}</span>
             </span>
           )}
           {hasCoords && (
             <span className="site-card-coords">
-              {formatCoord(lat, true)}, {formatCoord(lng, false)}
+              <svg className="site-card-coords-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="2" y1="12" x2="22" y2="12"></line>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+              </svg>
+              {coordsText}
+              {!compact && <CopyButton text={coordsText} title="Copy coordinates" size={10} />}
             </span>
           )}
         </div>
