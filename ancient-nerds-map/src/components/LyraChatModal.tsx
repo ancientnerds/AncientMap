@@ -1158,29 +1158,29 @@ export default function LyraChatModal({
                     ))
                   )}
                   <div ref={messagesEndRef} />
-                  <button
-                    className={`lyra-chat-scroll-fab${showScrollFab ? ' visible' : ''}`}
-                    onClick={() => {
-                      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-                      userScrolledUpRef.current = false
-                    }}
-                    aria-label="Scroll to bottom"
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <polyline points="6 9 12 15 18 9" />
-                    </svg>
-                  </button>
-                  {isStreaming && (
-                    <div className="lyra-chat-inline-stop">
-                      <button onClick={() => abortRef.current?.abort()}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                          <rect x="4" y="4" width="16" height="16" rx="2" />
-                        </svg>
-                        Stop generating
-                      </button>
-                    </div>
-                  )}
                 </div>
+                <button
+                  className={`lyra-chat-scroll-fab${showScrollFab ? ' visible' : ''}`}
+                  onClick={() => {
+                    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+                    userScrolledUpRef.current = false
+                  }}
+                  aria-label="Scroll to bottom"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+                {isStreaming && (
+                  <div className="lyra-chat-inline-stop">
+                    <button onClick={() => abortRef.current?.abort()}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <rect x="4" y="4" width="16" height="16" rx="2" />
+                      </svg>
+                      Stop generating
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Search panel — slides in from right */}
