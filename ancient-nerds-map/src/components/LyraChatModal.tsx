@@ -13,7 +13,7 @@
  * - Token usage display
  */
 
-import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense, Children, isValidElement } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -395,6 +395,16 @@ export default function LyraChatModal({
   // Custom react-markdown components for interactive content
   const mdComponents = useMemo(() => ({
     a: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { children?: React.ReactNode }) => {
+      // Country flag link: flag:code (from enricher)
+      if (href?.startsWith('flag:')) {
+        const code = href.slice('flag:'.length)
+        return (
+          <span className="lyra-inline-flag-wrap">
+            <img className="lyra-inline-flag" src={`/flags-flat/${code}.webp`} alt="" />
+            {children}
+          </span>
+        )
+      }
       // Site link: site:UUID (LLM-emitted) or lyra-site:id:lon:lat (legacy enricher)
       if (href?.startsWith('site:') || href?.startsWith('lyra-site:')) {
         const siteId = href.startsWith('site:')
@@ -420,7 +430,7 @@ export default function LyraChatModal({
                   if (res.ok) {
                     const detail = await res.json()
                     const siteData = apiDetailToSiteData(detail)
-                    if (onOpenSitePopup) onOpenSitePopup(siteData)
+                    if (onOpenSitePopup) { onOpenSitePopup(siteData); onClose() }
                     else setSelectedSite(siteData)
                     // Fly to site using API coordinates, or legacy coords as fallback
                     const lon = siteData.coordinates?.[0] ?? legacyLon
@@ -503,23 +513,7 @@ export default function LyraChatModal({
       // Normal link
       return <a {...props} href={href} target="_blank" rel="noopener noreferrer">{children}</a>
     },
-    img: ({ src, alt, ...props }: React.ImgHTMLAttributes<HTMLImageElement>) => {
-      // Inline country flag
-      if (alt === 'flag' && src?.includes('/flags-flat/')) {
-        return <img src={src} alt="" className="lyra-inline-flag" {...props} />
-      }
-      return <img src={src} alt={alt} {...props} />
-    },
-    p: ({ children }: { children?: React.ReactNode }) => {
-      // If paragraph contains a flag image, render as <span> to keep flag inline with text
-      const arr = Children.toArray(children)
-      const hasFlag = arr.some(c =>
-        isValidElement(c) && (c.props as Record<string, unknown>)?.className === 'lyra-inline-flag'
-      )
-      if (hasFlag) return <span>{children}</span>
-      return <p>{children}</p>
-    },
-  }), [onHighlightSites, onFlyToSite, onOpenSitePopup]) // sidebarNews accessed via ref — no re-render on news events
+  }), [onHighlightSites, onFlyToSite, onOpenSitePopup, onClose]) // sidebarNews accessed via ref — no re-render on news events
 
   // Auto-scroll: only if user hasn't scrolled up
   const lastMsg = messages[messages.length - 1]
@@ -1244,7 +1238,7 @@ export default function LyraChatModal({
                             if (res.ok) {
                               const detail = await res.json()
                               const sd = apiDetailToSiteData(detail)
-                              if (onOpenSitePopup) onOpenSitePopup(sd)
+                              if (onOpenSitePopup) { onOpenSitePopup(sd); onClose() }
                               else setSelectedSite(sd)
                             }
                           } catch (err) {
