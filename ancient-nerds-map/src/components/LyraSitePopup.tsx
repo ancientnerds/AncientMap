@@ -31,6 +31,7 @@ export function LyraSitePopup({ site, onClose }: { site: SiteData; onClose: () =
   useEffect(() => {
     if (!isDragging) return
     const onMove = (e: MouseEvent | TouchEvent) => {
+      if ('touches' in e) e.preventDefault() // prevent page scroll during drag
       const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
       const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
       const dx = clientX - dragStart.current.mx
@@ -60,7 +61,7 @@ export function LyraSitePopup({ site, onClose }: { site: SiteData; onClose: () =
     >
       <div className="lyra-site-popup-dragbar" onMouseDown={onDragStart} onTouchStart={onDragStart}>
         <span className="lyra-site-popup-dragbar-title">{site.title}</span>
-        <button className="lyra-site-popup-dragbar-close" onClick={onClose}>
+        <button className="lyra-site-popup-dragbar-close" onClick={onClose} aria-label="Close">
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
             <line x1="2" y1="2" x2="10" y2="10" /><line x1="10" y1="2" x2="2" y2="10" />
           </svg>
