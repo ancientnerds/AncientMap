@@ -13706,10 +13706,6 @@ body.news-feed-open .empire-borders-window {
   transition: width 0.25s ease;
 }
 
-.lyra-chat-modal.has-news {
-  width: min(820px, calc(100vw - 32px));
-}
-
 /* Header */
 .lyra-chat-header {
   display: flex;
@@ -14256,56 +14252,6 @@ body.news-feed-open .empire-borders-window {
   background: rgba(0, 180, 180, 0.1);
 }
 
-/* News column — full-height right panel */
-.lyra-chat-news-column {
-  width: 300px;
-  border-left: 1px solid var(--border-color);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.lyra-chat-news-scroll {
-  flex: 1;
-  overflow-y: auto;
-}
-
-.lyra-chat-sidebar-header {
-  padding: 8px 12px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-secondary);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  flex-shrink: 0;
-}
-
-/* Compact overrides for news cards inside Lyra chat sidebar */
-.lyra-chat-news-panel .news-feed-item {
-  padding: 10px 12px;
-  gap: 5px;
-}
-.lyra-chat-news-panel .news-card-meta { font-size: 10px; }
-.lyra-chat-news-panel .news-card-post-text { font-size: 11px; line-height: 1.4; }
-.lyra-chat-news-panel .news-card-thumb { border-radius: 6px; }
-.lyra-chat-news-panel .news-card-play { width: 20px; height: 20px; }
-.lyra-chat-news-panel .news-card-duration { font-size: 10px; padding: 1px 4px; }
-.lyra-chat-news-panel .news-card-timestamp { font-size: 10px; padding: 1px 4px; }
-.lyra-chat-news-panel .news-significance-stamp { font-size: 9px; }
-.lyra-chat-news-panel .news-category-badge { font-size: 8px; padding: 2px 6px; }
-.lyra-chat-news-panel .news-feed-site-block { gap: 3px; }
-.lyra-chat-news-panel .news-feed-site-row { font-size: 10px; }
-
-.lyra-news-site-name {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.6);
-}
-
 /* Markdown inside assistant messages */
 .lyra-chat-msg-assistant .lyra-chat-msg-text h2 {
   font-size: 15px;
@@ -14434,11 +14380,11 @@ body.news-feed-open .empire-borders-window {
 /* Inline country flags in Lyra messages */
 .lyra-inline-flag {
   display: inline-block;
-  height: 11px;
+  height: 12px;
   width: auto;
   margin-right: 3px;
   vertical-align: baseline;
-  border-radius: 1px;
+  border-radius: 0;
   position: relative;
   top: 1px;
 }
@@ -14521,9 +14467,6 @@ body.news-feed-open .empire-borders-window {
 .lyra-inline-video:hover {
   color: #ff6666;
   border-bottom-color: #ff6666;
-}
-.lyra-inline-video svg {
-  flex-shrink: 0;
 }
 
 .lyra-inline-video-embed {
@@ -14644,8 +14587,7 @@ body.news-feed-open .empire-borders-window {
 
 /* Mobile adjustments */
 @media (max-width: 600px) {
-  .lyra-chat-modal,
-  .lyra-chat-modal.has-news {
+  .lyra-chat-modal {
     width: 100vw;
     height: 100dvh;
     border-radius: 0;
@@ -14654,10 +14596,6 @@ body.news-feed-open .empire-borders-window {
   .lyra-chat-overlay {
     align-items: stretch;
     justify-content: stretch;
-  }
-
-  .lyra-chat-news-column {
-    display: none;
   }
 
   .lyra-chat-search-panel {
@@ -14686,60 +14624,77 @@ body.news-feed-open .empire-borders-window {
   border: none;
 }
 
-.lyra-chat-page .lyra-chat-modal.has-news {
-  width: 100%;
+/* =============================================
+   Lyra Floating Site Popup (draggable, non-blocking)
+   ============================================= */
+
+.lyra-site-popup-float {
+  position: fixed;
+  z-index: 10001;
+  width: 420px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card-solid);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+.lyra-site-popup-float.dragging {
+  user-select: none;
+  opacity: 0.92;
 }
 
+.lyra-site-popup-dragbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: grab;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+.lyra-site-popup-float.dragging .lyra-site-popup-dragbar {
+  cursor: grabbing;
+}
 
-/* Mobile collapsible panels — hidden on desktop, shown on mobile in page mode */
-.lyra-mobile-panels {
-  display: none;
+.lyra-site-popup-dragbar-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.lyra-site-popup-dragbar-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 2px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+.lyra-site-popup-dragbar-close:hover {
+  color: var(--text-primary);
+}
+
+.lyra-site-popup-body {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 @media (max-width: 600px) {
-  .lyra-chat-page .lyra-mobile-panels {
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-    border-top: 1px solid var(--border-color);
-  }
-
-  .lyra-mobile-panel {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  }
-
-  .lyra-mobile-panel-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    padding: 10px 14px;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--text-secondary);
-    background: rgba(255, 255, 255, 0.03);
-    border: none;
-    cursor: pointer;
-  }
-
-  .lyra-mobile-panel-header:active {
-    background: rgba(255, 255, 255, 0.06);
-  }
-
-  .lyra-mobile-panel-chevron {
-    transition: transform 0.2s ease;
-  }
-
-  .lyra-mobile-panel.open .lyra-mobile-panel-chevron {
-    transform: rotate(180deg);
-  }
-
-  .lyra-mobile-panel-content {
-    max-height: 40vh;
-    overflow-y: auto;
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
+  .lyra-site-popup-float {
+    width: calc(100vw - 16px);
+    left: 8px !important;
+    max-height: 70vh;
   }
 }
 
@@ -14883,6 +14838,11 @@ body.news-feed-open .empire-borders-window {
   100% { color: var(--text-primary); text-shadow: none; }
 }
 
+/* P4: Class-based glow trigger (avoids forced reflow from JS animation reset) */
+.lyra-typing-glow {
+  animation: lyra-fresh-type 0.8s ease-out forwards;
+}
+
 /* Typing indicator dots */
 .lyra-chat-typing-dots {
   display: flex; gap: 4px; padding: 12px 16px;
@@ -14951,34 +14911,6 @@ body.news-feed-open .empire-borders-window {
 
 .lyra-chat-msg-assistant .lyra-chat-msg-text tr:hover {
   background: rgba(255, 255, 255, 0.03);
-}
-
-/* =============================================
-   Confidence Badge
-   ============================================= */
-
-.lyra-chat-confidence {
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 3px 8px;
-  border-radius: 4px;
-  margin-top: 6px;
-}
-
-.lyra-chat-confidence.high {
-  background: rgba(76, 175, 80, 0.15);
-  color: #4caf50;
-}
-
-.lyra-chat-confidence.medium {
-  background: rgba(255, 152, 0, 0.15);
-  color: #ff9800;
-}
-
-.lyra-chat-confidence.low {
-  background: rgba(244, 67, 54, 0.15);
-  color: #f44336;
 }
 
 /* =============================================

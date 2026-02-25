@@ -106,7 +106,7 @@ class APISettings(BaseSettings):
     debug: bool = False
     reload: bool = False
     secret_key: str = ""  # Required: Set API_SECRET_KEY in .env (use: openssl rand -hex 32)
-    cors_origins: str = "http://localhost:3000,http://localhost:5173,null"
+    cors_origins: str = "http://localhost:3000,http://localhost:5173"
 
     @property
     def cors_origins_list(self) -> list[str]:
