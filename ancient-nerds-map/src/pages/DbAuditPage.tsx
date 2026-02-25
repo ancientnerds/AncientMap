@@ -198,6 +198,15 @@ export default function DbAuditPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  // Hero image status
+  const [heroStatus, setHeroStatus] = useState<Record<string, boolean>>({})
+  const [heroPopup, setHeroPopup] = useState<{ siteId: string; rect: DOMRect } | null>(null)
+  const [heroImageUrl, setHeroImageUrl] = useState('')
+  const [heroAttrUrl, setHeroAttrUrl] = useState('')
+  const [heroSaving, setHeroSaving] = useState(false)
+  const [heroError, setHeroError] = useState('')
+  const heroPopoverRef = useRef<HTMLDivElement>(null)
+
   // Filters & sort
   const [searchQuery, setSearchQuery] = useState('')
   const [activeIssue, setActiveIssue] = useState<IssueFilter>('all')
@@ -316,6 +325,29 @@ export default function DbAuditPage() {
   }, [])
 
   useEffect(() => { refreshDbSnapshots() }, [refreshDbSnapshots])
+
+  // Fetch hero image status
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${config.api.baseUrl}/wiki-images/hero-status?${CACHE_BUSTER}`)
+        if (res.ok) setHeroStatus(await res.json())
+      } catch { /* hero status is optional */ }
+    })()
+  }, [])
+
+  // Close hero popover on outside click
+  useEffect(() => {
+    if (!heroPopup) return
+    const handler = (e: MouseEvent) => {
+      if (heroPopoverRef.current && !heroPopoverRef.current.contains(e.target as Node)) {
+        setHeroPopup(null)
+        setHeroError('')
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [heroPopup])
 
   // Fetch sites (per-source: live or from snapshot)
   const hasFetched = useRef(false)
@@ -913,6 +945,42 @@ export default function DbAuditPage() {
     })
   }, [])
 
+  // Set hero image handler
+  const handleSetHero = useCallback(async () => {
+    if (!heroPopup || !token || !heroImageUrl) return
+    setHeroSaving(true)
+    setHeroError('')
+    try {
+      const res = await fetch(`${config.api.baseUrl}/wiki-images/${heroPopup.siteId}/set-hero`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ image_url: heroImageUrl, attribution_url: heroAttrUrl }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.detail || `HTTP ${res.status}`)
+      }
+      setHeroStatus(prev => ({ ...prev, [heroPopup.siteId]: true }))
+      setHeroPopup(null)
+      setHeroImageUrl('')
+      setHeroAttrUrl('')
+      setHeroError('')
+    } catch (e: unknown) {
+      setHeroError(e instanceof Error ? e.message : 'Failed to set hero')
+    } finally {
+      setHeroSaving(false)
+    }
+  }, [heroPopup, token, heroImageUrl, heroAttrUrl])
+
+  const openHeroPopup = useCallback((siteId: string, e: React.MouseEvent<HTMLTableCellElement>) => {
+    if (!isFounder) return
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    setHeroPopup({ siteId, rect })
+    setHeroImageUrl('')
+    setHeroAttrUrl('')
+    setHeroError('')
+  }, [isFounder])
+
   if (loading) {
     return (
       <div className="db-page">
@@ -1295,6 +1363,7 @@ export default function DbAuditPage() {
               <th className="db-th db-th-nosort">Desc</th>
               <th className="db-th db-th-nosort">URL</th>
               <th className="db-th db-th-nosort">Img</th>
+              <th className="db-th db-th-nosort db-th-hero">H</th>
               <th className="db-th db-th-nosort">User</th>
               <th className="db-th db-th-nosort db-th-db">DB</th>
               <th className="db-th" onClick={() => handleSort('edited_at')}>Last Edited{sortArrow('edited_at')}</th>
@@ -1430,6 +1499,16 @@ export default function DbAuditPage() {
                     ) : <span className="db-missing">&mdash;</span>}
                   </td>
 
+                  {/* Hero status */}
+                  <td
+                    className={`db-td db-td-hero ${isFounder ? 'db-td-hero-clickable' : ''}`}
+                    onClick={e => openHeroPopup(site.id, e)}
+                  >
+                    {heroStatus[site.id]
+                      ? <span className="db-hero-yes" title="Has hero image">&#10003;</span>
+                      : <span className="db-hero-no" title="No hero image">&#10007;</span>}
+                  </td>
+
                   {/* User (edited by) */}
                   <td className={`db-td db-td-edited db-edited-${site.eb || 'initial'}`}>
                     {site.eb || 'initial'}
@@ -1470,6 +1549,41 @@ export default function DbAuditPage() {
           </div>
         )}
       </div>
+
+      {/* Hero popover */}
+      {heroPopup && (
+        <div
+          className="db-hero-popover"
+          ref={heroPopoverRef}
+          style={{
+            top: heroPopup.rect.bottom + 4,
+            left: Math.min(heroPopup.rect.left, window.innerWidth - 320),
+          }}
+        >
+          <div className="db-hero-popover-title">Set Hero Image</div>
+          <input
+            className="db-hero-input"
+            placeholder="Image URL"
+            value={heroImageUrl}
+            onChange={e => setHeroImageUrl(e.target.value)}
+            autoFocus
+          />
+          <input
+            className="db-hero-input"
+            placeholder="Attribution URL"
+            value={heroAttrUrl}
+            onChange={e => setHeroAttrUrl(e.target.value)}
+          />
+          {heroError && <div className="db-hero-error">{heroError}</div>}
+          <button
+            className="db-hero-submit"
+            onClick={handleSetHero}
+            disabled={heroSaving || !heroImageUrl}
+          >
+            {heroSaving ? 'Saving...' : 'Set Hero'}
+          </button>
+        </div>
+      )}
 
       {/* Footer */}
       <div className="db-footer">
