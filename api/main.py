@@ -74,8 +74,8 @@ async def lifespan(app: FastAPI):
     # Startup: ensure new tables exist + warm up connections
     logger.info("Starting Ancient Nerds Map API...")
     try:
-        from pipeline.database import Base, engine
         import api.cardgame.models  # noqa: F401 — register Achievement/UserAchievement before create_all
+        from pipeline.database import Base, engine
         Base.metadata.create_all(bind=engine)
         # Add columns that models define but create_all won't add to existing tables
         with engine.begin() as conn:
