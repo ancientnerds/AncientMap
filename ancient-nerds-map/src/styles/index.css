@@ -14357,22 +14357,19 @@ body.news-feed-open .empire-borders-window {
 }
 
 .lyra-inline-copy {
-  display: inline-flex;
+  display: none;
   align-items: center;
   justify-content: center;
-  min-width: 44px;
-  min-height: 44px;
   background: none;
   border: none;
-  padding: 0;
+  padding: 2px;
   cursor: pointer;
   color: rgba(255, 255, 255, 0.3);
-  opacity: 0;
-  transition: opacity 0.15s, color 0.15s;
+  transition: color 0.15s;
 }
 
 .lyra-inline-site-wrap:hover .lyra-inline-copy {
-  opacity: 1;
+  display: inline-flex;
 }
 
 .lyra-inline-copy:hover {
@@ -14654,84 +14651,6 @@ body.news-feed-open .empire-borders-window {
   border: none;
 }
 
-/* =============================================
-   Lyra Floating Site Popup (draggable, non-blocking)
-   ============================================= */
-
-.lyra-site-popup-float {
-  position: fixed;
-  z-index: 10001;
-  width: 420px;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  border-radius: 10px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-card-solid);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
-  overflow: hidden;
-}
-.lyra-site-popup-float.dragging {
-  user-select: none;
-  opacity: 0.92;
-}
-
-.lyra-site-popup-dragbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  cursor: grab;
-  background: rgba(255, 255, 255, 0.04);
-  border-bottom: 1px solid var(--border-color);
-  flex-shrink: 0;
-}
-.lyra-site-popup-float.dragging .lyra-site-popup-dragbar {
-  cursor: grabbing;
-}
-
-.lyra-site-popup-dragbar-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  min-width: 0;
-}
-
-.lyra-site-popup-dragbar-close {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 2px;
-  flex-shrink: 0;
-  margin-left: 8px;
-  min-width: 44px;
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.lyra-site-popup-dragbar-close:hover {
-  color: var(--text-primary);
-}
-
-.lyra-site-popup-body {
-  overflow-y: auto;
-  flex: 1;
-  min-height: 0;
-}
-
-@media (max-width: 600px) {
-  .lyra-site-popup-float {
-    width: calc(100vw - 16px);
-    left: 8px !important;
-    max-height: 70vh;
-  }
-}
 
 /* =============================================
    Lyra Auth Gate
