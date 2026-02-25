@@ -276,6 +276,9 @@ def submit_quiz_answers(
     if quiz.score is not None:
         raise QuizAlreadySubmittedError("Quiz already submitted")
 
+    # Lock user row to prevent concurrent credit manipulation
+    user = session.query(DiscordUser).filter(DiscordUser.id == user.id).with_for_update().first()
+
     correct = 0
     results = []
     for i, answer in enumerate(answers[: len(quiz.answers_key)]):

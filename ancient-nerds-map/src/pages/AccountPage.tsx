@@ -298,6 +298,11 @@ export default function AccountPage() {
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
 
+  // Cleanup admin search debounce timer on unmount
+  useEffect(() => {
+    return () => clearTimeout(searchTimer.current)
+  }, [])
+
   // Handle OAuth error callback
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -385,8 +390,8 @@ export default function AccountPage() {
       }
       setDailyResult(parts.join(' | '))
       loadPlayerStats()
-    } catch (e: any) {
-      setDailyResult(e.message || 'Failed')
+    } catch (e) {
+      setDailyResult(e instanceof Error ? e.message : 'Failed')
     } finally {
       setClaimingDaily(false)
     }
@@ -400,8 +405,8 @@ export default function AccountPage() {
       await apiFetch('/cards/starter', token, { method: 'POST' })
       loadPlayerStats()
       changeTab('collection')
-    } catch (e: any) {
-      console.error('Starter claim failed:', e.message)
+    } catch (e) {
+      console.error('Starter claim failed:', e instanceof Error ? e.message : e)
     } finally {
       setClaimingStarter(false)
     }

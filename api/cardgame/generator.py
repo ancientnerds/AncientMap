@@ -10,7 +10,7 @@ and bulk-upserts into card_stats.
 import sys
 from collections import Counter
 
-from sqlalchemy import func, text
+from sqlalchemy import func
 
 from api.cardgame.models import CardStats
 from api.cardgame.stats import compute_all_stats

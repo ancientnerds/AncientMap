@@ -165,8 +165,8 @@ function PacksSection({ token, onOpen }: { token: string | null; onOpen: () => v
       })
       setResult(data.cards)
       onOpen()
-    } catch (e: any) {
-      setError(e.message || 'Failed to open pack')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to open pack')
     } finally {
       setOpening(false)
     }
@@ -240,8 +240,8 @@ export default function CardsPage() {
       await apiFetch('/cards/starter', token, { method: 'POST' })
       loadStats()
       setTab('collection')
-    } catch (e: any) {
-      console.error('Starter claim failed:', e.message)
+    } catch (e) {
+      console.error('Starter claim failed:', e instanceof Error ? e.message : e)
     } finally {
       setClaimingStarter(false)
     }
@@ -260,8 +260,8 @@ export default function CardsPage() {
       parts.push(`Streak: ${data.daily_streak} days`)
       setDailyResult(parts.join(' | '))
       loadStats()
-    } catch (e: any) {
-      setDailyResult(e.message || 'Failed')
+    } catch (e) {
+      setDailyResult(e instanceof Error ? e.message : 'Failed')
     } finally {
       setClaimingDaily(false)
     }

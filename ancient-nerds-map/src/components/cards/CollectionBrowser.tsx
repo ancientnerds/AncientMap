@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import type { CardData } from '../../types/cards'
 import { apiFetch } from '../../utils/cardApi'
 import { CardTile, CardDetail } from './CardTile'
@@ -28,7 +28,7 @@ export default function CollectionBrowser({ token, mode = 'browse', excludeIds, 
     setLoading(true)
     try {
       const params = new URLSearchParams({ page: String(page), per_page: '50' })
-      if (rarity) params.set('rarity', String(rarity))
+      if (rarity != null) params.set('rarity', String(rarity))
       const data = await apiFetch<{ cards: CardData[]; total: number; pages: number }>(
         `/cards/collection?${params}`, token,
       )
@@ -44,9 +44,12 @@ export default function CollectionBrowser({ token, mode = 'browse', excludeIds, 
 
   useEffect(() => { load() }, [load])
 
-  const filtered = search
-    ? cards.filter(c => c.name.toLowerCase().includes(search.toLowerCase()))
-    : cards
+  const filtered = useMemo(
+    () => search
+      ? cards.filter(c => c.name.toLowerCase().includes(search.toLowerCase()))
+      : cards,
+    [cards, search],
+  )
 
   return (
     <div className="cards-section">
@@ -83,7 +86,7 @@ export default function CollectionBrowser({ token, mode = 'browse', excludeIds, 
                 <div key={c.site_id} className={inDeck ? 'card-tile-dimmed' : ''}>
                   <CardTile
                     card={c}
-                    onClick={() => mode === 'browse' ? setSelected(c) : undefined}
+                    onClick={mode === 'browse' ? () => setSelected(c) : undefined}
                     action={mode === 'pick' ? (
                       <button
                         className="card-pick-btn"
