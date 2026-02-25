@@ -266,7 +266,6 @@ def find_contiguous_range(years: list[int], max_gap: int = 300) -> tuple[list[in
 
 from pipeline.historical_boundaries.empire_metadata import EMPIRE_METADATA
 
-
 # =============================================================================
 # Download
 # =============================================================================
