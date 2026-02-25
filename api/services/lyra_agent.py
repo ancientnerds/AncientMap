@@ -10,6 +10,7 @@ Swappable LLM via env vars:
   LYRA_LLM_PROVIDER=openai     → ChatOpenAI
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -75,12 +76,13 @@ def _auto_retrieve(query: str, context_type: str) -> tuple[str, list[dict], list
             lines = []
             for r in results:
                 name = r.get("name", "?")
+                site_id = r.get("id", "")
                 period = r.get("period_name", "")
                 country = r.get("country", "")
                 desc = r.get("description", "")[:300]
                 lat = r.get("lat", "")
                 lon = r.get("lon", "")
-                line = f"- **{name}** ({period}, {country}) [{lat}, {lon}]"
+                line = f"- **{name}** (id: {site_id}) ({period}, {country}) [{lat}, {lon}]"
                 if desc:
                     line += f" — {desc}"
                 lines.append(line)
@@ -465,11 +467,23 @@ async def run_agent_stream(
         # Skipped for empire context — empire questions use get_empire_data tool (Seshat data), not Qdrant/news
         auto_site_results: list[dict] = []
         auto_news_results: list[dict] = []
-        try:
-            retrieved_context, auto_site_results, auto_news_results, avg_relevance, vt = _auto_retrieve(message, context_type)
+
+        # Q1: Run auto-retrieval (Qdrant) and filter extraction (LLM) in parallel — zero data dependency
+        auto_task = asyncio.to_thread(_auto_retrieve, message, context_type)
+        filter_task = _extract_news_filters(message)
+        auto_result_or_exc, filters_or_exc = await asyncio.gather(auto_task, filter_task, return_exceptions=True)
+
+        news_filters: dict = {}
+        if isinstance(auto_result_or_exc, BaseException):
+            logger.error(f"Auto-retrieve failed: {auto_result_or_exc}")
+        else:
+            retrieved_context, auto_site_results, auto_news_results, avg_relevance, vt = auto_result_or_exc
             total_voyage_tokens += vt
-        except Exception as e:
-            logger.error(f"Auto-retrieve failed (Qdrant/Voyage issue, falling back to filter-based news): {e}")
+
+        if isinstance(filters_or_exc, BaseException):
+            logger.warning(f"News filter extraction failed: {filters_or_exc}")
+        else:
+            news_filters = filters_or_exc
 
         # Extract sites from auto-retrieved results for map highlighting
         # Only include sites with relevance above threshold to avoid irrelevant results
@@ -517,19 +531,15 @@ async def run_agent_stream(
                     all_news.append(n)
                     existing_keys.add(key)
 
-        # Filter-based news (uses LLM to extract filters including site names — catches site queries even when Qdrant is down)
-        try:
-            news_filters = await _extract_news_filters(message)
-            if news_filters:
-                filter_news = _get_related_news(**news_filters)
-                existing_keys = {f"{n['video_id']}::{n['headline']}" for n in all_news}
-                for n in filter_news:
-                    key = f"{n['video_id']}::{n['headline']}"
-                    if key not in existing_keys:
-                        all_news.append(n)
-                        existing_keys.add(key)
-        except Exception as e:
-            logger.warning(f"News filter extraction failed: {e}")
+        # Filter-based news (uses LLM-extracted filters — already awaited in parallel above)
+        if news_filters:
+            filter_news = _get_related_news(**news_filters)
+            existing_keys = {f"{n['video_id']}::{n['headline']}" for n in all_news}
+            for n in filter_news:
+                key = f"{n['video_id']}::{n['headline']}"
+                if key not in existing_keys:
+                    all_news.append(n)
+                    existing_keys.add(key)
 
         # Add news to retrieved context so the LLM can reference them
         if all_news:

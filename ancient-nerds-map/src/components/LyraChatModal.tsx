@@ -8,9 +8,8 @@
  * - Conversation history (client-side)
  * - Context-aware: receives contextType, contextId, contextYear props
  * - Site highlighting on globe from tool results
- * - Confidence badge on responses
  * - Markdown rendering for assistant messages
- * - Three-column layout with sites & news sidebar
+ * - Sites sidebar with search
  * - Token usage display
  */
 
@@ -21,16 +20,14 @@ import remarkGfm from 'remark-gfm'
 import { config } from '../config'
 import type { LyraContextType, LyraMessage, SiteHighlight, NewsHighlight, ConversationSummary } from '../types/ai'
 import { getCategoryColor, getPeriodColor } from '../constants/colors'
-import { enrichLyraContent, siteNameInContent, extractUnlinkedSiteNames } from '../utils/lyraContentEnricher'
+import { enrichLyraContent } from '../utils/lyraContentEnricher'
 import { formatRelativeDate } from '../utils/formatters'
 import PageHeader from './layout/PageHeader'
-import NewsCard, { newsHighlightToCardProps } from './news/NewsCard'
 import SiteResultItem from './SiteResultItem'
-import { SitePopupOverlay } from './SitePopupOverlay'
+import { LyraSitePopup } from './LyraSitePopup'
 import { apiDetailToSiteData } from '../utils/siteApi'
 import { resolvePeriod } from '../data/sites'
 import type { SiteData } from '../data/sites'
-import './news/news-cards.css'
 
 const LyraProfileModal = lazy(() => import('./LyraProfileModal'))
 
@@ -130,16 +127,6 @@ function loadAllStored(): StoredConversation[] {
   }
 }
 
-function ConfidenceBadge({ value }: { value: number }) {
-  const pct = Math.round(value * 100)
-  const tier = pct >= 80 ? 'high' : pct >= 60 ? 'medium' : 'low'
-  return (
-    <span className={`lyra-chat-confidence ${tier}`}>
-      {pct}% confidence
-    </span>
-  )
-}
-
 /* ---- Inline YouTube video embed (thumbnail → iframe) ---- */
 
 function LyraInlineVideo({ news, children }: { news: NewsHighlight; children?: React.ReactNode }) {
@@ -154,7 +141,7 @@ function LyraInlineVideo({ news, children }: { news: NewsHighlight; children?: R
   const embedUrl = ts != null
     ? `https://www.youtube.com/embed/${videoId}?start=${ts}&autoplay=1`
     : `https://www.youtube.com/embed/${videoId}?autoplay=1`
-  const thumbUrl = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
+  const thumbUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
 
   const formatTs = (s: number) => {
     const m = Math.floor(s / 60)
@@ -169,9 +156,6 @@ function LyraInlineVideo({ news, children }: { news: NewsHighlight; children?: R
         onClick={() => setExpanded(!expanded)}
         title={news.headline || `Watch on YouTube`}
       >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M8 5v14l11-7z"/>
-        </svg>
         {children}
       </button>
       {expanded && (
@@ -223,13 +207,11 @@ function LyraInlineVideo({ news, children }: { news: NewsHighlight; children?: R
 function TypewriterMessage({
   content,
   isStreaming,
-  sidebarSites,
   sidebarNews,
   mdComponents,
 }: {
   content: string
   isStreaming: boolean
-  sidebarSites: SiteHighlight[]
   sidebarNews: NewsHighlight[]
   mdComponents: React.ComponentProps<typeof ReactMarkdown>['components']
 }) {
@@ -295,15 +277,15 @@ function TypewriterMessage({
         revealedRef.current = next
         setRevealedLen(next)
 
-        // Re-trigger red fade animation on the last element
+        // Re-trigger red fade animation on the last element via class toggle (avoids forced reflow)
         const el = containerRef.current
         if (el) {
           const last = el.querySelector(':scope > :last-child > :last-child')
             || el.querySelector(':scope > :last-child')
           if (last instanceof HTMLElement) {
-            last.style.animation = 'none'
-            last.offsetHeight // force reflow
-            last.style.animation = ''
+            last.classList.remove('lyra-typing-glow')
+            // rAF ensures a paint without the class before re-adding (restarts the animation)
+            requestAnimationFrame(() => last.classList.add('lyra-typing-glow'))
           }
         }
       }
@@ -317,7 +299,11 @@ function TypewriterMessage({
 
   const isTyping = isStreaming || revealedLen < content.length
   const partialContent = isTyping ? content.substring(0, revealedLen) : content
-  const displayedContent = enrichLyraContent(partialContent, sidebarSites, sidebarNews)
+  // Q2: Only run enrichment (flags, coords, videos) after streaming completes — avoids ~500 redundant regex passes
+  const displayedContent = useMemo(() => {
+    if (isTyping) return partialContent
+    return enrichLyraContent(content, sidebarNews)
+  }, [isTyping, partialContent, content, sidebarNews])
 
   return (
     <div ref={containerRef} className={`lyra-chat-msg-text${isTyping ? ' streaming' : ''}`}>
@@ -325,7 +311,7 @@ function TypewriterMessage({
         const colonIndex = url.indexOf(':');
         if (colonIndex === -1) return url;
         const protocol = url.trim().slice(0, colonIndex);
-        if (['http', 'https', 'mailto', 'lyra-video'].includes(protocol.toLowerCase())) return url;
+        if (['http', 'https', 'mailto', 'lyra-video', 'site'].includes(protocol.toLowerCase())) return url;
         return '';
       }}>
         {displayedContent || '\u200B'}
@@ -348,10 +334,8 @@ export default function LyraChatModal({
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState<React.ReactNode | null>(null)
-  const [sidebarSites, setSidebarSites] = useState<SiteHighlight[]>([])
   const [sidebarNews, setSidebarNews] = useState<NewsHighlight[]>([])
   const [selectedSite, setSelectedSite] = useState<SiteData | null>(null)
-  const [mobilePanelOpen, setMobilePanelOpen] = useState<'sites' | 'news' | null>(null)
   const [showDossier, setShowDossier] = useState(false)
   const [conversationId, setConversationId] = useState<string>(() => crypto.randomUUID())
   const [conversations, setConversations] = useState<ConversationSummary[]>(() => listConversations())
@@ -384,23 +368,24 @@ export default function LyraChatModal({
     }
   }, [])
 
-  // Sort news by relevance (highest first)
-  const sortedNews = useMemo(
-    () => [...sidebarNews].sort((a, b) => (b.relevance ?? 0) - (a.relevance ?? 0)),
-    [sidebarNews],
-  )
-
-  const hasNews = sortedNews.length > 0
+  // Q3: Use ref for sidebarNews so mdComponents doesn't recreate on every SSE news event
+  const sidebarNewsRef = useRef(sidebarNews)
+  sidebarNewsRef.current = sidebarNews
 
   // Custom react-markdown components for interactive content
   const mdComponents = useMemo(() => ({
     a: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { children?: React.ReactNode }) => {
-      // Site link: lyra-site:id:lon:lat
-      if (href?.startsWith('lyra-site:')) {
-        const parts = href.slice('lyra-site:'.length).split(':')
-        const siteId = parts[0]
-        const lon = parseFloat(parts[1])
-        const lat = parseFloat(parts[2])
+      // Site link: site:UUID (LLM-emitted) or lyra-site:id:lon:lat (legacy enricher)
+      if (href?.startsWith('site:') || href?.startsWith('lyra-site:')) {
+        const siteId = href.startsWith('site:')
+          ? href.slice('site:'.length)
+          : href.slice('lyra-site:'.length).split(':')[0]
+        // Q5: Validate UUID format to prevent path traversal via crafted links
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(siteId)) return <span>{children}</span>
+        // Legacy lyra-site: links embed lon:lat; site: links don't (fetched from API)
+        const legacyParts = href.startsWith('lyra-site:') ? href.slice('lyra-site:'.length).split(':') : null
+        const legacyLon = legacyParts ? parseFloat(legacyParts[1]) : NaN
+        const legacyLat = legacyParts ? parseFloat(legacyParts[2]) : NaN
         // Extract plain text from children for copy
         const text = Array.isArray(children)
           ? children.map(c => (typeof c === 'string' ? c : '')).join('')
@@ -411,14 +396,18 @@ export default function LyraChatModal({
               className="lyra-inline-site"
               onClick={async () => {
                 try {
-                  if (onFlyToSite) {
-                    onHighlightSites?.([siteId])
-                    if (!isNaN(lon) && !isNaN(lat)) onFlyToSite([lon, lat])
-                  }
                   const res = await fetch(`${config.api.baseUrl}/sites/${siteId}`)
                   if (res.ok) {
                     const detail = await res.json()
-                    setSelectedSite(apiDetailToSiteData(detail))
+                    const siteData = apiDetailToSiteData(detail)
+                    setSelectedSite(siteData)
+                    // Fly to site using API coordinates, or legacy coords as fallback
+                    const lon = siteData.coordinates?.[0] ?? legacyLon
+                    const lat = siteData.coordinates?.[1] ?? legacyLat
+                    if (onFlyToSite && !isNaN(lon) && !isNaN(lat)) {
+                      onHighlightSites?.([siteId])
+                      onFlyToSite([lon, lat])
+                    }
                   }
                 } catch (err) {
                   console.error('Failed to fetch site detail:', err)
@@ -486,7 +475,7 @@ export default function LyraChatModal({
       // Video link: lyra-video:INDEX
       if (href?.startsWith('lyra-video:')) {
         const idx = parseInt(href.slice('lyra-video:'.length), 10)
-        const newsItem = sidebarNews[idx]
+        const newsItem = sidebarNewsRef.current[idx]
         if (!newsItem) return <span>{children}</span>
         return <LyraInlineVideo news={newsItem}>{children}</LyraInlineVideo>
       }
@@ -500,7 +489,7 @@ export default function LyraChatModal({
       }
       return <img src={src} alt={alt} {...props} />
     },
-  }), [onHighlightSites, onFlyToSite, sidebarNews])
+  }), [onHighlightSites, onFlyToSite]) // sidebarNews accessed via ref — no re-render on news events
 
   // Auto-scroll: always smooth — typewriter controls reveal speed
   const lastMsg = messages[messages.length - 1]
@@ -618,7 +607,6 @@ export default function LyraChatModal({
     }
     setConversationId(crypto.randomUUID())
     setMessages([])
-    setSidebarSites([])
     setSidebarNews([])
     setError(null)
     setShowHistory(false)
@@ -634,7 +622,6 @@ export default function LyraChatModal({
     const loaded = loadConversation(id)
     setConversationId(id)
     setMessages(loaded)
-    setSidebarSites([])
     setSidebarNews([])
     setError(null)
     setShowHistory(false)
@@ -647,7 +634,6 @@ export default function LyraChatModal({
     if (id === conversationId) {
       setConversationId(crypto.randomUUID())
       setMessages([])
-      setSidebarSites([])
       setSidebarNews([])
     }
   }, [conversationId])
@@ -666,7 +652,6 @@ export default function LyraChatModal({
     setError(null)
     setInput('')
     // Reset sidebar for new query
-    setSidebarSites([])
     setSidebarNews([])
 
     // Add user message
@@ -693,6 +678,7 @@ export default function LyraChatModal({
     // Build request
     const history = messages
       .filter(m => !m.isStreaming)
+      .slice(-10) // Q4: Match server-side cap (agent takes history[-10:])
       .map(m => ({ role: m.role, content: m.content }))
 
     const body = {
@@ -734,7 +720,6 @@ export default function LyraChatModal({
       let buffer = ''
       let collectedSites: SiteHighlight[] = []
       let eventType = ''
-      let fullContent = ''
 
       while (true) {
         const { done, value } = await reader.read()
@@ -754,7 +739,6 @@ export default function LyraChatModal({
               const type = data.type || eventType || ''
 
               if (type === 'token' && data.content) {
-                fullContent += data.content
                 setMessages(prev => prev.map(m =>
                   m.id === assistantId
                     ? { ...m, content: m.content + data.content }
@@ -763,7 +747,6 @@ export default function LyraChatModal({
               } else if (type === 'status' && data.content) {
                 // Pre-tool-call preamble: move streamed tokens to a status line
                 // and reset content so the real answer starts clean
-                fullContent = ''
                 setMessages(prev => prev.map(m =>
                   m.id === assistantId
                     ? { ...m, statusLines: [...(m.statusLines || []), data.content], content: '' }
@@ -771,15 +754,6 @@ export default function LyraChatModal({
                 ))
               } else if (type === 'sites' && data.sites) {
                 collectedSites = data.sites
-                // Merge & deduplicate by id
-                setSidebarSites(prev => {
-                  const ids = new Set(prev.map(s => s.id))
-                  const merged = [...prev]
-                  for (const s of data.sites as SiteHighlight[]) {
-                    if (!ids.has(s.id)) { merged.push(s); ids.add(s.id) }
-                  }
-                  return merged
-                })
                 setMessages(prev => prev.map(m =>
                   m.id === assistantId
                     ? { ...m, sites: data.sites }
@@ -802,7 +776,6 @@ export default function LyraChatModal({
                     : m
                 ))
               } else if (type === 'done') {
-                const avgRelevance = data.metadata?.avg_relevance ?? null
                 const tokens = data.metadata?.tokens ?? undefined
                 // Update credits from done event (Discord auth only)
                 if (data.metadata?.credits_remaining !== undefined) {
@@ -811,15 +784,9 @@ export default function LyraChatModal({
                 setMessages(prev => {
                   const updated = prev.map(m =>
                     m.id === assistantId
-                      ? { ...m, isStreaming: false, confidence: avgRelevance, tokens }
+                      ? { ...m, isStreaming: false, tokens }
                       : m
                   )
-                  // Filter sidebar to sites Lyra actually mentioned (flexible variant matching)
-                  const finalContent = updated.find(m => m.id === assistantId)?.content
-                  if (finalContent) {
-                    const lower = finalContent.toLowerCase()
-                    setSidebarSites(prev => prev.filter(s => siteNameInContent(s.name, lower)))
-                  }
                   // Auto-save conversation
                   const title = updated.find(m => m.role === 'user')?.content.slice(0, 50) || 'New conversation'
                   saveConversation(conversationId, title, updated)
@@ -840,34 +807,6 @@ export default function LyraChatModal({
       // Highlight sites on globe
       if (collectedSites.length > 0 && onHighlightSites) {
         onHighlightSites(collectedSites.map(s => s.id).filter(Boolean))
-      }
-
-      // Post-search: find site names Lyra mentioned that aren't in Qdrant results
-      if (fullContent) {
-        const candidates = extractUnlinkedSiteNames(fullContent, collectedSites)
-        if (candidates.length > 0) {
-          Promise.all(candidates.map(name =>
-            fetch(`${config.api.baseUrl}/sites/search?q=${encodeURIComponent(name)}&limit=3`)
-              .then(r => r.json())
-              .then(data => {
-                const sites = (data.sites || []) as { id: string; n: string; la: number; lo: number; t?: string; c?: string; pn?: string }[]
-                const nameLower = name.toLowerCase()
-                const match = sites.find(s => s.n.toLowerCase().startsWith(nameLower))
-                  || sites.find(s => nameLower.startsWith(s.n.toLowerCase()))
-                if (!match) return null
-                return { id: match.id, name: match.n, lat: match.la, lon: match.lo, site_type: match.t, country: match.c, period_name: match.pn } as SiteHighlight
-              })
-              .catch(() => null)
-          )).then(results => {
-            const newSites = results.filter((s): s is SiteHighlight => s !== null)
-            if (newSites.length > 0) {
-              setSidebarSites(prev => {
-                const ids = new Set(prev.map(s => s.id))
-                return [...prev, ...newSites.filter(s => !ids.has(s.id))]
-              })
-            }
-          }).catch((err) => console.error('Failed to prepare suggestions:', err))
-        }
       }
 
     } catch (e) {
@@ -1048,7 +987,7 @@ export default function LyraChatModal({
   )
 
   const modalContent = (
-    <div className={`lyra-chat-modal${hasNews ? ' has-news' : ''}`}>
+    <div className="lyra-chat-modal">
       {header}
       {historyPanel}
 
@@ -1136,7 +1075,6 @@ export default function LyraChatModal({
                                 <TypewriterMessage
                                   content={msg.content}
                                   isStreaming={!!msg.isStreaming}
-                                  sidebarSites={sidebarSites}
                                   sidebarNews={sidebarNews}
                                   mdComponents={mdComponents}
                                 />
@@ -1165,15 +1103,12 @@ export default function LyraChatModal({
                                   </svg>
                                 </button>
                               )}
-                              {msg.role === 'assistant' && !msg.isStreaming && msg.confidence != null && (
+                              {msg.role === 'assistant' && !msg.isStreaming && msg.tokens && (msg.tokens.input > 0 || msg.tokens.output > 0 || (msg.tokens.voyage ?? 0) > 0) && (
                                 <div className="lyra-chat-msg-footer">
-                                  <ConfidenceBadge value={msg.confidence} />
-                                  {msg.tokens && (msg.tokens.input > 0 || msg.tokens.output > 0 || (msg.tokens.voyage ?? 0) > 0) && (
-                                    <span className="lyra-chat-tokens">
-                                      LLM: {msg.tokens.input + msg.tokens.output}
-                                      {(msg.tokens.voyage ?? 0) > 0 && ` · Embed: ${msg.tokens.voyage}`}
-                                    </span>
-                                  )}
+                                  <span className="lyra-chat-tokens">
+                                    LLM: {msg.tokens.input + msg.tokens.output}
+                                    {(msg.tokens.voyage ?? 0) > 0 && ` · Embed: ${msg.tokens.voyage}`}
+                                  </span>
                                 </div>
                               )}
                             </div>
@@ -1185,25 +1120,6 @@ export default function LyraChatModal({
                   <div ref={messagesEndRef} />
                 </div>
               </div>
-
-              {/* Right: news column (full height) */}
-              {hasNews && (
-                <div className="lyra-chat-news-column lyra-chat-news-panel">
-                  <div className="lyra-chat-sidebar-header">
-                    News ({sortedNews.length})
-                  </div>
-                  <div className="lyra-chat-news-scroll">
-                    {sortedNews.map((news, i) => (
-                      <NewsCard
-                        key={`${news.video_id}-${i}`}
-                        size="sm"
-                        {...newsHighlightToCardProps(news)}
-                        onSiteLoaded={setSelectedSite}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {/* Search panel — slides in from right */}
               {searchOpen && (
@@ -1266,37 +1182,6 @@ export default function LyraChatModal({
               )}
             </div>
 
-            {/* Mobile collapsible panels (page mode only, hidden on desktop via CSS) */}
-            {isPage && hasNews && (
-              <div className="lyra-mobile-panels">
-                {hasNews && (
-                  <div className={`lyra-mobile-panel${mobilePanelOpen === 'news' ? ' open' : ''}`}>
-                    <button
-                      className="lyra-mobile-panel-header"
-                      onClick={() => setMobilePanelOpen(mobilePanelOpen === 'news' ? null : 'news')}
-                    >
-                      <span>News ({sortedNews.length})</span>
-                      <svg className="lyra-mobile-panel-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
-                    </button>
-                    {mobilePanelOpen === 'news' && (
-                      <div className="lyra-mobile-panel-content">
-                        {sortedNews.map((news, i) => (
-                          <NewsCard
-                            key={`${news.video_id}-${i}`}
-                            size="sm"
-                            {...newsHighlightToCardProps(news)}
-                            onSiteLoaded={setSelectedSite}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* Error */}
             {error && (
               <div className="lyra-chat-error">
@@ -1346,7 +1231,7 @@ export default function LyraChatModal({
       <div className="lyra-chat-page">
         {modalContent}
         {selectedSite && (
-          <SitePopupOverlay site={selectedSite} onClose={() => setSelectedSite(null)} />
+          <LyraSitePopup site={selectedSite} onClose={() => setSelectedSite(null)} />
         )}
         {dossierModal}
       </div>
@@ -1357,7 +1242,7 @@ export default function LyraChatModal({
     <div className="lyra-chat-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
       {modalContent}
       {selectedSite && (
-        <SitePopupOverlay site={selectedSite} onClose={() => setSelectedSite(null)} />
+        <LyraSitePopup site={selectedSite} onClose={() => setSelectedSite(null)} />
       )}
       {dossierModal}
     </div>,
