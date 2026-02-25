@@ -15,6 +15,16 @@
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
+.game-logo {
+  max-width: 420px;
+  width: 100%;
+  height: auto;
+  display: block;
+}
+@media (max-width: 600px) {
+  .game-logo { max-width: 280px; }
+}
+
 /* Layout: sidebar TOC + main content */
 .game-layout {
   display: flex;
