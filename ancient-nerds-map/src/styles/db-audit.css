@@ -701,6 +701,13 @@
   color: var(--primary-red);
 }
 
+.db-thumb-wrap {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 18px;
+}
+
 .db-thumb {
   width: 40px;
   height: 18px;
@@ -709,7 +716,7 @@
   cursor: pointer;
 }
 
-.db-thumb:hover {
+.db-thumb-wrap:hover .db-thumb {
   position: absolute;
   z-index: 100;
   width: auto;
@@ -735,10 +742,16 @@
   border-radius: 3px;
 }
 
-.db-img-expanded .db-thumb:hover {
+.db-img-expanded .db-thumb-wrap {
+  width: auto;
   height: 90px;
-  z-index: auto;
+}
+
+.db-img-expanded .db-thumb-wrap:hover .db-thumb {
   position: static;
+  transform: none;
+  box-shadow: none;
+  height: 90px;
 }
 
 /* Hero column */
