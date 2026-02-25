@@ -28,6 +28,7 @@ import { LyraSitePopup } from './LyraSitePopup'
 import { apiDetailToSiteData } from '../utils/siteApi'
 import { resolvePeriod } from '../data/sites'
 import type { SiteData } from '../data/sites'
+import { useFocusTrap } from '../hooks/useFocusTrap'
 
 const LyraProfileModal = lazy(() => import('./LyraProfileModal'))
 
@@ -216,7 +217,12 @@ function TypewriterMessage({
   mdComponents: React.ComponentProps<typeof ReactMarkdown>['components']
 }) {
   // For already-complete messages (loaded from history), show everything immediately
-  const [revealedLen, setRevealedLen] = useState(() => isStreaming ? 0 : content.length)
+  const prefersReducedMotion = useRef(
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
+  const [revealedLen, setRevealedLen] = useState(() =>
+    isStreaming && !prefersReducedMotion.current ? 0 : content.length
+  )
   const contentRef = useRef(content)
   const streamingRef = useRef(isStreaming)
   const revealedRef = useRef(revealedLen)
@@ -229,7 +235,7 @@ function TypewriterMessage({
 
   useEffect(() => {
     // Already fully revealed (e.g. loaded conversation) — nothing to animate
-    if (!streamingRef.current && revealedRef.current >= contentRef.current.length) return
+    if (prefersReducedMotion.current || (!streamingRef.current && revealedRef.current >= contentRef.current.length)) return
 
     let running = true
     let lastTime = 0
@@ -297,6 +303,13 @@ function TypewriterMessage({
     return () => { running = false }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Snap to full content when streaming completes (covers reduced-motion skip)
+  useEffect(() => {
+    if (!isStreaming && revealedLen < content.length) {
+      setRevealedLen(content.length)
+    }
+  }, [isStreaming, content.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const isTyping = isStreaming || revealedLen < content.length
   const partialContent = isTyping ? content.substring(0, revealedLen) : content
   // Q2: Only run enrichment (flags, coords, videos) after streaming completes — avoids ~500 redundant regex passes
@@ -353,11 +366,16 @@ export default function LyraChatModal({
   const [isUnlimited, setIsUnlimited] = useState(false)
   const isAuthenticated = !!authToken
 
+  const focusTrapRef = useFocusTrap(isOpen && mode === 'modal')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const searchAbortRef = useRef<AbortController | null>(null)
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const lastUserMsgRef = useRef<string>('')
+  const [showScrollFab, setShowScrollFab] = useState(false)
+  const userScrolledUpRef = useRef(false)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
 
   // Abort in-flight SSE stream + search on unmount
   useEffect(() => {
@@ -491,11 +509,26 @@ export default function LyraChatModal({
     },
   }), [onHighlightSites, onFlyToSite]) // sidebarNews accessed via ref — no re-render on news events
 
-  // Auto-scroll: always smooth — typewriter controls reveal speed
+  // Auto-scroll: only if user hasn't scrolled up
   const lastMsg = messages[messages.length - 1]
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (!userScrolledUpRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
   }, [messages.length, lastMsg?.content.length])
+
+  // Track scroll position for FAB visibility
+  useEffect(() => {
+    const el = messagesContainerRef.current
+    if (!el) return
+    const onScroll = () => {
+      const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+      setShowScrollFab(distFromBottom > 150)
+      userScrolledUpRef.current = distFromBottom > 150
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [isAuthenticated]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Focus input when opening (if authenticated)
   useEffect(() => {
@@ -651,6 +684,8 @@ export default function LyraChatModal({
 
     setError(null)
     setInput('')
+    lastUserMsgRef.current = messageText
+    if (inputRef.current) inputRef.current.style.height = 'auto'
     // Reset sidebar for new query
     setSidebarNews([])
 
@@ -1015,7 +1050,7 @@ export default function LyraChatModal({
             <div className="lyra-chat-body">
               {/* Left: chat messages */}
               <div className="lyra-chat-main">
-                <div className="lyra-chat-messages">
+                <div className="lyra-chat-messages" ref={messagesContainerRef} role="log" aria-live="polite">
                   {messages.length === 0 ? (
                     <div className="lyra-chat-welcome">
                       <img src="/lyra.gif" alt="Lyra" className="lyra-chat-welcome-avatar" />
@@ -1059,7 +1094,7 @@ export default function LyraChatModal({
                         {msg.role === 'assistant' && msg.isStreaming && !msg.content && (
                           <div className="lyra-chat-msg lyra-chat-msg-assistant">
                             <img src="/lyra.gif" alt="Lyra" className="lyra-chat-msg-avatar" />
-                            <div className="lyra-chat-typing-dots">
+                            <div className="lyra-chat-typing-dots" role="status" aria-label="Lyra is typing">
                               <span /><span /><span />
                             </div>
                           </div>
@@ -1079,9 +1114,14 @@ export default function LyraChatModal({
                                   mdComponents={mdComponents}
                                 />
                               ) : (
-                                <div className="lyra-chat-msg-text">
-                                  {msg.content}
-                                </div>
+                                <>
+                                  <div className="lyra-chat-msg-text">
+                                    {msg.content}
+                                  </div>
+                                  <div className="lyra-chat-msg-time">
+                                    {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  </div>
+                                </>
                               )}
                               {msg.role === 'assistant' && !msg.isStreaming && msg.content && (
                                 <button
@@ -1118,6 +1158,28 @@ export default function LyraChatModal({
                     ))
                   )}
                   <div ref={messagesEndRef} />
+                  <button
+                    className={`lyra-chat-scroll-fab${showScrollFab ? ' visible' : ''}`}
+                    onClick={() => {
+                      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+                      userScrolledUpRef.current = false
+                    }}
+                    aria-label="Scroll to bottom"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
+                  {isStreaming && (
+                    <div className="lyra-chat-inline-stop">
+                      <button onClick={() => abortRef.current?.abort()}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                          <rect x="4" y="4" width="16" height="16" rx="2" />
+                        </svg>
+                        Stop generating
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1184,9 +1246,16 @@ export default function LyraChatModal({
 
             {/* Error */}
             {error && (
-              <div className="lyra-chat-error">
-                {error}
-                <button onClick={() => setError(null)}>Dismiss</button>
+              <div className="lyra-chat-error" role="alert">
+                <span>{error}</span>
+                <div className="lyra-chat-error-actions">
+                  {lastUserMsgRef.current && (
+                    <button className="lyra-chat-retry-btn" onClick={() => { setError(null); sendMessage(lastUserMsgRef.current) }}>
+                      Retry
+                    </button>
+                  )}
+                  <button onClick={() => setError(null)}>Dismiss</button>
+                </div>
               </div>
             )}
 
@@ -1198,6 +1267,11 @@ export default function LyraChatModal({
                   className="lyra-chat-input"
                   value={input}
                   onChange={e => setInput(e.target.value)}
+                  onInput={(e) => {
+                    const el = e.currentTarget
+                    el.style.height = 'auto'
+                    el.style.height = Math.min(el.scrollHeight, 120) + 'px'
+                  }}
                   onKeyDown={handleKeyDown}
                   placeholder="Ask Lyra..."
                   disabled={isStreaming}
@@ -1239,7 +1313,7 @@ export default function LyraChatModal({
   }
 
   return createPortal(
-    <div className="lyra-chat-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+    <div ref={focusTrapRef} className="lyra-chat-overlay" role="dialog" aria-modal="true" aria-label="Chat with Lyra" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
       {modalContent}
       {selectedSite && (
         <LyraSitePopup site={selectedSite} onClose={() => setSelectedSite(null)} />
