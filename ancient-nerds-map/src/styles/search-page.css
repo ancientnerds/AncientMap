@@ -180,12 +180,25 @@
     margin-bottom: 12px;
   }
 
+  .search-bar-wrap {
+    padding: 8px 12px 12px;
+  }
+
   .search-bar-inner {
+    flex-wrap: wrap;
     padding: 8px 12px;
   }
 
-  .search-bar-input {
+  /* Force input to fill first row so buttons wrap to second row */
+  .search-bar-inner .search-bar-input {
+    flex-basis: 0;
+    min-width: 60%;
     font-size: 0.95rem;
+  }
+
+  /* Action buttons — second row, pushed right */
+  .search-bar-inner .search-bar-filter-btn {
+    margin-left: auto;
   }
 
   .search-filter-label {
@@ -194,5 +207,9 @@
 
   .search-bar-filter-btn {
     padding: 6px;
+  }
+
+  .search-prompt {
+    padding: 48px 16px;
   }
 }
