@@ -6,15 +6,119 @@ Images are served as static files by FastAPI at /data/images/wiki/.
 """
 
 import logging
+from io import BytesIO
+from pathlib import Path
 
-from fastapi import APIRouter, Depends
+import httpx
+from fastapi import APIRouter, Depends, HTTPException
+from PIL import Image
+from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from pipeline.database import get_db
+from api.services.jwt_auth import require_founder
+from pipeline.database import DiscordUser, get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+IMAGE_DIR = Path("public/data/images/wiki")
+HERO_WIDTH = 800
+WEBP_QUALITY = 82
+
+
+class SetHeroRequest(BaseModel):
+    image_url: str
+    attribution_url: str
+
+
+@router.get("/hero-status")
+async def get_hero_status(db: Session = Depends(get_db)):
+    """Return {site_id: true} for all sites that have a hero image."""
+    result = db.execute(text(
+        "SELECT DISTINCT site_id::text FROM wiki_images WHERE is_hero = true"
+    ))
+    return {row[0]: True for row in result}
+
+
+@router.post("/{site_id}/set-hero")
+async def set_hero(
+    site_id: str,
+    body: SetHeroRequest,
+    db: Session = Depends(get_db),
+    _user: DiscordUser = Depends(require_founder),
+):
+    """Download an image and set it as hero for a site."""
+    # Validate site exists
+    site_row = db.execute(
+        text("SELECT id FROM unified_sites WHERE id = :id"),
+        {"id": site_id},
+    ).fetchone()
+    if not site_row:
+        raise HTTPException(status_code=404, detail="Site not found")
+
+    # Download the image
+    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+        resp = await client.get(body.image_url)
+    if resp.status_code != 200:
+        raise HTTPException(status_code=400, detail=f"Failed to download image: HTTP {resp.status_code}")
+
+    # Process with PIL: resize + convert to WebP
+    img = Image.open(BytesIO(resp.content))
+    if img.mode in ("RGBA", "P"):
+        img = img.convert("RGB")
+    if img.width > HERO_WIDTH:
+        ratio = HERO_WIDTH / img.width
+        img = img.resize((HERO_WIDTH, int(img.height * ratio)), Image.LANCZOS)
+
+    final_width, final_height = img.size
+
+    # Save to disk
+    site_id_short = site_id.replace("-", "")[:8]
+    site_dir = IMAGE_DIR / site_id_short
+    site_dir.mkdir(parents=True, exist_ok=True)
+    hero_path = site_dir / "hero.webp"
+
+    buf = BytesIO()
+    img.save(buf, format="WEBP", quality=WEBP_QUALITY, method=4)
+    hero_path.write_bytes(buf.getvalue())
+
+    # Clear existing hero flags for this site
+    db.execute(
+        text("UPDATE wiki_images SET is_hero = false WHERE site_id = :sid AND is_hero = true"),
+        {"sid": site_id},
+    )
+
+    # Upsert wiki_images row
+    db.execute(text("""
+        INSERT INTO wiki_images (site_id, filename, original_url, commons_page_url, is_hero, source_type, width, height)
+        VALUES (:sid, 'hero.webp', :orig, :attr, true, 'manual', :w, :h)
+        ON CONFLICT ON CONSTRAINT uq_wiki_image_site_url
+        DO UPDATE SET
+            filename = 'hero.webp',
+            commons_page_url = :attr,
+            is_hero = true,
+            source_type = 'manual',
+            width = :w,
+            height = :h
+    """), {
+        "sid": site_id,
+        "orig": body.image_url,
+        "attr": body.attribution_url,
+        "w": final_width,
+        "h": final_height,
+    })
+
+    # Update thumbnail_url on unified_sites
+    thumb_path = f"/data/images/wiki/{site_id_short}/hero.webp"
+    db.execute(
+        text("UPDATE unified_sites SET thumbnail_url = :thumb WHERE id = :sid"),
+        {"thumb": thumb_path, "sid": site_id},
+    )
+
+    db.commit()
+
+    return {"success": True, "path": thumb_path}
 
 
 @router.get("/{site_id}")
