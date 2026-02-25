@@ -687,23 +687,53 @@
 
 /* Image thumbnail */
 .db-td-img {
-  width: 40px;
+  width: 48px;
   text-align: center;
+  position: relative;
+}
+
+.db-th-img {
+  cursor: pointer;
+  user-select: none;
+}
+
+.db-th-img-active {
+  color: var(--primary-red);
 }
 
 .db-thumb {
-  width: 24px;
-  height: 24px;
+  width: 40px;
+  height: 18px;
   object-fit: cover;
-  border-radius: 3px;
-  transition: transform 0.15s;
+  border-radius: 2px;
   cursor: pointer;
 }
 
 .db-thumb:hover {
-  transform: scale(3);
-  z-index: 10;
   position: relative;
+  z-index: 100;
+  width: auto;
+  height: 90px;
+  object-fit: contain;
+}
+
+/* Expanded image preview mode */
+.db-img-expanded .db-td-img {
+  width: auto;
+  min-width: 48px;
+}
+
+.db-img-expanded .db-thumb {
+  width: auto;
+  height: 90px;
+  object-fit: contain;
+  border-radius: 3px;
+}
+
+.db-img-expanded .db-thumb:hover {
+  height: 90px;
+  z-index: auto;
+  position: static;
 }
 
 /* Hero column */

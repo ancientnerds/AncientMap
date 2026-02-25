@@ -34,11 +34,22 @@ class SetHeroRequest(BaseModel):
 
 @router.get("/hero-status")
 async def get_hero_status(db: Session = Depends(get_db)):
-    """Return {site_id: true} for all sites that have a hero image."""
-    result = db.execute(text(
-        "SELECT DISTINCT site_id::text FROM wiki_images WHERE is_hero = true"
-    ))
-    return {row[0]: True for row in result}
+    """Return hero image info for all sites that have one."""
+    result = db.execute(text("""
+        SELECT DISTINCT ON (site_id) site_id::text, original_url, commons_page_url
+        FROM wiki_images
+        WHERE is_hero = true
+        ORDER BY site_id, created_at DESC
+    """))
+    out = {}
+    for row in result:
+        sid_short = row[0].replace("-", "")[:8]
+        out[row[0]] = {
+            "path": f"/data/images/wiki/{sid_short}/hero.webp",
+            "original_url": row[1] or "",
+            "attribution_url": row[2] or "",
+        }
+    return out
 
 
 @router.post("/{site_id}/set-hero")
