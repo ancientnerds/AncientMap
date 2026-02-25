@@ -831,7 +831,7 @@ def report_achievement_event(
     from api.cardgame.achievements import check_achievements
     from api.cardgame.models import CardPlayerStats
 
-    context = {"event_type": body.event_type}
+    context: dict[str, str | int] = {"event_type": body.event_type}
     if body.layer_count is not None:
         context["layer_count"] = body.layer_count
 
