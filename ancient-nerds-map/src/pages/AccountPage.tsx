@@ -258,15 +258,15 @@ function EmpireCollectionTab({ token }: { token: string | null }) {
 
 const ACHIEVEMENT_CATEGORIES = [
   { id: 'all', label: 'All', icon: '' },
-  { id: 'explorer', label: 'Explorer', icon: '\U0001f30d' },
-  { id: 'scholar', label: 'Scholar', icon: '\U0001f4da' },
-  { id: 'collector', label: 'Collector', icon: '\U0001f0cf' },
+  { id: 'explorer', label: 'Explorer', icon: '\u{1F30D}' },
+  { id: 'scholar', label: 'Scholar', icon: '\u{1F4DA}' },
+  { id: 'collector', label: 'Collector', icon: '\u{1F0CF}' },
   { id: 'warrior', label: 'Warrior', icon: '\u2694\ufe0f' },
   { id: 'archaeologist', label: 'Archaeologist', icon: '\u26cf\ufe0f' },
-  { id: 'historian', label: 'Historian', icon: '\U0001f4dc' },
-  { id: 'expeditioner', label: 'Expeditioner', icon: '\U0001f9ed' },
-  { id: 'patron', label: 'Patron', icon: '\U0001f451' },
-  { id: 'cartographer', label: 'Cartographer', icon: '\U0001f5fa' },
+  { id: 'historian', label: 'Historian', icon: '\u{1F4DC}' },
+  { id: 'expeditioner', label: 'Expeditioner', icon: '\u{1F9ED}' },
+  { id: 'patron', label: 'Loyalty', icon: '\u{1F451}' },
+  { id: 'cartographer', label: 'Cartographer', icon: '\u{1F5FA}' },
   { id: 'curator', label: 'Curator', icon: '\u2764\ufe0f' },
 ]
 
