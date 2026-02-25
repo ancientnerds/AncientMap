@@ -12,16 +12,13 @@ Usage:
     python -m pipeline.wiki_image_downloader --stats                     # show coverage
     python -m pipeline.wiki_image_downloader --force                     # re-process existing
     python -m pipeline.wiki_image_downloader --max-per-category 50       # limit Commons images
-    python -m pipeline.wiki_image_downloader --parallel 5                # concurrent sites
 """
 
 import argparse
 import hashlib
 import re
-import threading
 import time
 import urllib.parse
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import httpx
@@ -94,6 +91,23 @@ HEADERS = {
     "User-Agent": "AncientNerdsMap/1.0 (https://ancientnerds.com; contact@ancientnerds.com)",
     "Accept": "application/json",
 }
+
+# Shared HTTP client — reuses TCP connections to avoid Wikimedia connection resets.
+# Each function was creating/destroying its own httpx.Client, which opened too many
+# short-lived connections and triggered [WinError 10054] / 503 errors.
+_http_client = httpx.Client(
+    timeout=30,
+    follow_redirects=True,
+    headers=HEADERS,
+    limits=httpx.Limits(max_connections=5, max_keepalive_connections=3),
+)
+# Longer timeout client for image downloads (large files)
+_download_client = httpx.Client(
+    timeout=60,
+    follow_redirects=True,
+    headers=HEADERS,
+    limits=httpx.Limits(max_connections=5, max_keepalive_connections=3),
+)
 
 
 # =============================================================================
@@ -171,8 +185,7 @@ def fetch_article_images(article_title: str) -> list[dict]:
     url = f"{WIKIPEDIA_REST_API}/page/media-list/{encoded}"
 
     try:
-        with httpx.Client(timeout=30, follow_redirects=True) as client:
-            resp = client.get(url, headers=HEADERS)
+        resp = _http_client.get(url)
 
         if resp.status_code != 200:
             logger.debug(f"media-list {resp.status_code} for {article_title}")
@@ -223,69 +236,6 @@ def fetch_article_images(article_title: str) -> list[dict]:
     return images
 
 
-def fetch_image_metadata(file_title: str) -> dict:
-    """
-    Fetch image metadata (author, license) via MediaWiki imageinfo API.
-
-    Returns dict with: author, author_url, license, license_url, width, height
-    """
-    normalized = file_title if file_title.startswith("File:") else f"File:{file_title}"
-
-    params = {
-        "action": "query",
-        "titles": normalized,
-        "prop": "imageinfo",
-        "iiprop": "extmetadata|size|url",
-        "iiextmetadatafilter": "Artist|Author|Credit|LicenseShortName|License|LicenseUrl",
-        "format": "json",
-    }
-
-    try:
-        with httpx.Client(timeout=30, follow_redirects=True) as client:
-            resp = client.get(WIKIPEDIA_ACTION_API, params=params, headers=HEADERS)
-
-        if resp.status_code != 200:
-            return {}
-
-        data = resp.json()
-        pages = data.get("query", {}).get("pages", {})
-        page: dict = next(iter(pages.values()), {})
-        info = (page.get("imageinfo") or [{}])[0]
-        ext = info.get("extmetadata", {})
-
-        # Parse author (strip HTML)
-        author = ext.get("Artist", ext.get("Author", ext.get("Credit", {}))).get("value", "")
-        if author:
-            author = re.sub(r"<[^>]*>", "", author).strip()
-            if len(author) > 200:
-                author = author[:200] + "..."
-
-        # Parse author URL from the original HTML
-        author_url = None
-        raw_artist = ext.get("Artist", ext.get("Author", {})).get("value", "")
-        href_match = re.search(r'href="([^"]+)"', raw_artist)
-        if href_match:
-            author_url = href_match.group(1)
-            if author_url.startswith("//"):
-                author_url = "https:" + author_url
-
-        license_name = ext.get("LicenseShortName", ext.get("License", {})).get("value", "")
-        license_url = ext.get("LicenseUrl", {}).get("value", "")
-
-        return {
-            "author": author or None,
-            "author_url": author_url,
-            "license": license_name or None,
-            "license_url": license_url or None,
-            "width": info.get("width"),
-            "height": info.get("height"),
-            "original_url": info.get("url"),
-        }
-    except Exception as e:
-        logger.debug(f"imageinfo error for {file_title}: {e}")
-        return {}
-
-
 def fetch_image_metadata_batch(file_titles: list[str]) -> dict[str, dict]:
     """
     Fetch metadata for up to 50 images in one API call.
@@ -309,8 +259,7 @@ def fetch_image_metadata_batch(file_titles: list[str]) -> dict[str, dict]:
     }
 
     try:
-        with httpx.Client(timeout=30, follow_redirects=True) as client:
-            resp = client.get(WIKIPEDIA_ACTION_API, params=params, headers=HEADERS)
+        resp = _http_client.get(WIKIPEDIA_ACTION_API, params=params)
 
         if resp.status_code != 200:
             return {}
@@ -368,8 +317,7 @@ def wikipedia_opensearch(site_name: str) -> str | None:
     }
 
     try:
-        with httpx.Client(timeout=15, follow_redirects=True) as client:
-            resp = client.get(WIKIPEDIA_ACTION_API, params=params, headers=HEADERS)
+        resp = _http_client.get(WIKIPEDIA_ACTION_API, params=params)
 
         if resp.status_code == 200:
             data = resp.json()
@@ -381,38 +329,8 @@ def wikipedia_opensearch(site_name: str) -> str | None:
 
 
 # =============================================================================
-# Wikidata fallback for sites without Wikipedia URL
+# Wikidata entity resolution
 # =============================================================================
-
-
-def wikidata_p18_for_name(site_name: str) -> str | None:
-    """Query Wikidata for an image (P18) by site name. Returns Commons filename."""
-    query = f"""
-    SELECT ?image WHERE {{
-      ?item rdfs:label "{site_name.replace('"', "")}"@en .
-      ?item wdt:P18 ?image .
-    }} LIMIT 1
-    """
-
-    try:
-        with httpx.Client(timeout=30, follow_redirects=True) as client:
-            resp = client.get(
-                WIKIDATA_SPARQL_URL,
-                params={"query": query, "format": "json"},
-                headers={**HEADERS, "Accept": "application/sparql-results+json"},
-            )
-
-        if resp.status_code != 200:
-            return None
-
-        bindings = resp.json().get("results", {}).get("bindings", [])
-        if bindings:
-            image_url = bindings[0].get("image", {}).get("value", "")
-            if image_url:
-                return urllib.parse.unquote(image_url.split("/")[-1])
-    except Exception as e:
-        logger.debug(f"Wikidata P18 error for '{site_name}': {e}")
-    return None
 
 
 def resolve_wikidata_entity(article_title: str) -> dict | None:
@@ -434,8 +352,7 @@ def resolve_wikidata_entity(article_title: str) -> dict | None:
     }
 
     try:
-        with httpx.Client(timeout=30, follow_redirects=True) as client:
-            resp = client.get(WIKIPEDIA_ACTION_API, params=params, headers=HEADERS)
+        resp = _http_client.get(WIKIPEDIA_ACTION_API, params=params)
 
         if resp.status_code != 200:
             return None
@@ -460,8 +377,7 @@ def resolve_wikidata_entity(article_title: str) -> dict | None:
     }
 
     try:
-        with httpx.Client(timeout=30, follow_redirects=True) as client:
-            resp = client.get(WIKIDATA_ACTION_API, params=params, headers=HEADERS)
+        resp = _http_client.get(WIKIDATA_ACTION_API, params=params)
 
         if resp.status_code != 200:
             return None
@@ -555,9 +471,7 @@ def _parse_commons_file_page(page: dict) -> dict | None:
     }
 
 
-def _fetch_category_files(
-    client: httpx.Client, category_name: str, limit: int
-) -> list[dict]:
+def _fetch_category_files(category_name: str, limit: int) -> list[dict]:
     """Fetch direct file members from a single Commons category."""
     images: list[dict] = []
     gcmcontinue = None
@@ -578,7 +492,7 @@ def _fetch_category_files(
             params["gcmcontinue"] = gcmcontinue
 
         try:
-            resp = client.get(COMMONS_API_URL, params=params, headers=HEADERS)
+            resp = _http_client.get(COMMONS_API_URL, params=params)
             if resp.status_code != 200:
                 break
             data = resp.json()
@@ -602,7 +516,7 @@ def _fetch_category_files(
     return images[:limit]
 
 
-def _fetch_subcategory_names(client: httpx.Client, category_name: str) -> list[str]:
+def _fetch_subcategory_names(category_name: str) -> list[str]:
     """Fetch direct subcategory names from a Commons category."""
     subcats: list[str] = []
     cmcontinue = None
@@ -620,7 +534,7 @@ def _fetch_subcategory_names(client: httpx.Client, category_name: str) -> list[s
             params["cmcontinue"] = cmcontinue
 
         try:
-            resp = client.get(COMMONS_API_URL, params=params, headers=HEADERS)
+            resp = _http_client.get(COMMONS_API_URL, params=params)
             if resp.status_code != 200:
                 break
             data = resp.json()
@@ -651,20 +565,19 @@ def fetch_commons_category_images(
     Crawls 1 level deep: direct files from the main category, then direct files
     from each subcategory, until the limit is reached.
     """
-    with httpx.Client(timeout=30, follow_redirects=True) as client:
-        # Direct files from the main category
-        images = _fetch_category_files(client, category_name, limit)
-        if len(images) >= limit:
-            return images[:limit]
+    # Direct files from the main category
+    images = _fetch_category_files(category_name, limit)
+    if len(images) >= limit:
+        return images[:limit]
 
-        # Subcategories — fetch files from each until we hit the limit
-        subcats = _fetch_subcategory_names(client, category_name)
-        for subcat in subcats:
-            remaining = limit - len(images)
-            if remaining <= 0:
-                break
-            sub_images = _fetch_category_files(client, subcat, remaining)
-            images.extend(sub_images)
+    # Subcategories — fetch files from each until we hit the limit
+    subcats = _fetch_subcategory_names(category_name)
+    for subcat in subcats:
+        remaining = limit - len(images)
+        if remaining <= 0:
+            break
+        sub_images = _fetch_category_files(subcat, remaining)
+        images.extend(sub_images)
 
     return images[:limit]
 
@@ -748,8 +661,7 @@ def download_image(
     dest_path.parent.mkdir(parents=True, exist_ok=True)
 
     try:
-        with httpx.Client(timeout=60, follow_redirects=True) as client:
-            resp = client.get(fetch_url, headers=HEADERS)
+        resp = _download_client.get(fetch_url)
 
         if resp.status_code == 429:
             retry_after = float(resp.headers.get("retry-after", 12))
@@ -1057,12 +969,16 @@ def process_site(site: dict, dry_run: bool = False, max_per_category: int = 20, 
     needs_metadata: list[str] = []
     img_filenames: list[str] = []
     skip_flags: list[bool] = []
-    for img in deduped:
+    for idx, img in enumerate(deduped):
         file_title = img["title"]
-        raw_name = sanitize_filename(file_title.replace("File:", ""))
-        local_filename = re.sub(r"\.[^.]+$", ".webp", raw_name)
-        if not local_filename.endswith(".webp"):
-            local_filename += ".webp"
+        if idx == 0:
+            # Hero image always named hero.webp for predictable URLs
+            local_filename = "hero.webp"
+        else:
+            raw_name = sanitize_filename(file_title.replace("File:", ""))
+            local_filename = re.sub(r"\.[^.]+$", ".webp", raw_name)
+            if not local_filename.endswith(".webp"):
+                local_filename += ".webp"
         img_filenames.append(local_filename)
 
         if force:
@@ -1176,6 +1092,17 @@ def process_site(site: dict, dry_run: bool = False, max_per_category: int = 20, 
             else:
                 logger.warning(f"DB insert error for {file_title}: {e}")
 
+        # Update unified_sites.thumbnail_url to local hero image path
+        # Runs after insert (whether new or duplicate) — the file is on disk either way
+        if is_hero:
+            local_path = f"/data/images/wiki/{site_id[:8]}/{local_filename}"
+            with get_session() as session:
+                session.execute(
+                    text("UPDATE unified_sites SET thumbnail_url = :url WHERE id = :sid"),
+                    {"url": local_path, "sid": site_id},
+                )
+                session.commit()
+
     return downloaded
 
 
@@ -1186,9 +1113,8 @@ def run_downloader(
     stats_only: bool = False,
     force: bool = False,
     max_per_category: int = 20,
-    parallel_sites: int = 3,
 ) -> None:
-    """Main entry point for the wiki image downloader."""
+    """Main entry point for the wiki image downloader. Always sequential."""
     if stats_only:
         print_stats()
         return
@@ -1197,7 +1123,6 @@ def run_downloader(
     logger.info(f"Found {len(sites)} sites to process")
     if force:
         logger.info("--force enabled: re-processing sites even if they already have images")
-    logger.info(f"Parallel sites: {parallel_sites}, max images per site: 20")
 
     # Filter out already-downloaded sites upfront (unless --force)
     if not dry_run and not force:
@@ -1215,43 +1140,17 @@ def run_downloader(
 
     total_downloaded = 0
     total_errors = 0
-    _lock = threading.Lock()
-    processed_count = 0
 
-    def _process_one(site: dict) -> tuple[str, int]:
-        """Process a single site, return (name, count)."""
-        return site["name"], process_site(site, dry_run=dry_run, max_per_category=max_per_category, force=force)
-
-    if parallel_sites <= 1:
-        # Sequential mode
-        for i, site in enumerate(to_process):
-            try:
-                name, count = _process_one(site)
-                total_downloaded += count
-                if count > 0:
-                    logger.info(f"  [{i + 1}/{len(to_process)}] {name}: {count} images")
-            except Exception as e:
-                logger.warning(f"  Error processing {site['name']}: {e}")
-                total_errors += 1
-    else:
-        # Parallel site processing
-        with ThreadPoolExecutor(max_workers=parallel_sites) as executor:
-            futures = {executor.submit(_process_one, site): site for site in to_process}
-            for future in as_completed(futures):
-                site = futures[future]
-                with _lock:
-                    processed_count += 1
-                    progress = processed_count
-                try:
-                    name, count = future.result()
-                    with _lock:
-                        total_downloaded += count
-                    if count > 0:
-                        logger.info(f"  [{progress}/{len(to_process)}] {name}: {count} images")
-                except Exception as e:
-                    logger.warning(f"  Error processing {site['name']}: {e}")
-                    with _lock:
-                        total_errors += 1
+    for i, site in enumerate(to_process):
+        try:
+            name = site["name"]
+            count = process_site(site, dry_run=dry_run, max_per_category=max_per_category, force=force)
+            total_downloaded += count
+            if count > 0:
+                logger.info(f"  [{i + 1}/{len(to_process)}] {name}: {count} images")
+        except Exception as e:
+            logger.warning(f"  Error processing {site['name']}: {e}")
+            total_errors += 1
 
     logger.info("=" * 60)
     logger.info("Download complete:")
@@ -1334,12 +1233,6 @@ def main():
         default=20,
         help="Max images to fetch from Commons category per site (default: 20)",
     )
-    parser.add_argument(
-        "--parallel",
-        type=int,
-        default=3,
-        help="Number of sites to process concurrently (default: 3)",
-    )
     args = parser.parse_args()
 
     run_downloader(
@@ -1349,7 +1242,6 @@ def main():
         stats_only=args.stats,
         force=args.force,
         max_per_category=args.max_per_category,
-        parallel_sites=args.parallel,
     )
 
 
