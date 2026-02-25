@@ -86,7 +86,7 @@ def _auto_retrieve(query: str, context_type: str) -> tuple[str, list[dict], list
                 if desc:
                     line += f" — {desc}"
                 lines.append(line)
-            context_parts.append("### Sites\n" + "\n".join(lines))
+            context_parts.append("### Sites\nLink every site name as [Name](site:ID) using the IDs below.\n" + "\n".join(lines))
 
     # --- News collection (always — semantic news retrieval) ---
     news_limit = 5 if context_type == "news" else 3

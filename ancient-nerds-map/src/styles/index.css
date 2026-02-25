@@ -14396,14 +14396,17 @@ body.news-feed-open .empire-borders-window {
   display: block;
 }
 
-/* Inline country flags in Lyra messages */
-.lyra-inline-flag {
+/* Inline country flags in Lyra messages — needs .lyra-chat-msg-text prefix
+   to beat the generic `.lyra-chat-msg-text img` rule (specificity 0,1,1) */
+.lyra-chat-msg-text img.lyra-inline-flag {
   display: inline-block;
   height: 12px;
   width: auto;
-  margin-right: 3px;
+  max-width: none;
+  margin: 0 3px 0 0;
   vertical-align: baseline;
   border-radius: 0;
+  border: none;
   position: relative;
   top: 1px;
 }
