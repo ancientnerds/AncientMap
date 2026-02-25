@@ -178,7 +178,7 @@ const ROLE_SHORT: Record<string, string> = {
 const DISCORD_INVITE_URL = 'https://discord.gg/ancientnerds'
 const PATREON_URL = 'https://patreon.com/ancientnerds'
 
-type AccountTab = 'profile' | 'likes' | 'bookmarks' | 'achievements' | 'collection' | 'empires' | 'decks' | 'admin'
+type AccountTab = 'profile' | 'likes' | 'bookmarks' | 'achievements' | 'collection' | 'deckbuilder' | 'admin'
 
 const TAB_LABELS: Record<AccountTab, string> = {
   profile: 'Profile',
@@ -186,14 +186,16 @@ const TAB_LABELS: Record<AccountTab, string> = {
   bookmarks: 'Bookmarks',
   achievements: 'Achievements',
   collection: 'Collection',
-  empires: 'Empires',
-  decks: 'Decks',
+  deckbuilder: 'Deckbuilder',
   admin: 'Admin',
 }
 
 function getTabFromHash(): AccountTab {
-  const hash = window.location.hash.replace('#', '') as AccountTab
-  if (hash && hash in TAB_LABELS) return hash
+  const hash = window.location.hash.replace('#', '')
+  // Back-compat: old #empires → collection, old #decks → deckbuilder
+  if (hash === 'empires') return 'collection'
+  if (hash === 'decks') return 'deckbuilder'
+  if (hash && hash in TAB_LABELS) return hash as AccountTab
   return 'profile'
 }
 
@@ -747,11 +749,11 @@ export default function AccountPage() {
   }
 
   // Determine which tabs to show
-  const visibleTabs: AccountTab[] = ['profile', 'likes', 'bookmarks', 'achievements', 'collection', 'empires', 'decks']
+  const visibleTabs: AccountTab[] = ['profile', 'likes', 'bookmarks', 'achievements', 'collection', 'deckbuilder']
   if (user?.is_founder) visibleTabs.push('admin')
 
   // Wide tabs need more horizontal space
-  const isWideTab = tab === 'collection' || tab === 'empires' || tab === 'decks' || tab === 'achievements'
+  const isWideTab = tab === 'collection' || tab === 'deckbuilder' || tab === 'achievements'
 
   if (isLoading) {
     return (
@@ -1110,18 +1112,19 @@ export default function AccountPage() {
               />
             )}
 
-            {/* ============ COLLECTION TAB ============ */}
+            {/* ============ COLLECTION TAB (includes empire cards) ============ */}
             {tab === 'collection' && (
-              <CollectionBrowser token={token} />
+              <>
+                <CollectionBrowser token={token} />
+                <div className="account-section" style={{ marginTop: '2rem' }}>
+                  <h3 className="account-section-title">Empire Cards</h3>
+                  <EmpireCollectionTab token={token} />
+                </div>
+              </>
             )}
 
-            {/* ============ EMPIRES TAB ============ */}
-            {tab === 'empires' && (
-              <EmpireCollectionTab token={token} />
-            )}
-
-            {/* ============ DECKS TAB ============ */}
-            {tab === 'decks' && (
+            {/* ============ DECKBUILDER TAB ============ */}
+            {tab === 'deckbuilder' && (
               <DeckBuilder token={token} />
             )}
 

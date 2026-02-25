@@ -4,6 +4,7 @@
   min-height: 100vh;
   height: 100vh;
   overflow-y: auto;
+  overflow-x: hidden;
   background: var(--bg-primary, #0a1520);
   color: #e0e0e0;
 }
@@ -92,11 +93,10 @@
 /* Tab navigation */
 .account-tabs {
   display: flex;
-  gap: 0;
+  flex-wrap: wrap;
+  gap: 4px;
   margin-bottom: 1.5rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
 }
 
 .account-tab {
@@ -286,6 +286,7 @@
 /* Daily/Starter action buttons */
 .account-card-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 16px;
 }
@@ -597,6 +598,7 @@
 
 .admin-credit-controls {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 10px;
 }
@@ -824,6 +826,7 @@
 
 .admin-bulk-controls {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: center;
 }
@@ -1267,6 +1270,16 @@
     padding: 0.6rem 0.75rem;
     font-size: 0.8rem;
   }
+
+  .admin-bulk-controls,
+  .admin-credit-controls {
+    flex-direction: column;
+  }
+
+  .admin-bulk-controls > *,
+  .admin-credit-controls > * {
+    width: 100%;
+  }
 }
 
 @media (max-width: 480px) {
@@ -1305,6 +1318,18 @@
   .deck-selector-new {
     padding: 6px 12px;
     font-size: 12px;
+  }
+
+  .account-card-actions {
+    flex-direction: column;
+  }
+
+  .achievements-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
+
+  .empire-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   }
 }
 
@@ -1372,11 +1397,9 @@
 
 .achievements-categories {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 20px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-  -webkit-overflow-scrolling: touch;
 }
 
 .achievements-category-btn {
