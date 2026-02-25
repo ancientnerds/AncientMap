@@ -24,6 +24,7 @@ export interface CardData {
   lon?: number
   empires?: string[]
   empire_count?: number
+  card_description?: string | null
 }
 
 export interface DeckData {

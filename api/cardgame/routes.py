@@ -73,6 +73,7 @@ def _card_stats_to_dict(card: CardStats, site: UnifiedSite | None = None) -> dic
         "rarity_name": RARITY_NAMES.get(card.rarity_tier, "Common"),
         "category_group": card.category_group,
         "civilization": card.civilization,
+        "card_description": card.card_description,
     }
     if site:
         d.update({
