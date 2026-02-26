@@ -291,6 +291,36 @@ export default function DbAuditPage() {
   const [diffAddedExpanded, setDiffAddedExpanded] = useState(false)
   const [diffRemovedExpanded, setDiffRemovedExpanded] = useState(false)
 
+  // Scroll-arrow helper: hides native scrollbar, shows red chevron arrows
+  function useScrollArrows() {
+    const ref = useRef<HTMLDivElement>(null)
+    const [left, setLeft] = useState(false)
+    const [right, setRight] = useState(false)
+    const update = useCallback(() => {
+      const el = ref.current
+      if (!el) return
+      setLeft(el.scrollLeft > 1)
+      setRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1)
+    }, [])
+    useEffect(() => {
+      const el = ref.current
+      if (!el) return
+      update()
+      el.addEventListener('scroll', update)
+      const ro = new ResizeObserver(update)
+      ro.observe(el)
+      return () => { el.removeEventListener('scroll', update); ro.disconnect() }
+    }, [update])
+    const scroll = useCallback((dir: 'left' | 'right') => {
+      const el = ref.current
+      if (!el) return
+      el.scrollBy({ left: dir === 'left' ? -el.clientWidth * 0.7 : el.clientWidth * 0.7, behavior: 'smooth' })
+    }, [])
+    return { ref, canLeft: left, canRight: right, scroll }
+  }
+  const versionScroll = useScrollArrows()
+  const statsScroll = useScrollArrows()
+
   // Fetch snapshot manifest + active pins on mount
   useEffect(() => {
     (async () => {
@@ -1251,7 +1281,9 @@ export default function DbAuditPage() {
             <span className="db-version-panel-label">Database Snapshots</span>
             <span className="db-version-panel-count">{snapshots.length} snapshot{snapshots.length !== 1 ? 's' : ''}</span>
           </div>
-          <div className="db-version-cards">
+          <div className="db-scroll-wrap">
+            {versionScroll.canLeft && <button className="db-scroll-arrow left" onClick={() => versionScroll.scroll('left')} aria-label="Scroll left"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="7 1.5 3 5 7 8.5" /></svg></button>}
+            <div className="db-version-cards" ref={versionScroll.ref}>
             {/* Live card */}
             <div
               className={`db-version-card ${Object.values(sourceVersions).every(v => v === 'latest') ? 'active' : ''}`}
@@ -1308,11 +1340,64 @@ export default function DbAuditPage() {
               )
             })}
           </div>
+            {versionScroll.canRight && <button className="db-scroll-arrow right" onClick={() => versionScroll.scroll('right')} aria-label="Scroll right"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 1.5 7 5 3 8.5" /></svg></button>}
+          </div>
         </div>
       )}
 
+      {/* Undo history — shows when there are snapshots to restore */}
+      {isFounder && dbSnapshots.length > 0 && (
+        <details className="db-snapshots-panel" open>
+          <summary className="db-snapshots-summary">Undo History ({dbSnapshots.length} snapshot{dbSnapshots.length !== 1 ? 's' : ''})</summary>
+          <div className="db-snapshots-list">
+            {dbSnapshots.map(snap => {
+              const dt = new Date(snap.created_at)
+              const dateStr = dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+              const timeStr = dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+              return (
+                <div key={snap.id} className="db-snapshot-card">
+                  <div className="db-snapshot-row-top">
+                    <span className={`db-snapshot-type db-snapshot-type-${snap.snapshot_type || 'edit'}`}>{snap.snapshot_type === 'upload' ? 'UPLOAD' : 'EDIT'}</span>
+                    <span className="db-snapshot-desc">{snap.description}</span>
+                    <span className="db-snapshot-actions">
+                      <button className="db-btn db-btn-restore" onClick={() => previewDbSnapshot(snap.id)} disabled={snapshotPreviewLoading} title="Preview changes and restore">Restore</button>
+                    </span>
+                  </div>
+                  <div className="db-snapshot-row-detail">
+                    <span className="db-snapshot-detail-item" title={dt.toISOString()}>
+                      <span className="db-snapshot-detail-label">When</span>
+                      {dateStr} {timeStr} ({formatRelativeDate(snap.created_at)})
+                    </span>
+                    <span className="db-snapshot-detail-item">
+                      <span className="db-snapshot-detail-label">By</span>
+                      {snap.created_by || 'system'}
+                    </span>
+                    <span className="db-snapshot-detail-item">
+                      <span className="db-snapshot-detail-label">Sites</span>
+                      {snap.row_count} site{snap.row_count !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  {snap.site_names.length > 0 && (
+                    <div className="db-snapshot-sites">
+                      {snap.site_names.slice(0, 10).map((name, i) => (
+                        <span key={i} className="db-snapshot-site-tag">{name}</span>
+                      ))}
+                      {snap.site_names.length > 10 && (
+                        <span className="db-snapshot-site-more">+{snap.site_names.length - 10} more</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </details>
+      )}
+
       {/* Stats */}
-      <div className="db-stats">
+      <div className="db-scroll-wrap">
+        {statsScroll.canLeft && <button className="db-scroll-arrow left" onClick={() => statsScroll.scroll('left')} aria-label="Scroll left"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="7 1.5 3 5 7 8.5" /></svg></button>}
+        <div className="db-stats" ref={statsScroll.ref}>
         <button
           className={`db-stat-card ${activeIssue === 'all' ? 'active' : ''}`}
           onClick={() => setActiveIssue('all')}
@@ -1376,6 +1461,8 @@ export default function DbAuditPage() {
           <span className="db-stat-value">{stats.no_coords}</span>
           <span className="db-stat-label">No Coords</span>
         </button>
+        </div>
+        {statsScroll.canRight && <button className="db-scroll-arrow right" onClick={() => statsScroll.scroll('right')} aria-label="Scroll right"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 1.5 7 5 3 8.5" /></svg></button>}
       </div>
 
       {/* Filters */}
@@ -1893,55 +1980,6 @@ export default function DbAuditPage() {
             </div>
           </div>
         </div>
-      )}
-
-      {/* Undo history — shows when there are snapshots to restore */}
-      {isFounder && dbSnapshots.length > 0 && (
-        <details className="db-snapshots-panel" open>
-          <summary className="db-snapshots-summary">Undo History ({dbSnapshots.length} snapshot{dbSnapshots.length !== 1 ? 's' : ''})</summary>
-          <div className="db-snapshots-list">
-            {dbSnapshots.map(snap => {
-              const dt = new Date(snap.created_at)
-              const dateStr = dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-              const timeStr = dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-              return (
-                <div key={snap.id} className="db-snapshot-card">
-                  <div className="db-snapshot-row-top">
-                    <span className={`db-snapshot-type db-snapshot-type-${snap.snapshot_type || 'edit'}`}>{snap.snapshot_type === 'upload' ? 'UPLOAD' : 'EDIT'}</span>
-                    <span className="db-snapshot-desc">{snap.description}</span>
-                    <span className="db-snapshot-actions">
-                      <button className="db-btn db-btn-restore" onClick={() => previewDbSnapshot(snap.id)} disabled={snapshotPreviewLoading} title="Preview changes and restore">Restore</button>
-                    </span>
-                  </div>
-                  <div className="db-snapshot-row-detail">
-                    <span className="db-snapshot-detail-item" title={dt.toISOString()}>
-                      <span className="db-snapshot-detail-label">When</span>
-                      {dateStr} {timeStr} ({formatRelativeDate(snap.created_at)})
-                    </span>
-                    <span className="db-snapshot-detail-item">
-                      <span className="db-snapshot-detail-label">By</span>
-                      {snap.created_by || 'system'}
-                    </span>
-                    <span className="db-snapshot-detail-item">
-                      <span className="db-snapshot-detail-label">Sites</span>
-                      {snap.row_count} site{snap.row_count !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-                  {snap.site_names.length > 0 && (
-                    <div className="db-snapshot-sites">
-                      {snap.site_names.slice(0, 10).map((name, i) => (
-                        <span key={i} className="db-snapshot-site-tag">{name}</span>
-                      ))}
-                      {snap.site_names.length > 10 && (
-                        <span className="db-snapshot-site-more">+{snap.site_names.length - 10} more</span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </details>
       )}
 
       {/* Snapshot Preview Modal */}

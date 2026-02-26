@@ -134,9 +134,10 @@
 .db-stats {
   display: flex;
   gap: 12px;
-  padding: 16px 24px;
-  overflow-x: auto;
-  flex-shrink: 0;
+  padding: 16px 0;
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
 }
 
 .db-stat-card {
@@ -2301,9 +2302,13 @@
 /* Per-source version selectors */
 /* ─── Version panel (snapshot cards) ─────────────────────────────────────── */
 .db-version-panel {
-  padding: 10px 24px 12px;
+  padding: 10px 0 12px;
   background: rgba(0, 10, 15, 0.6);
   border-bottom: 1px solid var(--border-color);
+}
+
+.db-version-panel .db-version-panel-header {
+  padding: 0 24px;
 }
 
 .db-version-panel-header {
@@ -2329,8 +2334,36 @@
 .db-version-cards {
   display: flex;
   gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 4px;
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Scroll-arrow wrapper — shared by version-cards and stats */
+.db-scroll-wrap {
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+}
+
+.db-scroll-arrow {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  align-self: stretch;
+  background: none;
+  border: none;
+  color: var(--primary-red);
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+  padding: 0;
+}
+
+.db-scroll-arrow:hover {
+  opacity: 1;
 }
 
 .db-version-card {
@@ -2646,8 +2679,12 @@
 }
 
 @media (max-width: 768px) {
+  .db-scroll-wrap {
+    padding: 0 12px;
+  }
+
   .db-stats {
-    padding: 12px 16px;
+    padding: 12px 0;
     gap: 8px;
   }
 
@@ -2714,7 +2751,11 @@
   }
 
   .db-version-panel {
-    padding: 8px 12px 10px;
+    padding: 8px 0 10px;
+  }
+
+  .db-version-panel .db-version-panel-header {
+    padding: 0 12px;
   }
 
   .db-version-cards {
