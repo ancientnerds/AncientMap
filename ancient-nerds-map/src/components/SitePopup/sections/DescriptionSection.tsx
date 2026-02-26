@@ -1,4 +1,5 @@
 import SiteMetadata from '../../SiteMetadata'
+import { FitText } from '../../FitText'
 import { isWikipediaUrl } from '../../../services/imageService'
 import type { DescriptionSectionProps } from '../types'
 
@@ -16,7 +17,13 @@ export function DescriptionSection({
   return (
     <>
       {!isEmpireMode && cardDescription && (
-        <p className="popup-description card-summary">{cardDescription}</p>
+        <FitText
+          text={cardDescription}
+          maxPx={14}
+          minPx={10}
+          lines={3}
+          className="popup-description card-summary"
+        />
       )}
 
       {rawDataLoading && isEmpireMode ? (
