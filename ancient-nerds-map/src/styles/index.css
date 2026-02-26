@@ -4901,6 +4901,14 @@ a.popup-window-btn {
   overflow-y: auto;
 }
 
+.popup-description.card-summary {
+  font-style: italic;
+  color: var(--text-primary);
+  max-height: none;
+  overflow-y: visible;
+  margin-bottom: 6px;
+}
+
 .popup-description.loading {
   font-style: italic;
   color: rgba(136, 136, 136, 0.7);

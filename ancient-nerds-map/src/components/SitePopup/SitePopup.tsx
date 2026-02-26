@@ -710,6 +710,7 @@ export default function SitePopup({
               </div>
             ) : (
               <DescriptionSection
+                cardDescription={displaySite.cardDescription}
                 description={displaySite.description}
                 sourceId={displaySite.sourceId}
                 rawData={rawData}
