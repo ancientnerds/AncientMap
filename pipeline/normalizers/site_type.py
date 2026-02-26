@@ -16,44 +16,43 @@ mapped here so connectors don't need per-source fixups.
 # ---------------------------------------------------------------------------
 CANONICAL_TYPES: list[str] = [
     # Settlements
-    "city", "town", "village", "settlement", "urban", "villa",
+    "City", "Town", "Village", "Settlement", "Urban", "Villa",
     "City/town/settlement", "Residence/villa/farmhouse",
     "City/town/settlement, Pyramid complex",
     # Fortifications
-    "castle", "citadel", "fort", "fortress", "military", "wall", "gate",
-    "Fortress/citadel", "Castle/palace", "Fortress",
-    "Gate/archway/bridge", "Wall", "Fortification",
+    "Castle", "Citadel", "Fort", "Fortress", "Military", "Wall", "Gate",
+    "Fortress/citadel", "Castle/palace",
+    "Gate/archway/bridge", "Fortification",
     # Religious
-    "church", "mosque", "temple", "monastery", "sacred_site", "sanctuary",
-    "religious", "Temple complex", "Church/cathedral", "Minaret/tower",
+    "Church", "Mosque", "Temple", "Monastery", "Sacred site", "Sanctuary",
+    "Religious", "Temple complex", "Church/cathedral", "Minaret/tower",
     "Stone cross",
     # Burial & Death
-    "cemetery", "necropolis", "tomb", "burial", "funerary",
-    "Necropolis/tombs complex", "Cemetery", "Barrow", "Mound/tumulus",
+    "Cemetery", "Necropolis", "Tomb", "Burial", "Funerary",
+    "Necropolis/tombs complex", "Barrow", "Mound/tumulus",
     "Cairn", "Elongated skulls",
     # Megalithic
-    "megalithic", "Megalithic stones", "Megalithic structures",
+    "Megalithic", "Megalithic stones", "Megalithic structures",
     "Megalithic statues", "Megalithic walls", "Stone circle", "Dolmen",
     "Standing stone", "Henge", "Timber circle", "Polygonal masonry",
-    "Megalithic",
     # Rock & Cave
-    "cave", "Cave Structures", "Rock relief/carving", "Rock art",
+    "Cave", "Cave Structures", "Rock relief/carving", "Rock art",
     "Petroglyphs", "Sculptured stone", "Cave Structures, Rock art",
     "Geoglyphs",
     # Infrastructure
-    "road", "bridge", "mine", "quarry", "infrastructure",
+    "Road", "Bridge", "Mine", "Quarry", "Infrastructure",
     "Road/avenue/trackway", "Reservoir/aqueduct/canal", "Mine/quarry",
     "Earthwork", "Well",
     # Water & Ports
-    "aqueduct", "bath", "harbor", "port",
-    "Underwater structures", "Bath", "Shipwreck",
+    "Aqueduct", "Bath", "Harbor", "Port",
+    "Underwater structures", "Shipwreck",
     # Monuments
-    "monument", "memorial", "stadium", "theater", "theatre", "Theatre",
-    "forum", "palace", "Pyramid complex", "Museum", "Amphitheatre",
-    "scheduled_monument", "heritage_site", "archaeological_site", "Monument",
+    "Monument", "Memorial", "Stadium", "Theater", "Theatre",
+    "Forum", "Palace", "Pyramid complex", "Museum", "Amphitheatre",
+    "Scheduled monument", "Heritage site", "Archaeological site",
     # Other
-    "site", "ruin", "inscription", "natural_feature", "impact_crater",
-    "Geological interest", "Magnetic anomaly", "unknown", "Unknown",
+    "Site", "Ruin", "Inscription", "Natural feature", "Impact crater",
+    "Geological interest", "Magnetic anomaly", "Unknown",
 ]
 
 # ---------------------------------------------------------------------------
@@ -63,8 +62,6 @@ _LOOKUP: dict[str, str] = {}
 
 for _canonical in CANONICAL_TYPES:
     _key = _canonical.lower().replace("_", " ")
-    # First entry wins — lowercase forms appear first in the list, so
-    # 'monument' beats 'Monument', 'theatre' beats 'Theatre', etc.
     if _key not in _LOOKUP:
         _LOOKUP[_key] = _canonical
     # Also index the underscore variant
@@ -78,34 +75,34 @@ for _canonical in CANONICAL_TYPES:
 # same thing.  Do NOT merge distinct types (castle ≠ fort ≠ fortress).
 # ---------------------------------------------------------------------------
 _SYNONYMS: dict[str, str] = {
-    "ruins": "ruin",
+    "ruins": "Ruin",
     "tumulus": "Mound/tumulus",
     "barrow": "Barrow",
-    "mausoleum": "tomb",
-    "catacomb": "tomb",
+    "mausoleum": "Tomb",
+    "catacomb": "Tomb",
     "menhir": "Standing stone",
     "stone_circle": "Stone circle",
-    "megalith": "megalithic",
+    "megalith": "Megalithic",
     "megalithic_temple": "Megalithic structures",
     "megalithic_structure": "Megalithic structures",
-    "stone_monument": "monument",
-    "hillfort": "fort",
-    "oppidum": "fort",
-    "shrine": "sanctuary",
-    "colony": "settlement",
+    "stone_monument": "Monument",
+    "hillfort": "Fort",
+    "oppidum": "Fort",
+    "shrine": "Sanctuary",
+    "colony": "Settlement",
     "amphitheater": "Amphitheatre",
     "amphitheatre": "Amphitheatre",
-    "hippodrome": "stadium",
-    "circus": "stadium",
-    "baths": "bath",
-    "thermae": "bath",
-    "agora": "forum",
+    "hippodrome": "Stadium",
+    "circus": "Stadium",
+    "baths": "Bath",
+    "thermae": "Bath",
+    "agora": "Forum",
     "petroglyph": "Petroglyphs",
     "pictograph": "Rock art",
     "rock_art": "Rock art",
     "standing_stone": "Standing stone",
-    "harbour": "harbor",
-    "statue": "monument",
+    "harbour": "Harbor",
+    "statue": "Monument",
 }
 
 # Normalize synonym keys the same way
@@ -126,7 +123,7 @@ def normalize_site_type(site_type: str | None) -> str:
     3. Pass-through (strip whitespace only)
     """
     if not site_type or not site_type.strip():
-        return "unknown"
+        return "Unknown"
 
     cleaned = site_type.strip()
     key = cleaned.lower().replace("_", " ")

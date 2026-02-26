@@ -77,7 +77,7 @@ class EuropeanaIngester(BaseIngester):
 
     # Type mapping
     TYPE_MAPPING = {
-        "archaeological site": "archaeological_site",
+        "archaeological site": "Archaeological site",
         "ruins": "ruins",
         "temple": "temple",
         "tomb": "tomb",
