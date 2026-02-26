@@ -49,6 +49,18 @@ class CardStats(Base):
     empire_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     card_description: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
+    # Enrichment metadata (populated by site enrichment pipeline)
+    wikidata_qid: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source_language: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    heritage_designation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    inception_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    best_wiki_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    commons_image: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # Audit tracking
+    last_enriched: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
     site: Mapped["UnifiedSite"] = relationship("UnifiedSite", lazy="joined")
 
     __table_args__ = (

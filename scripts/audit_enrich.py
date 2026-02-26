@@ -1,0 +1,902 @@
+#!/usr/bin/env python3
+"""Unified Database Audit & Enrichment Orchestrator.
+
+The "one button" entry point for auditing and enriching the Ancient Nerds database.
+Currently scoped to ancient_nerds source only (lyra/community to be added later).
+
+Flow:
+  sync    → Fetch latest site data from API (GeoJSON) into local DB
+  Waves 0-3 → Audit & enrich locally
+  package → Export cleaned data for upload via db.html
+  upload  → (Manual) Open db.html, upload the package, auto-snapshot created
+
+Waves:
+  0: Mechanical fixes (deterministic, no LLM)
+  1: Wikidata enrichment pipeline (HTTP, no LLM)
+  2: Agent verification & gap fill (prepare batches for Claude Code agents)
+  3: Card descriptions (delegated to CARD_DESCRIPTIONS.md procedure)
+
+Usage:
+    python scripts/audit_enrich.py                          # Full run: sync + waves + package
+    python scripts/audit_enrich.py --mode full              # Force re-audit everything
+    python scripts/audit_enrich.py --phase sync             # Only: fetch API → local DB
+    python scripts/audit_enrich.py --phase mechanical       # Only Wave 0
+    python scripts/audit_enrich.py --phase enrich           # Only Wave 1
+    python scripts/audit_enrich.py --phase verify           # Only Wave 2 (prepare agent batches)
+    python scripts/audit_enrich.py --phase merge            # Merge agent results → DB
+    python scripts/audit_enrich.py --phase package          # Only: export cleaned DB for db.html upload
+    python scripts/audit_enrich.py --phase export           # Only: re-export static JSON
+
+    python scripts/audit_enrich.py --api-url https://ancientnerds.com  # Use production API
+"""
+
+import argparse
+import json
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+import httpx
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from sqlalchemy import text
+
+from pipeline.database import engine
+from pipeline.normalizers.site_type import normalize_site_type
+from pipeline.utils.text import categorize_period
+
+OUTPUT_DIR = Path(__file__).parent.parent / "output"
+BATCH_DIR = OUTPUT_DIR / "audit_batches"
+
+ALL_SOURCE_IDS = ["ancient_nerds"]
+DEFAULT_API_URL = "http://localhost:5175"
+
+# Re-audit sites older than 90 days
+AUDIT_FRESHNESS_DAYS = 90
+
+
+# =============================================================================
+# Phase: Sync from Production API
+# =============================================================================
+
+
+def _fetch_geojson(api_url: str, source_id: str) -> list[dict]:
+    """Fetch sites from /api/v1/sites.geojson and return as flat dicts."""
+    url = f"{api_url}/api/v1/sites.geojson"
+    print(f"  GET {url}?source={source_id} ...", flush=True)
+
+    resp = httpx.get(
+        url,
+        params={"source": source_id, "limit": 50000},
+        timeout=120,
+        headers={"User-Agent": "AncientNerdsAudit/1.0"},
+    )
+    resp.raise_for_status()
+    data = resp.json()
+
+    features = data.get("features", [])
+    sites = []
+    for feat in features:
+        props = feat.get("properties", {})
+        coords = feat.get("geometry", {}).get("coordinates", [None, None])
+        sites.append({
+            "site_id": props.get("id"),
+            "source_id": props.get("source_id", source_id),
+            "name": props.get("name"),
+            "lon": coords[0],
+            "lat": coords[1],
+            "site_type": props.get("site_type"),
+            "period_start": props.get("period_start"),
+            "period_name": props.get("period_name"),
+            "country": props.get("country"),
+            "description": props.get("description"),
+            "source_url": props.get("source_url"),
+            "thumbnail_url": props.get("thumbnail_url"),
+        })
+    return sites
+
+
+def sync_from_production(api_url: str, source_ids: list[str]) -> dict:
+    """Fetch latest site data from production API and upsert into local DB.
+
+    This ensures the local DB reflects manual edits made via db.html on production
+    before running the audit. Without this step, the audit could overwrite
+    production changes that only exist in the remote database.
+
+    Uses a temp table + batch JOIN for speed (~5s for 5000 sites instead of minutes).
+    """
+    print(f"\n[SYNC] Fetching from {api_url} ...", flush=True)
+
+    all_sites = []
+    for source_id in source_ids:
+        sites = _fetch_geojson(api_url, source_id)
+        print(f"  {source_id}: {len(sites)} sites", flush=True)
+        all_sites.extend(sites)
+
+    if not all_sites:
+        print("  WARNING: API returned 0 sites. Skipping sync.", flush=True)
+        return {"synced": 0, "skipped": 0}
+
+    # Filter out sites without IDs
+    valid = [s for s in all_sites if s.get("site_id")]
+    skipped = len(all_sites) - len(valid)
+
+    with engine.connect() as conn:
+        # Create temp table
+        conn.execute(text("""
+            CREATE TEMP TABLE _sync_incoming (
+                site_id TEXT PRIMARY KEY,
+                source_id TEXT,
+                name TEXT,
+                lat DOUBLE PRECISION,
+                lon DOUBLE PRECISION,
+                site_type TEXT,
+                period_start INTEGER,
+                period_name TEXT,
+                country TEXT,
+                description TEXT,
+                source_url TEXT,
+                thumbnail_url TEXT
+            ) ON COMMIT DROP
+        """))
+
+        # Batch insert into temp table (chunks of 500)
+        for i in range(0, len(valid), 500):
+            chunk = valid[i:i + 500]
+            values_parts = []
+            params = {}
+            for j, site in enumerate(chunk):
+                prefix = f"s{j}"
+                values_parts.append(
+                    f"(:{prefix}_id, :{prefix}_src, :{prefix}_n, :{prefix}_la, :{prefix}_lo, "
+                    f":{prefix}_t, :{prefix}_p, :{prefix}_pn, :{prefix}_c, "
+                    f":{prefix}_d, :{prefix}_u, :{prefix}_th)"
+                )
+                params[f"{prefix}_id"] = site["site_id"]
+                params[f"{prefix}_src"] = site.get("source_id")
+                params[f"{prefix}_n"] = site.get("name")
+                params[f"{prefix}_la"] = site.get("lat")
+                params[f"{prefix}_lo"] = site.get("lon")
+                params[f"{prefix}_t"] = site.get("site_type")
+                params[f"{prefix}_p"] = site.get("period_start")
+                params[f"{prefix}_pn"] = site.get("period_name")
+                params[f"{prefix}_c"] = site.get("country")
+                params[f"{prefix}_d"] = site.get("description")
+                params[f"{prefix}_u"] = site.get("source_url")
+                params[f"{prefix}_th"] = site.get("thumbnail_url")
+
+            conn.execute(
+                text(f"INSERT INTO _sync_incoming VALUES {', '.join(values_parts)}"),
+                params,
+            )
+
+        print(f"  Loaded {len(valid)} sites into temp table", flush=True)
+
+        # Batch UPDATE existing sites from temp table
+        result_upd = conn.execute(text("""
+            UPDATE unified_sites us SET
+                name = si.name,
+                lat = si.lat,
+                lon = si.lon,
+                site_type = si.site_type,
+                period_start = si.period_start,
+                period_name = si.period_name,
+                country = si.country,
+                description = si.description,
+                source_url = si.source_url,
+                thumbnail_url = si.thumbnail_url,
+                updated_at = NOW()
+            FROM _sync_incoming si
+            WHERE us.id::text = si.site_id
+        """))
+        updated = result_upd.rowcount
+
+        # Batch INSERT new sites (exist on production but not locally)
+        result_ins = conn.execute(text("""
+            INSERT INTO unified_sites (
+                id, source_id, name, lat, lon, geom,
+                site_type, period_start, period_name,
+                country, description, source_url, thumbnail_url,
+                created_at, updated_at
+            )
+            SELECT
+                si.site_id::uuid, si.source_id, si.name, si.lat, si.lon,
+                ST_SetSRID(ST_MakePoint(si.lon, si.lat), 4326),
+                si.site_type, si.period_start, si.period_name,
+                si.country, si.description, si.source_url, si.thumbnail_url,
+                NOW(), NOW()
+            FROM _sync_incoming si
+            LEFT JOIN unified_sites us ON us.id::text = si.site_id
+            WHERE us.id IS NULL
+        """))
+        inserted = result_ins.rowcount
+
+        conn.commit()
+
+    print(f"[SYNC] Complete: {updated} updated, {inserted} inserted, {skipped} skipped", flush=True)
+    return {"updated": updated, "inserted": inserted, "skipped": skipped}
+
+
+# =============================================================================
+# Phase: Fetch Candidates
+# =============================================================================
+
+def fetch_audit_candidates(source_ids: list[str], mode: str) -> list[dict]:
+    """Query unified_sites for audit candidates.
+
+    In default mode, skips sites audited within the last 90 days.
+    In full mode, returns all sites for the given sources.
+    """
+    placeholders = ", ".join(f":src_{i}" for i in range(len(source_ids)))
+    params = {f"src_{i}": sid for i, sid in enumerate(source_ids)}
+
+    date_filter = ""
+    if mode != "full":
+        date_filter = f"AND (last_audited IS NULL OR last_audited < NOW() - INTERVAL '{AUDIT_FRESHNESS_DAYS} days')"
+
+    query = f"""
+        SELECT
+            id::text AS site_id,
+            source_id,
+            name,
+            lat, lon,
+            site_type,
+            period_start,
+            period_end,
+            period_name,
+            country,
+            description,
+            source_url,
+            edited_by,
+            last_audited
+        FROM unified_sites
+        WHERE source_id IN ({placeholders})
+        {date_filter}
+        ORDER BY source_id, name
+    """
+
+    with engine.connect() as conn:
+        rows = conn.execute(text(query), params).fetchall()
+
+    sites = []
+    for row in rows:
+        sites.append({
+            "site_id": row.site_id,
+            "source_id": row.source_id,
+            "name": row.name,
+            "lat": row.lat,
+            "lon": row.lon,
+            "site_type": row.site_type,
+            "period_start": row.period_start,
+            "period_end": row.period_end,
+            "period_name": row.period_name,
+            "country": row.country,
+            "description": row.description,
+            "source_url": row.source_url,
+            "edited_by": row.edited_by,
+            "last_audited": row.last_audited.isoformat() if row.last_audited else None,
+        })
+
+    OUTPUT_DIR.mkdir(exist_ok=True)
+    output_path = OUTPUT_DIR / "audit_sites.json"
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(sites, f, indent=2, ensure_ascii=False)
+
+    by_source = {}
+    for s in sites:
+        by_source.setdefault(s["source_id"], 0)
+        by_source[s["source_id"]] += 1
+
+    print(f"[AUDIT] Fetched {len(sites)} candidates ({mode} mode)", flush=True)
+    for src, count in sorted(by_source.items()):
+        print(f"  {src}: {count}", flush=True)
+
+    return sites
+
+
+# =============================================================================
+# Wave 0: Mechanical Fixes
+# =============================================================================
+
+def run_mechanical_fixes(sites: list[dict]) -> dict:
+    """Apply deterministic fixes: site_type normalization, period recomputation,
+    raw_year parsing, compound capitalization.
+
+    Returns stats dict.
+    """
+    stats = {
+        "site_type_normalized": 0,
+        "period_name_recomputed": 0,
+        "total_sites": len(sites),
+    }
+    sql_statements = []
+
+    with engine.connect() as conn:
+        # --- Site type normalization ---
+        # Fetch distinct raw site_types across all sources
+        raw_types = conn.execute(text(
+            "SELECT DISTINCT site_type FROM unified_sites WHERE site_type IS NOT NULL"
+        )).fetchall()
+
+        for (raw,) in raw_types:
+            canonical = normalize_site_type(raw)
+            if canonical != raw:
+                stmt = (
+                    f"UPDATE unified_sites SET site_type = '{canonical}' "
+                    f"WHERE site_type = '{raw}';"
+                )
+                sql_statements.append(stmt)
+                result = conn.execute(
+                    text("UPDATE unified_sites SET site_type = :canonical WHERE site_type = :raw"),
+                    {"canonical": canonical, "raw": raw},
+                )
+                stats["site_type_normalized"] += result.rowcount
+
+        # --- Period name recomputation ---
+        # For sites with period_start but mismatched period_name
+        rows = conn.execute(text("""
+            SELECT id::text AS site_id, period_start, period_name
+            FROM unified_sites
+            WHERE period_start IS NOT NULL
+        """)).fetchall()
+
+        for row in rows:
+            expected = categorize_period(row.period_start)
+            if expected and expected != row.period_name:
+                stmt = (
+                    f"UPDATE unified_sites SET period_name = '{expected}' "
+                    f"WHERE id = '{row.site_id}' "
+                    f"AND (period_name IS NULL OR period_name = '{row.period_name or ''}');"
+                )
+                sql_statements.append(stmt)
+                conn.execute(
+                    text(
+                        "UPDATE unified_sites SET period_name = :expected "
+                        "WHERE id = :site_id "
+                        "AND (period_name IS NULL OR period_name = :current)"
+                    ),
+                    {
+                        "expected": expected,
+                        "site_id": row.site_id,
+                        "current": row.period_name,
+                    },
+                )
+                stats["period_name_recomputed"] += 1
+
+        conn.commit()
+
+    # Write SQL log
+    if sql_statements:
+        sql_path = OUTPUT_DIR / "audit_mechanical_fixes.sql"
+        with open(sql_path, "w", encoding="utf-8") as f:
+            f.write("-- Mechanical audit fixes generated by audit_enrich.py\n")
+            f.write(f"-- Generated: {datetime.now(timezone.utc).isoformat()}\n\n")
+            for stmt in sql_statements:
+                f.write(stmt + "\n")
+        print(f"  SQL log: {sql_path} ({len(sql_statements)} statements)", flush=True)
+
+    print(f"[WAVE 0] Mechanical fixes complete:", flush=True)
+    for key, val in stats.items():
+        if key != "total_sites":
+            print(f"  {key}: {val}", flush=True)
+
+    return stats
+
+
+# =============================================================================
+# Wave 1: Wikidata Enrichment Pipeline
+# =============================================================================
+
+def run_enrichment_pipeline() -> dict:
+    """Run the existing enrichment scripts in sequence.
+
+    Calls: export_card_sites.py → enrich_reconcile.py → enrich_fetch_claims.py
+           → enrich_wiki_select.py
+    """
+    scripts = [
+        ("Export sites", [sys.executable, "scripts/export_card_sites.py"]),
+        ("Reconcile QIDs", [sys.executable, "scripts/enrich_reconcile.py"]),
+        ("Fetch claims", [sys.executable, "scripts/enrich_fetch_claims.py"]),
+        ("Wiki selection", [sys.executable, "scripts/enrich_wiki_select.py"]),
+    ]
+
+    stats = {}
+    project_root = Path(__file__).parent.parent
+
+    for label, cmd in scripts:
+        print(f"\n[WAVE 1] {label}...", flush=True)
+        result = subprocess.run(
+            cmd,
+            cwd=str(project_root),
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            print(f"  ERROR: {label} failed (exit code {result.returncode})", flush=True)
+            if result.stderr:
+                print(f"  stderr: {result.stderr[:500]}", flush=True)
+            stats[label] = "FAILED"
+        else:
+            stats[label] = "OK"
+            # Print last few lines of output
+            lines = result.stdout.strip().split("\n")
+            for line in lines[-3:]:
+                print(f"  {line}", flush=True)
+
+    # Load enrichment stats
+    for fname in ["enrichment_qids.json", "enrichment_claims.json", "enrichment_wiki.json"]:
+        fpath = OUTPUT_DIR / fname
+        if fpath.exists():
+            with open(fpath, encoding="utf-8") as f:
+                data = json.load(f)
+            if "stats" in data:
+                stats[fname] = data["stats"]
+
+    print(f"\n[WAVE 1] Enrichment pipeline complete", flush=True)
+    return stats
+
+
+# =============================================================================
+# Wave 2: Prepare Agent Batches
+# =============================================================================
+
+def prepare_agent_batches(sites: list[dict]) -> dict:
+    """Identify sites needing research and split into agent batches.
+
+    Loads enrichment data to find gaps/discrepancies, then creates
+    batch input files for Claude Code agents.
+    """
+    # Load enrichment data
+    qids = {}
+    claims = {}
+    wiki = {}
+
+    qids_path = OUTPUT_DIR / "enrichment_qids.json"
+    if qids_path.exists():
+        with open(qids_path, encoding="utf-8") as f:
+            qids = json.load(f).get("matches", {})
+
+    claims_path = OUTPUT_DIR / "enrichment_claims.json"
+    if claims_path.exists():
+        with open(claims_path, encoding="utf-8") as f:
+            claims = json.load(f).get("claims", {})
+
+    wiki_path = OUTPUT_DIR / "enrichment_wiki.json"
+    if wiki_path.exists():
+        with open(wiki_path, encoding="utf-8") as f:
+            wiki = json.load(f).get("articles", {})
+
+    # Identify sites needing research
+    needs_research = []
+    for site in sites:
+        sid = site["site_id"]
+        issues = []
+
+        # Missing period_start and no Wikidata inception
+        claim = claims.get(sid, {})
+        if site["period_start"] is None:
+            if claim.get("inception") is not None:
+                issues.append(
+                    f"period_start is NULL — enrichment says {claim['inception']}, verify"
+                )
+            else:
+                issues.append("period_start is NULL — no enrichment data, needs research")
+
+        # No Wikidata match at all
+        if sid not in qids:
+            issues.append("No Wikidata match — needs manual identification")
+
+        # Missing country
+        if not site["country"]:
+            issues.append("country is NULL — needs geo-lookup or research")
+
+        # Missing site_type
+        if not site["site_type"] or site["site_type"] in ("unknown", "Unknown"):
+            issues.append("site_type is unknown — needs classification")
+
+        if issues:
+            entry = dict(site)
+            entry["enrichment"] = {
+                "qid": qids.get(sid, {}).get("qid"),
+                "inception": claim.get("inception"),
+                "heritage": claim.get("heritage"),
+            }
+            entry["wiki_extract"] = wiki.get(sid, {}).get("extract", "")
+            entry["needs_fix"] = issues
+            needs_research.append(entry)
+
+    if not needs_research:
+        print("[WAVE 2] No sites need research — all data complete!", flush=True)
+        return {"total_needing_research": 0, "batches": 0}
+
+    # Split into batches of ~50
+    batch_size = 50
+    BATCH_DIR.mkdir(parents=True, exist_ok=True)
+
+    batches = []
+    for i in range(0, len(needs_research), batch_size):
+        batch_num = f"{len(batches) + 1:03d}"
+        batch_sites = needs_research[i:i + batch_size]
+        batch = {
+            "batch_id": batch_num,
+            "sites": batch_sites,
+        }
+        batch_path = BATCH_DIR / f"batch_{batch_num}_input.json"
+        with open(batch_path, "w", encoding="utf-8") as f:
+            json.dump(batch, f, indent=2, ensure_ascii=False)
+        batches.append(batch_num)
+
+    # Write manifest
+    manifest = {
+        "created": datetime.now(timezone.utc).isoformat(),
+        "total_sites": len(needs_research),
+        "batch_count": len(batches),
+        "batch_size": batch_size,
+        "batches": {
+            bid: {"status": "pending", "input": f"batch_{bid}_input.json"}
+            for bid in batches
+        },
+    }
+    manifest_path = BATCH_DIR / "merge_manifest.json"
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2, ensure_ascii=False)
+
+    stats = {
+        "total_needing_research": len(needs_research),
+        "batches": len(batches),
+        "batch_size": batch_size,
+    }
+
+    print(f"[WAVE 2] Prepared {len(batches)} batches ({len(needs_research)} sites)", flush=True)
+    print(f"  Batch files: {BATCH_DIR}/batch_NNN_input.json", flush=True)
+    print(f"  Manifest: {manifest_path}", flush=True)
+    print(f"\n  Next: Launch agents to process each batch (see AUDIT_ENRICHMENT.md Step 3)", flush=True)
+
+    return stats
+
+
+# =============================================================================
+# Merge Agent Results (Post-Wave 2)
+# =============================================================================
+
+def merge_results() -> dict:
+    """Read all batch result files and apply fixes to the database.
+
+    Updates unified_sites and card_stats, sets last_audited timestamps.
+    """
+    manifest_path = BATCH_DIR / "merge_manifest.json"
+    if not manifest_path.exists():
+        print("[MERGE] No manifest found. Run --phase verify first.", flush=True)
+        return {"error": "no manifest"}
+
+    with open(manifest_path, encoding="utf-8") as f:
+        manifest = json.load(f)
+
+    stats = {"fixed": 0, "verified": 0, "manual": 0, "batches_merged": 0}
+    now = datetime.now(timezone.utc).isoformat()
+
+    with engine.connect() as conn:
+        for batch_id, batch_info in manifest.get("batches", {}).items():
+            result_path = BATCH_DIR / f"batch_{batch_id}_results.json"
+            if not result_path.exists():
+                print(f"  Batch {batch_id}: no results file, skipping", flush=True)
+                continue
+
+            with open(result_path, encoding="utf-8") as f:
+                results = json.load(f)
+
+            sites_results = results.get("sites", {})
+            for site_id, site_result in sites_results.items():
+                status = site_result.get("status", "unknown")
+
+                if status == "fixed":
+                    for fix in site_result.get("fixes", []):
+                        field = fix["field"]
+                        old_val = fix.get("old")
+                        new_val = fix["new"]
+
+                        # Conditional WHERE: protect user edits
+                        if old_val is None:
+                            condition = f"{field} IS NULL"
+                        else:
+                            condition = f"{field} = :old_val"
+
+                        update_sql = f"UPDATE unified_sites SET {field} = :new_val WHERE id = :site_id AND ({condition})"
+                        params = {"new_val": new_val, "site_id": site_id}
+                        if old_val is not None:
+                            params["old_val"] = old_val
+
+                        conn.execute(text(update_sql), params)
+                    stats["fixed"] += 1
+
+                elif status == "verified":
+                    stats["verified"] += 1
+                elif status == "manual":
+                    stats["manual"] += 1
+
+                # Update enrichment in card_stats if present
+                enrichment = site_result.get("enrichment", {})
+                if enrichment.get("confidence_score") is not None:
+                    conn.execute(
+                        text(
+                            "UPDATE card_stats SET confidence_score = :score, last_enriched = NOW() "
+                            "WHERE site_id = :site_id"
+                        ),
+                        {"score": enrichment["confidence_score"], "site_id": site_id},
+                    )
+
+                # Card description (ancient_nerds only)
+                card_desc = site_result.get("card_description")
+                if card_desc:
+                    conn.execute(
+                        text(
+                            "UPDATE card_stats SET card_description = :desc "
+                            "WHERE site_id = :site_id AND (card_description IS NULL OR card_description = '')"
+                        ),
+                        {"desc": card_desc, "site_id": site_id},
+                    )
+
+                # Mark as audited
+                conn.execute(
+                    text("UPDATE unified_sites SET last_audited = NOW() WHERE id = :site_id"),
+                    {"site_id": site_id},
+                )
+
+            stats["batches_merged"] += 1
+            batch_info["status"] = "merged"
+
+        conn.commit()
+
+    # Update manifest
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2, ensure_ascii=False)
+
+    print(f"[MERGE] Complete:", flush=True)
+    for key, val in stats.items():
+        print(f"  {key}: {val}", flush=True)
+
+    return stats
+
+
+# =============================================================================
+# Phase: Package for db.html Upload
+# =============================================================================
+
+def package_for_upload(source_ids: list[str]) -> dict:
+    """Export cleaned sites from local DB as GeoJSON files for upload via db.html.
+
+    Creates one GeoJSON FeatureCollection per source. The user uploads the file
+    in db.html which:
+    1. Parses features and matches to existing sites by name
+    2. Only updates the sites present in the file (like a GitHub diff)
+    3. Auto-creates a snapshot before applying — always rollback-safe
+
+    The GeoJSON format matches what db.html's exportGeoJSON() produces,
+    so it round-trips cleanly.
+    """
+    OUTPUT_DIR.mkdir(exist_ok=True)
+    stats = {}
+
+    with engine.connect() as conn:
+        for source_id in source_ids:
+            rows = conn.execute(
+                text("""
+                    SELECT
+                        id::text AS site_id,
+                        name, lat, lon,
+                        site_type, period_name, period_start,
+                        country, description, source_url, thumbnail_url
+                    FROM unified_sites
+                    WHERE source_id = :source_id
+                    ORDER BY name
+                """),
+                {"source_id": source_id},
+            ).fetchall()
+
+            features = []
+            for row in rows:
+                if row.lat is None or row.lon is None:
+                    continue
+                feature = {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [row.lon, row.lat],
+                    },
+                    "properties": {
+                        "id": row.site_id,
+                        "name": row.name,
+                        "source_id": source_id,
+                        "site_type": row.site_type,
+                        "period_start": row.period_start,
+                        "period_name": row.period_name,
+                        "country": row.country,
+                        "description": row.description,
+                        "source_url": row.source_url,
+                        "thumbnail_url": row.thumbnail_url,
+                    },
+                }
+                features.append(feature)
+
+            geojson = {
+                "type": "FeatureCollection",
+                "metadata": {
+                    "exported_at": datetime.now(timezone.utc).isoformat(),
+                    "source_id": source_id,
+                    "count": len(features),
+                },
+                "features": features,
+            }
+
+            out_path = OUTPUT_DIR / f"audit_upload_{source_id}.geojson"
+            with open(out_path, "w", encoding="utf-8") as f:
+                json.dump(geojson, f, indent=2, ensure_ascii=False)
+
+            stats[source_id] = len(features)
+            print(f"  {source_id}: {len(features)} sites -> {out_path}", flush=True)
+
+    print(f"\n[PACKAGE] Complete. Upload these files via db.html:", flush=True)
+    for source_id in source_ids:
+        out_path = OUTPUT_DIR / f"audit_upload_{source_id}.geojson"
+        print(f"  {out_path}", flush=True)
+    print("  Only sites in the file get updated (like a GitHub diff).", flush=True)
+    print("  db.html auto-creates a snapshot before applying.", flush=True)
+
+    return stats
+
+
+# =============================================================================
+# Export Static JSON
+# =============================================================================
+
+def export_static() -> None:
+    """Re-export static JSON files after database changes."""
+    print("\n[EXPORT] Re-exporting static JSON...", flush=True)
+    project_root = Path(__file__).parent.parent
+    result = subprocess.run(
+        [sys.executable, "-m", "pipeline.static_exporter", "--sites-only"],
+        cwd=str(project_root),
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print(f"  ERROR: Export failed (exit code {result.returncode})", flush=True)
+        if result.stderr:
+            print(f"  stderr: {result.stderr[:500]}", flush=True)
+    else:
+        lines = result.stdout.strip().split("\n")
+        for line in lines[-3:]:
+            print(f"  {line}", flush=True)
+        print("[EXPORT] Complete", flush=True)
+
+
+# =============================================================================
+# Main
+# =============================================================================
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Unified Database Audit & Enrichment Orchestrator"
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["default", "full"],
+        default="default",
+        help="default: skip recently audited; full: re-audit everything",
+    )
+    parser.add_argument(
+        "--source",
+        choices=ALL_SOURCE_IDS,
+        help="Single source only (default: all 3 AN sources)",
+    )
+    parser.add_argument(
+        "--phase",
+        choices=["sync", "mechanical", "enrich", "verify", "merge", "package", "export"],
+        help="Run only a specific phase",
+    )
+    parser.add_argument(
+        "--api-url",
+        default=DEFAULT_API_URL,
+        help=f"Production API URL (default: {DEFAULT_API_URL})",
+    )
+    args = parser.parse_args()
+
+    source_ids = [args.source] if args.source else ALL_SOURCE_IDS
+    phase = args.phase
+
+    print("=" * 60, flush=True)
+    print("  Ancient Nerds — Audit & Enrichment Orchestrator", flush=True)
+    print("=" * 60, flush=True)
+    print(f"  Sources: {', '.join(source_ids)}", flush=True)
+    print(f"  Mode: {args.mode}", flush=True)
+    print(f"  Phase: {phase or 'all'}", flush=True)
+    print(f"  API: {args.api_url}", flush=True)
+    print("=" * 60, flush=True)
+
+    # Step 1: Sync from production API (always first)
+    if phase in (None, "sync"):
+        print("\n" + "=" * 40, flush=True)
+        print("  SYNC: Fetch Production -> Local DB", flush=True)
+        print("=" * 40, flush=True)
+        sync_from_production(args.api_url, source_ids)
+        if phase == "sync":
+            print("\n[SYNC] Done. Local DB now matches production.", flush=True)
+            return
+
+    # Fetch candidates for audit (unless just merging/exporting/packaging)
+    if phase not in ("merge", "export", "package"):
+        sites = fetch_audit_candidates(source_ids, args.mode)
+        if not sites:
+            print("\n[AUDIT] No candidates found. Nothing to do.", flush=True)
+            return
+    else:
+        sites = []
+
+    # Wave 0: Mechanical fixes
+    if phase in (None, "mechanical"):
+        print("\n" + "=" * 40, flush=True)
+        print("  WAVE 0: Mechanical Fixes", flush=True)
+        print("=" * 40, flush=True)
+        run_mechanical_fixes(sites)
+
+    # Wave 1: Wikidata enrichment
+    if phase in (None, "enrich"):
+        print("\n" + "=" * 40, flush=True)
+        print("  WAVE 1: Wikidata Enrichment", flush=True)
+        print("=" * 40, flush=True)
+        run_enrichment_pipeline()
+
+    # Wave 2: Prepare agent batches
+    if phase in (None, "verify"):
+        print("\n" + "=" * 40, flush=True)
+        print("  WAVE 2: Agent Verification (Prepare)", flush=True)
+        print("=" * 40, flush=True)
+        prepare_agent_batches(sites)
+
+    # Merge agent results
+    if phase == "merge":
+        print("\n" + "=" * 40, flush=True)
+        print("  Merge Agent Results", flush=True)
+        print("=" * 40, flush=True)
+        merge_results()
+
+    # Mark audited sites (if running all phases or mechanical/enrich)
+    if phase in (None, "mechanical", "enrich") and sites:
+        site_ids = [s["site_id"] for s in sites]
+        print(f"\n[AUDIT] Marking {len(site_ids)} sites as audited...", flush=True)
+        with engine.connect() as conn:
+            # Batch update in chunks of 500
+            for i in range(0, len(site_ids), 500):
+                chunk = site_ids[i:i + 500]
+                placeholders = ", ".join(f":id_{j}" for j in range(len(chunk)))
+                params = {f"id_{j}": sid for j, sid in enumerate(chunk)}
+                conn.execute(
+                    text(f"UPDATE unified_sites SET last_audited = NOW() WHERE id::text IN ({placeholders})"),
+                    params,
+                )
+            conn.commit()
+        print(f"  Done. {len(site_ids)} sites marked.", flush=True)
+
+    # Package for db.html upload (last step before manual upload)
+    if phase in (None, "package"):
+        print("\n" + "=" * 40, flush=True)
+        print("  PACKAGE: Export for db.html Upload", flush=True)
+        print("=" * 40, flush=True)
+        package_for_upload(source_ids)
+
+    # Export static JSON
+    if phase in (None, "export"):
+        print("\n" + "=" * 40, flush=True)
+        print("  Export Static JSON", flush=True)
+        print("=" * 40, flush=True)
+        export_static()
+
+    print("\n" + "=" * 60, flush=True)
+    print("  Audit & Enrichment Complete", flush=True)
+    print("=" * 60, flush=True)
+
+
+if __name__ == "__main__":
+    main()

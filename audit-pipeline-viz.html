@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ancient Nerds — Audit & Enrichment Pipeline</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0a0a0f; color: #e0e0e0; padding: 32px; min-height: 100vh; }
+  h1 { text-align: center; font-size: 28px; margin-bottom: 8px; color: #fff; }
+  .subtitle { text-align: center; color: #888; margin-bottom: 40px; font-size: 14px; }
+
+  /* Sources bar */
+  .sources { display: flex; justify-content: center; gap: 24px; margin-bottom: 48px; }
+  .source-card { padding: 16px 24px; border-radius: 12px; text-align: center; min-width: 200px; }
+  .source-card h3 { font-size: 16px; margin-bottom: 4px; }
+  .source-card .count { font-size: 24px; font-weight: 700; }
+  .source-card .role { font-size: 11px; opacity: 0.7; margin-top: 4px; }
+  .src-an { background: linear-gradient(135deg, #c0202320, #c0202308); border: 1px solid #c02023; }
+  .src-an h3 { color: #c02023; }
+  .src-ly { background: linear-gradient(135deg, #3b82f620, #3b82f608); border: 1px solid #3b82f6; }
+  .src-ly h3 { color: #3b82f6; }
+  .src-co { background: linear-gradient(135deg, #22c55e20, #22c55e08); border: 1px solid #22c55e; }
+  .src-co h3 { color: #22c55e; }
+
+  /* Pipeline flow */
+  .pipeline { position: relative; max-width: 1000px; margin: 0 auto; }
+
+  /* Wave cards */
+  .wave { position: relative; margin-bottom: 12px; }
+  .wave-header { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
+  .wave-num { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 20px; flex-shrink: 0; }
+  .wave-title { font-size: 20px; font-weight: 600; }
+  .wave-type { font-size: 12px; padding: 3px 10px; border-radius: 20px; font-weight: 500; }
+
+  .wave-body { background: #12121a; border: 1px solid #2a2a3a; border-radius: 16px; padding: 24px; margin-left: 24px; border-left: 3px solid; }
+
+  /* Sync - Cyan */
+  .wsync .wave-num { background: #06b6d422; color: #06b6d4; border: 2px solid #06b6d4; }
+  .wsync .wave-title { color: #06b6d4; }
+  .wsync .wave-type { background: #06b6d420; color: #06b6d4; border: 1px solid #06b6d444; }
+  .wsync .wave-body { border-left-color: #06b6d4; }
+
+  /* Package - Rose */
+  .wpkg .wave-num { background: #f4365822; color: #f43658; border: 2px solid #f43658; }
+  .wpkg .wave-title { color: #f43658; }
+  .wpkg .wave-type { background: #f4365820; color: #f43658; border: 1px solid #f4365844; }
+  .wpkg .wave-body { border-left-color: #f43658; }
+
+  /* Wave 0 - Orange */
+  .w0 .wave-num { background: #f59e0b22; color: #f59e0b; border: 2px solid #f59e0b; }
+  .w0 .wave-title { color: #f59e0b; }
+  .w0 .wave-type { background: #f59e0b20; color: #f59e0b; border: 1px solid #f59e0b44; }
+  .w0 .wave-body { border-left-color: #f59e0b; }
+
+  /* Wave 1 - Blue */
+  .w1 .wave-num { background: #3b82f622; color: #3b82f6; border: 2px solid #3b82f6; }
+  .w1 .wave-title { color: #3b82f6; }
+  .w1 .wave-type { background: #3b82f620; color: #3b82f6; border: 1px solid #3b82f644; }
+  .w1 .wave-body { border-left-color: #3b82f6; }
+
+  /* Wave 2 - Purple */
+  .w2 .wave-num { background: #8b5cf622; color: #8b5cf6; border: 2px solid #8b5cf6; }
+  .w2 .wave-title { color: #8b5cf6; }
+  .w2 .wave-type { background: #8b5cf620; color: #8b5cf6; border: 1px solid #8b5cf644; }
+  .w2 .wave-body { border-left-color: #8b5cf6; }
+
+  /* Wave 3 - Green */
+  .w3 .wave-num { background: #10b98122; color: #10b981; border: 2px solid #10b981; }
+  .w3 .wave-title { color: #10b981; }
+  .w3 .wave-type { background: #10b98120; color: #10b981; border: 1px solid #10b98144; }
+  .w3 .wave-body { border-left-color: #10b981; }
+
+  /* Steps inside waves */
+  .steps { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
+  .step { background: #1a1a28; border: 1px solid #333; border-radius: 10px; padding: 14px 16px; flex: 1; min-width: 180px; }
+  .step-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.5; margin-bottom: 6px; }
+  .step-name { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .step-detail { font-size: 12px; color: #888; line-height: 1.4; }
+  .step-file { font-size: 11px; color: #6366f1; margin-top: 6px; font-family: 'Cascadia Code', 'Fira Code', monospace; }
+
+  /* Arrow between waves */
+  .arrow-down { text-align: center; padding: 8px 0; margin-left: 24px; }
+  .arrow-down svg { opacity: 0.3; }
+
+  /* Elimination callout */
+  .elim { display: inline-block; background: #22c55e15; border: 1px solid #22c55e33; border-radius: 8px; padding: 6px 14px; font-size: 13px; color: #22c55e; margin-top: 12px; }
+
+  /* Source applicability tags */
+  .applies { display: flex; gap: 6px; margin-top: 10px; }
+  .tag { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+  .tag-an { background: #c0202320; color: #c02023; border: 1px solid #c0202344; }
+  .tag-ly { background: #3b82f620; color: #3b82f6; border: 1px solid #3b82f644; }
+  .tag-co { background: #22c55e20; color: #22c55e; border: 1px solid #22c55e44; }
+
+  /* Schema box */
+  .schema { max-width: 1000px; margin: 48px auto 0; }
+  .schema h2 { font-size: 20px; margin-bottom: 16px; color: #fff; }
+  .schema-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .schema-card { background: #12121a; border: 1px solid #2a2a3a; border-radius: 12px; padding: 20px; }
+  .schema-card h3 { font-size: 15px; margin-bottom: 12px; color: #f59e0b; }
+  .schema-card code { font-size: 12px; color: #a78bfa; font-family: 'Cascadia Code', 'Fira Code', monospace; }
+  .col-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #1a1a28; }
+  .col-name { font-size: 13px; }
+  .col-type { font-size: 12px; color: #666; font-family: monospace; }
+  .col-new { background: #22c55e10; border-radius: 4px; padding: 2px 4px; }
+  .col-new .col-name { color: #22c55e; }
+
+  /* Output flow */
+  .outputs { max-width: 1000px; margin: 48px auto 0; }
+  .outputs h2 { font-size: 20px; margin-bottom: 16px; color: #fff; }
+  .output-flow { display: flex; gap: 12px; align-items: stretch; flex-wrap: wrap; }
+  .output-card { background: #12121a; border: 1px solid #2a2a3a; border-radius: 10px; padding: 14px; flex: 1; min-width: 140px; }
+  .output-card .fname { font-size: 11px; font-family: monospace; color: #6366f1; margin-bottom: 6px; word-break: break-all; }
+  .output-card .fdesc { font-size: 12px; color: #888; }
+  .flow-arrow { display: flex; align-items: center; color: #444; font-size: 20px; }
+
+  /* CLI box */
+  .cli { max-width: 1000px; margin: 48px auto 0; }
+  .cli h2 { font-size: 20px; margin-bottom: 16px; color: #fff; }
+  .cli-block { background: #0d0d14; border: 1px solid #2a2a3a; border-radius: 12px; padding: 20px; font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 13px; line-height: 1.8; }
+  .cli-block .prompt { color: #22c55e; }
+  .cli-block .cmd { color: #e0e0e0; }
+  .cli-block .comment { color: #555; }
+  .cli-block .flag { color: #f59e0b; }
+
+  /* Resumability */
+  .resume { max-width: 1000px; margin: 48px auto 0; }
+  .resume h2 { font-size: 20px; margin-bottom: 16px; color: #fff; }
+  .resume-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .resume-card { background: #12121a; border: 1px solid #2a2a3a; border-radius: 12px; padding: 20px; text-align: center; }
+  .resume-card .level { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #888; margin-bottom: 8px; }
+  .resume-card .mechanism { font-size: 14px; font-weight: 600; color: #a78bfa; margin-bottom: 6px; }
+  .resume-card .detail { font-size: 12px; color: #666; }
+</style>
+</head>
+<body>
+
+<h1>Audit & Enrichment Pipeline</h1>
+<p class="subtitle">python scripts/audit_enrich.py — 4-wave architecture for the full Ancient Nerds database</p>
+
+<!-- Sources -->
+<div class="sources">
+  <div class="source-card src-an">
+    <h3>Originals</h3>
+    <div class="count">~5,005</div>
+    <div class="role">Full audit + enrichment + card descriptions</div>
+  </div>
+  <div class="source-card src-ly">
+    <h3>Radar (Lyra)</h3>
+    <div class="count">varies</div>
+    <div class="role">Enrich + verify. Never auto-promote.</div>
+  </div>
+  <div class="source-card src-co">
+    <h3>Community</h3>
+    <div class="count">varies</div>
+    <div class="role">Enrich + verify. Never auto-promote.</div>
+  </div>
+</div>
+
+<!-- Pipeline -->
+<div class="pipeline">
+
+  <!-- Sync from Production -->
+  <div class="wave wsync">
+    <div class="wave-header">
+      <div class="wave-num" style="font-size:14px;">S</div>
+      <div class="wave-title">Sync from Production</div>
+      <div class="wave-type">HTTP fetch — no agents, no LLM</div>
+    </div>
+    <div class="wave-body">
+      <p style="color:#aaa; font-size:14px;">Fetch latest site data from production API before auditing. Captures manual edits made via db.html that aren't in the local DB.</p>
+      <div class="steps">
+        <div class="step">
+          <div class="step-label">Fetch</div>
+          <div class="step-name">GET /api/v1/sites.geojson</div>
+          <div class="step-detail">Fetches <code>ancient_nerds</code> sites as GeoJSON from <code>localhost:5175</code>. Use <code>--api-url</code> to point at production.</div>
+        </div>
+        <div class="step">
+          <div class="step-label">Upsert</div>
+          <div class="step-name">Local DB Update</div>
+          <div class="step-detail">Updates existing sites and inserts any new ones. Production state becomes the baseline for the audit.</div>
+        </div>
+      </div>
+      <div class="applies">
+        <span class="tag tag-an">Originals ✓</span>
+        <span class="tag tag-ly">Radar ✓</span>
+        <span class="tag tag-co">Community ✓</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-down"><svg width="24" height="32" viewBox="0 0 24 32"><path d="M12 0 L12 24 M4 18 L12 28 L20 18" stroke="#888" stroke-width="2" fill="none"/></svg></div>
+
+  <!-- Wave 0 -->
+  <div class="wave w0">
+    <div class="wave-header">
+      <div class="wave-num">0</div>
+      <div class="wave-title">Mechanical Fixes</div>
+      <div class="wave-type">Python script — no agents, no LLM</div>
+    </div>
+    <div class="wave-body">
+      <p style="color:#aaa; font-size:14px;">Deterministic fixes applied directly to the database. Fast, bulk operations.</p>
+      <div class="steps">
+        <div class="step">
+          <div class="step-label">Fix 1</div>
+          <div class="step-name">Site Type Normalization</div>
+          <div class="step-detail">Run every distinct site_type through <code>normalize_site_type()</code>. Fixes case drift, synonyms, underscores.</div>
+          <div class="step-file">pipeline/normalizers/site_type.py</div>
+        </div>
+        <div class="step">
+          <div class="step-label">Fix 2</div>
+          <div class="step-name">Period Recomputation</div>
+          <div class="step-detail">Recalculate <code>period_name</code> from <code>period_start</code> via <code>categorize_period()</code>. Fixes bucket mismatches.</div>
+          <div class="step-file">pipeline/utils/text.py:219</div>
+        </div>
+        <div class="step">
+          <div class="step-label">Fix 3</div>
+          <div class="step-name">Raw Year Parsing</div>
+          <div class="step-detail">Parse <code>raw_data->>'year'</code> patterns: "48000 BC", "9th ml. BC", "3rd c. AD", etc.</div>
+        </div>
+        <div class="step">
+          <div class="step-label">Fix 4</div>
+          <div class="step-name">Capitalization</div>
+          <div class="step-detail">Compound types like <code>city/town/settlement</code> → <code>City/town/settlement</code></div>
+        </div>
+      </div>
+      <div class="applies">
+        <span class="tag tag-an">Originals ✓</span>
+        <span class="tag tag-ly">Radar ✓</span>
+        <span class="tag tag-co">Community ✓</span>
+      </div>
+      <div class="elim">~80% of issues eliminated — no LLM cost</div>
+    </div>
+  </div>
+
+  <div class="arrow-down"><svg width="24" height="32" viewBox="0 0 24 32"><path d="M12 0 L12 24 M4 18 L12 28 L20 18" stroke="#888" stroke-width="2" fill="none"/></svg></div>
+
+  <!-- Wave 1 -->
+  <div class="wave w1">
+    <div class="wave-header">
+      <div class="wave-num">1</div>
+      <div class="wave-title">Wikidata Enrichment</div>
+      <div class="wave-type">Python scripts — HTTP only, no LLM</div>
+    </div>
+    <div class="wave-body">
+      <p style="color:#aaa; font-size:14px;">3-step pipeline fetching structured data from Wikidata and Wikipedia APIs.</p>
+      <div class="steps">
+        <div class="step">
+          <div class="step-label">Phase 1</div>
+          <div class="step-name">QID Reconciliation</div>
+          <div class="step-detail">Match sites → Wikidata entities via URL extraction, W3C Reconciliation API, SPARQL geo-search. Expect >80% match.</div>
+          <div class="step-file">scripts/enrich_reconcile.py</div>
+        </div>
+        <div class="step">
+          <div class="step-label">Phase 2</div>
+          <div class="step-name">Claims Fetch</div>
+          <div class="step-detail">Batch fetch P571 inception, P1435 heritage, P18 image, sitelinks. 50 QIDs per request.</div>
+          <div class="step-file">scripts/enrich_fetch_claims.py</div>
+        </div>
+        <div class="step">
+          <div class="step-label">Phase 3</div>
+          <div class="step-name">Wiki Article Selection</div>
+          <div class="step-detail">Pick best Wikipedia article per site. English preferred, multilingual fallback (de, fr, it, es…).</div>
+          <div class="step-file">scripts/enrich_wiki_select.py</div>
+        </div>
+      </div>
+      <div class="applies">
+        <span class="tag tag-an">Originals ✓</span>
+        <span class="tag tag-ly">Radar ✓</span>
+        <span class="tag tag-co">Community ✓</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-down"><svg width="24" height="32" viewBox="0 0 24 32"><path d="M12 0 L12 24 M4 18 L12 28 L20 18" stroke="#888" stroke-width="2" fill="none"/></svg></div>
+
+  <!-- Wave 2 -->
+  <div class="wave w2">
+    <div class="wave-header">
+      <div class="wave-num">2</div>
+      <div class="wave-title">Agent Verification & Gap Fill</div>
+      <div class="wave-type">10 parallel Claude agents per round</div>
+    </div>
+    <div class="wave-body">
+      <p style="color:#aaa; font-size:14px;">Only sites with remaining gaps/discrepancies after Waves 0-1. ~500-1500 sites, split into batches of ~50.</p>
+      <div class="steps">
+        <div class="step">
+          <div class="step-label">Prepare</div>
+          <div class="step-name">Identify Gaps</div>
+          <div class="step-detail">Find sites still missing period_start, country, site_type, or with Wikidata discrepancies. Split into batch files.</div>
+          <div class="step-file">output/audit_batches/batch_NNN_input.json</div>
+        </div>
+        <div class="step">
+          <div class="step-label">Execute</div>
+          <div class="step-name">10 Agents × N Rounds</div>
+          <div class="step-detail">Each agent web-searches ~50 sites using Consensus, Scholar Gateway, WebSearch. Produces fixes with evidence.</div>
+        </div>
+        <div class="step">
+          <div class="step-label">Merge</div>
+          <div class="step-name">Apply Results → DB</div>
+          <div class="step-detail">Conditional WHERE updates protecting user edits. Sets <code>last_audited</code> timestamp.</div>
+          <div class="step-file">output/audit_batches/batch_NNN_results.json</div>
+        </div>
+      </div>
+      <div class="applies">
+        <span class="tag tag-an">Originals ✓</span>
+        <span class="tag tag-ly">Radar ✓</span>
+        <span class="tag tag-co">Community ✓</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-down"><svg width="24" height="32" viewBox="0 0 24 32"><path d="M12 0 L12 24 M4 18 L12 28 L20 18" stroke="#888" stroke-width="2" fill="none"/></svg></div>
+
+  <!-- Wave 3 -->
+  <div class="wave w3">
+    <div class="wave-header">
+      <div class="wave-num">3</div>
+      <div class="wave-title">Card Descriptions</div>
+      <div class="wave-type">10 parallel Claude agents per round</div>
+    </div>
+    <div class="wave-body">
+      <p style="color:#aaa; font-size:14px;">Generate/update 200-char card descriptions using enriched context. <strong>Originals only</strong> — Radar and Community don't get card descriptions.</p>
+      <div class="steps">
+        <div class="step">
+          <div class="step-label">Input</div>
+          <div class="step-name">Enriched Context</div>
+          <div class="step-detail">Wikidata claims + wiki extracts from Waves 1-2 provide grounded facts for description writing.</div>
+        </div>
+        <div class="step">
+          <div class="step-label">Generate</div>
+          <div class="step-name">10 Agents × N Rounds</div>
+          <div class="step-detail">Each agent writes ~500 descriptions following the Tone & Style Guide (max 200 chars, no country, documentary voice).</div>
+          <div class="step-file">docs/procedures/CARD_DESCRIPTIONS.md</div>
+        </div>
+        <div class="step">
+          <div class="step-label">Import</div>
+          <div class="step-name">DB + Static Export</div>
+          <div class="step-detail">Import descriptions to <code>card_stats</code>, re-export static JSON for the frontend.</div>
+        </div>
+      </div>
+      <div class="applies">
+        <span class="tag tag-an">Originals ✓</span>
+        <span class="tag tag-ly" style="opacity:0.3; text-decoration:line-through;">Radar ✗</span>
+        <span class="tag tag-co" style="opacity:0.3; text-decoration:line-through;">Community ✗</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-down"><svg width="24" height="32" viewBox="0 0 24 32"><path d="M12 0 L12 24 M4 18 L12 28 L20 18" stroke="#888" stroke-width="2" fill="none"/></svg></div>
+
+  <!-- Package for Upload -->
+  <div class="wave wpkg">
+    <div class="wave-header">
+      <div class="wave-num" style="font-size:14px;">P</div>
+      <div class="wave-title">Package & Upload via db.html</div>
+      <div class="wave-type">Export + manual upload — creates rollback snapshot</div>
+    </div>
+    <div class="wave-body">
+      <p style="color:#aaa; font-size:14px;">Export cleaned data as JSON, then upload via db.html which auto-creates a snapshot. You can always roll back if something is wrong.</p>
+      <div class="steps">
+        <div class="step">
+          <div class="step-label">Export</div>
+          <div class="step-name">Export GeoJSON</div>
+          <div class="step-detail">Exports <code>audit_upload_*.geojson</code> — same format as db.html's own export. Only sites in the file get updated (like a diff).</div>
+          <div class="step-file">output/audit_upload_{source}.geojson</div>
+        </div>
+        <div class="step">
+          <div class="step-label">Upload</div>
+          <div class="step-name">db.html → Production</div>
+          <div class="step-detail">Open db.html, upload the JSON files. The API auto-creates a snapshot before applying. Each upload is a rollback point.</div>
+        </div>
+        <div class="step">
+          <div class="step-label">Verify</div>
+          <div class="step-name">Check & Rollback</div>
+          <div class="step-detail">Review changes on production. If wrong, rollback to the pre-upload snapshot via db.html's version history.</div>
+        </div>
+      </div>
+      <div class="applies">
+        <span class="tag tag-an">Originals ✓</span>
+        <span class="tag tag-ly">Radar ✓</span>
+        <span class="tag tag-co">Community ✓</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Schema Changes -->
+<div class="schema">
+  <h2>Schema Changes</h2>
+  <div class="schema-grid">
+    <div class="schema-card">
+      <h3>unified_sites</h3>
+      <code>pipeline/database.py:390</code>
+      <div style="margin-top:12px;">
+        <div class="col-row"><span class="col-name">id</span><span class="col-type">UUID PK</span></div>
+        <div class="col-row"><span class="col-name">source_id</span><span class="col-type">VARCHAR(50)</span></div>
+        <div class="col-row"><span class="col-name">name</span><span class="col-type">VARCHAR(500)</span></div>
+        <div class="col-row"><span class="col-name">lat / lon</span><span class="col-type">FLOAT</span></div>
+        <div class="col-row"><span class="col-name">site_type</span><span class="col-type">VARCHAR(100)</span></div>
+        <div class="col-row"><span class="col-name">period_start / end</span><span class="col-type">INTEGER</span></div>
+        <div class="col-row"><span class="col-name">period_name</span><span class="col-type">VARCHAR(100)</span></div>
+        <div class="col-row"><span class="col-name">country</span><span class="col-type">VARCHAR(100)</span></div>
+        <div class="col-row"><span class="col-name">edited_by</span><span class="col-type">VARCHAR(20)</span></div>
+        <div class="col-row"><span class="col-name">created_at / updated_at</span><span class="col-type">TIMESTAMP</span></div>
+        <div class="col-row col-new"><span class="col-name">last_audited ← NEW</span><span class="col-type">TIMESTAMP NULL</span></div>
+      </div>
+    </div>
+    <div class="schema-card">
+      <h3>card_stats</h3>
+      <code>api/cardgame/models.py:28</code>
+      <div style="margin-top:12px;">
+        <div class="col-row"><span class="col-name">site_id</span><span class="col-type">UUID FK → unified_sites</span></div>
+        <div class="col-row"><span class="col-name">antiquity / fortification / …</span><span class="col-type">INTEGER</span></div>
+        <div class="col-row"><span class="col-name">rarity_tier / rarity_score</span><span class="col-type">INTEGER</span></div>
+        <div class="col-row"><span class="col-name">card_description</span><span class="col-type">VARCHAR(200)</span></div>
+        <div class="col-row"><span class="col-name">wikidata_qid</span><span class="col-type">VARCHAR(20)</span></div>
+        <div class="col-row"><span class="col-name">confidence_score</span><span class="col-type">FLOAT</span></div>
+        <div class="col-row"><span class="col-name">heritage_designation</span><span class="col-type">TEXT</span></div>
+        <div class="col-row"><span class="col-name">inception_year</span><span class="col-type">INTEGER</span></div>
+        <div class="col-row"><span class="col-name">best_wiki_url</span><span class="col-type">VARCHAR(500)</span></div>
+        <div class="col-row"><span class="col-name">commons_image</span><span class="col-type">VARCHAR(500)</span></div>
+        <div class="col-row col-new"><span class="col-name">last_enriched ← NEW</span><span class="col-type">TIMESTAMP NULL</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Output Files -->
+<div class="outputs">
+  <h2>Data Flow — Output Files</h2>
+  <div class="output-flow">
+    <div class="output-card" style="border-color:#06b6d444;">
+      <div class="fname" style="color:#06b6d4;">API (GeoJSON)</div>
+      <div class="fdesc">GET /api/v1/sites.geojson</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="output-card">
+      <div class="fname">output/audit_sites.json</div>
+      <div class="fdesc">All candidate sites from DB</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="output-card">
+      <div class="fname">output/enrichment_*.json</div>
+      <div class="fdesc">QIDs + claims + wiki</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="output-card">
+      <div class="fname">output/audit_batches/</div>
+      <div class="fdesc">Agent input/output JSONs</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="output-card" style="border-color:#f4365844;">
+      <div class="fname" style="color:#f43658;">output/audit_upload_*.geojson</div>
+      <div class="fdesc">GeoJSON for db.html</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="output-card" style="border-color:#f4365844;">
+      <div class="fname" style="color:#f43658;">db.html upload</div>
+      <div class="fdesc">Auto-snapshot + apply</div>
+    </div>
+  </div>
+</div>
+
+<!-- CLI -->
+<div class="cli">
+  <h2>CLI Commands</h2>
+  <div class="cli-block">
+    <span class="comment"># Full run — sync + audit + package (all 3 sources)</span><br>
+    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span><br><br>
+    <span class="comment"># Force re-audit everything</span><br>
+    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--mode full</span><br><br>
+    <span class="comment"># Single source</span><br>
+    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--source ancient_nerds</span><br><br>
+    <span class="comment"># Use production API instead of local</span><br>
+    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--api-url https://ancientnerds.com</span><br><br>
+    <span class="comment"># Individual phases</span><br>
+    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase sync</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Fetch production → local DB</span><br>
+    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase mechanical</span> <span class="comment">&nbsp;&nbsp;# Wave 0 only</span><br>
+    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase enrich</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;# Wave 1 only</span><br>
+    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase verify</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;# Wave 2 prep</span><br>
+    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase merge</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Apply agent results</span><br>
+    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase package</span> <span class="comment">&nbsp;&nbsp;&nbsp;# Export for db.html upload</span><br>
+    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase export</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;# Re-export static JSON</span><br>
+  </div>
+</div>
+
+<!-- Resumability -->
+<div class="resume">
+  <h2>Resumability — 3 Levels</h2>
+  <div class="resume-grid">
+    <div class="resume-card">
+      <div class="level">Site-level</div>
+      <div class="mechanism">last_audited</div>
+      <div class="detail">Timestamp on unified_sites. Skip sites audited within 90 days unless <code>--mode full</code>.</div>
+    </div>
+    <div class="resume-card">
+      <div class="level">Batch-level</div>
+      <div class="mechanism">merge_manifest.json</div>
+      <div class="detail">Tracks which agent batches are pending / in-progress / merged.</div>
+    </div>
+    <div class="resume-card">
+      <div class="level">Phase-level</div>
+      <div class="mechanism">--phase flag</div>
+      <div class="detail">Re-run any individual phase independently without restarting everything.</div>
+    </div>
+  </div>
+</div>
+
+<div style="text-align:center; padding:48px 0 24px; color:#444; font-size:12px;">
+  Ancient Nerds — Audit & Enrichment Pipeline Visualization
+</div>
+
+</body>
+</html>
