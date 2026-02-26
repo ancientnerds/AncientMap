@@ -516,7 +516,7 @@
   z-index: 2;
   background: rgba(0, 10, 15, 0.95);
   backdrop-filter: blur(8px);
-  padding: 7px 10px;
+  padding: 5px 8px;
   text-align: left;
   font-size: 0.75rem;
   text-transform: uppercase;
@@ -556,7 +556,7 @@
 }
 
 .db-td {
-  padding: 5px 10px;
+  padding: 3px 8px;
   vertical-align: middle;
 }
 
