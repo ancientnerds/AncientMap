@@ -141,7 +141,7 @@ def restore_snapshot(db: Session, snapshot_id: str, restored_by: str = "system")
     """
     # Get original snapshot's source_id so the undo snapshot inherits it
     orig_snap = db.execute(
-        text("SELECT source_id FROM db_snapshots WHERE id::text = :sid"),
+        text("SELECT source_id, snapshot_type FROM db_snapshots WHERE id::text = :sid"),
         {"sid": snapshot_id},
     ).fetchone()
 
@@ -155,16 +155,20 @@ def restore_snapshot(db: Session, snapshot_id: str, restored_by: str = "system")
 
     site_ids = [row.site_id for row in snap_rows]
     orig_source = orig_snap.source_id if orig_snap else None
+    orig_type = orig_snap.snapshot_type if orig_snap else None
 
-    # Snapshot current state BEFORE restoring, so the restore is undoable
-    undo_id = create_snapshot(
-        db,
-        site_ids=site_ids,
-        created_by=restored_by,
-        description="Before restore of snapshot (undo)",
-        snapshot_type="edit",
-        source_id=orig_source,
-    )
+    # Snapshot current state BEFORE restoring, so the restore is undoable.
+    # Skip if restoring an undo snapshot — prevents undo-of-undo chain clutter.
+    undo_id = None
+    if orig_type != "undo":
+        undo_id = create_snapshot(
+            db,
+            site_ids=site_ids,
+            created_by=restored_by,
+            description="Before restore of snapshot (undo)",
+            snapshot_type="undo",
+            source_id=orig_source,
+        )
 
     count = 0
     for row in snap_rows:
