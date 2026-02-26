@@ -1918,8 +1918,8 @@ export default function DbAuditPage() {
         </div>
       )}
 
-      {/* DB Snapshots (undo history) — only visible when a specific source is selected */}
-      {isFounder && sourceFilter !== 'all' && (
+      {/* DB Snapshots (undo history) — only when a specific source is selected AND has snapshots */}
+      {isFounder && sourceFilter !== 'all' && dbSnapshots.length > 0 && (
         <details className="db-snapshots-panel" open>
           <summary className="db-snapshots-summary">
             <span className="db-snapshot-source-badge" style={{ borderColor: SOURCE_CONFIG[sourceFilter]?.color, background: SOURCE_CONFIG[sourceFilter]?.color + '15' }}>
