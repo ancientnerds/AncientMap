@@ -689,6 +689,20 @@ async def get_snapshots(
     return {"snapshots": list_snapshots(db, limit)}
 
 
+@router.get("/snapshots/{snapshot_id}/preview")
+async def preview_snapshot_endpoint(
+    snapshot_id: str,
+    db: Session = Depends(get_db),
+):
+    """Preview what restoring a snapshot would change (current vs old values)."""
+    from api.services.snapshots import preview_snapshot
+
+    result = preview_snapshot(db, snapshot_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    return result
+
+
 @router.post("/snapshots/{snapshot_id}/restore")
 async def restore_snapshot_endpoint(
     snapshot_id: str,

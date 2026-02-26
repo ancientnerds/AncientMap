@@ -252,7 +252,14 @@ export default function DbAuditPage() {
   const [pinLoading, setPinLoading] = useState<string | null>(null)
 
   // DB Snapshots (from API)
-  const [dbSnapshots, setDbSnapshots] = useState<{ id: string; created_at: string; description: string; row_count: number }[]>([])
+  const [dbSnapshots, setDbSnapshots] = useState<{ id: string; created_at: string; created_by: string; description: string; snapshot_type: string; row_count: number }[]>([])
+
+  // Snapshot preview (undo diff)
+  interface SnapshotFieldDiff { field: string; current: string | null; restore_to: string | null }
+  interface SnapshotSitePreview { site_id: string; name: string; status: 'changed' | 'unchanged' | 'deleted'; fields: SnapshotFieldDiff[] }
+  interface SnapshotPreview { snapshot_id: string; created_at: string; created_by: string; description: string; snapshot_type: string; row_count: number; sites: SnapshotSitePreview[]; changed_count: number; unchanged_count: number; deleted_count: number }
+  const [snapshotPreview, setSnapshotPreview] = useState<SnapshotPreview | null>(null)
+  const [snapshotPreviewLoading, setSnapshotPreviewLoading] = useState(false)
 
   // Pending edits (edit session)
   const [pendingEdits, setPendingEdits] = useState<Map<string, PendingEdit>>(new Map())
@@ -792,9 +799,8 @@ export default function DbAuditPage() {
   }, [token, pendingEdits, refreshDbSnapshots])
 
   // Upload file handler
-  const handleUploadFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  // Shared file processing for both input and drag & drop
+  const processUploadFile = useCallback((file: File) => {
     setUploadFileName(file.name)
     const reader = new FileReader()
     reader.onload = () => {
@@ -837,6 +843,23 @@ export default function DbAuditPage() {
     }
     reader.readAsText(file)
   }, [sites])
+
+  const handleUploadFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    processUploadFile(file)
+  }, [processUploadFile])
+
+  const [uploadDragOver, setUploadDragOver] = useState(false)
+  const handleUploadDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setUploadDragOver(false)
+    const file = e.dataTransfer.files?.[0]
+    if (!file) return
+    const ext = file.name.split('.').pop()?.toLowerCase()
+    if (!['csv', 'json', 'geojson'].includes(ext || '')) return
+    processUploadFile(file)
+  }, [processUploadFile])
 
   // Commit upload
   const commitUpload = useCallback(async () => {
@@ -897,6 +920,21 @@ export default function DbAuditPage() {
       setUploading(false)
     }
   }, [token, uploadParsed, uploadTarget, uploadMarkAudited, refreshDbSnapshots, discardAllEdits])
+
+  // Preview a DB snapshot (fetch diff)
+  const previewDbSnapshot = useCallback(async (snapshotId: string) => {
+    setSnapshotPreviewLoading(true)
+    try {
+      const res = await fetch(`${config.api.baseUrl}/sites/snapshots/${snapshotId}/preview?${CACHE_BUSTER}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      setSnapshotPreview(data)
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Preview failed')
+    } finally {
+      setSnapshotPreviewLoading(false)
+    }
+  }, [])
 
   // Restore a DB snapshot
   const restoreDbSnapshot = useCallback(async (snapshotId: string) => {
@@ -1698,22 +1736,49 @@ export default function DbAuditPage() {
             </div>
             <div className="db-modal-body">
               <div className="db-upload-controls">
-                <div className="db-field">
-                  <label>Target Database</label>
-                  <select value={uploadTarget} onChange={e => setUploadTarget(e.target.value)}>
+                <div className="db-upload-target-row">
+                  <span className="db-upload-target-label">Target</span>
+                  <div className="db-upload-target-pills">
                     {Object.entries(SOURCE_CONFIG).map(([id, cfg]) => (
-                      <option key={id} value={id}>{cfg.name}</option>
+                      <button
+                        key={id}
+                        className={`db-source-pill ${uploadTarget === id ? 'active' : ''}`}
+                        style={{
+                          borderColor: uploadTarget === id ? cfg.color : undefined,
+                          background: uploadTarget === id ? cfg.color + '18' : undefined,
+                          color: uploadTarget === id ? cfg.color : undefined,
+                        }}
+                        onClick={() => setUploadTarget(id)}
+                      >
+                        <span className="db-source-pill-dot" style={{ background: cfg.color }} />
+                        {cfg.abbr}
+                      </button>
                     ))}
-                  </select>
+                  </div>
+                  <button
+                    className={`db-upload-audited-toggle ${uploadMarkAudited ? 'active' : ''}`}
+                    onClick={() => setUploadMarkAudited(!uploadMarkAudited)}
+                    title="Mark all sites in this source as audited after upload"
+                  >
+                    <span className={`db-toggle-check ${uploadMarkAudited ? 'checked' : ''}`} />
+                    Mark audited
+                  </button>
                 </div>
-                <div className="db-field">
-                  <label>File (CSV, JSON, or GeoJSON)</label>
-                  <input type="file" accept=".csv,.json,.geojson" onChange={handleUploadFile} />
-                </div>
-                <label className="db-checkbox-label">
-                  <input type="checkbox" checked={uploadMarkAudited} onChange={e => setUploadMarkAudited(e.target.checked)} />
-                  Mark all sites in this source as audited
-                </label>
+
+                {!uploadFileName && (
+                  <div
+                    className={`db-upload-dropzone ${uploadDragOver ? 'dragover' : ''}`}
+                    onDragOver={e => { e.preventDefault(); setUploadDragOver(true) }}
+                    onDragLeave={() => setUploadDragOver(false)}
+                    onDrop={handleUploadDrop}
+                    onClick={() => document.getElementById('upload-file-input')?.click()}
+                  >
+                    <input id="upload-file-input" type="file" accept=".csv,.json,.geojson" onChange={handleUploadFile} style={{ display: 'none' }} />
+                    <div className="db-dropzone-icon">+</div>
+                    <div className="db-dropzone-text">Drop file here or click to browse</div>
+                    <div className="db-dropzone-hint">CSV, JSON, or GeoJSON</div>
+                  </div>
+                )}
               </div>
 
               {uploadParsed.length > 0 && (
@@ -1797,13 +1862,80 @@ export default function DbAuditPage() {
           <div className="db-snapshots-list">
             {dbSnapshots.map(snap => (
               <div key={snap.id} className="db-snapshot-item">
+                <span className={`db-snapshot-type db-snapshot-type-${snap.snapshot_type || 'edit'}`}>{snap.snapshot_type === 'upload' ? 'UPLOAD' : 'EDIT'}</span>
                 <span className="db-snapshot-desc">{snap.description}</span>
-                <span className="db-snapshot-meta">{snap.row_count} rows &middot; {formatRelativeDate(snap.created_at)}</span>
+                <span className="db-snapshot-meta">{snap.row_count} rows &middot; {snap.created_by || 'system'} &middot; {formatRelativeDate(snap.created_at)}</span>
+                <button className="db-btn db-btn-preview" onClick={() => previewDbSnapshot(snap.id)} disabled={snapshotPreviewLoading}>Preview</button>
                 <button className="db-btn db-btn-restore" onClick={() => restoreDbSnapshot(snap.id)}>Restore</button>
               </div>
             ))}
           </div>
         </details>
+      )}
+
+      {/* Snapshot Preview Modal */}
+      {snapshotPreview && (
+        <div className="db-modal-overlay" onClick={() => !snapshotPreviewLoading && setSnapshotPreview(null)}>
+          <div className="db-modal db-upload-modal" onClick={e => e.stopPropagation()}>
+            <div className="db-modal-header">
+              <h2>Snapshot Preview</h2>
+              <button className="db-modal-close" onClick={() => setSnapshotPreview(null)}>&times;</button>
+            </div>
+            <div className="db-modal-body">
+              <div className="db-upload-summary">
+                <span className="db-upload-file">{snapshotPreview.description}</span>
+                <span className="db-upload-stat db-upload-unchanged">{snapshotPreview.unchanged_count} unchanged</span>
+                <span className="db-upload-stat db-upload-update">{snapshotPreview.changed_count} changed</span>
+                {snapshotPreview.deleted_count > 0 && (
+                  <span className="db-upload-stat db-upload-error">{snapshotPreview.deleted_count} deleted since</span>
+                )}
+                <span className="db-snapshot-preview-meta">{snapshotPreview.created_by || 'system'} &middot; {formatRelativeDate(snapshotPreview.created_at)}</span>
+              </div>
+
+              <div className="db-upload-diff">
+                {snapshotPreview.sites
+                  .filter(s => s.status === 'changed' || s.status === 'deleted')
+                  .map(s => (
+                    <div key={s.site_id} className={`db-diff-item ${s.status === 'deleted' ? 'db-diff-insert' : 'db-diff-update'}`}>
+                      <div className="db-diff-header">
+                        <span className={`db-upload-status-pill ${s.status === 'deleted' ? 'db-upload-status-error' : 'db-upload-status-update'}`}>
+                          {s.status === 'deleted' ? 'DELETED' : 'REVERT'}
+                        </span>
+                        <span className="db-diff-name">{s.name}</span>
+                        {s.fields.length > 0 && (
+                          <span className="db-diff-count">{s.fields.length} field{s.fields.length !== 1 ? 's' : ''}</span>
+                        )}
+                      </div>
+                      {s.status === 'changed' && s.fields.length > 0 && (
+                        <div className="db-diff-fields">
+                          {s.fields.map(f => (
+                            <div key={f.field} className="db-diff-row">
+                              <span className="db-diff-field">{f.field.replace(/_/g, ' ')}</span>
+                              <span className="db-diff-old">{f.current || '(empty)'}</span>
+                              <span className="db-diff-arrow">&rarr;</span>
+                              <span className="db-diff-new">{f.restore_to || '(empty)'}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                {snapshotPreview.sites.filter(s => s.status === 'changed' || s.status === 'deleted').length === 0 && (
+                  <div className="db-diff-empty">No differences &mdash; all sites already match the snapshot state.</div>
+                )}
+              </div>
+            </div>
+            <div className="db-modal-footer">
+              <div className="db-upload-snapshot-notice">Restoring will revert the {snapshotPreview.changed_count} changed site{snapshotPreview.changed_count !== 1 ? 's' : ''} to their pre-change values. A new snapshot is created automatically.</div>
+              <div className="db-modal-footer-buttons">
+                <button className="db-btn db-btn-cancel" onClick={() => setSnapshotPreview(null)}>Close</button>
+                <button className="db-btn db-btn-restore" onClick={() => { restoreDbSnapshot(snapshotPreview.snapshot_id); setSnapshotPreview(null) }} disabled={snapshotPreview.changed_count === 0}>
+                  Restore {snapshotPreview.changed_count} site{snapshotPreview.changed_count !== 1 ? 's' : ''}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Diff Modal */}

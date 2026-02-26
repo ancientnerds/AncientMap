@@ -157,6 +157,100 @@ def restore_snapshot(db: Session, snapshot_id: str) -> int:
     return count
 
 
+_DIFF_FIELDS = [
+    "name", "site_type", "period_start", "period_name",
+    "country", "description", "source_url", "thumbnail_url",
+]
+
+
+def preview_snapshot(db: Session, snapshot_id: str) -> dict | None:
+    """Return per-site diff: old_data (snapshot) vs current DB values.
+
+    For each site in the snapshot, compares the stored old_data with the
+    current unified_sites row and reports which fields differ.
+    """
+    # Fetch snapshot metadata
+    snap_row = db.execute(
+        text("""
+            SELECT id::text, created_at, created_by, description, snapshot_type, row_count
+            FROM db_snapshots WHERE id::text = :sid
+        """),
+        {"sid": snapshot_id},
+    ).fetchone()
+    if not snap_row:
+        return None
+
+    # Fetch all snapshot rows
+    rows = db.execute(
+        text("SELECT site_id::text, old_data FROM snapshot_rows WHERE snapshot_id::text = :sid"),
+        {"sid": snapshot_id},
+    ).fetchall()
+    if not rows:
+        return None
+
+    site_ids = [r.site_id for r in rows]
+    old_by_id = {r.site_id: r.old_data for r in rows}
+
+    # Fetch current DB values for those sites
+    current_rows = db.execute(
+        text("""
+            SELECT id::text, name, site_type, period_start, period_name,
+                   country, description, source_url, thumbnail_url
+            FROM unified_sites WHERE id::text = ANY(:ids)
+        """),
+        {"ids": site_ids},
+    ).fetchall()
+    current_by_id = {r.id: r for r in current_rows}
+
+    sites = []
+    for site_id in site_ids:
+        old = old_by_id[site_id]
+        cur = current_by_id.get(site_id)
+
+        site_entry: dict = {
+            "site_id": site_id,
+            "name": old.get("name", "(unknown)"),
+        }
+
+        if not cur:
+            # Site was deleted since snapshot — restoring would need an INSERT
+            site_entry["status"] = "deleted"
+            site_entry["fields"] = []
+            sites.append(site_entry)
+            continue
+
+        changed = []
+        for field in _DIFF_FIELDS:
+            old_val = old.get(field)
+            cur_val = getattr(cur, field, None)
+            # Normalize for comparison
+            old_str = str(old_val) if old_val is not None else ""
+            cur_str = str(cur_val) if cur_val is not None else ""
+            if old_str != cur_str:
+                changed.append({
+                    "field": field,
+                    "current": cur_str or None,
+                    "restore_to": old_str or None,
+                })
+
+        site_entry["status"] = "changed" if changed else "unchanged"
+        site_entry["fields"] = changed
+        sites.append(site_entry)
+
+    return {
+        "snapshot_id": snap_row.id,
+        "created_at": snap_row.created_at.isoformat(),
+        "created_by": snap_row.created_by,
+        "description": snap_row.description,
+        "snapshot_type": snap_row.snapshot_type,
+        "row_count": snap_row.row_count,
+        "sites": sites,
+        "changed_count": sum(1 for s in sites if s["status"] == "changed"),
+        "unchanged_count": sum(1 for s in sites if s["status"] == "unchanged"),
+        "deleted_count": sum(1 for s in sites if s["status"] == "deleted"),
+    }
+
+
 def list_snapshots(db: Session, limit: int = 20) -> list[dict]:
     """List recent snapshots with metadata."""
     rows = db.execute(
