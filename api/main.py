@@ -77,24 +77,21 @@ async def lifespan(app: FastAPI):
         import api.cardgame.models  # noqa: F401 — register Achievement/UserAchievement before create_all
         from pipeline.database import Base, engine
         Base.metadata.create_all(bind=engine)
-        # Add columns that models define but create_all won't add to existing tables
-        with engine.begin() as conn:
-            from sqlalchemy import text as _text
-            conn.execute(_text("ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS raw_data JSONB"))
-            conn.execute(_text("ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS period_end INTEGER"))
-            # Prevent negative credit balances at the DB level
-            conn.execute(_text("""
-                DO $$ BEGIN
-                    ALTER TABLE discord_users ADD CONSTRAINT credits_non_negative CHECK (credits >= 0);
-                EXCEPTION WHEN duplicate_object THEN NULL;
-                END $$
-            """))
-            conn.execute(_text(
-                "ALTER TABLE expedition_progress ADD COLUMN IF NOT EXISTS last_stage_played_at TIMESTAMP"
-            ))
-            conn.execute(_text(
-                "ALTER TABLE card_player_stats ADD COLUMN IF NOT EXISTS feature_flags JSONB DEFAULT '{}'"
-            ))
+        # Add columns that models define but create_all won't add to existing tables.
+        # Note: unified_sites ALTERs live in pipeline/lyra/orchestrator.py migrations
+        # to avoid lock contention when both containers start simultaneously.
+        from sqlalchemy import text as _text
+        _api_migrations = [
+            """DO $$ BEGIN
+                ALTER TABLE discord_users ADD CONSTRAINT credits_non_negative CHECK (credits >= 0);
+            EXCEPTION WHEN duplicate_object THEN NULL;
+            END $$""",
+            "ALTER TABLE expedition_progress ADD COLUMN IF NOT EXISTS last_stage_played_at TIMESTAMP",
+            "ALTER TABLE card_player_stats ADD COLUMN IF NOT EXISTS feature_flags JSONB DEFAULT '{}'",
+        ]
+        for _sql in _api_migrations:
+            with engine.begin() as conn:
+                conn.execute(_text(_sql))
         logger.info("[STARTUP] Database tables verified (includes discord_users, credit_grants, token_usage_logs)")
 
         # Seed achievement definitions (idempotent upsert)
