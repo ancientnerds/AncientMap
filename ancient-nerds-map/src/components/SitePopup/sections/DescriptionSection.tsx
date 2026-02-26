@@ -3,6 +3,7 @@ import { isWikipediaUrl } from '../../../services/imageService'
 import type { DescriptionSectionProps } from '../types'
 
 export function DescriptionSection({
+  cardDescription,
   description,
   sourceId,
   rawData,
@@ -14,6 +15,10 @@ export function DescriptionSection({
 }: DescriptionSectionProps) {
   return (
     <>
+      {!isEmpireMode && cardDescription && (
+        <p className="popup-description card-summary">{cardDescription}</p>
+      )}
+
       {rawDataLoading && isEmpireMode ? (
         <p className="popup-description loading">Loading description from Wikipedia...</p>
       ) : description ? (
