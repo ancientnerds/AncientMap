@@ -239,8 +239,7 @@ export function GameCard({ card, variant = 'tile', onClick, action, onRemove, in
           <FitText
             text={description || card.card_description || ''}
             maxPx={11}
-            minPx={7}
-            lines={3}
+            lines={4}
             className="gc-desc"
           />
         )}

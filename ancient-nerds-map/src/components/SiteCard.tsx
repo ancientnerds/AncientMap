@@ -101,14 +101,13 @@ export function SiteCard({ site, sourceName, sourceColor, onClick, actions, comp
         {!compact && site.cardDescription && (
           <FitText
             text={site.cardDescription}
-            maxPx={12.5}
-            minPx={10}
-            lines={3}
-            className="site-card-desc site-card-desc--fit"
+            maxPx={11}
+            lines={4}
+            className="site-card-desc"
           />
         )}
         {!compact && !site.cardDescription && site.description && (
-          <p className="site-card-desc">{site.description}</p>
+          <p className="site-card-desc site-card-desc--wiki">{site.description}</p>
         )}
 
         {!compact && (actions || sourceName) && (
