@@ -1909,8 +1909,7 @@ export default function DbAuditPage() {
                     <span className={`db-snapshot-type db-snapshot-type-${snap.snapshot_type || 'edit'}`}>{snap.snapshot_type === 'upload' ? 'UPLOAD' : 'EDIT'}</span>
                     <span className="db-snapshot-desc">{snap.description}</span>
                     <span className="db-snapshot-actions">
-                      <button className="db-btn db-btn-preview" onClick={() => previewDbSnapshot(snap.id)} disabled={snapshotPreviewLoading} title="Preview what restoring this snapshot would change">Preview</button>
-                      <button className="db-btn db-btn-restore" onClick={() => restoreDbSnapshot(snap.id)} title="Revert affected sites to their pre-change state">Restore</button>
+                      <button className="db-btn db-btn-restore" onClick={() => previewDbSnapshot(snap.id)} disabled={snapshotPreviewLoading} title="Preview changes and restore">Restore</button>
                     </span>
                   </div>
                   <div className="db-snapshot-row-detail">
