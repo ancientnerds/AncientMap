@@ -1473,7 +1473,6 @@ export default function DbAuditPage() {
               <th className="db-th" onClick={() => handleSort('country')}>Country{sortArrow('country')}</th>
               <th className="db-th db-th-nosort" title="Game card description (200 chars)">Card</th>
               <th className="db-th db-th-nosort" title="Full Wikipedia description">Desc</th>
-              <th className="db-th db-th-nosort" title="Source URL (Wikipedia, etc.)">URL</th>
               <th className={`db-th db-th-img ${imgExpanded ? 'db-th-img-active' : ''}`} onClick={() => setImgExpanded(v => !v)} title="Thumbnail image — click to toggle preview">Img</th>
               <th className="db-th db-th-nosort db-th-hero" title="Hero image status">H</th>
               <th className="db-th db-th-nosort" title="Last edited by (user or initial import)">User</th>
@@ -1608,19 +1607,6 @@ export default function DbAuditPage() {
                           {site.d.length > 40 ? site.d.slice(0, 40) + '\u2026' : site.d}
                         </span>
                       )
-                    ) : <span className="db-missing">&mdash;</span>}
-                  </td>
-
-                  {/* URL */}
-                  <td className="db-td db-td-url">
-                    {site.u ? (
-                      <a href={site.u} target="_blank" rel="noopener noreferrer" className="db-link-icon" title={site.u}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                          <polyline points="15 3 21 3 21 9" />
-                          <line x1="10" y1="14" x2="21" y2="3" />
-                        </svg>
-                      </a>
                     ) : <span className="db-missing">&mdash;</span>}
                   </td>
 
