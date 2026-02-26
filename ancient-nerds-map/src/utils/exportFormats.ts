@@ -19,6 +19,16 @@ export interface ParsedSite {
   _status?: 'insert' | 'update' | 'error'
   _error?: string
   _matchedId?: string  // ID of existing site if this is an update
+  _currentData?: {     // Current DB values for diff display
+    name?: string
+    site_type?: string
+    period_name?: string
+    period_start?: number
+    country?: string
+    description?: string
+    source_url?: string
+  }
+  _changedFields?: string[]  // Fields that differ from current DB values
 }
 
 interface AuditSite {
