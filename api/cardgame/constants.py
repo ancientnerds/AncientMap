@@ -15,53 +15,52 @@ from pipeline.normalizers.site_type import normalize_site_type
 # Keep in sync with: src/constants/colors.ts CATEGORY_TO_GROUP
 _GROUP_DEFINITIONS: dict[str, list[str]] = {
     "Settlements": [
-        "city", "town", "village", "settlement", "urban", "villa",
+        "City", "Town", "Village", "Settlement", "Urban", "Villa",
         "City/town/settlement", "Residence/villa/farmhouse",
         "City/town/settlement, Pyramid complex",
     ],
     "Fortifications": [
-        "castle", "citadel", "fort", "fortress", "military", "wall", "gate",
-        "Fortress/citadel", "Castle/palace", "Fortress",
-        "Gate/archway/bridge", "Wall", "Fortification",
+        "Castle", "Citadel", "Fort", "Fortress", "Military", "Wall", "Gate",
+        "Fortress/citadel", "Castle/palace",
+        "Gate/archway/bridge", "Fortification",
     ],
     "Religious": [
-        "church", "mosque", "temple", "monastery", "sacred_site", "sanctuary",
-        "religious", "Temple complex", "Church/cathedral", "Minaret/tower",
+        "Church", "Mosque", "Temple", "Monastery", "Sacred site", "Sanctuary",
+        "Religious", "Temple complex", "Church/cathedral", "Minaret/tower",
         "Stone cross",
     ],
     "Burial & Death": [
-        "cemetery", "necropolis", "tomb", "burial", "funerary",
-        "Necropolis/tombs complex", "Cemetery", "Barrow", "Mound/tumulus",
+        "Cemetery", "Necropolis", "Tomb", "Burial", "Funerary",
+        "Necropolis/tombs complex", "Barrow", "Mound/tumulus",
         "Cairn", "Elongated skulls",
     ],
     "Megalithic": [
-        "megalithic", "Megalithic stones", "Megalithic structures",
+        "Megalithic", "Megalithic stones", "Megalithic structures",
         "Megalithic statues", "Megalithic walls", "Stone circle", "Dolmen",
         "Standing stone", "Henge", "Timber circle", "Polygonal masonry",
-        "Megalithic",
     ],
     "Rock & Cave": [
-        "cave", "Cave Structures", "Rock relief/carving", "Rock art",
+        "Cave", "Cave Structures", "Rock relief/carving", "Rock art",
         "Petroglyphs", "Sculptured stone", "Cave Structures, Rock art",
         "Geoglyphs",
     ],
     "Infrastructure": [
-        "road", "bridge", "mine", "quarry", "infrastructure",
+        "Road", "Bridge", "Mine", "Quarry", "Infrastructure",
         "Road/avenue/trackway", "Reservoir/aqueduct/canal", "Mine/quarry",
         "Earthwork", "Well",
     ],
     "Water & Ports": [
-        "aqueduct", "bath", "harbor", "port",
-        "Underwater structures", "Bath", "Shipwreck",
+        "Aqueduct", "Bath", "Harbor", "Port",
+        "Underwater structures", "Shipwreck",
     ],
     "Monuments": [
-        "monument", "memorial", "stadium", "theater", "theatre", "Theatre",
-        "forum", "palace", "Pyramid complex", "Museum", "Amphitheatre",
-        "scheduled_monument", "heritage_site", "archaeological_site", "Monument",
+        "Monument", "Memorial", "Stadium", "Theater", "Theatre",
+        "Forum", "Palace", "Pyramid complex", "Museum", "Amphitheatre",
+        "Scheduled monument", "Heritage site", "Archaeological site",
     ],
     "Other": [
-        "site", "ruin", "inscription", "natural_feature", "impact_crater",
-        "Geological interest", "Magnetic anomaly", "unknown", "Unknown",
+        "Site", "Ruin", "Inscription", "Natural feature", "Impact crater",
+        "Geological interest", "Magnetic anomaly", "Unknown",
     ],
 }
 

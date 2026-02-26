@@ -62,12 +62,12 @@ export const CATEGORY_COLORS: Record<string, string> = {
   // -------------------------------------------------------------------------
   // SETTLEMENTS - Oranges (warm, inhabited feel)
   // -------------------------------------------------------------------------
-  'city': '#ff8c00',                     // Dark Orange
-  'town': '#ff7b00',                     // Orange
-  'village': '#ff9933',                  // Light Orange
-  'settlement': '#e67300',               // Burnt Orange
-  'urban': '#ff6600',                    // Vivid Orange
-  'villa': '#ffaa33',                    // Golden Orange
+  'City': '#ff8c00',                     // Dark Orange
+  'Town': '#ff7b00',                     // Orange
+  'Village': '#ff9933',                  // Light Orange
+  'Settlement': '#e67300',               // Burnt Orange
+  'Urban': '#ff6600',                    // Vivid Orange
+  'Villa': '#ffaa33',                    // Golden Orange
   'City/town/settlement': '#ff5500',     // Vivid Orange
   'Residence/villa/farmhouse': '#cc7700', // Amber
   'City/town/settlement, Pyramid complex': '#ff6622', // Red-Orange
@@ -75,30 +75,28 @@ export const CATEGORY_COLORS: Record<string, string> = {
   // -------------------------------------------------------------------------
   // FORTIFICATIONS - Reds (strength, defense)
   // -------------------------------------------------------------------------
-  'castle': '#dc143c',                   // Crimson
-  'citadel': '#cc0033',                  // Deep Red
-  'fort': '#e60000',                     // Bright Red
-  'fortress': '#b30000',                 // Dark Red
-  'military': '#ff3333',                 // Light Red
-  'wall': '#cc2222',                     // Medium Red
-  'gate': '#e63946',                     // Rose Red
+  'Castle': '#dc143c',                   // Crimson
+  'Citadel': '#cc0033',                  // Deep Red
+  'Fort': '#e60000',                     // Bright Red
+  'Fortress': '#aa0000',                 // Maroon
+  'Military': '#ff3333',                 // Light Red
+  'Wall': '#bb2233',                     // Dark Rose
+  'Gate': '#e63946',                     // Rose Red
   'Fortress/citadel': '#dd1111',         // Bright Red
   'Castle/palace': '#cc0044',            // Deep Rose
-  'Fortress': '#aa0000',                 // Maroon
   'Gate/archway/bridge': '#e64444',      // Coral Red
-  'Wall': '#bb2233',                     // Dark Rose
   'Fortification': '#cc0000',            // Deep Red
 
   // -------------------------------------------------------------------------
   // RELIGIOUS - Yellows & Golds (spiritual, sacred)
   // -------------------------------------------------------------------------
-  'church': '#ffd700',                   // Gold
-  'mosque': '#ffcc00',                   // Bright Gold
-  'temple': '#e6b800',                   // Dark Gold
-  'monastery': '#ffdb4d',                // Light Gold
-  'sacred_site': '#ccaa00',              // Antique Gold
-  'sanctuary': '#e6c200',                // Medium Gold
-  'religious': '#d4aa00',                // Old Gold
+  'Church': '#ffd700',                   // Gold
+  'Mosque': '#ffcc00',                   // Bright Gold
+  'Temple': '#e6b800',                   // Dark Gold
+  'Monastery': '#ffdb4d',                // Light Gold
+  'Sacred site': '#ccaa00',              // Antique Gold
+  'Sanctuary': '#e6c200',                // Medium Gold
+  'Religious': '#d4aa00',                // Old Gold
   'Temple complex': '#ffc300',           // Vivid Yellow
   'Church/cathedral': '#ffaa00',         // Amber Gold
   'Minaret/tower': '#cc9900',            // Dark Amber
@@ -107,13 +105,12 @@ export const CATEGORY_COLORS: Record<string, string> = {
   // -------------------------------------------------------------------------
   // BURIAL & DEATH - Purples (mystery, death)
   // -------------------------------------------------------------------------
-  'cemetery': '#9933ff',                 // Bright Purple
-  'necropolis': '#7722cc',               // Deep Purple
-  'tomb': '#8844dd',                     // Medium Purple
-  'burial': '#aa55ee',                   // Light Purple
-  'funerary': '#6633bb',                 // Dark Purple
-  'Necropolis/tombs complex': '#8833dd', // Vivid Purple
   'Cemetery': '#7700b3',                 // Deep Violet
+  'Necropolis': '#7722cc',               // Deep Purple
+  'Tomb': '#8844dd',                     // Medium Purple
+  'Burial': '#aa55ee',                   // Light Purple
+  'Funerary': '#6633bb',                 // Dark Purple
+  'Necropolis/tombs complex': '#8833dd', // Vivid Purple
   'Barrow': '#bb77ff',                   // Lavender Purple
   'Mound/tumulus': '#6622aa',            // Royal Purple
   'Cairn': '#9944cc',                    // Orchid Purple
@@ -122,7 +119,7 @@ export const CATEGORY_COLORS: Record<string, string> = {
   // -------------------------------------------------------------------------
   // MEGALITHIC - Blues & Cyans (ancient, mysterious)
   // -------------------------------------------------------------------------
-  'megalithic': '#0099ff',               // Azure Blue
+  'Megalithic': '#0066cc',              // Navy Blue
   'Megalithic stones': '#0088ee',        // Bright Blue
   'Megalithic structures': '#0066bb',    // Strong Blue
   'Megalithic statues': '#3399ff',       // Sky Blue
@@ -133,12 +130,11 @@ export const CATEGORY_COLORS: Record<string, string> = {
   'Henge': '#00bbff',                    // Light Cyan
   'Timber circle': '#3388dd',            // Soft Blue
   'Polygonal masonry': '#4499cc',        // Slate Blue
-  'Megalithic': '#0066cc',               // Navy Blue
 
   // -------------------------------------------------------------------------
   // ROCK & CAVE - Greens (nature, earth)
   // -------------------------------------------------------------------------
-  'cave': '#22bb55',                     // Emerald Green
+  'Cave': '#22bb55',                     // Emerald Green
   'Cave Structures': '#33cc66',          // Spring Green
   'Rock relief/carving': '#55aa33',      // Lime Green
   'Rock art': '#44aa44',                 // Forest Green
@@ -150,11 +146,11 @@ export const CATEGORY_COLORS: Record<string, string> = {
   // -------------------------------------------------------------------------
   // INFRASTRUCTURE - Browns & Ambers (earth, construction)
   // -------------------------------------------------------------------------
-  'road': '#996633',                     // Saddle Brown
-  'bridge': '#aa7744',                   // Peru
-  'mine': '#885522',                     // Dark Brown
-  'quarry': '#775533',                   // Umber
-  'infrastructure': '#997755',           // Tan
+  'Road': '#996633',                     // Saddle Brown
+  'Bridge': '#aa7744',                   // Peru
+  'Mine': '#885522',                     // Dark Brown
+  'Quarry': '#775533',                   // Umber
+  'Infrastructure': '#997755',           // Tan
   'Road/avenue/trackway': '#aa6633',     // Sienna
   'Reservoir/aqueduct/canal': '#bb8844', // Light Brown
   'Mine/quarry': '#886644',              // Medium Brown
@@ -164,44 +160,40 @@ export const CATEGORY_COLORS: Record<string, string> = {
   // -------------------------------------------------------------------------
   // WATER & PORTS - Teals & Aquas (water, maritime)
   // -------------------------------------------------------------------------
-  'aqueduct': '#00b3b3',                 // Teal
-  'bath': '#00cccc',                     // Cyan
-  'harbor': '#009999',                   // Dark Teal
-  'port': '#00aaaa',                     // Medium Teal
-  'Underwater structures': '#00dddd',    // Light Cyan
+  'Aqueduct': '#00b3b3',                 // Teal
   'Bath': '#33cccc',                     // Turquoise
+  'Harbor': '#009999',                   // Dark Teal
+  'Port': '#00aaaa',                     // Medium Teal
+  'Underwater structures': '#00dddd',    // Light Cyan
   'Shipwreck': '#03a9f4',               // Light Blue
 
   // -------------------------------------------------------------------------
   // MONUMENTS - Magentas & Pinks (grandeur, significance)
   // -------------------------------------------------------------------------
-  'monument': '#dd44aa',                 // Rose Pink
-  'memorial': '#cc3399',                 // Deep Pink
-  'stadium': '#ee55bb',                  // Light Pink
-  'theater': '#dd3388',                  // Hot Pink
-  'theatre': '#cc4499',                  // Medium Pink
+  'Monument': '#dd66bb',                 // Pink Lavender
+  'Memorial': '#cc3399',                 // Deep Pink
+  'Stadium': '#ee55bb',                  // Light Pink
+  'Theater': '#dd3388',                  // Hot Pink
   'Theatre': '#dd55aa',                  // Orchid Pink
-  'forum': '#ee66aa',                    // Soft Pink
-  'palace': '#cc2288',                   // Magenta
+  'Forum': '#ee66aa',                    // Soft Pink
+  'Palace': '#cc2288',                   // Magenta
   'Pyramid complex': '#dd2277',          // Vivid Pink
   'Museum': '#ee4499',                   // Bright Pink
   'Amphitheatre': '#ee55bb',             // Light Pink
-  'scheduled_monument': '#cc55aa',       // Plum
-  'heritage_site': '#dd3399',            // Deep Rose
-  'archaeological_site': '#ee44aa',      // Rose Magenta
-  'Monument': '#dd66bb',                 // Pink Lavender
+  'Scheduled monument': '#cc55aa',       // Plum
+  'Heritage site': '#dd3399',            // Deep Rose
+  'Archaeological site': '#ee44aa',      // Rose Magenta
 
   // -------------------------------------------------------------------------
   // OTHER - Grays (neutral, miscellaneous)
   // -------------------------------------------------------------------------
-  'site': '#888899',                     // Blue Gray
-  'ruin': '#7799aa',                     // Steel Gray
-  'inscription': '#99aabb',              // Light Steel
-  'natural_feature': '#88aa99',          // Sage Gray
-  'impact_crater': '#778899',            // Slate Gray
+  'Site': '#888899',                     // Blue Gray
+  'Ruin': '#7799aa',                     // Steel Gray
+  'Inscription': '#99aabb',              // Light Steel
+  'Natural feature': '#88aa99',          // Sage Gray
+  'Impact crater': '#778899',            // Slate Gray
   'Geological interest': '#669988',      // Teal Gray
   'Magnetic anomaly': '#9988aa',         // Purple Gray
-  'unknown': '#999999',                  // Medium Gray
   'Unknown': '#888888',                  // Dark Gray
   'default': '#777777',                  // Charcoal Gray
 }
@@ -238,7 +230,7 @@ export const CATEGORY_GROUP_ORDER: CategoryGroup[] = [
 // Map categories to their groups (case-insensitive keys created below)
 // Keep in sync with: api/cardgame/constants.py _GROUP_DEFINITIONS
 const CATEGORY_TO_GROUP: Record<string, CategoryGroup> = {
-  // Settlements - Oranges & Reds
+  // Settlements
   'city': 'Settlements',
   'town': 'Settlements',
   'village': 'Settlements',
@@ -249,7 +241,7 @@ const CATEGORY_TO_GROUP: Record<string, CategoryGroup> = {
   'residence/villa/farmhouse': 'Settlements',
   'city/town/settlement, pyramid complex': 'Settlements',
 
-  // Fortifications - Reds & Pinks
+  // Fortifications
   'castle': 'Fortifications',
   'citadel': 'Fortifications',
   'fort': 'Fortifications',
@@ -262,12 +254,12 @@ const CATEGORY_TO_GROUP: Record<string, CategoryGroup> = {
   'gate/archway/bridge': 'Fortifications',
   'fortification': 'Fortifications',
 
-  // Religious - Yellows & Golds
+  // Religious
   'church': 'Religious',
   'mosque': 'Religious',
   'temple': 'Religious',
   'monastery': 'Religious',
-  'sacred_site': 'Religious',
+  'sacred site': 'Religious',
   'sanctuary': 'Religious',
   'religious': 'Religious',
   'temple complex': 'Religious',
@@ -275,7 +267,7 @@ const CATEGORY_TO_GROUP: Record<string, CategoryGroup> = {
   'minaret/tower': 'Religious',
   'stone cross': 'Religious',
 
-  // Burial & Death - Purples
+  // Burial & Death
   'cemetery': 'Burial & Death',
   'necropolis': 'Burial & Death',
   'tomb': 'Burial & Death',
@@ -287,7 +279,7 @@ const CATEGORY_TO_GROUP: Record<string, CategoryGroup> = {
   'cairn': 'Burial & Death',
   'elongated skulls': 'Burial & Death',
 
-  // Megalithic - Blues & Cyans
+  // Megalithic
   'megalithic': 'Megalithic',
   'megalithic stones': 'Megalithic',
   'megalithic structures': 'Megalithic',
@@ -300,7 +292,7 @@ const CATEGORY_TO_GROUP: Record<string, CategoryGroup> = {
   'timber circle': 'Megalithic',
   'polygonal masonry': 'Megalithic',
 
-  // Rock & Cave - Greens
+  // Rock & Cave
   'cave': 'Rock & Cave',
   'rock art': 'Rock & Cave',
   'cave structures': 'Rock & Cave',
@@ -310,7 +302,7 @@ const CATEGORY_TO_GROUP: Record<string, CategoryGroup> = {
   'cave structures, rock art': 'Rock & Cave',
   'geoglyphs': 'Rock & Cave',
 
-  // Infrastructure - Oranges & Browns
+  // Infrastructure
   'road': 'Infrastructure',
   'bridge': 'Infrastructure',
   'mine': 'Infrastructure',
@@ -322,7 +314,7 @@ const CATEGORY_TO_GROUP: Record<string, CategoryGroup> = {
   'earthwork': 'Infrastructure',
   'well': 'Infrastructure',
 
-  // Water & Ports - Blues
+  // Water & Ports
   'aqueduct': 'Water & Ports',
   'bath': 'Water & Ports',
   'harbor': 'Water & Ports',
@@ -330,7 +322,7 @@ const CATEGORY_TO_GROUP: Record<string, CategoryGroup> = {
   'underwater structures': 'Water & Ports',
   'shipwreck': 'Water & Ports',
 
-  // Monuments - Mixed
+  // Monuments
   'monument': 'Monuments',
   'memorial': 'Monuments',
   'stadium': 'Monuments',
@@ -341,16 +333,16 @@ const CATEGORY_TO_GROUP: Record<string, CategoryGroup> = {
   'pyramid complex': 'Monuments',
   'museum': 'Monuments',
   'amphitheatre': 'Monuments',
-  'scheduled_monument': 'Monuments',
-  'heritage_site': 'Monuments',
-  'archaeological_site': 'Monuments',
+  'scheduled monument': 'Monuments',
+  'heritage site': 'Monuments',
+  'archaeological site': 'Monuments',
 
-  // Other - Catch-all
+  // Other
   'site': 'Other',
   'ruin': 'Other',
   'inscription': 'Other',
-  'natural_feature': 'Other',
-  'impact_crater': 'Other',
+  'natural feature': 'Other',
+  'impact crater': 'Other',
   'geological interest': 'Other',
   'magnetic anomaly': 'Other',
   'unknown': 'Other',
@@ -455,7 +447,6 @@ for (const [key, value] of Object.entries(CATEGORY_COLORS)) {
 }
 
 // Build canonical key lookup: lowercased+space-normalized → exact CATEGORY_COLORS key
-// First entry wins, so lowercase keys ('monument') beat later Title keys ('Monument')
 const CANONICAL_TYPE_LOOKUP = new Map<string, string>()
 for (const key of Object.keys(CATEGORY_COLORS)) {
   const norm = key.toLowerCase().replace(/_/g, ' ')
@@ -469,7 +460,7 @@ for (const key of Object.keys(CATEGORY_COLORS)) {
  * 'rock_art', 'Rock_Art', 'ROCK ART' all → 'Rock art'
  */
 export function normalizeSiteType(siteType: string | undefined | null): string {
-  if (!siteType || !siteType.trim()) return 'unknown'
+  if (!siteType || !siteType.trim()) return 'Unknown'
   const cleaned = siteType.trim()
   // Exact match
   if (CATEGORY_COLORS[cleaned]) return cleaned

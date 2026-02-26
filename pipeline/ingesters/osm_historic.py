@@ -100,7 +100,7 @@ class OSMHistoricIngester(BaseIngester):
 
     # Site type mapping
     TYPE_MAPPING = {
-        "archaeological_site": "archaeological_site",
+        "archaeological_site": "Archaeological site",
         "ruins": "ruins",
         "tomb": "tomb",
         "monument": "monument",

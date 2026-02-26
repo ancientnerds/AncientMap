@@ -120,7 +120,7 @@ class EarthImpactsIngester(BaseIngester):
             lon=lon,
             alternative_names=[name] if name != f"Impact Crater {index}" else [],
             description="; ".join(desc_parts) if desc_parts else None,
-            site_type="impact_crater",
+            site_type="Impact crater",
             period_start=period_start,
             period_end=period_start,
             period_name=self._get_period_name(period_start),
