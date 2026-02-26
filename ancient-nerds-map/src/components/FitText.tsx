@@ -3,7 +3,6 @@ import { useRef, useLayoutEffect } from 'react'
 interface FitTextProps {
   text: string
   maxPx: number
-  minPx: number
   lines: number
   lineHeight?: number
   className?: string
@@ -11,36 +10,59 @@ interface FitTextProps {
 
 const cache = new Map<string, number>()
 
-export function FitText({ text, maxPx, minPx, lines, lineHeight = 1.45, className }: FitTextProps) {
+export function FitText({ text, maxPx, lines, lineHeight = 1.45, className }: FitTextProps) {
   const ref = useRef<HTMLDivElement>(null)
 
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
 
-    const key = `${text}|${el.clientWidth}|${maxPx}|${minPx}|${lines}`
-    const cached = cache.get(key)
-    if (cached) {
-      el.style.fontSize = `${cached}px`
-      return
+    function fit() {
+      const el = ref.current
+      if (!el) return
+
+      const w = el.clientWidth
+      const h = el.clientHeight
+      if (h === 0 || w === 0) return
+
+      const key = `${text}|${w}|${h}|${maxPx}|${lines}`
+      const cached = cache.get(key)
+      if (cached) {
+        el.style.fontSize = `${cached}px`
+        return
+      }
+
+      // Quick check: does it fit at maxPx?
+      el.style.fontSize = `${maxPx}px`
+      if (el.scrollHeight <= h) {
+        cache.set(key, maxPx)
+        return
+      }
+
+      // Binary search between 1px and maxPx, 0.25px precision
+      let lo = 1
+      let hi = maxPx
+      while (hi - lo > 0.25) {
+        const mid = (lo + hi) / 2
+        el.style.fontSize = `${mid}px`
+        if (el.scrollHeight <= h) {
+          lo = mid
+        } else {
+          hi = mid
+        }
+      }
+
+      el.style.fontSize = `${lo}px`
+      cache.set(key, lo)
     }
 
-    let size = maxPx
-    el.style.fontSize = `${size}px`
+    fit()
 
-    while (el.scrollHeight > el.clientHeight && size > minPx) {
-      size -= 0.5
-      el.style.fontSize = `${size}px`
-    }
+    const ro = new ResizeObserver(() => fit())
+    ro.observe(el)
 
-    if (el.scrollHeight > el.clientHeight) {
-      el.style.display = '-webkit-box'
-      el.style.webkitBoxOrient = 'vertical'
-      el.style.webkitLineClamp = `${lines}`
-    }
-
-    cache.set(key, size)
-  }, [text, maxPx, minPx, lines, lineHeight])
+    return () => ro.disconnect()
+  }, [text, maxPx, lines, lineHeight])
 
   const height = lines * maxPx * lineHeight
 
@@ -48,7 +70,17 @@ export function FitText({ text, maxPx, minPx, lines, lineHeight = 1.45, classNam
     <div
       ref={ref}
       className={className}
-      style={{ height, lineHeight, overflow: 'hidden', fontSize: maxPx }}
+      style={{
+        height,
+        lineHeight,
+        overflow: 'hidden',
+        fontSize: maxPx,
+        textAlign: 'justify',
+        textAlignLast: 'left',
+        textWrap: 'pretty',
+        flexShrink: 1,
+        minHeight: 0,
+      }}
     >
       {text}
     </div>
