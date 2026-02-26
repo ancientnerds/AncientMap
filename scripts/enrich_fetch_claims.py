@@ -37,6 +37,7 @@ PROPERTIES = {
     "P149": "architectural_style",
     "P31": "instance_of",
     "P361": "part_of",
+    "P17": "country",
     "P1612": "pleiades_id",
     "P1566": "geonames_id",
 }
@@ -148,6 +149,12 @@ def fetch_claims_batch(client: httpx.Client, qids: list[str]) -> dict[str, dict]
                 if val:
                     result[field_name] = val
 
+            elif prop_id == "P17":
+                # Country -> store QID for batch label resolution
+                entity_id = _extract_entity_id(claim)
+                if entity_id:
+                    result["country_qid"] = entity_id
+
             elif prop_id in ("P2596", "P149", "P31", "P361"):
                 # Entity references -> store QID (can resolve labels later)
                 entity_id = _extract_entity_id(claim)
@@ -171,6 +178,48 @@ def fetch_claims_batch(client: httpx.Client, qids: list[str]) -> dict[str, dict]
         results[qid] = result
 
     return results
+
+
+def _resolve_country_labels(client: httpx.Client, claims: dict[str, dict]) -> None:
+    """Batch-resolve country QIDs to human-readable labels in-place."""
+    country_qids = set()
+    for claim_data in claims.values():
+        qid = claim_data.get("country_qid")
+        if qid:
+            country_qids.add(qid)
+
+    if not country_qids:
+        return
+
+    qid_to_label: dict[str, str] = {}
+    qid_list = list(country_qids)
+
+    for batch_start in range(0, len(qid_list), 50):
+        batch = qid_list[batch_start:batch_start + 50]
+        resp = client.get(WIKIDATA_API, params={
+            "action": "wbgetentities",
+            "ids": "|".join(batch),
+            "props": "labels",
+            "languages": "en",
+            "format": "json",
+        })
+        if resp.status_code == 200:
+            entities = resp.json().get("entities", {})
+            for qid, entity in entities.items():
+                label = entity.get("labels", {}).get("en", {}).get("value")
+                if label:
+                    qid_to_label[qid] = label
+        time.sleep(0.5)
+
+    # Apply labels to claims
+    resolved = 0
+    for claim_data in claims.values():
+        qid = claim_data.get("country_qid")
+        if qid and qid in qid_to_label:
+            claim_data["country"] = qid_to_label[qid]
+            resolved += 1
+
+    print(f"  Resolved {resolved} country labels from {len(country_qids)} unique QIDs", flush=True)
 
 
 def main() -> None:
@@ -213,6 +262,9 @@ def main() -> None:
         # Rate limit
         time.sleep(0.5)
 
+    # Resolve country QIDs to labels
+    _resolve_country_labels(client, all_claims)
+
     client.close()
 
     # Map back to site_ids
@@ -225,6 +277,7 @@ def main() -> None:
     has_inception = sum(1 for c in site_claims.values() if "inception" in c)
     has_heritage = sum(1 for c in site_claims.values() if "heritage" in c)
     has_image = sum(1 for c in site_claims.values() if "commons_image" in c)
+    has_country = sum(1 for c in site_claims.values() if "country" in c)
     has_sitelinks = sum(1 for c in site_claims.values() if c.get("sitelinks"))
 
     output = {
@@ -234,6 +287,7 @@ def main() -> None:
             "has_inception": has_inception,
             "has_heritage": has_heritage,
             "has_commons_image": has_image,
+            "has_country": has_country,
             "has_sitelinks": has_sitelinks,
         },
     }
@@ -247,6 +301,7 @@ def main() -> None:
     print(f"  With inception date: {has_inception}", flush=True)
     print(f"  With heritage designation: {has_heritage}", flush=True)
     print(f"  With Commons image: {has_image}", flush=True)
+    print(f"  With country: {has_country}", flush=True)
     print(f"  With Wikipedia sitelinks: {has_sitelinks}", flush=True)
 
 
