@@ -87,6 +87,7 @@ export interface Site {
   periodEnd?: number | null
   image?: string | null  // thumbnail URL from API
   altNames?: string[]    // alternate names for search
+  cardDescription?: string  // short card description from card_stats
 }
 
 /** sites/index.json file format */

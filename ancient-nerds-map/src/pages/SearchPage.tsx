@@ -302,6 +302,7 @@ export default function SearchPage() {
                 id: result.id, title: result.title, location: result.location || '',
                 category: result.category || 'Unknown', period: result.period || 'Unknown',
                 periodStart: result.periodStart, description: result.description || '',
+                cardDescription: result.cardDescription,
                 image: result.image, sourceId: result.sourceId || '', coordinates: result.coordinates || [0, 0],
               }
               return (

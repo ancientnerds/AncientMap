@@ -1051,6 +1051,9 @@ def _run_migrations(engine) -> None:
         conn.execute(text(
             "ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS card_description VARCHAR(150)"
         ))
+        conn.execute(text(
+            "ALTER TABLE card_stats ALTER COLUMN card_description TYPE VARCHAR(200)"
+        ))
 
         conn.commit()
 

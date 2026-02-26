@@ -234,9 +234,12 @@ export function GameCard({ card, variant = 'tile', onClick, action, onRemove, in
             )}
           </div>
         )}
-        {isShowcase && description && (
-          <div className="gc-desc">{description}</div>
-        )}
+        {isShowcase && (description || card.card_description) && (() => {
+          const text = description || card.card_description || ''
+          const len = text.length
+          const fontSize = len <= 100 ? '0.68rem' : len <= 150 ? '0.62rem' : '0.56rem'
+          return <div className="gc-desc" style={{ fontSize }}>{text}</div>
+        })()}
       </div>
 
       {/* Stats */}

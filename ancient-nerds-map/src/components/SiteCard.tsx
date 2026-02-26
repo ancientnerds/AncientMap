@@ -97,8 +97,8 @@ export function SiteCard({ site, sourceName, sourceColor, onClick, actions, comp
           hideExactYear
         />
 
-        {!compact && site.description && (
-          <p className="site-card-desc">{site.description}</p>
+        {!compact && (site.cardDescription || site.description) && (
+          <p className="site-card-desc">{site.cardDescription || site.description}</p>
         )}
 
         {!compact && (actions || sourceName) && (

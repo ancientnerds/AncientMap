@@ -25,6 +25,7 @@ export interface SearchResult {
   sourceId?: string
   sourceUrl?: string
   description?: string
+  cardDescription?: string
   image?: string
   coordinates?: [number, number]
 }
@@ -173,6 +174,7 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
           sourceId: site.sourceId,
           sourceUrl: site.sourceUrl,
           description: site.description,
+          cardDescription: site.cardDescription,
           image: site.image,
           coordinates: site.coordinates,
         }
@@ -304,6 +306,7 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
           sourceId: site.sourceId,
           sourceUrl: site.sourceUrl,
           description: site.description,
+          cardDescription: site.cardDescription,
           image: site.image,
           coordinates: site.coordinates,
         }

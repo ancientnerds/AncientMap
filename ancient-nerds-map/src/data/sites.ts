@@ -35,6 +35,7 @@ export interface SiteData {
   sourceUrl?: string
   sourceId: string
   coordinates: [number, number]
+  cardDescription?: string
   altNames?: string[]
 }
 
@@ -79,6 +80,7 @@ export async function fetchSites(): Promise<SiteData[]> {
     period: resolvePeriod(site.period, site.periodStart),
     periodStart: site.periodStart,
     description: site.description || '',
+    cardDescription: site.cardDescription,
     image: site.imageUrl || site.image || undefined,
     sourceUrl: site.sourceUrl,
     sourceId: site.sourceId,
@@ -129,6 +131,7 @@ export function getCurrentSites(): SiteData[] {
     period: resolvePeriod(site.period, site.periodStart),
     periodStart: site.periodStart,
     description: site.description || '',
+    cardDescription: site.cardDescription,
     image: site.imageUrl || site.image || undefined,
     sourceUrl: site.sourceUrl,
     sourceId: site.sourceId,
