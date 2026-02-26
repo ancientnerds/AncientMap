@@ -14399,6 +14399,7 @@ body.news-feed-open .empire-borders-window {
 /* Inline country flags in Lyra messages — rendered via [Country](flag:code) links */
 .lyra-inline-flag-wrap {
   display: inline;
+  color: inherit;
 }
 .lyra-chat-msg-text img.lyra-inline-flag {
   display: inline-block;
