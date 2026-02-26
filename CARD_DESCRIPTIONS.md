@@ -1,6 +1,6 @@
 # Card Description Generator
 
-A procedure for generating punchy 120-character card descriptions for all Forgotten Worlds card sites. Claude Code follows this step-by-step when the user says "generate card descriptions".
+A procedure for generating punchy 200-character card descriptions for all Forgotten Worlds card sites. Claude Code follows this step-by-step when the user says "generate card descriptions".
 
 ## Execution Procedure
 
@@ -35,8 +35,8 @@ Launch **10 agents in parallel** (subagent_type: `general-purpose`), each with:
 
 Each agent's prompt must include:
 1. Read `output/batch_input_NNN.json`
-2. For each site, write a **max 120-character** description following the Tone & Style Guide
-3. Validate every description is <= 120 chars. If over, shorten it.
+2. For each site, write a **max 200-character** description following the Tone & Style Guide
+3. Validate every description is <= 200 chars. If over, shorten it.
 4. Write the result to `output/card_descriptions_batch_NNN.json` as: `{"site_id": "description", ...}`
 5. Print a summary: `Batch NNN complete. Wrote X descriptions.`
 
@@ -46,7 +46,7 @@ After all agents finish:
 1. Read each `output/card_descriptions_batch_NNN.json`
 2. Check: total descriptions across all batch files == total sites in all input files
 3. Check: no duplicate `site_id` across batches (there shouldn't be, but verify)
-4. Check: every description is <= 120 chars and non-empty
+4. Check: every description is <= 200 chars and non-empty
 5. Report any gaps or issues
 
 **Step 3c — Merge**
@@ -61,9 +61,9 @@ After all agents finish:
 
 1. Read `output/card_descriptions.json`.
 2. Check every description:
-   - Length <= 120 characters? Flag any that exceed.
+   - Length <= 200 characters? Flag any that exceed.
    - Not empty/blank?
-3. If any fail: fix them in-place (rewrite to fit 120 chars), save the file.
+3. If any fail: fix them in-place (rewrite to fit 200 chars), save the file.
 4. Report: `Validation: X passed, Y fixed`
 
 **Step 5 — Import to DB**
@@ -89,29 +89,29 @@ After all agents finish:
 - If `period_name` is a broad range like "< 4500 BC" or "1000 - 1500 AD", use that range loosely: "Predating 4500 BC" or "Medieval-era" — don't fake precision.
 
 **Rules**:
-- **Max 120 characters** (hard limit — this must fit on a card)
+- **Max 200 characters** (hard limit — this must fit on a card)
 - **Never mention the country** (it's already shown on the card)
 - **Factually accurate** — only use facts from the Wikipedia source text provided
 - **No generic filler** ("ancient ruins", "important site", "rich history")
 - **Prefer concrete details** over vague adjectives
 - If the wiki excerpt is empty/missing, write a brief factual description based on the site name, type, and period
 
-**Examples with known dates**:
+**Examples with known dates** (aim for 150-190 chars):
 ```
-Göbekli Tepe: "Built 9,600 BC. Massive carved pillars erected 6,000 years before Stonehenge."
-Pompeii: "Buried by Vesuvius in 79 AD. Bakeries, bathhouses, and graffiti frozen exactly as they were."
-Petra: "Carved into sandstone cliffs around 300 BC. A lost trade capital that channeled water through the desert."
-Angkor Wat: "Built in the 12th century. The world's largest religious monument, once home to 750,000 people."
-Machu Picchu: "Built around 1450 AD. An Inca estate perched 2,430m high, abandoned before the Spanish ever found it."
-Chichén Itzá: "Built around 600 AD. Its pyramid casts a serpent shadow down the stairs at every equinox."
+Göbekli Tepe: "Built 9,600 BC — 6,000 years before Stonehenge. Massive T-shaped pillars carved with lions, foxes, and vultures by people who hadn't yet invented pottery or farming." (170 chars)
+Pompeii: "Buried under 6 metres of volcanic ash when Vesuvius erupted in 79 AD. Bakeries still had loaves in the ovens. Election slogans and love notes survive on the walls." (167 chars)
+Petra: "Carved into rose-red sandstone cliffs around 300 BC by the Nabataeans. A lost trade capital that engineered flash-flood channels and cisterns to thrive in the desert." (168 chars)
+Angkor Wat: "Built in the 12th century as a Hindu temple, later converted to Buddhist. The world's largest religious monument, its moat alone spans 1.5 km on each side." (157 chars)
+Machu Picchu: "Built around 1450 AD at 2,430 m elevation. An Inca royal estate with 150+ buildings, astronomical observatories, and terraced farms — abandoned before the Spanish ever found it." (179 chars)
+Chichén Itzá: "Built around 600 AD. At each equinox, sunlight casts a feathered-serpent shadow slithering down the pyramid steps. Its sacred cenote held jade, gold, and human offerings." (172 chars)
 ```
 
-**Examples with unknown/vague dates**:
+**Examples with unknown/vague dates** (aim for 150-190 chars):
 ```
-Yonaguni Monument: "A massive stepped structure on the seafloor. Still debated: natural formation or submerged ruins?"
-Adam's Calendar: "A stone circle aligned to solstices and equinoxes, hidden in the mountains near Mpumalanga."
-Gunung Padang: "Layers of buried construction stacked deep into a volcanic hill. Each layer older than the last."
-Rujm el-Hiri: "Concentric stone rings visible only from the air, with no settlement anywhere nearby."
+Yonaguni Monument: "A massive stepped structure 25 m below sea level off the coast. Flat terraces, right angles, and carved channels — still fiercely debated: natural geology or submerged ruins?" (177 chars)
+Adam's Calendar: "A stone circle aligned precisely to solstices, equinoxes, and cardinal points, hidden in the mountains near Mpumalanga. Claimed by some to be 75,000 years old." (161 chars)
+Gunung Padang: "Layers of buried columnar basalt construction stacked deep into a volcanic hill, each layer older than the last. Ground-penetrating radar hints at hidden chambers below." (170 chars)
+Rujm el-Hiri: "Five concentric stone rings and a central cairn, visible only from the air. No settlement, no water source anywhere nearby — yet 42,000 tonnes of basalt were hauled here." (172 chars)
 ```
 
 **Anti-examples** (don't write like this):
