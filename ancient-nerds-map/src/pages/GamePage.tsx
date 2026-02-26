@@ -132,7 +132,7 @@ const MOCKUP_CARDS: MockupCardExt[] = [
     bonuses: { fortification: 2, cultural_influence: 1, legacy: 2 },
     typeBadgeColor: '#e6b800', periodBadgeColor: '#ff0000',
     coords: '37.2233\u00b0 N, 38.9224\u00b0 E',
-    description: 'A Neolithic archaeological site comprising of a number of large circular structures supported by massive stone pillars \u2014 many richly decorated with abstract anthropomorphic details and animal reliefs.',
+    description: 'Massive stone pillars carved with animal reliefs form the world\u2019s oldest known temple complex, predating agriculture itself by millennia.',
     dupsFilled: 0,
   },
   {
@@ -145,7 +145,7 @@ const MOCKUP_CARDS: MockupCardExt[] = [
     bonuses: { antiquity: 1, cultural_influence: 1, mystery: 1, legacy: 1 },
     typeBadgeColor: '#dd1111', periodBadgeColor: '#ffdd00',
     coords: '13.1631\u00b0 S, 72.5450\u00b0 W',
-    description: 'An ancient Inca citadel located on a 2,430 metre mountain range. Often referred to as the "Lost City of the Incas", it is the most familiar icon of Inca civilization.',
+    description: 'An Inca citadel perched at 2,430 m in the Andes. The "Lost City of the Incas" remains the most iconic symbol of Inca civilization.',
     dupsFilled: 9,
   },
   {
@@ -158,7 +158,7 @@ const MOCKUP_CARDS: MockupCardExt[] = [
     bonuses: { antiquity: 1, cultural_influence: 1, legacy: 1 },
     typeBadgeColor: '#ffc300', periodBadgeColor: '#ff4400',
     coords: '25.7188\u00b0 N, 32.6573\u00b0 E',
-    description: 'The Karnak Temple Complex comprises a vast mix of decayed temples, pylons, chapels, and other buildings near Luxor. Construction began during the reign of Senusret I.',
+    description: 'Egypt\u2019s largest temple complex, built over two millennia near Luxor. A forest of towering columns and obelisks honoring Amun-Ra.',
     dupsFilled: 5,
   },
   {
@@ -171,7 +171,7 @@ const MOCKUP_CARDS: MockupCardExt[] = [
     bonuses: { cultural_influence: 1, mystery: 1 },
     typeBadgeColor: '#dd2277', periodBadgeColor: '#ffcc00',
     coords: '20.6843\u00b0 N, 88.5678\u00b0 W',
-    description: 'A large pre-Columbian city built by the Maya people. Its most iconic structure is the step pyramid known as El Castillo, one of the New Seven Wonders of the World.',
+    description: 'A Maya metropolis crowned by El Castillo, whose shadow serpent descends each equinox. One of the New Seven Wonders of the World.',
     dupsFilled: 3,
   },
   {
@@ -184,7 +184,7 @@ const MOCKUP_CARDS: MockupCardExt[] = [
     bonuses: { cultural_influence: 1 },
     typeBadgeColor: '#ff5500', periodBadgeColor: '#ff0000',
     coords: '35.2981\u00b0 N, 25.1631\u00b0 E',
-    description: 'A Bronze Age archaeological site in Crete. The site was a major center of the Minoan civilization, known for its association with the myth of Theseus and the Minotaur.',
+    description: 'Heart of the Minoan civilization on Crete, famed for its labyrinthine palace and the legend of the Minotaur.',
     dupsFilled: 1,
   },
   {
@@ -197,7 +197,7 @@ const MOCKUP_CARDS: MockupCardExt[] = [
     bonuses: { cultural_influence: 1 },
     typeBadgeColor: '#ff5500', periodBadgeColor: '#ffcc00',
     coords: '20.3594\u00b0 N, 89.7714\u00b0 W',
-    description: 'An ancient Maya city of the classical period located in present-day Mexico. It is considered one of the most important archaeological sites of Maya culture.',
+    description: 'A Classic Maya city in Yucat\u00e1n renowned for its ornate Puuc-style architecture, including the towering Pyramid of the Magician.',
     dupsFilled: 2,
   },
   {
@@ -209,7 +209,7 @@ const MOCKUP_CARDS: MockupCardExt[] = [
     category_group: 'Burial & Death', civilization: null, star_level: 0, card_xp: 0,
     typeBadgeColor: '#8833dd', periodBadgeColor: '#ff2200',
     coords: '53.6947\u00b0 N, 6.4756\u00b0 W',
-    description: 'A Prehistoric monument in County Meath. It is an exceptionally grand passage tomb built during the Neolithic Period, around 3200 BC, overlooking the River Boyne.',
+    description: 'A 5,200-year-old passage tomb in Ireland\u2019s Boyne Valley, older than the pyramids, aligned to the winter solstice sunrise.',
     dupsFilled: 1,
   },
   {
@@ -221,7 +221,7 @@ const MOCKUP_CARDS: MockupCardExt[] = [
     category_group: 'Megalithic', civilization: null, star_level: 0, card_xp: 0,
     typeBadgeColor: '#0066bb', periodBadgeColor: '#ff8800',
     coords: '40.7508\u00b0 N, 14.4869\u00b0 E',
-    description: 'One of the oldest surviving Roman amphitheatres, located in the ancient city of Pompeii near Naples. Buried by the eruption of Mount Vesuvius in 79 AD.',
+    description: 'The oldest surviving Roman amphitheatre, entombed by Vesuvius in 79 AD and preserved beneath volcanic ash for nearly two millennia.',
     dupsFilled: 0,
   },
 ]

@@ -196,21 +196,23 @@ class StaticExporter:
             # Get all sites with minimal data for markers
             result = session.execute(text("""
                 SELECT
-                    id,
-                    name,
-                    lat,
-                    lon,
-                    source_id,
-                    site_type,
-                    period_start,
-                    period_end,
-                    period_name,
-                    country,
-                    description,
-                    thumbnail_url,
-                    source_url
-                FROM unified_sites
-                ORDER BY source_id, name
+                    us.id,
+                    us.name,
+                    us.lat,
+                    us.lon,
+                    us.source_id,
+                    us.site_type,
+                    us.period_start,
+                    us.period_end,
+                    us.period_name,
+                    us.country,
+                    us.description,
+                    us.thumbnail_url,
+                    us.source_url,
+                    cs.card_description
+                FROM unified_sites us
+                LEFT JOIN card_stats cs ON cs.site_id = us.id
+                ORDER BY us.source_id, us.name
             """))
 
             sites = []
@@ -241,6 +243,8 @@ class StaticExporter:
                     site["im"] = row.thumbnail_url  # image
                 if row.source_url:
                     site["u"] = row.source_url  # source URL
+                if row.card_description:
+                    site["cd"] = row.card_description  # card description
 
                 # Alternate names for search (Latin-script only, max 10)
                 site_alt = alt_names_map.get(str(row.id))

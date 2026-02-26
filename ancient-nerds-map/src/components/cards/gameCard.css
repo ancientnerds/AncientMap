@@ -223,10 +223,6 @@
   font-size: 0.68rem;
   line-height: 1.45;
   opacity: 0.6;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
 /* --------------------------------------------------------------------------

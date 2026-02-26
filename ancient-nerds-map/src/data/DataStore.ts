@@ -201,7 +201,7 @@ class DataStoreClass {
     return Array.from(this.sources.keys()).filter(id => !defaultIds.includes(id))
   }
 
-  private _parseSitesData(sites: Array<{ id: string; n: string; la: number; lo: number; s: string; t: string | null; p: number | null; pn?: string; d?: string; i?: string; c?: string; u?: string; an?: string[] }>): Site[] {
+  private _parseSitesData(sites: Array<{ id: string; n: string; la: number; lo: number; s: string; t: string | null; p: number | null; pn?: string; d?: string; cd?: string; i?: string; c?: string; u?: string; an?: string[] }>): Site[] {
     return sites.map(s => ({
       id: s.id,
       name: s.n,
@@ -213,6 +213,7 @@ class DataStoreClass {
       periodEnd: null,
       period: s.pn || undefined,  // User-edited period name from database
       description: s.d || undefined,
+      cardDescription: s.cd || undefined,
       image: s.i || null,
       location: s.c || undefined,
       sourceUrl: s.u || undefined,
