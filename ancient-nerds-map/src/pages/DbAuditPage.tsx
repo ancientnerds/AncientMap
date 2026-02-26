@@ -45,8 +45,6 @@ type SortDir = 'asc' | 'desc'
 const CATEGORY_OPTIONS = Object.keys(CATEGORY_COLORS)
 const ROWS_PER_PAGE = 500
 
-// PERIOD_ORDER and SORTED_PERIODS imported from constants/colors.ts
-
 interface SnapshotEntry {
   date: string
   file: string
@@ -78,8 +76,6 @@ interface PendingEdit {
     period: string; coordinates: [number, number]; sourceUrl?: string; country?: string
   }
 }
-
-// SOURCE_CONFIG imported from constants/colors.ts
 
 function hasPeriodIssue(s: AuditSite) { return !s.pn && s.p == null }
 function hasTypeIssue(s: AuditSite) { return !s.t }
@@ -619,6 +615,8 @@ export default function DbAuditPage() {
     const existing = pendingEdits.get(site.id)
     const merged = existing ? { ...existing.changes, ...changes } : changes
 
+    const newCountry = field === 'country' ? editValue : (site.c || '')
+
     const edit: PendingEdit = {
       siteId: site.id,
       siteName: site.n,
@@ -631,6 +629,7 @@ export default function DbAuditPage() {
         period: newPeriod,
         coordinates: [site.lo, site.la],
         sourceUrl: site.u,
+        country: newCountry,
       },
     }
 
@@ -929,7 +928,6 @@ export default function DbAuditPage() {
     }
   }, [token, uploadParsed, uploadTarget, uploadMarkAudited, refreshDbSnapshots, discardAllEdits])
 
-  // Preview a DB snapshot (fetch diff)
   // Fetch edit history for a site
   const fetchSiteHistory = useCallback(async (siteId: string, siteName: string) => {
     setHistoryLoading(true)
