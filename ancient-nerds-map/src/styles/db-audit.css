@@ -1729,7 +1729,7 @@
 
 /* ─── DB Snapshots (undo history) ────────────────────────────────────────── */
 .db-snapshots-panel {
-  margin: 0 24px 16px;
+  margin: 0 0 16px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   overflow: hidden;
@@ -1812,6 +1812,8 @@
   flex-direction: column;
   gap: 1px;
   background: rgba(255, 255, 255, 0.04);
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 .db-snapshot-card {
@@ -2738,7 +2740,7 @@
   }
 
   .db-snapshots-panel {
-    margin: 0 8px 12px;
+    margin: 0 0 12px;
   }
 
   .db-upload-target-row {
