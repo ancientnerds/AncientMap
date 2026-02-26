@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Export card sites with wiki descriptions for card description generation.
+"""Export Ancient Nerds sites for card description generation.
 
-Queries all sites in card_stats joined with unified_sites, exports to
+Queries all ancient_nerds sites that have a description, exports to
 output/card_sites.json with the fields needed for description generation.
 
 Usage:
@@ -27,15 +27,17 @@ def main() -> None:
     with engine.connect() as conn:
         rows = conn.execute(text("""
             SELECT
-                cs.site_id::text AS site_id,
+                us.id::text AS site_id,
                 us.name,
                 us.period_name,
                 us.period_start,
                 us.site_type,
                 us.country,
                 LEFT(us.description, 500) AS description
-            FROM card_stats cs
-            JOIN unified_sites us ON cs.site_id = us.id
+            FROM unified_sites us
+            WHERE us.source_id = 'ancient_nerds'
+              AND us.description IS NOT NULL
+              AND us.description != ''
             ORDER BY us.name
         """)).fetchall()
 

@@ -927,8 +927,9 @@ class DbSnapshot(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     created_by: Mapped[str] = mapped_column(String(50), nullable=False)  # "audit", "upload", "admin"
     description: Mapped[str] = mapped_column(String(500), nullable=False)
-    snapshot_type: Mapped[str] = mapped_column(String(20), nullable=False)  # "edit" | "upload"
+    snapshot_type: Mapped[str] = mapped_column(String(20), nullable=False)  # "edit" | "upload" | "manual"
     row_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_id: Mapped[str | None] = mapped_column(String(50), nullable=True)  # which database this snapshot belongs to
 
     rows: Mapped[list["SnapshotRow"]] = relationship(
         "SnapshotRow", back_populates="snapshot", cascade="all, delete-orphan",

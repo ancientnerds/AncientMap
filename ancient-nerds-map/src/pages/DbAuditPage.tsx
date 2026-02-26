@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { config } from '../config'
 import { CATEGORY_COLORS, PERIOD_ORDER, SORTED_PERIODS, getCategoryColor, getPeriodColor, SOURCE_CONFIG } from '../constants/colors'
 import { useAuth } from '../contexts/AuthContext'
@@ -10,11 +10,11 @@ import { getCountryFlatFlagUrl } from '../utils/countryFlags'
 import { exportCSV, exportJSON, exportGeoJSON, parseCSV, parseJSON, parseGeoJSON } from '../utils/exportFormats'
 import type { ParsedSite } from '../utils/exportFormats'
 import { MetadataBadge } from '../components/metadata/MetadataBadge'
+import { CopyButton } from '../components/metadata/CopyButton'
+import { viewOnGlobe } from '../components/SiteCard'
 import SiteForm from '../components/SiteForm'
 import type { SiteFormValues } from '../components/SiteForm'
 import '../styles/db-audit.css'
-
-const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
 
 declare const __BUILD_HASH__: string
 const CACHE_BUSTER = `_v=${__BUILD_HASH__}`
@@ -233,14 +233,8 @@ export default function DbAuditPage() {
   // Expanded descriptions
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
-  // Copied coords toast
-  const [copiedId, setCopiedId] = useState<string | null>(null)
-
   // Site popup
   const [popupSite, setPopupSite] = useState<SiteData | null>(null)
-
-  // Lyra profile
-  const [showLyraProfile, setShowLyraProfile] = useState(false)
 
   // Source filter
   const [sourceFilter, setSourceFilter] = useState('all')
@@ -254,7 +248,8 @@ export default function DbAuditPage() {
   const [pinLoading, setPinLoading] = useState<string | null>(null)
 
   // DB Snapshots (from API)
-  const [dbSnapshots, setDbSnapshots] = useState<{ id: string; created_at: string; created_by: string; description: string; snapshot_type: string; row_count: number; site_names: string[] }[]>([])
+  const [dbSnapshots, setDbSnapshots] = useState<{ id: string; created_at: string; created_by: string; description: string; snapshot_type: string; row_count: number; source_id: string | null; site_names: string[] }[]>([])
+  const [createSnapshotLoading, setCreateSnapshotLoading] = useState(false)
 
   // Snapshot preview (undo diff)
   interface SnapshotFieldDiff { field: string; current: string | null; restore_to: string | null }
@@ -268,6 +263,12 @@ export default function DbAuditPage() {
   const [showReviewModal, setShowReviewModal] = useState(false)
   const [committing, setCommitting] = useState(false)
 
+  // Site edit history
+  interface HistoryChange { field: string; before: string | null; after: string | null }
+  interface HistoryEntry { date: string; by: string; description: string; type: string; changes: HistoryChange[] }
+  const [historyModal, setHistoryModal] = useState<{ siteId: string; siteName: string; history: HistoryEntry[] } | null>(null)
+  const [historyLoading, setHistoryLoading] = useState(false)
+
   // Upload
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [uploadParsed, setUploadParsed] = useState<ParsedSite[]>([])
@@ -275,6 +276,7 @@ export default function DbAuditPage() {
   const [uploadTarget, setUploadTarget] = useState('ancient_nerds')
   const [uploading, setUploading] = useState(false)
   const [uploadMarkAudited, setUploadMarkAudited] = useState(false)
+  const [uploadCreateSnapshot, setUploadCreateSnapshot] = useState(true)
 
   // Qdrant sync
   interface QdrantCollection { pg_count: number; qdrant_count: number; delta: number | null; note?: string }
@@ -324,16 +326,20 @@ export default function DbAuditPage() {
     })()
   }, [])
 
-  // Fetch DB snapshots
+  // Fetch DB snapshots (filtered by selected source)
   const refreshDbSnapshots = useCallback(async () => {
+    if (sourceFilter === 'all') {
+      setDbSnapshots([])
+      return
+    }
     try {
-      const res = await fetch(`${config.api.baseUrl}/sites/snapshots?${CACHE_BUSTER}`)
+      const res = await fetch(`${config.api.baseUrl}/sites/snapshots?source_id=${sourceFilter}&${CACHE_BUSTER}`)
       if (res.ok) {
         const data = await res.json()
         setDbSnapshots(data.snapshots || [])
       }
     } catch { /* optional */ }
-  }, [])
+  }, [sourceFilter])
 
   useEffect(() => { refreshDbSnapshots() }, [refreshDbSnapshots])
 
@@ -723,13 +729,6 @@ export default function DbAuditPage() {
     })
   }, [])
 
-  // Copy coords to clipboard
-  const copyCoords = useCallback((la: number, lo: number, id: string) => {
-    navigator.clipboard.writeText(`${la.toFixed(4)}, ${lo.toFixed(4)}`)
-    setCopiedId(id)
-    setTimeout(() => setCopiedId(prev => prev === id ? null : prev), 1000)
-  }, [])
-
   // Export handlers
   const handleExportCSV = useCallback(() => exportCSV(filteredSites), [filteredSites])
   const handleExportJSON = useCallback(() => exportJSON(filteredSites), [filteredSites])
@@ -890,7 +889,7 @@ export default function DbAuditPage() {
       const res = await fetch(`${config.api.baseUrl}/sites/batch-upload`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ sites: payload, target_source: uploadTarget }),
+        body: JSON.stringify({ sites: payload, target_source: uploadTarget, create_snapshot: uploadCreateSnapshot }),
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
@@ -916,6 +915,7 @@ export default function DbAuditPage() {
       setUploadParsed([])
       setUploadFileName('')
       setUploadMarkAudited(false)
+      setUploadCreateSnapshot(true)
       refreshDbSnapshots()
       const msg = `Upload complete: ${result.inserted} inserted, ${result.updated} updated` +
         (auditedCount > 0 ? `\n${auditedCount} sites marked as audited` : '')
@@ -930,6 +930,21 @@ export default function DbAuditPage() {
   }, [token, uploadParsed, uploadTarget, uploadMarkAudited, refreshDbSnapshots, discardAllEdits])
 
   // Preview a DB snapshot (fetch diff)
+  // Fetch edit history for a site
+  const fetchSiteHistory = useCallback(async (siteId: string, siteName: string) => {
+    setHistoryLoading(true)
+    try {
+      const res = await fetch(`${config.api.baseUrl}/sites/${siteId}/history?${CACHE_BUSTER}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      setHistoryModal({ siteId, siteName, history: data.history || [] })
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to load history')
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [])
+
   const previewDbSnapshot = useCallback(async (snapshotId: string) => {
     setSnapshotPreviewLoading(true)
     try {
@@ -944,10 +959,9 @@ export default function DbAuditPage() {
     }
   }, [])
 
-  // Restore a DB snapshot
+  // Restore a DB snapshot (called from preview modal only)
   const restoreDbSnapshot = useCallback(async (snapshotId: string) => {
     if (!token) return
-    if (!confirm('Restore this snapshot? This will revert the affected sites to their pre-change state.')) return
     try {
       const res = await fetch(`${config.api.baseUrl}/sites/snapshots/${snapshotId}/restore`, {
         method: 'POST',
@@ -957,14 +971,36 @@ export default function DbAuditPage() {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.detail || `HTTP ${res.status}`)
       }
-      const result = await res.json()
-      alert(`Restored ${result.restored} sites`)
+      setSnapshotPreview(null)
       discardAllEdits()
       refreshDbSnapshots()
     } catch (e: unknown) {
+      setSnapshotPreview(null)
       alert(e instanceof Error ? e.message : 'Restore failed')
     }
   }, [token, discardAllEdits, refreshDbSnapshots])
+
+  // Create a manual DB snapshot
+  const createDbSnapshot = useCallback(async () => {
+    if (!token || sourceFilter === 'all') return
+    setCreateSnapshotLoading(true)
+    try {
+      const sourceName = SOURCE_CONFIG[sourceFilter]?.name || sourceFilter
+      const res = await fetch(`${config.api.baseUrl}/sites/snapshots/create?source_id=${sourceFilter}&description=${encodeURIComponent(`Manual snapshot of ${sourceName}`)}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.detail || `HTTP ${res.status}`)
+      }
+      refreshDbSnapshots()
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Snapshot creation failed')
+    } finally {
+      setCreateSnapshotLoading(false)
+    }
+  }, [token, sourceFilter, refreshDbSnapshots])
 
   // Diff: open compare modal with defaults
   const openDiffModal = useCallback(() => {
@@ -1088,8 +1124,7 @@ export default function DbAuditPage() {
     <div className="db-page">
       {/* Header */}
       <PageHeader
-        speechBubble="I help maintain and enrich the sites database"
-        onAvatarClick={() => setShowLyraProfile(true)}
+        hideLyra
         currentPage="db"
         rightSection={
         <>
@@ -1433,7 +1468,7 @@ export default function DbAuditPage() {
             <tr>
               <th className="db-th" onClick={() => handleSort('name')}>Name{sortArrow('name')}</th>
               <th className="db-th db-th-nosort">Coords</th>
-              <th className="db-th" onClick={() => handleSort('type')}>Type{sortArrow('type')}</th>
+              <th className="db-th" onClick={() => handleSort('type')}>Category{sortArrow('type')}</th>
               <th className="db-th" onClick={() => handleSort('period')}>Period{sortArrow('period')}</th>
               <th className="db-th" onClick={() => handleSort('country')}>Country{sortArrow('country')}</th>
               <th className="db-th db-th-nosort" title="Game card description (200 chars)">Card</th>
@@ -1445,6 +1480,7 @@ export default function DbAuditPage() {
               <th className="db-th db-th-nosort db-th-db" title="Source database">DB</th>
               <th className="db-th" onClick={() => handleSort('audited')} title="Audit status — green check means audited">Aud{sortArrow('audited')}</th>
               <th className="db-th" onClick={() => handleSort('edited_at')}>Last Edited{sortArrow('edited_at')}</th>
+              <th className="db-th db-th-nosort db-th-id" title="Site UUID — click to copy">ID</th>
               {isFounder && <th className="db-th db-th-edit">Edit</th>}
             </tr>
           </thead>
@@ -1462,14 +1498,15 @@ export default function DbAuditPage() {
               return (
                 <tr key={site.id} className={`db-row ${isPending ? 'db-row-pending' : ''}`}>
                   {/* Name */}
-                  <td className="db-td db-td-name" title={site.id} onClick={() => openPopup(site)}>
-                    {site.n}
+                  <td className="db-td db-td-name">
+                    <span className="db-name-link" onClick={() => openPopup(site)} title="Show popup">{site.n}</span>
+                    <CopyButton text={site.n} title="Copy name" size={11} />
                   </td>
 
                   {/* Coordinates */}
-                  <td className="db-td db-td-coords" onClick={() => copyCoords(site.la, site.lo, site.id)}>
-                    {site.la.toFixed(4)}, {site.lo.toFixed(4)}
-                    {copiedId === site.id && <span className="db-copied-toast">Copied!</span>}
+                  <td className="db-td db-td-coords">
+                    <span className="db-coords-link" onClick={() => viewOnGlobe(site.id)} title="View on globe">{site.la.toFixed(4)}, {site.lo.toFixed(4)}</span>
+                    <CopyButton text={`${site.la.toFixed(4)}, ${site.lo.toFixed(4)}`} title="Copy coordinates" size={11} />
                   </td>
 
                   {/* Type cell */}
@@ -1623,9 +1660,19 @@ export default function DbAuditPage() {
                       : <span className="db-audited-no">&mdash;</span>}
                   </td>
 
-                  {/* Last edited (timestamp) */}
-                  <td className="db-td db-td-timestamp" title={site.ea || ''}>
+                  {/* Last edited (timestamp) — click for history */}
+                  <td
+                    className={`db-td db-td-timestamp ${site.ea ? 'db-td-clickable' : ''}`}
+                    title={site.ea ? 'Click to view edit history' : ''}
+                    onClick={() => site.ea && fetchSiteHistory(site.id, site.n)}
+                  >
                     {site.ea ? formatRelativeDate(site.ea) : <span className="db-muted">&mdash;</span>}
+                  </td>
+
+                  {/* Site ID */}
+                  <td className="db-td db-td-id">
+                    <CopyButton text={site.id} title="Copy site ID" size={11} />
+                    <span className="db-id-text" title={site.id}>{site.id.slice(0, 8)}</span>
                   </td>
 
                   {/* Edit button */}
@@ -1694,12 +1741,6 @@ export default function DbAuditPage() {
 
       {/* Site Popup Overlay */}
       {popupSite && <SitePopupOverlay site={popupSite} onClose={() => setPopupSite(null)} />}
-
-      {showLyraProfile && (
-        <Suspense fallback={null}>
-          <LyraProfileModal onClose={() => setShowLyraProfile(false)} />
-        </Suspense>
-      )}
 
       {/* Pending changes bar */}
       {pendingEdits.size > 0 && (
@@ -1855,8 +1896,15 @@ export default function DbAuditPage() {
               )}
             </div>
             <div className="db-modal-footer">
-              <div className="db-upload-snapshot-notice" title="Every upload creates a snapshot first, so you can always undo">A snapshot will be created before applying changes. You can always roll back.</div>
-              <div className="db-modal-footer-buttons">
+              <div className="db-modal-footer-toggles">
+                <button
+                  className={`db-upload-audited-toggle ${uploadCreateSnapshot ? 'active' : ''}`}
+                  onClick={() => setUploadCreateSnapshot(!uploadCreateSnapshot)}
+                  title="Create a snapshot of the current database state before applying changes. This allows you to roll back."
+                >
+                  <span className={`db-toggle-check ${uploadCreateSnapshot ? 'checked' : ''}`} />
+                  Create snapshot
+                </button>
                 <button
                   className={`db-upload-audited-toggle ${uploadMarkAudited ? 'active' : ''} ${!uploadMarkAudited && uploadParsed.length > 0 ? 'db-audited-remind' : ''}`}
                   onClick={() => setUploadMarkAudited(!uploadMarkAudited)}
@@ -1865,9 +1913,11 @@ export default function DbAuditPage() {
                   <span className={`db-toggle-check ${uploadMarkAudited ? 'checked' : ''}`} />
                   Mark all as audited
                 </button>
-                <button className="db-btn db-btn-cancel" onClick={() => { setShowUploadModal(false); setUploadParsed([]); setUploadFileName(''); setUploadMarkAudited(false) }} disabled={uploading}>Cancel</button>
-                <button className="db-btn db-btn-commit" onClick={commitUpload} disabled={uploading || uploadParsed.filter(p => p._status !== 'error').length === 0} title="Creates a snapshot of current state, then applies all changes">
-                  {uploading ? 'Creating snapshot...' : 'Create Snapshot & Apply'}
+              </div>
+              <div className="db-modal-footer-buttons">
+                <button className="db-btn db-btn-cancel" onClick={() => { setShowUploadModal(false); setUploadParsed([]); setUploadFileName(''); setUploadMarkAudited(false); setUploadCreateSnapshot(true) }} disabled={uploading}>Cancel</button>
+                <button className="db-btn db-btn-commit" onClick={commitUpload} disabled={uploading || uploadParsed.filter(p => p._status !== 'error').length === 0} title={uploadCreateSnapshot ? 'Creates a snapshot of current state, then applies all changes' : 'Applies changes without creating a snapshot'}>
+                  {uploading ? 'Applying...' : uploadCreateSnapshot ? 'Snapshot & Apply' : 'Apply Changes'}
                 </button>
               </div>
             </div>
@@ -1875,23 +1925,37 @@ export default function DbAuditPage() {
         </div>
       )}
 
-      {/* DB Snapshots (undo history) */}
-      {isFounder && dbSnapshots.length > 0 && (
+      {/* DB Snapshots (undo history) — only visible when a specific source is selected */}
+      {isFounder && sourceFilter !== 'all' && (
         <details className="db-snapshots-panel" open>
-          <summary className="db-snapshots-summary">Undo History ({dbSnapshots.length} snapshot{dbSnapshots.length !== 1 ? 's' : ''})</summary>
+          <summary className="db-snapshots-summary">
+            <span className="db-snapshot-source-badge" style={{ borderColor: SOURCE_CONFIG[sourceFilter]?.color, background: SOURCE_CONFIG[sourceFilter]?.color + '15' }}>
+              <span className="db-snapshot-source-dot" style={{ background: SOURCE_CONFIG[sourceFilter]?.color }} />
+              {SOURCE_CONFIG[sourceFilter]?.name || sourceFilter}
+            </span>
+            Snapshots ({dbSnapshots.length})
+          </summary>
+          <div className="db-snapshots-header">
+            <button className="db-btn db-btn-create-snapshot" onClick={createDbSnapshot} disabled={createSnapshotLoading} title={`Create a manual snapshot of all ${SOURCE_CONFIG[sourceFilter]?.name || sourceFilter} sites`}>
+              {createSnapshotLoading ? 'Creating...' : 'Create Snapshot'}
+            </button>
+          </div>
           <div className="db-snapshots-list">
+            {dbSnapshots.length === 0 && (
+              <div className="db-snapshots-empty">No snapshots yet for {SOURCE_CONFIG[sourceFilter]?.name || sourceFilter}. Create one to save the current state.</div>
+            )}
             {dbSnapshots.map(snap => {
               const dt = new Date(snap.created_at)
               const dateStr = dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
               const timeStr = dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+              const typeLabel = snap.snapshot_type === 'upload' ? 'UPLOAD' : snap.snapshot_type === 'manual' ? 'MANUAL' : 'EDIT'
               return (
                 <div key={snap.id} className="db-snapshot-card">
                   <div className="db-snapshot-row-top">
-                    <span className={`db-snapshot-type db-snapshot-type-${snap.snapshot_type || 'edit'}`}>{snap.snapshot_type === 'upload' ? 'UPLOAD' : 'EDIT'}</span>
+                    <span className={`db-snapshot-type db-snapshot-type-${snap.snapshot_type || 'edit'}`}>{typeLabel}</span>
                     <span className="db-snapshot-desc">{snap.description}</span>
                     <span className="db-snapshot-actions">
-                      <button className="db-btn db-btn-preview" onClick={() => previewDbSnapshot(snap.id)} disabled={snapshotPreviewLoading} title="Preview what restoring this snapshot would change">Preview</button>
-                      <button className="db-btn db-btn-restore" onClick={() => restoreDbSnapshot(snap.id)} title="Revert affected sites to their pre-change state">Restore</button>
+                      <button className="db-btn db-btn-preview" onClick={() => previewDbSnapshot(snap.id)} disabled={snapshotPreviewLoading} title="Preview changes and optionally restore this snapshot">Preview & Restore</button>
                     </span>
                   </div>
                   <div className="db-snapshot-row-detail">
@@ -1931,6 +1995,12 @@ export default function DbAuditPage() {
           <div className="db-modal db-upload-modal" onClick={e => e.stopPropagation()}>
             <div className="db-modal-header">
               <h2>Snapshot Preview</h2>
+              {sourceFilter !== 'all' && (
+                <span className="db-snapshot-source-badge" style={{ borderColor: SOURCE_CONFIG[sourceFilter]?.color, background: SOURCE_CONFIG[sourceFilter]?.color + '15' }}>
+                  <span className="db-snapshot-source-dot" style={{ background: SOURCE_CONFIG[sourceFilter]?.color }} />
+                  {SOURCE_CONFIG[sourceFilter]?.name || sourceFilter}
+                </span>
+              )}
               <button className="db-modal-close" onClick={() => setSnapshotPreview(null)}>&times;</button>
             </div>
             <div className="db-modal-body">
@@ -1981,10 +2051,63 @@ export default function DbAuditPage() {
               <div className="db-upload-snapshot-notice">Restoring will revert the {snapshotPreview.changed_count} changed site{snapshotPreview.changed_count !== 1 ? 's' : ''} to their pre-change values. A new snapshot is created automatically.</div>
               <div className="db-modal-footer-buttons">
                 <button className="db-btn db-btn-cancel" onClick={() => setSnapshotPreview(null)}>Close</button>
-                <button className="db-btn db-btn-restore" onClick={() => { restoreDbSnapshot(snapshotPreview.snapshot_id); setSnapshotPreview(null) }} disabled={snapshotPreview.changed_count === 0}>
+                <button className="db-btn db-btn-restore" onClick={() => restoreDbSnapshot(snapshotPreview.snapshot_id)} disabled={snapshotPreview.changed_count === 0}>
                   Restore {snapshotPreview.changed_count} site{snapshotPreview.changed_count !== 1 ? 's' : ''}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Site Edit History Modal */}
+      {historyModal && (
+        <div className="db-modal-overlay" onClick={() => setHistoryModal(null)}>
+          <div className="db-modal db-modal-upload" onClick={e => e.stopPropagation()}>
+            <div className="db-modal-header">
+              <h2>{historyLoading ? 'Loading...' : 'Edit History'} &mdash; {historyModal.siteName}</h2>
+              <button className="db-modal-close" onClick={() => setHistoryModal(null)}>&times;</button>
+            </div>
+            <div className="db-modal-body">
+              {historyModal.history.length === 0 ? (
+                <div className="db-diff-empty">No edit history found for this site.</div>
+              ) : (
+                <div className="db-upload-diff">
+                  {historyModal.history.map((entry, i) => {
+                    const dt = new Date(entry.date)
+                    const dateStr = dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                    const timeStr = dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+                    return (
+                      <div key={i} className="db-diff-item db-diff-update">
+                        <div className="db-diff-header">
+                          <span className={`db-snapshot-type db-snapshot-type-${entry.type || 'edit'}`}>{entry.type === 'upload' ? 'UPLOAD' : 'EDIT'}</span>
+                          <span className="db-diff-name">{dateStr} {timeStr}</span>
+                          <span className="db-diff-count">{entry.by || 'system'} &middot; {entry.changes.length} field{entry.changes.length !== 1 ? 's' : ''}</span>
+                        </div>
+                        {entry.changes.length > 0 ? (
+                          <div className="db-diff-fields">
+                            {entry.changes.map(c => (
+                              <div key={c.field} className="db-diff-row">
+                                <span className="db-diff-field">{c.field.replace(/_/g, ' ')}</span>
+                                <span className="db-diff-old">{c.before || '(empty)'}</span>
+                                <span className="db-diff-arrow">&rarr;</span>
+                                <span className="db-diff-new">{c.after || '(empty)'}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="db-diff-fields">
+                            <span className="db-diff-count" style={{ padding: '4px 0' }}>{entry.description}</span>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="db-modal-footer">
+              <button className="db-btn db-btn-cancel" onClick={() => setHistoryModal(null)}>Close</button>
             </div>
           </div>
         </div>
@@ -2126,7 +2249,7 @@ export default function DbAuditPage() {
                         <table className="db-diff-list-table">
                           <thead>
                             <tr>
-                              <th>Name</th><th>Type</th><th>Period</th><th>Country</th>
+                              <th>Name</th><th>Category</th><th>Period</th><th>Country</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -2168,7 +2291,7 @@ export default function DbAuditPage() {
                         <table className="db-diff-list-table">
                           <thead>
                             <tr>
-                              <th>Name</th><th>Type</th><th>Period</th><th>Country</th>
+                              <th>Name</th><th>Category</th><th>Period</th><th>Country</th>
                             </tr>
                           </thead>
                           <tbody>

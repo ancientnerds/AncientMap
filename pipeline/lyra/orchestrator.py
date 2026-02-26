@@ -1059,6 +1059,9 @@ def _run_migrations(engine) -> None:
         conn.execute(text("ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS last_audited TIMESTAMP"))
         conn.execute(text("ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS last_enriched TIMESTAMP"))
 
+        # Snapshot source tracking: which database a snapshot belongs to
+        conn.execute(text("ALTER TABLE db_snapshots ADD COLUMN IF NOT EXISTS source_id VARCHAR(50)"))
+
         conn.commit()
 
 

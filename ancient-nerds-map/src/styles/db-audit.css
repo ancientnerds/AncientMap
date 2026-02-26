@@ -563,16 +563,30 @@
 .db-td-name {
   font-weight: 500;
   max-width: 280px;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
-  cursor: pointer;
   color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
-.db-td-name:hover {
+.db-name-link {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.db-name-link:hover {
   text-decoration: underline;
   color: var(--primary-red);
+}
+
+.db-td-name .meta-copy-btn {
+  opacity: 0;
+}
+
+.db-td-name:hover .meta-copy-btn {
+  opacity: 0.5;
 }
 
 .db-td-editable {
@@ -585,6 +599,25 @@
 
 .db-td-edit {
   text-align: center;
+}
+
+/* Site ID column */
+.db-td-id {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.db-id-text {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  opacity: 0.5;
+}
+
+.db-th-id {
+  width: 80px;
 }
 
 /* Country: flag + text */
@@ -613,34 +646,30 @@
 .db-td-coords {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 12px;
-  cursor: pointer;
   white-space: nowrap;
   color: var(--text-secondary);
-  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
-.db-td-coords:hover {
+.db-coords-link {
+  cursor: pointer;
+}
+
+.db-coords-link:hover {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
   color: var(--text-primary);
 }
 
-.db-copied-toast {
-  position: absolute;
-  top: -4px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #22c55e;
-  color: #000;
-  font-size: 10px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  pointer-events: none;
-  animation: db-toast-fade 1s forwards;
+.db-td-coords .meta-copy-btn {
+  opacity: 0;
 }
 
-@keyframes db-toast-fade {
-  0% { opacity: 1; }
-  70% { opacity: 1; }
-  100% { opacity: 0; }
+.db-td-coords:hover .meta-copy-btn {
+  opacity: 0.5;
 }
 
 /* Description */
@@ -900,11 +929,26 @@
   color: var(--text-secondary);
 }
 
-/* Badges */
+.db-td-clickable {
+  cursor: pointer;
+}
+
+.db-td-clickable:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+
+/* Badges — rectangle style for category and period in DB table */
+.db-page .meta-badge {
+  border-radius: 3px;
+}
+
 .db-badge {
   display: inline-block;
   padding: 2px 10px;
-  border-radius: 12px;
+  border-radius: 3px;
   font-size: 0.78rem;
   border: 1px solid rgba(255, 255, 255, 0.1);
   white-space: nowrap;
@@ -1656,6 +1700,17 @@
   font-size: 0.85rem;
 }
 
+.db-modal-footer-toggles {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.db-modal-footer-toggles .db-upload-audited-toggle {
+  margin-right: 0;
+}
+
 .db-modal-footer-buttons {
   display: flex;
   align-items: center;
@@ -1678,10 +1733,69 @@
   color: var(--text-secondary);
   background: rgba(255, 255, 255, 0.02);
   user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .db-snapshots-summary:hover {
   color: var(--text-primary);
+}
+
+.db-snapshot-source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 12px;
+  border: 1px solid;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.db-snapshot-source-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.db-snapshots-header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.db-btn-create-snapshot {
+  background: transparent;
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  padding: 4px 14px;
+  border-radius: 16px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.db-btn-create-snapshot:hover:not(:disabled) {
+  background: rgba(251, 191, 36, 0.1);
+  border-color: #fbbf24;
+}
+
+.db-btn-create-snapshot:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.db-snapshots-empty {
+  padding: 20px 16px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  opacity: 0.7;
 }
 
 .db-snapshots-list {
@@ -1807,6 +1921,11 @@
 .db-snapshot-type-upload {
   background: rgba(34, 197, 94, 0.15);
   color: #22c55e;
+}
+
+.db-snapshot-type-manual {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
 }
 
 .db-snapshot-preview-meta {

@@ -181,6 +181,8 @@ export interface DescriptionSectionProps {
   onAdminClick: () => void
   isEmpireMode?: boolean
   isFounder?: boolean
+  bestWikiUrl?: string
+  sourceLanguage?: string
 }
 
 export interface MapSectionProps {

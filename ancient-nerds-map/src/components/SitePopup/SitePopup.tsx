@@ -718,6 +718,8 @@ export default function SitePopup({
                 onAdminClick={() => adminMode.enterAdminMode()}
                 isEmpireMode={isEmpireMode}
                 isFounder={isFounder}
+                bestWikiUrl={displaySite.bestWikiUrl}
+                sourceLanguage={displaySite.sourceLanguage}
               />
             )}
 

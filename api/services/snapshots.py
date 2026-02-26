@@ -38,6 +38,7 @@ def create_snapshot(
     created_by: str,
     description: str,
     snapshot_type: str,
+    source_id: str | None = None,
 ) -> str | None:
     """Capture current state of given sites. Returns snapshot_id or None if no rows."""
     if not site_ids:
@@ -57,8 +58,8 @@ def create_snapshot(
 
     db.execute(
         text("""
-            INSERT INTO db_snapshots (id, created_by, description, snapshot_type, row_count)
-            VALUES (:id, :created_by, :description, :snapshot_type, :row_count)
+            INSERT INTO db_snapshots (id, created_by, description, snapshot_type, row_count, source_id)
+            VALUES (:id, :created_by, :description, :snapshot_type, :row_count, :source_id)
         """),
         {
             "id": snapshot_id,
@@ -66,6 +67,7 @@ def create_snapshot(
             "description": description,
             "snapshot_type": snapshot_type,
             "row_count": len(rows),
+            "source_id": source_id,
         },
     )
 
@@ -98,18 +100,74 @@ def create_snapshot(
     return snapshot_id
 
 
-def restore_snapshot(db: Session, snapshot_id: str) -> int:
-    """Restore all rows from a snapshot. Returns count of restored rows."""
-    snapshot_rows = db.execute(
+def create_manual_snapshot(
+    db: Session,
+    source_id: str,
+    created_by: str,
+    description: str,
+) -> dict:
+    """Create a manual snapshot of all sites in the given source.
+
+    Returns {snapshot_id, row_count} or raises if no sites found.
+    """
+    # Get all site IDs for this source
+    rows = db.execute(
+        text("SELECT id::text FROM unified_sites WHERE source_id = :source_id"),
+        {"source_id": source_id},
+    ).fetchall()
+
+    if not rows:
+        return {"snapshot_id": None, "row_count": 0}
+
+    site_ids = [r.id for r in rows]
+
+    snapshot_id = create_snapshot(
+        db,
+        site_ids=site_ids,
+        created_by=created_by,
+        description=description,
+        snapshot_type="manual",
+        source_id=source_id,
+    )
+
+    return {"snapshot_id": snapshot_id, "row_count": len(site_ids)}
+
+
+def restore_snapshot(db: Session, snapshot_id: str, restored_by: str = "system") -> dict:
+    """Restore all rows from a snapshot.
+
+    Creates a new snapshot of the current state first, so the restore
+    itself is undoable. Returns {restored, undo_snapshot_id}.
+    """
+    # Get original snapshot's source_id so the undo snapshot inherits it
+    orig_snap = db.execute(
+        text("SELECT source_id FROM db_snapshots WHERE id::text = :sid"),
+        {"sid": snapshot_id},
+    ).fetchone()
+
+    snap_rows = db.execute(
         text("SELECT site_id::text, old_data FROM snapshot_rows WHERE snapshot_id::text = :sid"),
         {"sid": snapshot_id},
     ).fetchall()
 
-    if not snapshot_rows:
-        return 0
+    if not snap_rows:
+        return {"restored": 0, "undo_snapshot_id": None}
+
+    site_ids = [row.site_id for row in snap_rows]
+    orig_source = orig_snap.source_id if orig_snap else None
+
+    # Snapshot current state BEFORE restoring, so the restore is undoable
+    undo_id = create_snapshot(
+        db,
+        site_ids=site_ids,
+        created_by=restored_by,
+        description=f"Before restore of snapshot (undo)",
+        snapshot_type="edit",
+        source_id=orig_source,
+    )
 
     count = 0
-    for row in snapshot_rows:
+    for row in snap_rows:
         data = row.old_data
         db.execute(
             text("""
@@ -153,8 +211,8 @@ def restore_snapshot(db: Session, snapshot_id: str) -> int:
     db.commit()
     cache_delete_pattern("sites:*")
     cache_delete_pattern("radar:*")
-    logger.info(f"Restored snapshot {snapshot_id}: {count} rows")
-    return count
+    logger.info(f"Restored snapshot {snapshot_id}: {count} rows (undo: {undo_id})")
+    return {"restored": count, "undo_snapshot_id": undo_id}
 
 
 _DIFF_FIELDS = [
@@ -172,7 +230,7 @@ def preview_snapshot(db: Session, snapshot_id: str) -> dict | None:
     # Fetch snapshot metadata
     snap_row = db.execute(
         text("""
-            SELECT id::text, created_at, created_by, description, snapshot_type, row_count
+            SELECT id::text, created_at, created_by, description, snapshot_type, row_count, source_id
             FROM db_snapshots WHERE id::text = :sid
         """),
         {"sid": snapshot_id},
@@ -244,6 +302,7 @@ def preview_snapshot(db: Session, snapshot_id: str) -> dict | None:
         "description": snap_row.description,
         "snapshot_type": snap_row.snapshot_type,
         "row_count": snap_row.row_count,
+        "source_id": snap_row.source_id,
         "sites": sites,
         "changed_count": sum(1 for s in sites if s["status"] == "changed"),
         "unchanged_count": sum(1 for s in sites if s["status"] == "unchanged"),
@@ -251,17 +310,106 @@ def preview_snapshot(db: Session, snapshot_id: str) -> dict | None:
     }
 
 
-def list_snapshots(db: Session, limit: int = 20) -> list[dict]:
-    """List recent snapshots with metadata and affected site names."""
+def site_edit_history(db: Session, site_id: str, limit: int = 20) -> list[dict]:
+    """Return the edit history for a single site from snapshot records.
+
+    Each entry represents one change event: what the values were BEFORE
+    that change was applied, plus the snapshot metadata (when, who, why).
+    """
     rows = db.execute(
         text("""
-            SELECT id::text, created_at, created_by, description, snapshot_type, row_count
-            FROM db_snapshots
-            ORDER BY created_at DESC
+            SELECT
+                sr.old_data,
+                ds.created_at,
+                ds.created_by,
+                ds.description,
+                ds.snapshot_type
+            FROM snapshot_rows sr
+            JOIN db_snapshots ds ON ds.id = sr.snapshot_id
+            WHERE sr.site_id::text = :site_id
+            ORDER BY ds.created_at DESC
             LIMIT :limit
         """),
-        {"limit": limit},
+        {"site_id": site_id, "limit": limit},
     ).fetchall()
+
+    if not rows:
+        return []
+
+    # Build history: each entry shows what changed (old_data[i] → old_data[i-1] or current)
+    # The most recent snapshot's old_data shows values BEFORE the latest edit,
+    # so we compare consecutive snapshots to reconstruct each change.
+    # For the most recent entry, compare old_data vs current DB.
+    current = db.execute(
+        text("""
+            SELECT name, site_type, period_start, period_name,
+                   country, description, source_url, thumbnail_url
+            FROM unified_sites WHERE id::text = :site_id
+        """),
+        {"site_id": site_id},
+    ).fetchone()
+
+    history = []
+    for i, row in enumerate(rows):
+        old = row.old_data
+        # "after" is either the current DB (for most recent) or the old_data of the previous snapshot
+        if i == 0 and current:
+            after = {f: getattr(current, f, None) for f in _DIFF_FIELDS}
+        elif i > 0:
+            after = rows[i - 1].old_data
+        else:
+            after = {}
+
+        changes = []
+        for field in _DIFF_FIELDS:
+            old_val = old.get(field)
+            new_val = after.get(field) if isinstance(after, dict) else after.get(field, None) if hasattr(after, 'get') else None
+            old_str = str(old_val) if old_val is not None else ""
+            new_str = str(new_val) if new_val is not None else ""
+            if old_str != new_str:
+                changes.append({
+                    "field": field,
+                    "before": old_str or None,
+                    "after": new_str or None,
+                })
+
+        history.append({
+            "date": row.created_at.isoformat(),
+            "by": row.created_by,
+            "description": row.description,
+            "type": row.snapshot_type,
+            "changes": changes,
+        })
+
+    return history
+
+
+def list_snapshots(db: Session, limit: int = 20, source_id: str | None = None) -> list[dict]:
+    """List recent snapshots with metadata and affected site names.
+
+    If source_id is given, only returns snapshots for that source.
+    """
+    if source_id:
+        rows = db.execute(
+            text("""
+                SELECT id::text, created_at, created_by, description, snapshot_type, row_count, source_id
+                FROM db_snapshots
+                WHERE source_id = :source_id
+                ORDER BY created_at DESC
+                LIMIT :limit
+            """),
+            {"limit": limit, "source_id": source_id},
+        ).fetchall()
+    else:
+        rows = db.execute(
+            text("""
+                SELECT id::text, created_at, created_by, description, snapshot_type, row_count, source_id
+                FROM db_snapshots
+                ORDER BY created_at DESC
+                LIMIT :limit
+            """),
+            {"limit": limit},
+        ).fetchall()
 
     if not rows:
         return []
@@ -291,6 +439,7 @@ def list_snapshots(db: Session, limit: int = 20) -> list[dict]:
             "description": row.description,
             "snapshot_type": row.snapshot_type,
             "row_count": row.row_count,
+            "source_id": row.source_id,
             "site_names": sites_by_snap.get(row.id, []),
         }
         for row in rows

@@ -9505,6 +9505,21 @@ body.hud-hidden .empire-borders-window {
    Popup Links Section
    ========================================================================== */
 
+.popup-wiki-source-link {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-muted, #888);
+  text-decoration: none;
+  opacity: 0.8;
+  transition: opacity 0.15s;
+}
+.popup-wiki-source-link:hover {
+  opacity: 1;
+  color: var(--primary-blue, #4a9eff);
+  text-decoration: underline;
+}
+
 .popup-links-section {
   flex-shrink: 0;
   margin-top: auto;
