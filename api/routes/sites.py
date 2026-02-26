@@ -309,6 +309,7 @@ async def get_all_sites(
                     us.source_url,
                     us.edited_by,
                     us.updated_at,
+                    us.last_audited,
                     cs.card_description
                 FROM unified_sites us
                 LEFT JOIN card_stats cs ON cs.site_id = us.id
@@ -345,6 +346,8 @@ async def get_all_sites(
                     site["eb"] = row.edited_by
                 if row.updated_at:
                     site["ea"] = row.updated_at.isoformat()
+                if row.last_audited:
+                    site["aud"] = row.last_audited.isoformat()
                 all_sites.append(site)
         except Exception as e:
             logger.warning(f"Database query failed for live sources: {e}")
