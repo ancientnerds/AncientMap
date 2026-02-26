@@ -620,7 +620,7 @@ async def search_sites(
     spaceless = normalized.replace(" ", "")
     spaceless_escaped = spaceless.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
-    # Exact + spaceless match on name_normalized
+    # Single query: exact > spaceless > substring, prefer rows with card_description
     query = text("""
         SELECT
             us.id::text, us.name, us.lat, us.lon, us.source_id, us.site_type,
@@ -629,24 +629,27 @@ async def search_sites(
             CASE
                 WHEN us.name_normalized = :norm THEN 1
                 WHEN replace(us.name_normalized, ' ', '') = :spaceless THEN 2
+                ELSE 3
             END AS rank
         FROM unified_sites us
         LEFT JOIN card_stats cs ON cs.site_id = us.id
         WHERE us.name_normalized = :norm
            OR replace(us.name_normalized, ' ', '') = :spaceless
-        ORDER BY rank, us.name
+           OR us.name_normalized ILIKE :pattern ESCAPE '\\'
+           OR replace(us.name_normalized, ' ', '') ILIKE :spaceless_pattern ESCAPE '\\'
+        ORDER BY (cs.card_description IS NULL), rank, us.name
         LIMIT :limit
     """)
 
     result = db.execute(query, {
         "norm": normalized,
         "spaceless": spaceless,
+        "pattern": f"%{normalized_escaped}%",
+        "spaceless_pattern": f"%{spaceless_escaped}%",
         "limit": limit,
     })
     sites = []
-    seen_ids = set()
     for row in result:
-        seen_ids.add(row.id)
         site = {
             "id": row.id,
             "n": row.name,
@@ -667,50 +670,6 @@ async def search_sites(
         if row.card_description:
             site["cd"] = row.card_description
         sites.append(site)
-
-    # If not enough results, broaden with ILIKE substring match
-    if len(sites) < limit:
-        remaining = limit - len(sites)
-        ilike_query = text("""
-            SELECT
-                us.id::text, us.name, us.lat, us.lon, us.source_id, us.site_type,
-                us.period_start, us.period_name, us.description, us.country, us.source_url,
-                cs.card_description
-            FROM unified_sites us
-            LEFT JOIN card_stats cs ON cs.site_id = us.id
-            WHERE (us.name_normalized ILIKE :pattern ESCAPE '\\'
-                   OR replace(us.name_normalized, ' ', '') ILIKE :spaceless_pattern ESCAPE '\\')
-              AND us.id::text != ALL(:seen)
-            ORDER BY us.name
-            LIMIT :limit
-        """)
-        result2 = db.execute(ilike_query, {
-            "pattern": f"%{normalized_escaped}%",
-            "spaceless_pattern": f"%{spaceless_escaped}%",
-            "seen": list(seen_ids),
-            "limit": remaining,
-        })
-        for row in result2:
-            site = {
-                "id": row.id,
-                "n": row.name,
-                "la": row.lat,
-                "lo": row.lon,
-                "s": row.source_id,
-                "t": row.site_type,
-                "p": row.period_start,
-            }
-            if row.period_name:
-                site["pn"] = row.period_name
-            if row.description:
-                site["d"] = row.description
-            if row.country:
-                site["c"] = row.country
-            if row.source_url:
-                site["u"] = row.source_url
-            if row.card_description:
-                site["cd"] = row.card_description
-            sites.append(site)
 
     return {"count": len(sites), "sites": sites}
 
@@ -852,7 +811,8 @@ async def get_site_detail(
             SELECT us.id::text, us.source_id, us.source_record_id, us.name, us.lat, us.lon,
                    us.site_type, us.period_start, us.period_end, us.period_name,
                    us.country, us.description, us.thumbnail_url, us.source_url, us.raw_data,
-                   cs.card_description
+                   cs.card_description,
+                   cs.best_wiki_url, cs.source_language
             FROM unified_sites us
             LEFT JOIN card_stats cs ON cs.site_id = us.id
             WHERE us.id::text = :site_id
@@ -863,7 +823,8 @@ async def get_site_detail(
             SELECT us.id::text, us.source_id, us.source_record_id, us.name, us.lat, us.lon,
                    us.site_type, us.period_start, us.period_end, us.period_name,
                    us.country, us.description, us.thumbnail_url, us.source_url, us.raw_data,
-                   cs.card_description
+                   cs.card_description,
+                   cs.best_wiki_url, cs.source_language
             FROM unified_sites us
             LEFT JOIN card_stats cs ON cs.site_id = us.id
             WHERE us.name ILIKE :name
@@ -898,6 +859,10 @@ async def get_site_detail(
     }
     if row.card_description:
         resp["cardDescription"] = row.card_description
+    if row.best_wiki_url:
+        resp["bestWikiUrl"] = row.best_wiki_url
+    if row.source_language:
+        resp["sourceLanguage"] = row.source_language
     return resp
 
 
@@ -1268,4 +1233,38 @@ async def batch_upload_sites(
         "inserted": inserted,
         "updated": updated,
         "errors": errors,
+    }
+
+
+# =============================================================================
+# Mark Audited Endpoint
+# =============================================================================
+
+
+class MarkAuditedRequest(BaseModel):
+    """Mark all sites in a source as audited."""
+    source_id: str = Field(..., max_length=50)
+
+
+@router.post("/mark-audited")
+async def mark_sites_audited(
+    body: MarkAuditedRequest,
+    user: DiscordUser = Depends(require_founder),
+    db: Session = Depends(get_db),
+):
+    """
+    Stamp last_audited = NOW() on all sites in a source (founders only).
+
+    Used after an audit pass to record that all sites have been reviewed,
+    even if only a few needed actual changes.
+    """
+    result = db.execute(
+        text("UPDATE unified_sites SET last_audited = NOW() WHERE source_id = :source_id"),
+        {"source_id": body.source_id},
+    )
+    db.commit()
+
+    return {
+        "source_id": body.source_id,
+        "marked": result.rowcount,
     }

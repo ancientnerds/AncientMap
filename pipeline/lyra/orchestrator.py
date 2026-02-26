@@ -1055,6 +1055,10 @@ def _run_migrations(engine) -> None:
             "ALTER TABLE card_stats ALTER COLUMN card_description TYPE VARCHAR(200)"
         ))
 
+        # Audit & enrichment tracking columns
+        conn.execute(text("ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS last_audited TIMESTAMP"))
+        conn.execute(text("ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS last_enriched TIMESTAMP"))
+
         conn.commit()
 
 

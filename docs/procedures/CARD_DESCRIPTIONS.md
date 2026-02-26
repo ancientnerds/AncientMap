@@ -4,7 +4,26 @@ A procedure for generating punchy 200-character card descriptions for all Forgot
 
 ## Execution Procedure
 
-**Step 0 — Check prerequisites**
+**Step 0 — Run site enrichment first**
+
+Before generating descriptions, run the audit & enrichment pipeline to fetch Wikidata metadata and the best Wikipedia articles. See `docs/procedures/AUDIT_ENRICHMENT.md` for the full procedure.
+
+Quick version:
+```bash
+python scripts/audit_enrich.py --phase enrich
+```
+
+Or run each enrichment step manually:
+```bash
+python scripts/export_card_sites.py
+python scripts/enrich_reconcile.py
+python scripts/enrich_fetch_claims.py
+python scripts/enrich_wiki_select.py
+```
+
+This populates `output/enrichment_qids.json`, `output/enrichment_claims.json`, and `output/enrichment_wiki.json` — providing grounded context (dates, heritage status, multilingual wiki extracts) for description generation.
+
+**Step 0b — Check prerequisites**
 
 1. Verify `output/card_sites.json` exists. If not, run: `python scripts/export_card_sites.py`
 2. Verify `card_stats.card_description` column exists (the migration in `orchestrator.py` adds it on deploy; for local dev, run the ALTER TABLE manually if needed).
@@ -32,13 +51,16 @@ Launch **10 agents in parallel** (subagent_type: `general-purpose`), each with:
 - Its own batch input file to read (`output/batch_input_NNN.json`)
 - Its own output file to write (`output/card_descriptions_batch_NNN.json`)
 - The full Tone & Style Guide (copy the guide into the agent prompt — agents don't share context)
+- Enrichment context files: `output/enrichment_claims.json` and `output/enrichment_wiki.json` (if available — agents should look up each site_id for grounded facts: Wikidata inception dates, heritage status, and multilingual wiki extracts to base descriptions on)
 
 Each agent's prompt must include:
 1. Read `output/batch_input_NNN.json`
-2. For each site, write a **max 200-character** description following the Tone & Style Guide
-3. Validate every description is <= 200 chars. If over, shorten it.
-4. Write the result to `output/card_descriptions_batch_NNN.json` as: `{"site_id": "description", ...}`
-5. Print a summary: `Batch NNN complete. Wrote X descriptions.`
+2. For each site, look up enrichment data (Wikidata claims + wiki extract) and use it as primary source material
+3. If enrichment data has a non-English wiki extract, translate key facts into English for the description
+4. Write a **max 200-character** description following the Tone & Style Guide, grounded in the enrichment data
+5. Validate every description is <= 200 chars. If over, shorten it.
+6. Write the result to `output/card_descriptions_batch_NNN.json` as: `{"site_id": "description", ...}`
+7. Print a summary: `Batch NNN complete. Wrote X descriptions.`
 
 **Step 3b — Wait and verify**
 
@@ -68,8 +90,9 @@ After all agents finish:
 
 **Step 5 — Import to DB**
 
-1. Run: `python scripts/import_card_descriptions.py`
-2. Report the result (how many rows updated, total with descriptions).
+1. Run: `python scripts/import_card_descriptions.py` (imports descriptions only)
+2. Run: `python scripts/enrich_import.py` (imports enrichment metadata: QIDs, confidence, wiki URLs, heritage, etc.)
+3. Report the result (how many rows updated, total with descriptions and enrichment metadata).
 
 ---
 

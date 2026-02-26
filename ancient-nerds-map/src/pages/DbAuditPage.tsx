@@ -265,6 +265,7 @@ export default function DbAuditPage() {
   const [uploadFileName, setUploadFileName] = useState('')
   const [uploadTarget, setUploadTarget] = useState('ancient_nerds')
   const [uploading, setUploading] = useState(false)
+  const [uploadMarkAudited, setUploadMarkAudited] = useState(false)
 
   // Qdrant sync
   interface QdrantCollection { pg_count: number; qdrant_count: number; delta: number | null; note?: string }
@@ -847,11 +848,29 @@ export default function DbAuditPage() {
         throw new Error(data.detail || `HTTP ${res.status}`)
       }
       const result = await res.json()
+
+      // Mark all sites in this source as audited if checkbox was checked
+      let auditedCount = 0
+      if (uploadMarkAudited) {
+        const auditRes = await fetch(`${config.api.baseUrl}/sites/mark-audited`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ source_id: uploadTarget }),
+        })
+        if (auditRes.ok) {
+          const auditResult = await auditRes.json()
+          auditedCount = auditResult.marked
+        }
+      }
+
       setShowUploadModal(false)
       setUploadParsed([])
       setUploadFileName('')
+      setUploadMarkAudited(false)
       refreshDbSnapshots()
-      alert(`Upload complete: ${result.inserted} inserted, ${result.updated} updated`)
+      const msg = `Upload complete: ${result.inserted} inserted, ${result.updated} updated` +
+        (auditedCount > 0 ? `\n${auditedCount} sites marked as audited` : '')
+      alert(msg)
       // Re-fetch sites
       discardAllEdits()
     } catch (e: unknown) {
@@ -859,7 +878,7 @@ export default function DbAuditPage() {
     } finally {
       setUploading(false)
     }
-  }, [token, uploadParsed, uploadTarget, refreshDbSnapshots, discardAllEdits])
+  }, [token, uploadParsed, uploadTarget, uploadMarkAudited, refreshDbSnapshots, discardAllEdits])
 
   // Restore a DB snapshot
   const restoreDbSnapshot = useCallback(async (snapshotId: string) => {
@@ -1671,6 +1690,13 @@ export default function DbAuditPage() {
               <div className="db-field">
                 <label>File (CSV, JSON, or GeoJSON)</label>
                 <input type="file" accept=".csv,.json,.geojson" onChange={handleUploadFile} />
+              </div>
+              <div className="db-field">
+                <label className="db-checkbox-label">
+                  <input type="checkbox" checked={uploadMarkAudited} onChange={e => setUploadMarkAudited(e.target.checked)} />
+                  Mark all sites in this source as audited
+                </label>
+                <div className="db-field-hint">Sets <code>last_audited</code> on every site in the target database, not just the uploaded ones.</div>
               </div>
               {uploadParsed.length > 0 && (
                 <>
