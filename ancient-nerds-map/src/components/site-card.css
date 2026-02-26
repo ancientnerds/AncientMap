@@ -229,8 +229,8 @@
 }
 
 .site-card-desc--wiki {
-  font-size: 0.78rem;
-  line-height: 1.4;
+  font-size: 11px;
+  line-height: 1.45;
   display: -webkit-box;
   -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
