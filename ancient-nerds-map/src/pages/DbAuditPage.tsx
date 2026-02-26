@@ -1271,8 +1271,8 @@ export default function DbAuditPage() {
         )}
       </PageHeader>
 
-      {/* Snapshot version panel */}
-      {snapshots.length > 0 && (
+      {/* Snapshot version panel — only when a specific source is selected */}
+      {snapshots.length > 0 && sourceFilter !== 'all' && (
         <div className="db-version-panel">
           <div className="db-version-panel-header">
             <span className="db-version-panel-label">Database Snapshots</span>
@@ -1499,14 +1499,18 @@ export default function DbAuditPage() {
                 <tr key={site.id} className={`db-row ${isPending ? 'db-row-pending' : ''}`}>
                   {/* Name */}
                   <td className="db-td db-td-name">
-                    <span className="db-name-link" onClick={() => openPopup(site)} title="Show popup">{site.n}</span>
-                    <CopyButton text={site.n} title="Copy name" size={11} />
+                    <div className="db-td-flex">
+                      <span className="db-name-link" onClick={() => openPopup(site)} title="Show popup">{site.n}</span>
+                      <CopyButton text={site.n} title="Copy name" size={11} />
+                    </div>
                   </td>
 
                   {/* Coordinates */}
                   <td className="db-td db-td-coords">
-                    <span className="db-coords-link" onClick={() => viewOnGlobe(site.id)} title="View on globe">{site.la.toFixed(4)}, {site.lo.toFixed(4)}</span>
-                    <CopyButton text={`${site.la.toFixed(4)}, ${site.lo.toFixed(4)}`} title="Copy coordinates" size={11} />
+                    <div className="db-td-flex">
+                      <span className="db-coords-link" onClick={() => viewOnGlobe(site.id)} title="View on globe">{site.la.toFixed(4)}, {site.lo.toFixed(4)}</span>
+                      <CopyButton text={`${site.la.toFixed(4)}, ${site.lo.toFixed(4)}`} title="Copy coordinates" size={11} />
+                    </div>
                   </td>
 
                   {/* Type cell */}
@@ -1671,8 +1675,10 @@ export default function DbAuditPage() {
 
                   {/* Site ID */}
                   <td className="db-td db-td-id">
-                    <CopyButton text={site.id} title="Copy site ID" size={11} />
-                    <span className="db-id-text" title={site.id}>{site.id.slice(0, 8)}</span>
+                    <div className="db-td-flex">
+                      <CopyButton text={site.id} title="Copy site ID" size={11} />
+                      <span className="db-id-text" title={site.id}>{site.id.slice(0, 8)}</span>
+                    </div>
                   </td>
 
                   {/* Edit button */}
