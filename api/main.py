@@ -106,6 +106,42 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"[STARTUP] Table creation check failed: {e}")
 
+    # Import card descriptions from JSON (idempotent — runs every startup)
+    try:
+        from pipeline.database import get_session
+        desc_path = Path("public/data/card_descriptions.json")
+        if desc_path.exists():
+            import json as _json
+            with open(desc_path, encoding="utf-8") as _f:
+                _desc_data = _json.load(_f)
+            descriptions = _desc_data.get("descriptions", {})
+            if descriptions:
+                from sqlalchemy import text as _t
+                with get_session() as _s:
+                    updated = 0
+                    for _sid, _desc in descriptions.items():
+                        r = _s.execute(
+                            _t("UPDATE card_stats SET card_description = :desc WHERE site_id = :id AND (card_description IS NULL OR card_description != :desc)"),
+                            {"desc": _desc[:200], "id": _sid},
+                        )
+                        updated += r.rowcount
+                    _s.commit()
+                    if updated:
+                        # Flush sites cache so fresh queries include cd
+                        try:
+                            rc = get_redis_client()
+                            if rc:
+                                keys = rc.keys("sites:*")
+                                if keys:
+                                    rc.delete(*keys)
+                        except Exception:
+                            pass
+                        logger.info(f"[STARTUP] Imported {updated} card descriptions (cache flushed)")
+                    else:
+                        logger.info(f"[STARTUP] Card descriptions already up to date ({len(descriptions)} checked)")
+    except Exception as e:
+        logger.warning(f"[STARTUP] Card description import failed (non-fatal): {e}")
+
     # Migrate any existing JSON contributions into unified_sites
     try:
         from api.routes.contributions import load_contributions

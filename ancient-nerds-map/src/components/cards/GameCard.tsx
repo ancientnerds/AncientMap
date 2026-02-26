@@ -240,7 +240,7 @@ export function GameCard({ card, variant = 'tile', onClick, action, onRemove, in
             text={description || card.card_description || ''}
             maxPx={11}
             minPx={8.5}
-            lines={4}
+            lines={3}
             className="gc-desc"
           />
         )}
