@@ -280,36 +280,38 @@ async def get_all_sites(
     # Load live sources from database
     if live_sources:
         try:
-            conditions = ["source_id = ANY(:sources)"]
+            conditions = ["us.source_id = ANY(:sources)"]
             params: dict[str, object] = {"limit": limit, "skip": skip, "sources": live_sources}
 
             if site_type:
-                conditions.append("site_type = :site_type")
+                conditions.append("us.site_type = :site_type")
                 params["site_type"] = site_type
 
             if period_max is not None:
-                conditions.append("(period_start IS NULL OR period_start <= :period_max)")
+                conditions.append("(us.period_start IS NULL OR us.period_start <= :period_max)")
                 params["period_max"] = period_max
 
             where_clause = " AND ".join(conditions)
 
             query = text(f"""
                 SELECT
-                    id::text,
-                    name,
-                    lat,
-                    lon,
-                    source_id,
-                    site_type,
-                    period_start,
-                    period_name,
-                    description,
-                    thumbnail_url,
-                    country,
-                    source_url,
-                    edited_by,
-                    updated_at
-                FROM unified_sites
+                    us.id::text,
+                    us.name,
+                    us.lat,
+                    us.lon,
+                    us.source_id,
+                    us.site_type,
+                    us.period_start,
+                    us.period_name,
+                    us.description,
+                    us.thumbnail_url,
+                    us.country,
+                    us.source_url,
+                    us.edited_by,
+                    us.updated_at,
+                    cs.card_description
+                FROM unified_sites us
+                LEFT JOIN card_stats cs ON cs.site_id = us.id
                 WHERE {where_clause}
                 OFFSET :skip
                 LIMIT :limit
@@ -337,6 +339,8 @@ async def get_all_sites(
                     site["c"] = row.country
                 if row.source_url:
                     site["u"] = row.source_url
+                if row.card_description:
+                    site["cd"] = row.card_description
                 if row.edited_by and row.edited_by != "initial":
                     site["eb"] = row.edited_by
                 if row.updated_at:
@@ -555,10 +559,12 @@ async def random_sites(
     all_sites = []
     for src, n in allocations.items():
         query = text("""
-            SELECT id::text, name, lat, lon, source_id, site_type,
-                   period_start, period_name, description, country, source_url
-            FROM unified_sites
-            WHERE source_id = :src
+            SELECT us.id::text, us.name, us.lat, us.lon, us.source_id, us.site_type,
+                   us.period_start, us.period_name, us.description, us.country, us.source_url,
+                   cs.card_description
+            FROM unified_sites us
+            LEFT JOIN card_stats cs ON cs.site_id = us.id
+            WHERE us.source_id = :src
             ORDER BY RANDOM()
             LIMIT :n
         """)
@@ -581,6 +587,8 @@ async def random_sites(
                 site["c"] = row.country
             if row.source_url:
                 site["u"] = row.source_url
+            if row.card_description:
+                site["cd"] = row.card_description
             all_sites.append(site)
 
     # Shuffle the combined results so sources are interleaved
@@ -615,16 +623,18 @@ async def search_sites(
     # Exact + spaceless match on name_normalized
     query = text("""
         SELECT
-            id::text, name, lat, lon, source_id, site_type,
-            period_start, period_name, description, country, source_url,
+            us.id::text, us.name, us.lat, us.lon, us.source_id, us.site_type,
+            us.period_start, us.period_name, us.description, us.country, us.source_url,
+            cs.card_description,
             CASE
-                WHEN name_normalized = :norm THEN 1
-                WHEN replace(name_normalized, ' ', '') = :spaceless THEN 2
+                WHEN us.name_normalized = :norm THEN 1
+                WHEN replace(us.name_normalized, ' ', '') = :spaceless THEN 2
             END AS rank
-        FROM unified_sites
-        WHERE name_normalized = :norm
-           OR replace(name_normalized, ' ', '') = :spaceless
-        ORDER BY rank, name
+        FROM unified_sites us
+        LEFT JOIN card_stats cs ON cs.site_id = us.id
+        WHERE us.name_normalized = :norm
+           OR replace(us.name_normalized, ' ', '') = :spaceless
+        ORDER BY rank, us.name
         LIMIT :limit
     """)
 
@@ -654,6 +664,8 @@ async def search_sites(
             site["c"] = row.country
         if row.source_url:
             site["u"] = row.source_url
+        if row.card_description:
+            site["cd"] = row.card_description
         sites.append(site)
 
     # If not enough results, broaden with ILIKE substring match
@@ -661,13 +673,15 @@ async def search_sites(
         remaining = limit - len(sites)
         ilike_query = text("""
             SELECT
-                id::text, name, lat, lon, source_id, site_type,
-                period_start, period_name, description, country, source_url
-            FROM unified_sites
-            WHERE (name_normalized ILIKE :pattern ESCAPE '\\'
-                   OR replace(name_normalized, ' ', '') ILIKE :spaceless_pattern ESCAPE '\\')
-              AND id::text != ALL(:seen)
-            ORDER BY name
+                us.id::text, us.name, us.lat, us.lon, us.source_id, us.site_type,
+                us.period_start, us.period_name, us.description, us.country, us.source_url,
+                cs.card_description
+            FROM unified_sites us
+            LEFT JOIN card_stats cs ON cs.site_id = us.id
+            WHERE (us.name_normalized ILIKE :pattern ESCAPE '\\'
+                   OR replace(us.name_normalized, ' ', '') ILIKE :spaceless_pattern ESCAPE '\\')
+              AND us.id::text != ALL(:seen)
+            ORDER BY us.name
             LIMIT :limit
         """)
         result2 = db.execute(ilike_query, {
@@ -694,6 +708,8 @@ async def search_sites(
                 site["c"] = row.country
             if row.source_url:
                 site["u"] = row.source_url
+            if row.card_description:
+                site["cd"] = row.card_description
             sites.append(site)
 
     return {"count": len(sites), "sites": sites}

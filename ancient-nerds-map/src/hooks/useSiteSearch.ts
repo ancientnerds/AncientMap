@@ -127,7 +127,7 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
       .then(res => res.json())
       .then(data => {
         if (controller.signal.aborted) return
-        const parsed: SiteData[] = (data.sites || []).map((s: { id: string; n: string; la: number; lo: number; s: string; t?: string; p?: number; pn?: string; d?: string; c?: string; u?: string }) => ({
+        const parsed: SiteData[] = (data.sites || []).map((s: { id: string; n: string; la: number; lo: number; s: string; t?: string; p?: number; pn?: string; d?: string; cd?: string; c?: string; u?: string }) => ({
           id: s.id,
           title: s.n,
           coordinates: [s.lo, s.la] as [number, number],
@@ -136,6 +136,7 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
           periodStart: s.p ?? null,
           location: s.c || '',
           description: s.d || '',
+          cardDescription: s.cd,
           sourceId: s.s,
           sourceUrl: s.u,
         }))
