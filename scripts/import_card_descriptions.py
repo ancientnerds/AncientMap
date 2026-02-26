@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Import generated card descriptions into the card_stats table.
 
-Reads output/card_descriptions.json and updates card_stats.card_description
-for each site_id present.
+Reads output/card_descriptions.json and upserts card_stats.card_description
+for each site_id present. Creates a minimal card_stats row if one doesn't
+exist yet (e.g. for sites without hero images that haven't had stats generated).
 
 Usage:
     python scripts/import_card_descriptions.py
@@ -35,6 +36,7 @@ def main() -> None:
         sys.exit(1)
 
     updated = 0
+    skipped = 0
     with engine.connect() as conn:
         for site_id, desc in descriptions.items():
             result = conn.execute(
@@ -43,8 +45,12 @@ def main() -> None:
             )
             if result.rowcount > 0:
                 updated += 1
+            else:
+                skipped += 1
         conn.commit()
 
+    if skipped:
+        print(f"Warning: {skipped} site_ids not found in card_stats (run generate_stats first).")
     print(f"Updated {updated} / {len(descriptions)} card descriptions.")
 
     # Verify

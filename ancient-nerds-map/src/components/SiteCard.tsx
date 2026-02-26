@@ -132,18 +132,21 @@ export function SiteCard({ site, sourceName, sourceColor, onClick, actions, comp
 
 let globeWindow: Window | null = null
 
+/** Navigate to a site on the globe — reuses existing globe tab via postMessage. */
+export function viewOnGlobe(siteId: string) {
+  if (globeWindow && !globeWindow.closed) {
+    globeWindow.postMessage({ type: 'focus-site', siteId }, '*')
+    globeWindow.focus()
+    return
+  }
+  globeWindow = window.open(`/globe.html?focus=${siteId}`, 'ancient-nerds-globe')
+}
+
 export function ViewOnGlobeLink({ siteId }: { siteId: string }) {
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-
-    if (globeWindow && !globeWindow.closed) {
-      globeWindow.postMessage({ type: 'focus-site', siteId }, '*')
-      globeWindow.focus()
-      return
-    }
-
-    globeWindow = window.open(`/globe.html?focus=${siteId}`, 'ancient-nerds-globe')
+    viewOnGlobe(siteId)
   }
 
   return (

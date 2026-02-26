@@ -10,7 +10,7 @@ and bulk-upserts into card_stats.
 import sys
 from collections import Counter
 
-from sqlalchemy import func
+from sqlalchemy import func, text
 
 from api.cardgame.models import CardStats
 from api.cardgame.stats import compute_all_stats
@@ -94,33 +94,51 @@ def _is_unesco(site) -> bool:
     return False
 
 
-def generate_stats() -> None:
-    """Compute stats for card-worthy Ancient Nerds sites.
+def _run_enrichment_migrations(session) -> None:
+    """Add enrichment columns to card_stats if they don't exist."""
+    columns = [
+        ("wikidata_qid", "VARCHAR(20)"),
+        ("confidence_score", "DOUBLE PRECISION"),
+        ("source_language", "VARCHAR(10)"),
+        ("heritage_designation", "TEXT"),
+        ("inception_year", "INTEGER"),
+        ("best_wiki_url", "VARCHAR(500)"),
+        ("commons_image", "VARCHAR(500)"),
+    ]
+    for col_name, col_type in columns:
+        session.execute(text(f"""
+            DO $$
+            BEGIN
+                ALTER TABLE card_stats ADD COLUMN {col_name} {col_type};
+            EXCEPTION
+                WHEN duplicate_column THEN NULL;
+            END $$;
+        """))
+    session.commit()
+    print("[CARDGAME] Enrichment columns ensured on card_stats", flush=True)
 
-    Only sites with ALL required fields become cards:
-    thumbnail, description, period_start, period_name, site_type, country.
+
+def generate_stats() -> None:
+    """Compute stats for all Ancient Nerds sites that have a description.
+
+    Sites with a description get card_stats rows (and thus card descriptions).
+    Missing fields (thumbnail, period, type, country) are handled gracefully
+    by the stat functions with sensible defaults.
     """
     with get_session() as session:
+        _run_enrichment_migrations(session)
+
         sites = (
             session.query(UnifiedSite)
             .filter(
                 UnifiedSite.source_id == "ancient_nerds",
-                UnifiedSite.thumbnail_url.isnot(None),
-                UnifiedSite.thumbnail_url != "",
                 UnifiedSite.description.isnot(None),
                 UnifiedSite.description != "",
-                UnifiedSite.period_start.isnot(None),
-                UnifiedSite.period_name.isnot(None),
-                UnifiedSite.period_name != "",
-                UnifiedSite.site_type.isnot(None),
-                UnifiedSite.site_type != "",
-                UnifiedSite.country.isnot(None),
-                UnifiedSite.country != "",
             )
             .all()
         )
         total = len(sites)
-        print(f"[CARDGAME] Found {total} card-worthy sites (with image, desc, period, type, country)", flush=True)
+        print(f"[CARDGAME] Found {total} Ancient Nerds sites with descriptions", flush=True)
 
         if total == 0:
             print("[CARDGAME] No sites found. Exiting.", flush=True)

@@ -37,6 +37,8 @@ export interface SiteData {
   coordinates: [number, number]
   cardDescription?: string
   altNames?: string[]
+  bestWikiUrl?: string
+  sourceLanguage?: string
 }
 
 // Period list derived from centralized PERIOD_COLORS
@@ -86,6 +88,8 @@ export async function fetchSites(): Promise<SiteData[]> {
     sourceId: site.sourceId,
     coordinates: [site.lon, site.lat] as [number, number],
     altNames: site.altNames,
+    bestWikiUrl: site.bestWikiUrl,
+    sourceLanguage: site.sourceLanguage,
   }))
 }
 
@@ -137,6 +141,8 @@ export function getCurrentSites(): SiteData[] {
     sourceId: site.sourceId,
     coordinates: [site.lon, site.lat] as [number, number],
     altNames: site.altNames,
+    bestWikiUrl: site.bestWikiUrl,
+    sourceLanguage: site.sourceLanguage,
   }))
 }
 

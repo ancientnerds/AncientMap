@@ -11,7 +11,14 @@ export function DescriptionSection({
   onAdminClick,
   isEmpireMode = false,
   isFounder = false,
+  bestWikiUrl,
+  sourceLanguage,
 }: DescriptionSectionProps) {
+  // Extract domain for source attribution (e.g. "de.wikipedia.org")
+  const wikiSourceDomain = bestWikiUrl && sourceLanguage && sourceLanguage !== 'en'
+    ? (() => { try { return new URL(bestWikiUrl).hostname } catch { return null } })()
+    : null
+
   return (
     <>
       {rawDataLoading && isEmpireMode ? (
@@ -21,6 +28,19 @@ export function DescriptionSection({
       ) : isEmpireMode ? (
         <p className="popup-description empty">No description available</p>
       ) : null}
+
+      {/* Source attribution for non-English wiki sources */}
+      {wikiSourceDomain && bestWikiUrl && (
+        <a
+          href={bestWikiUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="popup-wiki-source-link"
+          title={`Description sourced from ${wikiSourceDomain}`}
+        >
+          Source: {wikiSourceDomain} →
+        </a>
+      )}
 
       {/* Source-specific metadata (earthquakes, volcanoes, etc.) */}
       {!rawDataLoading && (

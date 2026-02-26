@@ -209,7 +209,9 @@ class StaticExporter:
                     us.description,
                     us.thumbnail_url,
                     us.source_url,
-                    cs.card_description
+                    cs.card_description,
+                    cs.best_wiki_url,
+                    cs.source_language
                 FROM unified_sites us
                 LEFT JOIN card_stats cs ON cs.site_id = us.id
                 ORDER BY us.source_id, us.name
@@ -245,6 +247,9 @@ class StaticExporter:
                     site["u"] = row.source_url  # source URL
                 if row.card_description:
                     site["cd"] = row.card_description  # card description
+                if row.best_wiki_url and row.source_language and row.source_language != "en":
+                    site["wu"] = row.best_wiki_url  # wiki URL (non-English source)
+                    site["sl"] = row.source_language  # source language
 
                 # Alternate names for search (Latin-script only, max 10)
                 site_alt = alt_names_map.get(str(row.id))

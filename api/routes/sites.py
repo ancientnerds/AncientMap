@@ -685,11 +685,33 @@ async def search_sites(
 @router.get("/snapshots")
 async def get_snapshots(
     limit: int = Query(20, ge=1, le=100),
+    source_id: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
-    """List recent database snapshots."""
+    """List recent database snapshots, optionally filtered by source."""
     from api.services.snapshots import list_snapshots
-    return {"snapshots": list_snapshots(db, limit)}
+    return {"snapshots": list_snapshots(db, limit, source_id=source_id)}
+
+
+@router.post("/snapshots/create")
+async def create_manual_snapshot_endpoint(
+    source_id: str = Query(...),
+    description: str = Query("Manual snapshot"),
+    _user: DiscordUser = Depends(require_founder),
+    db: Session = Depends(get_db),
+):
+    """Create a manual snapshot of all sites in a source (founders only)."""
+    from api.services.snapshots import create_manual_snapshot
+
+    valid_sources = {"ancient_nerds", "lyra", "ancient_nerds_community"}
+    if source_id not in valid_sources:
+        raise HTTPException(status_code=400, detail=f"Invalid source_id. Must be one of: {', '.join(sorted(valid_sources))}")
+
+    result = create_manual_snapshot(db, source_id, created_by=_user.username, description=description)
+    if not result["snapshot_id"]:
+        raise HTTPException(status_code=404, detail=f"No sites found for source '{source_id}'")
+
+    return result
 
 
 @router.get("/snapshots/{snapshot_id}/preview")
@@ -715,14 +737,30 @@ async def restore_snapshot_endpoint(
     """Restore all rows from a snapshot (founders only)."""
     from api.services.snapshots import restore_snapshot
 
-    count = restore_snapshot(db, snapshot_id)
-    if count == 0:
+    result = restore_snapshot(db, snapshot_id, restored_by=_user.username)
+    if result["restored"] == 0:
         raise HTTPException(status_code=404, detail="Snapshot not found or empty")
 
     global _static_sites_cache
     _static_sites_cache = None
 
-    return {"restored": count, "snapshot_id": snapshot_id}
+    return {
+        "restored": result["restored"],
+        "snapshot_id": snapshot_id,
+        "undo_snapshot_id": result["undo_snapshot_id"],
+    }
+
+
+@router.get("/{site_id}/history")
+async def get_site_edit_history(
+    site_id: str,
+    db: Session = Depends(get_db),
+):
+    """Get the edit history for a single site from snapshot records."""
+    from api.services.snapshots import site_edit_history
+
+    history = site_edit_history(db, site_id)
+    return {"site_id": site_id, "history": history}
 
 
 @router.get("/{site_id}/alternates")
@@ -1034,12 +1072,20 @@ async def batch_update_sites(
 
     site_ids = [u.id for u in updates]
 
+    # Determine source_id from the edited sites (use first site's source)
+    src_row = db.execute(
+        text("SELECT source_id FROM unified_sites WHERE id::text = :sid LIMIT 1"),
+        {"sid": site_ids[0]},
+    ).fetchone()
+    edit_source = src_row.source_id if src_row else None
+
     # Create snapshot before changes
     snapshot_id = create_snapshot(
         db, site_ids,
         created_by=edited_by,
         description=f"Edited {len(updates)} site{'s' if len(updates) != 1 else ''}",
         snapshot_type="edit",
+        source_id=edit_source,
     )
 
     total_synced = 0
@@ -1128,6 +1174,7 @@ class BatchUploadRequest(BaseModel):
     """Request body for batch upload."""
     sites: list[ParsedSitePayload]
     target_source: str
+    create_snapshot: bool = True
 
 
 @router.post("/batch-upload")
@@ -1158,12 +1205,13 @@ async def batch_upload_sites(
     # Separate inserts from updates
     update_ids = [s.existing_id for s in sites if s.existing_id]
     snapshot_id = None
-    if update_ids:
+    if update_ids and body.create_snapshot:
         snapshot_id = create_snapshot(
             db, update_ids,
             created_by=edited_by,
             description=f"Upload to {target_source} ({len(sites)} rows, {len(update_ids)} updates)",
             snapshot_type="upload",
+            source_id=target_source,
         )
 
     inserted = 0

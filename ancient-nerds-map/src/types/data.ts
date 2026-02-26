@@ -88,6 +88,8 @@ export interface Site {
   image?: string | null  // thumbnail URL from API
   altNames?: string[]    // alternate names for search
   cardDescription?: string  // short card description from card_stats
+  bestWikiUrl?: string    // best Wikipedia article URL (from enrichment)
+  sourceLanguage?: string // source language of best wiki article (e.g. "de")
 }
 
 /** sites/index.json file format */
