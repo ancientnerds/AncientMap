@@ -2766,3 +2766,31 @@
     min-width: 150px;
   }
 }
+
+/* Toast notification */
+.db-toast {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--primary-red);
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 0.9rem;
+  z-index: 9999;
+  cursor: pointer;
+  animation: db-toast-in 0.25s ease-out, db-toast-out 0.4s 3.5s ease-in forwards;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+@keyframes db-toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes db-toast-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}

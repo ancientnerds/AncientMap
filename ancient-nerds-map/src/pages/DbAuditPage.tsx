@@ -271,6 +271,15 @@ export default function DbAuditPage() {
   const [uploadMarkAudited, setUploadMarkAudited] = useState(false)
   const [uploadCreateSnapshot, setUploadCreateSnapshot] = useState(true)
 
+  // Toast notification
+  const [statusMsg, setStatusMsg] = useState('')
+  const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const showToast = useCallback((msg: string) => {
+    setStatusMsg(msg)
+    if (statusTimer.current) clearTimeout(statusTimer.current)
+    statusTimer.current = setTimeout(() => setStatusMsg(''), 4000)
+  }, [])
+
   // Qdrant sync
   interface QdrantCollection { pg_count: number; qdrant_count: number; delta: number | null; note?: string }
   interface QdrantReindex { running: boolean; started_at: string | null; collection: string | null; last_completed_at: string | null; last_duration_seconds: number | null; last_result: string | null }
@@ -321,18 +330,23 @@ export default function DbAuditPage() {
   const versionScroll = useScrollArrows()
   const statsScroll = useScrollArrows()
 
+  // Refresh file snapshot manifest
+  const refreshFileSnapshots = useCallback(async () => {
+    try {
+      const res = await fetch(`${config.api.baseUrl}/snapshots/?${CACHE_BUSTER}`)
+      if (res.ok) {
+        const data = await res.json()
+        setSnapshots(data.snapshots || [])
+      }
+    } catch {
+      // Snapshots are optional
+    }
+  }, [])
+
   // Fetch snapshot manifest + active pins on mount
   useEffect(() => {
     (async () => {
-      try {
-        const res = await fetch(`${config.api.baseUrl}/snapshots/?${CACHE_BUSTER}`)
-        if (res.ok) {
-          const data = await res.json()
-          setSnapshots(data.snapshots || [])
-        }
-      } catch {
-        // Snapshots are optional
-      }
+      await refreshFileSnapshots()
       try {
         const res = await fetch(`${config.api.baseUrl}/snapshots/pins?${CACHE_BUSTER}`)
         if (res.ok) {
@@ -347,7 +361,7 @@ export default function DbAuditPage() {
         // Pins are optional
       }
     })()
-  }, [])
+  }, [refreshFileSnapshots])
 
   // Fetch DB snapshots (undo history)
   const refreshDbSnapshots = useCallback(async () => {
@@ -822,13 +836,14 @@ export default function DbAuditPage() {
       setPendingEdits(new Map())
       setShowReviewModal(false)
       refreshDbSnapshots()
-      alert(`Committed ${result.updated} edits. Snapshot: ${result.snapshot_id?.slice(0, 8)}`)
+      refreshFileSnapshots()
+      showToast(`Committed ${result.updated} edits. Snapshot: ${result.snapshot_id?.slice(0, 8)}`)
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Commit failed')
     } finally {
       setCommitting(false)
     }
-  }, [token, pendingEdits, refreshDbSnapshots])
+  }, [token, pendingEdits, refreshDbSnapshots, refreshFileSnapshots, showToast])
 
   // Upload file handler
   // Shared file processing for both input and drag & drop
@@ -942,17 +957,19 @@ export default function DbAuditPage() {
       setUploadMarkAudited(false)
       setUploadCreateSnapshot(true)
       refreshDbSnapshots()
+      refreshFileSnapshots()
       const msg = `Upload complete: ${result.inserted} inserted, ${result.updated} updated` +
-        (auditedCount > 0 ? `\n${auditedCount} sites marked as audited` : '')
-      alert(msg)
-      // Re-fetch sites
-      discardAllEdits()
+        (auditedCount > 0 ? ` — ${auditedCount} sites marked as audited` : '')
+      showToast(msg)
+      // Re-fetch sites (skip discardAllEdits — it shows a confirm dialog)
+      setPendingEdits(new Map())
+      setSourceVersions(v => ({ ...v }))
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Upload failed')
     } finally {
       setUploading(false)
     }
-  }, [token, uploadParsed, uploadTarget, uploadMarkAudited, refreshDbSnapshots, discardAllEdits])
+  }, [token, uploadParsed, uploadTarget, uploadMarkAudited, refreshDbSnapshots, refreshFileSnapshots, showToast])
 
   // Fetch edit history for a site
   const fetchSiteHistory = useCallback(async (siteId: string, siteName: string) => {
@@ -1125,6 +1142,10 @@ export default function DbAuditPage() {
 
   return (
     <div className="db-page">
+      {/* Toast notification */}
+      {statusMsg && (
+        <div className="db-toast" onClick={() => setStatusMsg('')}>{statusMsg}</div>
+      )}
       {/* Header */}
       <PageHeader
         hideLyra
