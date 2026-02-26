@@ -132,7 +132,7 @@ const MOCKUP_CARDS: MockupCardExt[] = [
     bonuses: { fortification: 2, cultural_influence: 1, legacy: 2 },
     typeBadgeColor: '#e6b800', periodBadgeColor: '#ff0000',
     coords: '37.2233\u00b0 N, 38.9224\u00b0 E',
-    description: 'Massive stone pillars carved with animal reliefs form the world\u2019s oldest known temple complex, predating agriculture itself by millennia.',
+    description: 'Massive carved stone pillars erected in the 10th\u20138th millennium BC by people who hadn\u2019t invented farming yet. The oldest known monumental architecture on Earth.',
     dupsFilled: 0,
   },
   {
@@ -145,7 +145,7 @@ const MOCKUP_CARDS: MockupCardExt[] = [
     bonuses: { antiquity: 1, cultural_influence: 1, mystery: 1, legacy: 1 },
     typeBadgeColor: '#dd1111', periodBadgeColor: '#ffdd00',
     coords: '13.1631\u00b0 S, 72.5450\u00b0 W',
-    description: 'An Inca citadel perched at 2,430 m in the Andes. The "Lost City of the Incas" remains the most iconic symbol of Inca civilization.',
+    description: 'A 15th-century Inca citadel at 2,430 metres, built from polished dry-stone walls without mortar. Its Intihuatana stone was precisely carved to track the sun through the solstices.',
     dupsFilled: 9,
   },
   {
@@ -158,7 +158,7 @@ const MOCKUP_CARDS: MockupCardExt[] = [
     bonuses: { antiquity: 1, cultural_influence: 1, legacy: 1 },
     typeBadgeColor: '#ffc300', periodBadgeColor: '#ff4400',
     coords: '25.7188\u00b0 N, 32.6573\u00b0 E',
-    description: 'Egypt\u2019s largest temple complex, built over two millennia near Luxor. A forest of towering columns and obelisks honoring Amun-Ra.',
+    description: 'A vast temple complex built over 2,000 years, from 1971 BC to the Ptolemaic era. Its Hypostyle Hall has 134 columns across 5,000 square metres.',
     dupsFilled: 5,
   },
   {
@@ -184,7 +184,7 @@ const MOCKUP_CARDS: MockupCardExt[] = [
     bonuses: { cultural_influence: 1 },
     typeBadgeColor: '#ff5500', periodBadgeColor: '#ff0000',
     coords: '35.2981\u00b0 N, 25.1631\u00b0 E',
-    description: 'Heart of the Minoan civilization on Crete, famed for its labyrinthine palace and the legend of the Minotaur.',
+    description: 'The Palace of Minos -- a labyrinthine complex that served as Minoan religious and administrative center. Occupied from 8000 BC, it inspired the Minotaur myth.',
     dupsFilled: 1,
   },
   {
@@ -197,7 +197,7 @@ const MOCKUP_CARDS: MockupCardExt[] = [
     bonuses: { cultural_influence: 1 },
     typeBadgeColor: '#ff5500', periodBadgeColor: '#ffcc00',
     coords: '20.3594\u00b0 N, 89.7714\u00b0 W',
-    description: 'A Classic Maya city in Yucat\u00e1n renowned for its ornate Puuc-style architecture, including the towering Pyramid of the Magician.',
+    description: 'A major Maya city in the Puuc style, with the Pyramid of the Magician rising in an unusual elliptical shape. The Governor\u2019s Palace contains 20,000 individually carved stone elements.',
     dupsFilled: 2,
   },
   {
@@ -209,7 +209,7 @@ const MOCKUP_CARDS: MockupCardExt[] = [
     category_group: 'Burial & Death', civilization: null, star_level: 0, card_xp: 0,
     typeBadgeColor: '#8833dd', periodBadgeColor: '#ff2200',
     coords: '53.6947\u00b0 N, 6.4756\u00b0 W',
-    description: 'A 5,200-year-old passage tomb in Ireland\u2019s Boyne Valley, older than the pyramids, aligned to the winter solstice sunrise.',
+    description: 'A 3200 BC passage tomb older than Stonehenge and the Egyptian pyramids. On the winter solstice, sunlight pierces a roof box and illuminates the inner chamber.',
     dupsFilled: 1,
   },
   {
@@ -221,7 +221,7 @@ const MOCKUP_CARDS: MockupCardExt[] = [
     category_group: 'Megalithic', civilization: null, star_level: 0, card_xp: 0,
     typeBadgeColor: '#0066bb', periodBadgeColor: '#ff8800',
     coords: '40.7508\u00b0 N, 14.4869\u00b0 E',
-    description: 'The oldest surviving Roman amphitheatre, entombed by Vesuvius in 79 AD and preserved beneath volcanic ash for nearly two millennia.',
+    description: 'Completed around 70 BC, this is among the oldest stone amphitheatres in the Roman world. A 59 AD riot between locals and visitors from Nuceria killed dozens; Nero banned events here for a decade.',
     dupsFilled: 0,
   },
 ]
