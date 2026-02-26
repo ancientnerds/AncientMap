@@ -966,13 +966,14 @@ export default function DbAuditPage() {
         throw new Error(data.detail || `HTTP ${res.status}`)
       }
       setSnapshotPreview(null)
-      discardAllEdits()
+      setPendingEdits(new Map())
+      setSourceVersions(v => ({ ...v }))
       refreshDbSnapshots()
     } catch (e: unknown) {
       setSnapshotPreview(null)
       alert(e instanceof Error ? e.message : 'Restore failed')
     }
-  }, [token, discardAllEdits, refreshDbSnapshots])
+  }, [token, refreshDbSnapshots])
 
   // Diff: open compare modal with defaults
   const openDiffModal = useCallback(() => {
