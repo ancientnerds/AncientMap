@@ -7,7 +7,7 @@
 .meta-badge {
   display: inline-block;
   border: 1px solid;
-  border-radius: 12px;
+  border-radius: 3px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   font-weight: 500;
@@ -29,7 +29,7 @@
 .meta-badge-lg {
   font-size: 11px;
   padding: 4px 10px;
-  border-radius: 12px;
+  border-radius: 3px;
   transform: translateZ(0);
 }
 
