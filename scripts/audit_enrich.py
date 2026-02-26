@@ -11,21 +11,28 @@ Flow:
   upload  → (Manual) Open db.html, upload the package, auto-snapshot created
 
 Waves:
-  0: Mechanical fixes (deterministic, no LLM)
-  1: Wikidata enrichment pipeline (HTTP, no LLM)
+  0: Mechanical fixes + country backfill (deterministic, no LLM)
+  1: Wikidata enrichment pipeline + card_stats import (HTTP, no LLM)
+  Apply: Write enrichment data back to unified_sites (JSON → DB)
+  Images: Download wiki images from Wikimedia Commons (long-running)
   2: Agent verification & gap fill (prepare batches for Claude Code agents)
   3: Card descriptions (delegated to CARD_DESCRIPTIONS.md procedure)
 
 Usage:
     python scripts/audit_enrich.py                          # Full run: sync + waves + package
     python scripts/audit_enrich.py --mode full              # Force re-audit everything
+    python scripts/audit_enrich.py --mode full --skip-images  # Full run, skip image download
     python scripts/audit_enrich.py --phase sync             # Only: fetch API → local DB
     python scripts/audit_enrich.py --phase mechanical       # Only Wave 0
     python scripts/audit_enrich.py --phase enrich           # Only Wave 1
+    python scripts/audit_enrich.py --phase apply            # Only: apply enrichment → unified_sites
+    python scripts/audit_enrich.py --phase images           # Only: download wiki images
     python scripts/audit_enrich.py --phase verify           # Only Wave 2 (prepare agent batches)
     python scripts/audit_enrich.py --phase merge            # Merge agent results → DB
     python scripts/audit_enrich.py --phase package          # Only: export cleaned DB for db.html upload
     python scripts/audit_enrich.py --phase export           # Only: re-export static JSON
+    python scripts/audit_enrich.py --limit 3                # Test with 3 random sites
+    python scripts/audit_enrich.py --limit 3 --skip-images  # Test without image download
 
     python scripts/audit_enrich.py --api-url https://ancientnerds.com  # Use production API
 """
@@ -45,6 +52,8 @@ from sqlalchemy import text
 
 from pipeline.database import engine
 from pipeline.normalizers.site_type import normalize_site_type
+from pipeline.site_images.wikimedia_fallback import get_commons_thumb_url
+from pipeline.utils.country_lookup import lookup_country
 from pipeline.utils.text import categorize_period
 
 OUTPUT_DIR = Path(__file__).parent.parent / "output"
@@ -314,9 +323,14 @@ def run_mechanical_fixes(sites: list[dict]) -> dict:
     stats = {
         "site_type_normalized": 0,
         "period_name_recomputed": 0,
+        "country_filled": 0,
         "total_sites": len(sites),
     }
     sql_statements = []
+
+    def _sql_str(v: str) -> str:
+        """Escape single quotes for SQL log (double them per SQL standard)."""
+        return "'" + v.replace("'", "''") + "'"
 
     with engine.connect() as conn:
         # --- Site type normalization ---
@@ -329,8 +343,8 @@ def run_mechanical_fixes(sites: list[dict]) -> dict:
             canonical = normalize_site_type(raw)
             if canonical != raw:
                 stmt = (
-                    f"UPDATE unified_sites SET site_type = '{canonical}' "
-                    f"WHERE site_type = '{raw}';"
+                    f"UPDATE unified_sites SET site_type = {_sql_str(canonical)} "
+                    f"WHERE site_type = {_sql_str(raw)};"
                 )
                 sql_statements.append(stmt)
                 result = conn.execute(
@@ -351,9 +365,9 @@ def run_mechanical_fixes(sites: list[dict]) -> dict:
             expected = categorize_period(row.period_start)
             if expected and expected != row.period_name:
                 stmt = (
-                    f"UPDATE unified_sites SET period_name = '{expected}' "
+                    f"UPDATE unified_sites SET period_name = {_sql_str(expected)} "
                     f"WHERE id = '{row.site_id}' "
-                    f"AND (period_name IS NULL OR period_name = '{row.period_name or ''}');"
+                    f"AND (period_name IS NULL OR period_name = {_sql_str(row.period_name or '')});"
                 )
                 sql_statements.append(stmt)
                 conn.execute(
@@ -369,6 +383,27 @@ def run_mechanical_fixes(sites: list[dict]) -> dict:
                     },
                 )
                 stats["period_name_recomputed"] += 1
+
+        # --- Country backfill from coordinates ---
+        rows = conn.execute(text("""
+            SELECT id::text AS site_id, lat, lon
+            FROM unified_sites
+            WHERE country IS NULL AND lat IS NOT NULL AND lon IS NOT NULL
+        """)).fetchall()
+
+        if rows:
+            print(f"  Country backfill: checking {len(rows)} sites with NULL country...", flush=True)
+        for row in rows:
+            country = lookup_country(row.lat, row.lon)
+            if country:
+                conn.execute(
+                    text("UPDATE unified_sites SET country = :country WHERE id = :sid"),
+                    {"country": country, "sid": row.site_id},
+                )
+                sql_statements.append(
+                    f"UPDATE unified_sites SET country = {_sql_str(country)} WHERE id = '{row.site_id}';"
+                )
+                stats["country_filled"] += 1
 
         conn.commit()
 
@@ -438,6 +473,7 @@ def run_enrichment_pipeline(card_sites: list[dict] | None = None) -> dict:
         ("Reconcile QIDs", reconcile_cmd),
         ("Fetch claims", [sys.executable, "scripts/enrich_fetch_claims.py"]),
         ("Wiki selection", [sys.executable, "scripts/enrich_wiki_select.py"]),
+        ("Import to card_stats", [sys.executable, "scripts/enrich_import.py"]),
     ]
     # In normal mode, export_card_sites runs first
     if card_sites is None:
@@ -476,6 +512,236 @@ def run_enrichment_pipeline(card_sites: list[dict] | None = None) -> dict:
 
     print(f"\n[WAVE 1] Enrichment pipeline complete", flush=True)
     return stats
+
+
+# =============================================================================
+# Apply Enrichment to unified_sites
+# =============================================================================
+
+
+def apply_enrichment() -> dict:
+    """Apply Wikidata enrichment data back to unified_sites.
+
+    Reads enrichment JSONs produced by Wave 1 and fills NULL fields.
+    Only uses high-confidence matches (>= 0.8). Never overwrites existing data.
+    Sets edited_by = 'audit_enrich' for tracking.
+    """
+    MIN_CONFIDENCE = 0.8
+
+    # Load enrichment JSONs
+    qids: dict[str, dict] = {}
+    claims: dict[str, dict] = {}
+    wiki: dict[str, dict] = {}
+
+    qids_path = OUTPUT_DIR / "enrichment_qids.json"
+    if qids_path.exists():
+        with open(qids_path, encoding="utf-8") as f:
+            qids = json.load(f).get("matches", {})
+
+    claims_path = OUTPUT_DIR / "enrichment_claims.json"
+    if claims_path.exists():
+        with open(claims_path, encoding="utf-8") as f:
+            claims = json.load(f).get("claims", {})
+
+    wiki_path = OUTPUT_DIR / "enrichment_wiki.json"
+    if wiki_path.exists():
+        with open(wiki_path, encoding="utf-8") as f:
+            wiki = json.load(f).get("articles", {})
+
+    if not qids:
+        print("[APPLY] No QID matches found. Skipping.", flush=True)
+        return {"skipped": "no_qids"}
+
+    # Filter to high-confidence matches
+    hc_site_ids = {
+        sid for sid, match in qids.items()
+        if match.get("confidence", 0) >= MIN_CONFIDENCE
+    }
+    print(f"[APPLY] {len(hc_site_ids)} sites with confidence >= {MIN_CONFIDENCE}", flush=True)
+
+    stats = {
+        "period_start_filled": 0,
+        "period_name_filled": 0,
+        "thumbnail_url_filled": 0,
+        "source_url_filled": 0,
+        "description_filled": 0,
+        "country_filled": 0,
+    }
+    change_log: list[dict] = []
+
+    with engine.connect() as conn:
+        for site_id in hc_site_ids:
+            # Fetch current values for this site
+            row = conn.execute(
+                text("""
+                    SELECT period_start, period_name, thumbnail_url,
+                           source_url, description, country
+                    FROM unified_sites WHERE id = :sid
+                """),
+                {"sid": site_id},
+            ).fetchone()
+
+            if not row:
+                continue
+
+            updates: dict[str, object] = {}
+            site_claims = claims.get(site_id, {})
+            site_wiki = wiki.get(site_id, {})
+
+            # period_start from P571 inception
+            if row.period_start is None and site_claims.get("inception") is not None:
+                updates["period_start"] = site_claims["inception"]
+                change_log.append({
+                    "site_id": site_id,
+                    "field": "period_start",
+                    "old": None,
+                    "new": site_claims["inception"],
+                    "source": "wikidata_P571",
+                })
+                stats["period_start_filled"] += 1
+
+            # period_name recomputation (after period_start fill)
+            effective_period_start = updates.get("period_start", row.period_start)
+            if effective_period_start is not None and row.period_name is None:
+                new_period_name = categorize_period(effective_period_start)
+                if new_period_name:
+                    updates["period_name"] = new_period_name
+                    change_log.append({
+                        "site_id": site_id,
+                        "field": "period_name",
+                        "old": None,
+                        "new": new_period_name,
+                        "source": "computed_from_period_start",
+                    })
+                    stats["period_name_filled"] += 1
+
+            # thumbnail_url from P18 commons_image
+            if row.thumbnail_url is None and site_claims.get("commons_image"):
+                thumb_url = get_commons_thumb_url(site_claims["commons_image"], width=400)
+                updates["thumbnail_url"] = thumb_url
+                change_log.append({
+                    "site_id": site_id,
+                    "field": "thumbnail_url",
+                    "old": None,
+                    "new": thumb_url,
+                    "source": "wikidata_P18",
+                })
+                stats["thumbnail_url_filled"] += 1
+
+            # source_url from wiki article URL
+            if row.source_url is None and site_wiki.get("url"):
+                updates["source_url"] = site_wiki["url"]
+                change_log.append({
+                    "site_id": site_id,
+                    "field": "source_url",
+                    "old": None,
+                    "new": site_wiki["url"],
+                    "source": "wikipedia_article",
+                })
+                stats["source_url_filled"] += 1
+
+            # description from Wikipedia extract (first 500 chars)
+            if row.description is None and site_wiki.get("extract"):
+                desc = site_wiki["extract"][:500]
+                updates["description"] = desc
+                change_log.append({
+                    "site_id": site_id,
+                    "field": "description",
+                    "old": None,
+                    "new": desc,
+                    "source": "wikipedia_extract",
+                })
+                stats["description_filled"] += 1
+
+            # country from P17 (fallback when reverse geocoding missed it)
+            if row.country is None and site_claims.get("country"):
+                updates["country"] = site_claims["country"]
+                change_log.append({
+                    "site_id": site_id,
+                    "field": "country",
+                    "old": None,
+                    "new": site_claims["country"],
+                    "source": "wikidata_P17",
+                })
+                stats["country_filled"] += 1
+
+            if not updates:
+                continue
+
+            # Build UPDATE query
+            updates["edited_by"] = "audit_enrich"
+            set_parts = []
+            params: dict[str, object] = {"sid": site_id}
+            for col, val in updates.items():
+                set_parts.append(f"{col} = :{col}")
+                params[col] = val
+
+            conn.execute(
+                text(f"UPDATE unified_sites SET {', '.join(set_parts)} WHERE id = :sid"),
+                params,
+            )
+
+        conn.commit()
+
+    # Write change log
+    log_path = OUTPUT_DIR / "audit_apply_log.json"
+    log_data = {
+        "applied_at": datetime.now(timezone.utc).isoformat(),
+        "min_confidence": MIN_CONFIDENCE,
+        "stats": stats,
+        "changes": change_log,
+    }
+    with open(log_path, "w", encoding="utf-8") as f:
+        json.dump(log_data, f, indent=2, ensure_ascii=False)
+
+    print(f"[APPLY] Enrichment applied:", flush=True)
+    for key, val in stats.items():
+        if val > 0:
+            print(f"  {key}: {val}", flush=True)
+    print(f"  Change log: {log_path} ({len(change_log)} changes)", flush=True)
+
+    return stats
+
+
+# =============================================================================
+# Wiki Image Download
+# =============================================================================
+
+
+def run_wiki_images() -> dict:
+    """Download wiki images for sites with Wikidata matches.
+
+    Calls wiki_image_downloader.py with --parallel 1 (mandatory — parallel
+    execution hits Wikimedia 429 rate limits).
+    """
+    project_root = Path(__file__).parent.parent
+
+    print("\n[IMAGES] Starting wiki image download (sequential)...", flush=True)
+    print("  This is long-running (~2-4 hours for 5000 sites)", flush=True)
+
+    cmd = [
+        sys.executable, "-m", "pipeline.wiki_image_downloader",
+    ]
+
+    result = subprocess.run(
+        cmd,
+        cwd=str(project_root),
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        print(f"  ERROR: Wiki image download failed (exit code {result.returncode})", flush=True)
+        if result.stderr:
+            print(f"  stderr: {result.stderr[:500]}", flush=True)
+        return {"status": "FAILED"}
+
+    lines = result.stdout.strip().split("\n")
+    for line in lines[-5:]:
+        print(f"  {line}", flush=True)
+
+    print("[IMAGES] Complete", flush=True)
+    return {"status": "OK"}
 
 
 # =============================================================================
@@ -614,6 +880,11 @@ def merge_results() -> dict:
     with open(manifest_path, encoding="utf-8") as f:
         manifest = json.load(f)
 
+    ALLOWED_MERGE_FIELDS = frozenset({
+        "name", "site_type", "period_start", "period_end", "period_name",
+        "country", "description", "source_url", "thumbnail_url",
+    })
+
     stats = {"fixed": 0, "verified": 0, "manual": 0, "batches_merged": 0}
     now = datetime.now(timezone.utc).isoformat()
 
@@ -634,6 +905,9 @@ def merge_results() -> dict:
                 if status == "fixed":
                     for fix in site_result.get("fixes", []):
                         field = fix["field"]
+                        if field not in ALLOWED_MERGE_FIELDS:
+                            print(f"  WARNING: Skipping unknown field '{field}' for {site_id}", flush=True)
+                            continue
                         old_val = fix.get("old")
                         new_val = fix["new"]
 
@@ -844,7 +1118,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--phase",
-        choices=["sync", "mechanical", "enrich", "verify", "merge", "package", "export"],
+        choices=["sync", "mechanical", "enrich", "apply", "images", "verify", "merge", "package", "export"],
         help="Run only a specific phase",
     )
     parser.add_argument(
@@ -858,6 +1132,11 @@ def main() -> None:
         default=None,
         metavar="N",
         help="Test mode: process only N random sites (skips sync and mechanical fixes)",
+    )
+    parser.add_argument(
+        "--skip-images",
+        action="store_true",
+        help="Skip the wiki image download step (saves ~2-4 hours)",
     )
     args = parser.parse_args()
 
@@ -874,9 +1153,11 @@ def main() -> None:
     print(f"  API: {args.api_url}", flush=True)
     if limit:
         print(f"  Limit: {limit} random sites (test mode)", flush=True)
+    if args.skip_images:
+        print(f"  Skip images: yes", flush=True)
     print("=" * 60, flush=True)
 
-    # --limit mode: skip sync & mechanical, run enrichment + package on N random sites
+    # --limit mode: skip sync & mechanical, run enrichment + apply + package on N random sites
     if limit:
         sites = fetch_audit_candidates(source_ids, args.mode, limit=limit)
         if not sites:
@@ -889,6 +1170,17 @@ def main() -> None:
         print("  WAVE 1: Wikidata Enrichment", flush=True)
         print("=" * 40, flush=True)
         run_enrichment_pipeline(card_sites=sites)
+
+        print("\n" + "=" * 40, flush=True)
+        print("  APPLY: Enrichment → unified_sites", flush=True)
+        print("=" * 40, flush=True)
+        apply_enrichment()
+
+        if not args.skip_images:
+            print("\n" + "=" * 40, flush=True)
+            print("  IMAGES: Wiki Image Download", flush=True)
+            print("=" * 40, flush=True)
+            run_wiki_images()
 
         print("\n" + "=" * 40, flush=True)
         print("  PACKAGE: Export for db.html Upload", flush=True)
@@ -932,6 +1224,23 @@ def main() -> None:
         print("  WAVE 1: Wikidata Enrichment", flush=True)
         print("=" * 40, flush=True)
         run_enrichment_pipeline()
+
+    # Apply enrichment data to unified_sites
+    if phase in (None, "apply"):
+        print("\n" + "=" * 40, flush=True)
+        print("  APPLY: Enrichment → unified_sites", flush=True)
+        print("=" * 40, flush=True)
+        apply_enrichment()
+
+    # Wiki image download
+    if phase in (None, "images"):
+        if args.skip_images and phase is None:
+            print("\n[IMAGES] Skipped (--skip-images flag)", flush=True)
+        else:
+            print("\n" + "=" * 40, flush=True)
+            print("  IMAGES: Wiki Image Download", flush=True)
+            print("=" * 40, flush=True)
+            run_wiki_images()
 
     # Wave 2: Prepare agent batches
     if phase in (None, "verify"):
