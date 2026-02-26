@@ -121,7 +121,13 @@ async def lifespan(app: FastAPI):
                     updated = 0
                     for _sid, _desc in descriptions.items():
                         r = _s.execute(
-                            _t("UPDATE card_stats SET card_description = :desc WHERE site_id = :id AND (card_description IS NULL OR card_description != :desc)"),
+                            _t("""
+                                INSERT INTO card_stats (site_id, card_description, antiquity, fortification,
+                                    cultural_influence, mystery, legacy, total_power, rarity_score, rarity_tier, category_group)
+                                VALUES (:id, :desc, 0, 0, 0, 0, 0, 0, 0, 0, 'unknown')
+                                ON CONFLICT (site_id) DO UPDATE SET card_description = :desc
+                                WHERE card_stats.card_description IS DISTINCT FROM :desc
+                            """),
                             {"desc": _desc[:200], "id": _sid},
                         )
                         updated += r.rowcount
