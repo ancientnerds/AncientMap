@@ -252,7 +252,7 @@ def preview_snapshot(db: Session, snapshot_id: str) -> dict | None:
 
 
 def list_snapshots(db: Session, limit: int = 20) -> list[dict]:
-    """List recent snapshots with metadata."""
+    """List recent snapshots with metadata and affected site names."""
     rows = db.execute(
         text("""
             SELECT id::text, created_at, created_by, description, snapshot_type, row_count
@@ -263,6 +263,26 @@ def list_snapshots(db: Session, limit: int = 20) -> list[dict]:
         {"limit": limit},
     ).fetchall()
 
+    if not rows:
+        return []
+
+    snapshot_ids = [row.id for row in rows]
+
+    # Fetch site names for all snapshots in one query
+    site_rows = db.execute(
+        text("""
+            SELECT sr.snapshot_id::text, sr.old_data->>'name' AS site_name
+            FROM snapshot_rows sr
+            WHERE sr.snapshot_id::text = ANY(:ids)
+            ORDER BY sr.old_data->>'name'
+        """),
+        {"ids": snapshot_ids},
+    ).fetchall()
+
+    sites_by_snap: dict[str, list[str]] = {}
+    for sr in site_rows:
+        sites_by_snap.setdefault(sr.snapshot_id, []).append(sr.site_name or "(unknown)")
+
     return [
         {
             "id": row.id,
@@ -271,6 +291,7 @@ def list_snapshots(db: Session, limit: int = 20) -> list[dict]:
             "description": row.description,
             "snapshot_type": row.snapshot_type,
             "row_count": row.row_count,
+            "site_names": sites_by_snap.get(row.id, []),
         }
         for row in rows
     ]

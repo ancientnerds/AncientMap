@@ -29,15 +29,17 @@ interface AuditSite {
   p?: number       // period_start
   pn?: string      // period_name
   d?: string       // description
+  cd?: string      // card_description
   c?: string       // country
   u?: string       // source_url
   i?: string       // thumbnail_url
   eb?: string      // edited_by
   ea?: string      // edited_at (ISO timestamp)
+  aud?: string     // last_audited (ISO timestamp)
 }
 
 type IssueFilter = 'all' | 'no_period' | 'no_type' | 'no_country' | 'suspect_modern' | 'no_desc' | 'no_source' | 'no_image' | 'no_coords'
-type SortColumn = 'name' | 'type' | 'period' | 'country' | 'edited_at'
+type SortColumn = 'name' | 'type' | 'period' | 'country' | 'edited_at' | 'audited'
 type SortDir = 'asc' | 'desc'
 
 const CATEGORY_OPTIONS = Object.keys(CATEGORY_COLORS)
@@ -252,7 +254,7 @@ export default function DbAuditPage() {
   const [pinLoading, setPinLoading] = useState<string | null>(null)
 
   // DB Snapshots (from API)
-  const [dbSnapshots, setDbSnapshots] = useState<{ id: string; created_at: string; created_by: string; description: string; snapshot_type: string; row_count: number }[]>([])
+  const [dbSnapshots, setDbSnapshots] = useState<{ id: string; created_at: string; created_by: string; description: string; snapshot_type: string; row_count: number; site_names: string[] }[]>([])
 
   // Snapshot preview (undo diff)
   interface SnapshotFieldDiff { field: string; current: string | null; restore_to: string | null }
@@ -565,6 +567,12 @@ export default function DbAuditPage() {
           cmp = ta - tb
           break
         }
+        case 'audited': {
+          const aa = a.aud ? new Date(a.aud).getTime() : 0
+          const ab = b.aud ? new Date(b.aud).getTime() : 0
+          cmp = aa - ab
+          break
+        }
       }
       return sortDir === 'asc' ? cmp : -cmp
     })
@@ -699,7 +707,7 @@ export default function DbAuditPage() {
   // Sort handler
   const handleSort = useCallback((col: SortColumn) => {
     if (sortColumn === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortColumn(col); setSortDir(col === 'edited_at' ? 'desc' : 'asc') }
+    else { setSortColumn(col); setSortDir(col === 'edited_at' || col === 'audited' ? 'desc' : 'asc') }
   }, [sortColumn])
 
   const sortArrow = (col: SortColumn) =>
@@ -1228,81 +1236,70 @@ export default function DbAuditPage() {
         )}
       </PageHeader>
 
-      {/* Per-source version selectors */}
+      {/* Snapshot version panel */}
       {snapshots.length > 0 && (
-        <div className="db-version-selectors">
-          <span className="db-version-selectors-label">Snapshots</span>
-          {Object.entries(SOURCE_CONFIG).map(([sid, cfg]) => {
-            const ver = sourceVersions[sid] || 'latest'
-            const pin = activePins[sid]
-            const isPinned = pin != null
-            const isPinnedToThis = isPinned && pin === ver
-            const isViewingPinned = isPinned && ver === pin
-
-            return (
-              <div
-                key={sid}
-                className="db-version-selector"
-                style={{ borderColor: cfg.color + '55' }}
-              >
-                <span
-                  className="db-source-abbr-badge"
-                  style={{ background: cfg.color + '25', color: cfg.color }}
-                >
-                  {cfg.abbr}
-                </span>
-                <select
-                  value={ver}
-                  onChange={e => setSourceVersions(prev => ({ ...prev, [sid]: e.target.value }))}
-                >
-                  <option value="latest">Latest (live)</option>
-                  {snapshots.map(s => {
-                    const parts = s.date.split('_')
-                    const d = new Date(parts[0] + 'T' + (parts[1] ? `${parts[1].slice(0,2)}:${parts[1].slice(2,4)}:${parts[1].slice(4,6)}Z` : '00:00:00Z'))
-                    const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                      + (parts[1] ? ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '')
-                    const count = s.by_source?.[sid]
-                    return (
-                      <option key={s.date} value={s.date}>
-                        {label} ({count != null ? count.toLocaleString() : '?'})
-                      </option>
-                    )
-                  })}
-                </select>
-                {isPinned && isViewingPinned && (
-                  <span className="db-pin-indicator">PUBLIC</span>
-                )}
-                {isFounder && ver !== 'latest' && (
-                  isPinnedToThis ? (
-                    <button
-                      className="db-pin-btn db-pin-btn-active"
-                      onClick={() => handleSetPin(sid, null)}
-                      disabled={pinLoading === sid}
-                    >
-                      {pinLoading === sid ? '...' : 'Unpin'}
-                    </button>
-                  ) : (
-                    <button
-                      className="db-pin-btn"
-                      onClick={() => handleSetPin(sid, ver)}
-                      disabled={pinLoading === sid}
-                    >
-                      {pinLoading === sid ? '...' : 'Set as Public'}
-                    </button>
-                  )
-                )}
-                {isFounder && ver === 'latest' && isPinned && (
-                  <button
-                    className="db-pin-btn db-pin-btn-active"
-                    onClick={() => handleSetPin(sid, null)}
-                    disabled={pinLoading === sid}
-                  >
-                    {pinLoading === sid ? '...' : 'Unpin'}
-                  </button>
-                )}
+        <div className="db-version-panel">
+          <div className="db-version-panel-header">
+            <span className="db-version-panel-label">Database Snapshots</span>
+            <span className="db-version-panel-count">{snapshots.length} snapshot{snapshots.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div className="db-version-cards">
+            {/* Live card */}
+            <div
+              className={`db-version-card ${Object.values(sourceVersions).every(v => v === 'latest') ? 'active' : ''}`}
+              onClick={() => setSourceVersions({ ancient_nerds: 'latest', lyra: 'latest', ancient_nerds_community: 'latest' })}
+            >
+              <div className="db-version-card-top">
+                <span className="db-version-card-badge db-version-live">LIVE</span>
+                <span className="db-version-card-title">Latest (live database)</span>
               </div>
-            )
-          })}
+              <div className="db-version-card-meta">Real-time data from PostgreSQL</div>
+            </div>
+            {/* Snapshot cards */}
+            {snapshots.map(s => {
+              const parts = s.date.split('_')
+              const d = new Date(parts[0] + 'T' + (parts[1] ? `${parts[1].slice(0,2)}:${parts[1].slice(2,4)}:${parts[1].slice(4,6)}Z` : '00:00:00Z'))
+              const dateStr = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+              const timeStr = parts[1] ? d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''
+              const isActive = Object.values(sourceVersions).some(v => v === s.date)
+              const isPinned = Object.values(activePins).some(p => p === s.date)
+              const sourceSummary = Object.entries(s.by_source || {})
+                .filter(([, count]) => count > 0)
+                .map(([sid, count]) => `${SOURCE_CONFIG[sid]?.abbr || sid}: ${count.toLocaleString()}`)
+                .join(' / ')
+
+              return (
+                <div
+                  key={s.date}
+                  className={`db-version-card ${isActive ? 'active' : ''}`}
+                  onClick={() => setSourceVersions({ ancient_nerds: s.date, lyra: s.date, ancient_nerds_community: s.date })}
+                  title={`Snapshot from ${d.toISOString()}`}
+                >
+                  <div className="db-version-card-top">
+                    {isPinned && <span className="db-version-card-badge db-version-pinned">PUBLIC</span>}
+                    <span className="db-version-card-title">{dateStr} {timeStr}</span>
+                    <span className="db-version-card-ago">{formatRelativeDate(d.toISOString())}</span>
+                  </div>
+                  <div className="db-version-card-meta">
+                    {s.sites.toLocaleString()} sites{sourceSummary ? ` (${sourceSummary})` : ''}
+                  </div>
+                  {isActive && isFounder && (
+                    <div className="db-version-card-actions" onClick={e => e.stopPropagation()}>
+                      {isPinned ? (
+                        <button className="db-pin-btn db-pin-btn-active" onClick={() => { for (const sid of Object.keys(SOURCE_CONFIG)) handleSetPin(sid, null) }} disabled={pinLoading != null}>
+                          {pinLoading ? '...' : 'Unpin'}
+                        </button>
+                      ) : (
+                        <button className="db-pin-btn" onClick={() => { for (const sid of Object.keys(SOURCE_CONFIG)) handleSetPin(sid, s.date) }} disabled={pinLoading != null}>
+                          {pinLoading ? '...' : 'Set as Public'}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 
@@ -1439,12 +1436,14 @@ export default function DbAuditPage() {
               <th className="db-th" onClick={() => handleSort('type')}>Type{sortArrow('type')}</th>
               <th className="db-th" onClick={() => handleSort('period')}>Period{sortArrow('period')}</th>
               <th className="db-th" onClick={() => handleSort('country')}>Country{sortArrow('country')}</th>
-              <th className="db-th db-th-nosort">Desc</th>
-              <th className="db-th db-th-nosort">URL</th>
-              <th className={`db-th db-th-img ${imgExpanded ? 'db-th-img-active' : ''}`} onClick={() => setImgExpanded(v => !v)} title="Toggle image preview">Img</th>
-              <th className="db-th db-th-nosort db-th-hero">H</th>
-              <th className="db-th db-th-nosort">User</th>
-              <th className="db-th db-th-nosort db-th-db">DB</th>
+              <th className="db-th db-th-nosort" title="Game card description (200 chars)">Card</th>
+              <th className="db-th db-th-nosort" title="Full Wikipedia description">Desc</th>
+              <th className="db-th db-th-nosort" title="Source URL (Wikipedia, etc.)">URL</th>
+              <th className={`db-th db-th-img ${imgExpanded ? 'db-th-img-active' : ''}`} onClick={() => setImgExpanded(v => !v)} title="Thumbnail image — click to toggle preview">Img</th>
+              <th className="db-th db-th-nosort db-th-hero" title="Hero image status">H</th>
+              <th className="db-th db-th-nosort" title="Last edited by (user or initial import)">User</th>
+              <th className="db-th db-th-nosort db-th-db" title="Source database">DB</th>
+              <th className="db-th" onClick={() => handleSort('audited')} title="Audit status — green check means audited">Aud{sortArrow('audited')}</th>
               <th className="db-th" onClick={() => handleSort('edited_at')}>Last Edited{sortArrow('edited_at')}</th>
               {isFounder && <th className="db-th db-th-edit">Edit</th>}
             </tr>
@@ -1545,6 +1544,19 @@ export default function DbAuditPage() {
                     )}
                   </td>
 
+                  {/* Card Description */}
+                  <td className="db-td db-td-card-desc">
+                    {site.cd ? (
+                      expandedRows.has('cd-' + site.id) ? (
+                        <span className="db-desc-full" onClick={() => toggleExpand('cd-' + site.id)}>{site.cd}</span>
+                      ) : (
+                        <span className="db-desc-truncated db-card-desc-text" onClick={() => toggleExpand('cd-' + site.id)}>
+                          {site.cd.length > 40 ? site.cd.slice(0, 40) + '\u2026' : site.cd}
+                        </span>
+                      )
+                    ) : <span className="db-missing">&mdash;</span>}
+                  </td>
+
                   {/* Description */}
                   <td className="db-td db-td-desc">
                     {site.d ? (
@@ -1602,6 +1614,13 @@ export default function DbAuditPage() {
                         {srcCfg.abbr}
                       </span>
                     )}
+                  </td>
+
+                  {/* Audited */}
+                  <td className="db-td db-td-audited" title={site.aud || ''}>
+                    {site.aud
+                      ? <span className="db-audited-yes" title={formatRelativeDate(site.aud)}>&#10003;</span>
+                      : <span className="db-audited-no">&mdash;</span>}
                   </td>
 
                   {/* Last edited (timestamp) */}
@@ -1749,20 +1768,13 @@ export default function DbAuditPage() {
                           color: uploadTarget === id ? cfg.color : undefined,
                         }}
                         onClick={() => setUploadTarget(id)}
+                        title={`Upload to ${cfg.name}`}
                       >
-                        <span className="db-source-pill-dot" style={{ background: cfg.color }} />
-                        {cfg.abbr}
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+                        {cfg.name}
                       </button>
                     ))}
                   </div>
-                  <button
-                    className={`db-upload-audited-toggle ${uploadMarkAudited ? 'active' : ''}`}
-                    onClick={() => setUploadMarkAudited(!uploadMarkAudited)}
-                    title="Mark all sites in this source as audited after upload"
-                  >
-                    <span className={`db-toggle-check ${uploadMarkAudited ? 'checked' : ''}`} />
-                    Mark audited
-                  </button>
                 </div>
 
                 {!uploadFileName && (
@@ -1843,10 +1855,18 @@ export default function DbAuditPage() {
               )}
             </div>
             <div className="db-modal-footer">
-              <div className="db-upload-snapshot-notice">A snapshot will be created before applying changes. You can always roll back.</div>
+              <div className="db-upload-snapshot-notice" title="Every upload creates a snapshot first, so you can always undo">A snapshot will be created before applying changes. You can always roll back.</div>
               <div className="db-modal-footer-buttons">
+                <button
+                  className={`db-upload-audited-toggle ${uploadMarkAudited ? 'active' : ''} ${!uploadMarkAudited && uploadParsed.length > 0 ? 'db-audited-remind' : ''}`}
+                  onClick={() => setUploadMarkAudited(!uploadMarkAudited)}
+                  title="Mark all sites in this source as audited after upload. Enable this if you've reviewed the full database, not just the uploaded sites."
+                >
+                  <span className={`db-toggle-check ${uploadMarkAudited ? 'checked' : ''}`} />
+                  Mark all as audited
+                </button>
                 <button className="db-btn db-btn-cancel" onClick={() => { setShowUploadModal(false); setUploadParsed([]); setUploadFileName(''); setUploadMarkAudited(false) }} disabled={uploading}>Cancel</button>
-                <button className="db-btn db-btn-commit" onClick={commitUpload} disabled={uploading || uploadParsed.filter(p => p._status !== 'error').length === 0}>
+                <button className="db-btn db-btn-commit" onClick={commitUpload} disabled={uploading || uploadParsed.filter(p => p._status !== 'error').length === 0} title="Creates a snapshot of current state, then applies all changes">
                   {uploading ? 'Creating snapshot...' : 'Create Snapshot & Apply'}
                 </button>
               </div>
@@ -1857,18 +1877,50 @@ export default function DbAuditPage() {
 
       {/* DB Snapshots (undo history) */}
       {isFounder && dbSnapshots.length > 0 && (
-        <details className="db-snapshots-panel">
-          <summary className="db-snapshots-summary">Undo History ({dbSnapshots.length} snapshots)</summary>
+        <details className="db-snapshots-panel" open>
+          <summary className="db-snapshots-summary">Undo History ({dbSnapshots.length} snapshot{dbSnapshots.length !== 1 ? 's' : ''})</summary>
           <div className="db-snapshots-list">
-            {dbSnapshots.map(snap => (
-              <div key={snap.id} className="db-snapshot-item">
-                <span className={`db-snapshot-type db-snapshot-type-${snap.snapshot_type || 'edit'}`}>{snap.snapshot_type === 'upload' ? 'UPLOAD' : 'EDIT'}</span>
-                <span className="db-snapshot-desc">{snap.description}</span>
-                <span className="db-snapshot-meta">{snap.row_count} rows &middot; {snap.created_by || 'system'} &middot; {formatRelativeDate(snap.created_at)}</span>
-                <button className="db-btn db-btn-preview" onClick={() => previewDbSnapshot(snap.id)} disabled={snapshotPreviewLoading}>Preview</button>
-                <button className="db-btn db-btn-restore" onClick={() => restoreDbSnapshot(snap.id)}>Restore</button>
-              </div>
-            ))}
+            {dbSnapshots.map(snap => {
+              const dt = new Date(snap.created_at)
+              const dateStr = dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+              const timeStr = dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+              return (
+                <div key={snap.id} className="db-snapshot-card">
+                  <div className="db-snapshot-row-top">
+                    <span className={`db-snapshot-type db-snapshot-type-${snap.snapshot_type || 'edit'}`}>{snap.snapshot_type === 'upload' ? 'UPLOAD' : 'EDIT'}</span>
+                    <span className="db-snapshot-desc">{snap.description}</span>
+                    <span className="db-snapshot-actions">
+                      <button className="db-btn db-btn-preview" onClick={() => previewDbSnapshot(snap.id)} disabled={snapshotPreviewLoading} title="Preview what restoring this snapshot would change">Preview</button>
+                      <button className="db-btn db-btn-restore" onClick={() => restoreDbSnapshot(snap.id)} title="Revert affected sites to their pre-change state">Restore</button>
+                    </span>
+                  </div>
+                  <div className="db-snapshot-row-detail">
+                    <span className="db-snapshot-detail-item" title={dt.toISOString()}>
+                      <span className="db-snapshot-detail-label">When</span>
+                      {dateStr} {timeStr} ({formatRelativeDate(snap.created_at)})
+                    </span>
+                    <span className="db-snapshot-detail-item">
+                      <span className="db-snapshot-detail-label">By</span>
+                      {snap.created_by || 'system'}
+                    </span>
+                    <span className="db-snapshot-detail-item">
+                      <span className="db-snapshot-detail-label">Sites</span>
+                      {snap.row_count} site{snap.row_count !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  {snap.site_names.length > 0 && (
+                    <div className="db-snapshot-sites">
+                      {snap.site_names.slice(0, 10).map((name, i) => (
+                        <span key={i} className="db-snapshot-site-tag">{name}</span>
+                      ))}
+                      {snap.site_names.length > 10 && (
+                        <span className="db-snapshot-site-more">+{snap.site_names.length - 10} more</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </details>
       )}
