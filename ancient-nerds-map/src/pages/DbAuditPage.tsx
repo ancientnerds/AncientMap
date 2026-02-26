@@ -243,7 +243,6 @@ export default function DbAuditPage() {
 
   // DB Snapshots (from API)
   const [dbSnapshots, setDbSnapshots] = useState<{ id: string; created_at: string; created_by: string; description: string; snapshot_type: string; row_count: number; source_id: string | null; site_names: string[] }[]>([])
-  const [createSnapshotLoading, setCreateSnapshotLoading] = useState(false)
 
   // Snapshot preview (undo diff)
   interface SnapshotFieldDiff { field: string; current: string | null; restore_to: string | null }
@@ -320,14 +319,13 @@ export default function DbAuditPage() {
     })()
   }, [])
 
-  // Fetch DB snapshots (filtered by selected source)
+  // Fetch DB snapshots (undo history)
   const refreshDbSnapshots = useCallback(async () => {
-    if (sourceFilter === 'all') {
-      setDbSnapshots([])
-      return
-    }
     try {
-      const res = await fetch(`${config.api.baseUrl}/sites/snapshots?source_id=${sourceFilter}&${CACHE_BUSTER}`)
+      const url = sourceFilter !== 'all'
+        ? `${config.api.baseUrl}/sites/snapshots?source_id=${sourceFilter}&${CACHE_BUSTER}`
+        : `${config.api.baseUrl}/sites/snapshots?${CACHE_BUSTER}`
+      const res = await fetch(url)
       if (res.ok) {
         const data = await res.json()
         setDbSnapshots(data.snapshots || [])
@@ -975,28 +973,6 @@ export default function DbAuditPage() {
       alert(e instanceof Error ? e.message : 'Restore failed')
     }
   }, [token, discardAllEdits, refreshDbSnapshots])
-
-  // Create a manual DB snapshot
-  const createDbSnapshot = useCallback(async () => {
-    if (!token || sourceFilter === 'all') return
-    setCreateSnapshotLoading(true)
-    try {
-      const sourceName = SOURCE_CONFIG[sourceFilter]?.name || sourceFilter
-      const res = await fetch(`${config.api.baseUrl}/sites/snapshots/create?source_id=${sourceFilter}&description=${encodeURIComponent(`Manual snapshot of ${sourceName}`)}`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.detail || `HTTP ${res.status}`)
-      }
-      refreshDbSnapshots()
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Snapshot creation failed')
-    } finally {
-      setCreateSnapshotLoading(false)
-    }
-  }, [token, sourceFilter, refreshDbSnapshots])
 
   // Diff: open compare modal with defaults
   const openDiffModal = useCallback(() => {
@@ -1918,37 +1894,23 @@ export default function DbAuditPage() {
         </div>
       )}
 
-      {/* DB Snapshots (undo history) — only when a specific source is selected AND has snapshots */}
-      {isFounder && sourceFilter !== 'all' && dbSnapshots.length > 0 && (
+      {/* Undo history — shows when there are snapshots to restore */}
+      {isFounder && dbSnapshots.length > 0 && (
         <details className="db-snapshots-panel" open>
-          <summary className="db-snapshots-summary">
-            <span className="db-snapshot-source-badge" style={{ borderColor: SOURCE_CONFIG[sourceFilter]?.color, background: SOURCE_CONFIG[sourceFilter]?.color + '15' }}>
-              <span className="db-snapshot-source-dot" style={{ background: SOURCE_CONFIG[sourceFilter]?.color }} />
-              {SOURCE_CONFIG[sourceFilter]?.name || sourceFilter}
-            </span>
-            Snapshots ({dbSnapshots.length})
-          </summary>
-          <div className="db-snapshots-header">
-            <button className="db-btn db-btn-create-snapshot" onClick={createDbSnapshot} disabled={createSnapshotLoading} title={`Create a manual snapshot of all ${SOURCE_CONFIG[sourceFilter]?.name || sourceFilter} sites`}>
-              {createSnapshotLoading ? 'Creating...' : 'Create Snapshot'}
-            </button>
-          </div>
+          <summary className="db-snapshots-summary">Undo History ({dbSnapshots.length} snapshot{dbSnapshots.length !== 1 ? 's' : ''})</summary>
           <div className="db-snapshots-list">
-            {dbSnapshots.length === 0 && (
-              <div className="db-snapshots-empty">No snapshots yet for {SOURCE_CONFIG[sourceFilter]?.name || sourceFilter}. Create one to save the current state.</div>
-            )}
             {dbSnapshots.map(snap => {
               const dt = new Date(snap.created_at)
               const dateStr = dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
               const timeStr = dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-              const typeLabel = snap.snapshot_type === 'upload' ? 'UPLOAD' : snap.snapshot_type === 'manual' ? 'MANUAL' : 'EDIT'
               return (
                 <div key={snap.id} className="db-snapshot-card">
                   <div className="db-snapshot-row-top">
-                    <span className={`db-snapshot-type db-snapshot-type-${snap.snapshot_type || 'edit'}`}>{typeLabel}</span>
+                    <span className={`db-snapshot-type db-snapshot-type-${snap.snapshot_type || 'edit'}`}>{snap.snapshot_type === 'upload' ? 'UPLOAD' : 'EDIT'}</span>
                     <span className="db-snapshot-desc">{snap.description}</span>
                     <span className="db-snapshot-actions">
-                      <button className="db-btn db-btn-preview" onClick={() => previewDbSnapshot(snap.id)} disabled={snapshotPreviewLoading} title="Preview changes and optionally restore this snapshot">Preview & Restore</button>
+                      <button className="db-btn db-btn-preview" onClick={() => previewDbSnapshot(snap.id)} disabled={snapshotPreviewLoading} title="Preview what restoring this snapshot would change">Preview</button>
+                      <button className="db-btn db-btn-restore" onClick={() => restoreDbSnapshot(snap.id)} title="Revert affected sites to their pre-change state">Restore</button>
                     </span>
                   </div>
                   <div className="db-snapshot-row-detail">
