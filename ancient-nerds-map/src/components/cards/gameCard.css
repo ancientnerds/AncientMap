@@ -42,7 +42,7 @@
   width: 280px;
   aspect-ratio: 5 / 7;
 }
-.gc-showcase .gc-hero { flex: 1 1 0; min-height: 0; height: auto; }
+.gc-showcase .gc-hero { flex: 1 1 0; min-height: 0; max-height: 42%; height: auto; }
 
 /* Rarity border colors (applied via inline style for glow, but we handle border-color) */
 .gc-common    { border-color: rgba(150, 150, 150, 0.3); }
@@ -223,6 +223,7 @@
   font-size: 0.68rem;
   line-height: 1.45;
   opacity: 0.6;
+  min-height: calc(0.68rem * 1.45 * 4);
 }
 
 /* --------------------------------------------------------------------------
