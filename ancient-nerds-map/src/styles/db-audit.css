@@ -1303,6 +1303,157 @@
   margin-bottom: 16px;
 }
 
+/* ─── Target pills row ──────────────────────────────────────────────────── */
+.db-upload-target-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.db-upload-target-label {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  flex-shrink: 0;
+}
+
+.db-upload-target-pills {
+  display: flex;
+  gap: 6px;
+}
+
+.db-source-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.db-source-pill:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+}
+
+.db-source-pill.active {
+  font-weight: 700;
+}
+
+.db-source-pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ─── Audited toggle ────────────────────────────────────────────────────── */
+.db-upload-audited-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 4px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.db-upload-audited-toggle:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+}
+
+.db-upload-audited-toggle.active {
+  border-color: rgba(34, 197, 94, 0.5);
+  background: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
+}
+
+.db-toggle-check {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1.5px solid var(--border-color);
+  position: relative;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.db-toggle-check.checked {
+  border-color: #22c55e;
+  background: #22c55e;
+}
+
+.db-toggle-check.checked::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 0px;
+  width: 5px;
+  height: 8px;
+  border: solid #000;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+/* ─── Drop zone ─────────────────────────────────────────────────────────── */
+.db-upload-dropzone {
+  border: 2px dashed var(--border-color);
+  border-radius: 10px;
+  padding: 28px 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.db-upload-dropzone:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.db-upload-dropzone.dragover {
+  border-color: var(--primary-red);
+  background: rgba(192, 32, 35, 0.06);
+}
+
+.db-dropzone-icon {
+  font-size: 1.6rem;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  opacity: 0.5;
+  font-weight: 300;
+}
+
+.db-dropzone-text {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.db-dropzone-hint {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  opacity: 0.5;
+  margin-top: 4px;
+}
+
 .db-upload-summary {
   display: flex;
   align-items: center;
@@ -1529,6 +1680,46 @@
 .db-btn-restore:hover:not(:disabled) {
   background: rgba(96, 165, 250, 0.1);
   border-color: #60a5fa;
+}
+
+.db-btn-preview {
+  background: transparent;
+  color: #a78bfa;
+  border-color: rgba(167, 139, 250, 0.4);
+  padding: 4px 12px;
+  font-size: 0.78rem;
+}
+
+.db-btn-preview:hover:not(:disabled) {
+  background: rgba(167, 139, 250, 0.1);
+  border-color: #a78bfa;
+}
+
+.db-snapshot-type {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.db-snapshot-type-edit {
+  background: rgba(96, 165, 250, 0.15);
+  color: #60a5fa;
+}
+
+.db-snapshot-type-upload {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.db-snapshot-preview-meta {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 /* ─── Compare button ─────────────────────────────────────────────────────── */
@@ -2233,6 +2424,15 @@
 
   .db-snapshots-panel {
     margin: 0 8px 12px;
+  }
+
+  .db-upload-target-row {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .db-upload-audited-toggle {
+    margin-left: 0;
   }
 
   .db-version-selectors {
