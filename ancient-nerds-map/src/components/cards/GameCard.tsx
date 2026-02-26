@@ -13,6 +13,7 @@ import type { CardData } from '../../types/cards'
 import { STAR_LEVELS, MAX_STAR_LEVEL, DUPES_FOR_NEXT } from '../../constants/cards'
 import { RARITY_TIERS, STAT_COLORS, STAT_META, STAT_ACCENTS, RARITY_POWER_COLORS, RARITY_RIBBON_BG, type StatKey } from '../../constants/rarity'
 import { getCountryCode } from '../../utils/countryFlags'
+import { FitText } from '../FitText'
 import './gameCard.css'
 
 // ---------------------------------------------------------------------------
@@ -234,12 +235,15 @@ export function GameCard({ card, variant = 'tile', onClick, action, onRemove, in
             )}
           </div>
         )}
-        {isShowcase && (description || card.card_description) && (() => {
-          const text = description || card.card_description || ''
-          const len = text.length
-          const fontSize = len <= 100 ? '0.68rem' : len <= 150 ? '0.62rem' : '0.56rem'
-          return <div className="gc-desc" style={{ fontSize }}>{text}</div>
-        })()}
+        {isShowcase && (description || card.card_description) && (
+          <FitText
+            text={description || card.card_description || ''}
+            maxPx={11}
+            minPx={8.5}
+            lines={4}
+            className="gc-desc"
+          />
+        )}
       </div>
 
       {/* Stats */}

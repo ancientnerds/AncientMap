@@ -14,6 +14,7 @@
 import { useState } from 'react'
 import LazyImage from './LazyImage'
 import { SiteBadges, CountryFlag, CopyButton } from './metadata'
+import { FitText } from './FitText'
 import { extractCountry } from '../utils/searchUtils'
 import { formatCoord } from '../utils/formatters'
 import { getSourceColor } from '../data/sites'
@@ -97,8 +98,17 @@ export function SiteCard({ site, sourceName, sourceColor, onClick, actions, comp
           hideExactYear
         />
 
-        {!compact && (site.cardDescription || site.description) && (
-          <p className="site-card-desc">{site.cardDescription || site.description}</p>
+        {!compact && site.cardDescription && (
+          <FitText
+            text={site.cardDescription}
+            maxPx={12.5}
+            minPx={10}
+            lines={3}
+            className="site-card-desc site-card-desc--fit"
+          />
+        )}
+        {!compact && !site.cardDescription && site.description && (
+          <p className="site-card-desc">{site.description}</p>
         )}
 
         {!compact && (actions || sourceName) && (
