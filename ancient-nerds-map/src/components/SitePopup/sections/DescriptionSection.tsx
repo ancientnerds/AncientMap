@@ -1,10 +1,8 @@
 import SiteMetadata from '../../SiteMetadata'
-import { FitText } from '../../FitText'
 import { isWikipediaUrl } from '../../../services/imageService'
 import type { DescriptionSectionProps } from '../types'
 
 export function DescriptionSection({
-  cardDescription,
   description,
   sourceId,
   rawData,
@@ -16,16 +14,6 @@ export function DescriptionSection({
 }: DescriptionSectionProps) {
   return (
     <>
-      {!isEmpireMode && cardDescription && (
-        <FitText
-          text={cardDescription}
-          maxPx={14}
-          minPx={10}
-          lines={3}
-          className="popup-description card-summary"
-        />
-      )}
-
       {rawDataLoading && isEmpireMode ? (
         <p className="popup-description loading">Loading description from Wikipedia...</p>
       ) : description ? (

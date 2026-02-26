@@ -173,7 +173,6 @@ export interface LocationSectionProps {
 }
 
 export interface DescriptionSectionProps {
-  cardDescription?: string
   description?: string
   sourceId: string
   rawData: Record<string, unknown> | null

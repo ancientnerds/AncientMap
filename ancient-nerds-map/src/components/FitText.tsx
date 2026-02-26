@@ -33,6 +33,12 @@ export function FitText({ text, maxPx, minPx, lines, lineHeight = 1.45, classNam
       el.style.fontSize = `${size}px`
     }
 
+    if (el.scrollHeight > el.clientHeight) {
+      el.style.display = '-webkit-box'
+      el.style.webkitBoxOrient = 'vertical'
+      el.style.webkitLineClamp = `${lines}`
+    }
+
     cache.set(key, size)
   }, [text, maxPx, minPx, lines, lineHeight])
 
