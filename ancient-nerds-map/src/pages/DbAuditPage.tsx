@@ -804,13 +804,31 @@ export default function DbAuditPage() {
       else if (file.name.endsWith('.geojson')) parsed = parseGeoJSON(text)
       else parsed = parseJSON(text)
 
-      // Match against existing sites by name
+      // Match against existing sites by name, store current data for diff
       const nameIndex = new Map(sites.map(s => [s.n.toLowerCase(), s]))
       for (const p of parsed) {
         const existing = nameIndex.get(p.name.toLowerCase())
         if (existing) {
           p._status = 'update'
           p._matchedId = existing.id
+          p._currentData = {
+            name: existing.n,
+            site_type: existing.t,
+            period_name: existing.pn,
+            period_start: existing.p,
+            country: existing.c,
+            description: existing.d,
+            source_url: existing.u,
+          }
+          // Compute which fields actually changed
+          const changed: string[] = []
+          if ((p.site_type || '') !== (existing.t || '')) changed.push('site_type')
+          if ((p.period_name || '') !== (existing.pn || '')) changed.push('period_name')
+          if ((p.period_start ?? null) !== (existing.p ?? null)) changed.push('period_start')
+          if ((p.country || '') !== (existing.c || '')) changed.push('country')
+          if ((p.description || '') !== (existing.d || '')) changed.push('description')
+          if ((p.source_url || '') !== (existing.u || '')) changed.push('source_url')
+          p._changedFields = changed
         } else if (!p._status) {
           p._status = 'insert'
         }
@@ -1679,70 +1697,94 @@ export default function DbAuditPage() {
               <button className="db-modal-close" onClick={() => !uploading && setShowUploadModal(false)}>&times;</button>
             </div>
             <div className="db-modal-body">
-              <div className="db-field">
-                <label>Target Database</label>
-                <select value={uploadTarget} onChange={e => setUploadTarget(e.target.value)}>
-                  {Object.entries(SOURCE_CONFIG).map(([id, cfg]) => (
-                    <option key={id} value={id}>{cfg.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="db-field">
-                <label>File (CSV, JSON, or GeoJSON)</label>
-                <input type="file" accept=".csv,.json,.geojson" onChange={handleUploadFile} />
-              </div>
-              <div className="db-field">
+              <div className="db-upload-controls">
+                <div className="db-field">
+                  <label>Target Database</label>
+                  <select value={uploadTarget} onChange={e => setUploadTarget(e.target.value)}>
+                    {Object.entries(SOURCE_CONFIG).map(([id, cfg]) => (
+                      <option key={id} value={id}>{cfg.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="db-field">
+                  <label>File (CSV, JSON, or GeoJSON)</label>
+                  <input type="file" accept=".csv,.json,.geojson" onChange={handleUploadFile} />
+                </div>
                 <label className="db-checkbox-label">
                   <input type="checkbox" checked={uploadMarkAudited} onChange={e => setUploadMarkAudited(e.target.checked)} />
                   Mark all sites in this source as audited
                 </label>
-                <div className="db-field-hint">Sets <code>last_audited</code> on every site in the target database, not just the uploaded ones.</div>
               </div>
+
               {uploadParsed.length > 0 && (
                 <>
                   <div className="db-upload-summary">
                     <span className="db-upload-file">{uploadFileName}</span>
+                    <span className="db-upload-stat db-upload-unchanged">{uploadParsed.filter(p => p._status === 'update' && (!p._changedFields || p._changedFields.length === 0)).length} unchanged</span>
+                    <span className="db-upload-stat db-upload-update">{uploadParsed.filter(p => p._status === 'update' && p._changedFields && p._changedFields.length > 0).length} changed</span>
                     <span className="db-upload-stat db-upload-insert">{uploadParsed.filter(p => p._status === 'insert').length} new</span>
-                    <span className="db-upload-stat db-upload-update">{uploadParsed.filter(p => p._status === 'update').length} updates</span>
-                    <span className="db-upload-stat db-upload-error">{uploadParsed.filter(p => p._status === 'error').length} errors</span>
+                    {uploadParsed.filter(p => p._status === 'error').length > 0 && (
+                      <span className="db-upload-stat db-upload-error">{uploadParsed.filter(p => p._status === 'error').length} errors</span>
+                    )}
                   </div>
-                  <div className="db-upload-preview">
-                    <table className="db-table">
-                      <thead>
-                        <tr>
-                          <th className="db-th db-th-nosort">Status</th>
-                          <th className="db-th db-th-nosort">Name</th>
-                          <th className="db-th db-th-nosort">Type</th>
-                          <th className="db-th db-th-nosort">Period</th>
-                          <th className="db-th db-th-nosort">Country</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {uploadParsed.slice(0, 100).map((p, i) => (
-                          <tr key={i} className={`db-row db-upload-row-${p._status}`}>
-                            <td className="db-td">
-                              <span className={`db-upload-status-pill db-upload-status-${p._status}`}>
-                                {p._status === 'insert' ? 'NEW' : p._status === 'update' ? 'UPD' : 'ERR'}
-                              </span>
-                            </td>
-                            <td className="db-td">{p.name}</td>
-                            <td className="db-td">{p.site_type || ''}</td>
-                            <td className="db-td">{p.period_name || ''}</td>
-                            <td className="db-td">{p.country || ''}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {uploadParsed.length > 100 && <div className="db-muted" style={{ padding: 8 }}>...and {uploadParsed.length - 100} more</div>}
+
+                  {/* Diff view — only show sites with actual changes or inserts */}
+                  <div className="db-upload-diff">
+                    {uploadParsed
+                      .filter(p => p._status === 'insert' || (p._status === 'update' && p._changedFields && p._changedFields.length > 0))
+                      .slice(0, 100)
+                      .map((p, i) => (
+                        <div key={i} className={`db-diff-item db-diff-${p._status}`}>
+                          <div className="db-diff-header">
+                            <span className={`db-upload-status-pill db-upload-status-${p._status}`}>
+                              {p._status === 'insert' ? 'NEW' : 'CHANGED'}
+                            </span>
+                            <span className="db-diff-name">{p.name}</span>
+                            {p._changedFields && (
+                              <span className="db-diff-count">{p._changedFields.length} field{p._changedFields.length !== 1 ? 's' : ''}</span>
+                            )}
+                          </div>
+                          {p._status === 'update' && p._changedFields && p._currentData && (
+                            <div className="db-diff-fields">
+                              {p._changedFields.map(field => {
+                                const oldVal = String((p._currentData as Record<string, unknown>)?.[field] ?? '')
+                                const newVal = String((p as unknown as Record<string, unknown>)[field] ?? '')
+                                const label = field.replace(/_/g, ' ')
+                                return (
+                                  <div key={field} className="db-diff-row">
+                                    <span className="db-diff-field">{label}</span>
+                                    <span className="db-diff-old">{oldVal || '(empty)'}</span>
+                                    <span className="db-diff-arrow">&rarr;</span>
+                                    <span className="db-diff-new">{newVal || '(empty)'}</span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                          {p._status === 'insert' && (
+                            <div className="db-diff-fields">
+                              <div className="db-diff-row"><span className="db-diff-field">type</span><span className="db-diff-new">{p.site_type || '(none)'}</span></div>
+                              <div className="db-diff-row"><span className="db-diff-field">period</span><span className="db-diff-new">{p.period_name || '(none)'}</span></div>
+                              <div className="db-diff-row"><span className="db-diff-field">country</span><span className="db-diff-new">{p.country || '(none)'}</span></div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    {uploadParsed.filter(p => p._status === 'insert' || (p._status === 'update' && p._changedFields && p._changedFields.length > 0)).length === 0 && (
+                      <div className="db-diff-empty">No changes detected &mdash; all uploaded sites match the current database.</div>
+                    )}
                   </div>
                 </>
               )}
             </div>
             <div className="db-modal-footer">
-              <button className="db-btn db-btn-cancel" onClick={() => { setShowUploadModal(false); setUploadParsed([]); setUploadFileName('') }} disabled={uploading}>Cancel</button>
-              <button className="db-btn db-btn-commit" onClick={commitUpload} disabled={uploading || uploadParsed.filter(p => p._status !== 'error').length === 0}>
-                {uploading ? 'Uploading...' : `Commit Upload (${uploadParsed.filter(p => p._status !== 'error').length})`}
-              </button>
+              <div className="db-upload-snapshot-notice">A snapshot will be created before applying changes. You can always roll back.</div>
+              <div className="db-modal-footer-buttons">
+                <button className="db-btn db-btn-cancel" onClick={() => { setShowUploadModal(false); setUploadParsed([]); setUploadFileName(''); setUploadMarkAudited(false) }} disabled={uploading}>Cancel</button>
+                <button className="db-btn db-btn-commit" onClick={commitUpload} disabled={uploading || uploadParsed.filter(p => p._status !== 'error').length === 0}>
+                  {uploading ? 'Creating snapshot...' : 'Create Snapshot & Apply'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
