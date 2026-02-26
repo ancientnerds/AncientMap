@@ -13,6 +13,7 @@ export interface ApiSiteDetail {
   periodName?: string
   country?: string
   description?: string
+  cardDescription?: string
   sourceUrl?: string
 }
 
@@ -36,6 +37,7 @@ export function apiDetailToSiteData(detail: ApiSiteDetail): SiteData {
     periodStart: detail.periodStart,
     location: detail.country || '',
     description: detail.description || '',
+    cardDescription: detail.cardDescription,
     sourceId: detail.sourceId || 'unknown',
     sourceUrl: detail.sourceUrl,
   }

@@ -849,22 +849,27 @@ async def get_site_detail(
 
     if is_uuid:
         query = text("""
-            SELECT id::text, source_id, source_record_id, name, lat, lon,
-                   site_type, period_start, period_end, period_name,
-                   country, description, thumbnail_url, source_url, raw_data
-            FROM unified_sites WHERE id::text = :site_id
+            SELECT us.id::text, us.source_id, us.source_record_id, us.name, us.lat, us.lon,
+                   us.site_type, us.period_start, us.period_end, us.period_name,
+                   us.country, us.description, us.thumbnail_url, us.source_url, us.raw_data,
+                   cs.card_description
+            FROM unified_sites us
+            LEFT JOIN card_stats cs ON cs.site_id = us.id
+            WHERE us.id::text = :site_id
         """)
         result = db.execute(query, {"site_id": site_id})
     else:
         query = text("""
-            SELECT id::text, source_id, source_record_id, name, lat, lon,
-                   site_type, period_start, period_end, period_name,
-                   country, description, thumbnail_url, source_url, raw_data
-            FROM unified_sites
-            WHERE name ILIKE :name
-               OR name_normalized = LOWER(:name)
-               OR REPLACE(name_normalized, ' ', '') = LOWER(REPLACE(:name, ' ', ''))
-               OR id IN (SELECT site_id FROM unified_site_names WHERE name ILIKE :name)
+            SELECT us.id::text, us.source_id, us.source_record_id, us.name, us.lat, us.lon,
+                   us.site_type, us.period_start, us.period_end, us.period_name,
+                   us.country, us.description, us.thumbnail_url, us.source_url, us.raw_data,
+                   cs.card_description
+            FROM unified_sites us
+            LEFT JOIN card_stats cs ON cs.site_id = us.id
+            WHERE us.name ILIKE :name
+               OR us.name_normalized = LOWER(:name)
+               OR REPLACE(us.name_normalized, ' ', '') = LOWER(REPLACE(:name, ' ', ''))
+               OR us.id IN (SELECT site_id FROM unified_site_names WHERE name ILIKE :name)
             LIMIT 1
         """)
         result = db.execute(query, {"name": site_id})
@@ -874,7 +879,7 @@ async def get_site_detail(
     if not row:
         raise HTTPException(status_code=404, detail="Site not found")
 
-    return {
+    resp = {
         "id": row.id,
         "sourceId": row.source_id,
         "sourceRecordId": row.source_record_id,
@@ -891,6 +896,9 @@ async def get_site_detail(
         "sourceUrl": row.source_url,
         "rawData": row.raw_data,
     }
+    if row.card_description:
+        resp["cardDescription"] = row.card_description
+    return resp
 
 
 def _sync_to_radar(db: Session, site_id: str, site_update: 'SiteUpdateRequest', lat: float, lon: float) -> int:
