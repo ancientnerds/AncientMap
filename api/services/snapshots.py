@@ -301,7 +301,7 @@ def preview_snapshot(db: Session, snapshot_id: str) -> dict | None:
 
     return {
         "snapshot_id": snap_row.id,
-        "created_at": snap_row.created_at.isoformat(),
+        "created_at": snap_row.created_at.isoformat() + "+00:00",
         "created_by": snap_row.created_by,
         "description": snap_row.description,
         "snapshot_type": snap_row.snapshot_type,
@@ -378,7 +378,7 @@ def site_edit_history(db: Session, site_id: str, limit: int = 20) -> list[dict]:
                 })
 
         history.append({
-            "date": row.created_at.isoformat(),
+            "date": row.created_at.isoformat() + "+00:00",
             "by": row.created_by,
             "description": row.description,
             "type": row.snapshot_type,
@@ -438,7 +438,7 @@ def list_snapshots(db: Session, limit: int = 20, source_id: str | None = None) -
     return [
         {
             "id": row.id,
-            "created_at": row.created_at.isoformat(),
+            "created_at": row.created_at.isoformat() + "+00:00",
             "created_by": row.created_by,
             "description": row.description,
             "snapshot_type": row.snapshot_type,
