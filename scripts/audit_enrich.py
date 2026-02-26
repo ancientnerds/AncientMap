@@ -223,18 +223,22 @@ def sync_from_production(api_url: str, source_ids: list[str]) -> dict:
 # Phase: Fetch Candidates
 # =============================================================================
 
-def fetch_audit_candidates(source_ids: list[str], mode: str) -> list[dict]:
+def fetch_audit_candidates(source_ids: list[str], mode: str, limit: int | None = None) -> list[dict]:
     """Query unified_sites for audit candidates.
 
     In default mode, skips sites audited within the last 90 days.
     In full mode, returns all sites for the given sources.
+    When limit is set, picks N random sites (ignores audit freshness).
     """
     placeholders = ", ".join(f":src_{i}" for i in range(len(source_ids)))
     params = {f"src_{i}": sid for i, sid in enumerate(source_ids)}
 
     date_filter = ""
-    if mode != "full":
+    if limit is None and mode != "full":
         date_filter = f"AND (last_audited IS NULL OR last_audited < NOW() - INTERVAL '{AUDIT_FRESHNESS_DAYS} days')"
+
+    order_clause = "ORDER BY RANDOM()" if limit else "ORDER BY source_id, name"
+    limit_clause = f"LIMIT {int(limit)}" if limit else ""
 
     query = f"""
         SELECT
@@ -254,7 +258,8 @@ def fetch_audit_candidates(source_ids: list[str], mode: str) -> list[dict]:
         FROM unified_sites
         WHERE source_id IN ({placeholders})
         {date_filter}
-        ORDER BY source_id, name
+        {order_clause}
+        {limit_clause}
     """
 
     with engine.connect() as conn:
@@ -389,21 +394,56 @@ def run_mechanical_fixes(sites: list[dict]) -> dict:
 # Wave 1: Wikidata Enrichment Pipeline
 # =============================================================================
 
-def run_enrichment_pipeline() -> dict:
+def run_enrichment_pipeline(card_sites: list[dict] | None = None) -> dict:
     """Run the existing enrichment scripts in sequence.
 
     Calls: export_card_sites.py → enrich_reconcile.py → enrich_fetch_claims.py
            → enrich_wiki_select.py
+
+    When card_sites is provided (--limit mode), writes card_sites.json directly
+    from the candidate list and passes a site ID filter to enrich_reconcile.py.
     """
+    project_root = Path(__file__).parent.parent
+    site_filter_path = OUTPUT_DIR / "audit_site_filter.json"
+
+    # In --limit mode, write card_sites.json and filter file directly
+    if card_sites is not None:
+        card_sites_path = OUTPUT_DIR / "card_sites.json"
+        card_sites_data = [
+            {
+                "site_id": s["site_id"],
+                "name": s["name"],
+                "period_name": s.get("period_name"),
+                "period_start": s.get("period_start"),
+                "site_type": s.get("site_type"),
+                "country": s.get("country"),
+                "description": s.get("description"),
+            }
+            for s in card_sites
+        ]
+        with open(card_sites_path, "w", encoding="utf-8") as f:
+            json.dump(card_sites_data, f, indent=2, ensure_ascii=False)
+        print(f"  Wrote {len(card_sites_data)} sites to {card_sites_path}", flush=True)
+
+        site_ids = [s["site_id"] for s in card_sites]
+        with open(site_filter_path, "w", encoding="utf-8") as f:
+            json.dump(site_ids, f)
+        print(f"  Wrote site filter ({len(site_ids)} IDs) to {site_filter_path}", flush=True)
+
+    reconcile_cmd = [sys.executable, "scripts/enrich_reconcile.py"]
+    if card_sites is not None:
+        reconcile_cmd += ["--site-ids-file", str(site_filter_path)]
+
     scripts = [
-        ("Export sites", [sys.executable, "scripts/export_card_sites.py"]),
-        ("Reconcile QIDs", [sys.executable, "scripts/enrich_reconcile.py"]),
+        ("Reconcile QIDs", reconcile_cmd),
         ("Fetch claims", [sys.executable, "scripts/enrich_fetch_claims.py"]),
         ("Wiki selection", [sys.executable, "scripts/enrich_wiki_select.py"]),
     ]
+    # In normal mode, export_card_sites runs first
+    if card_sites is None:
+        scripts.insert(0, ("Export sites", [sys.executable, "scripts/export_card_sites.py"]))
 
     stats = {}
-    project_root = Path(__file__).parent.parent
 
     for label, cmd in scripts:
         print(f"\n[WAVE 1] {label}...", flush=True)
@@ -664,7 +704,7 @@ def merge_results() -> dict:
 # Phase: Package for db.html Upload
 # =============================================================================
 
-def package_for_upload(source_ids: list[str]) -> dict:
+def package_for_upload(source_ids: list[str], candidate_site_ids: set[str] | None = None) -> dict:
     """Export cleaned sites from local DB as GeoJSON files for upload via db.html.
 
     Creates one GeoJSON FeatureCollection per source. The user uploads the file
@@ -675,14 +715,24 @@ def package_for_upload(source_ids: list[str]) -> dict:
 
     The GeoJSON format matches what db.html's exportGeoJSON() produces,
     so it round-trips cleanly.
+
+    When candidate_site_ids is set (--limit mode), only exports those specific sites.
     """
     OUTPUT_DIR.mkdir(exist_ok=True)
     stats = {}
 
     with engine.connect() as conn:
         for source_id in source_ids:
+            params = {"source_id": source_id}
+            id_filter = ""
+            if candidate_site_ids:
+                id_placeholders = ", ".join(f":sid_{i}" for i in range(len(candidate_site_ids)))
+                for i, sid in enumerate(candidate_site_ids):
+                    params[f"sid_{i}"] = sid
+                id_filter = f"AND id::text IN ({id_placeholders})"
+
             rows = conn.execute(
-                text("""
+                text(f"""
                     SELECT
                         id::text AS site_id,
                         name, lat, lon,
@@ -690,9 +740,10 @@ def package_for_upload(source_ids: list[str]) -> dict:
                         country, description, source_url, thumbnail_url
                     FROM unified_sites
                     WHERE source_id = :source_id
+                    {id_filter}
                     ORDER BY name
                 """),
-                {"source_id": source_id},
+                params,
             ).fetchall()
 
             features = []
@@ -801,10 +852,18 @@ def main() -> None:
         default=DEFAULT_API_URL,
         help=f"Production API URL (default: {DEFAULT_API_URL})",
     )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Test mode: process only N random sites (skips sync and mechanical fixes)",
+    )
     args = parser.parse_args()
 
     source_ids = [args.source] if args.source else ALL_SOURCE_IDS
     phase = args.phase
+    limit = args.limit
 
     print("=" * 60, flush=True)
     print("  Ancient Nerds — Audit & Enrichment Orchestrator", flush=True)
@@ -813,7 +872,33 @@ def main() -> None:
     print(f"  Mode: {args.mode}", flush=True)
     print(f"  Phase: {phase or 'all'}", flush=True)
     print(f"  API: {args.api_url}", flush=True)
+    if limit:
+        print(f"  Limit: {limit} random sites (test mode)", flush=True)
     print("=" * 60, flush=True)
+
+    # --limit mode: skip sync & mechanical, run enrichment + package on N random sites
+    if limit:
+        sites = fetch_audit_candidates(source_ids, args.mode, limit=limit)
+        if not sites:
+            print("\n[AUDIT] No candidates found. Nothing to do.", flush=True)
+            return
+
+        candidate_site_ids = {s["site_id"] for s in sites}
+
+        print("\n" + "=" * 40, flush=True)
+        print("  WAVE 1: Wikidata Enrichment", flush=True)
+        print("=" * 40, flush=True)
+        run_enrichment_pipeline(card_sites=sites)
+
+        print("\n" + "=" * 40, flush=True)
+        print("  PACKAGE: Export for db.html Upload", flush=True)
+        print("=" * 40, flush=True)
+        package_for_upload(source_ids, candidate_site_ids=candidate_site_ids)
+
+        print("\n" + "=" * 60, flush=True)
+        print("  Audit & Enrichment Complete", flush=True)
+        print("=" * 60, flush=True)
+        return
 
     # Step 1: Sync from production API (always first)
     if phase in (None, "sync"):

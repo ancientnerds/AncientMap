@@ -10,6 +10,7 @@ Usage:
     python scripts/enrich_reconcile.py
 """
 
+import argparse
 import json
 import re
 import sys
@@ -75,17 +76,26 @@ def _resolve_article_to_qid(client: httpx.Client, lang: str, title: str) -> str 
     return None
 
 
-def strategy_url_extract() -> dict[str, dict]:
+def strategy_url_extract(allowed_site_ids: set[str] | None = None) -> dict[str, dict]:
     """Strategy 1: Extract QIDs from source_url in the database."""
     matches = {}
     with engine.connect() as conn:
-        rows = conn.execute(text("""
+        id_filter = ""
+        params = {}
+        if allowed_site_ids is not None:
+            id_placeholders = ", ".join(f":sid_{i}" for i in range(len(allowed_site_ids)))
+            for i, sid in enumerate(allowed_site_ids):
+                params[f"sid_{i}"] = sid
+            id_filter = f"AND id::text IN ({id_placeholders})"
+
+        rows = conn.execute(text(f"""
             SELECT id::text AS site_id, source_url
             FROM unified_sites
             WHERE source_id = 'ancient_nerds'
               AND source_url IS NOT NULL
               AND source_url != ''
-        """)).fetchall()
+              {id_filter}
+        """), params).fetchall()
 
     client = httpx.Client(headers=_HEADERS, timeout=30.0, follow_redirects=True)
     try:
@@ -248,6 +258,20 @@ def strategy_sparql_geo(sites: list[dict], already_matched: set[str]) -> dict[st
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Wikidata Entity Reconciliation")
+    parser.add_argument(
+        "--site-ids-file",
+        default=None,
+        help="JSON file with list of site IDs to filter (for --limit mode)",
+    )
+    args = parser.parse_args()
+
+    allowed_site_ids = None
+    if args.site_ids_file:
+        with open(args.site_ids_file, encoding="utf-8") as f:
+            allowed_site_ids = set(json.load(f))
+        print(f"[RECONCILE] Filtering to {len(allowed_site_ids)} site IDs", flush=True)
+
     card_sites_path = OUTPUT_DIR / "card_sites.json"
     if not card_sites_path.exists():
         print(f"Error: {card_sites_path} not found. Run: python scripts/export_card_sites.py")
@@ -278,7 +302,7 @@ def main() -> None:
 
     # Strategy 1: URL extraction
     print("\n[RECONCILE] Strategy 1: Extracting QIDs from source URLs...", flush=True)
-    url_matches = strategy_url_extract()
+    url_matches = strategy_url_extract(allowed_site_ids=allowed_site_ids)
     print(f"  Matched {len(url_matches)} sites from URLs", flush=True)
 
     matched_ids = set(url_matches.keys())
