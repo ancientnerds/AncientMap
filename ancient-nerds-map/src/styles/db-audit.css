@@ -1431,6 +1431,16 @@
   opacity: 1;
 }
 
+.db-source-pill:disabled:not(.active) {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.db-source-pill:disabled:hover {
+  background: none;
+  color: var(--text-secondary);
+}
+
 /* ─── Audited toggle ────────────────────────────────────────────────────── */
 .db-upload-audited-toggle {
   display: inline-flex;
