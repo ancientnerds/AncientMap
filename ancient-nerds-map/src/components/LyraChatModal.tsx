@@ -46,30 +46,30 @@ interface Props {
 
 const EXAMPLE_QUESTIONS: Record<LyraContextType, string[]> = {
   global: [
-    'What sites are older than the Egyptian pyramids?',
-    'Show me underwater ruins in the Mediterranean',
-    'What has Lyra discovered this week?',
-    'Tell me about the Roman Empire\'s military technology',
-    'Any recent discoveries about Göbekli Tepe?',
-    'Compare Angkor Wat and Teotihuacan',
+    'Show me photos of Pompeii',
+    'What has Lyra discovered on her radar this week?',
+    'What are YouTubers saying about the Antikythera mechanism?',
+    'Compare the military tech of Rome and the Mongol Empire',
+    'Find megalithic temples in Malta',
+    'What channels does Lyra monitor?',
   ],
   site: [
-    'Tell me more about this site',
+    'What are all the names this site goes by?',
+    'Show me images of this site',
     'What other sites are nearby?',
-    'What period does this belong to?',
-    'Any recent news about this site?',
+    'Any recent YouTube coverage of this site?',
   ],
   empire: [
-    'What weapons did this empire use?',
-    'How large was their territory?',
-    'Who were their main rivals?',
-    'What caused their decline?',
+    'What weapons and fortifications did they use?',
+    'What was their economy like — trade, coinage, roads?',
+    'How large was their territory at its peak?',
+    'Compare them to their main rival empire',
   ],
   news: [
     'Summarize this discovery',
-    'Where exactly was this found?',
-    'How significant is this finding?',
-    'Are there similar discoveries?',
+    'Show me the site on the map',
+    'What does the full transcript say about this?',
+    'Are there similar sites or discoveries?',
   ],
 }
 
@@ -325,7 +325,7 @@ function TypewriterMessage({
         const colonIndex = url.indexOf(':');
         if (colonIndex === -1) return url;
         const protocol = url.trim().slice(0, colonIndex);
-        if (['http', 'https', 'mailto', 'lyra-video', 'site'].includes(protocol.toLowerCase())) return url;
+        if (['http', 'https', 'mailto', 'lyra-video', 'lyra-site', 'lyra-coord', 'site', 'flag'].includes(protocol.toLowerCase())) return url;
         return '';
       }}>
         {displayedContent || '\u200B'}
