@@ -161,7 +161,7 @@ def restore_snapshot(db: Session, snapshot_id: str, restored_by: str = "system")
         db,
         site_ids=site_ids,
         created_by=restored_by,
-        description=f"Before restore of snapshot (undo)",
+        description="Before restore of snapshot (undo)",
         snapshot_type="edit",
         source_id=orig_source,
     )
