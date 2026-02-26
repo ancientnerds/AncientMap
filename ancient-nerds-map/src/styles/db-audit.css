@@ -560,20 +560,24 @@
   vertical-align: middle;
 }
 
+.db-td-flex {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .db-td-name {
   font-weight: 500;
   max-width: 280px;
   white-space: nowrap;
   color: var(--text-secondary);
-  display: flex;
-  align-items: center;
-  gap: 4px;
 }
 
 .db-name-link {
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
+  min-width: 0;
 }
 
 .db-name-link:hover {
@@ -603,9 +607,6 @@
 
 /* Site ID column */
 .db-td-id {
-  display: flex;
-  align-items: center;
-  gap: 4px;
   white-space: nowrap;
 }
 
@@ -648,9 +649,6 @@
   font-size: 12px;
   white-space: nowrap;
   color: var(--text-secondary);
-  display: flex;
-  align-items: center;
-  gap: 4px;
 }
 
 .db-coords-link {
