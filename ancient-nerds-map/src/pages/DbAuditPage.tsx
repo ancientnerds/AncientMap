@@ -322,8 +322,9 @@ export default function DbAuditPage() {
   const [diffFrom, setDiffFrom] = useState('')
   const [diffTo, setDiffTo] = useState('')
   const [expandedDiffRows, setExpandedDiffRows] = useState<Set<string>>(new Set())
-  const [diffAddedExpanded, setDiffAddedExpanded] = useState(false)
-  const [diffRemovedExpanded, setDiffRemovedExpanded] = useState(false)
+  const [diffChangedOpen, setDiffChangedOpen] = useState(true)
+  const [diffAddedOpen, setDiffAddedOpen] = useState(true)
+  const [diffRemovedOpen, setDiffRemovedOpen] = useState(true)
 
   // Scroll-arrow helper: hides native scrollbar, shows red chevron arrows
   function useScrollArrows() {
@@ -1119,8 +1120,8 @@ export default function DbAuditPage() {
     setDiffData(null)
     setDiffError('')
     setExpandedDiffRows(new Set())
-    setDiffAddedExpanded(false)
-    setDiffRemovedExpanded(false)
+    setDiffAddedOpen(true)
+    setDiffRemovedOpen(true)
     setShowDiffModal(true)
   }, [snapshots])
 
@@ -1138,8 +1139,8 @@ export default function DbAuditPage() {
       const data: DiffResponse = await res.json()
       setDiffData(data)
       setExpandedDiffRows(new Set())
-      setDiffAddedExpanded(false)
-      setDiffRemovedExpanded(false)
+      setDiffAddedOpen(true)
+      setDiffRemovedOpen(true)
     } catch (e: unknown) {
       setDiffError(e instanceof Error ? e.message : 'Failed to load diff')
     } finally {
@@ -2394,10 +2395,10 @@ export default function DbAuditPage() {
                   {/* Changed section */}
                   {diffData.changed.length > 0 && (
                     <div className="db-diff-section">
-                      <div className="db-diff-section-header db-diff-section-changed">
-                        CHANGED ({diffData.changed.length})
+                      <div className="db-diff-section-header db-diff-section-changed" onClick={() => setDiffChangedOpen(v => !v)} style={{ cursor: 'pointer' }}>
+                        <span>{diffChangedOpen ? '\u25BC' : '\u25B6'} CHANGED ({diffData.changed.length})</span>
                       </div>
-                      <div className="db-diff-section-body">
+                      {diffChangedOpen && <div className="db-diff-section-body">
                         {diffData.changed.map(site => {
                           const isExpanded = expandedDiffRows.has(site.id)
                           return (
@@ -2434,26 +2435,17 @@ export default function DbAuditPage() {
                             </div>
                           )
                         })}
-                      </div>
+                      </div>}
                     </div>
                   )}
 
                   {/* Added section */}
                   {diffData.added.length > 0 && (
                     <div className="db-diff-section">
-                      <div
-                        className="db-diff-section-header db-diff-section-added"
-                        onClick={() => diffData.added.length > 20 && setDiffAddedExpanded(v => !v)}
-                        style={diffData.added.length > 20 ? { cursor: 'pointer' } : undefined}
-                      >
-                        ADDED ({diffData.added.length})
-                        {diffData.added.length > 20 && (
-                          <span className="db-diff-section-toggle">
-                            {diffAddedExpanded ? 'Collapse' : 'Show all'}
-                          </span>
-                        )}
+                      <div className="db-diff-section-header db-diff-section-added" onClick={() => setDiffAddedOpen(v => !v)} style={{ cursor: 'pointer' }}>
+                        <span>{diffAddedOpen ? '\u25BC' : '\u25B6'} ADDED ({diffData.added.length})</span>
                       </div>
-                      <div className="db-diff-section-body">
+                      {diffAddedOpen && <div className="db-diff-section-body">
                         <table className="db-diff-list-table">
                           <thead>
                             <tr>
@@ -2461,7 +2453,7 @@ export default function DbAuditPage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {(diffAddedExpanded ? diffData.added : diffData.added.slice(0, 20)).map(site => (
+                            {diffData.added.map(site => (
                               <tr key={site.id} className="db-diff-added-row">
                                 <td>{site.n}</td>
                                 <td>{site.t || ''}</td>
@@ -2471,31 +2463,17 @@ export default function DbAuditPage() {
                             ))}
                           </tbody>
                         </table>
-                        {!diffAddedExpanded && diffData.added.length > 20 && (
-                          <button className="db-diff-show-all" onClick={() => setDiffAddedExpanded(true)}>
-                            Show all {diffData.added.length} added sites
-                          </button>
-                        )}
-                      </div>
+                      </div>}
                     </div>
                   )}
 
                   {/* Removed section */}
                   {diffData.removed.length > 0 && (
                     <div className="db-diff-section">
-                      <div
-                        className="db-diff-section-header db-diff-section-removed"
-                        onClick={() => diffData.removed.length > 20 && setDiffRemovedExpanded(v => !v)}
-                        style={diffData.removed.length > 20 ? { cursor: 'pointer' } : undefined}
-                      >
-                        REMOVED ({diffData.removed.length})
-                        {diffData.removed.length > 20 && (
-                          <span className="db-diff-section-toggle">
-                            {diffRemovedExpanded ? 'Collapse' : 'Show all'}
-                          </span>
-                        )}
+                      <div className="db-diff-section-header db-diff-section-removed" onClick={() => setDiffRemovedOpen(v => !v)} style={{ cursor: 'pointer' }}>
+                        <span>{diffRemovedOpen ? '\u25BC' : '\u25B6'} REMOVED ({diffData.removed.length})</span>
                       </div>
-                      <div className="db-diff-section-body">
+                      {diffRemovedOpen && <div className="db-diff-section-body">
                         <table className="db-diff-list-table">
                           <thead>
                             <tr>
@@ -2503,7 +2481,7 @@ export default function DbAuditPage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {(diffRemovedExpanded ? diffData.removed : diffData.removed.slice(0, 20)).map(site => (
+                            {diffData.removed.map(site => (
                               <tr key={site.id} className="db-diff-removed-row">
                                 <td>{site.n}</td>
                                 <td>{site.t || ''}</td>
@@ -2513,12 +2491,7 @@ export default function DbAuditPage() {
                             ))}
                           </tbody>
                         </table>
-                        {!diffRemovedExpanded && diffData.removed.length > 20 && (
-                          <button className="db-diff-show-all" onClick={() => setDiffRemovedExpanded(true)}>
-                            Show all {diffData.removed.length} removed sites
-                          </button>
-                        )}
-                      </div>
+                      </div>}
                     </div>
                   )}
 
