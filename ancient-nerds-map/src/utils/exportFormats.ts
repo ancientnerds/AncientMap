@@ -17,6 +17,7 @@ export interface ParsedSite {
   source_url?: string
   thumbnail_url?: string
   card_description?: string
+  confidence_score?: number
   _status?: 'insert' | 'update' | 'error'
   _error?: string
   _matchedId?: string  // ID of existing site if this is an update
@@ -38,6 +39,7 @@ interface AuditSite {
   u?: string       // source_url
   i?: string       // thumbnail_url
   cd?: string      // card_description
+  cf?: number      // confidence_score
   eb?: string      // edited_by
   ea?: string      // edited_at
 }
@@ -179,6 +181,7 @@ const HEADER_MAP: Record<string, keyof ParsedSite> = {
   source_url: 'source_url', url: 'source_url', u: 'source_url',
   thumbnail_url: 'thumbnail_url', image: 'thumbnail_url', i: 'thumbnail_url',
   card_description: 'card_description', cd: 'card_description',
+  confidence_score: 'confidence_score', cf: 'confidence_score',
 }
 
 function mapRow(raw: Record<string, string | number | null | undefined>): ParsedSite | null {
@@ -193,6 +196,9 @@ function mapRow(raw: Record<string, string | number | null | undefined>): Parsed
     } else if (field === 'period_start') {
       const n = typeof value === 'number' ? value : parseInt(String(value), 10)
       if (!isNaN(n)) site.period_start = n
+    } else if (field === 'confidence_score') {
+      const n = typeof value === 'number' ? value : parseFloat(String(value))
+      if (!isNaN(n)) site.confidence_score = n
     } else {
       (site as Record<string, unknown>)[field] = String(value).trim()
     }
