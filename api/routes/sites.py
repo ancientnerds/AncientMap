@@ -1239,7 +1239,7 @@ async def batch_upload_sites(
     card_stats_params = []
     errors = []
 
-    for i, site in enumerate(sites):
+    for site in sites:
         period_start = site.period_start
         if period_start is None and site.period_name:
             period_start = _period_to_year(site.period_name)
