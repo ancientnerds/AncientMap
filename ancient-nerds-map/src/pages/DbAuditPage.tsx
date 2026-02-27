@@ -890,25 +890,25 @@ export default function DbAuditPage() {
         if (existing) {
           p._status = 'update'
           p._matchedId = existing.id
-          p._currentData = {
-            name: existing.n,
-            site_type: existing.t,
-            period_name: existing.pn,
-            period_start: existing.p,
-            country: existing.c,
-            description: existing.d,
-            source_url: existing.u,
-            card_description: existing.cd,
+          // Dynamic diff: map compact AuditSite keys → ParsedSite field names
+          const fieldMap: Record<string, keyof typeof existing> = {
+            site_type: 't', period_name: 'pn', period_start: 'p',
+            country: 'c', description: 'd', source_url: 'u',
+            thumbnail_url: 'i', card_description: 'cd',
           }
-          // Compute which fields actually changed
+          const currentData: Record<string, unknown> = { name: existing.n }
           const changed: string[] = []
-          if ((p.site_type || '') !== (existing.t || '')) changed.push('site_type')
-          if ((p.period_name || '') !== (existing.pn || '')) changed.push('period_name')
-          if ((p.period_start ?? null) !== (existing.p ?? null)) changed.push('period_start')
-          if ((p.country || '') !== (existing.c || '')) changed.push('country')
-          if ((p.description || '') !== (existing.d || '')) changed.push('description')
-          if ((p.source_url || '') !== (existing.u || '')) changed.push('source_url')
-          if ((p.card_description || '') !== (existing.cd || '')) changed.push('card_description')
+          for (const [field, compact] of Object.entries(fieldMap)) {
+            const existingVal = existing[compact] ?? null
+            currentData[field] = existingVal
+            // Only compare fields present in the parsed data
+            if (field in p) {
+              const parsedVal = (p as unknown as Record<string, unknown>)[field] ?? null
+              const norm = (v: unknown) => (v == null || v === '') ? null : v
+              if (norm(parsedVal) !== norm(existingVal)) changed.push(field)
+            }
+          }
+          p._currentData = currentData as ParsedSite['_currentData']
           p._changedFields = changed
         } else if (!p._status) {
           p._status = 'insert'
