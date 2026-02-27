@@ -36,10 +36,11 @@ interface AuditSite {
   eb?: string      // edited_by
   ea?: string      // edited_at (ISO timestamp)
   aud?: string     // last_audited (ISO timestamp)
+  cf?: number      // confidence_score (0.0-1.0)
 }
 
 type IssueFilter = 'all' | 'no_period' | 'no_type' | 'no_country' | 'suspect_modern' | 'no_desc' | 'no_source' | 'no_image' | 'no_coords'
-type SortColumn = 'name' | 'type' | 'period' | 'country' | 'edited_at' | 'audited'
+type SortColumn = 'name' | 'type' | 'period' | 'country' | 'edited_at' | 'audited' | 'confidence'
 type SortDir = 'asc' | 'desc'
 
 const CATEGORY_OPTIONS = Object.keys(CATEGORY_COLORS)
@@ -85,6 +86,22 @@ function hasDescIssue(s: AuditSite) { return !s.d }
 function hasSourceIssue(s: AuditSite) { return !s.u }
 function hasImageIssue(s: AuditSite) { return !s.i }
 function hasCoordsIssue(s: AuditSite) { return s.la === 0 && s.lo === 0 }
+
+const CONF_BUCKETS = ['High (0.9+)', 'Medium (0.7–0.9)', 'Low (0.5–0.7)', 'Very Low (<0.5)', 'None'] as const
+function confBucket(cf?: number): string {
+  if (cf == null) return 'None'
+  if (cf >= 0.9) return 'High (0.9+)'
+  if (cf >= 0.7) return 'Medium (0.7–0.9)'
+  if (cf >= 0.5) return 'Low (0.5–0.7)'
+  return 'Very Low (<0.5)'
+}
+function confColor(cf?: number): string {
+  if (cf == null) return '#666'
+  if (cf >= 0.9) return '#22c55e'
+  if (cf >= 0.7) return '#eab308'
+  if (cf >= 0.5) return '#f97316'
+  return '#ef4444'
+}
 
 function formatRelativeDate(iso: string): string {
   const d = new Date(iso)
@@ -211,6 +228,7 @@ export default function DbAuditPage() {
   const [countryFilters, setCountryFilters] = useState<Set<string>>(new Set())
   const [periodFilters, setPeriodFilters] = useState<Set<string>>(new Set())
   const [editedByFilters, setEditedByFilters] = useState<Set<string>>(new Set())
+  const [confFilters, setConfFilters] = useState<Set<string>>(new Set())
   const [sortColumn, setSortColumn] = useState<SortColumn>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
 
@@ -554,7 +572,7 @@ export default function DbAuditPage() {
 
   // Are any filters active?
   const hasActiveFilters = activeIssue !== 'all' || typeFilters.size > 0 || countryFilters.size > 0 ||
-    periodFilters.size > 0 || editedByFilters.size > 0 || searchQuery !== '' || sourceFilter !== 'all'
+    periodFilters.size > 0 || editedByFilters.size > 0 || confFilters.size > 0 || searchQuery !== '' || sourceFilter !== 'all'
 
   const clearAllFilters = useCallback(() => {
     setActiveIssue('all')
@@ -562,6 +580,7 @@ export default function DbAuditPage() {
     setCountryFilters(new Set())
     setPeriodFilters(new Set())
     setEditedByFilters(new Set())
+    setConfFilters(new Set())
     setSearchQuery('')
     setSourceFilter('all')
   }, [])
@@ -588,6 +607,7 @@ export default function DbAuditPage() {
     if (countryFilters.size > 0) result = result.filter(s => countryFilters.has(s.c || ''))
     if (periodFilters.size > 0) result = result.filter(s => periodFilters.has(resolvePeriod(s.pn, s.p)))
     if (editedByFilters.size > 0) result = result.filter(s => editedByFilters.has(s.eb || 'initial'))
+    if (confFilters.size > 0) result = result.filter(s => confFilters.has(confBucket(s.cf)))
 
     // Search
     if (searchQuery) {
@@ -615,12 +635,13 @@ export default function DbAuditPage() {
           cmp = aa - ab
           break
         }
+        case 'confidence': cmp = (a.cf ?? -1) - (b.cf ?? -1); break
       }
       return sortDir === 'asc' ? cmp : -cmp
     })
 
     return result
-  }, [sites, sourceFilter, activeIssue, typeFilters, countryFilters, periodFilters, editedByFilters, searchQuery, sortColumn, sortDir])
+  }, [sites, sourceFilter, activeIssue, typeFilters, countryFilters, periodFilters, editedByFilters, confFilters, searchQuery, sortColumn, sortDir])
 
   // Reset pagination when filters change
   useEffect(() => { setVisibleRows(ROWS_PER_PAGE) }, [filteredSites])
@@ -752,7 +773,7 @@ export default function DbAuditPage() {
   // Sort handler
   const handleSort = useCallback((col: SortColumn) => {
     if (sortColumn === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortColumn(col); setSortDir(col === 'edited_at' || col === 'audited' ? 'desc' : 'asc') }
+    else { setSortColumn(col); setSortDir(col === 'edited_at' || col === 'audited' || col === 'confidence' ? 'desc' : 'asc') }
   }, [sortColumn])
 
   const sortArrow = (col: SortColumn) =>
@@ -1514,6 +1535,13 @@ export default function DbAuditPage() {
           selected={editedByFilters}
           onChange={setEditedByFilters}
         />
+        <MultiSelect
+          label="Confidence"
+          options={[...CONF_BUCKETS]}
+          selected={confFilters}
+          onChange={setConfFilters}
+          colorFn={v => v === 'High (0.9+)' ? '#22c55e' : v === 'Medium (0.7–0.9)' ? '#eab308' : v === 'Low (0.5–0.7)' ? '#f97316' : v === 'Very Low (<0.5)' ? '#ef4444' : '#666'}
+        />
         <div className="db-filter-group">
           <div className="db-search-wrap">
             <input
@@ -1559,6 +1587,7 @@ export default function DbAuditPage() {
               <th className="db-th db-th-nosort" title="Last edited by (user or initial import)">User</th>
               <th className="db-th db-th-nosort db-th-db" title="Source database">DB</th>
               <th className="db-th" onClick={() => handleSort('audited')} title="Audit status — green check means audited">Aud{sortArrow('audited')}</th>
+              <th className="db-th" onClick={() => handleSort('confidence')} title="AI confidence score (0.0–1.0)">Conf{sortArrow('confidence')}</th>
               <th className="db-th" onClick={() => handleSort('edited_at')}>Last Edited{sortArrow('edited_at')}</th>
               <th className="db-th db-th-nosort db-th-id" title="Site UUID — click to copy">ID</th>
               {isFounder && <th className="db-th db-th-edit">Edit</th>}
@@ -1733,6 +1762,15 @@ export default function DbAuditPage() {
                     {site.aud
                       ? <span className="db-audited-yes" title={formatRelativeDate(site.aud)}>&#10003;</span>
                       : <span className="db-audited-no">&mdash;</span>}
+                  </td>
+
+                  {/* Confidence */}
+                  <td className="db-td db-td-conf" title={site.cf != null ? `${site.cf}` : 'No score'}>
+                    {site.cf != null ? (
+                      <span className="db-conf-badge" style={{ background: confColor(site.cf) + '20', color: confColor(site.cf), borderColor: confColor(site.cf) + '55' }}>
+                        {site.cf.toFixed(2)}
+                      </span>
+                    ) : <span className="db-muted">&mdash;</span>}
                   </td>
 
                   {/* Last edited (timestamp) — click for history */}

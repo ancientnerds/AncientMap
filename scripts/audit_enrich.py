@@ -131,6 +131,7 @@ def sync_from_production(api_url: str, source_ids: list[str]) -> dict:
     skipped = len(all_sites) - len(valid)
 
     with engine.connect() as conn:
+        conn.execute(text("SET statement_timeout = '300s'"))
         # Create temp table
         conn.execute(text("""
             CREATE TEMP TABLE _sync_incoming (
@@ -348,6 +349,9 @@ def run_mechanical_fixes(sites: list[dict]) -> dict:
         return "'" + v.replace("'", "''") + "'"
 
     with engine.connect() as conn:
+        # Extend timeout for bulk audit operations (default 30s is too short)
+        conn.execute(text("SET statement_timeout = '300s'"))
+
         # --- Suspect modern flagging ---
         # Detect sites whose names match modern-institution phrases.
         # Only flags sites with vague types (Unknown, NULL, site) — specific
@@ -631,6 +635,7 @@ def apply_enrichment(overwrite: bool = False) -> dict:
     change_log: list[dict] = []
 
     with engine.connect() as conn:
+        conn.execute(text("SET statement_timeout = '300s'"))
         for site_id in hc_site_ids:
             # Fetch current values for this site
             row = conn.execute(
@@ -1237,6 +1242,7 @@ def package_for_upload(source_ids: list[str], candidate_site_ids: set[str] | Non
     stats = {}
 
     with engine.connect() as conn:
+        conn.execute(text("SET statement_timeout = '300s'"))
         for source_id in source_ids:
             params = {"source_id": source_id}
             id_filter = ""
@@ -1249,12 +1255,14 @@ def package_for_upload(source_ids: list[str], candidate_site_ids: set[str] | Non
             rows = conn.execute(
                 text(f"""
                     SELECT
-                        id::text AS site_id,
-                        name, lat, lon,
-                        site_type, period_name, period_start,
-                        country, description, source_url, thumbnail_url
-                    FROM unified_sites
-                    WHERE source_id = :source_id
+                        us.id::text AS site_id,
+                        us.name, us.lat, us.lon,
+                        us.site_type, us.period_name, us.period_start,
+                        us.country, us.description, us.source_url, us.thumbnail_url,
+                        cs.confidence_score
+                    FROM unified_sites us
+                    LEFT JOIN card_stats cs ON cs.site_id = us.id
+                    WHERE us.source_id = :source_id
                     {id_filter}
                     ORDER BY name
                 """),
@@ -1282,6 +1290,7 @@ def package_for_upload(source_ids: list[str], candidate_site_ids: set[str] | Non
                         "description": row.description,
                         "source_url": row.source_url,
                         "thumbnail_url": row.thumbnail_url,
+                        "confidence_score": row.confidence_score,
                     },
                 }
                 features.append(feature)
