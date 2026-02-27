@@ -368,27 +368,28 @@
     <div class="wave-header">
       <div class="wave-num">2</div>
       <div class="wave-title">Agent Verification & Gap Fill</div>
-      <div class="wave-type">10 parallel Claude agents per round</div>
+      <div class="wave-type">5 parallel Claude agents per wave</div>
     </div>
     <div class="wave-body">
-      <p style="color:#aaa; font-size:14px;">Only sites with remaining gaps/discrepancies after Waves 0-1. ~500-1500 sites, split into batches of ~50.</p>
+      <p style="color:#aaa; font-size:14px;">Only sites with remaining gaps/discrepancies after Waves 0-1. ~500-1500 sites, split into batches of ~50. Three-phase flow with human-in-the-loop.</p>
       <div class="steps">
         <div class="step">
-          <div class="step-label">Prepare</div>
-          <div class="step-name">Identify Gaps</div>
-          <div class="step-detail">Find sites still missing period_start, country, site_type, or with Wikidata discrepancies. Split into batch files.</div>
+          <div class="step-label">Phase 1 · <code>--phase verify</code></div>
+          <div class="step-name">Prepare Batches</div>
+          <div class="step-detail">Detects: NULL period_start, P1 suspects (period &gt; 1500 on non-museum), low-confidence Wikidata (&lt; 0.8), missing country/type, no description. Writes batch input files.</div>
           <div class="step-file">output/audit_batches/batch_NNN_input.json</div>
         </div>
         <div class="step">
-          <div class="step-label">Execute</div>
-          <div class="step-name">10 Agents × N Rounds</div>
-          <div class="step-detail">Each agent web-searches ~50 sites using Consensus, Scholar Gateway, WebSearch. Produces fixes with evidence.</div>
+          <div class="step-label">Phase 2 · Claude Code</div>
+          <div class="step-name">5 Agents × N Waves</div>
+          <div class="step-detail">Each agent researches ~50 sites via WebSearch, Consensus, Scholar Gateway. Produces fixes with evidence and confidence (high/medium/low). Launched 5 at a time to avoid rate limits.</div>
+          <div class="step-file">docs/procedures/AUDIT_ENRICHMENT.md §3b</div>
         </div>
         <div class="step">
-          <div class="step-label">Merge</div>
-          <div class="step-name">Apply Results → DB</div>
-          <div class="step-detail">Conditional WHERE updates protecting user edits. Sets <code>last_audited</code> timestamp.</div>
-          <div class="step-file">output/audit_batches/batch_NNN_results.json</div>
+          <div class="step-label">Phase 3 · <code>--phase merge</code></div>
+          <div class="step-name">Validated Merge → DB</div>
+          <div class="step-detail">Validates site_type against CANONICAL_TYPES, auto-computes period_name. <strong>High</strong> confidence → auto-apply. <strong>Medium</strong> → deferred to manual review. <strong>Low</strong> → skipped. Use <code>--dry-run</code> to preview.</div>
+          <div class="step-file">output/audit_manual_review.json</div>
         </div>
       </div>
       <div class="applies">
@@ -542,7 +543,12 @@
     <div class="flow-arrow">→</div>
     <div class="output-card">
       <div class="fname">output/audit_batches/</div>
-      <div class="fdesc">Agent input/output JSONs</div>
+      <div class="fdesc">Agent input/output JSONs + manifest</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="output-card" style="border-color:#8b5cf644;">
+      <div class="fname" style="color:#8b5cf6;">output/audit_manual_review.json</div>
+      <div class="fdesc">Medium-confidence fixes for human review</div>
     </div>
     <div class="flow-arrow">→</div>
     <div class="output-card" style="border-color:#f4365844;">
@@ -572,15 +578,17 @@
     <span class="comment"># Use production API instead of local</span><br>
     <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--api-url https://ancientnerds.com</span><br><br>
     <span class="comment"># Individual phases</span><br>
-    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase sync</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Fetch production → local DB</span><br>
-    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase mechanical</span> <span class="comment">&nbsp;&nbsp;# Wave 0 (+ country backfill)</span><br>
-    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase enrich</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;# Wave 1 (+ card_stats import)</span><br>
-    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase apply</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Apply enrichment → unified_sites</span><br>
-    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase images</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;# Download wiki images (~2-4h)</span><br>
-    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase verify</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;# Wave 2 prep</span><br>
-    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase merge</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Apply agent results</span><br>
-    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase package</span> <span class="comment">&nbsp;&nbsp;&nbsp;# Export for db.html upload</span><br>
-    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase export</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;# Re-export static JSON</span><br>
+    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase sync</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Fetch production → local DB</span><br>
+    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase mechanical</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Wave 0 (+ country backfill)</span><br>
+    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase enrich</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Wave 1 (+ card_stats import)</span><br>
+    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase apply</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Apply enrichment → unified_sites</span><br>
+    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase images</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Download wiki images (~2-4h)</span><br>
+    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase verify</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Wave 2 prep (create batch files)</span><br>
+    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase agents</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Wave 2 batch status + handoff</span><br>
+    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase merge --dry-run</span> <span class="comment">&nbsp;&nbsp;# Preview agent results merge</span><br>
+    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase merge</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Apply agent results → DB</span><br>
+    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase package</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Export for db.html upload</span><br>
+    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase export</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Re-export static JSON</span><br>
   </div>
 </div>
 

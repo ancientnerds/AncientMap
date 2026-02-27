@@ -14,30 +14,28 @@ Waves:
   0: Mechanical fixes + country backfill (deterministic, no LLM)
   1: Wikidata enrichment pipeline + card_stats import (HTTP, no LLM)
   Apply: Write enrichment data back to unified_sites (JSON → DB)
-  Images: Download wiki images from Wikimedia Commons (long-running)
   2: Agent verification & gap fill (prepare batches for Claude Code agents)
   3: Card descriptions (delegated to CARD_DESCRIPTIONS.md procedure)
 
 Usage:
     python scripts/audit_enrich.py                          # Full run: sync + waves + package
     python scripts/audit_enrich.py --mode full              # Force re-audit everything
-    python scripts/audit_enrich.py --mode full --skip-images  # Full run, skip image download
     python scripts/audit_enrich.py --phase sync             # Only: fetch API → local DB
     python scripts/audit_enrich.py --phase mechanical       # Only Wave 0
     python scripts/audit_enrich.py --phase enrich           # Only Wave 1
     python scripts/audit_enrich.py --phase apply            # Only: apply enrichment → unified_sites
-    python scripts/audit_enrich.py --phase images           # Only: download wiki images
     python scripts/audit_enrich.py --phase verify           # Only Wave 2 (prepare agent batches)
+    python scripts/audit_enrich.py --phase agents           # Show Wave 2 batch status + handoff instructions
+    python scripts/audit_enrich.py --phase merge --dry-run  # Preview merge changes without writing DB
     python scripts/audit_enrich.py --phase merge            # Merge agent results → DB
     python scripts/audit_enrich.py --phase package          # Only: export cleaned DB for db.html upload
     python scripts/audit_enrich.py --phase export           # Only: re-export static JSON
     python scripts/audit_enrich.py --limit 3                # Test with 3 random sites
-    python scripts/audit_enrich.py --limit 3 --skip-images  # Test without image download
-
     python scripts/audit_enrich.py --api-url https://ancientnerds.com  # Use production API
 """
 
 import argparse
+import contextlib
 import json
 import subprocess
 import sys
@@ -51,7 +49,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from sqlalchemy import text
 
 from pipeline.database import engine
-from pipeline.normalizers.site_type import normalize_site_type
+from pipeline.normalizers.site_type import CANONICAL_TYPES, normalize_site_type
 from pipeline.site_images.wikimedia_fallback import get_commons_thumb_url
 from pipeline.utils.country_lookup import lookup_country
 from pipeline.utils.text import categorize_period
@@ -320,7 +318,24 @@ def run_mechanical_fixes(sites: list[dict]) -> dict:
 
     Returns stats dict.
     """
+    # Phrases that indicate a purely modern institution with no archaeological value.
+    # These use word-boundary matching (\m...\M) to avoid false positives like
+    # "Huijazoo", "Zootzen", "Zook". Only sites with type Unknown/NULL/site are
+    # flagged — specific types (heritage_site, temple, fortress) are left alone.
+    SUSPECT_MODERN_PHRASES = [
+        r"\mwildlife sanctuary\M",
+        r"\mwildlife refuge\M",
+        r"\msafari park\M",
+        r"\mbotanical garden\M",
+        r"\mtheme park\M",
+        r"\mamusement park\M",
+        r"\mwater park\M",
+        r"\maquarium\M",
+        r"\mplanetarium\M",
+    ]
+
     stats = {
+        "suspect_modern_flagged": 0,
         "site_type_normalized": 0,
         "period_name_recomputed": 0,
         "country_filled": 0,
@@ -333,6 +348,42 @@ def run_mechanical_fixes(sites: list[dict]) -> dict:
         return "'" + v.replace("'", "''") + "'"
 
     with engine.connect() as conn:
+        # --- Suspect modern flagging ---
+        # Detect sites whose names match modern-institution phrases.
+        # Only flags sites with vague types (Unknown, NULL, site) — specific
+        # archaeological types are never overwritten.
+        regex_pattern = "(" + "|".join(SUSPECT_MODERN_PHRASES) + ")"
+        suspects = conn.execute(
+            text("""
+                SELECT id::text, name, site_type
+                FROM unified_sites
+                WHERE name ~* :pattern
+                  AND site_type != 'suspect_modern'
+                  AND (site_type IS NULL OR site_type IN ('Unknown', 'site'))
+            """),
+            {"pattern": regex_pattern},
+        ).fetchall()
+
+        for row in suspects:
+            conn.execute(
+                text("""
+                    UPDATE unified_sites
+                    SET site_type = 'suspect_modern', edited_by = 'audit_enrich'
+                    WHERE id = :sid
+                """),
+                {"sid": row.id},
+            )
+            sql_statements.append(
+                f"-- SUSPECT MODERN: {row.name} (was: {row.site_type})\n"
+                f"UPDATE unified_sites SET site_type = 'suspect_modern' "
+                f"WHERE id = '{row.id}' AND site_type = {_sql_str(row.site_type or 'NULL')};"
+            )
+        stats["suspect_modern_flagged"] = len(suspects)
+        if suspects:
+            print(f"  Suspect modern: {len(suspects)} sites flagged for review", flush=True)
+            for row in suspects:
+                print(f"    - {row.name} (was: {row.site_type})", flush=True)
+
         # --- Site type normalization ---
         # Fetch distinct raw site_types across all sources
         raw_types = conn.execute(text(
@@ -519,11 +570,12 @@ def run_enrichment_pipeline(card_sites: list[dict] | None = None) -> dict:
 # =============================================================================
 
 
-def apply_enrichment() -> dict:
+def apply_enrichment(overwrite: bool = False) -> dict:
     """Apply Wikidata enrichment data back to unified_sites.
 
     Reads enrichment JSONs produced by Wave 1 and fills NULL fields.
-    Only uses high-confidence matches (>= 0.8). Never overwrites existing data.
+    Only uses high-confidence matches (>= 0.8).
+    When overwrite=True, also replaces existing values (skipping no-ops).
     Sets edited_by = 'audit_enrich' for tracking.
     """
     MIN_CONFIDENCE = 0.8
@@ -559,13 +611,22 @@ def apply_enrichment() -> dict:
     }
     print(f"[APPLY] {len(hc_site_ids)} sites with confidence >= {MIN_CONFIDENCE}", flush=True)
 
+    if overwrite:
+        print(f"[APPLY] Overwrite mode: will verify + correct existing values", flush=True)
+
     stats = {
         "period_start_filled": 0,
+        "period_start_overwritten": 0,
         "period_name_filled": 0,
+        "period_name_overwritten": 0,
         "thumbnail_url_filled": 0,
+        "thumbnail_url_overwritten": 0,
         "source_url_filled": 0,
+        "source_url_overwritten": 0,
         "description_filled": 0,
+        "description_overwritten": 0,
         "country_filled": 0,
+        "country_overwritten": 0,
     }
     change_log: list[dict] = []
 
@@ -589,81 +650,96 @@ def apply_enrichment() -> dict:
             site_wiki = wiki.get(site_id, {})
 
             # period_start from P571 inception
-            if row.period_start is None and site_claims.get("inception") is not None:
-                updates["period_start"] = site_claims["inception"]
-                change_log.append({
-                    "site_id": site_id,
-                    "field": "period_start",
-                    "old": None,
-                    "new": site_claims["inception"],
-                    "source": "wikidata_P571",
-                })
-                stats["period_start_filled"] += 1
+            if site_claims.get("inception") is not None and (row.period_start is None or overwrite):
+                new_val = site_claims["inception"]
+                old_val = row.period_start
+                if old_val != new_val:
+                    updates["period_start"] = new_val
+                    stat_key = "period_start_overwritten" if old_val is not None else "period_start_filled"
+                    change_log.append({
+                        "site_id": site_id,
+                        "field": "period_start",
+                        "old": old_val,
+                        "new": new_val,
+                        "source": "wikidata_P571",
+                    })
+                    stats[stat_key] += 1
 
             # period_name recomputation (after period_start fill)
             effective_period_start = updates.get("period_start", row.period_start)
-            if effective_period_start is not None and row.period_name is None:
+            if effective_period_start is not None and (row.period_name is None or overwrite):
                 new_period_name = categorize_period(effective_period_start)
-                if new_period_name:
+                if new_period_name and new_period_name != row.period_name:
                     updates["period_name"] = new_period_name
+                    stat_key = "period_name_overwritten" if row.period_name is not None else "period_name_filled"
                     change_log.append({
                         "site_id": site_id,
                         "field": "period_name",
-                        "old": None,
+                        "old": row.period_name,
                         "new": new_period_name,
                         "source": "computed_from_period_start",
                     })
-                    stats["period_name_filled"] += 1
+                    stats[stat_key] += 1
 
             # thumbnail_url from P18 commons_image
-            if row.thumbnail_url is None and site_claims.get("commons_image"):
+            if site_claims.get("commons_image") and (row.thumbnail_url is None or overwrite):
                 thumb_url = get_commons_thumb_url(site_claims["commons_image"], width=400)
-                updates["thumbnail_url"] = thumb_url
-                change_log.append({
-                    "site_id": site_id,
-                    "field": "thumbnail_url",
-                    "old": None,
-                    "new": thumb_url,
-                    "source": "wikidata_P18",
-                })
-                stats["thumbnail_url_filled"] += 1
+                if thumb_url != row.thumbnail_url:
+                    updates["thumbnail_url"] = thumb_url
+                    stat_key = "thumbnail_url_overwritten" if row.thumbnail_url is not None else "thumbnail_url_filled"
+                    change_log.append({
+                        "site_id": site_id,
+                        "field": "thumbnail_url",
+                        "old": row.thumbnail_url,
+                        "new": thumb_url,
+                        "source": "wikidata_P18",
+                    })
+                    stats[stat_key] += 1
 
             # source_url from wiki article URL
-            if row.source_url is None and site_wiki.get("url"):
-                updates["source_url"] = site_wiki["url"]
-                change_log.append({
-                    "site_id": site_id,
-                    "field": "source_url",
-                    "old": None,
-                    "new": site_wiki["url"],
-                    "source": "wikipedia_article",
-                })
-                stats["source_url_filled"] += 1
+            if site_wiki.get("url") and (row.source_url is None or overwrite):
+                new_url = site_wiki["url"]
+                if new_url != row.source_url:
+                    updates["source_url"] = new_url
+                    stat_key = "source_url_overwritten" if row.source_url is not None else "source_url_filled"
+                    change_log.append({
+                        "site_id": site_id,
+                        "field": "source_url",
+                        "old": row.source_url,
+                        "new": new_url,
+                        "source": "wikipedia_article",
+                    })
+                    stats[stat_key] += 1
 
             # description from Wikipedia extract (first 500 chars)
-            if row.description is None and site_wiki.get("extract"):
+            if site_wiki.get("extract") and (row.description is None or overwrite):
                 desc = site_wiki["extract"][:500]
-                updates["description"] = desc
-                change_log.append({
-                    "site_id": site_id,
-                    "field": "description",
-                    "old": None,
-                    "new": desc,
-                    "source": "wikipedia_extract",
-                })
-                stats["description_filled"] += 1
+                if desc != row.description:
+                    updates["description"] = desc
+                    stat_key = "description_overwritten" if row.description is not None else "description_filled"
+                    change_log.append({
+                        "site_id": site_id,
+                        "field": "description",
+                        "old": row.description,
+                        "new": desc,
+                        "source": "wikipedia_extract",
+                    })
+                    stats[stat_key] += 1
 
             # country from P17 (fallback when reverse geocoding missed it)
-            if row.country is None and site_claims.get("country"):
-                updates["country"] = site_claims["country"]
-                change_log.append({
-                    "site_id": site_id,
-                    "field": "country",
-                    "old": None,
-                    "new": site_claims["country"],
-                    "source": "wikidata_P17",
-                })
-                stats["country_filled"] += 1
+            if site_claims.get("country") and (row.country is None or overwrite):
+                new_country = site_claims["country"]
+                if new_country != row.country:
+                    updates["country"] = new_country
+                    stat_key = "country_overwritten" if row.country is not None else "country_filled"
+                    change_log.append({
+                        "site_id": site_id,
+                        "field": "country",
+                        "old": row.country,
+                        "new": new_country,
+                        "source": "wikidata_P17",
+                    })
+                    stats[stat_key] += 1
 
             if not updates:
                 continue
@@ -688,6 +764,7 @@ def apply_enrichment() -> dict:
     log_data = {
         "applied_at": datetime.now(timezone.utc).isoformat(),
         "min_confidence": MIN_CONFIDENCE,
+        "overwrite": overwrite,
         "stats": stats,
         "changes": change_log,
     }
@@ -701,47 +778,6 @@ def apply_enrichment() -> dict:
     print(f"  Change log: {log_path} ({len(change_log)} changes)", flush=True)
 
     return stats
-
-
-# =============================================================================
-# Wiki Image Download
-# =============================================================================
-
-
-def run_wiki_images() -> dict:
-    """Download wiki images for sites with Wikidata matches.
-
-    Calls wiki_image_downloader.py with --parallel 1 (mandatory — parallel
-    execution hits Wikimedia 429 rate limits).
-    """
-    project_root = Path(__file__).parent.parent
-
-    print("\n[IMAGES] Starting wiki image download (sequential)...", flush=True)
-    print("  This is long-running (~2-4 hours for 5000 sites)", flush=True)
-
-    cmd = [
-        sys.executable, "-m", "pipeline.wiki_image_downloader",
-    ]
-
-    result = subprocess.run(
-        cmd,
-        cwd=str(project_root),
-        capture_output=True,
-        text=True,
-    )
-
-    if result.returncode != 0:
-        print(f"  ERROR: Wiki image download failed (exit code {result.returncode})", flush=True)
-        if result.stderr:
-            print(f"  stderr: {result.stderr[:500]}", flush=True)
-        return {"status": "FAILED"}
-
-    lines = result.stdout.strip().split("\n")
-    for line in lines[-5:]:
-        print(f"  {line}", flush=True)
-
-    print("[IMAGES] Complete", flush=True)
-    return {"status": "OK"}
 
 
 # =============================================================================
@@ -774,6 +810,9 @@ def prepare_agent_batches(sites: list[dict]) -> dict:
         with open(wiki_path, encoding="utf-8") as f:
             wiki = json.load(f).get("articles", {})
 
+    # Museum-like types exempt from P1 suspect-modern check
+    MUSEUM_TYPES = {"museum", "geological interest"}
+
     # Identify sites needing research
     needs_research = []
     for site in sites:
@@ -790,6 +829,27 @@ def prepare_agent_batches(sites: list[dict]) -> dict:
             else:
                 issues.append("period_start is NULL — no enrichment data, needs research")
 
+        # P1: Suspiciously modern period_start on non-museum sites
+        st = site.get("site_type") or ""
+        if (
+            site["period_start"] is not None
+            and site["period_start"] > 1500
+            and st.lower() not in MUSEUM_TYPES
+            and "museum" not in st.lower()
+        ):
+            issues.append(
+                f"period_start={site['period_start']} — suspiciously modern for "
+                f"a {st or 'unknown type'}, verify not a renovation/discovery date"
+            )
+
+        # Low-confidence Wikidata match excluded from auto-apply
+        qid_info = qids.get(sid, {})
+        if qid_info and qid_info.get("confidence", 1.0) < 0.8:
+            issues.append(
+                f"Wikidata match {qid_info.get('qid', '?')} at confidence "
+                f"{qid_info.get('confidence', 0):.2f}, needs human verification"
+            )
+
         # No Wikidata match at all
         if sid not in qids:
             issues.append("No Wikidata match — needs manual identification")
@@ -799,8 +859,14 @@ def prepare_agent_batches(sites: list[dict]) -> dict:
             issues.append("country is NULL — needs geo-lookup or research")
 
         # Missing site_type
-        if not site["site_type"] or site["site_type"] in ("unknown", "Unknown"):
+        if not st or st in ("unknown", "Unknown"):
             issues.append("site_type is unknown — needs classification")
+
+        # Description quality: empty or very short after Wave 1
+        desc = site.get("description") or ""
+        wiki_extract = wiki.get(sid, {}).get("extract", "")
+        if len(desc) < 20 and not wiki_extract:
+            issues.append("No description and no wiki extract — needs research for context")
 
         if issues:
             entry = dict(site)
@@ -863,14 +929,78 @@ def prepare_agent_batches(sites: list[dict]) -> dict:
     return stats
 
 
+def show_agent_status() -> None:
+    """Show batch status and handoff instructions for Wave 2 agent research."""
+    manifest_path = BATCH_DIR / "merge_manifest.json"
+    if not manifest_path.exists():
+        print("[AGENTS] No manifest found. Run --phase verify first to create batch files.", flush=True)
+        return
+
+    with open(manifest_path, encoding="utf-8") as f:
+        manifest = json.load(f)
+
+    batches = manifest.get("batches", {})
+    total_sites = manifest.get("total_sites", 0)
+
+    pending = [bid for bid, info in batches.items() if info.get("status") == "pending"]
+    completed = [bid for bid, info in batches.items() if info.get("status") in ("merged", "completed")]
+    has_results = []
+    for bid in pending:
+        result_path = BATCH_DIR / f"batch_{bid}_results.json"
+        if result_path.exists():
+            has_results.append(bid)
+
+    print(f"  Total sites needing research: {total_sites}", flush=True)
+    print(f"  Total batches: {len(batches)}", flush=True)
+    print(f"  Pending: {len(pending)}", flush=True)
+    print(f"  With results (ready to merge): {len(has_results)}", flush=True)
+    print(f"  Already merged: {len(completed)}", flush=True)
+
+    if pending:
+        # Summarize issue types across pending batches
+        issue_counts: dict[str, int] = {}
+        for bid in pending:
+            input_path = BATCH_DIR / f"batch_{bid}_input.json"
+            if not input_path.exists():
+                continue
+            with open(input_path, encoding="utf-8") as f:
+                batch = json.load(f)
+            for site in batch.get("sites", []):
+                for issue in site.get("needs_fix", []):
+                    # Categorize by first phrase before " — "
+                    key = issue.split(" — ")[0] if " — " in issue else issue[:40]
+                    issue_counts[key] = issue_counts.get(key, 0) + 1
+
+        if issue_counts:
+            print("\n  Issue breakdown:", flush=True)
+            for key, count in sorted(issue_counts.items(), key=lambda x: -x[1]):
+                print(f"    {count:>4}x  {key}", flush=True)
+
+        if has_results:
+            print(f"\n  {len(has_results)} batch(es) already have results (ready to merge).", flush=True)
+            remaining = len(pending) - len(has_results)
+            if remaining > 0:
+                print(f"  {remaining} batch(es) still need agent research.", flush=True)
+
+        print(f"\n  To run agent research, tell Claude Code:", flush=True)
+        print(f'    "run Wave 2 agent research"', flush=True)
+        print(f"\n  After agents complete, run:", flush=True)
+        print(f"    python scripts/audit_enrich.py --phase merge --dry-run", flush=True)
+        print(f"    python scripts/audit_enrich.py --phase merge", flush=True)
+    else:
+        print(f"\n  All batches merged. Nothing to do.", flush=True)
+
+
 # =============================================================================
 # Merge Agent Results (Post-Wave 2)
 # =============================================================================
 
-def merge_results() -> dict:
+def merge_results(dry_run: bool = False) -> dict:
     """Read all batch result files and apply fixes to the database.
 
     Updates unified_sites and card_stats, sets last_audited timestamps.
+    Validates site_type against CANONICAL_TYPES and auto-computes period_name.
+    Only auto-applies high-confidence fixes; medium goes to manual review file.
     """
     manifest_path = BATCH_DIR / "merge_manifest.json"
     if not manifest_path.exists():
@@ -885,11 +1015,23 @@ def merge_results() -> dict:
         "country", "description", "source_url", "thumbnail_url",
     })
 
-    stats = {"fixed": 0, "verified": 0, "manual": 0, "batches_merged": 0}
-    now = datetime.now(timezone.utc).isoformat()
+    canonical_types_lower = {t.lower() for t in CANONICAL_TYPES}
 
-    with engine.connect() as conn:
+    stats = {
+        "auto_applied": 0, "verified": 0, "manual": 0, "skipped_low": 0,
+        "deferred_medium": 0, "validation_warnings": 0, "batches_merged": 0,
+    }
+    manual_review_items: list[dict] = []
+
+    if dry_run:
+        print("[MERGE] DRY RUN — no database writes will be made.\n", flush=True)
+
+    ctx = engine.connect() if not dry_run else contextlib.nullcontext()
+    with ctx as conn:
         for batch_id, batch_info in manifest.get("batches", {}).items():
+            if batch_info.get("status") == "merged" and not dry_run:
+                continue
+
             result_path = BATCH_DIR / f"batch_{batch_id}_results.json"
             if not result_path.exists():
                 print(f"  Batch {batch_id}: no results file, skipping", flush=True)
@@ -903,71 +1045,170 @@ def merge_results() -> dict:
                 status = site_result.get("status", "unknown")
 
                 if status == "fixed":
-                    for fix in site_result.get("fixes", []):
+                    fixes = site_result.get("fixes", [])
+                    applied_any = False
+
+                    for fix in fixes:
                         field = fix["field"]
+                        confidence = fix.get("confidence", "low")
+
+                        # Skip low-confidence fixes entirely
+                        if confidence == "low":
+                            stats["skipped_low"] += 1
+                            continue
+
+                        # Defer medium-confidence fixes to manual review
+                        if confidence == "medium":
+                            manual_review_items.append({
+                                "site_id": site_id,
+                                "fix": fix,
+                                "batch_id": batch_id,
+                                "reason": "medium confidence — needs human verification",
+                            })
+                            stats["deferred_medium"] += 1
+                            continue
+
+                        # Only high-confidence fixes reach here
                         if field not in ALLOWED_MERGE_FIELDS:
                             print(f"  WARNING: Skipping unknown field '{field}' for {site_id}", flush=True)
+                            stats["validation_warnings"] += 1
                             continue
+
                         old_val = fix.get("old")
                         new_val = fix["new"]
 
-                        # Conditional WHERE: protect user edits
-                        if old_val is None:
-                            condition = f"{field} IS NULL"
+                        # Validate site_type against CANONICAL_TYPES
+                        if field == "site_type" and new_val:
+                            normalized = normalize_site_type(new_val)
+                            if normalized.lower() not in canonical_types_lower:
+                                print(
+                                    f"  WARNING: site_type '{new_val}' (normalized: '{normalized}') "
+                                    f"not in CANONICAL_TYPES for {site_id}, skipping",
+                                    flush=True,
+                                )
+                                stats["validation_warnings"] += 1
+                                continue
+                            new_val = normalized
+
+                        # Auto-compute period_name when period_start is set
+                        period_name_fix = None
+                        if field == "period_start" and new_val is not None:
+                            computed_name = categorize_period(int(new_val))
+                            if computed_name:
+                                period_name_fix = {
+                                    "field": "period_name",
+                                    "old": None,  # will use IS NULL or match
+                                    "new": computed_name,
+                                }
+
+                        if dry_run:
+                            print(
+                                f"  [DRY] {site_id}: {field} = {old_val!r} -> {new_val!r} "
+                                f"(confidence: {confidence})",
+                                flush=True,
+                            )
+                            if period_name_fix:
+                                print(
+                                    f"  [DRY] {site_id}: period_name -> {period_name_fix['new']!r} (auto-computed)",
+                                    flush=True,
+                                )
                         else:
-                            condition = f"{field} = :old_val"
+                            # Conditional WHERE: protect user edits
+                            if old_val is None:
+                                condition = f"{field} IS NULL"
+                            else:
+                                condition = f"{field} = :old_val"
 
-                        update_sql = f"UPDATE unified_sites SET {field} = :new_val WHERE id = :site_id AND ({condition})"
-                        params = {"new_val": new_val, "site_id": site_id}
-                        if old_val is not None:
-                            params["old_val"] = old_val
+                            update_sql = (
+                                f"UPDATE unified_sites SET {field} = :new_val "
+                                f"WHERE id = :site_id AND ({condition})"
+                            )
+                            params: dict = {"new_val": new_val, "site_id": site_id}
+                            if old_val is not None:
+                                params["old_val"] = old_val
 
-                        conn.execute(text(update_sql), params)
-                    stats["fixed"] += 1
+                            conn.execute(text(update_sql), params)
+
+                            # Apply auto-computed period_name (only if period_start was also updated)
+                            if period_name_fix:
+                                conn.execute(
+                                    text(
+                                        "UPDATE unified_sites SET period_name = :pname "
+                                        "WHERE id = :site_id AND period_start = :ps_val"
+                                    ),
+                                    {
+                                        "pname": period_name_fix["new"],
+                                        "site_id": site_id,
+                                        "ps_val": new_val,
+                                    },
+                                )
+
+                        applied_any = True
+
+                    if applied_any:
+                        stats["auto_applied"] += 1
 
                 elif status == "verified":
                     stats["verified"] += 1
                 elif status == "manual":
+                    manual_review_items.append({
+                        "site_id": site_id,
+                        "manual_notes": site_result.get("manual_notes", ""),
+                        "batch_id": batch_id,
+                        "reason": "agent flagged for manual review",
+                    })
                     stats["manual"] += 1
 
-                # Update enrichment in card_stats if present
-                enrichment = site_result.get("enrichment", {})
-                if enrichment.get("confidence_score") is not None:
-                    conn.execute(
-                        text(
-                            "UPDATE card_stats SET confidence_score = :score, last_enriched = NOW() "
-                            "WHERE site_id = :site_id"
-                        ),
-                        {"score": enrichment["confidence_score"], "site_id": site_id},
-                    )
+                if not dry_run and conn:
+                    # Update enrichment in card_stats if present
+                    enrichment = site_result.get("enrichment", {})
+                    if enrichment.get("confidence_score") is not None:
+                        conn.execute(
+                            text(
+                                "UPDATE card_stats SET confidence_score = :score, last_enriched = NOW() "
+                                "WHERE site_id = :site_id"
+                            ),
+                            {"score": enrichment["confidence_score"], "site_id": site_id},
+                        )
 
-                # Card description (ancient_nerds only)
-                card_desc = site_result.get("card_description")
-                if card_desc:
-                    conn.execute(
-                        text(
-                            "UPDATE card_stats SET card_description = :desc "
-                            "WHERE site_id = :site_id AND (card_description IS NULL OR card_description = '')"
-                        ),
-                        {"desc": card_desc, "site_id": site_id},
-                    )
+                    # Card description (ancient_nerds only)
+                    card_desc = site_result.get("card_description")
+                    if card_desc:
+                        conn.execute(
+                            text(
+                                "UPDATE card_stats SET card_description = :desc "
+                                "WHERE site_id = :site_id AND (card_description IS NULL OR card_description = '')"
+                            ),
+                            {"desc": card_desc, "site_id": site_id},
+                        )
 
-                # Mark as audited
-                conn.execute(
-                    text("UPDATE unified_sites SET last_audited = NOW() WHERE id = :site_id"),
-                    {"site_id": site_id},
-                )
+                    # Mark as audited
+                    conn.execute(
+                        text("UPDATE unified_sites SET last_audited = NOW() WHERE id = :site_id"),
+                        {"site_id": site_id},
+                    )
 
             stats["batches_merged"] += 1
-            batch_info["status"] = "merged"
+            if not dry_run:
+                batch_info["status"] = "merged"
 
-        conn.commit()
+        if conn and not dry_run:
+            conn.commit()
 
-    # Update manifest
-    with open(manifest_path, "w", encoding="utf-8") as f:
-        json.dump(manifest, f, indent=2, ensure_ascii=False)
+    # Update manifest (only if not dry run)
+    if not dry_run:
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            json.dump(manifest, f, indent=2, ensure_ascii=False)
 
-    print(f"[MERGE] Complete:", flush=True)
+    # Write manual review file if there are deferred items
+    if manual_review_items:
+        review_path = OUTPUT_DIR / "audit_manual_review.json"
+        with open(review_path, "w", encoding="utf-8") as f:
+            json.dump(manual_review_items, f, indent=2, ensure_ascii=False)
+        print(f"\n  Manual review items: {review_path} ({len(manual_review_items)} items)", flush=True)
+
+    prefix = "[MERGE DRY RUN]" if dry_run else "[MERGE]"
+    print(f"{prefix} Complete:", flush=True)
     for key, val in stats.items():
         print(f"  {key}: {val}", flush=True)
 
@@ -1118,7 +1359,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--phase",
-        choices=["sync", "mechanical", "enrich", "apply", "images", "verify", "merge", "package", "export"],
+        choices=["sync", "mechanical", "enrich", "apply", "verify", "agents", "merge", "package", "export"],
         help="Run only a specific phase",
     )
     parser.add_argument(
@@ -1134,9 +1375,14 @@ def main() -> None:
         help="Test mode: process only N random sites (skips sync and mechanical fixes)",
     )
     parser.add_argument(
-        "--skip-images",
+        "--overwrite",
         action="store_true",
-        help="Skip the wiki image download step (saves ~2-4 hours)",
+        help="Overwrite existing values with Wikidata data (default: only fill NULLs)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="(merge phase) Report proposed changes without writing to DB",
     )
     args = parser.parse_args()
 
@@ -1153,8 +1399,8 @@ def main() -> None:
     print(f"  API: {args.api_url}", flush=True)
     if limit:
         print(f"  Limit: {limit} random sites (test mode)", flush=True)
-    if args.skip_images:
-        print(f"  Skip images: yes", flush=True)
+    if args.overwrite:
+        print(f"  Overwrite: yes (verify + correct existing values)", flush=True)
     print("=" * 60, flush=True)
 
     # --limit mode: skip sync & mechanical, run enrichment + apply + package on N random sites
@@ -1174,13 +1420,7 @@ def main() -> None:
         print("\n" + "=" * 40, flush=True)
         print("  APPLY: Enrichment → unified_sites", flush=True)
         print("=" * 40, flush=True)
-        apply_enrichment()
-
-        if not args.skip_images:
-            print("\n" + "=" * 40, flush=True)
-            print("  IMAGES: Wiki Image Download", flush=True)
-            print("=" * 40, flush=True)
-            run_wiki_images()
+        apply_enrichment(overwrite=args.overwrite)
 
         print("\n" + "=" * 40, flush=True)
         print("  PACKAGE: Export for db.html Upload", flush=True)
@@ -1202,8 +1442,8 @@ def main() -> None:
             print("\n[SYNC] Done. Local DB now matches production.", flush=True)
             return
 
-    # Fetch candidates for audit (unless just merging/exporting/packaging)
-    if phase not in ("merge", "export", "package"):
+    # Fetch candidates for audit (unless just merging/exporting/packaging/agents)
+    if phase not in ("merge", "export", "package", "agents"):
         sites = fetch_audit_candidates(source_ids, args.mode)
         if not sites:
             print("\n[AUDIT] No candidates found. Nothing to do.", flush=True)
@@ -1230,31 +1470,39 @@ def main() -> None:
         print("\n" + "=" * 40, flush=True)
         print("  APPLY: Enrichment → unified_sites", flush=True)
         print("=" * 40, flush=True)
-        apply_enrichment()
-
-    # Wiki image download
-    if phase in (None, "images"):
-        if args.skip_images and phase is None:
-            print("\n[IMAGES] Skipped (--skip-images flag)", flush=True)
-        else:
-            print("\n" + "=" * 40, flush=True)
-            print("  IMAGES: Wiki Image Download", flush=True)
-            print("=" * 40, flush=True)
-            run_wiki_images()
+        apply_enrichment(overwrite=args.overwrite)
 
     # Wave 2: Prepare agent batches
     if phase in (None, "verify"):
         print("\n" + "=" * 40, flush=True)
         print("  WAVE 2: Agent Verification (Prepare)", flush=True)
         print("=" * 40, flush=True)
-        prepare_agent_batches(sites)
+        batch_stats = prepare_agent_batches(sites)
+
+        # In full-run mode, stop here with handoff instructions
+        if phase is None and batch_stats.get("batches", 0) > 0:
+            print("\n" + "=" * 60, flush=True)
+            print("  [WAVE 2] Batch files prepared. To run agent research:", flush=True)
+            print('    1. In Claude Code, say: "run Wave 2 agent research"', flush=True)
+            print("    2. After agents complete, run:", flush=True)
+            print("       python scripts/audit_enrich.py --phase merge --dry-run", flush=True)
+            print("       python scripts/audit_enrich.py --phase merge", flush=True)
+            print("    3. Then: python scripts/audit_enrich.py --phase package", flush=True)
+            print("=" * 60, flush=True)
+
+    # Wave 2: Show agent batch status and handoff instructions
+    if phase == "agents":
+        print("\n" + "=" * 40, flush=True)
+        print("  WAVE 2: Agent Research Status", flush=True)
+        print("=" * 40, flush=True)
+        show_agent_status()
 
     # Merge agent results
     if phase == "merge":
         print("\n" + "=" * 40, flush=True)
         print("  Merge Agent Results", flush=True)
         print("=" * 40, flush=True)
-        merge_results()
+        merge_results(dry_run=args.dry_run)
 
     # Mark audited sites (if running all phases or mechanical/enrich)
     if phase in (None, "mechanical", "enrich") and sites:
