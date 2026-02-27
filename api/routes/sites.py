@@ -353,18 +353,21 @@ async def get_all_sites(
                     site["aud"] = row.last_audited.isoformat()
                 all_sites.append(site)
         except Exception as e:
-            logger.warning(f"Database query failed for live sources: {e}")
-            # Fall back to static JSON for live sources
-            static_sites = _load_static_sites()
-            if static_sites:
-                filtered = _filter_static_sites(static_sites, live_sources, site_type, period_max, skip, limit)
-                all_sites.extend(_convert_static_site(s) for s in filtered)
+            logger.error(f"Database query failed for live sources: {e}", exc_info=True)
+            # Do NOT silently fall back to static JSON — surface the error so
+            # missing-column / query bugs are caught immediately instead of
+            # serving stale data labelled as "postgres".
+            raise HTTPException(status_code=500, detail="Database query failed for live sites")
+
+    data_source = "snapshot"
+    if live_sources:
+        data_source = "postgres"
 
     if all_sites:
         response = {
             "count": len(all_sites),
             "sites": all_sites,
-            "dataSource": "postgres" if live_sources else "snapshot",
+            "dataSource": data_source,
         }
         cache_set(cache_key, response, ttl=1800)
         return response
