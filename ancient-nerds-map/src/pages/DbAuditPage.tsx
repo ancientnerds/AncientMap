@@ -2081,6 +2081,17 @@ export default function DbAuditPage() {
                 </>
               )}
             </div>
+            {uploading && (
+              <div className="db-upload-progress">
+                <div className="db-upload-progress-spinner" />
+                <div className="db-upload-progress-text">
+                  Uploading {uploadParsed.filter(p => p._status === 'insert' || (p._status === 'update' && p._changedFields && p._changedFields.length > 0)).length} sites...
+                </div>
+                <div className="db-upload-progress-sub">
+                  {uploadCreateSnapshot ? 'Creating snapshot, then applying changes' : 'Applying changes'}
+                </div>
+              </div>
+            )}
             <div className="db-modal-footer">
               <div className="db-modal-footer-toggles">
                 <button
@@ -2102,8 +2113,8 @@ export default function DbAuditPage() {
               </div>
               <div className="db-modal-footer-buttons">
                 <button className="db-btn db-btn-cancel" onClick={() => { setShowUploadModal(false); setUploadParsed([]); setUploadFileName(''); setUploadMarkAudited(false); setUploadCreateSnapshot(true) }} disabled={uploading}>Cancel</button>
-                <button className="db-btn db-btn-commit" onClick={commitUpload} disabled={uploading || uploadParsed.filter(p => p._status !== 'error').length === 0} title={uploadCreateSnapshot ? 'Creates a snapshot of current state, then applies all changes' : 'Applies changes without creating a snapshot'}>
-                  {uploading ? 'Applying...' : uploadCreateSnapshot ? 'Snapshot & Apply' : 'Apply Changes'}
+                <button className={`db-btn ${uploadCreateSnapshot ? 'db-btn-commit' : 'db-btn-warn'}`} onClick={commitUpload} disabled={uploading || uploadParsed.filter(p => p._status !== 'error').length === 0} title={uploadCreateSnapshot ? 'Creates a snapshot of current state, then applies all changes' : 'No snapshot — changes cannot be rolled back!'}>
+                  {uploading ? 'Applying...' : uploadCreateSnapshot ? 'Snapshot & Apply' : 'Apply Without Snapshot'}
                 </button>
               </div>
             </div>

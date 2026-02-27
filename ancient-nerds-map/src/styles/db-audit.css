@@ -1358,6 +1358,54 @@
   border-color: #16a34a;
 }
 
+.db-btn-warn {
+  background: #f59e0b;
+  color: #000;
+  border-color: #f59e0b;
+  font-weight: 500;
+}
+
+.db-btn-warn:hover:not(:disabled) {
+  background: #d97706;
+  border-color: #d97706;
+}
+
+/* Upload progress overlay */
+.db-upload-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 16px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 12px;
+  margin: 0 16px 8px;
+}
+
+.db-upload-progress-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #333;
+  border-top-color: #22c55e;
+  border-radius: 50%;
+  animation: db-spin 0.8s linear infinite;
+}
+
+@keyframes db-spin {
+  to { transform: rotate(360deg); }
+}
+
+.db-upload-progress-text {
+  font-size: 15px;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.db-upload-progress-sub {
+  font-size: 12px;
+  color: #888;
+}
+
 /* ─── Review modal ───────────────────────────────────────────────────────── */
 .db-modal-review {
   max-width: 600px;
