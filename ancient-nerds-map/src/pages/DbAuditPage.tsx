@@ -286,6 +286,7 @@ export default function DbAuditPage() {
   const [uploadFileName, setUploadFileName] = useState('')
   const [uploadTarget, setUploadTarget] = useState('ancient_nerds')
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState({ sent: 0, total: 0, phase: '' })
   const [uploadMarkAudited, setUploadMarkAudited] = useState(false)
   const [uploadCreateSnapshot, setUploadCreateSnapshot] = useState(true)
 
@@ -936,12 +937,13 @@ export default function DbAuditPage() {
     processUploadFile(file)
   }, [processUploadFile])
 
-  // Commit upload
+  // Commit upload — sends in chunks of 200 to avoid timeouts
+  const CHUNK_SIZE = 200
   const commitUpload = useCallback(async () => {
     if (!token || uploadParsed.length === 0) return
     setUploading(true)
     try {
-      const payload = uploadParsed
+      const allSites = uploadParsed
         .filter(p => p._status === 'insert' || (p._status === 'update' && p._changedFields && p._changedFields.length > 0))
         .map(p => ({
           name: p.name, lat: p.lat, lon: p.lon,
@@ -955,20 +957,53 @@ export default function DbAuditPage() {
           card_description: p.card_description || null,
           existing_id: p._matchedId || null,
         }))
-      const res = await fetch(`${config.api.baseUrl}/sites/batch-upload`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ sites: payload, target_source: uploadTarget, create_snapshot: uploadCreateSnapshot }),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.detail || `HTTP ${res.status}`)
+
+      const total = allSites.length
+      let totalInserted = 0
+      let totalUpdated = 0
+      const allErrors: { row: number; name: string; error: string }[] = []
+
+      // Send snapshot only with the first chunk
+      const chunks: typeof allSites[] = []
+      for (let i = 0; i < total; i += CHUNK_SIZE) {
+        chunks.push(allSites.slice(i, i + CHUNK_SIZE))
       }
-      const result = await res.json()
+
+      for (let ci = 0; ci < chunks.length; ci++) {
+        const sent = Math.min((ci + 1) * CHUNK_SIZE, total)
+        setUploadProgress({
+          sent: ci * CHUNK_SIZE,
+          total,
+          phase: ci === 0 && uploadCreateSnapshot
+            ? `Creating snapshot + uploading batch ${ci + 1}/${chunks.length}`
+            : `Uploading batch ${ci + 1}/${chunks.length}`,
+        })
+
+        const res = await fetch(`${config.api.baseUrl}/sites/batch-upload`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({
+            sites: chunks[ci],
+            target_source: uploadTarget,
+            create_snapshot: ci === 0 && uploadCreateSnapshot,  // snapshot only on first chunk
+          }),
+        })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data.detail || `HTTP ${res.status} on batch ${ci + 1}`)
+        }
+        const result = await res.json()
+        totalInserted += result.inserted
+        totalUpdated += result.updated
+        if (result.errors) allErrors.push(...result.errors)
+
+        setUploadProgress({ sent, total, phase: `Batch ${ci + 1}/${chunks.length} done` })
+      }
 
       // Mark all sites in this source as audited if checkbox was checked
       let auditedCount = 0
       if (uploadMarkAudited) {
+        setUploadProgress({ sent: total, total, phase: 'Marking sites as audited...' })
         const auditRes = await fetch(`${config.api.baseUrl}/sites/mark-audited`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -987,7 +1022,8 @@ export default function DbAuditPage() {
       setUploadCreateSnapshot(true)
       refreshDbSnapshots()
       refreshFileSnapshots()
-      const msg = `Upload complete: ${result.inserted} inserted, ${result.updated} updated` +
+      const msg = `Upload complete: ${totalInserted} inserted, ${totalUpdated} updated` +
+        (allErrors.length > 0 ? ` (${allErrors.length} errors)` : '') +
         (auditedCount > 0 ? ` — ${auditedCount} sites marked as audited` : '')
       showToast(msg)
       // Re-fetch sites (skip discardAllEdits — it shows a confirm dialog)
@@ -997,8 +1033,9 @@ export default function DbAuditPage() {
       alert(e instanceof Error ? e.message : 'Upload failed')
     } finally {
       setUploading(false)
+      setUploadProgress({ sent: 0, total: 0, phase: '' })
     }
-  }, [token, uploadParsed, uploadTarget, uploadMarkAudited, refreshDbSnapshots, refreshFileSnapshots, showToast])
+  }, [token, uploadParsed, uploadTarget, uploadMarkAudited, uploadCreateSnapshot, refreshDbSnapshots, refreshFileSnapshots, showToast])
 
   // Fetch edit history for a site
   const fetchSiteHistory = useCallback(async (siteId: string, siteName: string) => {
@@ -2083,12 +2120,17 @@ export default function DbAuditPage() {
             </div>
             {uploading && (
               <div className="db-upload-progress">
-                <div className="db-upload-progress-spinner" />
+                <div className="db-upload-progress-bar-track">
+                  <div
+                    className="db-upload-progress-bar-fill"
+                    style={{ width: uploadProgress.total > 0 ? `${(uploadProgress.sent / uploadProgress.total) * 100}%` : '0%' }}
+                  />
+                </div>
                 <div className="db-upload-progress-text">
-                  Uploading {uploadParsed.filter(p => p._status === 'insert' || (p._status === 'update' && p._changedFields && p._changedFields.length > 0)).length} sites...
+                  {uploadProgress.sent} / {uploadProgress.total} sites
                 </div>
                 <div className="db-upload-progress-sub">
-                  {uploadCreateSnapshot ? 'Creating snapshot, then applying changes' : 'Applying changes'}
+                  {uploadProgress.phase}
                 </div>
               </div>
             )}
