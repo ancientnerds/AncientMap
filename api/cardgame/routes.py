@@ -23,7 +23,7 @@ from api.cardgame.models import (
     CardStats,
 )
 from api.services.jwt_auth import get_current_user, get_optional_user
-from api.services.rate_limiter import RateLimiter
+from api.services.rate_limiter import RateLimiter, get_client_ip
 from pipeline.database import DiscordUser, UnifiedSite, get_session
 from pipeline.historical_boundaries.empire_metadata import EMPIRE_METADATA
 from pipeline.utils.country_lookup import normalize_country
@@ -91,12 +91,8 @@ def _card_stats_to_dict(card: CardStats, site: UnifiedSite | None = None) -> dic
 
 
 def _get_client_ip(request: Request) -> str:
-    """Extract client IP. Only trust X-Forwarded-For from loopback (nginx proxy)."""
-    if request.client and request.client.host in ("127.0.0.1", "::1"):
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    """Extract client IP — delegates to shared get_client_ip."""
+    return get_client_ip(request)
 
 
 # ---------------------------------------------------------------------------

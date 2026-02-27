@@ -16,12 +16,15 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from api.services.jwt_auth import get_current_user
+from api.services.rate_limiter import RateLimiter, get_client_ip
 from pipeline.database import DiscordUser as DBUser
 from pipeline.database import get_session as get_db_session
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+_chat_limiter = RateLimiter(max_requests=15, window_seconds=60, namespace="lyra_chat")
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -39,7 +42,12 @@ LOW_CREDIT_MAX_HISTORY = 5  # max history messages for low-credit users (~2-3 ex
 
 class _ImagePayload(BaseModel):
     """Single base64 image in a Lyra chat request."""
-    data: str = Field(..., max_length=2_000_000, description="data:image/...;base64,...")
+    data: str = Field(
+        ...,
+        max_length=2_000_000,
+        pattern=r"^data:image/(png|jpeg|gif|webp);base64,",
+        description="data:image/...;base64,...",
+    )
 
 
 class _HistoryMessage(BaseModel):
@@ -70,6 +78,9 @@ async def lyra_chat(request: LyraChatRequest, req: Request):
     Returns SSE stream with token, sites, done events.
     The done event includes credits_remaining.
     """
+    if not _chat_limiter.check(get_client_ip(req)):
+        raise HTTPException(status_code=429, detail="Too many requests. Please wait a moment.")
+
     user = get_current_user(req)
 
     # Check unlimited flag and credits atomically

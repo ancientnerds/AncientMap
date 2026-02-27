@@ -79,7 +79,7 @@ def _collect_article_items(
     week_end: datetime,
     session,
 ) -> list[dict]:
-    """Query NewsItems (joined with video/channel) for the week, significance >= 6."""
+    """Query NewsItems (joined with video/channel) for the week, significance >= 7."""
     rows = (
         session.query(NewsItem, NewsVideo, NewsChannel)
         .join(NewsVideo, NewsItem.video_id == NewsVideo.id)

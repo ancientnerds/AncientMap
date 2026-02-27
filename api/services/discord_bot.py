@@ -113,15 +113,19 @@ async def _handle_ask(
     """
     from pipeline.database import DiscordUser, TokenUsageLog, get_session
 
+    # Rate limit check
+    if not _credits_limiter.check(discord_id):
+        raise ValueError("You're sending messages too fast. Please wait a moment.")
+
     # Account age check
     if _account_age_seconds(discord_id) < _MIN_ACCOUNT_AGE_SECONDS:
         raise ValueError("Your Discord account must be at least 7 days old to use Lyra.")
 
-    # Look up user
+    # Look up user (with row lock for credit deduction)
     with get_session() as session:
         user = session.query(DiscordUser).filter(
             DiscordUser.discord_id == discord_id,
-        ).first()
+        ).with_for_update().first()
         if not user:
             raise ValueError(
                 "You need to sign in at [ancientnerds.com](https://ancientnerds.com/account.html) first."
@@ -136,14 +140,9 @@ async def _handle_ask(
 
         # Pre-deduct 1 credit deposit (non-unlimited users)
         if not is_unlimited:
-            from sqlalchemy import update
-            session.execute(
-                update(DiscordUser)
-                .where(DiscordUser.id == user_id)
-                .values(credits=DiscordUser.credits - 1)
-            )
+            user.credits -= 1
+            deposit_remaining = user.credits
             session.commit()
-            deposit_remaining = user.credits - 1
 
     # Anti-exploit: limit history length for low-credit users
     if history and deposit_remaining < LOW_CREDIT_THRESHOLD and len(history) > LOW_CREDIT_MAX_HISTORY:
@@ -444,6 +443,9 @@ def _get_bot() -> LyraBot:
     @_bot.tree.command(name="link", description="Link your Discord to your Ancient Nerds account")
     @app_commands.checks.cooldown(1, 60.0)
     async def link_command(interaction: discord.Interaction):
+        if not _link_limiter.check(str(interaction.user.id)):
+            await interaction.response.send_message("Please wait before using /link again.", ephemeral=True)
+            return
         await interaction.response.send_message(
             "Sign in at **[ancientnerds.com/account](https://ancientnerds.com/account.html)** to link your Discord account and start chatting with Lyra!",
             ephemeral=True,

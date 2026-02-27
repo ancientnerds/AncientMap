@@ -83,10 +83,9 @@ class RateLimiter:
     def _check_redis(self, ip: str) -> bool:
         assert _redis_client is not None  # caller checks before calling
         key = f"rate_limit:{self.namespace}:{ip}"
-        pipe = _redis_client.pipeline(transaction=True)
-        pipe.incr(key)
-        pipe.expire(key, self.window_seconds)
-        count, _ = pipe.execute()
+        count = _redis_client.incr(key)
+        if count == 1:
+            _redis_client.expire(key, self.window_seconds)
         return count <= self.max_requests
 
     def _check_redis_with_info(self, ip: str) -> tuple[bool, int, int]:
@@ -94,9 +93,11 @@ class RateLimiter:
         key = f"rate_limit:{self.namespace}:{ip}"
         pipe = _redis_client.pipeline(transaction=True)
         pipe.incr(key)
-        pipe.expire(key, self.window_seconds)
         pipe.ttl(key)
-        count, _, ttl = pipe.execute()
+        count, ttl = pipe.execute()
+        if count == 1:
+            _redis_client.expire(key, self.window_seconds)
+            ttl = self.window_seconds
         remaining = max(0, self.max_requests - count)
         reset_seconds = max(0, ttl) if ttl > 0 else self.window_seconds
         return (count <= self.max_requests, remaining, reset_seconds)

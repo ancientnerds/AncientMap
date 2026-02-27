@@ -56,6 +56,7 @@ def verify_single_post(
     client: anthropic.Anthropic,
     model: str,
     system_prompt: str | None = None,
+    max_tokens: int | None = None,
 ) -> dict | None:
     """Verify a single post against the transcript.
 
@@ -87,10 +88,11 @@ def verify_single_post(
     )
 
     try:
+        _max_tokens = max_tokens if max_tokens is not None else _get_settings().max_tokens
         response = call_api(
             client,
             model=model,
-            max_tokens=_get_settings().max_tokens,
+            max_tokens=_max_tokens,
             temperature=0.0,
             system=[{
                 "type": "text",
@@ -157,7 +159,7 @@ def verify_video_posts(
         verified = 0
         skipped = 0
         for item in items:
-            result = verify_single_post(item, video.transcript_text, client, settings.model_verify, system_prompt)
+            result = verify_single_post(item, video.transcript_text, client, settings.model_verify, system_prompt, max_tokens=settings.max_tokens)
             if not result:
                 skipped += 1
                 continue

@@ -101,7 +101,8 @@ async def lifespan(app: FastAPI):
             count = seed_achievements(_session)
             logger.info(f"[STARTUP] Seeded {count} achievement definitions")
     except Exception as e:
-        logger.warning(f"[STARTUP] Table creation check failed: {e}")
+        logger.error(f"[STARTUP] Table creation/migration failed: {e}")
+        raise
 
     # Import card descriptions from JSON (idempotent — runs every startup)
     try:
@@ -131,14 +132,8 @@ async def lifespan(app: FastAPI):
                     _s.commit()
                     if updated:
                         # Flush sites cache so fresh queries include cd
-                        try:
-                            rc = get_redis_client()
-                            if rc:
-                                keys = rc.keys("sites:*")
-                                if keys:
-                                    rc.delete(*keys)
-                        except Exception:
-                            pass
+                        from api.cache import cache_delete_pattern as _cdp
+                        _cdp("sites:*")
                         logger.info(f"[STARTUP] Imported {updated} card descriptions (cache flushed)")
                     else:
                         logger.info(f"[STARTUP] Card descriptions already up to date ({len(descriptions)} checked)")

@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 SCREENSHOTS_DIR = Path("public/data/news/screenshots")
 SCREENSHOT_OFFSET = 2  # Grab frame 2 seconds after the timestamp
+MAX_RETRIES = 3  # Attempts per extraction cycle
 _VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 
 
@@ -140,11 +141,11 @@ def extract_screenshots(settings: LyraSettings) -> int:
         # Only immutable data is passed to worker threads; ORM objects stay in main thread.
         def _do_extract(args: tuple[int, str, int, str, Path]) -> tuple[int, str, str, bool]:
             item_id, video_id, ts, fn, out = args
-            for attempt in range(3):
+            for attempt in range(MAX_RETRIES):
                 if _extract_frame(video_id, ts, out, proxy_url):
                     return item_id, video_id, fn, True
-                if attempt < 2:
-                    logger.info(f"  Retry {attempt + 2}/3 for {fn} (new proxy IP)")
+                if attempt < MAX_RETRIES - 1:
+                    logger.info(f"  Retry {attempt + 2}/{MAX_RETRIES} for {fn} (new proxy IP)")
             return item_id, video_id, fn, False
 
         with ThreadPoolExecutor(max_workers=4) as pool:
@@ -156,7 +157,7 @@ def extract_screenshots(settings: LyraSettings) -> int:
                     extracted += 1
                     logger.info(f"  Extracted: {filename}")
                 else:
-                    item_by_id[item_id].screenshot_attempts += 3  # 3 attempts this cycle
+                    item_by_id[item_id].screenshot_attempts += MAX_RETRIES
                     logger.warning(f"  Failed: {video_id}@{filename}")
 
     logger.info(f"Extracted {extracted} screenshots")

@@ -24,7 +24,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from api.services.jwt_auth import FOUNDER_ROLE_ID, create_token, get_current_user, require_founder
-from api.services.rate_limiter import RateLimiter
+from api.services.rate_limiter import RateLimiter, get_client_ip
 from pipeline.database import CreditGrant, DiscordUser, TokenUsageLog, get_session
 
 logger = logging.getLogger(__name__)
@@ -292,7 +292,7 @@ async def discord_oauth_redirect(req: Request, return_to: str | None = None):
     if not DISCORD_CLIENT_ID or not DISCORD_REDIRECT_URI:
         raise HTTPException(status_code=503, detail="Discord OAuth not configured")
 
-    client_ip = req.client.host if req.client else "unknown"
+    client_ip = get_client_ip(req)
     if not _oauth_limiter.check(client_ip):
         raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
 
