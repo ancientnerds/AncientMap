@@ -1206,8 +1206,6 @@ async def batch_upload_sites(
 
     if not sites:
         raise HTTPException(status_code=400, detail="No sites provided")
-    if len(sites) > 5000:
-        raise HTTPException(status_code=400, detail="Maximum 5000 sites per upload")
 
     # Separate inserts from updates
     update_ids = [s.existing_id for s in sites if s.existing_id]
