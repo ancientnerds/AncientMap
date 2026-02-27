@@ -1231,8 +1231,12 @@ async def batch_upload_sites(
             source_id=target_source,
         )
 
-    inserted = 0
-    updated = 0
+    from pipeline.utils.text import normalize_name
+
+    # Separate into update vs insert batches and build param lists
+    update_params = []
+    insert_params = []
+    card_stats_params = []
     errors = []
 
     for i, site in enumerate(sites):
@@ -1240,107 +1244,100 @@ async def batch_upload_sites(
         if period_start is None and site.period_name:
             period_start = _period_to_year(site.period_name)
 
+        site_type = normalize_site_type(site.site_type) if site.site_type else None
+
         if site.existing_id:
-            # Update existing
-            db.execute(
-                text("""
-                    UPDATE unified_sites SET
-                        name = :name, lat = :lat, lon = :lon,
-                        geom = ST_SetSRID(ST_MakePoint(:lon, :lat), 4326),
-                        site_type = :site_type, period_name = :period_name,
-                        period_start = :period_start, country = :country,
-                        description = :description, source_url = :source_url,
-                        thumbnail_url = :thumbnail_url,
-                        edited_by = :edited_by, updated_at = NOW(), last_audited = NOW()
-                    WHERE id::text = :site_id
-                """),
-                {
-                    "site_id": site.existing_id,
-                    "name": site.name, "lat": site.lat, "lon": site.lon,
-                    "site_type": normalize_site_type(site.site_type) if site.site_type else None,
-                    "period_name": site.period_name, "period_start": period_start,
-                    "country": site.country, "description": site.description,
-                    "source_url": site.source_url, "thumbnail_url": site.thumbnail_url,
-                    "edited_by": edited_by,
-                },
-            )
+            update_params.append({
+                "site_id": site.existing_id,
+                "name": site.name, "lat": site.lat, "lon": site.lon,
+                "site_type": site_type, "period_name": site.period_name,
+                "period_start": period_start, "country": site.country,
+                "description": site.description, "source_url": site.source_url,
+                "thumbnail_url": site.thumbnail_url, "edited_by": edited_by,
+            })
             if site.card_description or site.confidence_score is not None:
-                db.execute(
-                    text("""
-                        INSERT INTO card_stats (site_id, card_description, confidence_score,
-                            antiquity, fortification, cultural_influence, mystery,
-                            legacy, total_power, rarity_score, rarity_tier, category_group)
-                        VALUES (CAST(:site_id AS uuid), :card_description, :confidence_score,
-                            0, 0, 0, 0, 0, 0, 0, 0, 'unknown')
-                        ON CONFLICT (site_id)
-                        DO UPDATE SET
-                            card_description = COALESCE(EXCLUDED.card_description, card_stats.card_description),
-                            confidence_score = COALESCE(EXCLUDED.confidence_score, card_stats.confidence_score)
-                    """),
-                    {
-                        "site_id": site.existing_id,
-                        "card_description": site.card_description,
-                        "confidence_score": site.confidence_score,
-                    },
-                )
-            updated += 1
+                card_stats_params.append({
+                    "site_id": site.existing_id,
+                    "card_description": site.card_description,
+                    "confidence_score": site.confidence_score,
+                })
         else:
-            # Insert new
             new_id = str(_uuid.uuid4())
-            from pipeline.utils.text import normalize_name
             name_norm = normalize_name(site.name) if site.name else site.name
             record_id = f"upload-{new_id[:8]}"
-            try:
-                db.execute(
-                    text("""
-                        INSERT INTO unified_sites (
-                            id, source_id, source_record_id, name, name_normalized,
-                            lat, lon, geom, site_type, period_name, period_start,
-                            country, description, source_url, thumbnail_url,
-                            edited_by, created_at
-                        ) VALUES (
-                            :id, :source_id, :source_record_id, :name, :name_normalized,
-                            :lat, :lon, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326),
-                            :site_type, :period_name, :period_start,
-                            :country, :description, :source_url, :thumbnail_url,
-                            :edited_by, NOW()
-                        )
-                    """),
-                    {
-                        "id": new_id, "source_id": target_source,
-                        "source_record_id": record_id,
-                        "name": site.name, "name_normalized": name_norm,
-                        "lat": site.lat, "lon": site.lon,
-                        "site_type": normalize_site_type(site.site_type) if site.site_type else None,
-                        "period_name": site.period_name, "period_start": period_start,
-                        "country": site.country, "description": site.description,
-                        "source_url": site.source_url, "thumbnail_url": site.thumbnail_url,
-                        "edited_by": edited_by,
-                    },
+            insert_params.append({
+                "id": new_id, "source_id": target_source,
+                "source_record_id": record_id,
+                "name": site.name, "name_normalized": name_norm,
+                "lat": site.lat, "lon": site.lon,
+                "site_type": site_type, "period_name": site.period_name,
+                "period_start": period_start, "country": site.country,
+                "description": site.description, "source_url": site.source_url,
+                "thumbnail_url": site.thumbnail_url, "edited_by": edited_by,
+            })
+            if site.card_description or site.confidence_score is not None:
+                card_stats_params.append({
+                    "site_id": new_id,
+                    "card_description": site.card_description,
+                    "confidence_score": site.confidence_score,
+                })
+
+    # Batch UPDATE existing sites
+    if update_params:
+        db.execute(
+            text("""
+                UPDATE unified_sites SET
+                    name = :name, lat = :lat, lon = :lon,
+                    geom = ST_SetSRID(ST_MakePoint(:lon, :lat), 4326),
+                    site_type = :site_type, period_name = :period_name,
+                    period_start = :period_start, country = :country,
+                    description = :description, source_url = :source_url,
+                    thumbnail_url = :thumbnail_url,
+                    edited_by = :edited_by, updated_at = NOW(), last_audited = NOW()
+                WHERE id::text = :site_id
+            """),
+            update_params,
+        )
+
+    # Batch INSERT new sites
+    if insert_params:
+        db.execute(
+            text("""
+                INSERT INTO unified_sites (
+                    id, source_id, source_record_id, name, name_normalized,
+                    lat, lon, geom, site_type, period_name, period_start,
+                    country, description, source_url, thumbnail_url,
+                    edited_by, created_at
+                ) VALUES (
+                    :id, :source_id, :source_record_id, :name, :name_normalized,
+                    :lat, :lon, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326),
+                    :site_type, :period_name, :period_start,
+                    :country, :description, :source_url, :thumbnail_url,
+                    :edited_by, NOW()
                 )
-                if site.card_description or site.confidence_score is not None:
-                    db.execute(
-                        text("""
-                            INSERT INTO card_stats (site_id, card_description, confidence_score,
-                                antiquity, fortification, cultural_influence, mystery,
-                                legacy, total_power, rarity_score, rarity_tier, category_group)
-                            VALUES (CAST(:site_id AS uuid), :card_description, :confidence_score,
-                                0, 0, 0, 0, 0, 0, 0, 0, 'unknown')
-                            ON CONFLICT (site_id)
-                            DO UPDATE SET
-                                card_description = COALESCE(EXCLUDED.card_description, card_stats.card_description),
-                                confidence_score = COALESCE(EXCLUDED.confidence_score, card_stats.confidence_score)
-                        """),
-                        {
-                            "site_id": new_id,
-                            "card_description": site.card_description,
-                            "confidence_score": site.confidence_score,
-                        },
-                    )
-                inserted += 1
-            except Exception as e:
-                logger.error(f"Batch upload row {i} ({site.name}): {e}")
-                errors.append({"row": i, "name": site.name, "error": "Insert failed for this row"})
+            """),
+            insert_params,
+        )
+
+    # Batch UPSERT card_stats
+    if card_stats_params:
+        db.execute(
+            text("""
+                INSERT INTO card_stats (site_id, card_description, confidence_score,
+                    antiquity, fortification, cultural_influence, mystery,
+                    legacy, total_power, rarity_score, rarity_tier, category_group)
+                VALUES (CAST(:site_id AS uuid), :card_description, :confidence_score,
+                    0, 0, 0, 0, 0, 0, 0, 0, 'unknown')
+                ON CONFLICT (site_id)
+                DO UPDATE SET
+                    card_description = COALESCE(EXCLUDED.card_description, card_stats.card_description),
+                    confidence_score = COALESCE(EXCLUDED.confidence_score, card_stats.confidence_score)
+            """),
+            card_stats_params,
+        )
+
+    inserted = len(insert_params)
+    updated = len(update_params)
 
     db.commit()
     cache_delete_pattern("sites:*")
