@@ -302,7 +302,8 @@ export default function DbAuditPage() {
   interface QdrantCollection { pg_count: number; qdrant_count: number; delta: number | null; note?: string }
   interface QdrantReindex { running: boolean; started_at: string | null; collection: string | null; last_completed_at: string | null; last_duration_seconds: number | null; last_result: string | null }
   interface QdrantEmpires { empire_count: number; boundary_count: number }
-  interface QdrantStatus { qdrant_available: boolean; collections: { sites: QdrantCollection; news: QdrantCollection; transcripts: QdrantCollection; articles: QdrantCollection; empires: QdrantCollection }; empires: QdrantEmpires; reindex: QdrantReindex }
+  interface QdrantAutoReindex { enabled: boolean; next_run_utc: string | null }
+  interface QdrantStatus { qdrant_available: boolean; collections: { sites: QdrantCollection; news: QdrantCollection; transcripts: QdrantCollection; articles: QdrantCollection; empires: QdrantCollection }; empires: QdrantEmpires; reindex: QdrantReindex; auto_reindex?: QdrantAutoReindex }
   const [qdrantStatus, setQdrantStatus] = useState<QdrantStatus | null>(null)
   const [qdrantOpen, setQdrantOpen] = useState(false)
   const qdrantRef = useRef<HTMLDivElement>(null)
@@ -1250,13 +1251,20 @@ export default function DbAuditPage() {
                       </span>
                     </div>
                   )}
-                  {qdrantStatus.reindex.last_completed_at && (
+                  {qdrantStatus.reindex.last_completed_at ? (
                     <div className="db-qdrant-meta">
                       Last indexed {formatRelativeDate(qdrantStatus.reindex.last_completed_at)}
                       {qdrantStatus.reindex.last_duration_seconds != null && ` (${qdrantStatus.reindex.last_duration_seconds}s)`}
                       {qdrantStatus.reindex.last_result && qdrantStatus.reindex.last_result !== 'success' && (
                         <span className="db-qdrant-fail"> — {qdrantStatus.reindex.last_result}</span>
                       )}
+                    </div>
+                  ) : (
+                    <div className="db-qdrant-meta" style={{ color: '#f59e0b' }}>Never synced</div>
+                  )}
+                  {qdrantStatus.auto_reindex?.next_run_utc && (
+                    <div className="db-qdrant-meta">
+                      Next auto-sync {formatRelativeDate(qdrantStatus.auto_reindex.next_run_utc)}
                     </div>
                   )}
                   {qdrantStatus.reindex.running && (
@@ -1389,7 +1397,7 @@ export default function DbAuditPage() {
 
       {/* Undo history — shows when there are snapshots to restore */}
       {isFounder && dbSnapshots.length > 0 && (
-        <details className="db-snapshots-panel" open>
+        <details className="db-snapshots-panel">
           <summary className="db-snapshots-summary">Undo History ({dbSnapshots.length} snapshot{dbSnapshots.length !== 1 ? 's' : ''})</summary>
           <div className="db-snapshots-list">
             {dbSnapshots.map(snap => {
@@ -1961,6 +1969,37 @@ export default function DbAuditPage() {
                       <span className="db-upload-stat db-upload-error">{uploadParsed.filter(p => p._status === 'error').length} errors</span>
                     )}
                   </div>
+
+                  {/* Per-field change breakdown */}
+                  {(() => {
+                    const fieldCounts: Record<string, number> = {}
+                    for (const p of uploadParsed) {
+                      if (p._changedFields) {
+                        for (const f of p._changedFields) {
+                          fieldCounts[f] = (fieldCounts[f] || 0) + 1
+                        }
+                      }
+                    }
+                    const newCount = uploadParsed.filter(p => p._status === 'insert').length
+                    const entries = Object.entries(fieldCounts).sort((a, b) => b[1] - a[1])
+                    if (entries.length === 0 && newCount === 0) return null
+                    return (
+                      <div className="db-upload-field-breakdown">
+                        {entries.map(([field, count]) => (
+                          <span key={field} className="db-field-change-pill">
+                            <span className="db-field-change-count">{count}</span>
+                            {field.replace(/_/g, ' ')}
+                          </span>
+                        ))}
+                        {newCount > 0 && (
+                          <span className="db-field-change-pill db-field-change-new">
+                            <span className="db-field-change-count">{newCount}</span>
+                            new sites
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })()}
 
                   {/* Diff view — only show sites with actual changes or inserts */}
                   <div className="db-upload-diff">

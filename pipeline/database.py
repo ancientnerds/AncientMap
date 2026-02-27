@@ -1128,6 +1128,24 @@ class SiteBookmark(Base):
 
 
 # =============================================================================
+# Vector Sync State
+# =============================================================================
+
+
+class VectorSyncState(Base):
+    """Persistent state for Qdrant vector reindex operations."""
+    __tablename__ = "vector_sync_state"
+
+    collection: Mapped[str] = mapped_column(String(50), primary_key=True)
+    last_completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_result: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+    def __repr__(self) -> str:
+        return f"<VectorSyncState {self.collection} @ {self.last_completed_at}>"
+
+
+# =============================================================================
 # Helper Functions
 # =============================================================================
 

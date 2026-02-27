@@ -201,6 +201,10 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[STARTUP] Discord bot startup failed (non-fatal): {e}", flush=True)
 
+    # Start nightly vector reindex scheduler
+    from api.routes.vector_sync import start_nightly_scheduler
+    start_nightly_scheduler()
+
     get_redis_client()  # Initialize Redis connection
 
     # Pre-warm cache with default sites query (so first user gets instant response)

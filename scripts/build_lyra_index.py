@@ -25,6 +25,7 @@ Usage:
 """
 
 import argparse
+import hashlib
 import json
 import logging
 import os
@@ -100,21 +101,27 @@ def create_payload_indexes(client: QdrantClient, collection: str, fields: list[s
     logger.info(f"Created payload indexes on '{collection}': {fields}")
 
 
-def get_existing_ids(client: QdrantClient, collection: str) -> set[str]:
-    """Get all point IDs already in the collection."""
-    existing = set()
+def _content_hash(text: str) -> str:
+    """Return first 16 hex chars of SHA-256 digest for change detection."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def get_existing_hashes(client: QdrantClient, collection: str) -> dict[str, str]:
+    """Get {point_id: content_hash} for all points in the collection."""
+    existing: dict[str, str] = {}
     offset = None
     while True:
         result = client.scroll(
             collection_name=collection,
             limit=1000,
             offset=offset,
-            with_payload=False,
+            with_payload=["content_hash"],
             with_vectors=False,
         )
         points, next_offset = result
         for p in points:
-            existing.add(str(p.id))
+            pid = str(p.id)
+            existing[pid] = (p.payload or {}).get("content_hash", "")
         if next_offset is None:
             break
         offset = next_offset
@@ -134,8 +141,8 @@ def index_sites(client: QdrantClient, embeddings, sparse_model, rebuild: bool = 
     ensure_collection(client, collection, VECTOR_SIZE)
     create_payload_indexes(client, collection, ["country", "period_name", "site_type"])
 
-    existing_ids = set() if rebuild else get_existing_ids(client, collection)
-    logger.info(f"Sites collection has {len(existing_ids)} existing points")
+    existing_hashes = {} if rebuild else get_existing_hashes(client, collection)
+    logger.info(f"Sites collection has {len(existing_hashes)} existing points")
 
     # Join with alternate names, raw_data for descriptions, and content links
     sql = """
@@ -157,9 +164,18 @@ def index_sites(client: QdrantClient, embeddings, sparse_model, rebuild: bool = 
 
     logger.info(f"Found {len(rows)} sites in database")
 
-    # Filter out already indexed
-    to_index = [r for r in rows if r.id not in existing_ids]
-    logger.info(f"New sites to index: {len(to_index)}")
+    # Build hash input per site and filter to new/changed
+    def _site_hash_input(r) -> str:
+        return f"{r.name}|{r.site_type or ''}|{r.period_name or ''}|{r.country or ''}|{(r.description or '')[:500]}"
+
+    to_index = []
+    for r in rows:
+        h = _content_hash(_site_hash_input(r))
+        if r.id in existing_hashes and existing_hashes[r.id] == h:
+            continue
+        to_index.append((r, h))
+
+    logger.info(f"Sites to index (new + changed): {len(to_index)}")
 
     if not to_index:
         logger.info("Nothing to index for sites")
@@ -172,9 +188,8 @@ def index_sites(client: QdrantClient, embeddings, sparse_model, rebuild: bool = 
 
         # Build text for embedding
         texts = []
-        for r in batch:
+        for r, _h in batch:
             parts = [r.name]
-            # Include alternate names for richer embeddings
             if r.alt_names:
                 alt_str = ", ".join(r.alt_names[:10])
                 parts.append(f"Also known as: {alt_str}")
@@ -190,22 +205,18 @@ def index_sites(client: QdrantClient, embeddings, sparse_model, rebuild: bool = 
             if r.description:
                 parts.append(r.description[:500])
             elif r.raw_data:
-                # Fall back to raw_data description when no dedicated description
                 desc = r.raw_data.get("description") or r.raw_data.get("summary", "") if isinstance(r.raw_data, dict) else ""
                 if desc:
                     parts.append(desc[:500])
-            # Include content link titles for additional context
             if r.content_titles:
                 parts.append(f"Related: {', '.join(r.content_titles[:5])}")
             texts.append(" | ".join(parts))
 
-        # Dense vectors (voyage-4-large)
         dense_vectors = embeddings.embed_documents(texts)
-        # Sparse vectors (BM25)
         sparse_vectors = list(sparse_model.embed(texts))
 
         points = []
-        for r, dense_vec, sparse_vec in zip(batch, dense_vectors, sparse_vectors):
+        for (r, h), dense_vec, sparse_vec in zip(batch, dense_vectors, sparse_vectors):
             points.append(
                 PointStruct(
                     id=r.id,
@@ -227,6 +238,7 @@ def index_sites(client: QdrantClient, embeddings, sparse_model, rebuild: bool = 
                         "lon": float(r.lon) if r.lon else None,
                         "thumbnail_url": r.thumbnail_url,
                         "alt_names": (r.alt_names or [])[:5],
+                        "content_hash": h,
                     },
                 )
             )
@@ -251,8 +263,8 @@ def index_news(client: QdrantClient, embeddings, sparse_model, rebuild: bool = F
     ensure_collection(client, collection, VECTOR_SIZE)
     create_payload_indexes(client, collection, ["channel", "category"])
 
-    existing_ids = set() if rebuild else get_existing_ids(client, collection)
-    logger.info(f"News collection has {len(existing_ids)} existing points")
+    existing_hashes = {} if rebuild else get_existing_hashes(client, collection)
+    logger.info(f"News collection has {len(existing_hashes)} existing points")
 
     sql = """
         SELECT ni.id, ni.headline, ni.summary, ni.significance, ni.news_category,
@@ -273,8 +285,15 @@ def index_news(client: QdrantClient, embeddings, sparse_model, rebuild: bool = F
 
     logger.info(f"Found {len(rows)} news items in database")
 
-    to_index = [r for r in rows if str(r.id) not in existing_ids]
-    logger.info(f"New news items to index: {len(to_index)}")
+    to_index = []
+    for r in rows:
+        point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"news-{r.id}"))
+        h = _content_hash(f"{r.headline}|{r.summary or ''}")
+        if point_id in existing_hashes and existing_hashes[point_id] == h:
+            continue
+        to_index.append((r, point_id, h))
+
+    logger.info(f"News items to index (new + changed): {len(to_index)}")
 
     if not to_index:
         logger.info("Nothing to index for news")
@@ -285,11 +304,10 @@ def index_news(client: QdrantClient, embeddings, sparse_model, rebuild: bool = F
         batch = to_index[i : i + BATCH_SIZE]
 
         texts = []
-        for r in batch:
+        for r, _pid, _h in batch:
             parts = [r.headline]
             if r.summary:
                 parts.append(r.summary[:500])
-            # Include extracted facts for richer embeddings
             if r.facts and isinstance(r.facts, list):
                 facts_str = "; ".join(str(f) for f in r.facts[:8])
                 parts.append(f"Facts: {facts_str}")
@@ -299,15 +317,11 @@ def index_news(client: QdrantClient, embeddings, sparse_model, rebuild: bool = F
                 parts.append(f"Channel: {r.channel_name}")
             texts.append(" | ".join(parts))
 
-        # Dense vectors (voyage-4-large)
         dense_vectors = embeddings.embed_documents(texts)
-        # Sparse vectors (BM25)
         sparse_vectors = list(sparse_model.embed(texts))
 
         points = []
-        for r, dense_vec, sparse_vec in zip(batch, dense_vectors, sparse_vectors):
-            # Use a UUID derived from the integer ID for Qdrant
-            point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"news-{r.id}"))
+        for (r, point_id, h), dense_vec, sparse_vec in zip(batch, dense_vectors, sparse_vectors):
             points.append(
                 PointStruct(
                     id=point_id,
@@ -331,6 +345,7 @@ def index_news(client: QdrantClient, embeddings, sparse_model, rebuild: bool = F
                         "facts": (r.facts or [])[:8],
                         "transcript_segment": (r.transcript_segment or "")[:300],
                         "timestamp_seconds": r.timestamp_seconds,
+                        "content_hash": h,
                     },
                 )
             )
@@ -438,8 +453,8 @@ def index_transcripts(client: QdrantClient, embeddings, sparse_model, rebuild: b
     ensure_collection(client, collection, VECTOR_SIZE)
     create_payload_indexes(client, collection, ["channel", "video_id"])
 
-    existing_ids = set() if rebuild else get_existing_ids(client, collection)
-    logger.info(f"Transcripts collection has {len(existing_ids)} existing points")
+    existing_hashes = {} if rebuild else get_existing_hashes(client, collection)
+    logger.info(f"Transcripts collection has {len(existing_hashes)} existing points")
 
     sql = """
         SELECT nv.id AS video_id, nv.title AS video_title,
@@ -458,22 +473,29 @@ def index_transcripts(client: QdrantClient, embeddings, sparse_model, rebuild: b
 
     logger.info(f"Found {len(rows)} videos with transcripts")
 
-    # Chunk all transcripts and filter out already-indexed
+    # Per-video hash from first 2000 chars of transcript (detects re-summarization)
+    video_hashes: dict[str, str] = {}
+    for r in rows:
+        video_hashes[r.video_id] = _content_hash(r.transcript_text[:2000])
+
+    # Chunk all transcripts and filter out unchanged
     all_chunks = []
     for r in rows:
         chunks = _chunk_transcript(r.transcript_text)
+        vh = video_hashes[r.video_id]
         for chunk in chunks:
             point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"transcript-{r.video_id}-{chunk['chunk_index']}"))
-            if point_id in existing_ids:
+            if point_id in existing_hashes and existing_hashes[point_id] == vh:
                 continue
             chunk["point_id"] = point_id
             chunk["video_id"] = r.video_id
             chunk["video_title"] = r.video_title
             chunk["channel"] = r.channel_name
             chunk["published_at"] = r.published_at
+            chunk["content_hash"] = vh
             all_chunks.append(chunk)
 
-    logger.info(f"New transcript chunks to index: {len(all_chunks)}")
+    logger.info(f"Transcript chunks to index (new + changed): {len(all_chunks)}")
 
     if not all_chunks:
         logger.info("Nothing to index for transcripts")
@@ -483,7 +505,6 @@ def index_transcripts(client: QdrantClient, embeddings, sparse_model, rebuild: b
     for i in range(0, len(all_chunks), BATCH_SIZE):
         batch = all_chunks[i : i + BATCH_SIZE]
 
-        # Build embedding text: video title + channel + chunk text
         texts = []
         for c in batch:
             texts.append(f"{c['video_title']} | {c['channel']} | {c['text']}")
@@ -512,6 +533,7 @@ def index_transcripts(client: QdrantClient, embeddings, sparse_model, rebuild: b
                         "chunk_index": c["chunk_index"],
                         "published_at": c["published_at"],
                         "text_preview": c["text"][:200],
+                        "content_hash": c["content_hash"],
                     },
                 )
             )
@@ -585,8 +607,8 @@ def index_articles(client: QdrantClient, embeddings, sparse_model, rebuild: bool
     ensure_collection(client, collection, VECTOR_SIZE)
     create_payload_indexes(client, collection, ["article_id"])
 
-    existing_ids = set() if rebuild else get_existing_ids(client, collection)
-    logger.info(f"Articles collection has {len(existing_ids)} existing points")
+    existing_hashes = {} if rebuild else get_existing_hashes(client, collection)
+    logger.info(f"Articles collection has {len(existing_hashes)} existing points")
 
     sql = """
         SELECT id, title, content, summary,
@@ -602,15 +624,22 @@ def index_articles(client: QdrantClient, embeddings, sparse_model, rebuild: bool
 
     logger.info(f"Found {len(rows)} articles in database")
 
-    # Chunk all articles and filter out already-indexed
+    # Per-article hash from first 2000 chars of content
+    article_hashes: dict[int, str] = {}
+    for r in rows:
+        if r.content:
+            article_hashes[r.id] = _content_hash(r.content[:2000])
+
+    # Chunk all articles and filter out unchanged
     all_chunks = []
     for r in rows:
         if not r.content:
             continue
+        ah = article_hashes[r.id]
         chunks = _chunk_article(r.content)
         for chunk in chunks:
             point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"article-{r.id}-{chunk['chunk_index']}"))
-            if point_id in existing_ids:
+            if point_id in existing_hashes and existing_hashes[point_id] == ah:
                 continue
             chunk["point_id"] = point_id
             chunk["article_id"] = r.id
@@ -619,9 +648,10 @@ def index_articles(client: QdrantClient, embeddings, sparse_model, rebuild: bool
             chunk["week_start"] = r.week_start
             chunk["week_end"] = r.week_end
             chunk["published_at"] = r.published_at
+            chunk["content_hash"] = ah
             all_chunks.append(chunk)
 
-    logger.info(f"New article chunks to index: {len(all_chunks)}")
+    logger.info(f"Article chunks to index (new + changed): {len(all_chunks)}")
 
     if not all_chunks:
         logger.info("Nothing to index for articles")
@@ -659,6 +689,7 @@ def index_articles(client: QdrantClient, embeddings, sparse_model, rebuild: bool
                         "week_end": c["week_end"],
                         "published_at": c["published_at"],
                         "text_preview": c["text"][:300],
+                        "content_hash": c["content_hash"],
                     },
                 )
             )
@@ -786,13 +817,14 @@ def index_empires(client: QdrantClient, embeddings, sparse_model, *, rebuild: bo
 
     ensure_collection(client, collection, VECTOR_SIZE)
     create_payload_indexes(client, collection, ["polity_id", "region"])
-    existing_ids = get_existing_ids(client, collection)
+    existing_hashes = get_existing_hashes(client, collection)
 
-    # Build points
+    # Build points — hash the full polity JSON string for change detection
     new_points = []
     for polity_id, p in polities.items():
         point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"empire-{polity_id}"))
-        if point_id in existing_ids:
+        h = _content_hash(json.dumps(p, sort_keys=True))
+        if point_id in existing_hashes and existing_hashes[point_id] == h:
             continue
         embed_text = _build_empire_text(polity_id, p)
         new_points.append({
@@ -800,9 +832,10 @@ def index_empires(client: QdrantClient, embeddings, sparse_model, *, rebuild: bo
             "polity_id": polity_id,
             "embed_text": embed_text,
             "polity": p,
+            "content_hash": h,
         })
 
-    logger.info(f"New empires to index: {len(new_points)}")
+    logger.info(f"Empires to index (new + changed): {len(new_points)}")
     if not new_points:
         logger.info("Nothing to index for empires")
         return
@@ -815,7 +848,6 @@ def index_empires(client: QdrantClient, embeddings, sparse_model, *, rebuild: bo
     points = []
     for pt, dense_vec, sparse_vec in zip(new_points, dense_vectors, sparse_vectors):
         p = pt["polity"]
-        # Derive a region from the polity ID prefix (eg_ → Egypt, it_ → Italy, etc.)
         region = polity_id_to_region(pt["polity_id"])
         points.append(
             PointStruct(
@@ -844,6 +876,7 @@ def index_empires(client: QdrantClient, embeddings, sparse_model, *, rebuild: bo
                     "seshat_url": p.get("seshatUrl"),
                     "wikipedia_url": p.get("wikipediaUrl"),
                     "text_preview": pt["embed_text"][:500],
+                    "content_hash": pt["content_hash"],
                 },
             )
         )

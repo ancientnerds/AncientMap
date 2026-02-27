@@ -1608,6 +1608,37 @@
 .db-upload-status-update { background: rgba(251, 191, 36, 0.2); color: #fbbf24; }
 .db-upload-status-error { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
 
+/* ─── Per-field change breakdown ─────────────────────────────────────────── */
+.db-upload-field-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.db-field-change-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  padding: 3px 10px;
+  border-radius: 10px;
+  background: rgba(251, 191, 36, 0.1);
+  color: rgba(251, 191, 36, 0.85);
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.db-field-change-pill.db-field-change-new {
+  background: rgba(34, 197, 94, 0.1);
+  color: rgba(34, 197, 94, 0.85);
+}
+
+.db-field-change-count {
+  font-weight: 700;
+  font-size: 0.76rem;
+}
+
 /* ─── Diff view ──────────────────────────────────────────────────────────── */
 .db-upload-diff {
   display: flex;
@@ -1743,22 +1774,28 @@
 
 /* ─── DB Snapshots (undo history) ────────────────────────────────────────── */
 .db-snapshots-panel {
-  margin: 0 0 16px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  overflow: hidden;
+  position: relative;
+  margin: 0 0 4px;
+  z-index: 20;
 }
 
 .db-snapshots-summary {
-  padding: 10px 16px;
+  padding: 6px 14px;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
   user-select: none;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+}
+
+.db-snapshots-panel[open] > .db-snapshots-summary {
+  border-radius: 6px 6px 0 0;
+  border-bottom-color: transparent;
 }
 
 .db-snapshots-summary:hover {
@@ -1822,46 +1859,64 @@
 }
 
 .db-snapshots-list {
+  position: absolute;
+  left: 0;
+  top: 100%;
+  width: 520px;
+  max-width: 90vw;
   display: flex;
   flex-direction: column;
   gap: 1px;
-  background: rgba(255, 255, 255, 0.04);
-  max-height: 400px;
+  background: var(--bg-dark);
+  border: 1px solid var(--border-color);
+  border-top: none;
+  border-radius: 0 6px 6px 6px;
+  max-height: 350px;
   overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
 .db-snapshot-card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 10px 16px;
+  gap: 4px;
+  padding: 8px 12px;
   background: var(--bg-dark);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
+}
+
+.db-snapshot-card + .db-snapshot-card {
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .db-snapshot-row-top {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .db-snapshot-desc {
   flex: 1;
+  min-width: 0;
   color: var(--text-primary);
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .db-snapshot-actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .db-snapshot-row-detail {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 16px;
-  font-size: 0.73rem;
+  gap: 4px 12px;
+  font-size: 0.7rem;
   color: var(--text-secondary);
 }
 
@@ -1906,8 +1961,8 @@
   background: transparent;
   color: #60a5fa;
   border-color: rgba(96, 165, 250, 0.4);
-  padding: 4px 12px;
-  font-size: 0.78rem;
+  padding: 3px 10px;
+  font-size: 0.72rem;
 }
 
 .db-btn-restore:hover:not(:disabled) {
@@ -2754,7 +2809,11 @@
   }
 
   .db-snapshots-panel {
-    margin: 0 0 12px;
+    margin: 0 0 4px;
+  }
+
+  .db-snapshots-list {
+    width: calc(100vw - 32px);
   }
 
   .db-upload-target-row {
