@@ -133,6 +133,16 @@ Step 1 mechanical scans run on ALL files in these directories. Step 2 deep revie
 | `pipeline/lyra/data_patches.py` | grep |
 | `pipeline/lyra/backfill_significance.py` | grep |
 | `pipeline/lyra/site_researcher.py` | deep |
+| `api/cardgame/routes.py` | deep |
+| `api/cardgame/achievements.py` | deep |
+| `api/cardgame/packs.py` | deep |
+| `api/cardgame/rewards.py` | deep |
+| `api/cardgame/expedition.py` | deep |
+| `api/cardgame/quiz.py` | deep |
+| `api/cardgame/synergies.py` | grep |
+| `api/cardgame/models.py` | grep |
+| `api/cardgame/constants.py` | grep |
+| `api/routes/interactions.py` | grep |
 | `pipeline/unified_loader.py` | grep |
 | `pipeline/content_linker.py` | grep |
 | `pipeline/static_exporter.py` | grep |
@@ -636,14 +646,17 @@ Oversized files/functions flagged for gradual refactoring. Address when touching
 | File | Lines | Long functions |
 |------|-------|----------------|
 | `pipeline/lyra/site_identifier.py` | ~1328 | `_handle_db_match` (~160), `_process_single` (~120), `_enrich_from_wikidata` (~90) |
-| `pipeline/lyra/orchestrator.py` | ~831 | `main` (~100) |
-| `api/routes/sites.py` | ~819 | Multiple endpoint handlers |
+| `pipeline/lyra/orchestrator.py` | ~1100 | `main` (~100), `_run_migrations` (~550) |
+| `api/routes/public_v1.py` | ~792 | `create_public_api` (~707 — entire API in one closure) |
+| `api/routes/sites.py` | ~1345 | Multiple endpoint handlers |
 | `api/services/lyra_agent.py` | ~618 | `run_agent_stream` (~150) |
 | `api/services/lyra_tools.py` | ~606 | `search_sites` (~90), `_hybrid_search` (~81) |
 | `api/routes/content.py` | ~605 | `get_connectors_status` (~126) |
-| `api/routes/news.py` | ~510 | `get_news_feed` (~133) |
+| `api/routes/news.py` | ~657 | `get_news_feed` (~133) |
 | `api/routes/og.py` | ~499 | `generate_og_image` (~127) |
-| `api/routes/radar.py` | ~433 | `get_radar` (~222) |
+| `api/routes/radar.py` | ~433 | `get_radar` (~265) |
+| `api/services/discord_bot.py` | ~450 | `_handle_ask` (~110), `_get_bot` (~151) |
+| `api/main.py` | ~450 | `lifespan` (~192) |
 | `pipeline/lyra/transcript_fetcher.py` | ~413 | `fetch_new_videos` (~81) |
 
 ### TypeScript (>400 lines)

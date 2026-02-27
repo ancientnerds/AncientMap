@@ -216,6 +216,21 @@ def extract_period_from_text(text: str) -> int | None:
     return None
 
 
+# Canonical period bucket definitions: (label, lower_bound, upper_bound)
+# Mirrors frontend categorizePeriod() in src/data/sites.ts.
+PERIOD_BUCKETS: list[tuple[str, int, int]] = [
+    ("< 4500 BC", -999999, -4500),
+    ("4500 - 3000 BC", -4500, -3000),
+    ("3000 - 1500 BC", -3000, -1500),
+    ("1500 - 500 BC", -1500, -500),
+    ("500 BC - 1 AD", -500, 1),
+    ("1 - 500 AD", 1, 500),
+    ("500 - 1000 AD", 500, 1000),
+    ("1000 - 1500 AD", 1000, 1500),
+    ("1500+ AD", 1500, 999999),
+]
+
+
 def categorize_period(year: int | None) -> str | None:
     """Convert a year to a canonical period bucket name.
 
@@ -223,22 +238,9 @@ def categorize_period(year: int | None) -> str | None:
     """
     if year is None:
         return None
-    if year < -4500:
-        return "< 4500 BC"
-    if year < -3000:
-        return "4500 - 3000 BC"
-    if year < -1500:
-        return "3000 - 1500 BC"
-    if year < -500:
-        return "1500 - 500 BC"
-    if year < 1:
-        return "500 BC - 1 AD"
-    if year < 500:
-        return "1 - 500 AD"
-    if year < 1000:
-        return "500 - 1000 AD"
-    if year < 1500:
-        return "1000 - 1500 AD"
+    for label, lo, hi in PERIOD_BUCKETS:
+        if lo <= year < hi:
+            return label
     return "1500+ AD"
 
 

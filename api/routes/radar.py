@@ -168,15 +168,20 @@ def _find_nearest_an_sites_batch(
 
     delta = max_km / 111.0
 
-    # Build VALUES rows: (id, lat, lon)
-    values_rows = ", ".join(
-        f"({i}, {lat}, {lon})"
-        for i, (_, lat, lon) in enumerate(coords)
-    )
+    # Build parameterized VALUES rows: (:idx_0, :lat_0, :lon_0), ...
+    value_fragments = []
+    params: dict = {"delta": delta, "max_km": max_km}
+    for i, (_, lat, lon) in enumerate(coords):
+        value_fragments.append(f"(:idx_{i}, :lat_{i}, :lon_{i})")
+        params[f"idx_{i}"] = i
+        params[f"lat_{i}"] = float(lat)
+        params[f"lon_{i}"] = float(lon)
+
+    values_clause = ", ".join(value_fragments)
 
     rows = db.execute(text(f"""
         WITH candidates(idx, clat, clon) AS (
-            VALUES {values_rows}
+            VALUES {values_clause}
         )
         SELECT DISTINCT ON (c.idx)
             c.idx,
@@ -186,12 +191,12 @@ def _find_nearest_an_sites_batch(
         FROM candidates c
         JOIN unified_sites us
           ON us.source_id = 'ancient_nerds'
-         AND us.lat BETWEEN c.clat - {delta} AND c.clat + {delta}
-         AND us.lon BETWEEN c.clon - {delta} AND c.clon + {delta}
+         AND us.lat BETWEEN c.clat - :delta AND c.clat + :delta
+         AND us.lon BETWEEN c.clon - :delta AND c.clon + :delta
         WHERE SQRT(POW((c.clat - us.lat) * 111.0, 2)
-                 + POW((c.clon - us.lon) * 111.0 * COS(RADIANS(c.clat)), 2)) <= {max_km}
+                 + POW((c.clon - us.lon) * 111.0 * COS(RADIANS(c.clat)), 2)) <= :max_km
         ORDER BY c.idx, dist_km
-    """)).fetchall()
+    """), params).fetchall()
 
     result: dict[str, dict] = {}
     for row in rows:

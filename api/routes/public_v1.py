@@ -281,10 +281,14 @@ def create_public_api() -> FastAPI:
         limit: int = Query(50, ge=1, le=200, description="Max results"),
         db: Session = Depends(get_db),
     ):
-        cache_key = f"pubv1:search:{q.lower().strip()}:{limit}"
+        q_clean = q.strip()
+        cache_key = f"pubv1:search:{q_clean.lower()}:{limit}"
         cached = cache_get(cache_key)
         if cached:
             return cached
+
+        # Escape ILIKE wildcard characters in user input
+        q_escaped = q_clean.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
         # Spaceless matching: compare with spaces/diacritics stripped
         query = text("""
@@ -299,8 +303,8 @@ def create_public_api() -> FastAPI:
             LIMIT :limit
         """)
         result = db.execute(query, {
-            "pattern": f"%{q.strip()}%",
-            "exact": q.strip(),
+            "pattern": f"%{q_escaped}%",
+            "exact": q_clean,
             "limit": limit,
         })
 
@@ -501,14 +505,16 @@ def create_public_api() -> FastAPI:
         period_result = db.execute(text("""
             SELECT
                 CASE
+                    WHEN period_start IS NULL THEN 'Unknown'
                     WHEN period_start < -4500 THEN '< 4500 BC'
                     WHEN period_start < -3000 THEN '4500 - 3000 BC'
                     WHEN period_start < -1500 THEN '3000 - 1500 BC'
                     WHEN period_start < -500 THEN '1500 - 500 BC'
                     WHEN period_start < 1 THEN '500 BC - 1 AD'
                     WHEN period_start < 500 THEN '1 - 500 AD'
-                    WHEN period_start < 1500 THEN '500 - 1500 AD'
-                    ELSE 'Unknown'
+                    WHEN period_start < 1000 THEN '500 - 1000 AD'
+                    WHEN period_start < 1500 THEN '1000 - 1500 AD'
+                    ELSE '1500+ AD'
                 END as period,
                 COUNT(*) as count
             FROM unified_sites

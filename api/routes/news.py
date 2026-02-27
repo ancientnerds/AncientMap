@@ -16,28 +16,17 @@ from sqlalchemy.orm import Session, joinedload
 from api.cache import cache_get, cache_set
 from pipeline.database import NewsArticle, NewsChannel, NewsItem, NewsVideo, UnifiedSite, get_db
 from pipeline.utils.country_lookup import country_name_variants, normalize_country
-from pipeline.utils.text import categorize_period
+from pipeline.utils.text import PERIOD_BUCKETS, categorize_period
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 # =============================================================================
-# Period Bucketing (mirrors frontend categorizePeriod in src/data/sites.ts)
+# Period Bucketing — uses canonical PERIOD_BUCKETS from pipeline.utils.text
 # =============================================================================
 
-_PERIOD_BUCKETS = [
-    ("< 4500 BC", -999999, -4500),
-    ("4500 - 3000 BC", -4500, -3000),
-    ("3000 - 1500 BC", -3000, -1500),
-    ("1500 - 500 BC", -1500, -500),
-    ("500 BC - 1 AD", -500, 1),
-    ("1 - 500 AD", 1, 500),
-    ("500 - 1000 AD", 500, 1000),
-    ("1000 - 1500 AD", 1000, 1500),
-    ("1500+ AD", 1500, 999999),
-]
-_PERIOD_ORDER = {label: i for i, (label, _, _) in enumerate(_PERIOD_BUCKETS)}
+_PERIOD_ORDER = {label: i for i, (label, _, _) in enumerate(PERIOD_BUCKETS)}
 
 
 def _categorize_period(start: int | None) -> str:
@@ -45,7 +34,7 @@ def _categorize_period(start: int | None) -> str:
 
 
 def _period_label_to_range(label: str) -> tuple[int, int] | None:
-    for bucket_label, lo, hi in _PERIOD_BUCKETS:
+    for bucket_label, lo, hi in PERIOD_BUCKETS:
         if bucket_label == label:
             return (lo, hi)
     return None
