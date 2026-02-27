@@ -301,11 +301,11 @@ Claude Code follows this procedure to launch parallel research agents that proce
 
 1. Read `output/audit_batches/merge_manifest.json`
 2. Identify all batches with `"status": "pending"` that do NOT yet have a `batch_NNN_results.json` file
-3. Report: "Found N pending batches (M total sites). Launching in waves of 5."
+3. Report: "Found N pending batches (M total sites). Launching in waves of 10."
 
-#### Launch agents — 5 parallel per wave
+#### Launch agents — 10 parallel per wave
 
-For each wave of up to 5 pending batches, launch Task agents with `subagent_type: "general-purpose"`. Wait for all 5 to complete before launching the next wave. This avoids WebSearch rate limits.
+For each wave of up to 10 pending batches, launch Task agents with `subagent_type: "general-purpose"`. Wait for all 10 to complete before launching the next wave.
 
 Each agent receives the prompt below (with `NNN` replaced by the batch number):
 
