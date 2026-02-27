@@ -153,6 +153,7 @@ desktop.ini
 audit_batch.csv
 audit_wikidata_results.json
 *_snapshot.json
+public/data/snapshots/
 
 # =============================================================================
 # MISC
