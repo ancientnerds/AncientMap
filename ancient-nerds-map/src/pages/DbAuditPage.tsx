@@ -1497,10 +1497,10 @@ export default function DbAuditPage() {
         </div>
       )}
 
-      {/* Undo history — shows when there are snapshots to restore */}
+      {/* Undo history — shows checkpoints to restore */}
       {isFounder && dbSnapshots.length > 0 && (
         <details className="db-snapshots-panel">
-          <summary className="db-snapshots-summary">Undo History ({dbSnapshots.length} snapshot{dbSnapshots.length !== 1 ? 's' : ''})</summary>
+          <summary className="db-snapshots-summary">Undo History ({dbSnapshots.length} checkpoint{dbSnapshots.length !== 1 ? 's' : ''})</summary>
           <div className="db-snapshots-list">
             {dbSnapshots.map(snap => {
               const dt = new Date(snap.created_at)
@@ -2232,12 +2232,12 @@ export default function DbAuditPage() {
         </div>
       )}
 
-      {/* Snapshot Preview Modal */}
+      {/* Undo Preview Modal */}
       {snapshotPreview && (
         <div className="db-modal-overlay" onClick={() => !snapshotPreviewLoading && setSnapshotPreview(null)}>
           <div className="db-modal db-upload-modal" onClick={e => e.stopPropagation()}>
             <div className="db-modal-header">
-              <h2>Snapshot Preview</h2>
+              <h2>Undo Preview</h2>
               {sourceFilter !== 'all' && (
                 <span className="db-snapshot-source-badge" style={{ borderColor: SOURCE_CONFIG[sourceFilter]?.color, background: SOURCE_CONFIG[sourceFilter]?.color + '15' }}>
                   <span className="db-snapshot-source-dot" style={{ background: SOURCE_CONFIG[sourceFilter]?.color }} />
@@ -2286,12 +2286,12 @@ export default function DbAuditPage() {
                     </div>
                   ))}
                 {snapshotPreview.sites.filter(s => s.status === 'changed' || s.status === 'deleted').length === 0 && (
-                  <div className="db-diff-empty">No differences &mdash; all sites already match the snapshot state.</div>
+                  <div className="db-diff-empty">No differences &mdash; all sites already match the checkpoint state.</div>
                 )}
               </div>
             </div>
             <div className="db-modal-footer">
-              <div className="db-upload-snapshot-notice">Restoring will revert the {snapshotPreview.changed_count} changed site{snapshotPreview.changed_count !== 1 ? 's' : ''} to their pre-change values. A new snapshot is created automatically.</div>
+              <div className="db-upload-snapshot-notice">Restoring will revert the {snapshotPreview.changed_count} changed site{snapshotPreview.changed_count !== 1 ? 's' : ''} to their pre-change values. A new undo checkpoint is created automatically.</div>
               <div className="db-modal-footer-buttons">
                 <button className="db-btn db-btn-cancel" onClick={() => setSnapshotPreview(null)}>Close</button>
                 <button className="db-btn db-btn-restore" onClick={() => restoreDbSnapshot(snapshotPreview.snapshot_id)} disabled={snapshotPreview.changed_count === 0}>
