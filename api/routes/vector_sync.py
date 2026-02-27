@@ -2,9 +2,10 @@
 
 import asyncio
 import json
+import logging
 import sys
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,9 +13,10 @@ from pydantic import BaseModel
 from sqlalchemy import text
 
 from api.services.jwt_auth import require_founder
-from pipeline.database import DiscordUser, get_session
+from pipeline.database import DiscordUser, VectorSyncState, get_session
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # ─── Module-level reindex state ──────────────────────────────────────────────
 _reindex_state: dict = {
@@ -25,6 +27,55 @@ _reindex_state: dict = {
     "last_duration_seconds": None,
     "last_result": None,
 }
+
+# Nightly scheduler state
+_nightly_task: asyncio.Task | None = None
+_next_run_utc: str | None = None
+
+NIGHTLY_HOUR_UTC = 3  # 3:00 AM UTC
+
+
+def _load_persisted_state():
+    """Load last reindex state from the database (called once at startup)."""
+    try:
+        with get_session() as session:
+            row = session.execute(
+                text("SELECT last_completed_at, last_duration_seconds, last_result FROM vector_sync_state WHERE collection = 'all'")
+            ).fetchone()
+            if row and row.last_completed_at:
+                _reindex_state["last_completed_at"] = row.last_completed_at.isoformat() + "Z" if row.last_completed_at.tzinfo is None else row.last_completed_at.isoformat()
+                _reindex_state["last_duration_seconds"] = row.last_duration_seconds
+                _reindex_state["last_result"] = row.last_result
+                logger.info(f"[VECTOR-SYNC] Loaded persisted state: last run {_reindex_state['last_completed_at']}")
+    except Exception as e:
+        logger.warning(f"[VECTOR-SYNC] Could not load persisted state (table may not exist yet): {e}")
+
+
+def _persist_state(collection: str):
+    """Save reindex completion to the database."""
+    try:
+        with get_session() as session:
+            session.execute(
+                text("""
+                    INSERT INTO vector_sync_state (collection, last_completed_at, last_duration_seconds, last_result)
+                    VALUES (:col, :ts, :dur, :res)
+                    ON CONFLICT (collection) DO UPDATE
+                    SET last_completed_at = :ts, last_duration_seconds = :dur, last_result = :res
+                """),
+                {
+                    "col": collection,
+                    "ts": datetime.now(UTC),
+                    "dur": _reindex_state["last_duration_seconds"],
+                    "res": _reindex_state["last_result"],
+                },
+            )
+            session.commit()
+    except Exception as e:
+        logger.warning(f"[VECTOR-SYNC] Failed to persist state: {e}")
+
+
+# Load persisted state on module import (safe — get_session handles connection)
+_load_persisted_state()
 
 
 class ReindexRequest(BaseModel):
@@ -155,6 +206,10 @@ async def vector_sync_status():
             "last_duration_seconds": _reindex_state["last_duration_seconds"],
             "last_result": _reindex_state["last_result"],
         },
+        "auto_reindex": {
+            "enabled": _nightly_task is not None and not _nightly_task.done(),
+            "next_run_utc": _next_run_utc,
+        },
     }
 
 
@@ -187,6 +242,7 @@ async def vector_reindex(
 
 async def _run_reindex(cmd: list[str]):
     """Run build_lyra_index.py as a subprocess and update state when done."""
+    collection = _reindex_state["collection"] or "all"
     start = time.monotonic()
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -207,3 +263,42 @@ async def _run_reindex(cmd: list[str]):
         _reindex_state["running"] = False
         _reindex_state["started_at"] = None
         _reindex_state["collection"] = None
+        _persist_state(collection)
+
+
+# ─── Nightly auto-reindex scheduler ─────────────────────────────────────────
+def _seconds_until_next(hour_utc: int) -> float:
+    """Seconds from now until the next occurrence of hour_utc:00 UTC."""
+    now = datetime.now(UTC)
+    target = now.replace(hour=hour_utc, minute=0, second=0, microsecond=0)
+    if target <= now:
+        target += timedelta(days=1)
+    return (target - now).total_seconds()
+
+
+async def schedule_nightly_reindex():
+    """Loop forever: sleep until 3:00 AM UTC, then trigger a full incremental reindex."""
+    global _next_run_utc
+    while True:
+        wait = _seconds_until_next(NIGHTLY_HOUR_UTC)
+        _next_run_utc = (datetime.now(UTC) + timedelta(seconds=wait)).isoformat()
+        logger.info(f"[VECTOR-SYNC] Next nightly reindex at {_next_run_utc} ({wait / 3600:.1f}h from now)")
+        await asyncio.sleep(wait)
+
+        if _reindex_state["running"]:
+            logger.info("[VECTOR-SYNC] Nightly reindex skipped — already running")
+            continue
+
+        logger.info("[VECTOR-SYNC] Starting nightly auto-reindex")
+        cmd = [sys.executable, "scripts/build_lyra_index.py"]
+        _reindex_state["running"] = True
+        _reindex_state["started_at"] = datetime.now(UTC).isoformat()
+        _reindex_state["collection"] = "all"
+        await _run_reindex(cmd)
+
+
+def start_nightly_scheduler():
+    """Create the nightly scheduler task. Call from lifespan."""
+    global _nightly_task
+    _nightly_task = asyncio.create_task(schedule_nightly_reindex())
+    logger.info("[VECTOR-SYNC] Nightly auto-reindex scheduler started")
