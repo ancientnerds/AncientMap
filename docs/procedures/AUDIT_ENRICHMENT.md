@@ -148,6 +148,8 @@ python scripts/audit_enrich.py --phase sync           # Fetch production → loc
 python scripts/audit_enrich.py --phase mechanical      # Wave 0 only
 python scripts/audit_enrich.py --phase enrich          # Wave 1 only
 python scripts/audit_enrich.py --phase verify          # Wave 2 prep (create batch files)
+python scripts/audit_enrich.py --phase agents          # Wave 2 batch status + handoff instructions
+python scripts/audit_enrich.py --phase merge --dry-run # Preview agent results merge
 python scripts/audit_enrich.py --phase merge           # Merge agent results → DB
 python scripts/audit_enrich.py --phase package         # Export cleaned DB for db.html upload
 python scripts/audit_enrich.py --phase export          # Re-export static JSON
@@ -183,6 +185,7 @@ These fixes require **no research** — they are deterministic corrections:
 
 | Fix | Detection | Correction |
 |-----|-----------|------------|
+| **Suspect modern flagging** | Name matches modern-institution phrases (wildlife sanctuary, safari park, botanical garden, theme park, amusement park, aquarium, planetarium, etc.) AND site has a vague type (Unknown/NULL/site) | Set `site_type = 'suspect_modern'`. Logged for admin review. Sites with specific archaeological types (heritage_site, temple, fortress, etc.) are never flagged — "Masada National Park" stays as Fortress/citadel. |
 | `site_type` normalization | Value differs from `normalize_site_type(site_type)` | Replace with canonical form |
 | `period_name` recomputation | `period_name` doesn't match `categorize_period(period_start)` | Recompute from `period_start` |
 | Raw year parsing | `raw_data->>'year'` parseable but `period_start` is NULL | Parse and set `period_start` |
@@ -224,19 +227,28 @@ python scripts/enrich_wiki_select.py     # Select best Wikipedia articles
 - `output/enrichment_claims.json` — Wikidata claims (inception dates, heritage, images)
 - `output/enrichment_wiki.json` — Best Wikipedia articles (multilingual)
 
-### Step 3 — Wave 2: Launch Agent Batches for Verification & Gap Fill
+### Step 3 — Wave 2: Prepare Agent Batches
 
-The orchestrator creates batch input files in `output/audit_batches/batch_NNN_input.json`, each containing ~50 sites that need research.
+```bash
+python scripts/audit_enrich.py --phase verify
+```
 
-Launch **10 agents in parallel** (subagent_type: `general-purpose`), each processing one batch:
+The orchestrator creates batch input files in `output/audit_batches/batch_NNN_input.json`, each containing ~50 sites that need research. It detects:
 
-Each agent:
-1. Reads its `batch_NNN_input.json`
-2. For each site with `needs_fix` items:
-   - Uses WebSearch, Consensus, Scholar Gateway to research
-   - Applies the verification rules from this document
-   - Classifies confidence (high/medium/low)
-3. Writes `batch_NNN_results.json` in the output format below
+- `period_start` is NULL (with or without Wikidata enrichment data)
+- `period_start > 1500` on non-museum sites (P1 suspect modern)
+- Low-confidence Wikidata matches (< 0.8) excluded from auto-apply
+- No Wikidata match at all
+- Missing country or site_type
+- No description and no wiki extract
+
+After preparing batches, check status:
+
+```bash
+python scripts/audit_enrich.py --phase agents
+```
+
+This prints a summary of pending batches, issue breakdown, and handoff instructions.
 
 **Batch input format:**
 ```json
@@ -279,17 +291,173 @@ Each agent:
 }
 ```
 
+### Step 3b — Wave 2: Execute Agent Research (Claude Code Procedure)
+
+**Trigger:** The user says "run Wave 2 agent research" (or similar).
+
+Claude Code follows this procedure to launch parallel research agents that process the batch files created by Step 3.
+
+#### Prerequisites
+
+1. Read `output/audit_batches/merge_manifest.json`
+2. Identify all batches with `"status": "pending"` that do NOT yet have a `batch_NNN_results.json` file
+3. Report: "Found N pending batches (M total sites). Launching in waves of 5."
+
+#### Launch agents — 5 parallel per wave
+
+For each wave of up to 5 pending batches, launch Task agents with `subagent_type: "general-purpose"`. Wait for all 5 to complete before launching the next wave. This avoids WebSearch rate limits.
+
+Each agent receives the prompt below (with `NNN` replaced by the batch number):
+
+````
+You are a research agent auditing archaeological sites for the Ancient Nerds database.
+
+## Your task
+
+1. Read the batch input file: `output/audit_batches/batch_NNN_input.json`
+2. For each site, research the issues listed in its `needs_fix` array
+3. Write results to: `output/audit_batches/batch_NNN_results.json`
+
+## Research tools (use in this order of preference)
+
+1. **WebSearch** — primary tool. Search for the site name + country, check Wikipedia, UNESCO, museum sites.
+2. **Consensus MCP** (`mcp__claude_ai_Consensus__search`) — for disputed archaeological dating claims.
+3. **Scholar Gateway MCP** (`mcp__claude_ai_Scholar_Gateway__semanticSearch`) — for peer-reviewed evidence on specific sites.
+
+## Verification rules (MANDATORY)
+
+- **Never use discovery/renovation/museum-opening dates as period_start.** The year Schliemann excavated Troy (1870) is NOT Troy's period. Ask: "Is this when the site was BUILT/ACTIVE, or when it was FOUND/RESTORED?"
+- **Never downgrade site_type specificity.** If current type is "Temple", do NOT change to "Archaeological site" even if a source says so.
+- **Never use historical country names.** Use current UN-recognized names: "Turkey" not "Anatolia", "Iraq" not "Mesopotamia".
+- **Cross-reference at least 2 sources** for any fix you mark as "high" confidence.
+- **If uncertain, classify as "manual"** — an empty field is better than a wrong one.
+- **Do NOT auto-fix coordinates** — flag for manual review unless the error is extreme (wrong continent).
+- **Do NOT trust a single source blindly** — especially Wikidata inception dates which are often wrong.
+- **period_name must always match period_start** — do not set period_name independently; the merge script auto-computes it.
+
+## Valid site_type values (CANONICAL_TYPES)
+
+Only use these exact strings for site_type fixes:
+
+**Settlements:** City, Town, Village, Settlement, Urban, Villa, City/town/settlement, Residence/villa/farmhouse
+**Fortifications:** Castle, Citadel, Fort, Fortress, Military, Wall, Gate, Fortress/citadel, Castle/palace, Gate/archway/bridge, Fortification
+**Religious:** Church, Mosque, Temple, Monastery, Sacred site, Sanctuary, Religious, Temple complex, Church/cathedral, Minaret/tower, Stone cross
+**Burial:** Cemetery, Necropolis, Tomb, Burial, Funerary, Necropolis/tombs complex, Barrow, Mound/tumulus, Cairn, Elongated skulls
+**Megalithic:** Megalithic, Megalithic stones, Megalithic structures, Megalithic statues, Megalithic walls, Stone circle, Dolmen, Standing stone, Henge, Timber circle, Polygonal masonry
+**Rock & Cave:** Cave, Cave Structures, Rock relief/carving, Rock art, Petroglyphs, Sculptured stone, Geoglyphs
+**Infrastructure:** Road, Bridge, Mine, Quarry, Infrastructure, Road/avenue/trackway, Reservoir/aqueduct/canal, Mine/quarry, Earthwork, Well
+**Water & Ports:** Aqueduct, Bath, Harbor, Port, Underwater structures, Shipwreck
+**Monuments:** Monument, Memorial, Stadium, Theater, Theatre, Forum, Palace, Pyramid complex, Museum, Amphitheatre, Scheduled monument, Heritage site, Archaeological site
+**Other:** Site, Ruin, Inscription, Natural feature, Impact crater, Geological interest, Magnetic anomaly, Unknown
+
+## Period buckets (for reference — merge script auto-computes period_name from period_start)
+
+| period_start range | period_name |
+|--------------------|-------------|
+| < -4500 | < 4500 BC |
+| -4500 to -3001 | 4500 - 3000 BC |
+| -3000 to -1501 | 3000 - 1500 BC |
+| -1500 to -501 | 1500 - 500 BC |
+| -500 to 0 | 500 BC - 1 AD |
+| 1 to 499 | 1 - 500 AD |
+| 500 to 999 | 500 - 1000 AD |
+| 1000 to 1499 | 1000 - 1500 AD |
+| >= 1500 | 1500+ AD |
+
+## Confidence classification
+
+- **high**: 2+ independent sources agree (e.g., Wikipedia + UNESCO listing + Wikidata). Auto-applied by merge.
+- **medium**: 1 strong source (e.g., Wikipedia article with citations). Deferred to manual review file.
+- **low**: Inference only, no direct source found. Skipped by merge entirely.
+
+## Output format
+
+Write this exact JSON structure to `output/audit_batches/batch_NNN_results.json`:
+
+```json
+{
+  "batch_id": "NNN",
+  "sites": {
+    "<site_id>": {
+      "status": "fixed|verified|manual",
+      "fixes": [
+        {
+          "field": "period_start",
+          "old": null,
+          "new": -9500,
+          "confidence": "high",
+          "evidence": "Wikipedia article states construction began c. 9500 BC, confirmed by UNESCO listing"
+        }
+      ],
+      "enrichment": { "confidence_score": 0.95 },
+      "manual_notes": null
+    }
+  },
+  "stats": { "fixed": 0, "verified": 0, "manual": 0 }
+}
+```
+
+**Status values:**
+- `"fixed"` — at least one field was corrected with evidence
+- `"verified"` — all current values are correct, no changes needed
+- `"manual"` — cannot determine correct value, needs human review. Set `manual_notes` explaining why.
+
+**IMPORTANT:** Every site_id from the input MUST appear in the output. Do not skip any site.
+
+## Process each site
+
+For each site in the batch:
+1. Read its `needs_fix` array to understand what needs research
+2. Check existing `enrichment` and `wiki_extract` data first — these are already fetched from Wikidata/Wikipedia
+3. If enrichment data answers the question, verify it with a WebSearch and classify confidence
+4. If enrichment data is missing or contradicts the issue, do WebSearch research
+5. For disputed archaeological claims (e.g., controversial dating), use Consensus or Scholar Gateway
+6. Produce a result entry with the appropriate status, fixes, and evidence
+
+After processing all sites, count the stats and write the output file.
+Print a one-line summary: "Batch NNN complete: X fixed, Y verified, Z manual"
+````
+
+#### Validate results
+
+After all agents complete:
+
+1. Read each `batch_NNN_results.json`
+2. For each batch, load the corresponding `batch_NNN_input.json` and verify every input `site_id` appears in the output
+3. Validate that any `site_type` fix values are in the canonical list above
+4. Report aggregate stats: total fixed, verified, manual across all batches
+5. Flag any batches with missing site_ids for re-processing
+
+#### Handoff
+
+Tell the user:
+```
+Agent research complete. X sites fixed, Y verified, Z flagged for manual review.
+
+Next steps:
+  python scripts/audit_enrich.py --phase merge --dry-run   # Preview changes
+  python scripts/audit_enrich.py --phase merge              # Apply to DB
+```
+
 ### Step 4 — Merge Agent Results → DB
 
 ```bash
+# Preview what will change (no DB writes):
+python scripts/audit_enrich.py --phase merge --dry-run
+
+# Apply changes:
 python scripts/audit_enrich.py --phase merge
 ```
 
 Reads all `batch_NNN_results.json` files and:
+- **Validates** `site_type` against `CANONICAL_TYPES` (normalizes via `normalize_site_type()`)
+- **Auto-computes** `period_name` from `period_start` via `categorize_period()` — never trusts agent's `period_name` value
+- **Auto-applies** only `high` confidence fixes
+- **Defers** `medium` confidence fixes to `output/audit_manual_review.json` for human review
+- **Skips** `low` confidence fixes entirely
 - Applies fixes with conditional WHERE clauses (protecting user edits)
 - Updates `unified_sites.last_audited = NOW()`
 - Updates `card_stats` enrichment columns + `last_enriched = NOW()`
-- Logs everything to `database_audit_log`
 
 ### Step 5 — Wave 3: Card Descriptions
 
@@ -352,7 +520,7 @@ Three levels of resume tracking:
 2. **Batch-level**: `output/audit_batches/merge_manifest.json` tracks which batches are complete/in-progress/pending
 3. **Phase-level**: `--phase` argument lets you re-run any phase independently
 
-Full phase order: `sync` → `mechanical` → `enrich` → `verify` → (agents) → `merge` → `package` → `export`
+Full phase order: `sync` → `mechanical` → `enrich` → `apply` → `verify` → `agents` → (Claude Code agents) → `merge` → `package` → `export`
 
 You can re-run any phase safely. Sync is idempotent (upserts). Package overwrites previous output files.
 
@@ -377,6 +545,7 @@ You can re-run any phase safely. Sync is idempotent (upserts). Package overwrite
 
 | Tier | Criteria | Query |
 |------|----------|-------|
+| P0 | **Suspect modern** — name matches modern-institution phrases (wildlife sanctuary, safari park, aquarium, etc.) AND has a vague type (Unknown/NULL/site). Specific archaeological types are never overwritten. | Detected automatically in Wave 0. See `SUSPECT_MODERN_PHRASES` in `audit_enrich.py`. |
 | P1 | `period_start > 1500` + non-museum type — likely Wikidata false positives | `WHERE period_start > 1500 AND site_type NOT IN ('museum', 'Museum', 'geological interest') AND site_type NOT ILIKE '%museum%'` |
 | P2 | `period_start IS NULL` — dots have no color on globe | `WHERE period_start IS NULL` |
 | P3 | `site_type IS NULL OR site_type = 'Unknown'` — can't be filtered | `WHERE site_type IS NULL OR site_type = 'Unknown'` |
