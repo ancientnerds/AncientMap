@@ -9,6 +9,7 @@ Then re-runs Phase 1 verification to confirm no new issues.
 """
 
 import json
+import shutil
 import sys
 from collections import Counter
 from pathlib import Path
@@ -86,6 +87,11 @@ def main():
         json.dump(original, f, ensure_ascii=False, indent=2)
 
     print(f"Wrote updated card_descriptions.json with {len(descs)} descriptions")
+
+    # Copy to public/data/ so the API startup import picks it up
+    public_path = ROOT / "public" / "data" / "card_descriptions.json"
+    shutil.copy2(OUTPUT / "card_descriptions.json", public_path)
+    print(f"Copied to {public_path}")
 
     # Re-run Phase 1 verification
     print("\n" + "=" * 60)

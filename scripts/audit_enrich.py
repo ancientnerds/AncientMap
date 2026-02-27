@@ -1259,7 +1259,8 @@ def package_for_upload(source_ids: list[str], candidate_site_ids: set[str] | Non
                         us.name, us.lat, us.lon,
                         us.site_type, us.period_name, us.period_start,
                         us.country, us.description, us.source_url, us.thumbnail_url,
-                        cs.confidence_score
+                        cs.confidence_score,
+                        cs.card_description
                     FROM unified_sites us
                     LEFT JOIN card_stats cs ON cs.site_id = us.id
                     WHERE us.source_id = :source_id
@@ -1291,6 +1292,7 @@ def package_for_upload(source_ids: list[str], candidate_site_ids: set[str] | Non
                         "source_url": row.source_url,
                         "thumbnail_url": row.thumbnail_url,
                         "confidence_score": row.confidence_score,
+                        "card_description": row.card_description,
                     },
                 }
                 features.append(feature)

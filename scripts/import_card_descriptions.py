@@ -10,6 +10,7 @@ Usage:
 """
 
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -52,6 +53,11 @@ def main() -> None:
     if skipped:
         print(f"Warning: {skipped} site_ids not found in card_stats (run generate_stats first).")
     print(f"Updated {updated} / {len(descriptions)} card descriptions.")
+
+    # Copy to public/data/ so the API startup import picks it up
+    public_path = Path(__file__).parent.parent / "public" / "data" / "card_descriptions.json"
+    shutil.copy2(desc_path, public_path)
+    print(f"Copied {len(descriptions)} descriptions to {public_path}")
 
     # Verify
     with engine.connect() as conn:
