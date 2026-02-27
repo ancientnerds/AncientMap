@@ -2290,6 +2290,11 @@
   align-items: center;
   justify-content: space-between;
   user-select: none;
+  cursor: pointer;
+}
+
+.db-diff-section-header:only-child {
+  border-bottom: none;
 }
 
 .db-diff-section-changed {
