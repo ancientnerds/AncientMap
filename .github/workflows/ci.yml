@@ -183,11 +183,17 @@ jobs:
           ssh -o StrictHostKeyChecking=accept-new -p ${{ secrets.VPS_PORT }} ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'set -e
             cd /var/www/ancientnerds
             BEFORE=$(git rev-parse HEAD)
+            echo "==> Preserving snapshots..."
+            cp -r public/data/snapshots /tmp/snapshots_backup 2>/dev/null || true
             echo "==> Discarding local changes..."
             git checkout -- .
             echo "==> Pulling latest..."
             git pull origin main
             git lfs pull
+            echo "==> Restoring snapshots..."
+            mkdir -p public/data/snapshots
+            cp -r /tmp/snapshots_backup/* public/data/snapshots/ 2>/dev/null || true
+            rm -rf /tmp/snapshots_backup
             AFTER=$(git rev-parse HEAD)
             CHANGED=$(git diff --name-only $BEFORE $AFTER)
 
