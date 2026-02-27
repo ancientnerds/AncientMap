@@ -2577,6 +2577,28 @@
   border-color: rgba(255, 255, 255, 0.15);
 }
 
+.db-version-card-create {
+  min-width: 40px !important;
+  max-width: 40px !important;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  font-weight: 300;
+  color: var(--text-secondary);
+  border-style: dashed;
+}
+
+.db-version-card-create:hover {
+  color: #22c55e;
+  border-color: #22c55e;
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.db-version-card-create:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
 .db-version-card.active {
   border-color: var(--primary-red);
   background: rgba(192, 32, 35, 0.06);
