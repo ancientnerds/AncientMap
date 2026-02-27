@@ -720,6 +720,17 @@ async def create_manual_snapshot_endpoint(
     return result
 
 
+@router.post("/snapshots/export")
+async def export_file_snapshot_endpoint(
+    _user: DiscordUser = Depends(require_founder),
+    db: Session = Depends(get_db),
+):
+    """Create a file snapshot of the current DB state (founders only)."""
+    from api.services.snapshots import export_file_snapshot
+    snapshot_key = export_file_snapshot(db)
+    return {"snapshot_key": snapshot_key}
+
+
 @router.get("/snapshots/{snapshot_id}/preview")
 async def preview_snapshot_endpoint(
     snapshot_id: str,

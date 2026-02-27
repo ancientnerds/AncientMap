@@ -291,6 +291,8 @@ export default function DbAuditPage() {
   const [uploadMarkAudited, setUploadMarkAudited] = useState(false)
   const [uploadCreateSnapshot, setUploadCreateSnapshot] = useState(true)
 
+  const [creatingSnapshot, setCreatingSnapshot] = useState(false)
+
   // Image column expand state
   const [expandedImgs, setExpandedImgs] = useState<Set<string>>(new Set())
   const [allImgsExpanded, setAllImgsExpanded] = useState(false)
@@ -368,6 +370,27 @@ export default function DbAuditPage() {
       // Snapshots are optional
     }
   }, [])
+
+  const createFileSnapshot = useCallback(async () => {
+    if (!token || creatingSnapshot) return
+    setCreatingSnapshot(true)
+    try {
+      const res = await fetch(`${config.api.baseUrl}/sites/snapshots/export`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.detail || `HTTP ${res.status}`)
+      }
+      showToast('Snapshot created')
+      await refreshFileSnapshots()
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to create snapshot')
+    } finally {
+      setCreatingSnapshot(false)
+    }
+  }, [token, creatingSnapshot, refreshFileSnapshots, showToast])
 
   // Fetch snapshot manifest + active pins on mount
   useEffect(() => {
@@ -1413,6 +1436,17 @@ export default function DbAuditPage() {
               </div>
               <div className="db-version-card-meta">Real-time data from PostgreSQL</div>
             </div>
+            {/* Create snapshot button */}
+            {isFounder && (
+              <button
+                className="db-version-card db-version-card-create"
+                onClick={createFileSnapshot}
+                disabled={creatingSnapshot}
+                title="Create snapshot of current DB state"
+              >
+                {creatingSnapshot ? '...' : '+'}
+              </button>
+            )}
             {/* Snapshot cards */}
             {snapshots.map(s => {
               const parts = s.date.split('_')
