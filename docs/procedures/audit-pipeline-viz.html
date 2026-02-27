@@ -65,12 +65,6 @@
   .wapply .wave-type { background: #10b98120; color: #10b981; border: 1px solid #10b98144; }
   .wapply .wave-body { border-left-color: #10b981; }
 
-  /* Images - Amber */
-  .wimages .wave-num { background: #d9740022; color: #d97400; border: 2px solid #d97400; }
-  .wimages .wave-title { color: #d97400; }
-  .wimages .wave-type { background: #d9740020; color: #d97400; border: 1px solid #d9740044; }
-  .wimages .wave-body { border-left-color: #d97400; }
-
   /* Wave 2 - Purple */
   .w2 .wave-num { background: #8b5cf622; color: #8b5cf6; border: 2px solid #8b5cf6; }
   .w2 .wave-title { color: #8b5cf6; }
@@ -331,38 +325,6 @@
 
   <div class="arrow-down"><svg width="24" height="32" viewBox="0 0 24 32"><path d="M12 0 L12 24 M4 18 L12 28 L20 18" stroke="#888" stroke-width="2" fill="none"/></svg></div>
 
-  <!-- Wiki Images -->
-  <div class="wave wimages">
-    <div class="wave-header">
-      <div class="wave-num" style="font-size:14px;">I</div>
-      <div class="wave-title">Wiki Image Download</div>
-      <div class="wave-type">Wikimedia API — sequential, ~2-4 hours</div>
-    </div>
-    <div class="wave-body">
-      <p style="color:#aaa; font-size:14px;">Downloads hero/lead images from Wikimedia Commons into <code>public/data/images/wiki/</code> and populates the <code>wiki_images</code> table. Sequential execution (Wikimedia 429 rate limits). Skip with <code>--skip-images</code>.</p>
-      <div class="steps">
-        <div class="step">
-          <div class="step-label">Download</div>
-          <div class="step-name">Commons Images</div>
-          <div class="step-detail">Fetches lead image for each site with a Wikidata match. Stores locally with attribution metadata.</div>
-          <div class="step-file">pipeline/wiki_image_downloader.py</div>
-        </div>
-        <div class="step">
-          <div class="step-label">Store</div>
-          <div class="step-name">wiki_images Table</div>
-          <div class="step-detail">Image path, license, author, source URL persisted for proper attribution on the frontend.</div>
-        </div>
-      </div>
-      <div class="applies">
-        <span class="tag tag-an">Originals ✓</span>
-        <span class="tag tag-ly">Radar ✓</span>
-        <span class="tag tag-co">Community ✓</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="arrow-down"><svg width="24" height="32" viewBox="0 0 24 32"><path d="M12 0 L12 24 M4 18 L12 28 L20 18" stroke="#888" stroke-width="2" fill="none"/></svg></div>
-
   <!-- Wave 2 -->
   <div class="wave w2">
     <div class="wave-header">
@@ -567,14 +529,10 @@
 <div class="cli">
   <h2>CLI Commands</h2>
   <div class="cli-block">
-    <span class="comment"># Full overnight run (~3-5 hours with images)</span><br>
+    <span class="comment"># Full run (sync + all waves + package)</span><br>
     <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--mode full</span><br><br>
-    <span class="comment"># Full run, skip image download (~1 hour)</span><br>
-    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--mode full --skip-images</span><br><br>
     <span class="comment"># Test with 3 random sites first</span><br>
     <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--limit 3</span><br><br>
-    <span class="comment"># Test without image download</span><br>
-    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--limit 3 --skip-images</span><br><br>
     <span class="comment"># Use production API instead of local</span><br>
     <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--api-url https://ancientnerds.com</span><br><br>
     <span class="comment"># Individual phases</span><br>
@@ -582,7 +540,6 @@
     <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase mechanical</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Wave 0 (+ country backfill)</span><br>
     <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase enrich</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Wave 1 (+ card_stats import)</span><br>
     <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase apply</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Apply enrichment → unified_sites</span><br>
-    <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase images</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Download wiki images (~2-4h)</span><br>
     <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase verify</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Wave 2 prep (create batch files)</span><br>
     <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase agents</span> <span class="comment">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Wave 2 batch status + handoff</span><br>
     <span class="prompt">$</span> <span class="cmd">python scripts/audit_enrich.py</span> <span class="flag">--phase merge --dry-run</span> <span class="comment">&nbsp;&nbsp;# Preview agent results merge</span><br>
