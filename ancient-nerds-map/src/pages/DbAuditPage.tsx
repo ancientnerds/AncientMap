@@ -895,7 +895,7 @@ export default function DbAuditPage() {
           const fieldMap: Record<string, keyof typeof existing> = {
             site_type: 't', period_name: 'pn', period_start: 'p',
             country: 'c', description: 'd', source_url: 'u',
-            thumbnail_url: 'i', card_description: 'cd',
+            thumbnail_url: 'i', card_description: 'cd', confidence_score: 'cf',
           }
           const currentData: Record<string, unknown> = { name: existing.n }
           const changed: string[] = []
@@ -955,6 +955,7 @@ export default function DbAuditPage() {
           source_url: p.source_url || null,
           thumbnail_url: p.thumbnail_url || null,
           card_description: p.card_description || null,
+          confidence_score: p.confidence_score ?? null,
           existing_id: p._matchedId || null,
         }))
 

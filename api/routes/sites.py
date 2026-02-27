@@ -1174,6 +1174,7 @@ class ParsedSitePayload(BaseModel):
     source_url: str | None = Field(default=None, max_length=2000)
     thumbnail_url: str | None = Field(default=None, max_length=2000)
     card_description: str | None = Field(default=None, max_length=300)
+    confidence_score: float | None = Field(default=None, ge=0.0, le=1.0)
     existing_id: str | None = Field(default=None, max_length=100)  # If updating an existing site
 
 
@@ -1239,7 +1240,7 @@ async def batch_upload_sites(
                         period_start = :period_start, country = :country,
                         description = :description, source_url = :source_url,
                         thumbnail_url = :thumbnail_url,
-                        edited_by = :edited_by, updated_at = NOW()
+                        edited_by = :edited_by, updated_at = NOW(), last_audited = NOW()
                     WHERE id::text = :site_id
                 """),
                 {
@@ -1252,18 +1253,24 @@ async def batch_upload_sites(
                     "edited_by": edited_by,
                 },
             )
-            if site.card_description:
+            if site.card_description or site.confidence_score is not None:
                 db.execute(
                     text("""
-                        INSERT INTO card_stats (site_id, card_description,
+                        INSERT INTO card_stats (site_id, card_description, confidence_score,
                             antiquity, fortification, cultural_influence, mystery,
                             legacy, total_power, rarity_score, rarity_tier, category_group)
-                        VALUES (CAST(:site_id AS uuid), :card_description,
+                        VALUES (CAST(:site_id AS uuid), :card_description, :confidence_score,
                             0, 0, 0, 0, 0, 0, 0, 0, 'unknown')
                         ON CONFLICT (site_id)
-                        DO UPDATE SET card_description = EXCLUDED.card_description
+                        DO UPDATE SET
+                            card_description = COALESCE(EXCLUDED.card_description, card_stats.card_description),
+                            confidence_score = COALESCE(EXCLUDED.confidence_score, card_stats.confidence_score)
                     """),
-                    {"site_id": site.existing_id, "card_description": site.card_description},
+                    {
+                        "site_id": site.existing_id,
+                        "card_description": site.card_description,
+                        "confidence_score": site.confidence_score,
+                    },
                 )
             updated += 1
         else:
@@ -1300,15 +1307,24 @@ async def batch_upload_sites(
                         "edited_by": edited_by,
                     },
                 )
-                if site.card_description:
+                if site.card_description or site.confidence_score is not None:
                     db.execute(
                         text("""
-                            INSERT INTO card_stats (site_id, card_description)
-                            VALUES (CAST(:site_id AS uuid), :card_description)
+                            INSERT INTO card_stats (site_id, card_description, confidence_score,
+                                antiquity, fortification, cultural_influence, mystery,
+                                legacy, total_power, rarity_score, rarity_tier, category_group)
+                            VALUES (CAST(:site_id AS uuid), :card_description, :confidence_score,
+                                0, 0, 0, 0, 0, 0, 0, 0, 'unknown')
                             ON CONFLICT (site_id)
-                            DO UPDATE SET card_description = EXCLUDED.card_description
+                            DO UPDATE SET
+                                card_description = COALESCE(EXCLUDED.card_description, card_stats.card_description),
+                                confidence_score = COALESCE(EXCLUDED.confidence_score, card_stats.confidence_score)
                         """),
-                        {"site_id": new_id, "card_description": site.card_description},
+                        {
+                            "site_id": new_id,
+                            "card_description": site.card_description,
+                            "confidence_score": site.confidence_score,
+                        },
                     )
                 inserted += 1
             except Exception as e:
