@@ -1353,6 +1353,37 @@ async def batch_upload_sites(
 
 
 # =============================================================================
+# Delete Site Endpoint
+# =============================================================================
+
+
+@router.delete("/{site_id}")
+async def delete_site(
+    site_id: str,
+    user: DiscordUser = Depends(require_founder),
+    db: Session = Depends(get_db),
+):
+    """Delete a site and its card_stats row (founders only)."""
+    # Verify site exists
+    row = db.execute(
+        text("SELECT id, name FROM unified_sites WHERE id::text = :site_id"),
+        {"site_id": site_id},
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Site not found")
+
+    db.execute(text("DELETE FROM card_stats WHERE site_id::text = :site_id"), {"site_id": site_id})
+    db.execute(text("DELETE FROM unified_sites WHERE id::text = :site_id"), {"site_id": site_id})
+    db.commit()
+
+    cache_delete_pattern("sites:*")
+    global _static_sites_cache
+    _static_sites_cache = None
+
+    return {"deleted": True, "site_id": site_id, "name": row.name}
+
+
+# =============================================================================
 # Mark Audited Endpoint
 # =============================================================================
 

@@ -39,7 +39,7 @@ interface AuditSite {
   cf?: number      // confidence_score (0.0-1.0)
 }
 
-type IssueFilter = 'all' | 'no_period' | 'no_type' | 'no_country' | 'suspect_modern' | 'no_desc' | 'no_source' | 'no_image' | 'no_coords'
+type IssueFilter = 'all' | 'no_period' | 'no_type' | 'no_country' | 'suspect_modern' | 'no_desc' | 'no_card_desc' | 'no_source' | 'no_image' | 'no_coords'
 type SortColumn = 'name' | 'type' | 'period' | 'country' | 'edited_at' | 'audited' | 'confidence'
 type SortDir = 'asc' | 'desc'
 
@@ -83,6 +83,7 @@ function hasTypeIssue(s: AuditSite) { return !s.t }
 function hasCountryIssue(s: AuditSite) { return !s.c }
 function isSuspectModern(s: AuditSite) { return s.p != null && s.p > 1500 }
 function hasDescIssue(s: AuditSite) { return !s.d }
+function hasCardDescIssue(s: AuditSite) { return !s.cd }
 function hasSourceIssue(s: AuditSite) { return !s.u }
 function hasImageIssue(s: AuditSite) { return !s.i }
 function hasCoordsIssue(s: AuditSite) { return s.la === 0 && s.lo === 0 }
@@ -552,10 +553,11 @@ export default function DbAuditPage() {
     const no_country = base.filter(hasCountryIssue).length
     const suspect_modern = base.filter(isSuspectModern).length
     const no_desc = base.filter(hasDescIssue).length
+    const no_card_desc = base.filter(hasCardDescIssue).length
     const no_source = base.filter(hasSourceIssue).length
     const no_image = base.filter(hasImageIssue).length
     const no_coords = base.filter(hasCoordsIssue).length
-    return { total, no_period, no_type, no_country, suspect_modern, no_desc, no_source, no_image, no_coords }
+    return { total, no_period, no_type, no_country, suspect_modern, no_desc, no_card_desc, no_source, no_image, no_coords }
   }, [sites, sourceFilter])
 
   // Unique filter values
@@ -604,6 +606,7 @@ export default function DbAuditPage() {
     else if (activeIssue === 'no_country') result = result.filter(hasCountryIssue)
     else if (activeIssue === 'suspect_modern') result = result.filter(isSuspectModern)
     else if (activeIssue === 'no_desc') result = result.filter(hasDescIssue)
+    else if (activeIssue === 'no_card_desc') result = result.filter(hasCardDescIssue)
     else if (activeIssue === 'no_source') result = result.filter(hasSourceIssue)
     else if (activeIssue === 'no_image') result = result.filter(hasImageIssue)
     else if (activeIssue === 'no_coords') result = result.filter(hasCoordsIssue)
@@ -721,6 +724,25 @@ export default function DbAuditPage() {
     setEditModalSite(site)
     setModalFormValues(null)
   }, [])
+
+  const deleteSite = useCallback(async (site: AuditSite) => {
+    if (!token) return
+    if (!confirm(`Delete "${site.n}"?\n\nThis cannot be undone.`)) return
+    try {
+      const res = await fetch(`${config.api.baseUrl}/sites/${site.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.detail || `HTTP ${res.status}`)
+      }
+      showToast(`Deleted "${site.n}"`)
+      setSourceVersions(v => ({ ...v }))
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Delete failed')
+    }
+  }, [token, showToast])
 
   const saveModal = useCallback(() => {
     if (!editModalSite || !modalFormValues) return
@@ -1536,6 +1558,13 @@ export default function DbAuditPage() {
           <span className="db-stat-label">No Desc</span>
         </button>
         <button
+          className={`db-stat-card issue ${activeIssue === 'no_card_desc' ? 'active' : ''}`}
+          onClick={() => setActiveIssue(activeIssue === 'no_card_desc' ? 'all' : 'no_card_desc')}
+        >
+          <span className="db-stat-value">{stats.no_card_desc}</span>
+          <span className="db-stat-label">No Card Desc</span>
+        </button>
+        <button
           className={`db-stat-card issue ${activeIssue === 'no_source' ? 'active' : ''}`}
           onClick={() => setActiveIssue(activeIssue === 'no_source' ? 'all' : 'no_source')}
         >
@@ -1642,7 +1671,7 @@ export default function DbAuditPage() {
               <th className="db-th db-th-nosort db-th-db" title="Source database">DB</th>
               <th className="db-th" onClick={() => handleSort('audited')} title="Audit status — green check means audited">Aud{sortArrow('audited')}</th>
               <th className="db-th" onClick={() => handleSort('confidence')} title="AI confidence score (0.0–1.0)">Conf{sortArrow('confidence')}</th>
-              <th className="db-th" onClick={() => handleSort('edited_at')}>Last Edited{sortArrow('edited_at')}</th>
+              <th className="db-th" onClick={() => handleSort('edited_at')}>Edited{sortArrow('edited_at')}</th>
               <th className="db-th db-th-nosort db-th-id" title="Site UUID — click to copy">ID</th>
               {isFounder && <th className="db-th db-th-edit">Edit</th>}
             </tr>
@@ -1872,6 +1901,9 @@ export default function DbAuditPage() {
                     <td className="db-td db-td-edit">
                       <button className="db-edit-btn" onClick={() => openEditModal(site)} title="Edit all fields">
                         &#9998;
+                      </button>
+                      <button className="db-delete-btn" onClick={() => deleteSite(site)} title="Delete site">
+                        &times;
                       </button>
                     </td>
                   )}
