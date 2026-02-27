@@ -1255,8 +1255,11 @@ async def batch_upload_sites(
             if site.card_description:
                 db.execute(
                     text("""
-                        INSERT INTO card_stats (site_id, card_description)
-                        VALUES (CAST(:site_id AS uuid), :card_description)
+                        INSERT INTO card_stats (site_id, card_description,
+                            antiquity, fortification, cultural_influence, mystery,
+                            legacy, total_power, rarity_score, rarity_tier, category_group)
+                        VALUES (CAST(:site_id AS uuid), :card_description,
+                            0, 0, 0, 0, 0, 0, 0, 0, 'unknown')
                         ON CONFLICT (site_id)
                         DO UPDATE SET card_description = EXCLUDED.card_description
                     """),
