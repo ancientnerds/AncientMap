@@ -88,11 +88,12 @@ After all agents finish:
 3. If any fail: fix them in-place (rewrite to fit 200 chars), save the file.
 4. Report: `Validation: X passed, Y fixed`
 
-**Step 5 — Import to DB**
+**Step 5 — Import to DB + deploy**
 
-1. Run: `python scripts/import_card_descriptions.py` (imports descriptions only)
+1. Run: `python scripts/import_card_descriptions.py` (imports descriptions to `card_stats` **and** auto-copies `output/card_descriptions.json` → `public/data/card_descriptions.json`)
 2. Run: `python scripts/enrich_import.py` (imports enrichment metadata: QIDs, confidence, wiki URLs, heritage, etc.)
-3. Report the result (how many rows updated, total with descriptions and enrichment metadata).
+3. Commit and push `public/data/card_descriptions.json` — the API loads this file on startup, so it must be deployed for descriptions to reach production.
+4. Report the result (how many rows updated, total with descriptions and enrichment metadata).
 
 ---
 
