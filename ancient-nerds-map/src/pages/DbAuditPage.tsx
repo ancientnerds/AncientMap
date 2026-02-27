@@ -950,6 +950,7 @@ export default function DbAuditPage() {
           description: p.description || null,
           source_url: p.source_url || null,
           thumbnail_url: p.thumbnail_url || null,
+          card_description: p.card_description || null,
           existing_id: p._matchedId || null,
         }))
       const res = await fetch(`${config.api.baseUrl}/sites/batch-upload`, {

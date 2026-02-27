@@ -16,6 +16,7 @@ export interface ParsedSite {
   description?: string
   source_url?: string
   thumbnail_url?: string
+  card_description?: string
   _status?: 'insert' | 'update' | 'error'
   _error?: string
   _matchedId?: string  // ID of existing site if this is an update
@@ -44,6 +45,7 @@ interface AuditSite {
   c?: string       // country
   u?: string       // source_url
   i?: string       // thumbnail_url
+  cd?: string      // card_description
   eb?: string      // edited_by
   ea?: string      // edited_at
 }
@@ -75,7 +77,7 @@ export function exportCSV(sites: AuditSite[]) {
   const headers = [
     'Name', 'Latitude', 'Longitude', 'Source', 'Type',
     'Period Start', 'Period Name', 'Country', 'Description',
-    'Source URL', 'Thumbnail URL', 'Edited By', 'Last Edited',
+    'Source URL', 'Thumbnail URL', 'Card Description', 'Edited By', 'Last Edited',
   ]
 
   const rows = sites.map(s => [
@@ -90,6 +92,7 @@ export function exportCSV(sites: AuditSite[]) {
     csvEscape(s.d),
     csvEscape(s.u),
     csvEscape(s.i),
+    csvEscape(s.cd),
     csvEscape(s.eb),
     csvEscape(s.ea),
   ].join(','))
@@ -112,6 +115,7 @@ export function exportJSON(sites: AuditSite[]) {
     description: s.d ?? null,
     source_url: s.u ?? null,
     thumbnail_url: s.i ?? null,
+    card_description: s.cd ?? null,
     edited_by: s.eb ?? null,
     edited_at: s.ea ?? null,
   }))
@@ -146,6 +150,7 @@ export function exportGeoJSON(sites: AuditSite[]) {
         description: s.d ?? null,
         source_url: s.u ?? null,
         thumbnail_url: s.i ?? null,
+        card_description: s.cd ?? null,
         edited_by: s.eb ?? null,
         edited_at: s.ea ?? null,
       },
@@ -181,6 +186,7 @@ const HEADER_MAP: Record<string, keyof ParsedSite> = {
   description: 'description', desc: 'description', d: 'description',
   source_url: 'source_url', url: 'source_url', u: 'source_url',
   thumbnail_url: 'thumbnail_url', image: 'thumbnail_url', i: 'thumbnail_url',
+  card_description: 'card_description', cd: 'card_description',
 }
 
 function mapRow(raw: Record<string, string | number | null | undefined>): ParsedSite | null {

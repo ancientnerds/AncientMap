@@ -1173,6 +1173,7 @@ class ParsedSitePayload(BaseModel):
     description: str | None = Field(default=None, max_length=5000)
     source_url: str | None = Field(default=None, max_length=2000)
     thumbnail_url: str | None = Field(default=None, max_length=2000)
+    card_description: str | None = Field(default=None, max_length=300)
     existing_id: str | None = Field(default=None, max_length=100)  # If updating an existing site
 
 
@@ -1253,6 +1254,16 @@ async def batch_upload_sites(
                     "edited_by": edited_by,
                 },
             )
+            if site.card_description:
+                db.execute(
+                    text("""
+                        INSERT INTO card_stats (site_id, card_description)
+                        VALUES (:site_id::uuid, :card_description)
+                        ON CONFLICT (site_id)
+                        DO UPDATE SET card_description = EXCLUDED.card_description
+                    """),
+                    {"site_id": site.existing_id, "card_description": site.card_description},
+                )
             updated += 1
         else:
             # Insert new
@@ -1288,6 +1299,16 @@ async def batch_upload_sites(
                         "edited_by": edited_by,
                     },
                 )
+                if site.card_description:
+                    db.execute(
+                        text("""
+                            INSERT INTO card_stats (site_id, card_description)
+                            VALUES (:site_id::uuid, :card_description)
+                            ON CONFLICT (site_id)
+                            DO UPDATE SET card_description = EXCLUDED.card_description
+                        """),
+                        {"site_id": new_id, "card_description": site.card_description},
+                    )
                 inserted += 1
             except Exception as e:
                 logger.error(f"Batch upload row {i} ({site.name}): {e}")
