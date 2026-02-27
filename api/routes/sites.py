@@ -1237,7 +1237,7 @@ async def batch_upload_sites(
     update_params = []
     insert_params = []
     card_stats_params = []
-    errors = []
+    errors: list[dict] = []
 
     for site in sites:
         period_start = site.period_start
