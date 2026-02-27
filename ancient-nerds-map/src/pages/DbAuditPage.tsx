@@ -289,6 +289,10 @@ export default function DbAuditPage() {
   const [uploadMarkAudited, setUploadMarkAudited] = useState(false)
   const [uploadCreateSnapshot, setUploadCreateSnapshot] = useState(true)
 
+  // Image column expand state
+  const [expandedImgs, setExpandedImgs] = useState<Set<string>>(new Set())
+  const [allImgsExpanded, setAllImgsExpanded] = useState(false)
+
   // Toast notification
   const [statusMsg, setStatusMsg] = useState('')
   const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1592,6 +1596,7 @@ export default function DbAuditPage() {
               <th className="db-th db-th-nosort" title="Full Wikipedia description">Desc</th>
               <th className="db-th db-th-nosort" title="Source URL (Wikipedia, etc.)">URL</th>
               <th className="db-th db-th-nosort db-th-hero" title="Hero image status">H</th>
+              <th className="db-th db-th-nosort db-th-img" title="Click to expand all images" onClick={() => { setAllImgsExpanded(p => !p); setExpandedImgs(new Set()) }}>IMG</th>
               <th className="db-th db-th-nosort" title="Last edited by (user or initial import)">User</th>
               <th className="db-th db-th-nosort db-th-db" title="Source database">DB</th>
               <th className="db-th" onClick={() => handleSort('audited')} title="Audit status — green check means audited">Aud{sortArrow('audited')}</th>
@@ -1749,6 +1754,29 @@ export default function DbAuditPage() {
                     {heroStatus[site.id]
                       ? <span className="db-hero-yes" title={heroStatus[site.id].path}>&#10003;</span>
                       : <span className="db-hero-no" title="No hero image">&#10007;</span>}
+                  </td>
+
+                  {/* Thumbnail image */}
+                  <td
+                    className="db-td db-td-img"
+                    onClick={() => {
+                      if (!site.i) return
+                      setExpandedImgs(prev => {
+                        const next = new Set(prev)
+                        if (next.has(site.id)) next.delete(site.id)
+                        else next.add(site.id)
+                        return next
+                      })
+                    }}
+                  >
+                    {site.i ? (
+                      <img
+                        src={site.i}
+                        alt=""
+                        loading="lazy"
+                        className={`db-img-thumb ${(allImgsExpanded || expandedImgs.has(site.id)) ? 'db-img-expanded' : ''}`}
+                      />
+                    ) : <span className="db-muted">&mdash;</span>}
                   </td>
 
                   {/* User (edited by) */}
