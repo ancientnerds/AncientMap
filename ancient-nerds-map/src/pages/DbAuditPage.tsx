@@ -983,8 +983,8 @@ export default function DbAuditPage() {
     processUploadFile(file)
   }, [processUploadFile])
 
-  // Commit upload — sends in chunks of 200 to avoid timeouts
-  const CHUNK_SIZE = 200
+  // Commit upload — sends in chunks to avoid timeouts
+  const CHUNK_SIZE = 500
   const commitUpload = useCallback(async () => {
     if (!token || uploadParsed.length === 0) return
     setUploading(true)

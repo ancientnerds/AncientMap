@@ -1348,18 +1348,11 @@ async def batch_upload_sites(
     global _static_sites_cache
     _static_sites_cache = None
 
-    # Create file-based snapshot for version history dropdown
-    file_snapshot_key = None
-    if body.create_snapshot:
-        from api.services.snapshots import export_file_snapshot
-        file_snapshot_key = export_file_snapshot(db)
-
     return {
         "snapshot_id": snapshot_id,
         "inserted": inserted,
         "updated": updated,
         "errors": errors,
-        "file_snapshot": file_snapshot_key,
     }
 
 
