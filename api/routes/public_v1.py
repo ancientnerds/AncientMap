@@ -20,6 +20,8 @@ from sqlalchemy.orm import Session
 from api.build_info import BUILD_HASH
 from api.cache import cache_get, cache_set
 from api.schemas.public_v1 import (
+    CardPublic,
+    CardsResponse,
     ChannelPublic,
     FacetSource,
     FacetsResponse,
@@ -793,6 +795,116 @@ def create_public_api() -> FastAPI:
             sources=sources,
         )
         cache_set(cache_key, response.model_dump(), ttl=600)
+        return response
+
+    # =========================================================================
+    # 9. GET /cards — Card descriptions
+    # =========================================================================
+
+    RARITY_NAMES = {1: "Common", 2: "Uncommon", 3: "Rare", 4: "Epic", 5: "Legendary"}
+
+    @public_app.get(
+        "/cards",
+        summary="List card descriptions",
+        description=(
+            "Card descriptions for archaeological sites used in the card game.\n\n"
+            "Each card has a short ~200 character description, stats (antiquity, fortification, "
+            "cultural influence, mystery, legacy), and a rarity tier from 1 (Common) to 5 (Legendary).\n\n"
+            "Filter by country, rarity tier, category group, or specific site UUID."
+        ),
+        response_model=CardsResponse,
+        tags=["Cards"],
+        dependencies=[Depends(rate_limit_dependency)],
+        responses={429: {"description": "Rate limit exceeded"}},
+    )
+    async def list_cards(
+        site_id: str | None = Query(None, description="Filter by site UUID"),
+        country: str | None = Query(None, description="Filter by country name (case-insensitive)"),
+        rarity: int | None = Query(None, ge=1, le=5, description="Filter by rarity tier (1-5)"),
+        category: str | None = Query(None, description="Filter by category group (e.g. Settlements, Religious)"),
+        limit: int = Query(50, ge=1, le=200, description="Max results"),
+        offset: int = Query(0, ge=0, description="Pagination offset"),
+        db: Session = Depends(get_db),
+    ):
+        parts = [
+            "pubv1:cards",
+            site_id or "_",
+            country or "_",
+            str(rarity) if rarity is not None else "_",
+            category or "_",
+            str(limit),
+            str(offset),
+        ]
+        cache_key = ":".join(parts)
+        cached = cache_get(cache_key)
+        if cached:
+            return cached
+
+        conditions = ["cs.card_description IS NOT NULL"]
+        params: dict = {"limit": limit, "offset": offset}
+
+        if site_id:
+            conditions.append("us.id::text = :site_id")
+            params["site_id"] = site_id
+        if country:
+            country_escaped = country.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            conditions.append("us.country ILIKE :country")
+            params["country"] = country_escaped
+        if rarity is not None:
+            conditions.append("cs.rarity_tier = :rarity")
+            params["rarity"] = rarity
+        if category:
+            conditions.append("cs.category_group = :category")
+            params["category"] = category
+
+        where_clause = " AND ".join(conditions)
+
+        # Count total matching
+        count_query = text(f"""
+            SELECT COUNT(*)
+            FROM card_stats cs
+            JOIN unified_sites us ON cs.site_id = us.id
+            WHERE {where_clause}
+        """)
+        total = db.execute(count_query, params).scalar()
+
+        query = text(f"""
+            SELECT us.id::text as site_id, us.name, cs.card_description,
+                   us.country, us.site_type, us.period_name,
+                   cs.category_group, cs.rarity_tier, cs.total_power,
+                   cs.antiquity, cs.fortification, cs.cultural_influence,
+                   cs.mystery, cs.legacy
+            FROM card_stats cs
+            JOIN unified_sites us ON cs.site_id = us.id
+            WHERE {where_clause}
+            ORDER BY cs.rarity_tier DESC, cs.total_power DESC
+            LIMIT :limit OFFSET :offset
+        """)
+        result = db.execute(query, params)
+
+        cards = [
+            CardPublic(
+                site_id=row.site_id,
+                name=row.name,
+                card_description=row.card_description,
+                country=row.country,
+                site_type=row.site_type,
+                period_name=row.period_name,
+                category_group=row.category_group,
+                rarity_tier=row.rarity_tier,
+                rarity_name=RARITY_NAMES.get(row.rarity_tier, "Common"),
+                total_power=row.total_power,
+                antiquity=row.antiquity,
+                fortification=row.fortification,
+                cultural_influence=row.cultural_influence,
+                mystery=row.mystery,
+                legacy=row.legacy,
+            )
+            for row in result
+        ]
+
+        response = CardsResponse(count=len(cards), total=total, cards=cards)
+        cache_set(cache_key, response.model_dump(), ttl=60)
         return response
 
     return public_app

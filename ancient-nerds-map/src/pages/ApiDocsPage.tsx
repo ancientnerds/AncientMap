@@ -45,7 +45,7 @@ interface FacetsData {
   categories: string[]
 }
 
-const TAG_ORDER = ['Status', 'Sites', 'Sources', 'News', 'Stats']
+const TAG_ORDER = ['Status', 'Sites', 'Sources', 'News', 'Cards', 'Stats']
 
 const PARAM_FACET_MAP: Record<string, keyof FacetsData> = {
   source: 'sources',
@@ -69,6 +69,11 @@ const ENDPOINT_EXAMPLES: Record<string, { label: string; params: Record<string, 
   '/sources/{source_id}': [
     { label: 'Pleiades', params: { source_id: 'pleiades' } },
     { label: 'UNESCO', params: { source_id: 'unesco' } },
+  ],
+  '/cards': [
+    { label: 'Legendary cards', params: { rarity: '5' } },
+    { label: 'Greek sites', params: { country: 'Greece' } },
+    { label: 'Religious sites', params: { category: 'Religious' } },
   ],
 }
 

@@ -190,3 +190,36 @@ class FacetsResponse(BaseModel):
     categories: list[str] = Field(description="Distinct site types")
     countries: list[str] = Field(description="Distinct country names")
     sources: list[FacetSource] = Field(description="Available data sources with counts")
+
+
+# =============================================================================
+# Cards
+# =============================================================================
+
+
+class CardPublic(BaseModel):
+    """A card description for an archaeological site."""
+
+    site_id: str = Field(description="Unique site identifier (UUID)", json_schema_extra={"example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"})
+    name: str = Field(description="Site name", json_schema_extra={"example": "Parthenon"})
+    card_description: str = Field(description="Short card description (~200 chars)", json_schema_extra={"example": "Iconic temple atop the Athenian Acropolis, built in 447 BC as a monument to Athena."})
+    country: str | None = Field(None, description="Country name", json_schema_extra={"example": "Greece"})
+    site_type: str | None = Field(None, description="Type of archaeological site", json_schema_extra={"example": "temple"})
+    period_name: str | None = Field(None, description="Named historical period", json_schema_extra={"example": "Classical"})
+    category_group: str | None = Field(None, description="Category group (e.g. Settlements, Religious)", json_schema_extra={"example": "Religious"})
+    rarity_tier: int = Field(description="Rarity tier (1=Common, 2=Uncommon, 3=Rare, 4=Epic, 5=Legendary)", json_schema_extra={"example": 5})
+    rarity_name: str = Field(description="Rarity tier name", json_schema_extra={"example": "Legendary"})
+    total_power: int = Field(description="Total power score", json_schema_extra={"example": 92})
+    antiquity: int = Field(description="Antiquity stat", json_schema_extra={"example": 18})
+    fortification: int = Field(description="Fortification stat", json_schema_extra={"example": 15})
+    cultural_influence: int = Field(description="Cultural influence stat", json_schema_extra={"example": 20})
+    mystery: int = Field(description="Mystery stat", json_schema_extra={"example": 19})
+    legacy: int = Field(description="Legacy stat", json_schema_extra={"example": 20})
+
+
+class CardsResponse(BaseModel):
+    """Paginated card descriptions response."""
+
+    count: int = Field(description="Number of results returned", json_schema_extra={"example": 50})
+    total: int = Field(description="Total matching cards", json_schema_extra={"example": 1200})
+    cards: list[CardPublic] = Field(description="Card descriptions")
