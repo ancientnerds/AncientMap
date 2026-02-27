@@ -28,6 +28,7 @@ export interface ParsedSite {
     country?: string
     description?: string
     source_url?: string
+    card_description?: string
   }
   _changedFields?: string[]  // Fields that differ from current DB values
 }

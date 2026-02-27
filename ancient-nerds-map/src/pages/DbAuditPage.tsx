@@ -898,6 +898,7 @@ export default function DbAuditPage() {
             country: existing.c,
             description: existing.d,
             source_url: existing.u,
+            card_description: existing.cd,
           }
           // Compute which fields actually changed
           const changed: string[] = []
@@ -907,6 +908,7 @@ export default function DbAuditPage() {
           if ((p.country || '') !== (existing.c || '')) changed.push('country')
           if ((p.description || '') !== (existing.d || '')) changed.push('description')
           if ((p.source_url || '') !== (existing.u || '')) changed.push('source_url')
+          if ((p.card_description || '') !== (existing.cd || '')) changed.push('card_description')
           p._changedFields = changed
         } else if (!p._status) {
           p._status = 'insert'
