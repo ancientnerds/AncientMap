@@ -310,7 +310,8 @@ async def get_all_sites(
                     us.edited_by,
                     us.updated_at,
                     us.last_audited,
-                    cs.card_description
+                    cs.card_description,
+                    cs.confidence_score
                 FROM unified_sites us
                 LEFT JOIN card_stats cs ON cs.site_id = us.id
                 WHERE {where_clause}
@@ -342,6 +343,8 @@ async def get_all_sites(
                     site["u"] = row.source_url
                 if row.card_description:
                     site["cd"] = row.card_description
+                if row.confidence_score is not None:
+                    site["cf"] = round(row.confidence_score, 2)
                 if row.edited_by and row.edited_by != "initial":
                     site["eb"] = row.edited_by
                 if row.updated_at:
