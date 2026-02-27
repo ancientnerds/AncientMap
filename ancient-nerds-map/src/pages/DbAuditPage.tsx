@@ -942,7 +942,7 @@ export default function DbAuditPage() {
     setUploading(true)
     try {
       const payload = uploadParsed
-        .filter(p => p._status !== 'error')
+        .filter(p => p._status === 'insert' || (p._status === 'update' && p._changedFields && p._changedFields.length > 0))
         .map(p => ({
           name: p.name, lat: p.lat, lon: p.lon,
           site_type: p.site_type || null,
