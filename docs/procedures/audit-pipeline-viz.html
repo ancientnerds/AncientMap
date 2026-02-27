@@ -388,7 +388,7 @@
         <div class="step">
           <div class="step-label">Import</div>
           <div class="step-name">DB + Static Export</div>
-          <div class="step-detail">Import descriptions to <code>card_stats</code>, re-export static JSON for the frontend.</div>
+          <div class="step-detail">Import descriptions to <code>card_stats</code>. Auto-copies <code>output/card_descriptions.json</code> → <code>public/data/</code>. Commit &amp; push for deploy.</div>
         </div>
       </div>
       <div class="applies">
@@ -414,7 +414,7 @@
         <div class="step">
           <div class="step-label">Export</div>
           <div class="step-name">Export GeoJSON</div>
-          <div class="step-detail">Exports <code>audit_upload_*.geojson</code> — same format as db.html's own export. Only sites in the file get updated (like a diff).</div>
+          <div class="step-detail">Exports <code>audit_upload_*.geojson</code> — same format as db.html's own export. Includes <code>card_description</code> and <code>confidence_score</code> from <code>card_stats</code>. Only sites in the file get updated (like a diff).</div>
           <div class="step-file">output/audit_upload_{source}.geojson</div>
         </div>
         <div class="step">
@@ -513,9 +513,14 @@
       <div class="fdesc">Medium-confidence fixes for human review</div>
     </div>
     <div class="flow-arrow">→</div>
+    <div class="output-card" style="border-color:#22c55e44;">
+      <div class="fname" style="color:#22c55e;">output/card_descriptions.json</div>
+      <div class="fdesc">5k descriptions → public/data/ → deploy</div>
+    </div>
+    <div class="flow-arrow">→</div>
     <div class="output-card" style="border-color:#f4365844;">
       <div class="fname" style="color:#f43658;">output/audit_upload_*.geojson</div>
-      <div class="fdesc">GeoJSON for db.html</div>
+      <div class="fdesc">GeoJSON for db.html (incl. card_description)</div>
     </div>
     <div class="flow-arrow">→</div>
     <div class="output-card" style="border-color:#f4365844;">
