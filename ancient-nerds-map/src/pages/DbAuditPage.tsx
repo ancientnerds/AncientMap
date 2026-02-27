@@ -2235,7 +2235,7 @@ export default function DbAuditPage() {
       {/* Undo Preview Modal */}
       {snapshotPreview && (
         <div className="db-modal-overlay" onClick={() => !snapshotPreviewLoading && setSnapshotPreview(null)}>
-          <div className="db-modal db-upload-modal" onClick={e => e.stopPropagation()}>
+          <div className="db-modal db-modal-upload" onClick={e => e.stopPropagation()}>
             <div className="db-modal-header">
               <h2>Undo Preview</h2>
               {sourceFilter !== 'all' && (
