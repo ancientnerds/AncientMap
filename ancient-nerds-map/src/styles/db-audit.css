@@ -841,7 +841,6 @@
   object-fit: cover;
   border-radius: 2px;
   opacity: 0.85;
-  transition: height 0.2s ease;
 }
 
 .db-img-thumb:hover {
@@ -850,7 +849,8 @@
 
 .db-img-thumb.db-img-expanded {
   height: 180px;
-  width: 180px;
+  width: auto;
+  max-width: 260px;
 }
 
 /* Hero popover */
