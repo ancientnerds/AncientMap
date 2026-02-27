@@ -71,6 +71,8 @@ def create_snapshot(
         },
     )
 
+    # Build all row params, then batch-insert in one statement
+    row_params = []
     for row in rows:
         row_dict = {}
         for col in _SNAPSHOT_COLUMNS:
@@ -79,22 +81,22 @@ def create_snapshot(
                 row_dict[col] = str(val) if isinstance(val, (uuid.UUID,)) else val
             else:
                 row_dict[col] = None
-        # Handle datetime serialization
         for dt_col in ("created_at", "updated_at"):
             if row_dict.get(dt_col) is not None:
                 row_dict[dt_col] = str(row_dict[dt_col])
+        row_params.append({
+            "snapshot_id": snapshot_id,
+            "site_id": row_dict["id"],
+            "old_data": json.dumps(row_dict),
+        })
 
-        db.execute(
-            text("""
-                INSERT INTO snapshot_rows (snapshot_id, site_id, old_data)
-                VALUES (:snapshot_id, :site_id, CAST(:old_data AS jsonb))
-            """),
-            {
-                "snapshot_id": snapshot_id,
-                "site_id": row_dict["id"],
-                "old_data": __import__("json").dumps(row_dict),
-            },
-        )
+    db.execute(
+        text("""
+            INSERT INTO snapshot_rows (snapshot_id, site_id, old_data)
+            VALUES (:snapshot_id, :site_id, CAST(:old_data AS jsonb))
+        """),
+        row_params,
+    )
 
     logger.info(f"Created snapshot {snapshot_id}: {len(rows)} rows ({description})")
     return snapshot_id
