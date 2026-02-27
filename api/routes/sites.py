@@ -1256,7 +1256,7 @@ async def batch_upload_sites(
                 db.execute(
                     text("""
                         INSERT INTO card_stats (site_id, card_description)
-                        VALUES (:site_id::uuid, :card_description)
+                        VALUES (CAST(:site_id AS uuid), :card_description)
                         ON CONFLICT (site_id)
                         DO UPDATE SET card_description = EXCLUDED.card_description
                     """),
@@ -1301,7 +1301,7 @@ async def batch_upload_sites(
                     db.execute(
                         text("""
                             INSERT INTO card_stats (site_id, card_description)
-                            VALUES (:site_id::uuid, :card_description)
+                            VALUES (CAST(:site_id AS uuid), :card_description)
                             ON CONFLICT (site_id)
                             DO UPDATE SET card_description = EXCLUDED.card_description
                         """),
