@@ -605,6 +605,7 @@
 
 .db-td-edit {
   text-align: center;
+  white-space: nowrap;
 }
 
 /* Site ID column */
