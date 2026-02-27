@@ -97,6 +97,7 @@ async def lifespan(app: FastAPI):
         ]
         for _sql in _api_migrations:
             with engine.begin() as conn:
+                conn.execute(_text("SET statement_timeout = '120s'"))
                 conn.execute(_text(_sql))
         logger.info("[STARTUP] Database tables verified (includes discord_users, credit_grants, token_usage_logs)")
 
