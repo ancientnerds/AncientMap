@@ -13956,6 +13956,7 @@ body.news-feed-open .empire-borders-window {
 .lyra-chat-thinking-bubble {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 3px solid rgba(0, 180, 180, 0.4);
   border-radius: 12px;
   border-top-left-radius: 2px;
   padding: 8px 12px;
@@ -13964,6 +13965,22 @@ body.news-feed-open .empire-borders-window {
   color: rgba(255, 255, 255, 0.45);
   margin-bottom: 4px;
   max-width: 85%;
+  position: relative;
+  overflow: hidden;
+}
+.lyra-chat-thinking-bubble::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(0, 180, 180, 0.05), transparent);
+  animation: lyra-shimmer 2s ease-in-out infinite;
+}
+@keyframes lyra-shimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
 }
 .lyra-chat-thinking-bubble p { margin: 0 0 2px; }
 .lyra-chat-thinking-bubble p:last-child { margin: 0; }
@@ -14786,13 +14803,14 @@ body.news-feed-open .empire-borders-window {
 .lyra-chat-msg-text.streaming > table:last-child tr:last-child td:last-child::after {
   content: '';
   display: inline-block;
-  width: 2px;
+  width: 3px;
   height: 1em;
   background: var(--primary-red);
   margin-left: 2px;
   vertical-align: text-bottom;
+  border-radius: 1px;
   animation: lyra-cursor-blink 0.7s step-end infinite;
-  box-shadow: 0 0 4px var(--primary-red), 0 0 8px rgba(192, 32, 35, 0.3);
+  box-shadow: 0 0 6px var(--primary-red), 0 0 12px rgba(192, 32, 35, 0.2), -4px 0 8px rgba(192, 32, 35, 0.15);
 }
 
 /* Prevent duplicate cursors when last-child is a list/table */
@@ -14816,8 +14834,8 @@ body.news-feed-open .empire-borders-window {
 }
 
 @keyframes lyra-fresh-type {
-  0% { color: var(--primary-red); text-shadow: 0 0 6px rgba(192, 32, 35, 0.3); }
-  100% { color: var(--text-primary); text-shadow: none; }
+  0% { opacity: 0.7; }
+  100% { opacity: 1; }
 }
 
 /* P4: Class-based glow trigger (avoids forced reflow from JS animation reset) */
@@ -15170,6 +15188,318 @@ body.news-feed-open .empire-borders-window {
   margin-top: 2px;
 }
 
+/* ── LyraWelcome: Landing page showcase ── */
+.lyra-welcome-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 24px 16px;
+  max-width: 600px;
+  margin: 0 auto;
+}
+.lyra-welcome-section > * {
+  opacity: 0;
+  animation: lyra-welcome-in 0.4s ease forwards;
+}
+.lyra-welcome-section > *:nth-child(1) { animation-delay: 0.05s; }
+.lyra-welcome-section > *:nth-child(2) { animation-delay: 0.1s; }
+.lyra-welcome-section > *:nth-child(3) { animation-delay: 0.2s; }
+@keyframes lyra-welcome-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Hero */
+.lyra-welcome-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+.lyra-welcome-avatar-wrap {
+  position: relative;
+  display: inline-block;
+}
+.lyra-welcome-avatar {
+  border-radius: 50%;
+  object-fit: cover;
+}
+.lyra-welcome-page .lyra-welcome-avatar { width: 96px; height: 96px; }
+.lyra-welcome-modal .lyra-welcome-avatar { width: 48px; height: 48px; }
+.lyra-welcome-avatar-ring {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 180, 180, 0.3);
+  animation: lyra-avatar-pulse 3s ease-in-out infinite;
+}
+@keyframes lyra-avatar-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.4; }
+  50% { transform: scale(1.15); opacity: 0; }
+}
+.lyra-welcome-hero-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.lyra-welcome-name {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.lyra-welcome-subtitle {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.45);
+}
+.lyra-welcome-stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.7rem;
+  color: rgba(0, 180, 180, 0.7);
+  font-family: 'JetBrains Mono', monospace;
+  margin-top: 4px;
+}
+.lyra-welcome-stats-sep { color: rgba(255, 255, 255, 0.2); }
+
+/* Capability cards */
+.lyra-welcome-caps {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  width: 100%;
+  padding: 2px 0;
+  scrollbar-width: none;
+}
+.lyra-welcome-caps::-webkit-scrollbar { display: none; }
+.lyra-welcome-cap-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 120px;
+  padding: 14px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: border-color 0.2s, background 0.2s;
+}
+.lyra-welcome-cap-card:hover:not(:disabled) {
+  border-color: rgba(0, 180, 180, 0.3);
+  background: rgba(0, 180, 180, 0.06);
+}
+.lyra-welcome-cap-card:disabled { opacity: 0.5; cursor: default; }
+.lyra-welcome-cap-icon { font-size: 1.3rem; }
+.lyra-welcome-cap-label { font-size: 0.75rem; font-weight: 600; }
+.lyra-welcome-cap-desc {
+  font-size: 0.65rem;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: center;
+  line-height: 1.3;
+}
+
+/* Compact chip mode (modal) */
+.lyra-welcome-caps-compact { flex-wrap: wrap; justify-content: center; }
+.lyra-welcome-cap-chip {
+  flex-direction: row;
+  min-width: auto;
+  padding: 6px 12px;
+  gap: 6px;
+  font-size: 0.75rem;
+}
+.lyra-welcome-cap-chip .lyra-welcome-cap-icon { font-size: 0.9rem; }
+
+/* Curated prompts */
+.lyra-welcome-prompts {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.lyra-welcome-prompts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.lyra-welcome-prompt-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.lyra-welcome-prompt-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.3);
+  padding-left: 2px;
+}
+.lyra-welcome-prompt-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  line-height: 1.4;
+}
+.lyra-welcome-prompt-btn:hover:not(:disabled) {
+  border-color: rgba(0, 180, 180, 0.25);
+  background: rgba(0, 180, 180, 0.05);
+  color: var(--text-primary);
+}
+.lyra-welcome-prompt-btn:disabled { opacity: 0.5; cursor: default; }
+
+/* ── Coordinate fly-to button ── */
+.lyra-inline-coord-fly {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: rgba(0, 180, 180, 0.6);
+  cursor: pointer;
+  padding: 2px;
+  margin-left: 2px;
+  border-radius: 3px;
+  transition: color 0.15s, background 0.15s;
+  vertical-align: middle;
+}
+.lyra-inline-coord-fly:hover {
+  color: rgba(0, 210, 210, 1);
+  background: rgba(0, 180, 180, 0.12);
+}
+.lyra-inline-coord-text.navigating {
+  color: rgba(0, 180, 180, 1);
+  text-shadow: 0 0 6px rgba(0, 180, 180, 0.4);
+  transition: color 0.15s, text-shadow 0.15s;
+}
+
+/* ── SiteChip: Interactive site reference pill ── */
+.lyra-site-chip-wrap {
+  position: relative;
+  display: inline;
+}
+.lyra-site-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: rgba(0, 180, 180, 0.9);
+  cursor: pointer;
+  font: inherit;
+  padding: 1px 2px;
+  border-radius: 3px;
+  transition: background 0.15s, color 0.15s;
+}
+.lyra-site-chip:hover {
+  background: rgba(0, 180, 180, 0.1);
+  color: rgba(0, 210, 210, 1);
+}
+.lyra-site-chip-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(0, 180, 180, 0.7);
+  flex-shrink: 0;
+}
+
+/* SiteChip hover preview — floating card */
+.lyra-site-preview {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 100;
+  min-width: 220px;
+  max-width: 300px;
+  background: rgba(15, 25, 35, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  animation: lyra-preview-in 0.15s ease;
+}
+.lyra-site-preview .search-result-item {
+  background: transparent;
+  border: none;
+  margin: 0;
+}
+@keyframes lyra-preview-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Sites strip — horizontal scroll below multi-site messages */
+.lyra-msg-sites-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 8px 0 4px 40px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+.lyra-msg-sites-strip::-webkit-scrollbar { height: 4px; }
+.lyra-msg-sites-strip::-webkit-scrollbar-track { background: transparent; }
+.lyra-msg-sites-strip::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 2px; }
+.lyra-msg-sites-strip .search-result-item {
+  min-width: 180px;
+  max-width: 200px;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+}
+
+/* ── Gamification: discovery bar, streak chips ── */
+.lyra-discovery-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 40px;
+  font-size: 0.65rem;
+  color: rgba(255, 255, 255, 0.35);
+  animation: lyra-discovery-fade 5s forwards;
+}
+.lyra-discovery-sep { color: rgba(255, 255, 255, 0.15); }
+.lyra-discovery-count {
+  color: rgba(0, 180, 180, 0.8);
+  font-weight: 600;
+  animation: lyra-discovery-sparkle 0.6s ease;
+}
+@keyframes lyra-discovery-fade {
+  0%, 80% { opacity: 1; }
+  100% { opacity: 0.3; }
+}
+@keyframes lyra-discovery-sparkle {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.3); color: rgba(0, 210, 210, 1); }
+  100% { transform: scale(1); }
+}
+.lyra-gamify-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.65rem;
+  font-family: 'JetBrains Mono', monospace;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .lyra-chat-msg,
   .lyra-chat-typing-dots span,
@@ -15177,8 +15507,15 @@ body.news-feed-open .empire-borders-window {
   .lyra-chat-msg-text.streaming > :last-child::after,
   .lyra-typing-glow,
   .lyra-chat-search-panel,
-  .lyra-chat-history-panel { animation: none !important; transition: none !important; }
+  .lyra-chat-history-panel,
+  .lyra-chat-thinking-bubble::before,
+  .lyra-welcome-section > *,
+  .lyra-welcome-avatar-ring,
+  .lyra-site-preview,
+  .lyra-discovery-bar,
+  .lyra-discovery-count { animation: none !important; transition: none !important; }
   .lyra-chat-typing-dots span { opacity: 0.7; }
+  .lyra-welcome-section > * { opacity: 1; }
 }
 
 /* ── Articles Page ── */

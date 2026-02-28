@@ -29,6 +29,11 @@ import { apiDetailToSiteData } from '../utils/siteApi'
 import { resolvePeriod } from '../data/sites'
 import type { SiteData } from '../data/sites'
 import { useFocusTrap } from '../hooks/useFocusTrap'
+import SiteChip from './lyra/SiteChip'
+import LyraWelcome from './lyra/LyraWelcome'
+import { navigateGlobeToCoords } from '../utils/globeNavigation'
+import { addDiscoveries, getDiscoveryCount } from '../utils/lyraDiscoveries'
+import { notifyAchievements } from './AchievementToast'
 
 const LyraProfileModal = lazy(() => import('./LyraProfileModal'))
 
@@ -44,33 +49,15 @@ interface Props {
   mode?: 'modal' | 'page'
 }
 
-const EXAMPLE_QUESTIONS: Record<LyraContextType, string[]> = {
-  global: [
-    'Show me photos of Pompeii',
-    'What has Lyra discovered on her radar this week?',
-    'What are YouTubers saying about the Antikythera mechanism?',
-    'Compare the military tech of Rome and the Mongol Empire',
-    'Find megalithic temples in Malta',
-    'What channels does Lyra monitor?',
-  ],
-  site: [
-    'What are all the names this site goes by?',
-    'Show me images of this site',
-    'What other sites are nearby?',
-    'Any recent YouTube coverage of this site?',
-  ],
-  empire: [
-    'What weapons and fortifications did they use?',
-    'What was their economy like — trade, coinage, roads?',
-    'How large was their territory at its peak?',
-    'Compare them to their main rival empire',
-  ],
-  news: [
-    'Summarize this discovery',
-    'Show me the site on the map',
-    'What does the full transcript say about this?',
-    'Are there similar sites or discoveries?',
-  ],
+
+/* ---- Tool status icons ---- */
+function getToolIcon(s: string): string {
+  if (s.includes('site')) return '\uD83D\uDD0D '
+  if (s.includes('news') || s.includes('radar')) return '\uD83D\uDCE1 '
+  if (s.includes('transcript')) return '\uD83D\uDCDC '
+  if (s.includes('empire')) return '\uD83D\uDC51 '
+  if (s.includes('image') || s.includes('photo')) return '\uD83D\uDCF7 '
+  return '\u2699\uFE0F '
 }
 
 /* ---- Conversation persistence ---- */
@@ -366,6 +353,8 @@ export default function LyraChatModal({
   )
   const [userCredits, setUserCredits] = useState<number | null>(null)
   const [isUnlimited, setIsUnlimited] = useState(false)
+  const [totalDiscoveries, setTotalDiscoveries] = useState(() => getDiscoveryCount())
+  const [chatStreak, setChatStreak] = useState<number>(0)
   const isAuthenticated = !!authToken
 
   const focusTrapRef = useFocusTrap(isOpen && mode === 'modal')
@@ -412,68 +401,26 @@ export default function LyraChatModal({
           : href.slice('lyra-site:'.length).split(':')[0]
         // Q5: Validate UUID format to prevent path traversal via crafted links
         if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(siteId)) return <span>{children}</span>
-        // Legacy lyra-site: links embed lon:lat; site: links don't (fetched from API)
-        const legacyParts = href.startsWith('lyra-site:') ? href.slice('lyra-site:'.length).split(':') : null
-        const legacyLon = legacyParts ? parseFloat(legacyParts[1]) : NaN
-        const legacyLat = legacyParts ? parseFloat(legacyParts[2]) : NaN
-        // Extract plain text from children for copy
-        const text = Array.isArray(children)
-          ? children.map(c => (typeof c === 'string' ? c : '')).join('')
-          : typeof children === 'string' ? children : ''
         return (
-          <span className="lyra-inline-site-wrap">
-            <button
-              className="lyra-inline-site"
-              onClick={async () => {
-                try {
-                  const res = await fetch(`${config.api.baseUrl}/sites/${siteId}`)
-                  if (res.ok) {
-                    const detail = await res.json()
-                    const siteData = apiDetailToSiteData(detail)
-                    if (onOpenSitePopup) { onOpenSitePopup(siteData); onClose() }
-                    else setSelectedSite(siteData)
-                    // Fly to site using API coordinates, or legacy coords as fallback
-                    const lon = siteData.coordinates?.[0] ?? legacyLon
-                    const lat = siteData.coordinates?.[1] ?? legacyLat
-                    if (onFlyToSite && !isNaN(lon) && !isNaN(lat)) {
-                      onHighlightSites?.([siteId])
-                      onFlyToSite([lon, lat])
-                    }
-                  }
-                } catch (err) {
-                  console.error('Failed to fetch site detail:', err)
-                }
-              }}
-            >
-              {children}
-            </button>
-            {text && (
-              <button
-                className="lyra-inline-copy"
-                title="Copy site name"
-                onClick={(e) => {
-                  const btn = e.currentTarget
-                  navigator.clipboard.writeText(text).catch(() => {})
-                  btn.classList.add('copied')
-                  setTimeout(() => btn.classList.remove('copied'), 2000)
-                }}
-              >
-                <svg className="lyra-inline-copy-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                </svg>
-                <svg className="lyra-inline-check-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              </button>
-            )}
-          </span>
+          <SiteChip
+            siteId={siteId}
+            onOpenPopup={(site) => {
+              if (onOpenSitePopup) { onOpenSitePopup(site); onClose() }
+              else setSelectedSite(site)
+            }}
+            onFlyTo={onFlyToSite}
+            onHighlight={onHighlightSites}
+          >
+            {children}
+          </SiteChip>
         )
       }
       // Coordinate link: lyra-coord:lat,lon
       if (href?.startsWith('lyra-coord:')) {
         const coordStr = href.slice('lyra-coord:'.length)
         const [lat, lon] = coordStr.split(',')
+        const numLat = parseFloat(lat)
+        const numLon = parseFloat(lon)
         return (
           <span className="lyra-inline-coord">
             <svg className="lyra-inline-coord-pin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -500,6 +447,28 @@ export default function LyraChatModal({
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </button>
+            {!isNaN(numLat) && !isNaN(numLon) && (
+              <button
+                className="lyra-inline-coord-fly"
+                title="Fly to location on globe"
+                onClick={(e) => {
+                  const textEl = e.currentTarget.parentElement?.querySelector('.lyra-inline-coord-text')
+                  textEl?.classList.add('navigating')
+                  setTimeout(() => textEl?.classList.remove('navigating'), 300)
+                  if (onFlyToSite) {
+                    onFlyToSite([numLon, numLat])
+                  } else {
+                    navigateGlobeToCoords(numLat, numLon)
+                  }
+                }}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="2" y1="12" x2="22" y2="12" />
+                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                </svg>
+              </button>
+            )}
           </span>
         )
       }
@@ -808,9 +777,11 @@ export default function LyraChatModal({
                 ))
               } else if (type === 'sites' && data.sites) {
                 collectedSites = data.sites
+                const disc = addDiscoveries(data.sites.map((s: { id: string }) => s.id))
+                if (disc.newCount > 0) setTotalDiscoveries(disc.total)
                 setMessages(prev => prev.map(m =>
                   m.id === assistantId
-                    ? { ...m, sites: data.sites }
+                    ? { ...m, sites: data.sites, discoveries: disc.newCount > 0 ? disc : undefined }
                     : m
                 ))
               } else if (type === 'news' && data.news) {
@@ -835,6 +806,9 @@ export default function LyraChatModal({
                 if (data.metadata?.credits_remaining !== undefined) {
                   setUserCredits(data.metadata.credits_remaining)
                 }
+                if (data.metadata?.chat_streak) {
+                  setChatStreak(data.metadata.chat_streak)
+                }
                 setMessages(prev => {
                   const updated = prev.map(m =>
                     m.id === assistantId
@@ -847,6 +821,8 @@ export default function LyraChatModal({
                   setConversations(listConversations())
                   return updated
                 })
+              } else if (type === 'achievements' && data.achievements) {
+                notifyAchievements(data.achievements)
               } else if (type === 'error') {
                 throw new Error(data.error || 'Stream error')
               }
@@ -894,7 +870,6 @@ export default function LyraChatModal({
 
   if (!isOpen) return null
 
-  const examples = EXAMPLE_QUESTIONS[contextType] || EXAMPLE_QUESTIONS.global
   const isPage = mode === 'page'
 
   const header = isPage ? (
@@ -907,6 +882,16 @@ export default function LyraChatModal({
           {authToken && userCredits !== null && (
             <span className="lyra-credits-badge" title="Lyra credits remaining">
               {isUnlimited ? '∞' : userCredits.toLocaleString()} credits
+            </span>
+          )}
+          {chatStreak > 1 && (
+            <span className="lyra-gamify-chip" title={`${chatStreak}-day chat streak`}>
+              {'\uD83D\uDD25'} {chatStreak}
+            </span>
+          )}
+          {totalDiscoveries > 0 && (
+            <span className="lyra-gamify-chip" title={`${totalDiscoveries} sites discovered with Lyra`}>
+              {'\uD83E\uDDED'} {totalDiscoveries}
             </span>
           )}
           {messages.length > 0 && (
@@ -960,6 +945,16 @@ export default function LyraChatModal({
         {authToken && userCredits !== null && (
           <span className="lyra-credits-badge" title="Lyra credits remaining">
             {isUnlimited ? '∞' : userCredits.toLocaleString()} credits
+          </span>
+        )}
+        {chatStreak > 1 && (
+          <span className="lyra-gamify-chip" title={`${chatStreak}-day chat streak`}>
+            {'\uD83D\uDD25'} {chatStreak}
+          </span>
+        )}
+        {totalDiscoveries > 0 && (
+          <span className="lyra-gamify-chip" title={`${totalDiscoveries} sites discovered with Lyra`}>
+            {'\uD83E\uDDED'} {totalDiscoveries}
           </span>
         )}
         {messages.length > 0 && (
@@ -1071,30 +1066,12 @@ export default function LyraChatModal({
               <div className="lyra-chat-main">
                 <div className="lyra-chat-messages" ref={messagesContainerRef} role="log" aria-live="polite">
                   {messages.length === 0 ? (
-                    <div className="lyra-chat-welcome">
-                      <img src="/lyra.gif" alt="Lyra" className="lyra-chat-welcome-avatar" />
-                      <div className="lyra-chat-welcome-text">
-                        {contextType === 'global'
-                          ? 'Ask me anything about archaeological sites, empires, or recent discoveries.'
-                          : contextType === 'site'
-                            ? 'Ask me about this site — its history, nearby sites, or recent news.'
-                            : contextType === 'empire'
-                              ? 'Ask me about this empire — warfare, economy, social structure, or rivals.'
-                              : 'Ask me about this discovery — significance, location, or related findings.'}
-                      </div>
-                      <div className="lyra-chat-examples">
-                        {examples.map((q, i) => (
-                          <button
-                            key={i}
-                            className="lyra-chat-example-btn"
-                            onClick={() => handleExampleClick(q)}
-                            disabled={isStreaming}
-                          >
-                            {q}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                    <LyraWelcome
+                      mode={mode}
+                      contextType={contextType}
+                      onPromptClick={handleExampleClick}
+                      disabled={isStreaming}
+                    />
                   ) : (
                     messages.map(msg => (
                       <div key={msg.id}>
@@ -1104,7 +1081,7 @@ export default function LyraChatModal({
                             <img src="/lyra.gif" alt="Lyra" className="lyra-chat-msg-avatar" />
                             <div className="lyra-chat-thinking-bubble">
                               {msg.statusLines.map((s, i) => (
-                                <p key={i}>{s}</p>
+                                <p key={i}>{getToolIcon(s)}{s}</p>
                               ))}
                             </div>
                           </div>
@@ -1171,6 +1148,52 @@ export default function LyraChatModal({
                                 </div>
                               )}
                             </div>
+                          </div>
+                        )}
+                        {/* Sites strip — horizontal scroll of cards for multi-site responses */}
+                        {msg.role === 'assistant' && !msg.isStreaming && msg.sites && msg.sites.length >= 4 && (
+                          <div className="lyra-msg-sites-strip">
+                            {msg.sites.map(s => (
+                              <SiteResultItem
+                                key={s.id}
+                                id={s.id}
+                                title={s.name}
+                                category={s.site_type}
+                                categoryColor={getCategoryColor(s.site_type || '')}
+                                location={s.country}
+                                period={s.period_name}
+                                periodColor={getPeriodColor(s.period_name || '')}
+                                thumbnailUrl={s.thumbnail_url}
+                                showInfoBtn={false}
+                                onMainClick={async () => {
+                                  try {
+                                    if (onFlyToSite && s.lat && s.lon) {
+                                      onHighlightSites?.([s.id])
+                                      onFlyToSite([s.lon, s.lat])
+                                    }
+                                    const res = await fetch(`${config.api.baseUrl}/sites/${s.id}`)
+                                    if (res.ok) {
+                                      const detail = await res.json()
+                                      const sd = apiDetailToSiteData(detail)
+                                      if (onOpenSitePopup) { onOpenSitePopup(sd); onClose() }
+                                      else setSelectedSite(sd)
+                                    }
+                                  } catch (err) {
+                                    console.error('Failed to fetch site detail:', err)
+                                  }
+                                }}
+                                onHoverEnter={() => onHighlightSites?.([s.id])}
+                                onHoverLeave={() => onHighlightSites?.([])}
+                              />
+                            ))}
+                          </div>
+                        )}
+                        {/* Discovery notification */}
+                        {msg.role === 'assistant' && !msg.isStreaming && msg.discoveries && msg.discoveries.newCount > 0 && (
+                          <div className="lyra-discovery-bar">
+                            <span>\uD83D\uDD0D Discovered <span className="lyra-discovery-count">{msg.discoveries.newCount}</span> new site{msg.discoveries.newCount !== 1 ? 's' : ''}</span>
+                            <span className="lyra-discovery-sep">|</span>
+                            <span>{msg.discoveries.total} total explored</span>
                           </div>
                         )}
                       </div>

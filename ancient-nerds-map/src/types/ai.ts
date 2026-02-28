@@ -60,6 +60,7 @@ export interface LyraMessage {
   isStreaming?: boolean
   confidence?: number | null
   tokens?: { input: number; output: number; voyage?: number }
+  discoveries?: { newCount: number; total: number }
 }
 
 /**
@@ -77,7 +78,7 @@ export interface LyraChatRequest {
 /**
  * Server-Sent Event types for streaming.
  */
-export type SSEEventType = 'token' | 'status' | 'sites' | 'news' | 'done' | 'error'
+export type SSEEventType = 'token' | 'status' | 'sites' | 'news' | 'done' | 'error' | 'achievements'
 
 export interface SSETokenEvent {
   type: 'token'
@@ -115,7 +116,22 @@ export interface SSEStatusEvent {
   content: string
 }
 
-export type SSEEvent = SSETokenEvent | SSEStatusEvent | SSESitesEvent | SSENewsEvent | SSEDoneEvent | SSEErrorEvent
+export interface SSEAchievementsEvent {
+  type: 'achievements'
+  achievements: Array<{
+    id: string
+    name: string
+    description: string
+    tier: string
+    icon: string
+    reward_credits: number
+    reward_xp: number
+    reward_card_tier?: number | null
+    reward_card_count: number
+  }>
+}
+
+export type SSEEvent = SSETokenEvent | SSEStatusEvent | SSESitesEvent | SSENewsEvent | SSEDoneEvent | SSEErrorEvent | SSEAchievementsEvent
 
 /**
  * Summary of a saved conversation for the history panel.

@@ -318,6 +318,46 @@ _a(
     30,
     "\U0001f4b0",
 )
+_a(
+    "scholar_polyglot",
+    "scholar",
+    "Polyglot Excavator",
+    "Ask Lyra about sites in 10 different countries",
+    "silver",
+    500,
+    25,
+    "\U0001f30d",
+)
+_a(
+    "scholar_time_weaver",
+    "scholar",
+    "Time Weaver",
+    "Explore sites from 5 different period categories",
+    "silver",
+    500,
+    25,
+    "\u231b",
+)
+_a(
+    "scholar_deep_diver",
+    "scholar",
+    "Deep Diver",
+    "Send 10+ messages in a single conversation",
+    "bronze",
+    200,
+    15,
+    "\U0001f9bf",
+)
+_a(
+    "scholar_cartographer",
+    "scholar",
+    "Lyra's Cartographer",
+    "Discover 50 sites through Lyra conversations",
+    "gold",
+    1000,
+    30,
+    "\U0001f5fa",
+)
 
 # ---- COLLECTOR (14) ----
 _a(
@@ -1386,6 +1426,10 @@ _EVENT_ACHIEVEMENTS: dict[str, list[str]] = {
         "scholar_empire_context",
         "scholar_image_analyst",
         "scholar_big_spender",
+        "scholar_polyglot",
+        "scholar_time_weaver",
+        "scholar_deep_diver",
+        "scholar_cartographer",
     ],
     "frontend_event": [
         "explorer_screenshot",
@@ -2052,6 +2096,65 @@ def _check_single(
             {"uid": str(user_id)},
         ).scalar()
         return (total or 0) >= 1000
+
+    if aid == "scholar_polyglot":
+        # Accumulate countries in feature_flags and check threshold
+        if not context:
+            return False
+        ps = session.get(CardPlayerStats, user_id)
+        if not ps:
+            return False
+        flags = ps.feature_flags or {}
+        seen = set(flags.get("lyra_countries_seen", []))
+        new_countries = context.get("countries_found", [])
+        if new_countries:
+            seen.update(new_countries)
+            flags["lyra_countries_seen"] = list(seen)
+            ps.feature_flags = flags
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(ps, "feature_flags")
+        return len(seen) >= 10
+
+    if aid == "scholar_time_weaver":
+        # Accumulate periods in feature_flags and check threshold
+        if not context:
+            return False
+        ps = session.get(CardPlayerStats, user_id)
+        if not ps:
+            return False
+        flags = ps.feature_flags or {}
+        seen = set(flags.get("lyra_periods_seen", []))
+        new_periods = context.get("periods_found", [])
+        if new_periods:
+            seen.update(new_periods)
+            flags["lyra_periods_seen"] = list(seen)
+            ps.feature_flags = flags
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(ps, "feature_flags")
+        return len(seen) >= 5
+
+    if aid == "scholar_deep_diver":
+        if not context:
+            return False
+        return context.get("history_length", 0) >= 10
+
+    if aid == "scholar_cartographer":
+        # Accumulate site IDs in feature_flags and check threshold
+        if not context:
+            return False
+        ps = session.get(CardPlayerStats, user_id)
+        if not ps:
+            return False
+        flags = ps.feature_flags or {}
+        seen = set(flags.get("lyra_sites_discovered", []))
+        new_sites = context.get("site_ids_found", [])
+        if new_sites:
+            seen.update(new_sites)
+            flags["lyra_sites_discovered"] = list(seen)
+            ps.feature_flags = flags
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(ps, "feature_flags")
+        return len(seen) >= 50
 
     # --- HISTORIAN ---
     if aid in (

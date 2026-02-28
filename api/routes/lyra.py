@@ -236,8 +236,15 @@ def _stream_response_with_credits(
                     voyage_tokens = tokens.get("voyage", 0)
                     credits_used = max(1, ceil((input_tokens + output_tokens) / 100))
 
+                    # Collect tool metadata from done event for achievement context
+                    tool_meta = {}
+                    meta = chunk.get("metadata", {})
+                    for key in ("site_ids_found", "countries_found", "periods_found", "tool_calls_count", "history_length"):
+                        if key in meta:
+                            tool_meta[key] = meta[key]
+
                     # Reconcile: 1 credit already deducted as deposit
-                    credits_remaining = _reconcile_credits(
+                    credits_remaining, new_achievements, chat_streak = _reconcile_credits(
                         user_id=user_id,
                         input_tokens=input_tokens,
                         output_tokens=output_tokens,
@@ -245,14 +252,20 @@ def _stream_response_with_credits(
                         credits_used=credits_used,
                         context_type=context_type,
                         has_images=bool(images),
+                        tool_metadata=tool_meta,
                     )
 
                     if "metadata" not in chunk:
                         chunk["metadata"] = {}
                     chunk["metadata"]["credits_used"] = credits_used
                     chunk["metadata"]["credits_remaining"] = credits_remaining
+                    chunk["metadata"]["chat_streak"] = chat_streak
 
                 yield f"event: {event_type}\ndata: {json.dumps(chunk)}\n\n"
+
+                # Emit achievements SSE event if any were unlocked
+                if event_type == "done" and new_achievements:
+                    yield f"event: achievements\ndata: {json.dumps({'type': 'achievements', 'achievements': new_achievements})}\n\n"
 
         except Exception as e:
             logger.error(f"Lyra stream error: {e}", exc_info=True)
@@ -291,13 +304,14 @@ def _reconcile_credits(
     credits_used: int,
     context_type: str = "global",
     has_images: bool = False,
-) -> int:
+    tool_metadata: dict | None = None,
+) -> tuple[int, list[dict], int]:
     """Reconcile credits after streaming. 1 credit was already pre-deducted as deposit.
 
     If real cost > 1: deduct the remainder.
     If real cost == 1: no adjustment needed (deposit covers it).
     Logs usage regardless.
-    Returns remaining credits.
+    Returns (remaining_credits, newly_unlocked_achievements, chat_streak).
     """
     from pipeline.database import DiscordUser, TokenUsageLog, get_session
 
@@ -308,7 +322,7 @@ def _reconcile_credits(
             session.query(DiscordUser).filter(DiscordUser.id == user_id).with_for_update().first()
         )
         if not user:
-            return 0
+            return 0, [], 0
 
         if additional > 0:
             user.credits = max(0, user.credits - additional)
@@ -324,17 +338,59 @@ def _reconcile_credits(
         )
         remaining = user.credits
 
-        # Check Lyra-related achievements (fire and forget — no way to send back via SSE)
+        # Build enriched context for achievement checks
         from api.cardgame.achievements import check_achievements
 
-        check_achievements(
+        ctx: dict = {
+            "context_type": context_type,
+            "has_images": has_images,
+        }
+        if tool_metadata:
+            ctx.update(tool_metadata)
+
+        unlocked = check_achievements(
             session,
             user_id,
             "lyra_chat",
-            context={
-                "context_type": context_type,
-                "has_images": has_images,
-            },
+            context=ctx,
         )
 
-    return remaining
+        # Track chat streak
+        _update_chat_streak(session, user_id)
+
+        # Read back streak for frontend
+        from api.cardgame.models import CardPlayerStats
+        ps = session.get(CardPlayerStats, user_id)
+        streak = (ps.feature_flags or {}).get("lyra_chat_streak", 0) if ps else 0
+
+    return remaining, unlocked, streak
+
+
+def _update_chat_streak(session: "Session", user_id: uuid.UUID) -> None:  # type: ignore[name-defined]  # noqa: F821
+    """Update daily chat streak in CardPlayerStats.feature_flags."""
+    from datetime import date
+
+    from api.cardgame.models import CardPlayerStats
+
+    ps = session.get(CardPlayerStats, user_id)
+    if not ps:
+        return
+
+    flags = ps.feature_flags or {}
+    today = date.today().isoformat()
+    last_chat = flags.get("lyra_last_chat_date")
+
+    if last_chat == today:
+        return  # already chatted today
+
+    yesterday = (date.today() - __import__("datetime").timedelta(days=1)).isoformat()
+    if last_chat == yesterday:
+        flags["lyra_chat_streak"] = flags.get("lyra_chat_streak", 0) + 1
+    else:
+        flags["lyra_chat_streak"] = 1
+
+    flags["lyra_last_chat_date"] = today
+    ps.feature_flags = flags
+    from sqlalchemy.orm.attributes import flag_modified
+
+    flag_modified(ps, "feature_flags")
