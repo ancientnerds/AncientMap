@@ -14,6 +14,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 from collections.abc import AsyncIterator
 
 from langchain_core.messages import (
@@ -501,25 +502,34 @@ async def run_agent_stream(
         auto_news_results: list[dict] = []
 
         # Q1: Run auto-retrieval (Qdrant) and filter extraction (LLM) in parallel — zero data dependency
+        yield {"type": "pipeline", "stage": "auto_retrieve", "status": "start", "duration_ms": None, "meta": None}
+        yield {"type": "pipeline", "stage": "filter_extraction", "status": "start", "duration_ms": None, "meta": None}
+        _t_phase1 = time.monotonic()
+
         auto_task = asyncio.to_thread(_auto_retrieve, message, context_type)
         filter_task = _extract_news_filters(message)
         auto_result_or_exc, filters_or_exc = await asyncio.gather(
             auto_task, filter_task, return_exceptions=True
         )
+        _phase1_ms = int((time.monotonic() - _t_phase1) * 1000)
 
         news_filters: dict = {}
         if isinstance(auto_result_or_exc, BaseException):
             logger.error(f"Auto-retrieve failed: {auto_result_or_exc}")
+            yield {"type": "pipeline", "stage": "auto_retrieve", "status": "error", "duration_ms": _phase1_ms, "meta": None}
         else:
             retrieved_context, auto_site_results, auto_news_results, avg_relevance, vt = (
                 auto_result_or_exc
             )
             total_voyage_tokens += vt
+            yield {"type": "pipeline", "stage": "auto_retrieve", "status": "done", "duration_ms": _phase1_ms, "meta": {"sites_count": len(auto_site_results), "news_count": len(auto_news_results), "voyage_tokens": vt}}
 
         if isinstance(filters_or_exc, BaseException):
             logger.warning(f"News filter extraction failed: {filters_or_exc}")
+            yield {"type": "pipeline", "stage": "filter_extraction", "status": "error", "duration_ms": _phase1_ms, "meta": None}
         else:
             news_filters = filters_or_exc
+            yield {"type": "pipeline", "stage": "filter_extraction", "status": "done", "duration_ms": _phase1_ms, "meta": {"filters": news_filters}}
 
         # Extract sites from auto-retrieved results for map highlighting
         # Only include sites with relevance above threshold to avoid irrelevant results
@@ -558,6 +568,7 @@ async def run_agent_stream(
             )
 
         # Fetch related news: site-specific first, then broader filters
+        _t_news = time.monotonic()
         site_ids = [s["id"] for s in all_sites if s.get("id")]
         site_names = [s["name"] for s in all_sites if s.get("name")]
 
@@ -584,6 +595,7 @@ async def run_agent_stream(
                 if key not in existing_keys:
                     all_news.append(n)
                     existing_keys.add(key)
+        yield {"type": "pipeline", "stage": "news_augmentation", "status": "done", "duration_ms": int((time.monotonic() - _t_news) * 1000), "meta": {"count": len(all_news)}}
 
         # Add news to retrieved context so the LLM can reference them
         if all_news:
@@ -596,10 +608,16 @@ async def run_agent_stream(
                     line += f" [youtube: {n['video_id']}]"
                 news_lines.append(line)
             retrieved_context += "\n\n### Related News\n" + "\n".join(news_lines) + "\n"
+    else:
+        # Empire context or empty message — skip retrieval phases
+        yield {"type": "pipeline", "stage": "auto_retrieve", "status": "skip", "duration_ms": None, "meta": None}
+        yield {"type": "pipeline", "stage": "filter_extraction", "status": "skip", "duration_ms": None, "meta": None}
 
+    _t_ctx = time.monotonic()
     messages = _build_messages(
         message, images, history, context_type, context_id, context_year, retrieved_context
     )
+    yield {"type": "pipeline", "stage": "context_assembly", "status": "done", "duration_ms": int((time.monotonic() - _t_ctx) * 1000), "meta": {"message_count": len(messages)}}
 
     # Emit auto-retrieved sites immediately for map highlighting
     if all_sites:
@@ -609,10 +627,14 @@ async def run_agent_stream(
     if all_news:
         yield {"type": "news", "news": all_news}
 
+    yield {"type": "pipeline", "stage": "pre_stream_emit", "status": "done", "duration_ms": 0, "meta": {"sites": len(all_sites), "news": len(all_news)}}
+
     tool_calls_made = 0
     max_tool_rounds = 5
 
     for _round in range(max_tool_rounds):
+        yield {"type": "pipeline", "stage": "llm_round", "status": "start", "duration_ms": None, "meta": {"round": _round + 1}}
+        _t_round = time.monotonic()
         # Stream the LLM response
         collected_content = ""
         tool_calls: list[dict[str, str | int | None]] = []
@@ -660,6 +682,7 @@ async def run_agent_stream(
 
         # If no tool calls, we're done
         if not tool_calls:
+            yield {"type": "pipeline", "stage": "llm_round", "status": "done", "duration_ms": int((time.monotonic() - _t_round) * 1000), "meta": {"round": _round + 1, "has_tools": False}}
             break
 
         # The preamble text (e.g. "I'll search for...") was streamed as tokens.
@@ -698,6 +721,8 @@ async def run_agent_stream(
                 )
                 continue
 
+            yield {"type": "pipeline", "stage": "tool_call", "status": "start", "duration_ms": None, "meta": {"tool": str(tc["name"])}}
+            _t_tool = time.monotonic()
             try:
                 args = json.loads(str(tc["args"])) if tc["args"] else {}
                 result = tool_fn.invoke(args)
@@ -779,6 +804,7 @@ async def run_agent_stream(
                         pass
 
                 messages.append(ToolMessage(content=result, tool_call_id=str(tc["id"])))
+                yield {"type": "pipeline", "stage": "tool_call", "status": "done", "duration_ms": int((time.monotonic() - _t_tool) * 1000), "meta": {"tool": str(tc["name"])}}
 
             except Exception as e:
                 logger.error(f"Tool {tc['name']} failed: {e}")
@@ -788,6 +814,9 @@ async def run_agent_stream(
                         tool_call_id=str(tc["id"]),
                     )
                 )
+                yield {"type": "pipeline", "stage": "tool_call", "status": "error", "duration_ms": int((time.monotonic() - _t_tool) * 1000), "meta": {"tool": str(tc["name"])}}
+
+        yield {"type": "pipeline", "stage": "llm_round", "status": "done", "duration_ms": int((time.monotonic() - _t_round) * 1000), "meta": {"round": _round + 1, "has_tools": True}}
 
         # Emit sites after tool calls
         if all_sites:
@@ -819,6 +848,8 @@ async def run_agent_stream(
     site_ids_found = list({s["id"] for s in all_sites if s.get("id")})
     countries_found = list({s["country"] for s in all_sites if s.get("country")})
     periods_found = list({s["period_name"] for s in all_sites if s.get("period_name")})
+
+    yield {"type": "pipeline", "stage": "done_credits", "status": "done", "duration_ms": 0, "meta": {"total_tokens": total_input_tokens + total_output_tokens}}
 
     # Done
     yield {

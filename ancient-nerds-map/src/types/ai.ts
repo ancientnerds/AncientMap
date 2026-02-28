@@ -2,6 +2,8 @@
  * TypeScript types for Lyra Chat functionality.
  */
 
+import type { PipelineTrace } from './pipeline'
+
 /**
  * Context type — where the chat was opened from.
  */
@@ -61,6 +63,7 @@ export interface LyraMessage {
   confidence?: number | null
   tokens?: { input: number; output: number; voyage?: number }
   discoveries?: { newCount: number; total: number }
+  pipelineTrace?: PipelineTrace
 }
 
 /**
@@ -78,7 +81,7 @@ export interface LyraChatRequest {
 /**
  * Server-Sent Event types for streaming.
  */
-export type SSEEventType = 'token' | 'status' | 'sites' | 'news' | 'done' | 'error' | 'achievements'
+export type SSEEventType = 'token' | 'status' | 'sites' | 'news' | 'done' | 'error' | 'achievements' | 'pipeline'
 
 export interface SSETokenEvent {
   type: 'token'

@@ -31,6 +31,9 @@ import type { SiteData } from '../data/sites'
 import { useFocusTrap } from '../hooks/useFocusTrap'
 import SiteChip from './lyra/SiteChip'
 import LyraWelcome from './lyra/LyraWelcome'
+import PipelinePanel from './lyra/PipelinePanel'
+import { applyPipelineEvent } from '../types/pipeline'
+import type { PipelineEvent } from '../types/pipeline'
 import { navigateGlobeToCoords } from '../utils/globeNavigation'
 import { addDiscoveries, getDiscoveryCount } from '../utils/lyraDiscoveries'
 import { notifyAchievements } from './AchievementToast'
@@ -80,6 +83,7 @@ function saveConversation(id: string, title: string, messages: LyraMessage[]) {
       ...m,
       timestamp: m.timestamp.toISOString(),
       isStreaming: undefined,
+      pipelineTrace: undefined,
     })),
   }
   const idx = all.findIndex(c => c.id === id)
@@ -346,6 +350,8 @@ export default function LyraChatModal({
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<SiteData[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
+  const [pipelineOpen, setPipelineOpen] = useState(() => localStorage.getItem('lyra_pipeline_open') !== 'false')
+  const [viewingPipelineFor, setViewingPipelineFor] = useState<string | null>(null)
 
   // Auth state — Discord OAuth token from localStorage
   const [authToken, setAuthToken] = useState<string | null>(() =>
@@ -592,12 +598,15 @@ export default function LyraChatModal({
     }
   }, [searchQuery])
 
-  // Close on Escape: search panel → stop streaming → close modal
+  // Close on Escape: pipeline panel → search panel → stop streaming → close modal
   useEffect(() => {
     if (!isOpen) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (searchOpen) {
+        if (pipelineOpen) {
+          setPipelineOpen(false)
+          localStorage.setItem('lyra_pipeline_open', 'false')
+        } else if (searchOpen) {
           setSearchOpen(false)
           setSearchQuery('')
           setSearchResults([])
@@ -610,7 +619,7 @@ export default function LyraChatModal({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [isOpen, isStreaming, searchOpen, onClose, mode])
+  }, [isOpen, isStreaming, searchOpen, pipelineOpen, onClose, mode])
 
   const clearAuth = useCallback(() => {
     localStorage.removeItem('an_auth_token')
@@ -697,6 +706,13 @@ export default function LyraChatModal({
     }
     setMessages(prev => [...prev, assistantMsg])
     setIsStreaming(true)
+
+    // Auto-open pipeline panel on new query (respects user preference)
+    if (localStorage.getItem('lyra_pipeline_open') !== 'false') {
+      setPipelineOpen(true)
+      setSearchOpen(false)
+    }
+    setViewingPipelineFor(null) // Switch to latest trace
 
     // Build request
     const history = messages
@@ -814,7 +830,14 @@ export default function LyraChatModal({
                 setMessages(prev => {
                   const updated = prev.map(m =>
                     m.id === assistantId
-                      ? { ...m, isStreaming: false, tokens }
+                      ? {
+                          ...m,
+                          isStreaming: false,
+                          tokens,
+                          pipelineTrace: m.pipelineTrace
+                            ? { ...m.pipelineTrace, isLive: false }
+                            : undefined,
+                        }
                       : m
                   )
                   // Auto-save conversation
@@ -825,6 +848,13 @@ export default function LyraChatModal({
                 })
               } else if (type === 'achievements' && data.achievements) {
                 notifyAchievements(data.achievements)
+              } else if (type === 'pipeline' && data.stage) {
+                const pEvent: PipelineEvent = { stage: data.stage, status: data.status, duration_ms: data.duration_ms ?? null, meta: data.meta ?? null }
+                setMessages(prev => prev.map(m => {
+                  if (m.id !== assistantId) return m
+                  const trace = m.pipelineTrace ?? { nodes: [], isLive: true }
+                  return { ...m, pipelineTrace: { ...trace, nodes: applyPipelineEvent(trace.nodes, pEvent) } }
+                }))
               } else if (type === 'error') {
                 throw new Error(data.error || 'Stream error')
               }
@@ -920,7 +950,14 @@ export default function LyraChatModal({
               <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
             </svg>
           </button>
-          <button className={`lyra-chat-icon-btn${searchOpen ? ' active' : ''}`} onClick={() => { setSearchOpen(!searchOpen); if (searchOpen) { setSearchQuery(''); setSearchResults([]) } }} title="Search sites">
+          <button className={`lyra-chat-icon-btn lp-header-btn${pipelineOpen ? ' active' : ''}${messages.some(m => m.pipelineTrace) ? ' has-trace' : ''}`} onClick={() => { const next = !pipelineOpen; setPipelineOpen(next); localStorage.setItem('lyra_pipeline_open', String(next)); if (next) { setSearchOpen(false); setSearchQuery(''); setSearchResults([]) } }} title="Pipeline trace">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="6" cy="6" r="2.5" /><circle cx="18" cy="6" r="2.5" />
+              <circle cx="12" cy="18" r="2.5" />
+              <line x1="6" y1="8.5" x2="12" y2="15.5" /><line x1="18" y1="8.5" x2="12" y2="15.5" />
+            </svg>
+          </button>
+          <button className={`lyra-chat-icon-btn${searchOpen ? ' active' : ''}`} onClick={() => { const next = !searchOpen; setSearchOpen(next); if (next) { setPipelineOpen(false); localStorage.setItem('lyra_pipeline_open', 'false') } else { setSearchQuery(''); setSearchResults([]) } }} title="Search sites">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
@@ -983,7 +1020,14 @@ export default function LyraChatModal({
             <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
           </svg>
         </button>
-        <button className={`lyra-chat-icon-btn${searchOpen ? ' active' : ''}`} onClick={() => { setSearchOpen(!searchOpen); if (searchOpen) { setSearchQuery(''); setSearchResults([]) } }} title="Search sites">
+        <button className={`lyra-chat-icon-btn lp-header-btn${pipelineOpen ? ' active' : ''}${messages.some(m => m.pipelineTrace) ? ' has-trace' : ''}`} onClick={() => { const next = !pipelineOpen; setPipelineOpen(next); localStorage.setItem('lyra_pipeline_open', String(next)); if (next) { setSearchOpen(false); setSearchQuery(''); setSearchResults([]) } }} title="Pipeline trace">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="6" cy="6" r="2.5" /><circle cx="18" cy="6" r="2.5" />
+            <circle cx="12" cy="18" r="2.5" />
+            <line x1="6" y1="8.5" x2="12" y2="15.5" /><line x1="18" y1="8.5" x2="12" y2="15.5" />
+          </svg>
+        </button>
+        <button className={`lyra-chat-icon-btn${searchOpen ? ' active' : ''}`} onClick={() => { const next = !searchOpen; setSearchOpen(next); if (next) { setPipelineOpen(false); localStorage.setItem('lyra_pipeline_open', 'false') } else { setSearchQuery(''); setSearchResults([]) } }} title="Search sites">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
@@ -1159,6 +1203,25 @@ export default function LyraChatModal({
                                     LLM: {msg.tokens.input + msg.tokens.output}
                                     {(msg.tokens.voyage ?? 0) > 0 && ` · Embed: ${msg.tokens.voyage}`}
                                   </span>
+                                  {msg.pipelineTrace && (() => {
+                                    const totalMs = msg.pipelineTrace.nodes
+                                      .filter(n => n.stageId !== 'tool_call' && n.stageId !== 'done_credits' && n.duration_ms != null)
+                                      .reduce((s, n) => s + (n.duration_ms ?? 0), 0)
+                                    return (
+                                      <button
+                                        className="lp-msg-badge"
+                                        title="View pipeline trace"
+                                        onClick={() => { setViewingPipelineFor(msg.id); setPipelineOpen(true); localStorage.setItem('lyra_pipeline_open', 'true'); setSearchOpen(false) }}
+                                      >
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                          <circle cx="6" cy="6" r="2.5" /><circle cx="18" cy="6" r="2.5" />
+                                          <circle cx="12" cy="18" r="2.5" />
+                                          <line x1="6" y1="8.5" x2="12" y2="15.5" /><line x1="18" y1="8.5" x2="12" y2="15.5" />
+                                        </svg>
+                                        {totalMs < 1000 ? `${totalMs}ms` : `${(totalMs / 1000).toFixed(1)}s`}
+                                      </button>
+                                    )
+                                  })()}
                                 </div>
                               )}
                             </div>
@@ -1262,6 +1325,20 @@ export default function LyraChatModal({
                   </div>
                 </div>
               )}
+
+              {/* Pipeline panel — slides in from right */}
+              {pipelineOpen && (() => {
+                const activePipelineMsg = viewingPipelineFor
+                  ? messages.find(m => m.id === viewingPipelineFor)
+                  : ((arr) => arr[arr.length - 1])(messages.filter(m => m.pipelineTrace))
+                return (
+                  <PipelinePanel
+                    trace={activePipelineMsg?.pipelineTrace ?? null}
+                    isLive={isStreaming && viewingPipelineFor === null}
+                    onClose={() => { setPipelineOpen(false); localStorage.setItem('lyra_pipeline_open', 'false') }}
+                  />
+                )
+              })()}
             </div>
 
             {/* Error */}
