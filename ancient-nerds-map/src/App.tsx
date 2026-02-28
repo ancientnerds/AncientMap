@@ -95,6 +95,15 @@ function getFocusSiteId(): string | null {
   return urlParams.get('focus')
 }
 
+// Check for coordinate fly-to (opened via ?lat=&lon= from Lyra coord links)
+function getInitialCoords(): [number, number] | null {
+  const urlParams = new URLSearchParams(window.location.search)
+  const lat = parseFloat(urlParams.get('lat') || '')
+  const lon = parseFloat(urlParams.get('lon') || '')
+  if (!isNaN(lat) && !isNaN(lon)) return [lon, lat]
+  return null
+}
+
 
 function AppContent() {
   // Phone detection - block phones but allow tablets
@@ -130,6 +139,8 @@ function AppContent() {
   const [standaloneSiteId] = useState(() => getStandaloneSiteId())
   // Focus mode: warp directly to site (from ?focus=)
   const [focusSiteId] = useState(() => getFocusSiteId())
+  const [initialCoords] = useState(() => getInitialCoords())
+  const initialCoordsHandledRef = useRef(false)
   const focusHandledRef = useRef(false)
 
   const [sites, setSites] = useState<SiteData[]>([])
@@ -993,9 +1004,23 @@ function AppContent() {
     setListFrozenSiteIds([site.id])
   }, [focusSiteId, sites, setSearchQuery])
 
-  // Listen for postMessage from search page — switch site without reload
+  // Coordinate fly-to from URL params (?lat=&lon=)
+  useEffect(() => {
+    if (!initialCoords || initialCoordsHandledRef.current) return
+    initialCoordsHandledRef.current = true
+    setFlyToCoords(null)
+    requestAnimationFrame(() => setFlyToCoords(initialCoords))
+  }, [initialCoords])
+
+  // Listen for postMessage from search page / Lyra — switch site or fly to coords
   useEffect(() => {
     const handler = async (e: MessageEvent) => {
+      // Handle fly-to-coords from Lyra coordinate links
+      if (e.data?.type === 'fly-to-coords' && e.data?.lat != null && e.data?.lon != null) {
+        setFlyToCoords(null)
+        requestAnimationFrame(() => setFlyToCoords([e.data.lon, e.data.lat]))
+        return
+      }
       if (e.data?.type !== 'focus-site' || !e.data?.siteId) return
 
       const siteId = e.data.siteId as string

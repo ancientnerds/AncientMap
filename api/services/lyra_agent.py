@@ -813,6 +813,11 @@ async def run_agent_stream(
         if len(all_news) > news_before:
             yield {"type": "news", "news": all_news}
 
+    # Collect distinct metadata for gamification achievement checks
+    site_ids_found = list({s["id"] for s in all_sites if s.get("id")})
+    countries_found = list({s["country"] for s in all_sites if s.get("country")})
+    periods_found = list({s["period_name"] for s in all_sites if s.get("period_name")})
+
     # Done
     yield {
         "type": "done",
@@ -826,5 +831,10 @@ async def run_agent_stream(
                 "output": total_output_tokens,
                 "voyage": total_voyage_tokens,
             },
+            "site_ids_found": site_ids_found,
+            "countries_found": countries_found,
+            "periods_found": periods_found,
+            "tool_calls_count": tool_calls_made,
+            "history_length": len(history) if history else 0,
         },
     }
