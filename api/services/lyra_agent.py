@@ -670,18 +670,20 @@ async def run_agent_stream(
 
         # Execute tool calls
         # Add the AI message with tool calls to conversation
-        ai_msg = AIMessage(
-            content=collected_content,
-            tool_calls=[
-                {
-                    "id": str(tc["id"]),
-                    "name": str(tc["name"]),
-                    "args": json.loads(str(tc["args"])) if tc["args"] else {},
-                }
-                for tc in tool_calls
-                if tc.get("id") and tc.get("name")
-            ],
-        )
+        # Parse args safely — malformed JSON from the LLM proxy must not crash the stream
+        parsed_tool_calls = []
+        for tc in tool_calls:
+            if not tc.get("id") or not tc.get("name"):
+                continue
+            try:
+                args = json.loads(str(tc["args"])) if tc["args"] else {}
+            except (json.JSONDecodeError, ValueError):
+                logger.warning(f"Malformed tool args for {tc['name']}: {tc['args']!r}")
+                args = {}
+            parsed_tool_calls.append(
+                {"id": str(tc["id"]), "name": str(tc["name"]), "args": args}
+            )
+        ai_msg = AIMessage(content=collected_content, tool_calls=parsed_tool_calls)
         messages.append(ai_msg)
 
         # Execute each tool and add results
