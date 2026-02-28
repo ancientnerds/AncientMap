@@ -1150,44 +1150,6 @@ export default function LyraChatModal({
                             </div>
                           </div>
                         )}
-                        {/* Sites strip — horizontal scroll of cards for multi-site responses */}
-                        {msg.role === 'assistant' && !msg.isStreaming && msg.sites && msg.sites.length >= 4 && (
-                          <div className="lyra-msg-sites-strip">
-                            {msg.sites.map(s => (
-                              <SiteResultItem
-                                key={s.id}
-                                id={s.id}
-                                title={s.name}
-                                category={s.site_type}
-                                categoryColor={getCategoryColor(s.site_type || '')}
-                                location={s.country}
-                                period={s.period_name}
-                                periodColor={getPeriodColor(s.period_name || '')}
-                                thumbnailUrl={s.thumbnail_url}
-                                showInfoBtn={false}
-                                onMainClick={async () => {
-                                  try {
-                                    if (onFlyToSite && s.lat && s.lon) {
-                                      onHighlightSites?.([s.id])
-                                      onFlyToSite([s.lon, s.lat])
-                                    }
-                                    const res = await fetch(`${config.api.baseUrl}/sites/${s.id}`)
-                                    if (res.ok) {
-                                      const detail = await res.json()
-                                      const sd = apiDetailToSiteData(detail)
-                                      if (onOpenSitePopup) { onOpenSitePopup(sd); onClose() }
-                                      else setSelectedSite(sd)
-                                    }
-                                  } catch (err) {
-                                    console.error('Failed to fetch site detail:', err)
-                                  }
-                                }}
-                                onHoverEnter={() => onHighlightSites?.([s.id])}
-                                onHoverLeave={() => onHighlightSites?.([])}
-                              />
-                            ))}
-                          </div>
-                        )}
                         {/* Discovery notification */}
                         {msg.role === 'assistant' && !msg.isStreaming && msg.discoveries && msg.discoveries.newCount > 0 && (
                           <div className="lyra-discovery-bar">
