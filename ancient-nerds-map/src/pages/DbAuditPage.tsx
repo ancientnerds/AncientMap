@@ -1353,10 +1353,13 @@ export default function DbAuditPage() {
                   ) : (
                     <div className="db-qdrant-meta" style={{ color: '#f59e0b' }}>Never synced</div>
                   )}
-                  {qdrantStatus.auto_reindex?.next_run_utc && (
+                  {qdrantStatus.auto_reindex?.enabled && qdrantStatus.auto_reindex?.next_run_utc && (
                     <div className="db-qdrant-meta">
                       Next auto-sync {formatRelativeDate(qdrantStatus.auto_reindex.next_run_utc)}
                     </div>
+                  )}
+                  {qdrantStatus.auto_reindex && !qdrantStatus.auto_reindex.enabled && (
+                    <div className="db-qdrant-meta" style={{ color: '#ef4444' }}>Auto-sync scheduler is dead</div>
                   )}
                   {qdrantStatus.reindex.running && (
                     <div className="db-qdrant-meta">

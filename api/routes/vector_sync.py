@@ -208,7 +208,7 @@ async def vector_sync_status():
         },
         "auto_reindex": {
             "enabled": _nightly_task is not None and not _nightly_task.done(),
-            "next_run_utc": _next_run_utc,
+            "next_run_utc": _next_run_utc if (_nightly_task is not None and not _nightly_task.done()) else None,
         },
     }
 
@@ -250,11 +250,15 @@ async def _run_reindex(cmd: list[str]):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        await proc.wait()
+        stdout, stderr = await proc.communicate()
         duration = time.monotonic() - start
         _reindex_state["last_duration_seconds"] = round(duration)
         _reindex_state["last_completed_at"] = datetime.now(UTC).isoformat()
-        _reindex_state["last_result"] = "success" if proc.returncode == 0 else f"failed (exit {proc.returncode})"
+        if proc.returncode != 0:
+            output = (stderr or stdout or b"").decode(errors="replace")[-500:]
+            _reindex_state["last_result"] = f"failed (exit {proc.returncode}): {output}"
+        else:
+            _reindex_state["last_result"] = "success"
     except Exception as exc:
         _reindex_state["last_completed_at"] = datetime.now(UTC).isoformat()
         _reindex_state["last_duration_seconds"] = round(time.monotonic() - start)
@@ -280,21 +284,28 @@ async def schedule_nightly_reindex():
     """Loop forever: sleep until 3:00 AM UTC, then trigger a full incremental reindex."""
     global _next_run_utc
     while True:
-        wait = _seconds_until_next(NIGHTLY_HOUR_UTC)
-        _next_run_utc = (datetime.now(UTC) + timedelta(seconds=wait)).isoformat()
-        logger.info(f"[VECTOR-SYNC] Next nightly reindex at {_next_run_utc} ({wait / 3600:.1f}h from now)")
-        await asyncio.sleep(wait)
+        try:
+            wait = _seconds_until_next(NIGHTLY_HOUR_UTC)
+            _next_run_utc = (datetime.now(UTC) + timedelta(seconds=wait)).isoformat()
+            logger.info(f"[VECTOR-SYNC] Next nightly reindex at {_next_run_utc} ({wait / 3600:.1f}h from now)")
+            await asyncio.sleep(wait)
 
-        if _reindex_state["running"]:
-            logger.info("[VECTOR-SYNC] Nightly reindex skipped — already running")
-            continue
+            if _reindex_state["running"]:
+                logger.info("[VECTOR-SYNC] Nightly reindex skipped — already running")
+                continue
 
-        logger.info("[VECTOR-SYNC] Starting nightly auto-reindex")
-        cmd = [sys.executable, "scripts/build_lyra_index.py"]
-        _reindex_state["running"] = True
-        _reindex_state["started_at"] = datetime.now(UTC).isoformat()
-        _reindex_state["collection"] = "all"
-        await _run_reindex(cmd)
+            logger.info("[VECTOR-SYNC] Starting nightly auto-reindex")
+            cmd = [sys.executable, "scripts/build_lyra_index.py"]
+            _reindex_state["running"] = True
+            _reindex_state["started_at"] = datetime.now(UTC).isoformat()
+            _reindex_state["collection"] = "all"
+            await _run_reindex(cmd)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.error(f"[VECTOR-SYNC] Nightly loop error: {e}")
+            _reindex_state["running"] = False
+            await asyncio.sleep(60)
 
 
 def start_nightly_scheduler():
