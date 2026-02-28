@@ -743,6 +743,7 @@ export default function LyraChatModal({
       let buffer = ''
       let collectedSites: SiteHighlight[] = []
       let eventType = ''
+      let receivedDone = false
 
       while (true) {
         const { done, value } = await reader.read()
@@ -801,6 +802,7 @@ export default function LyraChatModal({
                     : m
                 ))
               } else if (type === 'done') {
+                receivedDone = true
                 const tokens = data.metadata?.tokens ?? undefined
                 // Update credits from done event (Discord auth only)
                 if (data.metadata?.credits_remaining !== undefined) {
@@ -831,6 +833,18 @@ export default function LyraChatModal({
               throw e
             }
           }
+        }
+      }
+
+      // Stream ended without a done event — finalize the message so it doesn't hang
+      if (!receivedDone) {
+        setMessages(prev => prev.map(m =>
+          m.id === assistantId
+            ? { ...m, isStreaming: false, content: m.content || (m.statusLines?.length ? '' : '') }
+            : m
+        ))
+        if (!abortRef.current?.signal.aborted) {
+          setError('Response was interrupted. Try again.')
         }
       }
 
