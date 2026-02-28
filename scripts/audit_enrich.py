@@ -627,6 +627,7 @@ def apply_enrichment(overwrite: bool = False) -> dict:
         "thumbnail_url_overwritten": 0,
         "source_url_filled": 0,
         "source_url_overwritten": 0,
+        "source_url_fragment_upgraded": 0,
         "description_filled": 0,
         "description_overwritten": 0,
         "country_filled": 0,
@@ -702,11 +703,23 @@ def apply_enrichment(overwrite: bool = False) -> dict:
                     stats[stat_key] += 1
 
             # source_url from wiki article URL
-            if site_wiki.get("url") and (row.source_url is None or overwrite):
+            # Also upgrade fragment URLs (#section) to dedicated articles
+            existing_is_fragment = row.source_url and "#" in row.source_url
+            new_is_dedicated = site_wiki.get("url") and "#" not in site_wiki["url"]
+            if site_wiki.get("url") and (
+                row.source_url is None
+                or overwrite
+                or (existing_is_fragment and new_is_dedicated)
+            ):
                 new_url = site_wiki["url"]
                 if new_url != row.source_url:
                     updates["source_url"] = new_url
-                    stat_key = "source_url_overwritten" if row.source_url is not None else "source_url_filled"
+                    if existing_is_fragment and new_is_dedicated:
+                        stat_key = "source_url_fragment_upgraded"
+                    elif row.source_url is not None:
+                        stat_key = "source_url_overwritten"
+                    else:
+                        stat_key = "source_url_filled"
                     change_log.append({
                         "site_id": site_id,
                         "field": "source_url",
@@ -872,6 +885,19 @@ def prepare_agent_batches(sites: list[dict]) -> dict:
         wiki_extract = wiki.get(sid, {}).get("extract", "")
         if len(desc) < 20 and not wiki_extract:
             issues.append("No description and no wiki extract — needs research for context")
+
+        # Source URL quality
+        src_url = site.get("source_url") or ""
+        if not src_url:
+            issues.append("source_url is missing — find authoritative reference")
+        elif "#" in src_url:
+            issues.append(
+                "source_url is a fragment link (#section) — find dedicated article"
+            )
+
+        # Thumbnail URL missing and no Wikidata P18
+        if not site.get("thumbnail_url") and not claim.get("commons_image"):
+            issues.append("thumbnail_url missing and no Wikidata P18 — find representative image")
 
         if issues:
             entry = dict(site)
