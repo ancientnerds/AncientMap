@@ -1,8 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
-import SiteResultItem from '../SiteResultItem'
+import { SiteCard } from '../SiteCard'
 import { config } from '../../config'
 import { apiDetailToSiteData } from '../../utils/siteApi'
-import { getCategoryColor, getPeriodColor } from '../../constants/colors'
 import type { SiteData } from '../../data/sites'
 
 interface SiteChipProps {
@@ -85,17 +84,10 @@ export default function SiteChip({ siteId, children, onOpenPopup, onFlyTo, onHig
           onMouseEnter={handlePreviewEnter}
           onMouseLeave={handlePreviewLeave}
         >
-          <SiteResultItem
-            id={preview.id}
-            title={preview.title}
-            category={preview.category}
-            categoryColor={getCategoryColor(preview.category)}
-            location={preview.location}
-            period={preview.period}
-            periodColor={getPeriodColor(preview.period)}
-            thumbnailUrl={preview.image}
-            showInfoBtn={false}
-            onMainClick={handleClick}
+          <SiteCard
+            site={preview}
+            compact
+            onClick={handleClick}
           />
         </div>
       )}

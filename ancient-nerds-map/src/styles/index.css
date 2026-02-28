@@ -15433,7 +15433,7 @@ body.news-feed-open .empire-borders-window {
   overflow: hidden;
   animation: lyra-preview-in 0.15s ease;
 }
-.lyra-site-preview .search-result-item {
+.lyra-site-preview .site-card {
   background: transparent;
   border: none;
   margin: 0;
@@ -15443,24 +15443,6 @@ body.news-feed-open .empire-borders-window {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Sites strip — horizontal scroll below multi-site messages */
-.lyra-msg-sites-strip {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding: 8px 0 4px 40px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
-}
-.lyra-msg-sites-strip::-webkit-scrollbar { height: 4px; }
-.lyra-msg-sites-strip::-webkit-scrollbar-track { background: transparent; }
-.lyra-msg-sites-strip::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 2px; }
-.lyra-msg-sites-strip .search-result-item {
-  min-width: 180px;
-  max-width: 200px;
-  flex-shrink: 0;
-  font-size: 0.75rem;
-}
 
 /* ── Gamification: discovery bar, streak chips ── */
 .lyra-discovery-bar {
