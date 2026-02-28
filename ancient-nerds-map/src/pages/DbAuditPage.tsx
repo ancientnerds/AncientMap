@@ -108,6 +108,15 @@ function formatRelativeDate(iso: string): string {
   const d = new Date(iso)
   const now = new Date()
   const diffMs = now.getTime() - d.getTime()
+  if (diffMs < 0) {
+    const futureMin = Math.floor(-diffMs / 60000)
+    if (futureMin < 1) return 'just now'
+    if (futureMin < 60) return `in ${futureMin}m`
+    const futureHr = Math.floor(futureMin / 60)
+    if (futureHr < 24) return `in ${futureHr}h`
+    const futureDays = Math.floor(futureHr / 24)
+    return `in ${futureDays}d`
+  }
   const diffMin = Math.floor(diffMs / 60000)
   if (diffMin < 1) return 'just now'
   if (diffMin < 60) return `${diffMin}m ago`
