@@ -42,11 +42,7 @@ def _count_combos(session) -> dict[tuple[str | None, str | None], int]:
 
 def _get_content_stats(session, site_id) -> tuple[int, int, bool]:
     """Return (content_link_count, distinct_content_types, has_3d_model)."""
-    links = (
-        session.query(SiteContentLink)
-        .filter(SiteContentLink.site_id == site_id)
-        .all()
-    )
+    links = session.query(SiteContentLink).filter(SiteContentLink.site_id == site_id).all()
     content_types = set()
     has_3d = False
     for link in links:
@@ -106,14 +102,16 @@ def _run_enrichment_migrations(session) -> None:
         ("commons_image", "VARCHAR(500)"),
     ]
     for col_name, col_type in columns:
-        session.execute(text(f"""
+        session.execute(
+            text(f"""
             DO $$
             BEGIN
                 ALTER TABLE card_stats ADD COLUMN {col_name} {col_type};
             EXCEPTION
                 WHEN duplicate_column THEN NULL;
             END $$;
-        """))
+        """)
+        )
     session.commit()
     print("[CARDGAME] Enrichment columns ensured on card_stats", flush=True)
 
@@ -210,6 +208,7 @@ def generate_stats() -> None:
     print(f"\n[CARDGAME] Done! Created {created}, updated {updated} card stats.", flush=True)
     print("[CARDGAME] Rarity distribution:", flush=True)
     from api.cardgame.constants import RARITY_NAMES
+
     for tier in sorted(tier_counter.keys()):
         name = RARITY_NAMES.get(tier, f"Tier {tier}")
         count = tier_counter[tier]

@@ -318,6 +318,7 @@ export function MapSection({
               allowFullScreen
               loading="eager"
               referrerPolicy="no-referrer-when-downgrade"
+              title="Street View"
             />
           ) : (
             <iframe
@@ -327,6 +328,7 @@ export function MapSection({
               referrerPolicy="no-referrer-when-downgrade"
               onLoad={onGoogleMapsLoad}
               onError={onGoogleMapsError}
+              title="Satellite map"
             />
           )}
         </div>

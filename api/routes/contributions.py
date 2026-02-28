@@ -45,19 +45,34 @@ async def get_lyra_stats(db: Session = Depends(get_db)):
     - total_name_variants: alternate names Lyra can match (unified_site_names)
     """
     # Sites discovered by Lyra
-    discoveries = db.execute(text("""
+    discoveries = (
+        db.execute(
+            text("""
         SELECT COUNT(*) FROM user_contributions WHERE source = 'lyra'
-    """)).scalar() or 0
+    """)
+        ).scalar()
+        or 0
+    )
 
     # Sites in knowledge base
-    sites_known = db.execute(text("""
+    sites_known = (
+        db.execute(
+            text("""
         SELECT COUNT(*) FROM unified_sites
-    """)).scalar() or 0
+    """)
+        ).scalar()
+        or 0
+    )
 
     # Name variants
-    name_variants = db.execute(text("""
+    name_variants = (
+        db.execute(
+            text("""
         SELECT COUNT(*) FROM unified_site_names
-    """)).scalar() or 0
+    """)
+        ).scalar()
+        or 0
+    )
 
     return {
         "total_discoveries": discoveries,
@@ -86,19 +101,28 @@ async def get_lyra_contributions(
     offset = (page - 1) * page_size
 
     # Get total count
-    total = db.execute(text("""
+    total = (
+        db.execute(
+            text("""
         SELECT COUNT(*) FROM user_contributions
         WHERE source = 'lyra' AND mention_count >= :min_mentions
-    """), {"min_mentions": min_mentions}).scalar() or 0
+    """),
+            {"min_mentions": min_mentions},
+        ).scalar()
+        or 0
+    )
 
     # Get paginated items
-    rows = db.execute(text("""
+    rows = db.execute(
+        text("""
         SELECT id, name, description, country, site_type, source_url, mention_count, created_at
         FROM user_contributions
         WHERE source = 'lyra' AND mention_count >= :min_mentions
         ORDER BY mention_count DESC, created_at DESC
         LIMIT :limit OFFSET :offset
-    """), {"min_mentions": min_mentions, "limit": page_size, "offset": offset}).fetchall()
+    """),
+        {"min_mentions": min_mentions, "limit": page_size, "offset": offset},
+    ).fetchall()
 
     items = [
         {
@@ -121,6 +145,7 @@ async def get_lyra_contributions(
         "page_size": page_size,
         "has_more": offset + len(items) < total,
     }
+
 
 # Contributions JSON file path
 CONTRIBUTIONS_FILE = Path(__file__).parent.parent.parent / "data" / "contributions.json"
@@ -154,6 +179,7 @@ def save_contribution(contribution: dict) -> None:
 
 class ContributionCreate(BaseModel):
     """Pydantic model for contribution submission."""
+
     name: str = Field(..., min_length=1, max_length=500, description="Site name (required)")
     lat: float | None = Field(None, ge=-90, le=90, description="Latitude")
     lon: float | None = Field(None, ge=-180, le=180, description="Longitude")
@@ -163,36 +189,36 @@ class ContributionCreate(BaseModel):
     source_url: str | None = Field(None, max_length=2000, description="Source URL")
     turnstile_token: str = Field(..., description="Cloudflare Turnstile token")
 
-    @field_validator('source_url')
+    @field_validator("source_url")
     @classmethod
     def validate_url(cls, v: str | None) -> str | None:
         """Validate that source_url is a proper HTTP/HTTPS URL."""
-        if v is None or v.strip() == '':
+        if v is None or v.strip() == "":
             return None
         v = v.strip()
         # Only allow http/https URLs
         url_pattern = re.compile(
-            r'^https?://'  # http:// or https://
-            r'[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?'  # domain
-            r'(\.[a-zA-Z]{2,})+'  # TLD
-            r'(:\d+)?'  # optional port
-            r'(/[^\s]*)?$',  # path
-            re.IGNORECASE
+            r"^https?://"  # http:// or https://
+            r"[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?"  # domain
+            r"(\.[a-zA-Z]{2,})+"  # TLD
+            r"(:\d+)?"  # optional port
+            r"(/[^\s]*)?$",  # path
+            re.IGNORECASE,
         )
         if not url_pattern.match(v):
-            raise ValueError('Invalid URL format. Must be a valid http:// or https:// URL.')
+            raise ValueError("Invalid URL format. Must be a valid http:// or https:// URL.")
         return v
 
-    @field_validator('country')
+    @field_validator("country")
     @classmethod
     def validate_country(cls, v: str | None) -> str | None:
         """Validate country contains only allowed characters."""
-        if v is None or v.strip() == '':
+        if v is None or v.strip() == "":
             return None
         v = v.strip()
         # Only allow letters, spaces, hyphens, and apostrophes
         if not re.match(r"^[a-zA-Z\s\-']+$", v):
-            raise ValueError('Country must contain only letters, spaces, hyphens, and apostrophes.')
+            raise ValueError("Country must contain only letters, spaces, hyphens, and apostrophes.")
         return v
 
 
@@ -234,7 +260,8 @@ async def create_contribution(
     source_url = contribution.source_url.strip() if contribution.source_url else None
 
     # Write to unified_sites so it shows up everywhere immediately
-    db.execute(text("""
+    db.execute(
+        text("""
         INSERT INTO unified_sites (
             id, source_id, source_record_id, name, lat, lon,
             site_type, country, description, source_url, edited_by
@@ -243,17 +270,19 @@ async def create_contribution(
             :lat, :lon, :site_type, :country, :description,
             :source_url, 'user'
         )
-    """), {
-        "id": contribution_id,
-        "source_record_id": contribution_id,
-        "name": name,
-        "lat": contribution.lat or 0,
-        "lon": contribution.lon or 0,
-        "site_type": contribution.site_type,
-        "country": country,
-        "description": description,
-        "source_url": source_url,
-    })
+    """),
+        {
+            "id": contribution_id,
+            "source_record_id": contribution_id,
+            "name": name,
+            "lat": contribution.lat or 0,
+            "lon": contribution.lon or 0,
+            "site_type": contribution.site_type,
+            "country": country,
+            "description": description,
+            "source_url": source_url,
+        },
+    )
     db.commit()
 
     # Invalidate Redis cache so the new site appears immediately
@@ -281,6 +310,7 @@ async def create_contribution(
     if user:
         from api.cardgame.achievements import check_achievements
         from pipeline.database import get_session
+
         with get_session() as ach_session:
             new_achievements = check_achievements(ach_session, user.id, "contribution")
 
@@ -300,13 +330,15 @@ async def get_site_types(db: Session = Depends(get_db)):
     Returns the distinct site types from the unified_sites table.
     """
     try:
-        result = db.execute(text("""
+        result = db.execute(
+            text("""
             SELECT DISTINCT site_type
             FROM unified_sites
             WHERE site_type IS NOT NULL AND site_type != ''
             ORDER BY site_type
             LIMIT 100
-        """))
+        """)
+        )
 
         types = [row.site_type for row in result if row.site_type]
         return {"site_types": types}
@@ -323,13 +355,15 @@ async def get_countries(db: Session = Depends(get_db)):
     Returns distinct countries for autocomplete suggestions.
     """
     try:
-        result = db.execute(text("""
+        result = db.execute(
+            text("""
             SELECT DISTINCT country
             FROM unified_sites
             WHERE country IS NOT NULL AND country != ''
             ORDER BY country
             LIMIT 200
-        """))
+        """)
+        )
 
         countries = [row.country for row in result if row.country]
         return {"countries": countries}

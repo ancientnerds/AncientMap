@@ -181,20 +181,22 @@ class MediaWikiProtocol:
             imageinfo = page.get("imageinfo", [{}])[0]
             extmetadata = imageinfo.get("extmetadata", {})
 
-            images.append({
-                "pageid": page.get("pageid"),
-                "title": page.get("title", "").replace("File:", ""),
-                "url": imageinfo.get("url"),
-                "thumburl": imageinfo.get("thumburl"),
-                "width": imageinfo.get("width"),
-                "height": imageinfo.get("height"),
-                "mime": imageinfo.get("mime"),
-                "description": self._extract_metadata(extmetadata, "ImageDescription"),
-                "artist": self._extract_metadata(extmetadata, "Artist"),
-                "license": self._extract_metadata(extmetadata, "LicenseShortName"),
-                "license_url": self._extract_metadata(extmetadata, "LicenseUrl"),
-                "date": self._extract_metadata(extmetadata, "DateTimeOriginal"),
-            })
+            images.append(
+                {
+                    "pageid": page.get("pageid"),
+                    "title": page.get("title", "").replace("File:", ""),
+                    "url": imageinfo.get("url"),
+                    "thumburl": imageinfo.get("thumburl"),
+                    "width": imageinfo.get("width"),
+                    "height": imageinfo.get("height"),
+                    "mime": imageinfo.get("mime"),
+                    "description": self._extract_metadata(extmetadata, "ImageDescription"),
+                    "artist": self._extract_metadata(extmetadata, "Artist"),
+                    "license": self._extract_metadata(extmetadata, "LicenseShortName"),
+                    "license_url": self._extract_metadata(extmetadata, "LicenseUrl"),
+                    "date": self._extract_metadata(extmetadata, "DateTimeOriginal"),
+                }
+            )
 
         return images
 
@@ -238,17 +240,19 @@ class MediaWikiProtocol:
             imageinfo = page.get("imageinfo", [{}])[0]
             extmetadata = imageinfo.get("extmetadata", {})
 
-            images.append({
-                "pageid": page.get("pageid"),
-                "title": page.get("title", "").replace("File:", ""),
-                "url": imageinfo.get("url"),
-                "thumburl": imageinfo.get("thumburl"),
-                "width": imageinfo.get("width"),
-                "height": imageinfo.get("height"),
-                "description": self._extract_metadata(extmetadata, "ImageDescription"),
-                "artist": self._extract_metadata(extmetadata, "Artist"),
-                "license": self._extract_metadata(extmetadata, "LicenseShortName"),
-            })
+            images.append(
+                {
+                    "pageid": page.get("pageid"),
+                    "title": page.get("title", "").replace("File:", ""),
+                    "url": imageinfo.get("url"),
+                    "thumburl": imageinfo.get("thumburl"),
+                    "width": imageinfo.get("width"),
+                    "height": imageinfo.get("height"),
+                    "description": self._extract_metadata(extmetadata, "ImageDescription"),
+                    "artist": self._extract_metadata(extmetadata, "Artist"),
+                    "license": self._extract_metadata(extmetadata, "LicenseShortName"),
+                }
+            )
 
         return images
 
@@ -322,17 +326,19 @@ class MediaWikiProtocol:
             imageinfo = page["imageinfo"][0]
             extmetadata = imageinfo.get("extmetadata", {})
 
-            images.append({
-                "pageid": page.get("pageid"),
-                "title": page.get("title", "").replace("File:", ""),
-                "url": imageinfo.get("url"),
-                "thumburl": imageinfo.get("thumburl"),
-                "width": imageinfo.get("width"),
-                "height": imageinfo.get("height"),
-                "description": self._extract_metadata(extmetadata, "ImageDescription"),
-                "artist": self._extract_metadata(extmetadata, "Artist"),
-                "license": self._extract_metadata(extmetadata, "LicenseShortName"),
-            })
+            images.append(
+                {
+                    "pageid": page.get("pageid"),
+                    "title": page.get("title", "").replace("File:", ""),
+                    "url": imageinfo.get("url"),
+                    "thumburl": imageinfo.get("thumburl"),
+                    "width": imageinfo.get("width"),
+                    "height": imageinfo.get("height"),
+                    "description": self._extract_metadata(extmetadata, "ImageDescription"),
+                    "artist": self._extract_metadata(extmetadata, "Artist"),
+                    "license": self._extract_metadata(extmetadata, "LicenseShortName"),
+                }
+            )
 
         return images
 
@@ -419,9 +425,9 @@ class MediaWikiProtocol:
 
             # Filter for actual maps
             is_map = (
-                "map" in title or
-                any("map" in cat for cat in categories) or
-                any("carte" in cat for cat in categories)
+                "map" in title
+                or any("map" in cat for cat in categories)
+                or any("carte" in cat for cat in categories)
             )
 
             if not is_map:
@@ -430,17 +436,19 @@ class MediaWikiProtocol:
             imageinfo = page.get("imageinfo", [{}])[0]
             extmetadata = imageinfo.get("extmetadata", {})
 
-            maps.append({
-                "pageid": page.get("pageid"),
-                "title": page.get("title", "").replace("File:", ""),
-                "url": imageinfo.get("url"),
-                "thumburl": imageinfo.get("thumburl"),
-                "width": imageinfo.get("width"),
-                "height": imageinfo.get("height"),
-                "description": self._extract_metadata(extmetadata, "ImageDescription"),
-                "date": self._extract_metadata(extmetadata, "DateTimeOriginal"),
-                "license": self._extract_metadata(extmetadata, "LicenseShortName"),
-            })
+            maps.append(
+                {
+                    "pageid": page.get("pageid"),
+                    "title": page.get("title", "").replace("File:", ""),
+                    "url": imageinfo.get("url"),
+                    "thumburl": imageinfo.get("thumburl"),
+                    "width": imageinfo.get("width"),
+                    "height": imageinfo.get("height"),
+                    "description": self._extract_metadata(extmetadata, "ImageDescription"),
+                    "date": self._extract_metadata(extmetadata, "DateTimeOriginal"),
+                    "license": self._extract_metadata(extmetadata, "LicenseShortName"),
+                }
+            )
 
             if len(maps) >= limit:
                 break

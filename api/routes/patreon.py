@@ -32,9 +32,9 @@ PATREON_WEBHOOK_SECRET = os.getenv("PATREON_WEBHOOK_SECRET", "")
 # This lets us grant credits immediately on webhook without waiting for role sync
 # Credits per tier: Explorer=2,500, Archaeologist=5,000, Scholar=12,500
 _TIER_CENTS_TO_REASON: dict[int, str] = {
-    500: "monthly_patron_explorer",      # $5 → 5,000 credits (~40-80 questions)
+    500: "monthly_patron_explorer",  # $5 → 5,000 credits (~40-80 questions)
     1000: "monthly_patron_archaeologist",  # $10 → 15,000 credits (~125-250 questions)
-    2500: "monthly_patron_scholar",        # $25 → 50,000 credits (~415-830 questions)
+    2500: "monthly_patron_scholar",  # $25 → 50,000 credits (~415-830 questions)
 }
 
 
@@ -43,7 +43,9 @@ def _verify_signature(body: bytes, signature: str) -> bool:
     if not PATREON_WEBHOOK_SECRET:
         return False
     expected = hmac.new(
-        PATREON_WEBHOOK_SECRET.encode(), body, hashlib.md5,
+        PATREON_WEBHOOK_SECRET.encode(),
+        body,
+        hashlib.md5,
     ).hexdigest()
     return hmac.compare_digest(expected, signature)
 
@@ -81,7 +83,9 @@ async def patreon_webhook(request: Request):
 
     # Get pledge amount from data attributes
     attrs = data.get("attributes", {})
-    tier_amount_cents = attrs.get("currently_entitled_amount_cents", 0) or attrs.get("amount_cents", 0)
+    tier_amount_cents = attrs.get("currently_entitled_amount_cents", 0) or attrs.get(
+        "amount_cents", 0
+    )
 
     # Find user and social connections in included resources
     for item in included:
@@ -98,20 +102,26 @@ async def patreon_webhook(request: Request):
 
     # Single atomic transaction: idempotency check + event log + credit grant
     with get_session() as session:
-        existing = session.query(PatreonEvent).filter(
-            PatreonEvent.event_id == full_event_id,
-        ).first()
+        existing = (
+            session.query(PatreonEvent)
+            .filter(
+                PatreonEvent.event_id == full_event_id,
+            )
+            .first()
+        )
         if existing:
             return {"ok": True, "message": "Event already processed"}
 
         # Log the event
-        session.add(PatreonEvent(
-            event_id=full_event_id,
-            event_type=event_type,
-            patron_email=patron_email,
-            discord_id=discord_id,
-            tier_amount_cents=tier_amount_cents,
-        ))
+        session.add(
+            PatreonEvent(
+                event_id=full_event_id,
+                event_type=event_type,
+                patron_email=patron_email,
+                discord_id=discord_id,
+                tier_amount_cents=tier_amount_cents,
+            )
+        )
         # Flush to detect concurrent duplicate (IntegrityError) before credit logic
         try:
             session.flush()
@@ -134,7 +144,9 @@ async def patreon_webhook(request: Request):
 
         reason = _TIER_CENTS_TO_REASON.get(tier_amount_cents)
         if not reason:
-            logger.warning(f"Unknown tier amount: {tier_amount_cents} cents for discord={discord_id}")
+            logger.warning(
+                f"Unknown tier amount: {tier_amount_cents} cents for discord={discord_id}"
+            )
             return {"ok": True, "message": "Unknown tier amount"}
 
         # Find the CREDIT_ROLES config matching this tier's reason
@@ -147,9 +159,14 @@ async def patreon_webhook(request: Request):
         cap_multiplier = role_config.get("cap_multiplier", 3)
         max_balance = monthly_amount * cap_multiplier
 
-        user = session.query(DiscordUser).filter(
-            DiscordUser.discord_id == discord_id,
-        ).with_for_update().first()
+        user = (
+            session.query(DiscordUser)
+            .filter(
+                DiscordUser.discord_id == discord_id,
+            )
+            .with_for_update()
+            .first()
+        )
         if not user:
             logger.info(f"Discord user {discord_id} not in DB yet — credits granted on next login")
             return {"ok": True, "message": "User not registered yet"}
@@ -162,11 +179,15 @@ async def patreon_webhook(request: Request):
             user.grant_anchor_date = now
 
         # Idempotency: check if this period + reason was already granted
-        existing_grant = session.query(CreditGrant).filter(
-            CreditGrant.user_id == user.id,
-            CreditGrant.reason == reason,
-            CreditGrant.grant_period == period,
-        ).first()
+        existing_grant = (
+            session.query(CreditGrant)
+            .filter(
+                CreditGrant.user_id == user.id,
+                CreditGrant.reason == reason,
+                CreditGrant.grant_period == period,
+            )
+            .first()
+        )
         if existing_grant:
             logger.info(f"Credits already granted for {user.username} ({reason}, period={period})")
             return {"ok": True, "message": "Credits already granted for this period"}
@@ -174,14 +195,20 @@ async def patreon_webhook(request: Request):
         effective = min(monthly_amount, max(0, max_balance - user.credits))
         if effective > 0:
             user.credits += effective
-            session.add(CreditGrant(
-                user_id=user.id,
-                amount=effective,
-                reason=reason,
-                grant_period=period,
-            ))
-            logger.info(f"Webhook granted {effective} credits to {user.username} ({reason}, period={period})")
+            session.add(
+                CreditGrant(
+                    user_id=user.id,
+                    amount=effective,
+                    reason=reason,
+                    grant_period=period,
+                )
+            )
+            logger.info(
+                f"Webhook granted {effective} credits to {user.username} ({reason}, period={period})"
+            )
         else:
-            logger.info(f"Credit cap reached for {user.username}, no grant ({reason}, period={period})")
+            logger.info(
+                f"Credit cap reached for {user.username}, no grant ({reason}, period={period})"
+            )
 
     return {"ok": True, "message": "Credits processed"}

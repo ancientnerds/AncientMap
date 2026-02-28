@@ -342,7 +342,7 @@ function RadarCard({ item, onViewSite, onPromote }: { item: RadarItem; onViewSit
         >
           <LazyImage
             src={item.thumbnail_url}
-            alt=""
+            alt={item.display_name || ''}
             className="lyra-discovery-image"
           />
           <div className="lyra-image-hover-overlay">

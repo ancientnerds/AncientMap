@@ -72,9 +72,15 @@ def deduplicate_posts(settings: LyraSettings | None = None) -> int:
     threshold = settings.dedup_similarity_threshold if settings else 0.25
 
     with get_session() as session:
-        items = session.query(NewsItem).filter(
-            NewsItem.post_text.isnot(None),
-        ).order_by(NewsItem.id.desc()).limit(500).all()
+        items = (
+            session.query(NewsItem)
+            .filter(
+                NewsItem.post_text.isnot(None),
+            )
+            .order_by(NewsItem.id.desc())
+            .limit(500)
+            .all()
+        )
 
         if len(items) < 2:
             return 0
@@ -105,9 +111,13 @@ def deduplicate_posts(settings: LyraSettings | None = None) -> int:
             for item in items:
                 if item.id in to_clear:
                     kept_id, sim = to_clear[item.id]
-                    logger.info(f"Dedup: soft-deleting item {item.id} (similar to {kept_id}, score={sim:.2f})")
+                    logger.info(
+                        f"Dedup: soft-deleting item {item.id} (similar to {kept_id}, score={sim:.2f})"
+                    )
                     item.post_text = None
                     item.news_category = "duplicate"
 
-        logger.info(f"Deduplication: soft-deleted {len(to_clear)} duplicates from {len(items)} items")
+        logger.info(
+            f"Deduplication: soft-deleted {len(to_clear)} duplicates from {len(items)} items"
+        )
         return len(to_clear)

@@ -177,3 +177,8 @@ ancient-nerds-map/video/output/
 # Working directory for card description generation
 output/
 
+# Dev artifacts
+*.stackdump
+test*.jpg
+card-mockup.html
+

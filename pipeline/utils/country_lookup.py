@@ -15,6 +15,7 @@ from loguru import logger
 try:
     from shapely.geometry import Point, shape
     from shapely.strtree import STRtree
+
     SHAPELY_AVAILABLE = True
 except ImportError:
     SHAPELY_AVAILABLE = False
@@ -69,11 +70,15 @@ class CountryLookup:
                         try:
                             shapely_geom = shape(geom)
                             self._geometries.append(shapely_geom)
-                            self._countries.append({
-                                "name": props.get("ADMIN") or props.get("name") or props.get("NAME"),
-                                "iso_a2": props.get("ISO_A2") or props.get("iso_a2"),
-                                "iso_a3": props.get("ISO_A3") or props.get("iso_a3"),
-                            })
+                            self._countries.append(
+                                {
+                                    "name": props.get("ADMIN")
+                                    or props.get("name")
+                                    or props.get("NAME"),
+                                    "iso_a2": props.get("ISO_A2") or props.get("iso_a2"),
+                                    "iso_a3": props.get("ISO_A3") or props.get("iso_a3"),
+                                }
+                            )
                         except Exception as e:
                             logger.debug(f"Failed to parse geometry: {e}")
 
@@ -89,13 +94,17 @@ class CountryLookup:
                     if geom:
                         bbox = self._compute_bbox(geom)
                         if bbox:
-                            self._countries.append({
-                                "name": props.get("ADMIN") or props.get("name") or props.get("NAME"),
-                                "iso_a2": props.get("ISO_A2") or props.get("iso_a2"),
-                                "iso_a3": props.get("ISO_A3") or props.get("iso_a3"),
-                                "bbox": bbox,
-                                "geometry": geom,
-                            })
+                            self._countries.append(
+                                {
+                                    "name": props.get("ADMIN")
+                                    or props.get("name")
+                                    or props.get("NAME"),
+                                    "iso_a2": props.get("ISO_A2") or props.get("iso_a2"),
+                                    "iso_a3": props.get("ISO_A3") or props.get("iso_a3"),
+                                    "bbox": bbox,
+                                    "geometry": geom,
+                                }
+                            )
 
                 logger.info(f"Loaded {len(self._countries)} country bounding boxes")
 
@@ -210,7 +219,7 @@ class CountryLookup:
             candidates = self._spatial_index.query(point)
 
             for idx in candidates:
-                if hasattr(idx, '__index__'):
+                if hasattr(idx, "__index__"):
                     idx = idx.__index__()
                 if self._geometries[idx].contains(point):
                     return self._countries[idx]["name"]
@@ -239,7 +248,7 @@ class CountryLookup:
             candidates = self._spatial_index.query(point)
 
             for idx in candidates:
-                if hasattr(idx, '__index__'):
+                if hasattr(idx, "__index__"):
                     idx = idx.__index__()
                 if self._geometries[idx].contains(point):
                     return self._countries[idx].get("iso_a2")
@@ -587,7 +596,7 @@ def download_country_boundaries():
             # Look for the .shp file and convert to GeoJSON
             shp_name = None
             for name in zf.namelist():
-                if name.endswith('.shp'):
+                if name.endswith(".shp"):
                     shp_name = name
                     break
 
@@ -599,7 +608,9 @@ def download_country_boundaries():
         logger.warning(f"Failed to download shapefile: {e}")
 
     # Try GeoJSON endpoint instead
-    geojson_url = "https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson"
+    geojson_url = (
+        "https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson"
+    )
 
     logger.info(f"Trying GeoJSON endpoint: {geojson_url}")
 
@@ -654,11 +665,11 @@ def main():
     elif args.test:
         # Test some known locations
         test_cases = [
-            (41.9028, 12.4964, "Italy"),      # Rome
+            (41.9028, 12.4964, "Italy"),  # Rome
             (51.5074, -0.1278, "United Kingdom"),  # London
             (40.7128, -74.0060, "United States of America"),  # New York
-            (35.6762, 139.6503, "Japan"),     # Tokyo
-            (31.2304, 121.4737, "China"),     # Shanghai
+            (35.6762, 139.6503, "Japan"),  # Tokyo
+            (31.2304, 121.4737, "China"),  # Shanghai
             (-33.8688, 151.2093, "Australia"),  # Sydney
         ]
 

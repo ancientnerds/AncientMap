@@ -10,7 +10,6 @@ Priority: P2
 API: https://www.hathitrust.org/data
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector

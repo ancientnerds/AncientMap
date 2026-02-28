@@ -10,7 +10,6 @@ Priority: P1
 API: https://www.geonames.org/export/web-services.html
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector

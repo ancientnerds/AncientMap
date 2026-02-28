@@ -10,7 +10,6 @@ Priority: P1
 API: https://pro.europeana.eu/page/apis
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
@@ -150,10 +149,7 @@ class EuropeanaConnector(BaseConnector):
             if item_id.startswith("europeana:"):
                 item_id = item_id[10:]
 
-            response = await self.rest.get(
-                f"{item_id}.json",
-                params={"wskey": self.api_key}
-            )
+            response = await self.rest.get(f"{item_id}.json", params={"wskey": self.api_key})
 
             if response and "object" in response:
                 return self._parse_item(response["object"])

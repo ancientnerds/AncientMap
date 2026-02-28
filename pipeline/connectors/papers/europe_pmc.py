@@ -10,7 +10,6 @@ Priority: P2
 API: https://europepmc.org/RestfulWebService
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
@@ -116,7 +115,7 @@ class EuropePMCConnector(BaseConnector):
                     "query": f"EXT_ID:{item_id}",
                     "resultType": "core",
                     "format": "json",
-                }
+                },
             )
 
             if response and "resultList" in response:

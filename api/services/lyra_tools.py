@@ -45,7 +45,9 @@ def _load_seshat_data() -> dict:
     for path in candidates:
         if path.exists():
             _seshat_data = json.loads(path.read_text(encoding="utf-8"))
-            logger.info(f"Loaded Seshat data from {path}: {len(_seshat_data.get('polities', {}))} polities")
+            logger.info(
+                f"Loaded Seshat data from {path}: {len(_seshat_data.get('polities', {}))} polities"
+            )
             return _seshat_data
 
     logger.warning("Seshat polities.json not found \u2014 empire knowledge unavailable")
@@ -56,6 +58,7 @@ def _load_seshat_data() -> dict:
 # ---------------------------------------------------------------------------
 # Tools (LangChain @tool functions)
 # ---------------------------------------------------------------------------
+
 
 @tool
 def search_sites(
@@ -225,14 +228,12 @@ def get_site_details(site_id: str) -> str:
 
     if names:
         site["alternate_names"] = [
-            {"name": n.name, "lang": n.language_code, "type": n.name_type}
-            for n in names
+            {"name": n.name, "lang": n.language_code, "type": n.name_type} for n in names
         ]
 
     if links:
         site["content_links"] = [
-            {"type": l.content_type, "title": l.title, "url": l.content_url}
-            for l in links
+            {"type": l.content_type, "title": l.title, "url": l.content_url} for l in links
         ]
 
     return json.dumps(site, ensure_ascii=False)
@@ -333,15 +334,19 @@ def get_empire_data(empire_id: str) -> str:
         available = list(data.get("polities", {}).keys())
         matches = [k for k in available if empire_id.lower() in k.lower()]
         if matches:
-            return json.dumps({
-                "error": f"Polity '{empire_id}' not found. Did you mean: {matches[:5]}?",
-                "available_ids": matches[:10],
-            })
-        return json.dumps({
-            "error": f"Polity '{empire_id}' not found.",
-            "available_count": len(available),
-            "sample_ids": available[:15],
-        })
+            return json.dumps(
+                {
+                    "error": f"Polity '{empire_id}' not found. Did you mean: {matches[:5]}?",
+                    "available_ids": matches[:10],
+                }
+            )
+        return json.dumps(
+            {
+                "error": f"Polity '{empire_id}' not found.",
+                "available_count": len(available),
+                "sample_ids": available[:15],
+            }
+        )
 
     return json.dumps(polity, ensure_ascii=False)
 
@@ -415,13 +420,21 @@ def _hybrid_search(
     # Step 2: Build metadata filter
     conditions: list[models.FieldCondition | models.Filter] = []
     if country:
-        conditions.append(models.FieldCondition(key="country", match=models.MatchText(text=country)))
+        conditions.append(
+            models.FieldCondition(key="country", match=models.MatchText(text=country))
+        )
     if period:
-        conditions.append(models.FieldCondition(key="period_name", match=models.MatchText(text=period)))
+        conditions.append(
+            models.FieldCondition(key="period_name", match=models.MatchText(text=period))
+        )
     if site_type:
-        conditions.append(models.FieldCondition(key="site_type", match=models.MatchText(text=site_type)))
+        conditions.append(
+            models.FieldCondition(key="site_type", match=models.MatchText(text=site_type))
+        )
     if channel:
-        conditions.append(models.FieldCondition(key="channel", match=models.MatchText(text=channel)))
+        conditions.append(
+            models.FieldCondition(key="channel", match=models.MatchText(text=channel))
+        )
     query_filter = models.Filter(must=conditions) if conditions else None  # type: ignore[arg-type]
 
     # Step 3: Hybrid query \u2014 prefetch dense + BM25, fuse with RRF
@@ -484,8 +497,12 @@ def vector_search(
     """
     query = (query or "")[:500]
     items, _vt = _hybrid_search(
-        query, collection=collection, limit=limit,
-        country=country, period=period, site_type=site_type,
+        query,
+        collection=collection,
+        limit=limit,
+        country=country,
+        period=period,
+        site_type=site_type,
         channel=channel,
     )
     if not items:
@@ -593,12 +610,14 @@ def list_channels() -> str:
 
     channels = []
     for r in rows:
-        channels.append({
-            "name": r.name,
-            "enabled": r.enabled,
-            "videos_processed": r.video_count,
-            "youtube_url": f"https://www.youtube.com/channel/{r.id}",
-        })
+        channels.append(
+            {
+                "name": r.name,
+                "enabled": r.enabled,
+                "videos_processed": r.video_count,
+                "youtube_url": f"https://www.youtube.com/channel/{r.id}",
+            }
+        )
 
     return json.dumps(channels, ensure_ascii=False)
 
@@ -761,7 +780,7 @@ def search_transcripts(
         yt_link = f"https://youtu.be/{video_id}?t={start}" if video_id else ""
         thumb = f"https://img.youtube.com/vi/{video_id}/mqdefault.jpg" if video_id else ""
 
-        lines.append(f"{i}. **{ch}** — \"{video_title}\" (at {ts_str})")
+        lines.append(f'{i}. **{ch}** — "{video_title}" (at {ts_str})')
         if thumb:
             lines.append(f"   ![thumbnail]({thumb})")
         if preview:
@@ -869,7 +888,9 @@ def search_empires(
         wiki = item.get("wikipedia_url")
         if wiki:
             lines.append(f"   - [Wikipedia]({wiki})")
-        lines.append(f"   Use `get_empire_data('{polity_id}')` for full warfare, economy, and crisis data.")
+        lines.append(
+            f"   Use `get_empire_data('{polity_id}')` for full warfare, economy, and crisis data."
+        )
         lines.append("")
 
     return "\n".join(lines)
@@ -879,4 +900,16 @@ def search_empires(
 # Exported tools list
 # ---------------------------------------------------------------------------
 
-TOOLS = [search_sites, get_site_details, search_news, get_empire_data, vector_search, search_radar, list_channels, get_site_images, search_transcripts, search_articles, search_empires]
+TOOLS = [
+    search_sites,
+    get_site_details,
+    search_news,
+    get_empire_data,
+    vector_search,
+    search_radar,
+    list_channels,
+    get_site_images,
+    search_transcripts,
+    search_articles,
+    search_empires,
+]

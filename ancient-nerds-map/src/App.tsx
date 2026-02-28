@@ -1,9 +1,25 @@
-import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react'
 import Globe from './components/Globe'
 import FilterPanel from './components/FilterPanel'
 import { EmpirePolygonData, computeBoundingBox, isSiteInEmpirePolygons } from './utils/geometry'
 import SitePopup, { EmpirePopupData } from './components/SitePopup'
 import { EMPIRES } from './config/empireData'
+class LazyErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false }
+  static getDerivedStateFromError() { return { hasError: true } }
+  render() {
+    if (this.state.hasError) {
+      return <div style={{ padding: '1rem', textAlign: 'center', opacity: 0.6 }}>
+        Failed to load. Please refresh the page.
+      </div>
+    }
+    return this.props.children
+  }
+}
+
 // Lazy-load modals for faster initial load
 const ContributeModal = lazy(() => import('./components/ContributeModal'))
 const DisclaimerModal = lazy(() => import('./components/DisclaimerModal'))
@@ -1940,7 +1956,7 @@ function AppContent() {
       })}
 
       {/* News Feed Panel - slides in from right */}
-      <Suspense fallback={null}>
+      <LazyErrorBoundary><Suspense fallback={null}>
         {showNewsFeed && (
           <NewsFeedPanel
             onClose={() => setShowNewsFeed(false)}
@@ -1964,10 +1980,10 @@ function AppContent() {
             }}
           />
         )}
-      </Suspense>
+      </Suspense></LazyErrorBoundary>
 
       {/* Lazy-loaded modals wrapped in Suspense for faster initial load */}
-      <Suspense fallback={null}>
+      <LazyErrorBoundary><Suspense fallback={null}>
         {/* Contribute Modal - always mounted to preserve form state */}
         <ContributeModal
           isOpen={showContributeModal}
@@ -2016,7 +2032,7 @@ function AppContent() {
           }}
           onOpenSitePopup={openSitePopup}
         />
-      </Suspense>
+      </Suspense></LazyErrorBoundary>
     </>
   )
 }

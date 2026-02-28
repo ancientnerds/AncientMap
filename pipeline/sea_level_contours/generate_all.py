@@ -47,29 +47,30 @@ DEFAULT_MAX_LEVEL = 50
 
 # Detail levels matching the frontend LOD system
 DETAIL_TOLERANCES = {
-    '110m': 0.125,   # ~14km at equator (4x more detail)
-    '50m': 0.017,    # ~1.9km (3x more detail)
-    '10m': 0.0025,   # ~0.28km (2x more detail)
+    "110m": 0.125,  # ~14km at equator (4x more detail)
+    "50m": 0.017,  # ~1.9km (3x more detail)
+    "10m": 0.0025,  # ~0.28km (2x more detail)
 }
 
 # Minimum line length in degrees to keep (0 = keep all)
 MIN_LINE_LENGTH = {
-    '110m': 0.0,
-    '50m': 0.0,
-    '10m': 0.0,
+    "110m": 0.0,
+    "50m": 0.0,
+    "10m": 0.0,
 }
 
 # Output directory
-OUTPUT_DIR = Path('ancient-nerds-map/public/data/sea-levels')
+OUTPUT_DIR = Path("ancient-nerds-map/public/data/sea-levels")
 
 # GEBCO data path and download URL
-GEBCO_PATH = Path('data/raw/GEBCO_2024.nc')
-GEBCO_DOWNLOAD_URL = 'https://www.bodc.ac.uk/data/open_download/gebco/gebco_2024/zip/'
+GEBCO_PATH = Path("data/raw/GEBCO_2024.nc")
+GEBCO_DOWNLOAD_URL = "https://www.bodc.ac.uk/data/open_download/gebco/gebco_2024/zip/"
 
 
 # =============================================================================
 # Download GEBCO Data
 # =============================================================================
+
 
 def download_gebco(output_path: Path = GEBCO_PATH) -> Path:
     """Download GEBCO 2024 data if not present."""
@@ -77,7 +78,7 @@ def download_gebco(output_path: Path = GEBCO_PATH) -> Path:
         logger.info(f"GEBCO data already exists at {output_path}")
         return output_path
 
-    zip_path = output_path.with_suffix('.zip')
+    zip_path = output_path.with_suffix(".zip")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     logger.info("Downloading GEBCO 2024 (~4GB compressed)...")
@@ -88,7 +89,11 @@ def download_gebco(output_path: Path = GEBCO_PATH) -> Path:
         percent = count * block_size * 100 / total_size
         downloaded_mb = count * block_size / (1024 * 1024)
         total_mb = total_size / (1024 * 1024)
-        print(f"\r  Downloading: {percent:.1f}% ({downloaded_mb:.0f}/{total_mb:.0f} MB)", end='', flush=True)
+        print(
+            f"\r  Downloading: {percent:.1f}% ({downloaded_mb:.0f}/{total_mb:.0f} MB)",
+            end="",
+            flush=True,
+        )
 
     try:
         urllib.request.urlretrieve(GEBCO_DOWNLOAD_URL, zip_path, progress_hook)
@@ -96,9 +101,9 @@ def download_gebco(output_path: Path = GEBCO_PATH) -> Path:
         logger.info(f"Downloaded to {zip_path}")
 
         logger.info("Extracting GEBCO NetCDF file...")
-        with zipfile.ZipFile(zip_path, 'r') as zf:
+        with zipfile.ZipFile(zip_path, "r") as zf:
             for name in zf.namelist():
-                if name.endswith('.nc'):
+                if name.endswith(".nc"):
                     logger.info(f"  Extracting {name}...")
                     zf.extract(name, output_path.parent)
                     extracted = output_path.parent / name
@@ -121,6 +126,7 @@ def download_gebco(output_path: Path = GEBCO_PATH) -> Path:
 # Data Loading
 # =============================================================================
 
+
 def load_gebco(path: Path = GEBCO_PATH, auto_download: bool = True) -> xr.DataArray:
     """Load GEBCO NetCDF elevation/bathymetry data."""
     if not path.exists():
@@ -133,16 +139,18 @@ def load_gebco(path: Path = GEBCO_PATH, auto_download: bool = True) -> xr.DataAr
     logger.info(f"Loading GEBCO data from {path}...")
     ds = xr.open_dataset(path)
 
-    if 'elevation' in ds:
-        elevation = ds['elevation']
-    elif 'z' in ds:
-        elevation = ds['z']
+    if "elevation" in ds:
+        elevation = ds["elevation"]
+    elif "z" in ds:
+        elevation = ds["z"]
     else:
         raise ValueError(f"Could not find elevation variable in {path}")
 
-    logger.info(f"Loaded: {elevation.shape} grid, "
-                f"lat range [{float(elevation.lat.min()):.1f}, {float(elevation.lat.max()):.1f}], "
-                f"lon range [{float(elevation.lon.min()):.1f}, {float(elevation.lon.max()):.1f}]")
+    logger.info(
+        f"Loaded: {elevation.shape} grid, "
+        f"lat range [{float(elevation.lat.min()):.1f}, {float(elevation.lat.max()):.1f}], "
+        f"lon range [{float(elevation.lon.min()):.1f}, {float(elevation.lon.max()):.1f}]"
+    )
 
     return elevation
 
@@ -151,7 +159,10 @@ def load_gebco(path: Path = GEBCO_PATH, auto_download: bool = True) -> xr.DataAr
 # Contour Extraction
 # =============================================================================
 
-def extract_contour(elevation: np.ndarray, level: float, lats: np.ndarray, lons: np.ndarray) -> MultiLineString:
+
+def extract_contour(
+    elevation: np.ndarray, level: float, lats: np.ndarray, lons: np.ndarray
+) -> MultiLineString:
     """Extract contour at given elevation using marching squares."""
     contours = measure.find_contours(elevation, level)
 
@@ -178,9 +189,9 @@ def line_length_degrees(line: LineString) -> float:
     coords = list(line.coords)
     total = 0.0
     for i in range(len(coords) - 1):
-        dx = coords[i+1][0] - coords[i][0]
-        dy = coords[i+1][1] - coords[i][1]
-        total += (dx*dx + dy*dy) ** 0.5
+        dx = coords[i + 1][0] - coords[i][0]
+        dy = coords[i + 1][1] - coords[i][1]
+        total += (dx * dx + dy * dy) ** 0.5
     return total
 
 
@@ -221,6 +232,7 @@ def simplify_geometry(geom, tolerance: float, min_length: float = 0.0):
 # Export
 # =============================================================================
 
+
 def export_geojson(geom, output_path: Path, sea_level: int):
     """Export geometry to GeoJSON file."""
     features = []
@@ -234,23 +246,30 @@ def export_geojson(geom, output_path: Path, sea_level: int):
 
     for line in geoms:
         if not line.is_empty and len(list(line.coords)) >= 2:
-            features.append(geojson.Feature(
-                geometry=geojson.LineString(list(line.coords)),
-                properties={'sea_level': sea_level}
-            ))
+            features.append(
+                geojson.Feature(
+                    geometry=geojson.LineString(list(line.coords)),
+                    properties={"sea_level": sea_level},
+                )
+            )
 
     collection = geojson.FeatureCollection(features)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(output_path, 'w') as f:
-        geojson.dump(collection, f, separators=(',', ':'))
+    with open(output_path, "w") as f:
+        geojson.dump(collection, f, separators=(",", ":"))
 
 
 # =============================================================================
 # Processing
 # =============================================================================
 
-def process_level(level: int, elevation_data: tuple[np.ndarray, np.ndarray, np.ndarray], output_dir: Path = OUTPUT_DIR) -> dict:
+
+def process_level(
+    level: int,
+    elevation_data: tuple[np.ndarray, np.ndarray, np.ndarray],
+    output_dir: Path = OUTPUT_DIR,
+) -> dict:
     """Process a single sea level."""
     elevation, lats, lons = elevation_data
 
@@ -261,9 +280,9 @@ def process_level(level: int, elevation_data: tuple[np.ndarray, np.ndarray, np.n
     contour = extract_contour(elevation, level, lats, lons)
 
     stats = {
-        'level': level,
-        'raw_features': len(list(contour.geoms)) if isinstance(contour, MultiLineString) else 1,
-        'files': {}
+        "level": level,
+        "raw_features": len(list(contour.geoms)) if isinstance(contour, MultiLineString) else 1,
+        "files": {},
     }
 
     # Generate simplified versions for each detail level
@@ -285,10 +304,10 @@ def process_level(level: int, elevation_data: tuple[np.ndarray, np.ndarray, np.n
         export_geojson(simplified, output_path, level)
 
         file_size = output_path.stat().st_size if output_path.exists() else 0
-        stats['files'][detail_name] = {
-            'features': num_features,
-            'coordinates': total_coords,
-            'size_kb': round(file_size / 1024, 1)
+        stats["files"][detail_name] = {
+            "features": num_features,
+            "coordinates": total_coords,
+            "size_kb": round(file_size / 1024, 1),
         }
 
     elapsed = time.time() - start_time
@@ -300,28 +319,48 @@ def process_level(level: int, elevation_data: tuple[np.ndarray, np.ndarray, np.n
 def generate_metadata(levels: list[int], output_dir: Path = OUTPUT_DIR):
     """Generate metadata.json with level information."""
     metadata = {
-        'range': {'min': min(levels), 'max': max(levels)},
-        'levels': sorted(levels),
-        'details': list(DETAIL_TOLERANCES.keys()),
-        'key_levels': [
-            {'level': -130, 'label': 'LGM Peak', 'description': 'Last Glacial Maximum peak (~26,000 years ago)'},
-            {'level': -120, 'label': 'Late LGM', 'description': 'Late Last Glacial Maximum (~20,000 years ago)'},
-            {'level': -80, 'label': 'Meltwater Pulse', 'description': 'Rapid sea level rise (~14,500 years ago)'},
-            {'level': -60, 'label': 'Younger Dryas', 'description': 'Cold period (~12,000 years ago)'},
-            {'level': -40, 'label': 'Early Holocene', 'description': 'Early Holocene warming (~10,000 years ago)'},
-            {'level': 0, 'label': 'Present Day', 'description': 'Current sea level'},
+        "range": {"min": min(levels), "max": max(levels)},
+        "levels": sorted(levels),
+        "details": list(DETAIL_TOLERANCES.keys()),
+        "key_levels": [
+            {
+                "level": -130,
+                "label": "LGM Peak",
+                "description": "Last Glacial Maximum peak (~26,000 years ago)",
+            },
+            {
+                "level": -120,
+                "label": "Late LGM",
+                "description": "Late Last Glacial Maximum (~20,000 years ago)",
+            },
+            {
+                "level": -80,
+                "label": "Meltwater Pulse",
+                "description": "Rapid sea level rise (~14,500 years ago)",
+            },
+            {
+                "level": -60,
+                "label": "Younger Dryas",
+                "description": "Cold period (~12,000 years ago)",
+            },
+            {
+                "level": -40,
+                "label": "Early Holocene",
+                "description": "Early Holocene warming (~10,000 years ago)",
+            },
+            {"level": 0, "label": "Present Day", "description": "Current sea level"},
         ],
-        'sources': {
-            'data': 'GEBCO 2024',
-            'url': 'https://www.gebco.net/',
-            'license': 'GEBCO is made available under a Creative Commons license'
-        }
+        "sources": {
+            "data": "GEBCO 2024",
+            "url": "https://www.gebco.net/",
+            "license": "GEBCO is made available under a Creative Commons license",
+        },
     }
 
-    output_path = output_dir / 'metadata.json'
+    output_path = output_dir / "metadata.json"
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(output_path, 'w') as f:
+    with open(output_path, "w") as f:
         json.dump(metadata, f, indent=2)
 
     logger.info("Generated metadata.json")
@@ -331,29 +370,38 @@ def generate_metadata(levels: list[int], output_dir: Path = OUTPUT_DIR):
 # Main Entry Point
 # =============================================================================
 
+
 def main():
     parser = argparse.ArgumentParser(
-        description='Generate sea level contour files from GEBCO bathymetry data'
+        description="Generate sea level contour files from GEBCO bathymetry data"
     )
     parser.add_argument(
-        '--level', '-l', type=int,
-        help='Generate contour for a single sea level (meters)'
+        "--level", "-l", type=int, help="Generate contour for a single sea level (meters)"
     )
     parser.add_argument(
-        '--range', '-r', nargs=2, type=int, metavar=('MIN', 'MAX'),
-        help=f'Sea level range to process (default: {DEFAULT_MIN_LEVEL} to {DEFAULT_MAX_LEVEL})'
+        "--range",
+        "-r",
+        nargs=2,
+        type=int,
+        metavar=("MIN", "MAX"),
+        help=f"Sea level range to process (default: {DEFAULT_MIN_LEVEL} to {DEFAULT_MAX_LEVEL})",
     )
     parser.add_argument(
-        '--gebco', '-g', type=Path, default=GEBCO_PATH,
-        help=f'Path to GEBCO NetCDF file (default: {GEBCO_PATH})'
+        "--gebco",
+        "-g",
+        type=Path,
+        default=GEBCO_PATH,
+        help=f"Path to GEBCO NetCDF file (default: {GEBCO_PATH})",
     )
     parser.add_argument(
-        '--output', '-o', type=Path, default=OUTPUT_DIR,
-        help=f'Output directory (default: {OUTPUT_DIR})'
+        "--output",
+        "-o",
+        type=Path,
+        default=OUTPUT_DIR,
+        help=f"Output directory (default: {OUTPUT_DIR})",
     )
     parser.add_argument(
-        '--no-download', action='store_true',
-        help='Do not auto-download GEBCO data if missing'
+        "--no-download", action="store_true", help="Do not auto-download GEBCO data if missing"
     )
 
     args = parser.parse_args()
@@ -366,22 +414,20 @@ def main():
     else:
         levels = list(range(DEFAULT_MIN_LEVEL, DEFAULT_MAX_LEVEL + 1))
 
-    logger.info(f"Will generate contours for {len(levels)} sea levels: {min(levels)}m to {max(levels)}m")
+    logger.info(
+        f"Will generate contours for {len(levels)} sea levels: {min(levels)}m to {max(levels)}m"
+    )
 
     start_time = time.time()
     all_stats = []
 
     # Load GEBCO data once
     elevation = load_gebco(args.gebco, auto_download=not args.no_download)
-    elevation_data = (
-        elevation.values,
-        elevation.lat.values,
-        elevation.lon.values
-    )
+    elevation_data = (elevation.values, elevation.lat.values, elevation.lon.values)
 
     # Process each level
     for i, level in enumerate(levels):
-        logger.info(f"[{i+1}/{len(levels)}] Processing {level}m...")
+        logger.info(f"[{i + 1}/{len(levels)}] Processing {level}m...")
         try:
             stats = process_level(level, elevation_data, args.output)
             all_stats.append(stats)
@@ -395,20 +441,18 @@ def main():
     elapsed = time.time() - start_time
     total_files = len(levels) * len(DETAIL_TOLERANCES)
     total_size_kb = sum(
-        stats['files'][detail]['size_kb']
-        for stats in all_stats
-        for detail in stats['files']
+        stats["files"][detail]["size_kb"] for stats in all_stats for detail in stats["files"]
     )
 
-    logger.info(f"\n{'='*60}")
+    logger.info(f"\n{'=' * 60}")
     logger.info("COMPLETE!")
     logger.info(f"  Levels processed: {len(levels)}")
     logger.info(f"  Files generated:  {total_files}")
-    logger.info(f"  Total size:       {total_size_kb/1024:.1f} MB")
-    logger.info(f"  Time elapsed:     {elapsed/60:.1f} minutes")
+    logger.info(f"  Total size:       {total_size_kb / 1024:.1f} MB")
+    logger.info(f"  Time elapsed:     {elapsed / 60:.1f} minutes")
     logger.info(f"  Output directory: {args.output}")
-    logger.info(f"{'='*60}")
+    logger.info(f"{'=' * 60}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

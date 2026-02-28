@@ -35,14 +35,38 @@ GZIP_OUTPUT = True  # Also create .gz versions
 
 # Region definitions for chunking site details
 REGIONS = {
-    "europe": {"name": "Europe", "bounds": {"min_lat": 35, "max_lat": 72, "min_lon": -10, "max_lon": 45}},
-    "mediterranean": {"name": "Mediterranean", "bounds": {"min_lat": 30, "max_lat": 46, "min_lon": -10, "max_lon": 40}},
-    "middle_east": {"name": "Middle East", "bounds": {"min_lat": 15, "max_lat": 45, "min_lon": 25, "max_lon": 65}},
-    "north_africa": {"name": "North Africa", "bounds": {"min_lat": 15, "max_lat": 38, "min_lon": -20, "max_lon": 35}},
-    "asia": {"name": "Asia", "bounds": {"min_lat": 0, "max_lat": 60, "min_lon": 60, "max_lon": 150}},
-    "americas": {"name": "Americas", "bounds": {"min_lat": -60, "max_lat": 72, "min_lon": -170, "max_lon": -30}},
-    "oceania": {"name": "Oceania", "bounds": {"min_lat": -50, "max_lat": 0, "min_lon": 100, "max_lon": 180}},
-    "africa": {"name": "Africa", "bounds": {"min_lat": -35, "max_lat": 38, "min_lon": -20, "max_lon": 55}},
+    "europe": {
+        "name": "Europe",
+        "bounds": {"min_lat": 35, "max_lat": 72, "min_lon": -10, "max_lon": 45},
+    },
+    "mediterranean": {
+        "name": "Mediterranean",
+        "bounds": {"min_lat": 30, "max_lat": 46, "min_lon": -10, "max_lon": 40},
+    },
+    "middle_east": {
+        "name": "Middle East",
+        "bounds": {"min_lat": 15, "max_lat": 45, "min_lon": 25, "max_lon": 65},
+    },
+    "north_africa": {
+        "name": "North Africa",
+        "bounds": {"min_lat": 15, "max_lat": 38, "min_lon": -20, "max_lon": 35},
+    },
+    "asia": {
+        "name": "Asia",
+        "bounds": {"min_lat": 0, "max_lat": 60, "min_lon": 60, "max_lon": 150},
+    },
+    "americas": {
+        "name": "Americas",
+        "bounds": {"min_lat": -60, "max_lat": 72, "min_lon": -170, "max_lon": -30},
+    },
+    "oceania": {
+        "name": "Oceania",
+        "bounds": {"min_lat": -50, "max_lat": 0, "min_lon": 100, "max_lon": 180},
+    },
+    "africa": {
+        "name": "Africa",
+        "bounds": {"min_lat": -35, "max_lat": 38, "min_lon": -20, "max_lon": 55},
+    },
 }
 
 
@@ -112,7 +136,8 @@ class StaticExporter:
         logger.info("\nExporting sources.json...")
 
         with get_session() as session:
-            result = session.execute(text("""
+            result = session.execute(
+                text("""
                 SELECT
                     sm.id,
                     sm.name,
@@ -126,7 +151,8 @@ class StaticExporter:
                     COALESCE(sm.record_count, 0) as record_count
                 FROM source_meta sm
                 ORDER BY sm.priority, sm.name
-            """))
+            """)
+            )
 
             sources = {}
             total_count = 0
@@ -160,13 +186,15 @@ class StaticExporter:
         Only includes names that differ from the primary name after normalization,
         and only Latin-script names (useful for search, not Arabic/Chinese/etc).
         """
-        result = session.execute(text("""
+        result = session.execute(
+            text("""
             SELECT usn.site_id, usn.name
             FROM unified_site_names usn
             JOIN unified_sites us ON us.id = usn.site_id
             WHERE usn.name_normalized != us.name_normalized
-            AND usn.name ~ '^[a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]'
-        """))
+            AND usn.name ~ '^[a-zA-Z\u00c0-\u024f\u1e00-\u1eff]'
+        """)
+        )
 
         alt_names: dict[str, list[str]] = defaultdict(list)
         seen: dict[str, set[str]] = defaultdict(set)
@@ -194,7 +222,8 @@ class StaticExporter:
             logger.info(f"  Loaded alt names for {len(alt_names_map):,} sites")
 
             # Get all sites with minimal data for markers
-            result = session.execute(text("""
+            result = session.execute(
+                text("""
                 SELECT
                     us.id,
                     us.name,
@@ -215,7 +244,8 @@ class StaticExporter:
                 FROM unified_sites us
                 LEFT JOIN card_stats cs ON cs.site_id = us.id
                 ORDER BY us.source_id, us.name
-            """))
+            """)
+            )
 
             sites = []
             source_counts = defaultdict(int)
@@ -284,7 +314,8 @@ class StaticExporter:
             for region_id, region_config in REGIONS.items():
                 bounds = region_config["bounds"]
 
-                result = session.execute(text("""
+                result = session.execute(
+                    text("""
                     SELECT
                         id,
                         source_id,
@@ -304,12 +335,14 @@ class StaticExporter:
                     FROM unified_sites
                     WHERE lat BETWEEN :min_lat AND :max_lat
                     AND lon BETWEEN :min_lon AND :max_lon
-                """), {
-                    "min_lat": bounds["min_lat"],
-                    "max_lat": bounds["max_lat"],
-                    "min_lon": bounds["min_lon"],
-                    "max_lon": bounds["max_lon"],
-                })
+                """),
+                    {
+                        "min_lat": bounds["min_lat"],
+                        "max_lat": bounds["max_lat"],
+                        "min_lon": bounds["min_lon"],
+                        "max_lon": bounds["max_lon"],
+                    },
+                )
 
                 sites = {}
                 for row in result:
@@ -326,7 +359,9 @@ class StaticExporter:
                             "start": row.period_start,
                             "end": row.period_end,
                             "name": row.period_name,
-                        } if row.period_start or row.period_end or row.period_name else None,
+                        }
+                        if row.period_start or row.period_end or row.period_name
+                        else None,
                         "country": row.country,
                         "description": row.description[:1000] if row.description else None,
                         "thumbnail": row.thumbnail_url,
@@ -351,14 +386,16 @@ class StaticExporter:
         images_dir.mkdir(parents=True, exist_ok=True)
 
         with get_session() as session:
-            result = session.execute(text("""
+            result = session.execute(
+                text("""
                 SELECT
                     site_id, filename, author, license,
                     commons_page_url, is_hero, is_lead,
                     width, height, sort_order
                 FROM wiki_images
                 ORDER BY site_id, sort_order
-            """))
+            """)
+            )
 
             index: dict[str, list] = {}
             total_images = 0
@@ -402,7 +439,8 @@ class StaticExporter:
         logger.info("\nExporting content links...")
 
         with get_session() as session:
-            result = session.execute(text("""
+            result = session.execute(
+                text("""
                 SELECT
                     site_id,
                     content_type,
@@ -412,7 +450,8 @@ class StaticExporter:
                 FROM site_content_links
                 WHERE relevance_score >= 0.2
                 ORDER BY site_id, relevance_score DESC
-            """))
+            """)
+            )
 
             links = defaultdict(lambda: defaultdict(list))
 
@@ -420,11 +459,13 @@ class StaticExporter:
                 site_id = str(row.site_id)
                 content_type = row.content_type
                 # Compact link format: [source, id, score]
-                links[site_id][content_type].append([
-                    row.content_source,
-                    row.content_id,
-                    round(row.relevance_score, 2),
-                ])
+                links[site_id][content_type].append(
+                    [
+                        row.content_source,
+                        row.content_id,
+                        round(row.relevance_score, 2),
+                    ]
+                )
 
             # Convert to regular dict for JSON serialization
             output = {
@@ -434,7 +475,9 @@ class StaticExporter:
             }
 
             save_json(self.output_dir / "links.json", output)
-            self.stats["links"] = sum(sum(len(v) for v in types.values()) for types in links.values())
+            self.stats["links"] = sum(
+                sum(len(v) for v in types.values()) for types in links.values()
+            )
             logger.info(f"  Total links: {self.stats['links']:,}")
 
     def _export_content(self):
@@ -446,7 +489,8 @@ class StaticExporter:
 
         with get_session() as session:
             # Get unique content items from links
-            result = session.execute(text("""
+            result = session.execute(
+                text("""
                 SELECT DISTINCT
                     content_type,
                     content_source,
@@ -456,7 +500,8 @@ class StaticExporter:
                     content_url,
                     link_metadata
                 FROM site_content_links
-            """))
+            """)
+            )
 
             content_by_type = defaultdict(dict)
 
@@ -494,7 +539,8 @@ class StaticExporter:
         snapshot_key = now.strftime("%Y-%m-%d_%H%M%S")
 
         with get_session() as session:
-            result = session.execute(text("""
+            result = session.execute(
+                text("""
                 SELECT
                     id, name, lat, lon, source_id, site_type,
                     period_start, period_end, period_name, country,
@@ -503,7 +549,8 @@ class StaticExporter:
                 FROM unified_sites
                 WHERE source_id IN ('ancient_nerds', 'lyra', 'ancient_nerds_community')
                 ORDER BY source_id, name
-            """))
+            """)
+            )
 
             sites = []
             source_counts = defaultdict(int)
@@ -556,7 +603,14 @@ class StaticExporter:
                 manifest = json.load(f)
 
         snapshots = manifest["snapshots"]
-        snapshots.append({"date": snapshot_key, "file": snapshot_file, "sites": len(sites), "by_source": dict(source_counts)})
+        snapshots.append(
+            {
+                "date": snapshot_key,
+                "file": snapshot_file,
+                "sites": len(sites),
+                "by_source": dict(source_counts),
+            }
+        )
         snapshots.sort(key=lambda s: s["date"], reverse=True)
         manifest["snapshots"] = snapshots
 
@@ -597,7 +651,9 @@ def main():
 
     parser = argparse.ArgumentParser(description="Export database to static JSON files")
     parser.add_argument("--output", "-o", help="Output directory", default=str(OUTPUT_DIR))
-    parser.add_argument("--sites-only", action="store_true", help="Only export sites (skip content)")
+    parser.add_argument(
+        "--sites-only", action="store_true", help="Only export sites (skip content)"
+    )
     parser.add_argument("--no-gzip", action="store_true", help="Skip gzip compression")
     args = parser.parse_args()
 

@@ -24,12 +24,13 @@ def strip_html(text: str) -> str:
     if not text:
         return text
     # Remove HTML tags
-    text = re.sub(r'<[^>]+>', ' ', text)
+    text = re.sub(r"<[^>]+>", " ", text)
     # Decode HTML entities like &#39; &amp; etc
     text = html.unescape(text)
     # Normalize whitespace
-    text = re.sub(r'\s+', ' ', text).strip()
+    text = re.sub(r"\s+", " ", text).strip()
     return text
+
 
 from loguru import logger
 from sqlalchemy import text
@@ -61,7 +62,7 @@ DATE_CUTOFF_REST_OF_WORLD = 500
 
 # Americas bounding box (longitude-based)
 AMERICAS_LON_MIN = -170  # Western Alaska/Aleutians
-AMERICAS_LON_MAX = -30   # Eastern Brazil
+AMERICAS_LON_MAX = -30  # Eastern Brazil
 
 
 def passes_date_cutoff(record: dict) -> bool:
@@ -114,7 +115,6 @@ SOURCE_CONFIG = {
         "enabled_by_default": True,
         "priority": 0,  # Highest priority
     },
-
     # Priority 1: Core ancient world databases
     "pleiades": {
         "name": "Pleiades",
@@ -149,7 +149,6 @@ SOURCE_CONFIG = {
         "license": "CC BY-NC-SA 4.0",
         "attribution": "ToposText Project",
     },
-
     # Priority 2: Global databases
     "unesco": {
         "name": "UNESCO World Heritage",
@@ -175,7 +174,6 @@ SOURCE_CONFIG = {
     },
     # GeoNames removed - 13.4M records with no period data, would add noise
     # Other sources (Pleiades, DARE, Wikidata) already cover ancient sites with proper dating
-
     # Priority 3: Regional databases
     "osm_historic": {
         "name": "OpenStreetMap Historic",
@@ -221,7 +219,6 @@ SOURCE_CONFIG = {
         "license": "CC BY-NC-SA 3.0",
         "attribution": "DAI & CoDArchLab",
     },
-
     # Priority 4: Specialized databases
     "megalithic_portal": {
         "name": "Megalithic Portal",
@@ -256,7 +253,6 @@ SOURCE_CONFIG = {
         "license": "Various",
         "attribution": "Rock Art Database",
     },
-
     # Inscriptions & Texts
     "inscriptions_edh": {
         "name": "EDH Inscriptions",
@@ -269,7 +265,6 @@ SOURCE_CONFIG = {
         "license": "CC BY-SA 3.0",
         "attribution": "Epigraphic Database Heidelberg",
     },
-
     # Maritime & Shipwrecks
     "shipwrecks_oxrep": {
         "name": "OXREP Shipwrecks",
@@ -282,7 +277,6 @@ SOURCE_CONFIG = {
         "license": "CC BY 4.0",
         "attribution": "Oxford Roman Economy Project",
     },
-
     # Numismatics
     "coins_nomisma": {
         "name": "Nomisma Coins",
@@ -295,7 +289,6 @@ SOURCE_CONFIG = {
         "license": "CC BY 4.0",
         "attribution": "Nomisma.org",
     },
-
     # Environmental
     "volcanic_holvol": {
         "name": "HolVol Volcanic",
@@ -320,7 +313,6 @@ SOURCE_CONFIG = {
         "attribution": "Earth Impact Database / Planetary and Space Science Centre",
         "priority": 26,
     },
-
     # NCEI Natural Hazards
     "ncei_earthquakes": {
         "name": "NCEI Significant Earthquakes",
@@ -366,7 +358,6 @@ SOURCE_CONFIG = {
         "license": "Public Domain",
         "attribution": "NOAA NCEI Natural Hazards",
     },
-
     # 3D Models
     "models_sketchfab": {
         "name": "Sketchfab 3D Models",
@@ -379,7 +370,6 @@ SOURCE_CONFIG = {
         "license": "Various",
         "attribution": "Sketchfab",
     },
-
     # Boundaries
     "boundaries_seshat": {
         "name": "Seshat Boundaries",
@@ -392,7 +382,6 @@ SOURCE_CONFIG = {
         "license": "CC BY-NC-SA 4.0",
         "attribution": "Seshat Databank",
     },
-
     # Middle East & Africa
     "eamena": {
         "name": "EAMENA",
@@ -405,7 +394,6 @@ SOURCE_CONFIG = {
         "license": "CC BY 4.0",
         "attribution": "EAMENA Database",
     },
-
     # Open Context
     "open_context": {
         "name": "Open Context",
@@ -418,7 +406,6 @@ SOURCE_CONFIG = {
         "license": "CC BY 4.0",
         "attribution": "Open Context",
     },
-
     # Museum Collections (content sources - may have limited geo data)
     "europeana": {
         "name": "Europeana",
@@ -431,7 +418,6 @@ SOURCE_CONFIG = {
         "license": "CC BY-SA 4.0",
         "attribution": "Europeana",
     },
-
     # Historical Maps (content source - bbox, not points)
     "david_rumsey": {
         "name": "David Rumsey Maps",
@@ -588,11 +574,14 @@ class UnifiedLoader:
         self.stats = {}
         self.skip_backup = skip_backup
 
-    def load_all(self, source_filter: str | None = None, batch_size: int = 5000, skip_loaded: bool = False):
+    def load_all(
+        self, source_filter: str | None = None, batch_size: int = 5000, skip_loaded: bool = False
+    ):
         """Load all sources or a specific source."""
         # Create backup before any destructive operations
         if not self.skip_backup:
             from pipeline.backup import create_backup
+
             logger.info("Creating backup before loading sources...")
             backup = create_backup(include_db=True, include_contributions=True)
             if not backup.success:
@@ -608,9 +597,11 @@ class UnifiedLoader:
             # Get existing record counts if skip_loaded is enabled
             existing_counts = {}
             if skip_loaded:
-                result = session.execute(text(
-                    "SELECT source_id, COUNT(*) as count FROM unified_sites GROUP BY source_id"
-                ))
+                result = session.execute(
+                    text(
+                        "SELECT source_id, COUNT(*) as count FROM unified_sites GROUP BY source_id"
+                    )
+                )
                 existing_counts = {row.source_id: row.count for row in result}
 
             for source_id in sources_to_load:
@@ -620,14 +611,20 @@ class UnifiedLoader:
 
                 # Skip if already loaded
                 if skip_loaded and source_id in existing_counts and existing_counts[source_id] > 0:
-                    logger.info(f"Skipping {source_id} - already has {existing_counts[source_id]:,} records")
-                    self.stats[source_id] = {"success": True, "count": existing_counts[source_id], "skipped": True}
+                    logger.info(
+                        f"Skipping {source_id} - already has {existing_counts[source_id]:,} records"
+                    )
+                    self.stats[source_id] = {
+                        "success": True,
+                        "count": existing_counts[source_id],
+                        "skipped": True,
+                    }
                     continue
 
                 config = SOURCE_CONFIG[source_id]
-                logger.info(f"\n{'='*60}")
+                logger.info(f"\n{'=' * 60}")
                 logger.info(f"Loading {config['name']} ({source_id})")
-                logger.info(f"{'='*60}")
+                logger.info(f"{'=' * 60}")
 
                 try:
                     count = self._load_source(session, source_id, config, batch_size)
@@ -635,8 +632,10 @@ class UnifiedLoader:
 
                     # Update source meta record count
                     session.execute(
-                        text("UPDATE source_meta SET record_count = :count, last_loaded = NOW() WHERE id = :id"),
-                        {"count": count, "id": source_id}
+                        text(
+                            "UPDATE source_meta SET record_count = :count, last_loaded = NOW() WHERE id = :id"
+                        ),
+                        {"count": count, "id": source_id},
                     )
                     session.commit()
 
@@ -657,31 +656,35 @@ class UnifiedLoader:
             enabled_by_default = config.get("enabled_by_default", False)
             priority = config.get("priority", list(SOURCE_CONFIG.keys()).index(source_id) + 1)
 
-            stmt = insert(SourceMeta).values(
-                id=source_id,
-                name=config["name"],
-                description=config.get("description"),
-                color=config.get("color"),
-                icon=config.get("icon"),
-                category=config.get("category"),
-                license=config.get("license"),
-                attribution=config.get("attribution"),
-                enabled=True,
-                is_primary=is_primary,
-                enabled_by_default=enabled_by_default,
-                priority=priority,
-            ).on_conflict_do_update(
-                index_elements=["id"],
-                set_={
-                    "name": config["name"],
-                    "description": config.get("description"),
-                    "color": config.get("color"),
-                    "icon": config.get("icon"),
-                    "category": config.get("category"),
-                    "is_primary": is_primary,
-                    "enabled_by_default": enabled_by_default,
-                    "priority": priority,
-                }
+            stmt = (
+                insert(SourceMeta)
+                .values(
+                    id=source_id,
+                    name=config["name"],
+                    description=config.get("description"),
+                    color=config.get("color"),
+                    icon=config.get("icon"),
+                    category=config.get("category"),
+                    license=config.get("license"),
+                    attribution=config.get("attribution"),
+                    enabled=True,
+                    is_primary=is_primary,
+                    enabled_by_default=enabled_by_default,
+                    priority=priority,
+                )
+                .on_conflict_do_update(
+                    index_elements=["id"],
+                    set_={
+                        "name": config["name"],
+                        "description": config.get("description"),
+                        "color": config.get("color"),
+                        "icon": config.get("icon"),
+                        "category": config.get("category"),
+                        "is_primary": is_primary,
+                        "enabled_by_default": enabled_by_default,
+                        "priority": priority,
+                    },
+                )
             )
             session.execute(stmt)
         session.commit()
@@ -712,8 +715,7 @@ class UnifiedLoader:
 
         # Delete existing records for this source
         session.execute(
-            text("DELETE FROM unified_sites WHERE source_id = :sid"),
-            {"sid": source_id}
+            text("DELETE FROM unified_sites WHERE source_id = :sid"), {"sid": source_id}
         )
 
         # Load records in batches
@@ -759,7 +761,9 @@ class UnifiedLoader:
             logger.info(f"  Enriched {enriched_count:,} records with country data")
 
         if filtered_by_date > 0:
-            logger.info(f"  Filtered {filtered_by_date:,} records by date cutoff (>500 AD Old World, >1500 AD Americas)")
+            logger.info(
+                f"  Filtered {filtered_by_date:,} records by date cutoff (>500 AD Old World, >1500 AD Americas)"
+            )
 
         session.commit()
         return total
@@ -772,7 +776,13 @@ class UnifiedLoader:
         # Sanitize records to fix SQLAlchemy binding issues
         # All records must have the same keys for bulk insert
         # Explicitly set missing optional fields to None
-        optional_string_fields = ["country", "description", "thumbnail_url", "source_url", "period_name"]
+        optional_string_fields = [
+            "country",
+            "description",
+            "thumbnail_url",
+            "source_url",
+            "period_name",
+        ]
         sanitized = []
         for record in records:
             clean = dict(record)  # Copy the record
@@ -833,8 +843,12 @@ class UnifiedLoader:
                     "site_type": self._normalize_type(row.get("featureTypes", "")),
                     "period_start": parse_year(row.get("minDate")),
                     "period_end": parse_year(row.get("maxDate")),
-                    "period_name": row.get("timePeriods", "")[:100] if row.get("timePeriods") else None,
-                    "description": row.get("description", "")[:2000] if row.get("description") else None,
+                    "period_name": row.get("timePeriods", "")[:100]
+                    if row.get("timePeriods")
+                    else None,
+                    "description": row.get("description", "")[:2000]
+                    if row.get("description")
+                    else None,
                     "source_url": f"https://pleiades.stoa.org{row.get('path', '')}",
                     "raw_data": {
                         "tags": row.get("tags"),
@@ -876,7 +890,10 @@ class UnifiedLoader:
                 name = props.get("Name", "")
                 record_id = str(props.get("ListEntry", props.get("OBJECTID", "")))
                 site_type = "scheduled_monument"
-                source_url = props.get("hyperlink", f"https://historicengland.org.uk/listing/the-list/list-entry/{record_id}")
+                source_url = props.get(
+                    "hyperlink",
+                    f"https://historicengland.org.uk/listing/the-list/list-entry/{record_id}",
+                )
             elif source_id == "ireland_nms":
                 name = props.get("MONUMENT_CLASS", props.get("TOWNLAND", ""))
                 record_id = props.get("ENTITY_ID", props.get("SMRS", ""))
@@ -899,8 +916,14 @@ class UnifiedLoader:
                 "lat": lat,
                 "lon": lon,
                 "site_type": site_type,
-                "country": props.get("country", props.get("COUNTY", ""))[:100] if props.get("country") or props.get("COUNTY") else None,
-                "description": props.get("description", props.get("short_description_en", ""))[:2000] if props.get("description") or props.get("short_description_en") else None,
+                "country": props.get("country", props.get("COUNTY", ""))[:100]
+                if props.get("country") or props.get("COUNTY")
+                else None,
+                "description": props.get("description", props.get("short_description_en", ""))[
+                    :2000
+                ]
+                if props.get("description") or props.get("short_description_en")
+                else None,
                 "source_url": source_url[:500] if source_url else None,
                 "raw_data": {k: v for k, v in props.items() if k not in ("name", "description")},
             }
@@ -972,7 +995,9 @@ class UnifiedLoader:
                 },
             }
 
-    def _parse_geojson_ancient_nerds(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
+    def _parse_geojson_ancient_nerds(
+        self, path: Path, source_id: str, config: dict
+    ) -> Iterator[dict]:
         """Parse Ancient Nerds original GeoJSON format with rich descriptions."""
         # Period mapping from text to numeric years
         PERIOD_MAPPING = {
@@ -1053,7 +1078,9 @@ class UnifiedLoader:
                 "period_end": period_end,
                 "period_name": period_name[:100] if period_name else None,
                 "country": country[:100] if country else None,
-                "description": description[:5000] if description else None,  # Allow longer descriptions
+                "description": description[:5000]
+                if description
+                else None,  # Allow longer descriptions
                 "thumbnail_url": image_url[:500] if image_url else None,
                 "source_url": source_url[:500] if source_url else None,
                 "raw_data": {
@@ -1111,8 +1138,12 @@ class UnifiedLoader:
                 "lat": lat,
                 "lon": lon,
                 "site_type": site_type,
-                "country": item.get("countryLabel", {}).get("value", "")[:100] if item.get("countryLabel") else None,
-                "description": item.get("itemDescription", {}).get("value", "")[:2000] if item.get("itemDescription") else None,
+                "country": item.get("countryLabel", {}).get("value", "")[:100]
+                if item.get("countryLabel")
+                else None,
+                "description": item.get("itemDescription", {}).get("value", "")[:2000]
+                if item.get("itemDescription")
+                else None,
                 "source_url": item_uri,
                 "raw_data": {"wikidata_id": record_id},
             }
@@ -1160,7 +1191,9 @@ class UnifiedLoader:
                 "lat": lat,
                 "lon": lon,
                 "site_type": site_type,
-                "description": tags.get("description", "")[:2000] if tags.get("description") else None,
+                "description": tags.get("description", "")[:2000]
+                if tags.get("description")
+                else None,
                 "source_url": f"https://www.openstreetmap.org/{elem.get('type', 'node')}/{elem.get('id', '')}",
                 "raw_data": {
                     "osm_type": elem.get("type"),
@@ -1216,8 +1249,12 @@ class UnifiedLoader:
                 "lat": lat,
                 "lon": lon,
                 "site_type": self._normalize_type(place.get("type", "")),
-                "country": place.get("country", place.get("region", ""))[:100] if place.get("country") or place.get("region") else None,
-                "description": place.get("description", "")[:2000] if place.get("description") else None,
+                "country": place.get("country", place.get("region", ""))[:100]
+                if place.get("country") or place.get("region")
+                else None,
+                "description": place.get("description", "")[:2000]
+                if place.get("description")
+                else None,
                 "source_url": tt_url or f"https://topostext.org/place/{record_id}",
                 "raw_data": {
                     "pleiades": place.get("Pleiades"),
@@ -1234,9 +1271,24 @@ class UnifiedLoader:
 
         # Find the array of sites (could be under different keys)
         sites = []
-        for key in ["sites", "records", "items", "features", "results", "objects", "inscriptions",
-                    "models", "boundaries", "eruptions", "shipwrecks", "wrecks",
-                    "earthquakes", "tsunamis", "volcanoes", "observations"]:
+        for key in [
+            "sites",
+            "records",
+            "items",
+            "features",
+            "results",
+            "objects",
+            "inscriptions",
+            "models",
+            "boundaries",
+            "eruptions",
+            "shipwrecks",
+            "wrecks",
+            "earthquakes",
+            "tsunamis",
+            "volcanoes",
+            "observations",
+        ]:
             if key in data:
                 sites = data[key]
                 break
@@ -1278,9 +1330,15 @@ class UnifiedLoader:
             if not (-90 <= lat <= 90 and -180 <= lon <= 180):
                 continue
 
-            name = (site.get("name") or site.get("title") or site.get("label") or
-                    site.get("volcano_name") or site.get("site_name") or
-                    site.get("location_name") or "")
+            name = (
+                site.get("name")
+                or site.get("title")
+                or site.get("label")
+                or site.get("volcano_name")
+                or site.get("site_name")
+                or site.get("location_name")
+                or ""
+            )
             if not name:
                 continue
 
@@ -1297,7 +1355,9 @@ class UnifiedLoader:
                 if year is not None and year > PERIOD_CUTOFF:
                     continue  # Skip modern eruptions
 
-            record_id = site.get("id") or site.get("_id") or site.get("uid") or str(uuid.uuid4())[:8]
+            record_id = (
+                site.get("id") or site.get("_id") or site.get("uid") or str(uuid.uuid4())[:8]
+            )
             record_id = str(record_id)
 
             # Determine site_type - special handling for NCEI sources that don't have type in records
@@ -1322,12 +1382,20 @@ class UnifiedLoader:
                 "lon": lon,
                 "site_type": site_type,
                 "period_start": self._derive_period_start(source_id, site),
-                "period_end": parse_year(site.get("date_end", site.get("period_end", site.get("year_end")))),
-                "country": site.get("country", site.get("region", ""))[:100] if site.get("country") or site.get("region") else None,
+                "period_end": parse_year(
+                    site.get("date_end", site.get("period_end", site.get("year_end")))
+                ),
+                "country": site.get("country", site.get("region", ""))[:100]
+                if site.get("country") or site.get("region")
+                else None,
                 "description": self._build_description(site),
-                "source_url": site.get("url", site.get("source_url", site.get("link", "")))[:500] if site.get("url") or site.get("source_url") or site.get("link") else None,
+                "source_url": site.get("url", site.get("source_url", site.get("link", "")))[:500]
+                if site.get("url") or site.get("source_url") or site.get("link")
+                else None,
                 "thumbnail_url": self._extract_thumbnail(site),
-                "raw_data": {k: v for k, v in site.items() if k not in ("name", "lat", "lon", "description")},
+                "raw_data": {
+                    k: v for k, v in site.items() if k not in ("name", "lat", "lon", "description")
+                },
             }
 
     def _parse_arachne(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
@@ -1376,7 +1444,9 @@ class UnifiedLoader:
                 "country": places[0].get("country", "")[:100] if places[0].get("country") else None,
                 "description": item.get("subtitle", "")[:2000] if item.get("subtitle") else None,
                 "source_url": item.get("@id", f"https://arachne.dainst.org/entity/{record_id}"),
-                "thumbnail_url": f"https://arachne.dainst.org/data/image/thumb/{item.get('thumbnailId')}" if item.get("thumbnailId") else None,
+                "thumbnail_url": f"https://arachne.dainst.org/data/image/thumb/{item.get('thumbnailId')}"
+                if item.get("thumbnailId")
+                else None,
                 "raw_data": {
                     "entity_id": record_id,
                     "type": item.get("type"),
@@ -1481,7 +1551,9 @@ class UnifiedLoader:
                 "site_type": "mint",
                 "period_start": parse_year(mint.get("start_date")),
                 "period_end": parse_year(mint.get("end_date")),
-                "description": mint.get("definition", "")[:2000] if mint.get("definition") else None,
+                "description": mint.get("definition", "")[:2000]
+                if mint.get("definition")
+                else None,
                 "source_url": mint.get("uri", ""),
                 "raw_data": {
                     "type": "mint",
@@ -1560,7 +1632,11 @@ class UnifiedLoader:
             if date_end is not None and date_end > PERIOD_CUTOFF:
                 continue  # Skip post-ancient inscriptions
 
-            name = insc.get("ancient_place") or insc.get("modern_place") or f"Inscription {insc.get('edh_id', '')}"
+            name = (
+                insc.get("ancient_place")
+                or insc.get("modern_place")
+                or f"Inscription {insc.get('edh_id', '')}"
+            )
             record_id = insc.get("edh_id", insc.get("id", ""))
 
             yield {
@@ -1574,8 +1650,12 @@ class UnifiedLoader:
                 "period_start": parse_year(insc.get("date_start")),
                 "period_end": parse_year(insc.get("date_end")),
                 "country": insc.get("country", "")[:100] if insc.get("country") else None,
-                "description": f"Type: {insc.get('inscription_type', '')}; Material: {insc.get('material', '')}; Find spot: {insc.get('find_spot', '')}"[:2000],
-                "source_url": insc.get("source_url", f"https://edh.ub.uni-heidelberg.de/edh/inschrift/{record_id}"),
+                "description": f"Type: {insc.get('inscription_type', '')}; Material: {insc.get('material', '')}; Find spot: {insc.get('find_spot', '')}"[
+                    :2000
+                ],
+                "source_url": insc.get(
+                    "source_url", f"https://edh.ub.uni-heidelberg.de/edh/inschrift/{record_id}"
+                ),
                 "raw_data": {
                     "edh_id": record_id,
                     "inscription_type": insc.get("inscription_type"),
@@ -1688,19 +1768,26 @@ class UnifiedLoader:
         - In raw_data: thumbnail, primary_image, image_url, etc.
         """
         # Check top-level fields first
-        for field in ['thumbnail', 'thumbnail_url', 'image', 'primary_image']:
+        for field in ["thumbnail", "thumbnail_url", "image", "primary_image"]:
             if site.get(field):
                 url = str(site[field])[:500]
-                if url.startswith('http'):
+                if url.startswith("http"):
                     return url
 
         # Check inside raw_data
-        raw_data = site.get('raw_data', {})
+        raw_data = site.get("raw_data", {})
         if raw_data and isinstance(raw_data, dict):
-            for field in ['thumbnail', 'thumbnail_url', 'primary_image', 'image', 'image_url', 'depiction']:
+            for field in [
+                "thumbnail",
+                "thumbnail_url",
+                "primary_image",
+                "image",
+                "image_url",
+                "depiction",
+            ]:
                 if raw_data.get(field):
                     url = str(raw_data[field])[:500]
-                    if url.startswith('http'):
+                    if url.startswith("http"):
                         return url
 
         return None
@@ -1745,7 +1832,6 @@ class UnifiedLoader:
             "civitas": "settlement",
             "oppidum": "settlement",
             "vicus": "settlement",
-
             # Religious
             "temple": "temple",
             "sanctuary": "temple",
@@ -1755,7 +1841,6 @@ class UnifiedLoader:
             "monastery": "monastery",
             "cathedral": "church",
             "chapel": "church",
-
             # Fortifications
             "fort": "fort",
             "fortress": "fort",
@@ -1763,7 +1848,6 @@ class UnifiedLoader:
             "fortification": "fort",
             "hillfort": "fort",
             "castra": "fort",
-
             # Tombs & Burial
             "tomb": "tomb",
             "burial": "tomb",
@@ -1773,7 +1857,6 @@ class UnifiedLoader:
             "tumulus": "tomb",
             "barrow": "tomb",
             "cairn": "tomb",
-
             # Monuments
             "monument": "monument",
             "memorial": "monument",
@@ -1785,7 +1868,6 @@ class UnifiedLoader:
             "stone_circle": "monument",
             "dolmen": "monument",
             "menhir": "monument",
-
             # Infrastructure
             "road": "road",
             "bridge": "bridge",
@@ -1794,7 +1876,6 @@ class UnifiedLoader:
             "gate": "gate",
             "harbor": "port",
             "port": "port",
-
             # Other built structures
             "theater": "theater",
             "theatre": "theater",
@@ -1808,7 +1889,6 @@ class UnifiedLoader:
             "agora": "forum",
             "palace": "palace",
             "villa": "villa",
-
             # Natural features
             "mountain": "natural_feature",
             "river": "natural_feature",
@@ -1816,22 +1896,18 @@ class UnifiedLoader:
             "lake": "natural_feature",
             "spring": "natural_feature",
             "cave": "cave",
-
             # Archaeological categories
             "archaeological_site": "archaeological_site",
             "excavation": "archaeological_site",
             "ruin": "ruin",
             "ruins": "ruin",
-
             # Inscriptions & Art
             "inscription": "inscription",
             "rock_art": "rock_art",
             "petroglyph": "rock_art",
-
             # Maritime
             "shipwreck": "shipwreck",
             "wreck": "shipwreck",
-
             # Environmental / Geological
             "volcano": "volcano",
             "eruption": "volcano",
@@ -1881,7 +1957,11 @@ class UnifiedLoader:
     def _derive_period_start(self, source_id: str, site: dict) -> int | None:
         """Derive period_start from site data, with special handling for certain sources."""
         # First try standard date fields
-        period = parse_year(site.get("date_start", site.get("period_start", site.get("year_start", site.get("year")))))
+        period = parse_year(
+            site.get(
+                "date_start", site.get("period_start", site.get("year_start", site.get("year")))
+            )
+        )
         if period is not None:
             return period
 
@@ -1917,7 +1997,9 @@ class UnifiedLoader:
                 logger.error(f"  X {source_id}: {stat.get('error', 'Unknown error')}")
 
         logger.info("-" * 60)
-        logger.info(f"Total: {total_records:,} records | Loaded: {success} | Skipped: {skipped} | Failed: {failed}")
+        logger.info(
+            f"Total: {total_records:,} records | Loaded: {success} | Skipped: {skipped} | Failed: {failed}"
+        )
 
 
 def main():
@@ -1928,19 +2010,25 @@ def main():
     parser.add_argument("--source", "-s", help="Load only specific source")
     parser.add_argument("--status", action="store_true", help="Show loading status")
     parser.add_argument("--batch-size", type=int, default=5000, help="Batch size for inserts")
-    parser.add_argument("--skip-loaded", action="store_true", help="Skip sources that already have records")
-    parser.add_argument("--no-backup", action="store_true", help="Skip backup before loading (use with caution)")
+    parser.add_argument(
+        "--skip-loaded", action="store_true", help="Skip sources that already have records"
+    )
+    parser.add_argument(
+        "--no-backup", action="store_true", help="Skip backup before loading (use with caution)"
+    )
     args = parser.parse_args()
 
     if args.status:
         # Show current database status
         with get_session() as session:
-            result = session.execute(text("""
+            result = session.execute(
+                text("""
                 SELECT source_id, COUNT(*) as count
                 FROM unified_sites
                 GROUP BY source_id
                 ORDER BY count DESC
-            """))
+            """)
+            )
 
             print("\nCurrent unified_sites counts:")
             print("-" * 40)
@@ -1953,7 +2041,9 @@ def main():
         return
 
     loader = UnifiedLoader(skip_backup=args.no_backup)
-    loader.load_all(source_filter=args.source, batch_size=args.batch_size, skip_loaded=args.skip_loaded)
+    loader.load_all(
+        source_filter=args.source, batch_size=args.batch_size, skip_loaded=args.skip_loaded
+    )
 
 
 if __name__ == "__main__":

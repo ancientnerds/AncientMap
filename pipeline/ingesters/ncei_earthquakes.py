@@ -32,7 +32,9 @@ class NCEIEarthquakesIngester(BaseIngester):
     source_name = "NCEI Significant Earthquakes"
 
     # ArcGIS REST endpoint for significant earthquakes (Layer 5)
-    API_URL = "https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/hazards/MapServer/5/query"
+    API_URL = (
+        "https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/hazards/MapServer/5/query"
+    )
 
     # Max records per request (ArcGIS limit)
     PAGE_SIZE = 1000
@@ -90,7 +92,9 @@ class NCEIEarthquakesIngester(BaseIngester):
                         all_earthquakes.append(parsed)
 
                 logger.info(f"Fetched {len(features)} earthquakes (total: {len(all_earthquakes)})")
-                self.report_progress(len(all_earthquakes), None, f"{len(all_earthquakes):,} earthquakes")
+                self.report_progress(
+                    len(all_earthquakes), None, f"{len(all_earthquakes):,} earthquakes"
+                )
 
                 if len(features) < self.PAGE_SIZE:
                     break
@@ -112,7 +116,7 @@ class NCEIEarthquakesIngester(BaseIngester):
                 "total_earthquakes": len(all_earthquakes),
                 "license": "Public Domain",
                 "attribution": "NOAA NCEI Natural Hazards",
-            }
+            },
         }
 
         atomic_write_json(dest_path, output)

@@ -15,9 +15,7 @@ logger = logging.getLogger(__name__)
 MAX_CLIP_DURATION = 15
 
 
-def _download_clip(
-    video_id: str, start: int, duration: int, output_path: Path
-) -> bool:
+def _download_clip(video_id: str, start: int, duration: int, output_path: Path) -> bool:
     """Download a segment of a YouTube video using yt-dlp.
 
     Args:
@@ -35,10 +33,14 @@ def _download_clip(
 
     cmd = [
         "yt-dlp",
-        "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
-        "--download-sections", f"*{start}-{end}",
-        "--merge-output-format", "mp4",
-        "-o", str(output_path),
+        "-f",
+        "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+        "--download-sections",
+        f"*{start}-{end}",
+        "--merge-output-format",
+        "mp4",
+        "-o",
+        str(output_path),
         "--no-playlist",
         "--quiet",
         url,
@@ -132,7 +134,11 @@ def collect_assets(script: dict, output_dir: Path, api_base_url: str = "") -> di
         # Download screenshot
         screenshot_url = visuals.get("screenshot_url")
         if screenshot_url:
-            full_url = f"{api_base_url}{screenshot_url}" if screenshot_url.startswith("/") else screenshot_url
+            full_url = (
+                f"{api_base_url}{screenshot_url}"
+                if screenshot_url.startswith("/")
+                else screenshot_url
+            )
             screenshot_path = images_dir / f"screen_{i:02d}.jpg"
             if _download_image(full_url, screenshot_path):
                 manifest["screenshots"][f"segment_{i}"] = str(screenshot_path)
@@ -149,6 +155,8 @@ def collect_assets(script: dict, output_dir: Path, api_base_url: str = "") -> di
     clip_count = len(manifest["clips"])
     screen_count = len(manifest["screenshots"])
     wiki_count = len(manifest["wiki_images"])
-    logger.info(f"Assets collected: {clip_count} clips, {screen_count} screenshots, {wiki_count} wiki images")
+    logger.info(
+        f"Assets collected: {clip_count} clips, {screen_count} screenshots, {wiki_count} wiki images"
+    )
 
     return manifest

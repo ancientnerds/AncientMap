@@ -146,6 +146,7 @@ def get_redis_client():
     """Get Redis client from API cache module."""
     try:
         from api.cache import get_redis_client as api_get_redis
+
         return api_get_redis()
     except ImportError:
         logger.debug("Redis client not available")

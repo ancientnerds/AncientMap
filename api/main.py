@@ -69,6 +69,7 @@ async def lifespan(app: FastAPI):
 
     # Startup: verify critical configuration
     from api.services.jwt_auth import verify_secret_key
+
     verify_secret_key()
 
     # Startup: ensure new tables exist + warm up connections
@@ -76,11 +77,13 @@ async def lifespan(app: FastAPI):
     try:
         import api.cardgame.models  # noqa: F401 — register Achievement/UserAchievement before create_all
         from pipeline.database import Base, engine
+
         Base.metadata.create_all(bind=engine)
         # Add columns that models define but create_all won't add to existing tables.
         # Note: unified_sites ALTERs live in pipeline/lyra/orchestrator.py migrations
         # to avoid lock contention when both containers start simultaneously.
         from sqlalchemy import text as _text
+
         _api_migrations = [
             """DO $$ BEGIN
                 ALTER TABLE discord_users ADD CONSTRAINT credits_non_negative CHECK (credits >= 0);
@@ -99,12 +102,16 @@ async def lifespan(app: FastAPI):
             with engine.begin() as conn:
                 conn.execute(_text("SET statement_timeout = '120s'"))
                 conn.execute(_text(_sql))
-        logger.info("[STARTUP] Database tables verified (includes discord_users, credit_grants, token_usage_logs)")
+        logger.info(
+            "[STARTUP] Database tables verified (includes discord_users, credit_grants, token_usage_logs)"
+        )
 
         # Seed achievement definitions (idempotent upsert)
         from pipeline.database import get_session as _get_session
+
         with _get_session() as _session:
             from api.cardgame.achievements import seed_achievements
+
             count = seed_achievements(_session)
             logger.info(f"[STARTUP] Seeded {count} achievement definitions")
     except Exception as e:
@@ -114,14 +121,17 @@ async def lifespan(app: FastAPI):
     # Import card descriptions from JSON (idempotent — runs every startup)
     try:
         from pipeline.database import get_session
+
         desc_path = Path("public/data/card_descriptions.json")
         if desc_path.exists():
             import json as _json
+
             with open(desc_path, encoding="utf-8") as _f:
                 _desc_data = _json.load(_f)
             descriptions = _desc_data.get("descriptions", {})
             if descriptions:
                 from sqlalchemy import text as _t
+
                 with get_session() as _s:
                     updated = 0
                     for _sid, _desc in descriptions.items():
@@ -140,10 +150,15 @@ async def lifespan(app: FastAPI):
                     if updated:
                         # Flush sites cache so fresh queries include cd
                         from api.cache import cache_delete_pattern as _cdp
+
                         _cdp("sites:*")
-                        logger.info(f"[STARTUP] Imported {updated} card descriptions (cache flushed)")
+                        logger.info(
+                            f"[STARTUP] Imported {updated} card descriptions (cache flushed)"
+                        )
                     else:
-                        logger.info(f"[STARTUP] Card descriptions already up to date ({len(descriptions)} checked)")
+                        logger.info(
+                            f"[STARTUP] Card descriptions already up to date ({len(descriptions)} checked)"
+                        )
     except Exception as e:
         logger.warning(f"[STARTUP] Card description import failed (non-fatal): {e}")
 
@@ -156,6 +171,7 @@ async def lifespan(app: FastAPI):
         if contributions:
             with get_session() as session:
                 from sqlalchemy import text as sql_text
+
                 migrated = 0
                 for c in contributions:
                     cid = c.get("id")
@@ -168,7 +184,8 @@ async def lifespan(app: FastAPI):
                     ).fetchone()
                     if exists:
                         continue
-                    session.execute(sql_text("""
+                    session.execute(
+                        sql_text("""
                         INSERT INTO unified_sites (
                             id, source_id, source_record_id, name, lat, lon,
                             site_type, country, description, source_url, edited_by
@@ -177,20 +194,24 @@ async def lifespan(app: FastAPI):
                             :lat, :lon, :site_type, :country, :description,
                             :source_url, 'user'
                         )
-                    """), {
-                        "id": cid,
-                        "name": c.get("name", "Unknown"),
-                        "lat": c.get("lat") or 0,
-                        "lon": c.get("lon") or 0,
-                        "site_type": c.get("site_type"),
-                        "country": c.get("country"),
-                        "description": c.get("description"),
-                        "source_url": c.get("source_url"),
-                    })
+                    """),
+                        {
+                            "id": cid,
+                            "name": c.get("name", "Unknown"),
+                            "lat": c.get("lat") or 0,
+                            "lon": c.get("lon") or 0,
+                            "site_type": c.get("site_type"),
+                            "country": c.get("country"),
+                            "description": c.get("description"),
+                            "source_url": c.get("source_url"),
+                        },
+                    )
                     migrated += 1
                 session.commit()
                 if migrated:
-                    logger.info(f"[STARTUP] Migrated {migrated} JSON contributions to unified_sites")
+                    logger.info(
+                        f"[STARTUP] Migrated {migrated} JSON contributions to unified_sites"
+                    )
     except Exception as e:
         logger.warning(f"[STARTUP] Contribution migration failed (non-fatal): {e}")
 
@@ -201,6 +222,7 @@ async def lifespan(app: FastAPI):
             import asyncio
 
             from api.services.discord_bot import start_bot
+
             asyncio.create_task(start_bot())
             print("[STARTUP] Discord bot task created", flush=True)
         else:
@@ -210,6 +232,7 @@ async def lifespan(app: FastAPI):
 
     # Start nightly vector reindex scheduler
     from api.routes.vector_sync import start_nightly_scheduler
+
     start_nightly_scheduler()
 
     get_redis_client()  # Initialize Redis connection
@@ -236,8 +259,12 @@ async def lifespan(app: FastAPI):
                 sites = []
                 for row in result:
                     site = {
-                        "id": row.id, "n": row.name, "la": row.lat,
-                        "lo": row.lon, "s": row.source_id, "t": row.site_type,
+                        "id": row.id,
+                        "n": row.name,
+                        "la": row.lat,
+                        "lo": row.lon,
+                        "s": row.source_id,
+                        "t": row.site_type,
                         "p": row.period_start,
                     }
                     if row.thumbnail_url:
@@ -248,7 +275,9 @@ async def lifespan(app: FastAPI):
 
                 response = {"count": len(sites), "sites": sites}
                 cache_set(cache_key, response, ttl=1800)  # 30 minutes
-                logger.info(f"[STARTUP] Pre-warmed cache with {len(sites)} sites in {(time.time()-start)*1000:.0f}ms")
+                logger.info(
+                    f"[STARTUP] Pre-warmed cache with {len(sites)} sites in {(time.time() - start) * 1000:.0f}ms"
+                )
         else:
             logger.info("[STARTUP] Sites cache already warm")
     except Exception as e:
@@ -259,6 +288,7 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down...")
     try:
         from api.services.discord_bot import stop_bot
+
         await stop_bot()
     except Exception as e:
         logger.warning(f"Discord bot shutdown error: {e}")
@@ -325,13 +355,20 @@ app.mount("/data/images/wiki", StaticFiles(directory=str(_wiki_images_dir)), nam
 # Serve news screenshots as static files
 _screenshots_dir = Path("public/data/news/screenshots")
 _screenshots_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/api/news/screenshots", StaticFiles(directory=str(_screenshots_dir)), name="news-screenshots")
+app.mount(
+    "/api/news/screenshots", StaticFiles(directory=str(_screenshots_dir)), name="news-screenshots"
+)
 
 
 @app.get("/")
 async def root():
     """Health check endpoint."""
-    return {"status": "ok", "version": "1.0.0", "commit": BUILD_HASH, "service": "Ancient Nerds Map API"}
+    return {
+        "status": "ok",
+        "version": "1.0.0",
+        "commit": BUILD_HASH,
+        "service": "Ancient Nerds Map API",
+    }
 
 
 @app.get("/api/stats")
@@ -353,12 +390,14 @@ async def stats():
         total_sites = result.scalar()
 
         # By source
-        result = session.execute(text("""
+        result = session.execute(
+            text("""
             SELECT source_id, COUNT(*) as count
             FROM unified_sites
             GROUP BY source_id
             ORDER BY count DESC
-        """))
+        """)
+        )
         by_source = {row.source_id: row.count for row in result}
 
     response = {

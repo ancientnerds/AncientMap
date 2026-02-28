@@ -125,7 +125,7 @@ class DAREIngester(BaseIngester):
                 "source_url": "https://imperium.ahlfeldt.se/",
                 "fetched_at": datetime.now(UTC).isoformat(),
                 "total_places": len(features),
-            }
+            },
         }
 
         atomic_write_json(dest_path, output)

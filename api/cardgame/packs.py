@@ -116,16 +116,18 @@ def open_pack(
     user.credits -= cost
 
     # Audit trail
-    session.add(CreditGrant(
-        user_id=user.id,
-        amount=-cost,
-        reason=f"card_pack_{pack_type}",
-    ))
+    session.add(
+        CreditGrant(
+            user_id=user.id,
+            amount=-cost,
+            reason=f"card_pack_{pack_type}",
+        )
+    )
 
     # Get user's existing collection
     owned_ids = {
-        row[0] for row in
-        session.query(CardCollection.site_id)
+        row[0]
+        for row in session.query(CardCollection.site_id)
         .filter(CardCollection.user_id == user.id)
         .all()
     }
@@ -140,11 +142,7 @@ def open_pack(
 
         if card is None:
             # No cards exist at this tier at all — try any tier
-            card = (
-                session.query(CardStats)
-                .order_by(func.random())
-                .first()
-            )
+            card = session.query(CardStats).order_by(func.random()).first()
 
         if card is None:
             continue
@@ -162,11 +160,13 @@ def open_pack(
         else:
             # New card
             owned_ids.add(card.site_id)
-            session.add(CardCollection(
-                user_id=user.id,
-                site_id=card.site_id,
-                acquired_via=f"pack_{pack_type}",
-            ))
+            session.add(
+                CardCollection(
+                    user_id=user.id,
+                    site_id=card.site_id,
+                    acquired_via=f"pack_{pack_type}",
+                )
+            )
             card_dict["duplicate"] = False
             card_dict["star_level"] = 1
             card_dict["card_xp"] = 0
@@ -175,12 +175,14 @@ def open_pack(
         cards_out.append(card_dict)
 
     # Log the pack opening
-    session.add(CardPackLog(
-        user_id=user.id,
-        pack_type=pack_type,
-        credits_spent=cost,
-        cards_received=[str(c["site_id"]) for c in cards_out],
-    ))
+    session.add(
+        CardPackLog(
+            user_id=user.id,
+            pack_type=pack_type,
+            credits_spent=cost,
+            cards_received=[str(c["site_id"]) for c in cards_out],
+        )
+    )
 
     # Update player stats (only count genuinely new cards)
     new_card_count = sum(1 for c in cards_out if not c.get("duplicate"))
@@ -189,11 +191,13 @@ def open_pack(
         player_stats.total_cards += new_card_count
         player_stats.packs_opened += 1
     else:
-        session.add(CardPlayerStats(
-            user_id=user.id,
-            total_cards=new_card_count,
-            packs_opened=1,
-        ))
+        session.add(
+            CardPlayerStats(
+                user_id=user.id,
+                total_cards=new_card_count,
+                packs_opened=1,
+            )
+        )
 
     return cards_out
 
@@ -204,8 +208,10 @@ def _card_to_dict(session: Session, card: CardStats, user_id: uuid.UUID | None =
     If user_id is provided, includes star_level and card_xp from their collection.
     """
     from pipeline.database import UnifiedSite
+
     site = session.get(UnifiedSite, card.site_id)
     from api.cardgame.constants import RARITY_NAMES, STAR_LEVELS
+
     d = {
         "site_id": str(card.site_id),
         "name": site.name if site else "Unknown",

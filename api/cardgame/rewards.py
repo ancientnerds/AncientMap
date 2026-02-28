@@ -67,37 +67,44 @@ def claim_daily(session: Session, user: DiscordUser) -> dict:
 
     # Give credits
     user.credits += DAILY_CREDITS
-    session.add(CreditGrant(
-        user_id=user.id,
-        amount=DAILY_CREDITS,
-        reason="card_daily",
-    ))
+    session.add(
+        CreditGrant(
+            user_id=user.id,
+            amount=DAILY_CREDITS,
+            reason="card_daily",
+        )
+    )
 
     # Give 1 Common card
     owned = {
-        r[0] for r in
-        session.query(CardCollection.site_id)
+        r[0]
+        for r in session.query(CardCollection.site_id)
         .filter(CardCollection.user_id == user.id)
         .all()
     }
     from api.cardgame.packs import _pick_card
+
     card = _pick_card(session, 1, owned)
     card_info = None
     if card:
-        session.add(CardCollection(
-            user_id=user.id,
-            site_id=card.site_id,
-            acquired_via="daily",
-        ))
+        session.add(
+            CardCollection(
+                user_id=user.id,
+                site_id=card.site_id,
+                acquired_via="daily",
+            )
+        )
         ps.total_cards += 1
         from api.cardgame.packs import _card_to_dict
+
         card_info = _card_to_dict(session, card)
 
     # Check streak rewards (best match wins — check from highest threshold down)
     streak_reward = None
     for day_threshold, reward_type, reward_value, repeating in reversed(STREAK_REWARDS):
         triggered = (
-            (ps.daily_streak % day_threshold == 0) if repeating
+            (ps.daily_streak % day_threshold == 0)
+            if repeating
             else (ps.daily_streak == day_threshold)
         )
         if triggered:
@@ -106,11 +113,13 @@ def claim_daily(session: Session, user: DiscordUser) -> dict:
             if reward_type == "credits":
                 bonus = int(reward_value)
                 user.credits += bonus
-                session.add(CreditGrant(
-                    user_id=user.id,
-                    amount=bonus,
-                    reason=f"streak_bonus_{day_threshold}d",
-                ))
+                session.add(
+                    CreditGrant(
+                        user_id=user.id,
+                        amount=bonus,
+                        reason=f"streak_bonus_{day_threshold}d",
+                    )
+                )
             break
 
     return {
@@ -176,13 +185,16 @@ def claim_starter_deck(session: Session, user: DiscordUser) -> list[dict]:
 
     # Add to collection
     from api.cardgame.packs import _card_to_dict
+
     result = []
     for card in starter_cards:
-        session.add(CardCollection(
-            user_id=user.id,
-            site_id=card.site_id,
-            acquired_via="starter",
-        ))
+        session.add(
+            CardCollection(
+                user_id=user.id,
+                site_id=card.site_id,
+                acquired_via="starter",
+            )
+        )
         result.append(_card_to_dict(session, card))
 
     ps.total_cards = len(starter_cards)
@@ -194,22 +206,26 @@ def claim_starter_deck(session: Session, user: DiscordUser) -> list[dict]:
 # Contribution reward stubs (Phase 6 — wired in later)
 # ---------------------------------------------------------------------------
 
+
 def reward_site_submission(session: Session, user: DiscordUser) -> dict | None:
     """Award 1 Uncommon+ card for an approved site submission."""
     from api.cardgame.packs import _card_to_dict, _pick_card
+
     owned = {
-        r[0] for r in
-        session.query(CardCollection.site_id)
+        r[0]
+        for r in session.query(CardCollection.site_id)
         .filter(CardCollection.user_id == user.id)
         .all()
     }
     card = _pick_card(session, 2, owned)  # min Uncommon
     if card:
-        session.add(CardCollection(
-            user_id=user.id,
-            site_id=card.site_id,
-            acquired_via="contribution_site",
-        ))
+        session.add(
+            CardCollection(
+                user_id=user.id,
+                site_id=card.site_id,
+                acquired_via="contribution_site",
+            )
+        )
         ps = session.get(CardPlayerStats, user.id)
         if ps:
             ps.total_cards += 1
@@ -220,19 +236,22 @@ def reward_site_submission(session: Session, user: DiscordUser) -> dict | None:
 def reward_image_upload(session: Session, user: DiscordUser) -> dict | None:
     """Award 1 Common card for an approved image upload."""
     from api.cardgame.packs import _card_to_dict, _pick_card
+
     owned = {
-        r[0] for r in
-        session.query(CardCollection.site_id)
+        r[0]
+        for r in session.query(CardCollection.site_id)
         .filter(CardCollection.user_id == user.id)
         .all()
     }
     card = _pick_card(session, 1, owned)
     if card:
-        session.add(CardCollection(
-            user_id=user.id,
-            site_id=card.site_id,
-            acquired_via="contribution_image",
-        ))
+        session.add(
+            CardCollection(
+                user_id=user.id,
+                site_id=card.site_id,
+                acquired_via="contribution_image",
+            )
+        )
         ps = session.get(CardPlayerStats, user.id)
         if ps:
             ps.total_cards += 1

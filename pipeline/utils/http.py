@@ -38,6 +38,7 @@ class HTTPError(Exception):
 
 class RateLimitError(HTTPError):
     """Raised when rate limited by a data source."""
+
     pass
 
 
@@ -168,5 +169,3 @@ def download_file(
     logger.info(f"Downloaded {len(content):,} bytes (MD5: {file_hash})")
 
     return dest_path
-
-

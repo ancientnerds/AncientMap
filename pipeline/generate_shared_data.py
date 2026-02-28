@@ -52,13 +52,10 @@ def _build_empires() -> list[dict]:
 def _build_game_constants() -> dict:
     """Build game constants from Python source."""
     display_names: dict[str, str] = _constants.EMPIRE_DISPLAY_NAMES
-    star_levels = {
-        str(k): v["duplicates_needed"] for k, v in _constants.STAR_LEVELS.items()
-    }
+    star_levels = {str(k): v["duplicates_needed"] for k, v in _constants.STAR_LEVELS.items()}
 
     pack_prices = {
-        name: {"cost": p["cost"], "cards": p["cards"]}
-        for name, p in _constants.PACK_PRICES.items()
+        name: {"cost": p["cost"], "cards": p["cards"]} for name, p in _constants.PACK_PRICES.items()
     }
 
     trade_routes = [

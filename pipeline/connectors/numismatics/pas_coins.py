@@ -13,7 +13,6 @@ Note: This uses the same PAS database as the museums/pas.py connector
 but focuses specifically on numismatic finds (coins).
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
@@ -181,8 +180,7 @@ class PASCoinsConnector(BaseConnector):
                 item_id = item_id[10:]
 
             response = await self.rest.get(
-                f"/artefacts/record/id/{item_id}",
-                params={"format": "json"}
+                f"/artefacts/record/id/{item_id}", params={"format": "json"}
             )
 
             if not response:

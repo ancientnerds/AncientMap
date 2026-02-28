@@ -134,7 +134,7 @@ class EAMENAIngester(BaseIngester):
         logger.info(f"Found {len(resource_uris):,} resource URIs")
 
         # Limit to MAX_RESOURCES
-        resource_uris = resource_uris[:self.MAX_RESOURCES]
+        resource_uris = resource_uris[: self.MAX_RESOURCES]
         logger.info(f"Fetching first {len(resource_uris):,} resources...")
 
         # Fetch each resource
@@ -149,15 +149,19 @@ class EAMENAIngester(BaseIngester):
 
                 if geometry_list:
                     # Resource has geometry, add to results
-                    all_results.append({
-                        "resourceinstanceid": resource_data.get("resourceinstanceid"),
-                        "displayname": resource_data.get("displayname"),
-                        "displaydescription": resource_data.get("displaydescription"),
-                        "resource": resource,
-                    })
+                    all_results.append(
+                        {
+                            "resourceinstanceid": resource_data.get("resourceinstanceid"),
+                            "displayname": resource_data.get("displayname"),
+                            "displaydescription": resource_data.get("displaydescription"),
+                            "resource": resource,
+                        }
+                    )
 
                 if (i + 1) % 100 == 0:
-                    logger.info(f"Processed {i + 1:,} / {len(resource_uris):,} resources, {len(all_results):,} with geometry")
+                    logger.info(
+                        f"Processed {i + 1:,} / {len(resource_uris):,} resources, {len(all_results):,} with geometry"
+                    )
 
                 self.report_progress(i + 1, len(resource_uris), f"{i + 1:,}/{len(resource_uris):,}")
 
@@ -176,7 +180,7 @@ class EAMENAIngester(BaseIngester):
                 "source": "EAMENA",
                 "fetched_at": datetime.now(UTC).isoformat(),
                 "total_fetched": len(all_results),
-            }
+            },
         }
 
         atomic_write_json(dest_path, output)
@@ -325,6 +329,7 @@ class EAMENAIngester(BaseIngester):
         Returns:
             Value string or None
         """
+
         def search_dict(obj, target_key):
             if isinstance(obj, dict):
                 for k, v in obj.items():

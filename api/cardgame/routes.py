@@ -41,6 +41,7 @@ _expedition_limiter = RateLimiter(max_requests=10, window_seconds=60, namespace=
 # Request/response schemas
 # ---------------------------------------------------------------------------
 
+
 class PackOpenRequest(BaseModel):
     pack_type: str = Field(max_length=20)
 
@@ -59,6 +60,7 @@ class QuizAnswerRequest(BaseModel):
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _card_stats_to_dict(card: CardStats, site: UnifiedSite | None = None) -> dict:
     """Serialize a CardStats row to a response dict."""
     d = {
@@ -76,17 +78,19 @@ def _card_stats_to_dict(card: CardStats, site: UnifiedSite | None = None) -> dic
         "card_description": card.card_description,
     }
     if site:
-        d.update({
-            "name": site.name,
-            "country": site.country,
-            "country_code": normalize_country(site.country) if site.country else None,
-            "period_name": site.period_name,
-            "period_start": site.period_start,
-            "thumbnail_url": site.thumbnail_url,
-            "site_type": site.site_type,
-            "lat": site.lat,
-            "lon": site.lon,
-        })
+        d.update(
+            {
+                "name": site.name,
+                "country": site.country,
+                "country_code": normalize_country(site.country) if site.country else None,
+                "period_name": site.period_name,
+                "period_start": site.period_start,
+                "thumbnail_url": site.thumbnail_url,
+                "site_type": site.site_type,
+                "lat": site.lat,
+                "lon": site.lon,
+            }
+        )
     return d
 
 
@@ -98,6 +102,7 @@ def _get_client_ip(request: Request) -> str:
 # ---------------------------------------------------------------------------
 # Public endpoints
 # ---------------------------------------------------------------------------
+
 
 @router.get("/random")
 def get_random_cards(count: int = Query(100, ge=1, le=200)):
@@ -125,14 +130,16 @@ def get_all_empires():
     empires = []
     for empire_id, name in EMPIRE_DISPLAY_NAMES.items():
         meta = EMPIRE_METADATA.get(empire_id, {})
-        empires.append({
-            "id": empire_id,
-            "name": name,
-            "region": meta.get("region", ""),
-            "thematic_stat": EMPIRE_THEMATIC_STATS.get(empire_id, "mystery"),
-            "period": EMPIRE_PERIODS.get(empire_id, ""),
-            "description": EMPIRE_DESCRIPTIONS.get(empire_id, ""),
-        })
+        empires.append(
+            {
+                "id": empire_id,
+                "name": name,
+                "region": meta.get("region", ""),
+                "thematic_stat": EMPIRE_THEMATIC_STATS.get(empire_id, "mystery"),
+                "period": EMPIRE_PERIODS.get(empire_id, ""),
+                "description": EMPIRE_DESCRIPTIONS.get(empire_id, ""),
+            }
+        )
     return {"empires": empires}
 
 
@@ -160,9 +167,8 @@ def get_leaderboard(
 ):
     """Top players leaderboard (public)."""
     with get_session() as session:
-        query = (
-            session.query(CardPlayerStats, DiscordUser)
-            .join(DiscordUser, CardPlayerStats.user_id == DiscordUser.id)
+        query = session.query(CardPlayerStats, DiscordUser).join(
+            DiscordUser, CardPlayerStats.user_id == DiscordUser.id
         )
 
         if sort == "wins":
@@ -178,17 +184,19 @@ def get_leaderboard(
 
         result = []
         for ps, user in rows:
-            result.append({
-                "username": user.username if user else "Unknown",
-                "avatar_hash": user.avatar_hash if user else None,
-                "wins": ps.wins,
-                "losses": ps.losses,
-                "draws": ps.draws,
-                "total_cards": ps.total_cards,
-                "xp": ps.xp,
-                "best_streak": ps.best_streak,
-                "daily_streak": ps.daily_streak,
-            })
+            result.append(
+                {
+                    "username": user.username if user else "Unknown",
+                    "avatar_hash": user.avatar_hash if user else None,
+                    "wins": ps.wins,
+                    "losses": ps.losses,
+                    "draws": ps.draws,
+                    "total_cards": ps.total_cards,
+                    "xp": ps.xp,
+                    "best_streak": ps.best_streak,
+                    "daily_streak": ps.daily_streak,
+                }
+            )
 
         return {"leaderboard": result}
 
@@ -196,6 +204,7 @@ def get_leaderboard(
 # ---------------------------------------------------------------------------
 # Authenticated endpoints
 # ---------------------------------------------------------------------------
+
 
 @router.get("/collection")
 def get_collection(
@@ -224,8 +233,7 @@ def get_collection(
 
         total = query.count()
         rows = (
-            query
-            .order_by(CardStats.rarity_tier.desc(), CardStats.total_power.desc())
+            query.order_by(CardStats.rarity_tier.desc(), CardStats.total_power.desc())
             .offset((page - 1) * per_page)
             .limit(per_page)
             .all()
@@ -279,6 +287,7 @@ def open_pack_endpoint(
             raise HTTPException(status_code=402, detail=str(e)) from None
 
         from api.cardgame.achievements import check_achievements
+
         new_achievements = check_achievements(session, db_user.id, "pack_open")
 
         return {
@@ -326,8 +335,8 @@ def create_or_update_deck(
     with get_session() as session:
         # Verify all cards are owned by user
         owned = {
-            str(r[0]) for r in
-            session.query(CardCollection.site_id)
+            str(r[0])
+            for r in session.query(CardCollection.site_id)
             .filter(CardCollection.user_id == user.id)
             .all()
         }
@@ -336,11 +345,7 @@ def create_or_update_deck(
                 raise HTTPException(status_code=400, detail=f"You don't own card {cid}")
 
         # Check deck count
-        deck_count = (
-            session.query(CardDeck)
-            .filter(CardDeck.user_id == user.id)
-            .count()
-        )
+        deck_count = session.query(CardDeck).filter(CardDeck.user_id == user.id).count()
         if deck_count >= 3:
             raise HTTPException(status_code=400, detail="Maximum 3 decks allowed")
 
@@ -382,8 +387,8 @@ def update_deck(
 
         # Verify all cards are owned by user
         owned = {
-            str(r[0]) for r in
-            session.query(CardCollection.site_id)
+            str(r[0])
+            for r in session.query(CardCollection.site_id)
             .filter(CardCollection.user_id == user.id)
             .all()
         }
@@ -456,10 +461,18 @@ def get_player_stats(user: DiscordUser = Depends(get_current_user)):
         if not ps:
             level, xp_progress, xp_to_next = get_level(0)
             return {
-                "total_cards": 0, "wins": 0, "losses": 0, "draws": 0,
-                "win_streak": 0, "best_streak": 0, "xp": 0,
-                "daily_streak": 0, "packs_opened": 0,
-                "level": level, "xp_progress": xp_progress, "xp_to_next": xp_to_next,
+                "total_cards": 0,
+                "wins": 0,
+                "losses": 0,
+                "draws": 0,
+                "win_streak": 0,
+                "best_streak": 0,
+                "xp": 0,
+                "daily_streak": 0,
+                "packs_opened": 0,
+                "level": level,
+                "xp_progress": xp_progress,
+                "xp_to_next": xp_to_next,
             }
         level, xp_progress, xp_to_next = get_level(ps.xp)
         return {
@@ -496,6 +509,7 @@ def claim_starter(request: Request, user: DiscordUser = Depends(get_current_user
             raise HTTPException(status_code=409, detail=str(e)) from None
 
         from api.cardgame.achievements import check_achievements
+
         new_achievements = check_achievements(session, db_user.id, "starter_claim")
 
         return {"cards": cards, "count": len(cards), "achievements_unlocked": new_achievements}
@@ -519,6 +533,7 @@ def claim_daily_endpoint(request: Request, user: DiscordUser = Depends(get_curre
             raise HTTPException(status_code=409, detail=str(e)) from None
 
         from api.cardgame.achievements import check_achievements
+
         new_achievements = check_achievements(session, db_user.id, "daily_claim")
         result["achievements_unlocked"] = new_achievements
 
@@ -533,9 +548,7 @@ def get_pack_info():
             name: {
                 "cost": p["cost"],
                 "cards": p["cards"],
-                "guarantees": [
-                    RARITY_NAMES.get(t, "Common") for t in p["guarantees"]
-                ],
+                "guarantees": [RARITY_NAMES.get(t, "Common") for t in p["guarantees"]],
             }
             for name, p in PACK_PRICES.items()
         }
@@ -545,6 +558,7 @@ def get_pack_info():
 # ---------------------------------------------------------------------------
 # Synergy preview (Phase A)
 # ---------------------------------------------------------------------------
+
 
 @router.post("/deck-synergies")
 def preview_deck_synergies(
@@ -579,6 +593,7 @@ def preview_deck_synergies(
 # ---------------------------------------------------------------------------
 # Quiz endpoints (Phase C)
 # ---------------------------------------------------------------------------
+
 
 @router.post("/quiz/start")
 def start_quiz(
@@ -625,6 +640,7 @@ def submit_quiz(
             raise HTTPException(status_code=400, detail=str(e)) from None
 
         from api.cardgame.achievements import check_achievements
+
         new_achievements = check_achievements(session, db_user.id, "quiz_submit")
         result["achievements_unlocked"] = new_achievements
 
@@ -634,6 +650,7 @@ def submit_quiz(
 # ---------------------------------------------------------------------------
 # Expedition endpoints (Phase D)
 # ---------------------------------------------------------------------------
+
 
 @router.get("/expeditions")
 def list_expeditions(
@@ -679,6 +696,7 @@ def play_expedition(
             raise HTTPException(status_code=400, detail=str(e)) from None
 
         from api.cardgame.achievements import check_achievements
+
         new_achievements = check_achievements(session, db_user.id, "expedition_stage")
         result["achievements_unlocked"] = new_achievements
 
@@ -690,7 +708,9 @@ def play_expedition(
 # ---------------------------------------------------------------------------
 
 _achievement_limiter = RateLimiter(max_requests=10, window_seconds=60, namespace="achievements")
-_achievement_event_limiter = RateLimiter(max_requests=30, window_seconds=60, namespace="achievement_events")
+_achievement_event_limiter = RateLimiter(
+    max_requests=30, window_seconds=60, namespace="achievement_events"
+)
 
 
 class AchievementEventRequest(BaseModel):
@@ -717,11 +737,7 @@ def get_achievements(
             # Retroactive check — unlocks anything the user already qualifies for
             check_achievements(session, user.id, "full_check")
 
-            rows = (
-                session.query(UserAchievement)
-                .filter(UserAchievement.user_id == user.id)
-                .all()
-            )
+            rows = session.query(UserAchievement).filter(UserAchievement.user_id == user.id).all()
             for ua in rows:
                 unlocked_map[ua.achievement_id] = {
                     "unlocked_at": ua.unlocked_at.isoformat() if ua.unlocked_at else None,
@@ -795,9 +811,7 @@ def get_achievements_summary(
 
     with get_session() as session:
         total_unlocked = (
-            session.query(UserAchievement)
-            .filter(UserAchievement.user_id == user.id)
-            .count()
+            session.query(UserAchievement).filter(UserAchievement.user_id == user.id).count()
         )
         unclaimed = (
             session.query(UserAchievement)

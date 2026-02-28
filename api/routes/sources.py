@@ -25,40 +25,34 @@ STATIC_SOURCES_PATH = Path(__file__).parent.parent.parent / "public" / "data" / 
 # Default source colors (matches pipeline SOURCE_CONFIG)
 DEFAULT_SOURCE_COLORS = {
     # PRIMARY SOURCES
-    "ancient_nerds": "#FFD700",   # Gold - Primary source (manually curated)
-    "lyra": "#8b5cf6",            # Purple - Lyra auto-discoveries
+    "ancient_nerds": "#FFD700",  # Gold - Primary source (manually curated)
+    "lyra": "#8b5cf6",  # Purple - Lyra auto-discoveries
     "ancient_nerds_community": "#22c55e",  # Green - Community contributions
-
     # Core ancient world
-    "pleiades": "#e74c3c",        # Red - ancient places
-    "dare": "#6c5ce7",            # Violet-blue - Roman Empire
-    "topostext": "#00bcd4",       # Cyan - ancient texts (NO TEAL - coastlines are teal)
-
+    "pleiades": "#e74c3c",  # Red - ancient places
+    "dare": "#6c5ce7",  # Violet-blue - Roman Empire
+    "topostext": "#00bcd4",  # Cyan - ancient texts (NO TEAL - coastlines are teal)
     # Global databases
-    "unesco": "#ffd700",          # Gold/Yellow - UNESCO
-    "wikidata": "#9966ff",        # Purple - Wikidata (NO GREEN)
-    "osm_historic": "#ff9800",    # Orange - OSM (NO GREEN)
-
+    "unesco": "#ffd700",  # Gold/Yellow - UNESCO
+    "wikidata": "#9966ff",  # Purple - Wikidata (NO GREEN)
+    "osm_historic": "#ff9800",  # Orange - OSM (NO GREEN)
     # Europe
-    "historic_england": "#c0392b", # Dark red - England
-    "ireland_nms": "#ff6699",     # Pink - Ireland (NO GREEN)
-    "arachne": "#8e44ad",         # Dark purple - Arachne
-    "megalithic_portal": "#9966cc", # Amethyst Purple - megaliths
-
+    "historic_england": "#c0392b",  # Dark red - England
+    "ireland_nms": "#ff6699",  # Pink - Ireland (NO GREEN)
+    "arachne": "#8e44ad",  # Dark purple - Arachne
+    "megalithic_portal": "#9966cc",  # Amethyst Purple - megaliths
     # Specialized
-    "sacred_sites": "#ff69b4",    # Hot Pink - sacred sites
-    "rock_art": "#e67e22",        # Orange - rock art
-    "inscriptions_edh": "#5dade2", # Light blue - inscriptions
-    "coins_nomisma": "#d4af37",   # Gold - coins
-    "shipwrecks_oxrep": "#0066ff", # Ocean Blue - shipwrecks
-    "volcanic_holvol": "#ff0000", # Bright Red - volcanoes
-
+    "sacred_sites": "#ff69b4",  # Hot Pink - sacred sites
+    "rock_art": "#e67e22",  # Orange - rock art
+    "inscriptions_edh": "#5dade2",  # Light blue - inscriptions
+    "coins_nomisma": "#d4af37",  # Gold - coins
+    "shipwrecks_oxrep": "#0066ff",  # Ocean Blue - shipwrecks
+    "volcanic_holvol": "#ff0000",  # Bright Red - volcanoes
     # MENA
-    "eamena": "#d35400",          # Dark orange - MENA
-    "open_context": "#2980b9",    # Strong blue - Open Context
-
+    "eamena": "#d35400",  # Dark orange - MENA
+    "open_context": "#2980b9",  # Strong blue - Open Context
     # Fallback
-    "default": "#ff00ff",         # Magenta - visible fallback
+    "default": "#ff00ff",  # Magenta - visible fallback
 }
 
 
@@ -73,17 +67,23 @@ def _load_static_sources():
 
     sources = []
     for source_id, info in data.get("sources", {}).items():
-        sources.append({
-            "id": source_id,
-            "name": info.get("n", source_id.replace("_", " ").title()),
-            "count": info.get("cnt", 0),
-            "color": info.get("c", DEFAULT_SOURCE_COLORS.get(source_id, DEFAULT_SOURCE_COLORS["default"])),
-            "isPrimary": source_id in ("ancient_nerds", "lyra"),
-            "enabledByDefault": info.get("on", False),
-            "priority": 0 if source_id == "ancient_nerds" else (1 if source_id == "lyra" else 50),
-            "category": info.get("cat"),
-            "description": info.get("d"),
-        })
+        sources.append(
+            {
+                "id": source_id,
+                "name": info.get("n", source_id.replace("_", " ").title()),
+                "count": info.get("cnt", 0),
+                "color": info.get(
+                    "c", DEFAULT_SOURCE_COLORS.get(source_id, DEFAULT_SOURCE_COLORS["default"])
+                ),
+                "isPrimary": source_id in ("ancient_nerds", "lyra"),
+                "enabledByDefault": info.get("on", False),
+                "priority": 0
+                if source_id == "ancient_nerds"
+                else (1 if source_id == "lyra" else 50),
+                "category": info.get("cat"),
+                "description": info.get("d"),
+            }
+        )
 
     return {
         "count": len(sources),
@@ -131,17 +131,20 @@ async def get_sources(db: Session = Depends(get_db)):
         sources = []
         for row in result:
             source_id = row.source_id
-            sources.append({
-                "id": source_id,
-                "name": row.name or source_id.replace("_", " ").title(),
-                "count": row.count,
-                "color": row.color or DEFAULT_SOURCE_COLORS.get(source_id, DEFAULT_SOURCE_COLORS["default"]),
-                "isPrimary": row.is_primary,
-                "enabledByDefault": row.enabled_by_default,
-                "priority": row.priority,
-                "category": row.category,
-                "description": row.description,
-            })
+            sources.append(
+                {
+                    "id": source_id,
+                    "name": row.name or source_id.replace("_", " ").title(),
+                    "count": row.count,
+                    "color": row.color
+                    or DEFAULT_SOURCE_COLORS.get(source_id, DEFAULT_SOURCE_COLORS["default"]),
+                    "isPrimary": row.is_primary,
+                    "enabledByDefault": row.enabled_by_default,
+                    "priority": row.priority,
+                    "category": row.category,
+                    "description": row.description,
+                }
+            )
 
         if sources:
             response = {

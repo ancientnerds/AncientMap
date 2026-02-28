@@ -43,7 +43,9 @@ def _load_prompt() -> str:
 
 
 def generate_posts_for_video(
-    video: NewsVideo, settings: LyraSettings, system_prompt: str | None = None,
+    video: NewsVideo,
+    settings: LyraSettings,
+    system_prompt: str | None = None,
 ) -> int:
     """Generate post text for each news item of a summarized video.
 
@@ -58,10 +60,14 @@ def generate_posts_for_video(
 
     # Check if there are items to attach posts to BEFORE calling the API
     with get_session() as session:
-        item_count = session.query(NewsItem).filter(
-            NewsItem.video_id == video.id,
-            NewsItem.post_text.is_(None),
-        ).count()
+        item_count = (
+            session.query(NewsItem)
+            .filter(
+                NewsItem.video_id == video.id,
+                NewsItem.post_text.is_(None),
+            )
+            .count()
+        )
     if item_count == 0:
         logger.info(f"Video {video.id}: no DB items awaiting text — skipping API call")
         with get_session() as session:
@@ -78,7 +84,11 @@ def generate_posts_for_video(
     time_instruction = ""
     if video.published_at:
         # published_at is stored as naive UTC in the DB
-        pub = video.published_at.replace(tzinfo=UTC) if video.published_at.tzinfo is None else video.published_at
+        pub = (
+            video.published_at.replace(tzinfo=UTC)
+            if video.published_at.tzinfo is None
+            else video.published_at
+        )
         days_ago = (now - pub).days
         if days_ago == 0:
             time_instruction = "This content was published today."
@@ -101,11 +111,13 @@ def generate_posts_for_video(
             model=settings.model_post,
             max_tokens=settings.max_tokens,
             temperature=0.3,
-            system=[{
-                "type": "text",
-                "text": system_prompt,
-                "cache_control": {"type": "ephemeral"},
-            }],
+            system=[
+                {
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
             messages=[{"role": "user", "content": user_content}],
             output_config={
                 "format": {
@@ -129,17 +141,20 @@ def generate_posts_for_video(
         logger.warning(f"Failed to parse post generation JSON for {video.id}: {e}")
         return 0
 
-
     with get_session() as session:
         db_video = session.get(NewsVideo, video.id)
         if not db_video:
             return 0
 
         # Match posts to existing news items by headline
-        items = session.query(NewsItem).filter(
-            NewsItem.video_id == video.id,
-            NewsItem.post_text.is_(None),
-        ).all()
+        items = (
+            session.query(NewsItem)
+            .filter(
+                NewsItem.video_id == video.id,
+                NewsItem.post_text.is_(None),
+            )
+            .all()
+        )
 
         logger.info(
             f"Video {video.id}: {len(posts_data)} LLM posts, {len(items)} DB items awaiting text"
@@ -181,13 +196,18 @@ def generate_posts_for_video(
                 matched_by_headline += 1
             else:
                 # Fallback: match by position if headline didn't match
-                while fallback_idx < len(items_by_order) and items_by_order[fallback_idx].post_text is not None:
+                while (
+                    fallback_idx < len(items_by_order)
+                    and items_by_order[fallback_idx].post_text is not None
+                ):
                     fallback_idx += 1
                 if fallback_idx < len(items_by_order):
                     item = items_by_order[fallback_idx]
                     fallback_idx += 1
                     matched_by_position += 1
-                    logger.info(f"Headline mismatch, matched by position: {headline!r} → item {item.id}")
+                    logger.info(
+                        f"Headline mismatch, matched by position: {headline!r} → item {item.id}"
+                    )
                 else:
                     unmatched += 1
                     logger.warning(f"No matching item for headline: {headline!r}")
@@ -216,9 +236,7 @@ def generate_pending_posts(settings: LyraSettings) -> int:
     Returns number of posts generated.
     """
     with get_session() as session:
-        pending = session.query(NewsVideo).filter(
-            NewsVideo.status == "summarized"
-        ).all()
+        pending = session.query(NewsVideo).filter(NewsVideo.status == "summarized").all()
         session.expunge_all()
 
     system_prompt = _load_prompt()

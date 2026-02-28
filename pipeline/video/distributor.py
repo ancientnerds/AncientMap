@@ -30,7 +30,9 @@ def _build_description(script: dict, timeline: dict) -> str:
         if seg["type"] == "intro":
             lines.append(f"{timestamp} Introduction")
         elif seg["type"] == "story":
-            heading = seg.get("sectionHeading") or seg.get("lowerThird", {}).get("siteName", "Story")
+            heading = seg.get("sectionHeading") or seg.get("lowerThird", {}).get(
+                "siteName", "Story"
+            )
             lines.append(f"{timestamp} {heading}")
         elif seg["type"] == "outro":
             lines.append(f"{timestamp} Credits & Sources")

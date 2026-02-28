@@ -43,7 +43,6 @@ class PleiadesIngester(BaseIngester):
         # Prehistoric
         "neolithic": {"start": -7000, "end": -3000},
         "chalcolithic": {"start": -4500, "end": -3300},
-
         # Bronze Age
         "early-bronze-age-anatolia": {"start": -3000, "end": -2000},
         "middle-bronze-age-anatolia": {"start": -2000, "end": -1600},
@@ -59,13 +58,11 @@ class PleiadesIngester(BaseIngester):
         "bronze-age-late-minoan": {"start": -1500, "end": -1100},
         "egyptian-middle-kingdom": {"start": -2055, "end": -1650},
         "egyptian-new-kingdom": {"start": -1550, "end": -1069},
-
         # Iron Age
         "archaic": {"start": -750, "end": -480},
         "classical": {"start": -480, "end": -323},
         "hellenistic-republican": {"start": -323, "end": -31},
         "hellenistic": {"start": -323, "end": -31},
-
         # Roman
         "roman-early-empire": {"start": -31, "end": 117},
         "roman-middle-empire": {"start": 117, "end": 284},
@@ -73,12 +70,10 @@ class PleiadesIngester(BaseIngester):
         "roman-provincial": {"start": -31, "end": 476},
         "roman": {"start": -31, "end": 476},
         "roman-republic": {"start": -509, "end": -27},
-
         # Late Antique / Byzantine
         "late-antique": {"start": 300, "end": 640},
         "transition-roman-early-empire-late-antique": {"start": 200, "end": 400},
         "byzantine": {"start": 330, "end": 1453},
-
         # Generic periods
         "modern": {"start": 1500, "end": 2000},
         "mediaeval-byzantine": {"start": 640, "end": 1453},

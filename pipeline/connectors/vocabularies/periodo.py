@@ -10,7 +10,6 @@ Priority: P1
 API: https://perio.do/
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
@@ -98,9 +97,9 @@ class PeriodOConnector(BaseConnector):
                         items.append(item)
 
                         if len(items) >= limit:
-                            return items[offset:offset + limit]
+                            return items[offset : offset + limit]
 
-            return items[offset:offset + limit]
+            return items[offset : offset + limit]
 
         except Exception as e:
             logger.error(f"PeriodO search failed: {e}")

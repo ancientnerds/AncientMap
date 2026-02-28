@@ -210,8 +210,12 @@ class OAIPMHProtocol:
 
         info = {}
         fields = [
-            "repositoryName", "baseURL", "protocolVersion",
-            "adminEmail", "earliestDatestamp", "deletedRecord",
+            "repositoryName",
+            "baseURL",
+            "protocolVersion",
+            "adminEmail",
+            "earliestDatestamp",
+            "deletedRecord",
             "granularity",
         ]
 
@@ -446,8 +450,7 @@ class OAIPMHProtocol:
                 identifier=self._get_text(header_elem, "oai:identifier"),
                 datestamp=self._get_text(header_elem, "oai:datestamp"),
                 set_specs=[
-                    s.text for s in header_elem.findall("oai:setSpec", OAI_NAMESPACES)
-                    if s.text
+                    s.text for s in header_elem.findall("oai:setSpec", OAI_NAMESPACES) if s.text
                 ],
                 deleted=header_elem.get("status") == "deleted",
             )
@@ -471,10 +474,7 @@ class OAIPMHProtocol:
         record = OAIRecord(
             identifier=self._get_text(header, "oai:identifier"),
             datestamp=self._get_text(header, "oai:datestamp"),
-            set_specs=[
-                s.text for s in header.findall("oai:setSpec", OAI_NAMESPACES)
-                if s.text
-            ],
+            set_specs=[s.text for s in header.findall("oai:setSpec", OAI_NAMESPACES) if s.text],
             deleted=header.get("status") == "deleted",
         )
 
@@ -509,11 +509,7 @@ class OAIPMHProtocol:
 
     def _get_all_text(self, elem: ET.Element, path: str) -> list[str]:
         """Get text from all matching child elements."""
-        return [
-            child.text.strip()
-            for child in elem.findall(path, OAI_NAMESPACES)
-            if child.text
-        ]
+        return [child.text.strip() for child in elem.findall(path, OAI_NAMESPACES) if child.text]
 
 
 class OAIError(Exception):

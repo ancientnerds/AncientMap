@@ -38,6 +38,7 @@ _redis_client = None
 
 try:
     import redis
+
     _redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
     _redis_client = redis.from_url(_redis_url, decode_responses=True)
     _redis_client.ping()

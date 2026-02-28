@@ -117,9 +117,7 @@ class WikidataConnector(BaseConnector):
     # Video extraction (P10)
     # =========================================================================
 
-    async def _resolve_commons_video(
-        self, filename: str, qid: str
-    ) -> ContentItem | None:
+    async def _resolve_commons_video(self, filename: str, qid: str) -> ContentItem | None:
         """Resolve a Commons filename to a video ContentItem with thumbnail."""
         await self._rate_limit()
         encoded_name = filename.replace(" ", "_")
@@ -134,9 +132,7 @@ class WikidataConnector(BaseConnector):
             "format": "json",
         }
         try:
-            resp = await self.http_client.get(
-                _COMMONS_API, params=params, headers=_HEADERS
-            )
+            resp = await self.http_client.get(_COMMONS_API, params=params, headers=_HEADERS)
             if resp.status_code != 200:
                 return None
             pages = resp.json().get("query", {}).get("pages", {})
@@ -244,9 +240,7 @@ class WikidataConnector(BaseConnector):
                 params["gcmcontinue"] = gcmcontinue
 
             try:
-                resp = await self.http_client.get(
-                    _COMMONS_API, params=params, headers=_HEADERS
-                )
+                resp = await self.http_client.get(_COMMONS_API, params=params, headers=_HEADERS)
                 if resp.status_code != 200:
                     break
                 data = resp.json()

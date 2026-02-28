@@ -15,52 +15,121 @@ from pipeline.normalizers.site_type import normalize_site_type
 # Keep in sync with: src/constants/colors.ts CATEGORY_TO_GROUP
 _GROUP_DEFINITIONS: dict[str, list[str]] = {
     "Settlements": [
-        "City", "Town", "Village", "Settlement", "Urban", "Villa",
-        "City/town/settlement", "Residence/villa/farmhouse",
+        "City",
+        "Town",
+        "Village",
+        "Settlement",
+        "Urban",
+        "Villa",
+        "City/town/settlement",
+        "Residence/villa/farmhouse",
         "City/town/settlement, Pyramid complex",
     ],
     "Fortifications": [
-        "Castle", "Citadel", "Fort", "Fortress", "Military", "Wall", "Gate",
-        "Fortress/citadel", "Castle/palace",
-        "Gate/archway/bridge", "Fortification",
+        "Castle",
+        "Citadel",
+        "Fort",
+        "Fortress",
+        "Military",
+        "Wall",
+        "Gate",
+        "Fortress/citadel",
+        "Castle/palace",
+        "Gate/archway/bridge",
+        "Fortification",
     ],
     "Religious": [
-        "Church", "Mosque", "Temple", "Monastery", "Sacred site", "Sanctuary",
-        "Religious", "Temple complex", "Church/cathedral", "Minaret/tower",
+        "Church",
+        "Mosque",
+        "Temple",
+        "Monastery",
+        "Sacred site",
+        "Sanctuary",
+        "Religious",
+        "Temple complex",
+        "Church/cathedral",
+        "Minaret/tower",
         "Stone cross",
     ],
     "Burial & Death": [
-        "Cemetery", "Necropolis", "Tomb", "Burial", "Funerary",
-        "Necropolis/tombs complex", "Barrow", "Mound/tumulus",
-        "Cairn", "Elongated skulls",
+        "Cemetery",
+        "Necropolis",
+        "Tomb",
+        "Burial",
+        "Funerary",
+        "Necropolis/tombs complex",
+        "Barrow",
+        "Mound/tumulus",
+        "Cairn",
+        "Elongated skulls",
     ],
     "Megalithic": [
-        "Megalithic", "Megalithic stones", "Megalithic structures",
-        "Megalithic statues", "Megalithic walls", "Stone circle", "Dolmen",
-        "Standing stone", "Henge", "Timber circle", "Polygonal masonry",
+        "Megalithic",
+        "Megalithic stones",
+        "Megalithic structures",
+        "Megalithic statues",
+        "Megalithic walls",
+        "Stone circle",
+        "Dolmen",
+        "Standing stone",
+        "Henge",
+        "Timber circle",
+        "Polygonal masonry",
     ],
     "Rock & Cave": [
-        "Cave", "Cave Structures", "Rock relief/carving", "Rock art",
-        "Petroglyphs", "Sculptured stone", "Cave Structures, Rock art",
+        "Cave",
+        "Cave Structures",
+        "Rock relief/carving",
+        "Rock art",
+        "Petroglyphs",
+        "Sculptured stone",
+        "Cave Structures, Rock art",
         "Geoglyphs",
     ],
     "Infrastructure": [
-        "Road", "Bridge", "Mine", "Quarry", "Infrastructure",
-        "Road/avenue/trackway", "Reservoir/aqueduct/canal", "Mine/quarry",
-        "Earthwork", "Well",
+        "Road",
+        "Bridge",
+        "Mine",
+        "Quarry",
+        "Infrastructure",
+        "Road/avenue/trackway",
+        "Reservoir/aqueduct/canal",
+        "Mine/quarry",
+        "Earthwork",
+        "Well",
     ],
     "Water & Ports": [
-        "Aqueduct", "Bath", "Harbor", "Port",
-        "Underwater structures", "Shipwreck",
+        "Aqueduct",
+        "Bath",
+        "Harbor",
+        "Port",
+        "Underwater structures",
+        "Shipwreck",
     ],
     "Monuments": [
-        "Monument", "Memorial", "Stadium", "Theater", "Theatre",
-        "Forum", "Palace", "Pyramid complex", "Museum", "Amphitheatre",
-        "Scheduled monument", "Heritage site", "Archaeological site",
+        "Monument",
+        "Memorial",
+        "Stadium",
+        "Theater",
+        "Theatre",
+        "Forum",
+        "Palace",
+        "Pyramid complex",
+        "Museum",
+        "Amphitheatre",
+        "Scheduled monument",
+        "Heritage site",
+        "Archaeological site",
     ],
     "Other": [
-        "Site", "Ruin", "Inscription", "Natural feature", "Impact crater",
-        "Geological interest", "Magnetic anomaly", "Unknown",
+        "Site",
+        "Ruin",
+        "Inscription",
+        "Natural feature",
+        "Impact crater",
+        "Geological interest",
+        "Magnetic anomaly",
+        "Unknown",
     ],
 }
 
@@ -93,16 +162,16 @@ GROUP_FORTIFICATION: dict[str, int] = {
 # ---------------------------------------------------------------------------
 
 ANTIQUITY_BUCKETS: list[tuple[int, int]] = [
-    (-8000, 10),   # before 8000 BCE
-    (-4500, 9),    # 8000-4500 BCE
-    (-3000, 8),    # 4500-3000 BCE
-    (-2000, 7),    # 3000-2000 BCE
-    (-1000, 6),    # 2000-1000 BCE
-    (-500, 5),     # 1000-500 BCE
-    (0, 4),        # 500-1 BCE
-    (500, 3),      # 1-500 CE
-    (1000, 2),     # 500-1000 CE
-    (1500, 1),     # 1000-1500 CE
+    (-8000, 10),  # before 8000 BCE
+    (-4500, 9),  # 8000-4500 BCE
+    (-3000, 8),  # 4500-3000 BCE
+    (-2000, 7),  # 3000-2000 BCE
+    (-1000, 6),  # 2000-1000 BCE
+    (-500, 5),  # 1000-500 BCE
+    (0, 4),  # 500-1 BCE
+    (500, 3),  # 1-500 CE
+    (1000, 2),  # 500-1000 CE
+    (1500, 1),  # 1000-1500 CE
 ]
 ANTIQUITY_DEFAULT = 5  # for sites with no period_start
 
@@ -140,11 +209,11 @@ RARITY_NAMES: dict[int, str] = {t: name for _, t, name in RARITY_TIERS}
 
 # Discord embed colors only — frontend card colors are in rarity.ts
 RARITY_COLORS: dict[int, int] = {
-    1: 0x9E9E9E,   # Common — grey
-    2: 0x4CAF50,   # Uncommon — green
-    3: 0x2196F3,   # Rare — blue
-    4: 0x9C27B0,   # Epic — purple
-    5: 0xFFC107,   # Legendary — gold
+    1: 0x9E9E9E,  # Common — grey
+    2: 0x4CAF50,  # Uncommon — green
+    3: 0x2196F3,  # Rare — blue
+    4: 0x9C27B0,  # Epic — purple
+    5: 0xFFC107,  # Legendary — gold
 }
 
 # ---------------------------------------------------------------------------
@@ -162,11 +231,11 @@ PACK_PRICES: dict[str, dict] = {
 # Weighted rarity distribution for non-guaranteed slots
 # Tuned for ~1% legendary per Bronze pack, ~10% per Epic pack.
 RARITY_WEIGHTS: dict[int, float] = {
-    1: 45,     # Common
-    2: 30,     # Uncommon
-    3: 15,     # Rare
-    4: 4,      # Epic
-    5: 0.33,   # Legendary
+    1: 45,  # Common
+    2: 30,  # Uncommon
+    3: 15,  # Rare
+    4: 4,  # Epic
+    5: 0.33,  # Legendary
 }
 
 # ---------------------------------------------------------------------------
@@ -193,16 +262,16 @@ MYSTERY_DEFAULT = 1  # combo_count >= 200
 DAILY_CREDITS = 100
 BATTLE_WIN_CREDITS = 25
 BATTLE_CARD_DROP_CHANCE = 0.10  # 10%
-BATTLE_MAX_STAKE = 50000       # hard cap per duel — prevents absurd whale bets
+BATTLE_MAX_STAKE = 50000  # hard cap per duel — prevents absurd whale bets
 STARTER_DECK_SIZE = 10
 
 # Streak rewards: (day_threshold, reward_type, reward_value, repeating)
 # repeating=True means the reward triggers every N days (via modulo)
 STREAK_REWARDS: list[tuple[int, str, str, bool]] = [
-    (3, "credits", "150", True),       # small bump every 3 days
-    (7, "pack", "uncommon", True),     # weekly uncommon pack
-    (14, "credits", "500", False),     # bi-weekly bonus (one-shot per cycle)
-    (30, "pack", "rare", False),       # monthly rare pack (one-shot per cycle)
+    (3, "credits", "150", True),  # small bump every 3 days
+    (7, "pack", "uncommon", True),  # weekly uncommon pack
+    (14, "credits", "500", False),  # bi-weekly bonus (one-shot per cycle)
+    (30, "pack", "rare", False),  # monthly rare pack (one-shot per cycle)
 ]
 
 
@@ -226,8 +295,8 @@ GROUP_PRIMARY_STAT: dict[str, str] = {
     "Other": "mystery",
 }
 
-SYNERGY_CATEGORY_BONUS = 1   # +1 to group's primary stat
-SYNERGY_TEMPORAL_BONUS = 1   # +1 legacy
+SYNERGY_CATEGORY_BONUS = 1  # +1 to group's primary stat
+SYNERGY_TEMPORAL_BONUS = 1  # +1 legacy
 
 # Period buckets for temporal synergy (upper_bound_exclusive, bucket_name)
 PERIOD_BUCKETS: list[tuple[int, str]] = [
@@ -240,11 +309,11 @@ PERIOD_BUCKETS: list[tuple[int, str]] = [
 
 # Cross-combo: category pairs from same country → +2 mystery to both
 CROSS_COMBO_PAIRS: list[tuple[str, str]] = [
-    ("Religious", "Burial & Death"),       # sacred burial grounds
-    ("Settlements", "Fortifications"),     # city-fortress complexes
-    ("Water & Ports", "Infrastructure"),   # engineering marvels
-    ("Megalithic", "Religious"),           # ritual stone circles
-    ("Monuments", "Settlements"),          # civic centers
+    ("Religious", "Burial & Death"),  # sacred burial grounds
+    ("Settlements", "Fortifications"),  # city-fortress complexes
+    ("Water & Ports", "Infrastructure"),  # engineering marvels
+    ("Megalithic", "Religious"),  # ritual stone circles
+    ("Monuments", "Settlements"),  # civic centers
 ]
 CROSS_COMBO_BONUS = 2
 
@@ -252,9 +321,9 @@ CROSS_COMBO_BONUS = 2
 # Snap mechanic (Phase B)
 # ---------------------------------------------------------------------------
 
-SNAP_MULTIPLIER = 2          # stakes double on snap
-SNAP_TIMEOUT_SECONDS = 30    # time to decide after a snap
-ROUND_REVEAL_SECONDS = 10    # time between round reveals
+SNAP_MULTIPLIER = 2  # stakes double on snap
+SNAP_TIMEOUT_SECONDS = 30  # time to decide after a snap
+ROUND_REVEAL_SECONDS = 10  # time between round reveals
 
 # ---------------------------------------------------------------------------
 # Quiz (Phase C)
@@ -264,7 +333,7 @@ QUIZ_QUESTIONS_PER_SESSION = 5
 QUIZ_CREDITS_PER_CORRECT = 10
 QUIZ_XP_PER_CORRECT = 5
 QUIZ_PERFECT_BONUS_TIER = 1  # Common card for 5/5
-QUIZ_DAILY_LIMIT = 3         # max quiz sessions per day
+QUIZ_DAILY_LIMIT = 3  # max quiz sessions per day
 
 # ---------------------------------------------------------------------------
 # Expeditions (Phase D)
@@ -281,11 +350,11 @@ EXPEDITION_COOLDOWN_SECONDS = 30
 
 # Fibonacci-based evolution: each star costs 2, 3, 5, 8, 13 duplicates
 STAR_LEVELS: dict[int, dict] = {
-    1: {"duplicates_needed": 2, "stat_bonus": 1},    # ★     — 2 dupes
-    2: {"duplicates_needed": 5, "stat_bonus": 1},    # ★★    — 5 dupes total (2+3)
-    3: {"duplicates_needed": 10, "stat_bonus": 1},   # ★★★   — 10 dupes total (2+3+5)
-    4: {"duplicates_needed": 18, "stat_bonus": 1},   # ★★★★  — 18 dupes total (2+3+5+8)
-    5: {"duplicates_needed": 31, "stat_bonus": 1},   # ★★★★★ — 31 dupes total (2+3+5+8+13)
+    1: {"duplicates_needed": 2, "stat_bonus": 1},  # ★     — 2 dupes
+    2: {"duplicates_needed": 5, "stat_bonus": 1},  # ★★    — 5 dupes total (2+3)
+    3: {"duplicates_needed": 10, "stat_bonus": 1},  # ★★★   — 10 dupes total (2+3+5)
+    4: {"duplicates_needed": 18, "stat_bonus": 1},  # ★★★★  — 18 dupes total (2+3+5+8)
+    5: {"duplicates_needed": 31, "stat_bonus": 1},  # ★★★★★ — 31 dupes total (2+3+5+8+13)
 }
 MAX_STAR_LEVEL = 5
 
@@ -371,13 +440,11 @@ from pipeline.historical_boundaries.empire_metadata import (
     get_empire_period,
 )
 
-EMPIRE_DISPLAY_NAMES: dict[str, str] = {
-    eid: meta["name"] for eid, meta in EMPIRE_METADATA.items()
-}
+EMPIRE_DISPLAY_NAMES: dict[str, str] = {eid: meta["name"] for eid, meta in EMPIRE_METADATA.items()}
 
 # Commander bonuses
-COMMANDER_BONUS = 1          # +1 to thematic stat for homeland cards
-COMMANDER_MAX_CARDS = 3      # max cards that get the commander bonus
+COMMANDER_BONUS = 1  # +1 to thematic stat for homeland cards
+COMMANDER_MAX_CARDS = 3  # max cards that get the commander bonus
 
 # Crossroads synergy: empire diversity of site cards
 CROSSROADS_THRESHOLDS: list[tuple[int, int]] = [
@@ -386,16 +453,16 @@ CROSSROADS_THRESHOLDS: list[tuple[int, int]] = [
 ]
 
 # Ancient Anchor: pre-empire sites
-ANCIENT_ANCHOR_THRESHOLD = 2   # need 2+ anchor cards
-ANCIENT_ANCHOR_BONUS = 1       # +1 mystery to all anchor cards
+ANCIENT_ANCHOR_THRESHOLD = 2  # need 2+ anchor cards
+ANCIENT_ANCHOR_BONUS = 1  # +1 mystery to all anchor cards
 
 # ---------------------------------------------------------------------------
 # Trade Routes synergy
 # ---------------------------------------------------------------------------
 
-TRADE_ROUTE_BONUS = 1          # +1 Legacy per active route
-TRADE_NETWORK_BONUS = 2        # +2 Legacy when route is part of a triangle
-TRADE_ROUTE_MAX_ACTIVE = 3     # max routes per deck
+TRADE_ROUTE_BONUS = 1  # +1 Legacy per active route
+TRADE_NETWORK_BONUS = 2  # +2 Legacy when route is part of a triangle
+TRADE_ROUTE_MAX_ACTIVE = 3  # max routes per deck
 
 # (name, empire_a, empire_b, trade_goods)
 TRADE_ROUTES: list[tuple[str, str, str, str]] = [
@@ -430,7 +497,7 @@ EXPEDITION_EMPIRE_REWARDS: dict[str, str | None] = {
     "aegean": "greek",
     "mesoamerica": "maya",
     "fertile_crescent": "akkadian",
-    "british_isles": None,          # Ancient Anchor — no empire card
+    "british_isles": None,  # Ancient Anchor — no empire card
     "indus_valley": "maurya",
     "east_asia": "han",
     "sub_saharan": "kush",
@@ -479,6 +546,4 @@ EMPIRE_DESCRIPTIONS: dict[str, str] = {
     "elam": "One of the oldest civilizations in the world, Elam developed its own writing system and repeatedly clashed with and influenced Mesopotamian cultures.",
 }
 
-EMPIRE_PERIODS: dict[str, str] = {
-    eid: get_empire_period(eid) for eid in EMPIRE_METADATA
-}
+EMPIRE_PERIODS: dict[str, str] = {eid: get_empire_period(eid) for eid in EMPIRE_METADATA}

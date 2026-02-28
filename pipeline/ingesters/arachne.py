@@ -42,22 +42,22 @@ class ArachneIngester(BaseIngester):
 
     # Search terms for archaeological sites (German and English)
     SEARCH_TERMS = [
-        "tempel",       # temple
-        "theater",      # theater
-        "amphitheater", # amphitheater
-        "forum",        # forum
-        "basilika",     # basilica
-        "therme",       # bath
-        "villa",        # villa
-        "grab",         # tomb
-        "nekropole",    # necropolis
-        "festung",      # fortress
-        "kastell",      # fort
-        "heiligtum",    # sanctuary
-        "aquädukt",     # aqueduct
-        "temple",       # temple (english)
-        "ruins",        # ruins
-        "sanctuary",    # sanctuary
+        "tempel",  # temple
+        "theater",  # theater
+        "amphitheater",  # amphitheater
+        "forum",  # forum
+        "basilika",  # basilica
+        "therme",  # bath
+        "villa",  # villa
+        "grab",  # tomb
+        "nekropole",  # necropolis
+        "festung",  # fortress
+        "kastell",  # fort
+        "heiligtum",  # sanctuary
+        "aquädukt",  # aqueduct
+        "temple",  # temple (english)
+        "ruins",  # ruins
+        "sanctuary",  # sanctuary
     ]
 
     # Pagination
@@ -205,7 +205,7 @@ class ArachneIngester(BaseIngester):
                 "source": "Arachne (iDAI)",
                 "fetched_at": datetime.now(UTC).isoformat(),
                 "total_fetched": len(all_results),
-            }
+            },
         }
 
         atomic_write_json(dest_path, output)

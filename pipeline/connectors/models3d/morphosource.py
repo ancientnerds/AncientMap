@@ -11,7 +11,6 @@ API: https://www.morphosource.org/catalog/media.json
 Documentation: https://morphosource.stoplight.io/docs/morphosource-api/
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
@@ -42,7 +41,9 @@ class MorphoSourceConnector(BaseConnector):
     auth_type = AuthType.NONE
 
     available = False
-    unavailable_reason = "MorphoSource API returns mostly biological specimens, not archaeological content"
+    unavailable_reason = (
+        "MorphoSource API returns mostly biological specimens, not archaeological content"
+    )
 
     license = "Varies"
     attribution = "MorphoSource"

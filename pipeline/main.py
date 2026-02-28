@@ -72,6 +72,7 @@ def cli(debug):
     """ANCIENT NERDS - Research Platform Data Pipeline"""
     if debug:
         from pipeline.utils.logging import setup_logging
+
         setup_logging(level="DEBUG")
 
 
@@ -171,10 +172,14 @@ def status():
         sources = session.query(SourceDatabase).order_by(SourceDatabase.priority).all()
 
         if not sources:
-            console.print("[yellow]No sources configured. Run 'python scripts/init_db.py' first.[/yellow]")
+            console.print(
+                "[yellow]No sources configured. Run 'python scripts/init_db.py' first.[/yellow]"
+            )
         else:
             for source in sources:
-                last_sync = source.last_sync.strftime("%Y-%m-%d %H:%M") if source.last_sync else "Never"
+                last_sync = (
+                    source.last_sync.strftime("%Y-%m-%d %H:%M") if source.last_sync else "Never"
+                )
                 record_count = source.record_count or 0
                 status = "[green]OK[/green]" if source.last_sync else "[yellow]Not synced[/yellow]"
 
@@ -203,7 +208,12 @@ def status():
         stats_table.add_column("Value")
         stats_table.add_row("Source Records", str(source_record_count))
         stats_table.add_row("Deduplicated Sites", str(site_count))
-        stats_table.add_row("Deduplication Rate", f"{(1 - site_count / max(source_record_count, 1)) * 100:.1f}%" if source_record_count > 0 else "N/A")
+        stats_table.add_row(
+            "Deduplication Rate",
+            f"{(1 - site_count / max(source_record_count, 1)) * 100:.1f}%"
+            if source_record_count > 0
+            else "N/A",
+        )
 
         console.print(stats_table)
 
@@ -224,7 +234,11 @@ def list_sources():
 
     for source_id, source_info in DATA_SOURCES.items():
         has_ingester = "[green]✓[/green]" if source_id in INGESTERS else "[dim]✗[/dim]"
-        description = source_info.get("description", "")[:50] + "..." if len(source_info.get("description", "")) > 50 else source_info.get("description", "")
+        description = (
+            source_info.get("description", "")[:50] + "..."
+            if len(source_info.get("description", "")) > 50
+            else source_info.get("description", "")
+        )
 
         table.add_row(
             source_id,
@@ -244,10 +258,13 @@ def backup():
 
 @backup.command("create")
 @click.option("--db/--no-db", default=True, help="Include database backup")
-@click.option("--contributions/--no-contributions", default=True, help="Include contributions.json backup")
+@click.option(
+    "--contributions/--no-contributions", default=True, help="Include contributions.json backup"
+)
 def backup_create(db: bool, contributions: bool):
     """Create a backup of database and contributions."""
     from pipeline.backup import create_backup
+
     result = create_backup(include_db=db, include_contributions=contributions)
     if result.success:
         console.print(f"[green]Backup created: {result.backup_id}[/green]")
@@ -263,6 +280,7 @@ def backup_create(db: bool, contributions: bool):
 def backup_list():
     """List available backups."""
     from pipeline.backup import list_backups
+
     backups = list_backups()
     if not backups:
         console.print("[yellow]No backups found[/yellow]")
@@ -285,10 +303,13 @@ def backup_list():
 @click.argument("timestamp")
 @click.option("--db/--no-db", default=True, help="Restore database")
 @click.option("--contributions/--no-contributions", default=True, help="Restore contributions.json")
-@click.confirmation_option(prompt="Are you sure you want to restore? This will overwrite current data.")
+@click.confirmation_option(
+    prompt="Are you sure you want to restore? This will overwrite current data."
+)
 def backup_restore(timestamp: str, db: bool, contributions: bool):
     """Restore from a specific backup."""
     from pipeline.backup import restore_backup
+
     success = restore_backup(timestamp, restore_db=db, restore_contributions=contributions)
     if success:
         console.print(f"[green]Restore complete from backup: {timestamp}[/green]")

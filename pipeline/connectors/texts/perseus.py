@@ -18,7 +18,6 @@ References:
 - CTS: http://cite-architecture.org/cts/
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
@@ -488,11 +487,13 @@ class PerseusConnector(BaseConnector):
 
         for work_key, work_info in CLASSICAL_WORKS.items():
             # Check if query matches title, author, or description
-            searchable = " ".join([
-                work_info.get("title", ""),
-                work_info.get("author", ""),
-                work_info.get("description", ""),
-            ]).lower()
+            searchable = " ".join(
+                [
+                    work_info.get("title", ""),
+                    work_info.get("author", ""),
+                    work_info.get("description", ""),
+                ]
+            ).lower()
 
             if query_lower in searchable:
                 item = ContentItem(
@@ -512,7 +513,9 @@ class PerseusConnector(BaseConnector):
                     },
                 )
                 # Score by how early the match appears
-                item.relevance_score = 1.0 if query_lower in work_info.get("title", "").lower() else 0.5
+                item.relevance_score = (
+                    1.0 if query_lower in work_info.get("title", "").lower() else 0.5
+                )
                 results.append(item)
 
         # Sort by relevance

@@ -38,13 +38,20 @@ def _render_video(timeline_path: Path, output_path: Path) -> bool:
         True if render succeeded.
     """
     cmd = [
-        "npx", "remotion", "render",
+        "npx",
+        "remotion",
+        "render",
         "WeeklyVideo",
-        "--props", str(timeline_path),
-        "--output", str(output_path),
-        "--codec", "h264",
-        "--image-format", "jpeg",
-        "--log", "warn",
+        "--props",
+        str(timeline_path),
+        "--output",
+        str(output_path),
+        "--codec",
+        "h264",
+        "--image-format",
+        "jpeg",
+        "--log",
+        "warn",
     ]
 
     logger.info(f"Starting Remotion render: {' '.join(cmd)}")
@@ -96,6 +103,7 @@ async def generate_weekly_video(
     # Phase 1: Script Adapter
     logger.info(f"=== Phase 1: Generating script for article {article_id} ===")
     from pipeline.video.script_adapter import generate_script
+
     script = generate_script(article_id, settings)
 
     script_path = output_dir / "video_script.json"
@@ -112,6 +120,7 @@ async def generate_weekly_video(
     # Phase 2: Voiceover
     logger.info("=== Phase 2: Generating voiceover ===")
     from pipeline.video.voiceover import ElevenLabsSettings, generate_voiceover
+
     elevenlabs_settings = ElevenLabsSettings()
     audio_result = generate_voiceover(script, output_dir, elevenlabs_settings)
     result["audio_files"] = audio_result["audio_files"]
@@ -119,12 +128,14 @@ async def generate_weekly_video(
     # Phase 3: Asset Collection
     logger.info("=== Phase 3: Collecting assets ===")
     from pipeline.video.asset_collector import collect_assets
+
     manifest = collect_assets(script, output_dir, api_base_url)
     result["manifest"] = manifest
 
     # Phase 4: Timeline Builder
     logger.info("=== Phase 4: Building timeline ===")
     from pipeline.video.timeline_builder import build_timeline
+
     timeline_path = output_dir / "timeline.json"
     timeline = build_timeline(script, audio_result, manifest, timeline_path)
     result["timeline_path"] = str(timeline_path)
@@ -155,9 +166,12 @@ async def generate_weekly_video(
     # Phase 6: YouTube Upload
     logger.info("=== Phase 6: Uploading to YouTube ===")
     from pipeline.video.distributor import upload_to_youtube
+
     thumbnail_path = output_dir / "thumbnail.png"
     youtube_url = upload_to_youtube(
-        video_path, script, timeline,
+        video_path,
+        script,
+        timeline,
         thumbnail_path=thumbnail_path if thumbnail_path.exists() else None,
         privacy="private",
     )
@@ -174,10 +188,18 @@ def main() -> None:
     """CLI entry point for the video pipeline."""
     parser = argparse.ArgumentParser(description="Weekly video pipeline orchestrator")
     parser.add_argument("--article-id", type=int, required=True, help="NewsArticle ID to process")
-    parser.add_argument("--dry-run", action="store_true", help="Only generate script JSON, don't render")
-    parser.add_argument("--skip-upload", action="store_true", help="Render but don't upload to YouTube")
-    parser.add_argument("--skip-render", action="store_true", help="Generate assets but don't render")
-    parser.add_argument("--api-base-url", default="https://ancientnerds.com", help="API base URL for screenshots")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Only generate script JSON, don't render"
+    )
+    parser.add_argument(
+        "--skip-upload", action="store_true", help="Render but don't upload to YouTube"
+    )
+    parser.add_argument(
+        "--skip-render", action="store_true", help="Generate assets but don't render"
+    )
+    parser.add_argument(
+        "--api-base-url", default="https://ancientnerds.com", help="API base URL for screenshots"
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -187,13 +209,16 @@ def main() -> None:
     )
 
     import asyncio
-    result = asyncio.run(generate_weekly_video(
-        article_id=args.article_id,
-        dry_run=args.dry_run,
-        skip_upload=args.skip_upload,
-        skip_render=args.skip_render,
-        api_base_url=args.api_base_url,
-    ))
+
+    result = asyncio.run(
+        generate_weekly_video(
+            article_id=args.article_id,
+            dry_run=args.dry_run,
+            skip_upload=args.skip_upload,
+            skip_render=args.skip_render,
+            api_base_url=args.api_base_url,
+        )
+    )
 
     if result.get("dry_run"):
         return

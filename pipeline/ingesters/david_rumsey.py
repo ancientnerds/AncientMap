@@ -143,11 +143,11 @@ class DavidRumseyIngester(BaseIngester):
 
                             # Extract bbox from multiple possible field names
                             bbox = (
-                                fields.get("Bounds", "") or
-                                fields.get("bounds", "") or
-                                fields.get("Bounding Box", "") or
-                                item.get("bounds", "") or
-                                item.get("bbox", "")
+                                fields.get("Bounds", "")
+                                or fields.get("bounds", "")
+                                or fields.get("Bounding Box", "")
+                                or item.get("bounds", "")
+                                or item.get("bbox", "")
                             )
 
                             # Only save maps that have bbox data for geographic matching
@@ -199,7 +199,7 @@ class DavidRumseyIngester(BaseIngester):
                 "total_maps": len(all_maps),
                 "data_type": "historical_maps",
                 "license": "CC-BY-NC",
-            }
+            },
         }
 
         atomic_write_json(dest_path, output)

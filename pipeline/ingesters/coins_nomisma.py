@@ -68,7 +68,6 @@ WHERE {
 ORDER BY ?label
 LIMIT 10000
 """,
-
         "hoards": """
 PREFIX nmo: <http://nomisma.org/ontology#>
 PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>
@@ -94,7 +93,6 @@ WHERE {
 ORDER BY ?label
 LIMIT 20000
 """,
-
         "finds": """
 PREFIX nmo: <http://nomisma.org/ontology#>
 PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>
@@ -118,7 +116,6 @@ WHERE {
 }
 LIMIT 50000
 """,
-
         "rulers": """
 PREFIX nmo: <http://nomisma.org/ontology#>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
@@ -140,7 +137,7 @@ WHERE {
 }
 ORDER BY ?label
 LIMIT 5000
-"""
+""",
     }
 
     REQUEST_DELAY = 2.0  # SPARQL queries can be heavy
@@ -218,7 +215,9 @@ LIMIT 5000
         # Count totals
         total = sum(len(v) for v in all_data.values())
         logger.info(f"Total records fetched: {total:,}")
-        self.report_progress(len(self.SPARQL_QUERIES), len(self.SPARQL_QUERIES), f"{total:,} records")
+        self.report_progress(
+            len(self.SPARQL_QUERIES), len(self.SPARQL_QUERIES), f"{total:,} records"
+        )
 
         # Save to file
         output = {
@@ -233,7 +232,7 @@ LIMIT 5000
                 "total_rulers": len(all_data["rulers"]),
                 "data_type": "numismatic_linked_data",
                 "license": "Open (varies by dataset)",
-            }
+            },
         }
 
         atomic_write_json(dest_path, output)

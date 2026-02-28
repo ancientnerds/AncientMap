@@ -128,7 +128,9 @@ class UNESCOIngester(BaseIngester):
 
         # Get other fields
         country = properties.get("states_name_en", properties.get("states", ""))
-        description = properties.get("short_description_en", properties.get("short_description", ""))
+        description = properties.get(
+            "short_description_en", properties.get("short_description", "")
+        )
         date_inscribed = str(properties.get("date_inscribed", ""))
         region = properties.get("region_en", properties.get("region", ""))
         criteria = properties.get("criteria_txt", "")

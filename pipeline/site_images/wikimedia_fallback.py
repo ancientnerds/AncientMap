@@ -43,7 +43,7 @@ WIKIPEDIA_API_URL = "https://en.wikipedia.org/w/api.php"
 
 # Rate limits
 WIKIDATA_DELAY = 2.0  # Wikidata requests 1 req/sec for bots
-COMMONS_DELAY = 0.5   # Commons is more lenient
+COMMONS_DELAY = 0.5  # Commons is more lenient
 WIKIPEDIA_DELAY = 0.2  # Wikipedia allows ~5 req/s
 
 # Batch sizes
@@ -61,9 +61,11 @@ COMMONS_FULL_URL = "https://commons.wikimedia.org/wiki/File:{filename}"
 # Data Classes
 # =============================================================================
 
+
 @dataclass
 class WikidataResult:
     """Result from Wikidata SPARQL query."""
+
     qid: str
     name: str
     lat: float
@@ -71,9 +73,11 @@ class WikidataResult:
     image_filename: str
     image_url: str
 
+
 @dataclass
 class SiteMatch:
     """Matched site with image."""
+
     site_id: str
     site_name: str
     image_url: str
@@ -157,6 +161,7 @@ LIMIT {limit}
 # =============================================================================
 # Wikidata Functions
 # =============================================================================
+
 
 def parse_wkt_point(wkt: str) -> tuple[float, float]:
     """Parse WKT Point to (lat, lon). Uses shared utility."""
@@ -258,6 +263,7 @@ def fetch_wikidata_images(limit: int = 50000) -> Iterator[WikidataResult]:
 # Commons API Functions
 # =============================================================================
 
+
 def get_commons_thumb_url(filename: str, width: int = 300) -> str:
     """
     Generate Commons thumbnail URL for a filename.
@@ -270,7 +276,7 @@ def get_commons_thumb_url(filename: str, width: int = 300) -> str:
     filename = filename.replace(" ", "_")
 
     # Calculate MD5 hash of filename
-    md5 = hashlib.md5(filename.encode('utf-8')).hexdigest()
+    md5 = hashlib.md5(filename.encode("utf-8")).hexdigest()
     hash_path = f"{md5[0]}/{md5[0:2]}"
 
     return COMMONS_THUMB_URL.format(
@@ -333,12 +339,14 @@ def search_commons_images(query: str, limit: int = 5) -> list[dict]:
             if not mime.startswith("image/"):
                 continue
 
-            results.append({
-                "title": page.get("title", "").replace("File:", ""),
-                "url": thumb_url,
-                "width": imageinfo.get("thumbwidth", imageinfo.get("width", 0)),
-                "height": imageinfo.get("thumbheight", imageinfo.get("height", 0)),
-            })
+            results.append(
+                {
+                    "title": page.get("title", "").replace("File:", ""),
+                    "url": thumb_url,
+                    "width": imageinfo.get("thumbwidth", imageinfo.get("width", 0)),
+                    "height": imageinfo.get("thumbheight", imageinfo.get("height", 0)),
+                }
+            )
 
         return results
 
@@ -379,6 +387,7 @@ def search_commons_for_site(site_name: str) -> str | None:
 # =============================================================================
 
 WIKIPEDIA_PAGEIMAGES_BATCH = 50  # Max titles per pageimages request
+
 
 def wikipedia_opensearch(site_name: str) -> str | None:
     """Resolve a site name to a Wikipedia article title using fuzzy search."""
@@ -481,12 +490,14 @@ def search_wikipedia_thumbnails(
     title_to_thumb: dict[str, str] = {}
 
     for i in range(0, len(unique_titles), WIKIPEDIA_PAGEIMAGES_BATCH):
-        batch = unique_titles[i:i + WIKIPEDIA_PAGEIMAGES_BATCH]
+        batch = unique_titles[i : i + WIKIPEDIA_PAGEIMAGES_BATCH]
         batch_result = wikipedia_batch_pageimages(batch)
         title_to_thumb.update(batch_result)
         time.sleep(0.5)
 
-    logger.info(f"  Got thumbnails for {len(title_to_thumb)}/{len(unique_titles)} Wikipedia articles")
+    logger.info(
+        f"  Got thumbnails for {len(title_to_thumb)}/{len(unique_titles)} Wikipedia articles"
+    )
 
     if not title_to_thumb:
         return 0
@@ -497,9 +508,7 @@ def search_wikipedia_thumbnails(
         for sid in site_id_by_title.get(title, []):
             try:
                 session.execute(
-                    update(UnifiedSite)
-                    .where(UnifiedSite.id == sid)
-                    .values(thumbnail_url=thumb_url)
+                    update(UnifiedSite).where(UnifiedSite.id == sid).values(thumbnail_url=thumb_url)
                 )
                 updated += 1
             except Exception as e:
@@ -517,7 +526,10 @@ def search_wikipedia_thumbnails(
 # Database Matching & Updates
 # =============================================================================
 
-def get_sites_without_images(session: Session, limit: int = None, source_id: str = None) -> list[tuple]:
+
+def get_sites_without_images(
+    session: Session, limit: int = None, source_id: str = None
+) -> list[tuple]:
     """Get sites that don't have thumbnail_url set."""
     if source_id:
         query = text("""
@@ -579,14 +591,16 @@ def match_wikidata_to_sites(
 
                 for wd in candidates:
                     # Check if within threshold
-                    dist = ((wd.lat - lat)**2 + (wd.lon - lon)**2)**0.5
+                    dist = ((wd.lat - lat) ** 2 + (wd.lon - lon) ** 2) ** 0.5
                     if dist < coord_threshold:
-                        matches.append(SiteMatch(
-                            site_id=str(site_id),
-                            site_name=site_name,
-                            image_url=wd.image_url,
-                            source="wikidata",
-                        ))
+                        matches.append(
+                            SiteMatch(
+                                site_id=str(site_id),
+                                site_name=site_name,
+                                image_url=wd.image_url,
+                                source="wikidata",
+                            )
+                        )
                         matched_count += 1
                         break
                 else:
@@ -605,7 +619,7 @@ def update_site_thumbnails(session: Session, matches: list[SiteMatch]) -> int:
     updated = 0
 
     for i in range(0, len(matches), DB_UPDATE_BATCH_SIZE):
-        batch = matches[i:i + DB_UPDATE_BATCH_SIZE]
+        batch = matches[i : i + DB_UPDATE_BATCH_SIZE]
 
         for match in batch:
             try:
@@ -627,6 +641,7 @@ def update_site_thumbnails(session: Session, matches: list[SiteMatch]) -> int:
 # =============================================================================
 # Commons Fallback Search
 # =============================================================================
+
 
 def search_commons_fallback(
     session: Session,
@@ -675,20 +690,24 @@ def search_commons_fallback(
 # Statistics
 # =============================================================================
 
+
 def get_image_stats(session: Session) -> dict:
     """Get statistics about image coverage."""
-    result = session.execute(text("""
+    result = session.execute(
+        text("""
         SELECT
             COUNT(*) as total,
             COUNT(thumbnail_url) as with_image,
             COUNT(*) - COUNT(thumbnail_url) as without_image,
             ROUND(100.0 * COUNT(thumbnail_url) / COUNT(*), 2) as coverage_pct
         FROM unified_sites
-    """))
+    """)
+    )
     row = result.fetchone()
 
     # By source
-    by_source = session.execute(text("""
+    by_source = session.execute(
+        text("""
         SELECT
             source_id,
             COUNT(*) as total,
@@ -697,7 +716,8 @@ def get_image_stats(session: Session) -> dict:
         FROM unified_sites
         GROUP BY source_id
         ORDER BY total DESC
-    """))
+    """)
+    )
 
     return {
         "total_sites": row[0],
@@ -707,7 +727,7 @@ def get_image_stats(session: Session) -> dict:
         "by_source": [
             {"source": r[0], "total": r[1], "with_image": r[2], "coverage_pct": r[3]}
             for r in by_source.fetchall()
-        ]
+        ],
     }
 
 
@@ -724,14 +744,17 @@ def print_stats(stats: dict):
     print("-" * 60)
     print(f"{'Source':<25} {'Total':>10} {'Images':>10} {'Coverage':>10}")
     print("-" * 60)
-    for src in stats['by_source']:
-        print(f"{src['source']:<25} {src['total']:>10,} {src['with_image']:>10,} {src['coverage_pct']:>9}%")
+    for src in stats["by_source"]:
+        print(
+            f"{src['source']:<25} {src['total']:>10,} {src['with_image']:>10,} {src['coverage_pct']:>9}%"
+        )
     print("=" * 60 + "\n")
 
 
 # =============================================================================
 # Main Entry Point
 # =============================================================================
+
 
 def run_wikimedia_fallback(
     limit: int = None,
@@ -805,29 +828,28 @@ def main():
         description="Fetch images from Wikimedia Commons/Wikidata for archaeological sites"
     )
     parser.add_argument(
-        "--limit", "-l", type=int, default=None,
-        help="Maximum number of sites to process"
+        "--limit", "-l", type=int, default=None, help="Maximum number of sites to process"
     )
     parser.add_argument(
-        "--wikidata-only", action="store_true",
-        help="Only use Wikidata SPARQL (faster)"
+        "--wikidata-only", action="store_true", help="Only use Wikidata SPARQL (faster)"
     )
     parser.add_argument(
-        "--commons-only", action="store_true",
-        help="Only use Commons search (slower but finds more)"
+        "--commons-only",
+        action="store_true",
+        help="Only use Commons search (slower but finds more)",
     )
     parser.add_argument(
-        "--wikipedia-only", action="store_true",
-        help="Only use Wikipedia opensearch + pageimages (best for named sites)"
+        "--wikipedia-only",
+        action="store_true",
+        help="Only use Wikipedia opensearch + pageimages (best for named sites)",
     )
     parser.add_argument(
-        "--source-filter", type=str, default=None,
-        help="Only process sites from this source (e.g. 'ancient_nerds')"
+        "--source-filter",
+        type=str,
+        default=None,
+        help="Only process sites from this source (e.g. 'ancient_nerds')",
     )
-    parser.add_argument(
-        "--stats", action="store_true",
-        help="Just print statistics"
-    )
+    parser.add_argument("--stats", action="store_true", help="Just print statistics")
 
     args = parser.parse_args()
 

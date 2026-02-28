@@ -10,15 +10,32 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 logger = logging.getLogger(__name__)
 
 VALID_CATEGORIES = {
-    "excavation", "artifact", "architecture", "bioarchaeology", "dating",
-    "remote_sensing", "underwater", "epigraphy", "conservation", "heritage",
-    "theory", "technology", "archaeoastronomy", "survey", "art", "general",
+    "excavation",
+    "artifact",
+    "architecture",
+    "bioarchaeology",
+    "dating",
+    "remote_sensing",
+    "underwater",
+    "epigraphy",
+    "conservation",
+    "heritage",
+    "theory",
+    "technology",
+    "archaeoastronomy",
+    "survey",
+    "art",
+    "general",
     "speculative",
 }
 
 VALID_SPECULATIVE_TAGS = {
-    "ancient_astronauts", "annunaki", "lost_civilization",
-    "giants", "supernatural", "conspiracy",
+    "ancient_astronauts",
+    "annunaki",
+    "lost_civilization",
+    "giants",
+    "supernatural",
+    "conspiracy",
 }
 
 
@@ -67,7 +84,7 @@ class LyraSettings(BaseSettings):
     post_amounts_medium: int = 4
     post_amounts_long: int = 6
     post_amounts_very_long: int = 8
-    post_threshold_short: int = 15   # minutes
+    post_threshold_short: int = 15  # minutes
     post_threshold_medium: int = 30
     post_threshold_long: int = 60
 
@@ -196,15 +213,20 @@ def _tool_use_to_text_block(response: anthropic.types.Message) -> anthropic.type
     for block in response.content:
         if block.type == "tool_use":
             json_str = json.dumps(block.input, ensure_ascii=False)
-            return response.model_copy(update={
-                "content": [anthropic.types.TextBlock(type="text", text=json_str)],
-                "stop_reason": "end_turn",
-            })
+            return response.model_copy(
+                update={
+                    "content": [anthropic.types.TextBlock(type="text", text=json_str)],
+                    "stop_reason": "end_turn",
+                }
+            )
     return response
 
 
 def call_api(
-    client: anthropic.Anthropic, *, prefill: str | None = None, **kwargs,
+    client: anthropic.Anthropic,
+    *,
+    prefill: str | None = None,
+    **kwargs,
 ) -> anthropic.types.Message:
     """Throttled wrapper around client.messages.create().
 
@@ -244,11 +266,13 @@ def call_api(
             # Extract the JSON schema from output_config and wrap it as a tool.
             schema = output_config.get("format", {}).get("schema", {})
             if schema:
-                kwargs["tools"] = [{
-                    "name": "structured_output",
-                    "description": "Return the structured JSON result.",
-                    "input_schema": schema,
-                }]
+                kwargs["tools"] = [
+                    {
+                        "name": "structured_output",
+                        "description": "Return the structured JSON result.",
+                        "input_schema": schema,
+                    }
+                ]
                 kwargs["tool_choice"] = {"type": "any"}
                 # Suppress prefill — incompatible with tool calling and not needed
                 prefill = None
@@ -290,8 +314,7 @@ def call_api(
                 parse_prefilled_json(text)
             except (json.JSONDecodeError, ValueError):
                 logger.warning(
-                    f"Malformed JSON from non-native provider, retrying once: "
-                    f"{text[:200]}"
+                    f"Malformed JSON from non-native provider, retrying once: {text[:200]}"
                 )
                 response = _throttled_create(client, **kwargs)
 

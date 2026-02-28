@@ -23,14 +23,13 @@ class ElevenLabsSettings:
 
     def __init__(self) -> None:
         import os
+
         self.api_key: str = os.getenv("ELEVENLABS_API_KEY", "")
         self.voice_id: str = os.getenv("ELEVENLABS_VOICE_ID", "")
         self.model_id: str = os.getenv("ELEVENLABS_MODEL_ID", "eleven_multilingual_v2")
 
 
-def _characters_to_words(
-    characters: list[dict], text: str
-) -> list[dict]:
+def _characters_to_words(characters: list[dict], text: str) -> list[dict]:
     """Convert character-level timing from ElevenLabs into word-level timing.
 
     ElevenLabs returns:
@@ -51,11 +50,13 @@ def _characters_to_words(
         if char in (" ", "\n", "\t"):
             if current_word and word_start is not None:
                 word_end = char_ends[i - 1] if i - 1 < len(char_ends) else word_start + 0.1
-                words.append({
-                    "word": current_word,
-                    "start": word_start,
-                    "end": word_end,
-                })
+                words.append(
+                    {
+                        "word": current_word,
+                        "start": word_start,
+                        "end": word_end,
+                    }
+                )
             current_word = ""
             word_start = None
         else:
@@ -66,11 +67,13 @@ def _characters_to_words(
     # Last word
     if current_word and word_start is not None:
         word_end = char_ends[-1] if char_ends else word_start + 0.1
-        words.append({
-            "word": current_word,
-            "start": word_start,
-            "end": word_end,
-        })
+        words.append(
+            {
+                "word": current_word,
+                "start": word_start,
+                "end": word_end,
+            }
+        )
 
     return words
 
@@ -136,6 +139,7 @@ def generate_voiceover(
 
         # Extract audio bytes (base64 encoded in response)
         import base64
+
         audio_b64 = data.get("audio_base64", "")
         audio_bytes = base64.b64decode(audio_b64) if audio_b64 else b""
 
@@ -151,11 +155,13 @@ def generate_voiceover(
         word_timings = _characters_to_words([char_starts, char_ends], narration)
 
         duration = word_timings[-1]["end"] if word_timings else 0
-        all_timings.append({
-            "segment_index": i,
-            "words": word_timings,
-            "duration": duration,
-        })
+        all_timings.append(
+            {
+                "segment_index": i,
+                "words": word_timings,
+                "duration": duration,
+            }
+        )
 
         logger.info(f"  Segment {i}: {duration:.1f}s audio, {len(word_timings)} words")
 

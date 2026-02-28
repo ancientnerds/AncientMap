@@ -10,7 +10,6 @@ Priority: P3
 API: https://constellate.org/docs/
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector

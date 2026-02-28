@@ -10,7 +10,6 @@ Features:
 - License information extraction
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
@@ -241,9 +240,7 @@ class WikimediaConnector(BaseConnector):
         logger.info(f"Wikimedia: precise search in category '{commons_category}'")
 
         if content_type == ContentType.VIDEO:
-            return await self._search_videos_precise(
-                commons_category, site_name, limit
-            )
+            return await self._search_videos_precise(commons_category, site_name, limit)
 
         if content_type:
             # Photos/maps/artwork from category
@@ -252,9 +249,7 @@ class WikimediaConnector(BaseConnector):
         # No filter: category images (photos) + precise video search
         photos = await self.get_category_images(commons_category, limit=limit)
 
-        videos = await self._search_videos_precise(
-            commons_category, site_name, max(limit // 4, 5)
-        )
+        videos = await self._search_videos_precise(commons_category, site_name, max(limit // 4, 5))
 
         return photos + videos
 

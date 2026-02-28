@@ -32,7 +32,7 @@ def _find_active_trade_routes(
     deck: list[CardStats],
 ) -> tuple[
     list[tuple[str, str, str, str, bool]],  # (name, empire_a, empire_b, goods, is_triangle)
-    dict[str, list[CardStats]],              # empire_id → cards
+    dict[str, list[CardStats]],  # empire_id → cards
 ]:
     """Find active trade routes for a deck, prioritizing triangle networks.
 
@@ -143,8 +143,7 @@ def compute_synergies(
         if thematic_stat:
             # Find cards whose empires list contains the commander's empire
             homeland_cards = [
-                c for c in deck
-                if commander_empire_id in (getattr(c, "empires", None) or [])
+                c for c in deck if commander_empire_id in (getattr(c, "empires", None) or [])
             ]
             # Pick top 3 by base thematic stat value (descending)
             homeland_cards.sort(
@@ -222,8 +221,7 @@ def describe_synergies(
     for threshold, bonus_val in CROSSROADS_THRESHOLDS:
         if len(all_empires) >= threshold:
             descriptions.append(
-                f"Crossroads: {len(all_empires)} empires → "
-                f"+{bonus_val} Cultural Influence to all"
+                f"Crossroads: {len(all_empires)} empires → +{bonus_val} Cultural Influence to all"
             )
             break
 
@@ -240,13 +238,13 @@ def describe_synergies(
         thematic_stat = EMPIRE_THEMATIC_STATS.get(commander_empire_id)
         if thematic_stat:
             homeland_count = sum(
-                1 for c in deck
-                if commander_empire_id in (getattr(c, "empires", None) or [])
+                1 for c in deck if commander_empire_id in (getattr(c, "empires", None) or [])
             )
             boosted = min(homeland_count, COMMANDER_MAX_CARDS)
             if boosted > 0:
                 empire_name = EMPIRE_DISPLAY_NAMES.get(
-                    commander_empire_id, commander_empire_id,
+                    commander_empire_id,
+                    commander_empire_id,
                 )
                 descriptions.append(
                     f"Commander ({empire_name}): {boosted} homeland sites → "
@@ -262,9 +260,7 @@ def describe_synergies(
     bucket_counts = Counter(b for b in card_buckets.values() if b is not None)
     for bucket, count in bucket_counts.items():
         if count >= SYNERGY_THRESHOLD:
-            descriptions.append(
-                f"Temporal: {count}x {bucket} → +{SYNERGY_TEMPORAL_BONUS} Legacy"
-            )
+            descriptions.append(f"Temporal: {count}x {bucket} → +{SYNERGY_TEMPORAL_BONUS} Legacy")
 
     # Cross-combo
     country_group_cards: dict[tuple[str, str], list[str]] = {}
@@ -274,10 +270,11 @@ def describe_synergies(
             country_group_cards.setdefault(key, []).append(str(card.site_id))
     for group_a, group_b in CROSS_COMBO_PAIRS:
         for country in {k[0] for k in country_group_cards}:
-            if country_group_cards.get((country, group_a)) and country_group_cards.get((country, group_b)):
+            if country_group_cards.get((country, group_a)) and country_group_cards.get(
+                (country, group_b)
+            ):
                 descriptions.append(
-                    f"Cross-combo: {group_a} + {group_b} ({country}) → "
-                    f"+{CROSS_COMBO_BONUS} Mystery"
+                    f"Cross-combo: {group_a} + {group_b} ({country}) → +{CROSS_COMBO_BONUS} Mystery"
                 )
 
     # Trade Routes

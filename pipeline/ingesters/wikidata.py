@@ -125,9 +125,7 @@ class WikidataIngester(BaseIngester):
 
             while offset < self.MAX_RECORDS_PER_TYPE:
                 query = self.SPARQL_QUERY.format(
-                    type_id=type_id,
-                    limit=self.BATCH_SIZE,
-                    offset=offset
+                    type_id=type_id, limit=self.BATCH_SIZE, offset=offset
                 )
 
                 try:
@@ -166,7 +164,7 @@ class WikidataIngester(BaseIngester):
                 "source": "Wikidata",
                 "fetched_at": datetime.now(UTC).isoformat(),
                 "total_fetched": len(all_results),
-            }
+            },
         }
 
         atomic_write_json(dest_path, output)
@@ -276,7 +274,9 @@ class WikidataIngester(BaseIngester):
         description = result.get("itemDescription", {}).get("value", "")
         country = result.get("countryLabel", {}).get("value", "")
         # Use _type_name from our query, or fall back to instanceLabel
-        instance_type = result.get("_type_name", "") or result.get("instanceLabel", {}).get("value", "")
+        instance_type = result.get("_type_name", "") or result.get("instanceLabel", {}).get(
+            "value", ""
+        )
 
         # Map type
         site_type = self._map_type(instance_type)
@@ -334,7 +334,7 @@ class WikidataIngester(BaseIngester):
         total = len(qids)
 
         for i in range(0, total, batch_size):
-            batch = qids[i:i + batch_size]
+            batch = qids[i : i + batch_size]
             ids_param = "|".join(batch)
 
             url = "https://www.wikidata.org/w/api.php"

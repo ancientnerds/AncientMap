@@ -48,12 +48,14 @@ def _allocate_visuals(
     screen_path = manifest.get("screenshots", {}).get(screen_key)
     if screen_path:
         screen_frames = min(_seconds_to_frames(5), total_frames // 3)
-        visuals_list.append({
-            "type": "screenshot",
-            "src": screen_path,
-            "startFrame": frame_cursor,
-            "endFrame": frame_cursor + screen_frames,
-        })
+        visuals_list.append(
+            {
+                "type": "screenshot",
+                "src": screen_path,
+                "startFrame": frame_cursor,
+                "endFrame": frame_cursor + screen_frames,
+            }
+        )
         frame_cursor += screen_frames
 
     # YouTube clip
@@ -66,16 +68,18 @@ def _allocate_visuals(
         if clip_path:
             clip_duration = min(clip_info.get("duration", 15), 15)
             clip_frames = min(_seconds_to_frames(clip_duration), total_frames - frame_cursor)
-            visuals_list.append({
-                "type": "clip",
-                "src": clip_path,
-                "startFrame": frame_cursor,
-                "endFrame": frame_cursor + clip_frames,
-                "attribution": {
-                    "channel": visuals.get("channel_name", ""),
-                    "title": visuals.get("video_title", ""),
-                },
-            })
+            visuals_list.append(
+                {
+                    "type": "clip",
+                    "src": clip_path,
+                    "startFrame": frame_cursor,
+                    "endFrame": frame_cursor + clip_frames,
+                    "attribution": {
+                        "channel": visuals.get("channel_name", ""),
+                        "title": visuals.get("video_title", ""),
+                    },
+                }
+            )
             frame_cursor += clip_frames
 
     # WikiImages for remaining time
@@ -87,14 +91,18 @@ def _allocate_visuals(
             wiki_key = f"seg{segment_index}_wiki{j}"
             wiki_path = manifest.get("wiki_images", {}).get(wiki_key)
             if wiki_path:
-                img_frames = frames_per_image if j < len(wiki_images) - 1 else (total_frames - frame_cursor)
+                img_frames = (
+                    frames_per_image if j < len(wiki_images) - 1 else (total_frames - frame_cursor)
+                )
                 if img_frames > 0:
-                    visuals_list.append({
-                        "type": "wiki_image",
-                        "src": wiki_path,
-                        "startFrame": frame_cursor,
-                        "endFrame": frame_cursor + img_frames,
-                    })
+                    visuals_list.append(
+                        {
+                            "type": "wiki_image",
+                            "src": wiki_path,
+                            "startFrame": frame_cursor,
+                            "endFrame": frame_cursor + img_frames,
+                        }
+                    )
                     frame_cursor += img_frames
 
     # Globe fly-to at the end (if we have site coordinates)
@@ -102,15 +110,17 @@ def _allocate_visuals(
     site_lon = visuals.get("site_lon")
     if site_lat is not None and site_lon is not None:
         flyto_frames = _seconds_to_frames(GLOBE_FLYTO_DURATION)
-        visuals_list.append({
-            "type": "globe_flyto",
-            "startFrame": frame_cursor,
-            "endFrame": frame_cursor + flyto_frames,
-            "targetLat": site_lat,
-            "targetLon": site_lon,
-            "siteName": visuals.get("site_name", ""),
-            "country": visuals.get("site_country", ""),
-        })
+        visuals_list.append(
+            {
+                "type": "globe_flyto",
+                "startFrame": frame_cursor,
+                "endFrame": frame_cursor + flyto_frames,
+                "targetLat": site_lat,
+                "targetLon": site_lon,
+                "siteName": visuals.get("site_name", ""),
+                "country": visuals.get("site_country", ""),
+            }
+        )
 
     return visuals_list
 
@@ -151,15 +161,17 @@ def build_timeline(
                 _seconds_to_frames(INTRO_DURATION),
                 _seconds_to_frames(audio_duration),
             )
-            segments_out.append({
-                "type": "intro",
-                "startFrame": frame_cursor,
-                "durationFrames": duration_frames,
-                "audio": audio_file,
-                "wordTimings": timing.get("words", []),
-                "titleText": script.get("title", "This Week in Archaeology"),
-                "dateRange": script.get("date_range", ""),
-            })
+            segments_out.append(
+                {
+                    "type": "intro",
+                    "startFrame": frame_cursor,
+                    "durationFrames": duration_frames,
+                    "audio": audio_file,
+                    "wordTimings": timing.get("words", []),
+                    "titleText": script.get("title", "This Week in Archaeology"),
+                    "dateRange": script.get("date_range", ""),
+                }
+            )
             frame_cursor += duration_frames
 
         elif seg_type == "transition":
@@ -167,14 +179,16 @@ def build_timeline(
                 _seconds_to_frames(TRANSITION_DURATION),
                 _seconds_to_frames(audio_duration),
             )
-            segments_out.append({
-                "type": "transition",
-                "startFrame": frame_cursor,
-                "durationFrames": duration_frames,
-                "audio": audio_file,
-                "wordTimings": timing.get("words", []),
-                "narration": segment.get("narration", ""),
-            })
+            segments_out.append(
+                {
+                    "type": "transition",
+                    "startFrame": frame_cursor,
+                    "durationFrames": duration_frames,
+                    "audio": audio_file,
+                    "wordTimings": timing.get("words", []),
+                    "narration": segment.get("narration", ""),
+                }
+            )
             frame_cursor += duration_frames
 
         elif seg_type == "outro":
@@ -182,15 +196,17 @@ def build_timeline(
                 _seconds_to_frames(OUTRO_DURATION),
                 _seconds_to_frames(audio_duration),
             )
-            segments_out.append({
-                "type": "outro",
-                "startFrame": frame_cursor,
-                "durationFrames": duration_frames,
-                "audio": audio_file,
-                "wordTimings": timing.get("words", []),
-                "credits": script.get("credits", []),
-                "sources": script.get("sources", []),
-            })
+            segments_out.append(
+                {
+                    "type": "outro",
+                    "startFrame": frame_cursor,
+                    "durationFrames": duration_frames,
+                    "audio": audio_file,
+                    "wordTimings": timing.get("words", []),
+                    "credits": script.get("credits", []),
+                    "sources": script.get("sources", []),
+                }
+            )
             frame_cursor += duration_frames
 
         else:
@@ -212,16 +228,18 @@ def build_timeline(
                     "siteType": site_visuals.get("site_type", ""),
                 }
 
-            segments_out.append({
-                "type": "story",
-                "startFrame": frame_cursor,
-                "durationFrames": duration_frames,
-                "audio": audio_file,
-                "wordTimings": timing.get("words", []),
-                "visuals": visuals,
-                "lowerThird": lower_third,
-                "sectionHeading": segment.get("section_heading", ""),
-            })
+            segments_out.append(
+                {
+                    "type": "story",
+                    "startFrame": frame_cursor,
+                    "durationFrames": duration_frames,
+                    "audio": audio_file,
+                    "wordTimings": timing.get("words", []),
+                    "visuals": visuals,
+                    "lowerThird": lower_third,
+                    "sectionHeading": segment.get("section_heading", ""),
+                }
+            )
             frame_cursor += duration_frames
 
     timeline = {
@@ -239,6 +257,8 @@ def build_timeline(
     if output_path:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(json.dumps(timeline, indent=2), encoding="utf-8")
-        logger.info(f"Timeline written to {output_path} ({frame_cursor} frames, {frame_cursor / FPS:.1f}s)")
+        logger.info(
+            f"Timeline written to {output_path} ({frame_cursor} frames, {frame_cursor / FPS:.1f}s)"
+        )
 
     return timeline

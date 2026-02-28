@@ -74,7 +74,9 @@ def get_embeddings(usage: str = "query") -> VoyageEmbeddings:
     model = EMBED_MODEL_INDEX if usage == "index" else EMBED_MODEL_QUERY
     input_type = "document" if usage == "index" else "query"
     instance = VoyageEmbeddings(model=model, input_type=input_type)
-    logger.info(f"Initialized VoyageAI embeddings: {model} (usage={usage}, input_type={input_type})")
+    logger.info(
+        f"Initialized VoyageAI embeddings: {model} (usage={usage}, input_type={input_type})"
+    )
 
     if usage == "index":
         _embeddings_index = instance
@@ -122,6 +124,7 @@ def get_sparse_model():
         return _sparse_model
 
     from fastembed import SparseTextEmbedding
+
     _sparse_model = SparseTextEmbedding(model_name="Qdrant/bm25")
     logger.info("Initialized BM25 sparse model: Qdrant/bm25")
     return _sparse_model

@@ -61,11 +61,11 @@ CONTENT_SOURCES = {
 
 # Link distance thresholds (in km)
 DISTANCE_THRESHOLDS = {
-    "text": 10,        # Text references within 10km
+    "text": 10,  # Text references within 10km
     "inscription": 5,  # Inscriptions within 5km (more precise)
-    "map": 100,        # Maps can cover large areas
-    "model": 10,       # 3D models within 10km
-    "artwork": 20,     # Artworks within 20km
+    "map": 100,  # Maps can cover large areas
+    "model": 10,  # 3D models within 10km
+    "artwork": 20,  # Artworks within 20km
 }
 
 
@@ -82,7 +82,7 @@ def normalize_for_matching(name: str) -> str:
     prefixes = ["tel ", "tell ", "temple of ", "sanctuary of ", "ancient ", "old "]
     for prefix in prefixes:
         if normalized.startswith(prefix):
-            normalized = normalized[len(prefix):]
+            normalized = normalized[len(prefix) :]
 
     return normalized.strip()
 
@@ -107,7 +107,7 @@ def name_similarity(name1: str, name2: str) -> float:
 
     # Simple character-based similarity (Jaccard on character trigrams)
     def trigrams(s):
-        return {s[i:i+3] for i in range(len(s)-2)} if len(s) >= 3 else {s}
+        return {s[i : i + 3] for i in range(len(s) - 2)} if len(s) >= 3 else {s}
 
     t1, t2 = trigrams(n1), trigrams(n2)
     if not t1 or not t2:
@@ -139,9 +139,9 @@ class ContentLinker:
 
         with get_session() as session:
             for source_id, config in sources_to_link:
-                logger.info(f"\n{'='*60}")
+                logger.info(f"\n{'=' * 60}")
                 logger.info(f"Linking {config['description']} ({source_id})")
-                logger.info(f"{'='*60}")
+                logger.info(f"{'=' * 60}")
 
                 try:
                     count = self._link_source(session, source_id, config)
@@ -181,7 +181,7 @@ class ContentLinker:
         # Delete existing links for this source
         session.execute(
             text("DELETE FROM site_content_links WHERE content_source = :source"),
-            {"source": source_id}
+            {"source": source_id},
         )
 
         # Get linker function based on content type
@@ -246,7 +246,11 @@ class ContentLinker:
             return
 
         item_name = item.get("name", "")
-        content_id = item.get("ToposText", "").split("/")[-1] if item.get("ToposText") else str(item.get("id", ""))
+        content_id = (
+            item.get("ToposText", "").split("/")[-1]
+            if item.get("ToposText")
+            else str(item.get("id", ""))
+        )
 
         if not content_id:
             return
@@ -269,7 +273,7 @@ class ContentLinker:
                 "max_lat": lat + lat_delta,
                 "min_lon": lon - lon_delta,
                 "max_lon": lon + lon_delta,
-            }
+            },
         )
 
         for row in result:
@@ -306,7 +310,9 @@ class ContentLinker:
                 },
             }
 
-    def _link_inscription(self, session, source_id: str, item: dict, content_type: str) -> Iterator[dict]:
+    def _link_inscription(
+        self, session, source_id: str, item: dict, content_type: str
+    ) -> Iterator[dict]:
         """Link EDH inscriptions to sites."""
         lat = item.get("lat")
         lon = item.get("lon")
@@ -339,7 +345,7 @@ class ContentLinker:
                 "max_lat": lat + lat_delta,
                 "min_lon": lon - lon_delta,
                 "max_lon": lon + lon_delta,
-            }
+            },
         )
 
         item_name = item.get("ancient_place") or item.get("modern_place") or ""
@@ -364,7 +370,9 @@ class ContentLinker:
                 "content_source": source_id,
                 "content_id": content_id,
                 "title": f"Inscription {content_id}"[:500],
-                "content_url": item.get("source_url", f"https://edh.ub.uni-heidelberg.de/edh/inschrift/{content_id}"),
+                "content_url": item.get(
+                    "source_url", f"https://edh.ub.uni-heidelberg.de/edh/inschrift/{content_id}"
+                ),
                 "relevance_score": round(relevance, 3),
                 "metadata": {
                     "inscription_type": item.get("inscription_type", ""),
@@ -411,7 +419,7 @@ class ContentLinker:
                             "max_lat": max_lat,
                             "min_lon": min_lon,
                             "max_lon": max_lon,
-                        }
+                        },
                     )
 
                     for row in result:
@@ -455,7 +463,7 @@ class ContentLinker:
                 WHERE name_normalized LIKE ANY(:patterns)
                 LIMIT 100
             """),
-            {"patterns": [f"%{word}%" for word in title_words if len(word) > 3]}
+            {"patterns": [f"%{word}%" for word in title_words if len(word) > 3]},
         )
 
         for row in result:
@@ -513,7 +521,7 @@ class ContentLinker:
                         "max_lat": lat + lat_delta,
                         "min_lon": lon - lon_delta,
                         "max_lon": lon + lon_delta,
-                    }
+                    },
                 )
 
                 for row in result:
@@ -536,8 +544,13 @@ class ContentLinker:
                         "content_source": source_id,
                         "content_id": content_id,
                         "title": title[:500],
-                        "thumbnail_url": item.get("thumbnail", item.get("thumbnails", {}).get("images", [{}])[0].get("url", "")),
-                        "content_url": item.get("viewerUrl", f"https://sketchfab.com/3d-models/{content_id}"),
+                        "thumbnail_url": item.get(
+                            "thumbnail",
+                            item.get("thumbnails", {}).get("images", [{}])[0].get("url", ""),
+                        ),
+                        "content_url": item.get(
+                            "viewerUrl", f"https://sketchfab.com/3d-models/{content_id}"
+                        ),
                         "relevance_score": round(relevance, 3),
                         "metadata": {
                             "author": item.get("user", {}).get("displayName", ""),
@@ -562,7 +575,7 @@ class ContentLinker:
                 WHERE name_normalized LIKE :pattern
                 LIMIT 50
             """),
-            {"pattern": f"%{title_normalized[:20]}%"}
+            {"pattern": f"%{title_normalized[:20]}%"},
         )
 
         for row in result:
@@ -579,14 +592,18 @@ class ContentLinker:
                 "content_id": content_id,
                 "title": title[:500],
                 "thumbnail_url": item.get("thumbnail", ""),
-                "content_url": item.get("viewerUrl", f"https://sketchfab.com/3d-models/{content_id}"),
+                "content_url": item.get(
+                    "viewerUrl", f"https://sketchfab.com/3d-models/{content_id}"
+                ),
                 "relevance_score": round(name_sim, 3),
                 "metadata": {
                     "author": item.get("user", {}).get("displayName", ""),
                 },
             }
 
-    def _link_artwork(self, session, source_id: str, item: dict, content_type: str) -> Iterator[dict]:
+    def _link_artwork(
+        self, session, source_id: str, item: dict, content_type: str
+    ) -> Iterator[dict]:
         """Link Europeana artworks to sites."""
         lat = item.get("lat")
         lon = item.get("lon")
@@ -595,7 +612,12 @@ class ContentLinker:
         if not content_id:
             return
 
-        title = item.get("title", item.get("dcTitleLangAware", {}).get("en", [""])[0] if isinstance(item.get("dcTitleLangAware"), dict) else "")
+        title = item.get(
+            "title",
+            item.get("dcTitleLangAware", {}).get("en", [""])[0]
+            if isinstance(item.get("dcTitleLangAware"), dict)
+            else "",
+        )
         if isinstance(title, list):
             title = title[0] if title else ""
 
@@ -620,7 +642,7 @@ class ContentLinker:
                         "max_lat": lat + lat_delta,
                         "min_lon": lon - lon_delta,
                         "max_lon": lon + lon_delta,
-                    }
+                    },
                 )
 
                 for row in result:
@@ -643,14 +665,24 @@ class ContentLinker:
                         "content_source": source_id,
                         "content_id": content_id,
                         "title": title[:500] if title else f"Artwork {content_id}",
-                        "thumbnail_url": item.get("edmPreview", [""])[0] if isinstance(item.get("edmPreview"), list) else item.get("thumbnail", ""),
-                        "content_url": item.get("guid", f"https://www.europeana.eu/item/{content_id}"),
+                        "thumbnail_url": item.get("edmPreview", [""])[0]
+                        if isinstance(item.get("edmPreview"), list)
+                        else item.get("thumbnail", ""),
+                        "content_url": item.get(
+                            "guid", f"https://www.europeana.eu/item/{content_id}"
+                        ),
                         "relevance_score": round(relevance, 3),
                         "metadata": {
-                            "provider": item.get("dataProvider", [""])[0] if isinstance(item.get("dataProvider"), list) else "",
-                            "country": item.get("country", [""])[0] if isinstance(item.get("country"), list) else "",
+                            "provider": item.get("dataProvider", [""])[0]
+                            if isinstance(item.get("dataProvider"), list)
+                            else "",
+                            "country": item.get("country", [""])[0]
+                            if isinstance(item.get("country"), list)
+                            else "",
                             "type": item.get("type", ""),
-                            "year": item.get("year", [""])[0] if isinstance(item.get("year"), list) else "",
+                            "year": item.get("year", [""])[0]
+                            if isinstance(item.get("year"), list)
+                            else "",
                         },
                     }
                 return
@@ -671,7 +703,7 @@ class ContentLinker:
                 WHERE name_normalized LIKE :pattern
                 LIMIT 20
             """),
-            {"pattern": f"%{title_normalized[:15]}%"}
+            {"pattern": f"%{title_normalized[:15]}%"},
         )
 
         for row in result:
@@ -687,13 +719,17 @@ class ContentLinker:
                 "content_source": source_id,
                 "content_id": content_id,
                 "title": title[:500],
-                "thumbnail_url": item.get("edmPreview", [""])[0] if isinstance(item.get("edmPreview"), list) else "",
+                "thumbnail_url": item.get("edmPreview", [""])[0]
+                if isinstance(item.get("edmPreview"), list)
+                else "",
                 "content_url": item.get("guid", f"https://www.europeana.eu/item/{content_id}"),
                 "relevance_score": round(name_sim, 3),
                 "metadata": {},
             }
 
-    def _link_generic(self, session, source_id: str, item: dict, content_type: str) -> Iterator[dict]:
+    def _link_generic(
+        self, session, source_id: str, item: dict, content_type: str
+    ) -> Iterator[dict]:
         """Generic linker for unknown content types."""
         lat = item.get("lat")
         lon = item.get("lon")
@@ -726,7 +762,7 @@ class ContentLinker:
                 "max_lat": lat + lat_delta,
                 "min_lon": lon - lon_delta,
                 "max_lon": lon + lon_delta,
-            }
+            },
         )
 
         for row in result:
@@ -772,18 +808,24 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Link content to sites")
-    parser.add_argument("--type", "-t", help="Link only specific content type (text, map, inscription, model, artwork)")
+    parser.add_argument(
+        "--type",
+        "-t",
+        help="Link only specific content type (text, map, inscription, model, artwork)",
+    )
     parser.add_argument("--status", action="store_true", help="Show linking status")
     args = parser.parse_args()
 
     if args.status:
         with get_session() as session:
-            result = session.execute(text("""
+            result = session.execute(
+                text("""
                 SELECT content_type, content_source, COUNT(*) as count
                 FROM site_content_links
                 GROUP BY content_type, content_source
                 ORDER BY content_type, count DESC
-            """))
+            """)
+            )
 
             print("\nCurrent content links:")
             print("-" * 50)

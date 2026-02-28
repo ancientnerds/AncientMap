@@ -10,8 +10,6 @@ Priority: P3
 API: https://core.tdar.org/
 """
 
-
-
 from pipeline.connectors.base import BaseConnector
 from pipeline.connectors.protocols.rest import RestProtocol
 from pipeline.connectors.registry import ConnectorRegistry

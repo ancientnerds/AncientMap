@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
 import LazyImage from './LazyImage'
 
@@ -21,7 +22,7 @@ export interface SiteResultItemProps {
   onHoverLeave?: () => void
 }
 
-export default function SiteResultItem({
+function SiteResultItem({
   title,
   category,
   categoryColor,
@@ -39,6 +40,8 @@ export default function SiteResultItem({
   onHoverEnter,
   onHoverLeave,
 }: SiteResultItemProps) {
+  const flagUrl = location ? getCountryFlatFlagUrl(location) : null
+
   return (
     <div
       className={`search-result-item${selected ? ' selected' : ''}`}
@@ -54,9 +57,9 @@ export default function SiteResultItem({
           {location && (
             <div className="search-result-location">
               {location}
-              {getCountryFlatFlagUrl(location) && (
+              {flagUrl && (
                 <img
-                  src={getCountryFlatFlagUrl(location)!}
+                  src={flagUrl}
                   alt=""
                   className="search-result-flag"
                 />
@@ -92,3 +95,5 @@ export default function SiteResultItem({
     </div>
   )
 }
+
+export default memo(SiteResultItem)

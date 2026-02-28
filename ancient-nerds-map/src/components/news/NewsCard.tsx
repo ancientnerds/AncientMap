@@ -12,7 +12,7 @@
  * - size — 'sm' | 'md' | 'lg'
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, memo } from 'react'
 import { config } from '../../config'
 import { apiDetailToSiteData } from '../../utils/siteApi'
 import { formatDuration, formatRelativeDate } from '../../utils/formatters'
@@ -68,7 +68,7 @@ export interface NewsCardProps {
 const PLAY_SIZE = { sm: 20, md: 24, lg: 32 }
 const PIN_SIZE = { sm: 12, md: 14, lg: 14 }
 
-export default function NewsCard({
+function NewsCard({
   headline,
   postText,
   channelName,
@@ -218,6 +218,7 @@ export default function NewsCard({
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               referrerPolicy="strict-origin-when-cross-origin"
               allowFullScreen
+              title={headline || 'YouTube video'}
             />
             {showEmbedHint && (
               <div className="news-card-embed-hint">
@@ -291,6 +292,8 @@ export default function NewsCard({
     </div>
   )
 }
+
+export default memo(NewsCard)
 
 /**
  * Adapter: convert NewsHighlight (from Lyra chat SSE) → NewsCardProps.

@@ -62,7 +62,9 @@ def _save_cached_image(site_id: str, data: bytes, content_type: str) -> None:
 
 async def _fetch_thumbnail(thumbnail_url: str) -> tuple[bytes, str] | None:
     """Fetch a thumbnail URL. Returns (bytes, content_type) or None."""
-    user_agent = os.environ.get("OG_USER_AGENT", "AncientNerdsMap/1.0 (https://ancientnerds.com; contact@ancientnerds.com)")
+    user_agent = os.environ.get(
+        "OG_USER_AGENT", "AncientNerdsMap/1.0 (https://ancientnerds.com; contact@ancientnerds.com)"
+    )
     try:
         async with httpx.AsyncClient(timeout=10.0, headers={"User-Agent": user_agent}) as client:
             resp = await client.get(thumbnail_url, follow_redirects=True)
@@ -77,12 +79,12 @@ async def _fetch_thumbnail(thumbnail_url: str) -> tuple[bytes, str] | None:
 
 def _generate_og_fallback() -> bytes:
     """Generate a branded fallback OG image (logo on dark background)."""
-    img = Image.new('RGBA', (OG_WIDTH, OG_HEIGHT), (10, 20, 25, 255))
+    img = Image.new("RGBA", (OG_WIDTH, OG_HEIGHT), (10, 20, 25, 255))
 
     logo_path = LOGO_DIR / "without background.png"
     if logo_path.exists():
         try:
-            logo = Image.open(logo_path).convert('RGBA')
+            logo = Image.open(logo_path).convert("RGBA")
             logo_h = int(OG_HEIGHT * 0.6)
             logo_w = int(logo_h * logo.width / logo.height)
             logo = logo.resize((logo_w, logo_h), Image.Resampling.LANCZOS)
@@ -90,21 +92,21 @@ def _generate_og_fallback() -> bytes:
         except Exception as e:
             logger.warning(f"Failed to load logo: {e}")
 
-    img = img.convert('RGB')
+    img = img.convert("RGB")
     buffer = io.BytesIO()
-    img.save(buffer, format='WEBP', quality=82)
+    img.save(buffer, format="WEBP", quality=82)
     return buffer.getvalue()
 
 
 @router.get("/homepage")
 async def get_homepage_og_image():
     """Generate Open Graph image for the homepage."""
-    img = Image.new('RGBA', (OG_WIDTH, OG_HEIGHT), (10, 20, 25, 255))
+    img = Image.new("RGBA", (OG_WIDTH, OG_HEIGHT), (10, 20, 25, 255))
 
     logo_path = LOGO_DIR / "without background.png"
     if logo_path.exists():
         try:
-            logo = Image.open(logo_path).convert('RGBA')
+            logo = Image.open(logo_path).convert("RGBA")
             logo_h = int(OG_HEIGHT * 0.75)
             logo_w = int(logo_h * logo.width / logo.height)
             logo = logo.resize((logo_w, logo_h), Image.Resampling.LANCZOS)
@@ -112,9 +114,9 @@ async def get_homepage_og_image():
         except Exception as e:
             logger.warning(f"Failed to load logo for homepage: {e}")
 
-    img = img.convert('RGB')
+    img = img.convert("RGB")
     buffer = io.BytesIO()
-    img.save(buffer, format='JPEG', quality=85, optimize=True)
+    img.save(buffer, format="JPEG", quality=85, optimize=True)
     buffer.seek(0)
 
     return Response(
@@ -159,7 +161,11 @@ def get_site_data(site_id: str, db: Session) -> dict:
         pe = row.period_end
         suffix_s = "BC" if ps < 0 else "AD"
         suffix_e = "BC" if (pe or ps) < 0 else "AD"
-        period = f"{abs(ps)} {suffix_s}" if pe is None else f"{abs(ps)} {suffix_s} - {abs(pe)} {suffix_e}"
+        period = (
+            f"{abs(ps)} {suffix_s}"
+            if pe is None
+            else f"{abs(ps)} {suffix_s} - {abs(pe)} {suffix_e}"
+        )
 
     return {
         "found": True,
@@ -181,10 +187,10 @@ async def get_share_page(
     db: Session = Depends(get_db),
 ):
     """Serve HTML page with OG meta tags for social media sharing."""
-    if not re.match(r'^[0-9a-fA-F-]{36}$', site_id):
+    if not re.match(r"^[0-9a-fA-F-]{36}$", site_id):
         return HTMLResponse(content="Invalid site ID", status_code=400)
 
-    base_url = str(request.base_url).rstrip('/')
+    base_url = str(request.base_url).rstrip("/")
     base_url = base_url.replace("http://", "https://")
     site = get_site_data(site_id, db)
 
@@ -275,12 +281,17 @@ async def get_og_image(
     db: Session = Depends(get_db),
 ):
     """Serve the site's thumbnail image. Falls back to branded logo."""
+    if not re.match(r"^[0-9a-fA-F-]{36}$", site_id):
+        return Response(content="Invalid site ID", status_code=400)
+
     # Check disk cache first
     if not refresh:
         cached = _get_cached_image(site_id)
         if cached:
             data, ct = cached
-            return Response(content=data, media_type=ct, headers={"Cache-Control": "public, max-age=86400"})
+            return Response(
+                content=data, media_type=ct, headers={"Cache-Control": "public, max-age=86400"}
+            )
 
     site = get_site_data(site_id, db)
 
@@ -290,9 +301,15 @@ async def get_og_image(
         if result:
             data, ct = result
             _save_cached_image(site_id, data, ct)
-            return Response(content=data, media_type=ct, headers={"Cache-Control": "public, max-age=86400"})
+            return Response(
+                content=data, media_type=ct, headers={"Cache-Control": "public, max-age=86400"}
+            )
 
     # Fallback — branded logo image
     img_bytes = _generate_og_fallback()
     _save_cached_image(site_id, img_bytes, "image/webp")
-    return Response(content=img_bytes, media_type="image/webp", headers={"Cache-Control": "public, max-age=86400"})
+    return Response(
+        content=img_bytes,
+        media_type="image/webp",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )

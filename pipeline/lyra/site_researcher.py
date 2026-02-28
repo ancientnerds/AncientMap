@@ -68,9 +68,11 @@ WIKIDATA_SEARCH_URL = "https://www.wikidata.org/w/api.php"
 
 # --- Data classes ---
 
+
 @dataclass
 class ResearchResult:
     """Result of the multi-step research protocol."""
+
     pre_research: dict | None = None
     all_candidates: dict = field(default_factory=dict)
     best_match: dict | None = None
@@ -86,6 +88,7 @@ class ResearchResult:
 
 
 # --- Main entry point ---
+
 
 def research_site(
     name: str,
@@ -113,10 +116,12 @@ def research_site(
         for alt in result.pre_research["alternative_names"]:
             if alt and alt.lower().strip() != name.lower().strip() and alt not in search_names:
                 search_names.append(alt)
-    search_names = search_names[:settings.max_research_names]
+    search_names = search_names[: settings.max_research_names]
     result.search_names_used = search_names
 
-    logger.info(f"  [{name}] Research: searching with {len(search_names)} name variants: {search_names}")
+    logger.info(
+        f"  [{name}] Research: searching with {len(search_names)} name variants: {search_names}"
+    )
 
     # Step 2: Multi-source API search
     result.all_candidates = _search_all_sources(search_names, settings)
@@ -132,7 +137,12 @@ def research_site(
     # Step 3: Candidate selection (if we found any candidates)
     if total_candidates > 0:
         result.best_match = _select_best_candidate(
-            name, client, settings, facts, result.pre_research, result.all_candidates,
+            name,
+            client,
+            settings,
+            facts,
+            result.pre_research,
+            result.all_candidates,
         )
         if result.best_match:
             logger.info(
@@ -144,6 +154,7 @@ def research_site(
 
 
 # --- Step 1: Pre-Research ---
+
 
 def _pre_research(
     name: str,
@@ -171,11 +182,13 @@ def _pre_research(
             model=settings.model_identify,
             max_tokens=settings.max_tokens,
             messages=[{"role": "user", "content": prompt}],
-            system=[{
-                "type": "text",
-                "text": PRE_RESEARCH_SYSTEM,
-                "cache_control": {"type": "ephemeral"},
-            }],
+            system=[
+                {
+                    "type": "text",
+                    "text": PRE_RESEARCH_SYSTEM,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
             thinking={"type": "enabled", "budget_tokens": settings.max_tokens - 1024},
             prefill="{",
         )
@@ -202,6 +215,7 @@ def _pre_research(
 
 # --- Step 2: Multi-Source API Search ---
 
+
 def _search_all_sources(
     names: list[str],
     settings: LyraSettings,
@@ -217,9 +231,7 @@ def _search_all_sources(
         all_candidates["wikidata"].extend(_search_wikidata(name))
         all_candidates["wikipedia"].extend(_search_wikipedia_opensearch(name))
         if settings.geonames_username:
-            all_candidates["geonames"].extend(
-                _search_geonames(name, settings.geonames_username)
-            )
+            all_candidates["geonames"].extend(_search_geonames(name, settings.geonames_username))
 
     # SPARQL fallback: if basic wbsearchentities found nothing, try
     # the more specific archaeological-site-filtered SPARQL query
@@ -227,7 +239,9 @@ def _search_all_sources(
         sparql_results = _search_wikidata_sparql(names[0])
         if sparql_results:
             all_candidates["wikidata"].extend(sparql_results)
-            logger.info(f"  SPARQL fallback found {len(sparql_results)} candidates for '{names[0]}'")
+            logger.info(
+                f"  SPARQL fallback found {len(sparql_results)} candidates for '{names[0]}'"
+            )
 
     # Deduplicate within each source (by ID, then phonetically)
     all_candidates["wikidata"] = _dedupe_by_key(all_candidates["wikidata"], "qid")
@@ -257,7 +271,8 @@ def _dedupe_by_key(items: list[dict], key: str) -> list[dict]:
 
 
 def _dedupe_by_transliteration(
-    candidates: list[dict], higher_priority: list[dict],
+    candidates: list[dict],
+    higher_priority: list[dict],
 ) -> list[dict]:
     """Remove candidates whose transliterated name already exists in higher_priority list."""
     priority_translits = set()
@@ -275,7 +290,6 @@ def _dedupe_by_transliteration(
             continue  # Skip — higher-priority source already has this name
         result.append(c)
     return result
-
 
 
 def _search_wikidata(name: str) -> list[dict]:
@@ -376,7 +390,7 @@ def _search_wikidata_sparql(name: str) -> list[dict]:
     """SPARQL search filtered to archaeological site instances."""
     # Sanitize for SPARQL string literal — strip all characters that could
     # break out of the quoted string or alter query structure
-    safe_name = re.sub(r'[{}()#<>\\"' + "'" + r'\n\r\t]', '', name).strip()
+    safe_name = re.sub(r'[{}()#<>\\"' + "'" + r"\n\r\t]", "", name).strip()
     if not safe_name:
         return []
 
@@ -412,18 +426,21 @@ def _search_wikidata_sparql(name: str) -> list[dict]:
         qid = item_uri.split("/")[-1] if "/entity/" in item_uri else None
         if not qid:
             continue
-        results.append({
-            "qid": qid,
-            "label": binding.get("itemLabel", {}).get("value", ""),
-            "description": binding.get("itemDescription", {}).get("value", ""),
-            "country": binding.get("countryLabel", {}).get("value"),
-            "source": "wikidata_sparql",
-        })
+        results.append(
+            {
+                "qid": qid,
+                "label": binding.get("itemLabel", {}).get("value", ""),
+                "description": binding.get("itemDescription", {}).get("value", ""),
+                "country": binding.get("countryLabel", {}).get("value"),
+                "source": "wikidata_sparql",
+            }
+        )
 
     return results
 
 
 # --- Step 3: Candidate Selection ---
+
 
 def _select_best_candidate(
     name: str,
@@ -498,11 +515,13 @@ def _select_best_candidate(
             model=settings.model_identify,
             max_tokens=settings.max_tokens,
             messages=[{"role": "user", "content": prompt}],
-            system=[{
-                "type": "text",
-                "text": SYNTHESIS_SYSTEM,
-                "cache_control": {"type": "ephemeral"},
-            }],
+            system=[
+                {
+                    "type": "text",
+                    "text": SYNTHESIS_SYSTEM,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
             output_config={"format": {"type": "json_schema", "schema": RESEARCH_SYNTHESIS_SCHEMA}},
             prefill="{",
         )
@@ -526,7 +545,11 @@ def _select_best_candidate(
             for c in candidate_index.values():
                 cid = c.get("qid") or c.get("url") or str(c.get("geoname_id", ""))
                 if cid == chosen_id:
-                    return {**c, "confidence": result.get("confidence", "medium"), "reasoning": result.get("reasoning", "")}
+                    return {
+                        **c,
+                        "confidence": result.get("confidence", "medium"),
+                        "reasoning": result.get("reasoning", ""),
+                    }
 
             # If ID didn't match, return the raw result
             return result

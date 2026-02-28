@@ -139,8 +139,7 @@ class MetMuseumIngester(BaseIngester):
 
         with ThreadPoolExecutor(max_workers=self.MAX_PARALLEL) as executor:
             future_to_id = {
-                executor.submit(self._fetch_object, obj_id): obj_id
-                for obj_id in object_ids
+                executor.submit(self._fetch_object, obj_id): obj_id for obj_id in object_ids
             }
 
             for future in as_completed(future_to_id):
@@ -156,10 +155,11 @@ class MetMuseumIngester(BaseIngester):
 
                 if completed % 1000 == 0:
                     self.report_progress(
-                        completed, len(object_ids),
-                        f"{len(all_objects):,} with locations"
+                        completed, len(object_ids), f"{len(all_objects):,} with locations"
                     )
-                    logger.info(f"  Progress: {completed:,}/{len(object_ids):,} - {len(all_objects):,} with locations")
+                    logger.info(
+                        f"  Progress: {completed:,}/{len(object_ids):,} - {len(all_objects):,} with locations"
+                    )
 
         logger.info("=" * 60)
         logger.info(f"COMPLETED: {len(all_objects):,} objects with location data")
@@ -177,7 +177,7 @@ class MetMuseumIngester(BaseIngester):
                 "total_objects": len(all_objects),
                 "departments": list(self.DEPARTMENTS.values()),
                 "license": "CC0 (Public Domain)",
-            }
+            },
         }
 
         atomic_write_json(dest_path, output)
@@ -201,8 +201,14 @@ class MetMuseumIngester(BaseIngester):
         """Check if object has usable location data."""
         # Check for geographic location fields
         location_fields = [
-            "country", "region", "subregion", "locale", "locus",
-            "excavation", "river", "city"
+            "country",
+            "region",
+            "subregion",
+            "locale",
+            "locus",
+            "excavation",
+            "river",
+            "city",
         ]
         for field in location_fields:
             if obj.get(field):
@@ -286,7 +292,9 @@ class MetMuseumIngester(BaseIngester):
             period_name=obj.get("period"),
             precision_meters=10000,  # Museum provenance is often approximate
             precision_reason="museum_provenance",
-            source_url=obj.get("objectURL", f"https://www.metmuseum.org/art/collection/search/{object_id}"),
+            source_url=obj.get(
+                "objectURL", f"https://www.metmuseum.org/art/collection/search/{object_id}"
+            ),
             raw_data={
                 "object_id": object_id,
                 "department": obj.get("department"),

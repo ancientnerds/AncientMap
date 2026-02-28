@@ -404,9 +404,7 @@ class BaseConnector(ABC):
         Yields:
             ContentItem objects
         """
-        raise NotImplementedError(
-            f"{self.connector_name} does not support batch fetching"
-        )
+        raise NotImplementedError(f"{self.connector_name} does not support batch fetching")
 
     # =========================================================================
     # Helper methods for subclasses
@@ -422,9 +420,7 @@ class BaseConnector(ABC):
 
         # Normalize unicode and remove diacritics
         normalized = unicodedata.normalize("NFD", text)
-        ascii_text = "".join(
-            c for c in normalized if unicodedata.category(c) != "Mn"
-        )
+        ascii_text = "".join(c for c in normalized if unicodedata.category(c) != "Mn")
 
         # Lowercase and clean whitespace
         return " ".join(ascii_text.lower().split())

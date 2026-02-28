@@ -29,10 +29,12 @@ def seed_channels() -> None:
         added = 0
         for ch in channels:
             if ch["id"] not in existing:
-                session.add(NewsChannel(
-                    id=ch["id"],
-                    name=ch["name"],
-                ))
+                session.add(
+                    NewsChannel(
+                        id=ch["id"],
+                        name=ch["name"],
+                    )
+                )
                 added += 1
         if added:
             logger.info(f"Seeded {added} new channels")

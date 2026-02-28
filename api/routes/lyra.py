@@ -33,15 +33,17 @@ _chat_limiter = RateLimiter(max_requests=15, window_seconds=60, namespace="lyra_
 SSE_MAX_DURATION = 300  # Max SSE stream duration in seconds (5 minutes)
 
 # Anti-exploit: cap conversation history for low-credit users to bound max request cost
-LOW_CREDIT_THRESHOLD = 20   # credits below which history is truncated
+LOW_CREDIT_THRESHOLD = 20  # credits below which history is truncated
 LOW_CREDIT_MAX_HISTORY = 5  # max history messages for low-credit users (~2-3 exchanges)
 
 # ---------------------------------------------------------------------------
 # Request / Response models
 # ---------------------------------------------------------------------------
 
+
 class _ImagePayload(BaseModel):
     """Single base64 image in a Lyra chat request."""
+
     data: str = Field(
         ...,
         max_length=2_000_000,
@@ -52,23 +54,34 @@ class _ImagePayload(BaseModel):
 
 class _HistoryMessage(BaseModel):
     """Single message in conversation history."""
+
     role: str = Field(..., pattern=r"^(user|assistant)$")
     content: str = Field(..., max_length=4000)
 
 
 class LyraChatRequest(BaseModel):
     """Request body for Lyra chat (login required, no Turnstile)."""
+
     message: str = Field(..., min_length=1, max_length=4000)
-    images: list[_ImagePayload] | None = Field(default=None, max_length=5, description="Base64 images")
-    context_type: str = Field(default="global", description="Where chat was opened: global, site, empire, news")
-    context_id: str | None = Field(default=None, max_length=100, description="UUID of site, empire polity ID, or news item ID")
+    images: list[_ImagePayload] | None = Field(
+        default=None, max_length=5, description="Base64 images"
+    )
+    context_type: str = Field(
+        default="global", description="Where chat was opened: global, site, empire, news"
+    )
+    context_id: str | None = Field(
+        default=None, max_length=100, description="UUID of site, empire polity ID, or news item ID"
+    )
     context_year: int | None = Field(default=None, description="Year for empire context")
-    history: list[_HistoryMessage] | None = Field(default=None, max_length=50, description="Conversation history [{role, content}]")
+    history: list[_HistoryMessage] | None = Field(
+        default=None, max_length=50, description="Conversation history [{role, content}]"
+    )
 
 
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @router.post("/chat")
 async def lyra_chat(request: LyraChatRequest, req: Request):
@@ -85,9 +98,14 @@ async def lyra_chat(request: LyraChatRequest, req: Request):
 
     # Check unlimited flag and credits atomically
     with get_db_session() as session:
-        db_user = session.query(DBUser).filter(
-            DBUser.id == user.id,
-        ).with_for_update().first()
+        db_user = (
+            session.query(DBUser)
+            .filter(
+                DBUser.id == user.id,
+            )
+            .with_for_update()
+            .first()
+        )
         if not db_user:
             raise HTTPException(status_code=402, detail="No credits remaining")
 
@@ -110,7 +128,11 @@ async def lyra_chat(request: LyraChatRequest, req: Request):
 
     # Anti-exploit: limit history length for low-credit users to bound max cost
     history = [h.model_dump() for h in request.history] if request.history else None
-    if deposit_remaining < LOW_CREDIT_THRESHOLD and history and len(history) > LOW_CREDIT_MAX_HISTORY:
+    if (
+        deposit_remaining < LOW_CREDIT_THRESHOLD
+        and history
+        and len(history) > LOW_CREDIT_MAX_HISTORY
+    ):
         history = history[-LOW_CREDIT_MAX_HISTORY:]
 
     return _stream_response_with_credits(
@@ -238,7 +260,12 @@ def _stream_response_with_credits(
             if not done_fired:
                 try:
                     with get_db_session() as session:
-                        u = session.query(DBUser).filter(DBUser.id == user_id).with_for_update().first()
+                        u = (
+                            session.query(DBUser)
+                            .filter(DBUser.id == user_id)
+                            .with_for_update()
+                            .first()
+                        )
                         if u:
                             u.credits += 1
                 except Exception:
@@ -277,27 +304,37 @@ def _reconcile_credits(
     additional = credits_used - 1  # deposit was 1
 
     with get_session() as session:
-        user = session.query(DiscordUser).filter(DiscordUser.id == user_id).with_for_update().first()
+        user = (
+            session.query(DiscordUser).filter(DiscordUser.id == user_id).with_for_update().first()
+        )
         if not user:
             return 0
 
         if additional > 0:
             user.credits = max(0, user.credits - additional)
 
-        session.add(TokenUsageLog(
-            user_id=user_id,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            voyage_tokens=voyage_tokens,
-            credits_used=credits_used,
-        ))
+        session.add(
+            TokenUsageLog(
+                user_id=user_id,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                voyage_tokens=voyage_tokens,
+                credits_used=credits_used,
+            )
+        )
         remaining = user.credits
 
         # Check Lyra-related achievements (fire and forget — no way to send back via SSE)
         from api.cardgame.achievements import check_achievements
-        check_achievements(session, user_id, "lyra_chat", context={
-            "context_type": context_type,
-            "has_images": has_images,
-        })
+
+        check_achievements(
+            session,
+            user_id,
+            "lyra_chat",
+            context={
+                "context_type": context_type,
+                "has_images": has_images,
+            },
+        )
 
     return remaining

@@ -27,7 +27,7 @@ GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")
 async def check_street_view(
     lat: float = Query(..., description="Latitude"),
     lon: float = Query(..., description="Longitude"),
-    radius: int = Query(100, description="Search radius in meters")
+    radius: int = Query(100, description="Search radius in meters"),
 ):
     """
     Check if Street View coverage exists at the given coordinates.
@@ -55,11 +55,7 @@ async def check_street_view(
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(
                 "https://maps.googleapis.com/maps/api/streetview/metadata",
-                params={
-                    "location": f"{lat},{lon}",
-                    "radius": radius,
-                    "key": GOOGLE_MAPS_API_KEY
-                }
+                params={"location": f"{lat},{lon}", "radius": radius, "key": GOOGLE_MAPS_API_KEY},
             )
 
             if response.status_code != 200:
@@ -76,7 +72,7 @@ async def check_street_view(
                 result = {
                     "available": True,
                     "pano_id": data.get("pano_id"),
-                    "location": data.get("location")
+                    "location": data.get("location"),
                 }
             else:
                 result = {"available": False, "pano_id": None}

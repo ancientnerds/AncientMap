@@ -43,10 +43,13 @@ def _extract_frame(video_id: str, timestamp: int, output_path: Path, proxy_url: 
     # Step 1: Download a tiny clip around the timestamp via yt-dlp
     cmd_clip = [
         "yt-dlp",
-        "-f", "bestvideo[height<=480]/worst",
-        "--download-sections", f"*{timestamp}-{timestamp + 3}",
+        "-f",
+        "bestvideo[height<=480]/worst",
+        "--download-sections",
+        f"*{timestamp}-{timestamp + 3}",
         "--force-keyframes-at-cuts",
-        "-o", str(clip_path),
+        "-o",
+        str(clip_path),
         "--no-warnings",
         yt_url,
     ]
@@ -69,10 +72,14 @@ def _extract_frame(video_id: str, timestamp: int, output_path: Path, proxy_url: 
     # Step 2: Extract first frame from local clip (no network, instant)
     cmd_ffmpeg = [
         "ffmpeg",
-        "-i", str(clip_path),
-        "-frames:v", "1",
-        "-c:v", "libwebp",
-        "-q:v", "75",
+        "-i",
+        str(clip_path),
+        "-frames:v",
+        "1",
+        "-c:v",
+        "libwebp",
+        "-q:v",
+        "75",
         "-y",
         str(output_path),
     ]
@@ -123,7 +130,9 @@ def extract_screenshots(settings: LyraSettings) -> int:
         # Build work list, skipping items that already have a file on disk
         # Map item_id -> item for applying results back in the main thread
         item_by_id: dict[int, NewsItem] = {}
-        to_extract: list[tuple[int, str, int, str, Path]] = []  # (item_id, video_id, ts, filename, output_path)
+        to_extract: list[
+            tuple[int, str, int, str, Path]
+        ] = []  # (item_id, video_id, ts, filename, output_path)
         for item in items:
             timestamp = item.timestamp_seconds + SCREENSHOT_OFFSET
             filename = f"{item.video_id}_{timestamp}.webp"

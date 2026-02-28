@@ -10,7 +10,6 @@ Priority: P1
 API: https://www.loc.gov/apis/
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
@@ -87,7 +86,11 @@ class LibraryOfCongressConnector(BaseConnector):
                     ct = ContentType.PHOTO
                     if content_type:
                         ct = content_type
-                    elif "map" in result.get("original_format", [""])[0].lower() if result.get("original_format") else False:
+                    elif (
+                        "map" in result.get("original_format", [""])[0].lower()
+                        if result.get("original_format")
+                        else False
+                    ):
                         ct = ContentType.MAP
 
                     item = ContentItem(
@@ -95,10 +98,14 @@ class LibraryOfCongressConnector(BaseConnector):
                         source=self.connector_id,
                         content_type=ct,
                         title=result.get("title", "Unknown"),
-                        description=result.get("description", [""])[0] if result.get("description") else None,
+                        description=result.get("description", [""])[0]
+                        if result.get("description")
+                        else None,
                         url=result.get("url", ""),
                         thumbnail_url=thumbnail,
-                        creator=result.get("contributor", [""])[0] if result.get("contributor") else None,
+                        creator=result.get("contributor", [""])[0]
+                        if result.get("contributor")
+                        else None,
                         date=result.get("date", ""),
                         license=self.license,
                         attribution=self.attribution,

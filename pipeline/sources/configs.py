@@ -50,7 +50,6 @@ SOURCE_CONFIG: dict[str, SourceConfigType] = {
         "enabled_by_default": True,
         "priority": 0,  # Highest priority
     },
-
     # Priority 1: Core ancient world databases
     "pleiades": {
         "name": "Pleiades",
@@ -85,7 +84,6 @@ SOURCE_CONFIG: dict[str, SourceConfigType] = {
         "license": "CC BY-NC-SA 4.0",
         "attribution": "ToposText Project",
     },
-
     # Priority 2: Global databases
     "unesco": {
         "name": "UNESCO World Heritage",
@@ -109,7 +107,6 @@ SOURCE_CONFIG: dict[str, SourceConfigType] = {
         "license": "CC0",
         "attribution": "Wikidata",
     },
-
     # Priority 3: Regional databases
     "osm_historic": {
         "name": "OpenStreetMap Historic",
@@ -155,7 +152,6 @@ SOURCE_CONFIG: dict[str, SourceConfigType] = {
         "license": "CC BY-NC-SA 3.0",
         "attribution": "DAI & CoDArchLab",
     },
-
     # Priority 4: Specialized databases
     "megalithic_portal": {
         "name": "Megalithic Portal",
@@ -190,7 +186,6 @@ SOURCE_CONFIG: dict[str, SourceConfigType] = {
         "license": "Various",
         "attribution": "Rock Art Database",
     },
-
     # Inscriptions & Texts
     "inscriptions_edh": {
         "name": "EDH Inscriptions",
@@ -203,7 +198,6 @@ SOURCE_CONFIG: dict[str, SourceConfigType] = {
         "license": "CC BY-SA 3.0",
         "attribution": "Epigraphic Database Heidelberg",
     },
-
     # Maritime & Shipwrecks
     "shipwrecks_oxrep": {
         "name": "OXREP Shipwrecks",
@@ -216,7 +210,6 @@ SOURCE_CONFIG: dict[str, SourceConfigType] = {
         "license": "CC BY 4.0",
         "attribution": "Oxford Roman Economy Project",
     },
-
     # Numismatics
     "coins_nomisma": {
         "name": "Nomisma Coins",
@@ -229,7 +222,6 @@ SOURCE_CONFIG: dict[str, SourceConfigType] = {
         "license": "CC BY 4.0",
         "attribution": "Nomisma.org",
     },
-
     # Environmental
     "volcanic_holvol": {
         "name": "HolVol Volcanic",
@@ -254,7 +246,6 @@ SOURCE_CONFIG: dict[str, SourceConfigType] = {
         "attribution": "Earth Impact Database / Planetary and Space Science Centre",
         "priority": 26,
     },
-
     # NCEI Natural Hazards
     "ncei_earthquakes": {
         "name": "NCEI Significant Earthquakes",
@@ -300,7 +291,6 @@ SOURCE_CONFIG: dict[str, SourceConfigType] = {
         "license": "Public Domain",
         "attribution": "NOAA NCEI Natural Hazards",
     },
-
     # 3D Models
     "models_sketchfab": {
         "name": "Sketchfab 3D Models",
@@ -313,7 +303,6 @@ SOURCE_CONFIG: dict[str, SourceConfigType] = {
         "license": "Various",
         "attribution": "Sketchfab",
     },
-
     # Boundaries
     "boundaries_seshat": {
         "name": "Seshat Boundaries",
@@ -326,7 +315,6 @@ SOURCE_CONFIG: dict[str, SourceConfigType] = {
         "license": "CC BY-NC-SA 4.0",
         "attribution": "Seshat Databank",
     },
-
     # Middle East & Africa
     "eamena": {
         "name": "EAMENA",
@@ -339,7 +327,6 @@ SOURCE_CONFIG: dict[str, SourceConfigType] = {
         "license": "CC BY 4.0",
         "attribution": "EAMENA Database",
     },
-
     # Open Context
     "open_context": {
         "name": "Open Context",
@@ -352,7 +339,6 @@ SOURCE_CONFIG: dict[str, SourceConfigType] = {
         "license": "CC BY 4.0",
         "attribution": "Open Context",
     },
-
     # Museum Collections
     "europeana": {
         "name": "Europeana",
@@ -365,7 +351,6 @@ SOURCE_CONFIG: dict[str, SourceConfigType] = {
         "license": "CC BY-SA 4.0",
         "attribution": "Europeana",
     },
-
     # Historical Maps
     "david_rumsey": {
         "name": "David Rumsey Maps",
@@ -384,27 +369,70 @@ SOURCE_CONFIG: dict[str, SourceConfigType] = {
 # Site types to EXCLUDE from Wikidata and OSM (mostly medieval/modern)
 EXCLUDED_MODERN_TYPES = {
     # Religious buildings (mostly medieval/modern)
-    "church", "cathedral", "chapel", "monastery", "abbey", "priory",
-    "mosque", "synagogue",
+    "church",
+    "cathedral",
+    "chapel",
+    "monastery",
+    "abbey",
+    "priory",
+    "mosque",
+    "synagogue",
     # Modern memorials
-    "memorial", "cenotaph", "war_memorial",
+    "memorial",
+    "cenotaph",
+    "war_memorial",
     # Cemeteries (mostly modern)
-    "cemetery", "grave_yard", "graveyard",
+    "cemetery",
+    "grave_yard",
+    "graveyard",
     # Industrial heritage
-    "mine", "mill", "factory", "industrial",
+    "mine",
+    "mill",
+    "factory",
+    "industrial",
     # Transportation
-    "railway", "railway_station", "station", "bridge",
+    "railway",
+    "railway_station",
+    "station",
+    "bridge",
     # Misc modern
-    "cannon", "tank", "aircraft", "ship",
-    "milestone", "boundary_stone", "wayside_cross", "wayside_shrine",
+    "cannon",
+    "tank",
+    "aircraft",
+    "ship",
+    "milestone",
+    "boundary_stone",
+    "wayside_cross",
+    "wayside_shrine",
 }
 
 
 # Site types that ARE ancient (whitelist for strict filtering)
 ANCIENT_SITE_TYPES = {
-    "archaeological_site", "ruin", "ruins", "tomb", "tumulus", "barrow",
-    "dolmen", "menhir", "stone_circle", "megalith", "fort", "hillfort",
-    "castle", "temple", "settlement", "city", "amphitheatre", "theatre",
-    "aqueduct", "roman", "celtic", "prehistoric", "neolithic",
-    "bronze_age", "iron_age", "ancient",
+    "archaeological_site",
+    "ruin",
+    "ruins",
+    "tomb",
+    "tumulus",
+    "barrow",
+    "dolmen",
+    "menhir",
+    "stone_circle",
+    "megalith",
+    "fort",
+    "hillfort",
+    "castle",
+    "temple",
+    "settlement",
+    "city",
+    "amphitheatre",
+    "theatre",
+    "aqueduct",
+    "roman",
+    "celtic",
+    "prehistoric",
+    "neolithic",
+    "bronze_age",
+    "iron_age",
+    "ancient",
 }

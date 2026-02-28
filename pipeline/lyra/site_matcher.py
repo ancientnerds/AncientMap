@@ -26,9 +26,13 @@ _lyra_contrib_cache: dict[str, UserContribution] | None = None
 
 def _build_lyra_contrib_cache(session: Session) -> dict[str, UserContribution]:
     """Build a normalize_name → UserContribution lookup for all lyra contributions."""
-    all_lyra = session.query(UserContribution).filter(
-        UserContribution.source == "lyra",
-    ).all()
+    all_lyra = (
+        session.query(UserContribution)
+        .filter(
+            UserContribution.source == "lyra",
+        )
+        .all()
+    )
     cache: dict[str, UserContribution] = {}
     for contrib in all_lyra:
         key = normalize_name(contrib.corrected_name or contrib.name)
@@ -47,7 +51,9 @@ def _find_lyra_contribution(session: Session, normalized: str) -> UserContributi
 
 def _load_source_priority(session: Session) -> dict[str, int]:
     """Load source priorities from source_meta. Lower priority = better source."""
-    rows = session.query(SourceMeta.id, SourceMeta.priority).filter(SourceMeta.enabled.is_(True)).all()
+    rows = (
+        session.query(SourceMeta.id, SourceMeta.priority).filter(SourceMeta.enabled.is_(True)).all()
+    )
     return {row.id: row.priority for row in rows}
 
 
@@ -75,14 +81,22 @@ def _find_site_by_name(
 
     # 1+1.5. Exact + spaceless match on unified_sites.name_normalized
     # Merged so "gobekli tepe" (exact) and "gobeklitepe" (spaceless) compete on priority.
-    exact = session.query(UnifiedSite).filter(
-        UnifiedSite.name_normalized == normalized,
-        source_filter,
-    ).all()
-    spaceless_matches = session.query(UnifiedSite).filter(
-        func.replace(UnifiedSite.name_normalized, ' ', '') == spaceless,
-        source_filter,
-    ).all()
+    exact = (
+        session.query(UnifiedSite)
+        .filter(
+            UnifiedSite.name_normalized == normalized,
+            source_filter,
+        )
+        .all()
+    )
+    spaceless_matches = (
+        session.query(UnifiedSite)
+        .filter(
+            func.replace(UnifiedSite.name_normalized, " ", "") == spaceless,
+            source_filter,
+        )
+        .all()
+    )
     combined = {m.id: m for m in exact + spaceless_matches}
 
     if len(combined) == 1:
@@ -91,18 +105,20 @@ def _find_site_by_name(
         return _pick_best_match(list(combined.values()), source_priority)
 
     # 2+2.5. Exact + spaceless match on unified_site_names (alternate names)
-    alt_exact = session.query(UnifiedSiteName).filter(
-        UnifiedSiteName.name_normalized == normalized
-    ).all()
-    alt_spaceless = session.query(UnifiedSiteName).filter(
-        func.replace(UnifiedSiteName.name_normalized, ' ', '') == spaceless
-    ).all()
+    alt_exact = (
+        session.query(UnifiedSiteName).filter(UnifiedSiteName.name_normalized == normalized).all()
+    )
+    alt_spaceless = (
+        session.query(UnifiedSiteName)
+        .filter(func.replace(UnifiedSiteName.name_normalized, " ", "") == spaceless)
+        .all()
+    )
     alt_site_ids = {m.site_id for m in alt_exact + alt_spaceless}
 
     if alt_site_ids:
-        candidates = session.query(UnifiedSite).filter(
-            UnifiedSite.id.in_(alt_site_ids), source_filter
-        ).all()
+        candidates = (
+            session.query(UnifiedSite).filter(UnifiedSite.id.in_(alt_site_ids), source_filter).all()
+        )
         if len(candidates) == 1:
             return candidates[0]
         if len(candidates) > 1:
@@ -111,7 +127,9 @@ def _find_site_by_name(
     return None
 
 
-def _pick_best_match(matches: list[UnifiedSite], source_priority: dict[str, int]) -> UnifiedSite | None:
+def _pick_best_match(
+    matches: list[UnifiedSite], source_priority: dict[str, int]
+) -> UnifiedSite | None:
     """Pick the best match from multiple candidates, preferring lowest priority (most curated)."""
     return min(matches, key=lambda m: source_priority.get(m.source_id, 99))
 
@@ -160,11 +178,15 @@ def match_sites_for_pending_items() -> int:
             )
         }
 
-        items = session.query(NewsItem).filter(
-            NewsItem.site_name_extracted.isnot(None),
-            NewsItem.site_id.is_(None),
-            NewsItem.site_match_tried.is_(False),
-        ).all()
+        items = (
+            session.query(NewsItem)
+            .filter(
+                NewsItem.site_name_extracted.isnot(None),
+                NewsItem.site_id.is_(None),
+                NewsItem.site_match_tried.is_(False),
+            )
+            .all()
+        )
 
         if not items:
             return 0
@@ -172,7 +194,9 @@ def match_sites_for_pending_items() -> int:
         logger.info(f"Attempting site matching for {len(items)} news items")
 
         for item in items:
-            site = _find_site_by_name(session, item.site_name_extracted, matchable_sources, source_priority)
+            site = _find_site_by_name(
+                session, item.site_name_extracted, matchable_sources, source_priority
+            )
             if site:
                 item.site_id = site.id
                 _correct_text_fields(item, site.name)
@@ -212,20 +236,26 @@ def _extract_topic_metadata(session: Session, item: NewsItem) -> dict:
         if not primary_site or not isinstance(primary_site, dict):
             continue
         # Match by site name
-        if primary_site.get("name") and normalize_name(primary_site["name"]) == normalize_name(item.site_name_extracted):
+        if primary_site.get("name") and normalize_name(primary_site["name"]) == normalize_name(
+            item.site_name_extracted
+        ):
             raw_period = primary_site.get("period")
             period_start = extract_period_from_text(raw_period) if raw_period else None
             return {
                 "country": primary_site.get("country"),
                 "site_type": primary_site.get("site_type"),
-                "period_name": categorize_period(period_start) if period_start is not None else raw_period,
+                "period_name": categorize_period(period_start)
+                if period_start is not None
+                else raw_period,
                 "period_start": period_start,
             }
     return {}
 
 
 def _upsert_lyra_suggestion(
-    session: Session, item: NewsItem, matched_site: UnifiedSite | None = None,
+    session: Session,
+    item: NewsItem,
+    matched_site: UnifiedSite | None = None,
 ) -> None:
     """Upsert site name into user_contributions for curation.
 
@@ -267,7 +297,9 @@ def _upsert_lyra_suggestion(
             site_type=metadata.get("site_type"),
             period_name=metadata.get("period_name"),
             period_start=metadata.get("period_start"),
-            source_url=f"https://www.youtube.com/watch?v={item.video_id}" if item.video_id else None,
+            source_url=f"https://www.youtube.com/watch?v={item.video_id}"
+            if item.video_id
+            else None,
         )
         # Enrich from matched external site (fill-if-missing)
         if matched_site:

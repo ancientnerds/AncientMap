@@ -81,8 +81,12 @@ class NCEIVolcanoesIngester(BaseIngester):
                     break
 
                 all_eruptions.extend(items)
-                logger.info(f"Fetched {len(items)} eruptions (total: {len(all_eruptions)}/{total_items})")
-                self.report_progress(len(all_eruptions), total_items, f"{len(all_eruptions):,} eruptions")
+                logger.info(
+                    f"Fetched {len(items)} eruptions (total: {len(all_eruptions)}/{total_items})"
+                )
+                self.report_progress(
+                    len(all_eruptions), total_items, f"{len(all_eruptions):,} eruptions"
+                )
 
                 if page >= total_pages:
                     break
@@ -121,7 +125,11 @@ class NCEIVolcanoesIngester(BaseIngester):
                 completed += 1
                 if completed % 100 == 0:
                     logger.info(f"Fetched details for {completed}/{len(all_eruptions)} eruptions")
-                    self.report_progress(completed, len(all_eruptions), f"details: {completed:,}/{len(all_eruptions):,}")
+                    self.report_progress(
+                        completed,
+                        len(all_eruptions),
+                        f"details: {completed:,}/{len(all_eruptions):,}",
+                    )
 
         # Parse eruptions
         parsed_eruptions = []
@@ -131,7 +139,9 @@ class NCEIVolcanoesIngester(BaseIngester):
                 parsed_eruptions.append(parsed)
 
         logger.info(f"Total eruptions: {len(parsed_eruptions):,}")
-        self.report_progress(len(parsed_eruptions), len(parsed_eruptions), f"{len(parsed_eruptions):,} eruptions")
+        self.report_progress(
+            len(parsed_eruptions), len(parsed_eruptions), f"{len(parsed_eruptions):,} eruptions"
+        )
 
         output = {
             "volcanoes": parsed_eruptions,
@@ -143,7 +153,7 @@ class NCEIVolcanoesIngester(BaseIngester):
                 "data_type": "volcanic_eruptions",
                 "license": "Public Domain",
                 "attribution": "NOAA NCEI Natural Hazards",
-            }
+            },
         }
 
         atomic_write_json(dest_path, output)
@@ -237,7 +247,12 @@ class NCEIVolcanoesIngester(BaseIngester):
             if eruption.get("deaths_total"):
                 desc_parts.append(f"Deaths: {eruption['deaths_total']:,}")
             if eruption.get("agent"):
-                agent_map = {"P": "Pyroclastic flow", "T": "Tsunami", "M": "Mudflow/Lahar", "L": "Lava"}
+                agent_map = {
+                    "P": "Pyroclastic flow",
+                    "T": "Tsunami",
+                    "M": "Mudflow/Lahar",
+                    "L": "Lava",
+                }
                 agent_desc = agent_map.get(eruption["agent"], eruption["agent"])
                 desc_parts.append(f"Agent: {agent_desc}")
             description = ". ".join(desc_parts) if desc_parts else None

@@ -9,9 +9,9 @@ from .dates import parse_epoch_timestamp, parse_iso_date, parse_year, passes_dat
 from .site_type import normalize_site_type
 
 __all__ = [
-    'parse_year',
-    'passes_date_cutoff',
-    'parse_iso_date',
-    'parse_epoch_timestamp',
-    'normalize_site_type',
+    "parse_year",
+    "passes_date_cutoff",
+    "parse_iso_date",
+    "parse_epoch_timestamp",
+    "normalize_site_type",
 ]

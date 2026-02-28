@@ -168,7 +168,10 @@ class PleiadesGISConnector(BaseConnector):
         """Create ContentItem from RDF/RSS data only."""
         try:
             title = rss_item.findtext("{http://purl.org/rss/1.0/}title", "Unknown Place")
-            link = rss_item.get("{http://www.w3.org/1999/02/22-rdf-syntax-ns#}about", f"https://pleiades.stoa.org/places/{place_id}")
+            link = rss_item.get(
+                "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}about",
+                f"https://pleiades.stoa.org/places/{place_id}",
+            )
             description = rss_item.findtext("{http://purl.org/rss/1.0/}description", "")
 
             return ContentItem(
@@ -205,7 +208,10 @@ class PleiadesGISConnector(BaseConnector):
             lat_delta = radius_km / 111.0
             # 1 degree longitude varies by latitude
             import math
-            lon_delta = radius_km / (111.0 * math.cos(math.radians(lat))) if lat != 0 else radius_km / 111.0
+
+            lon_delta = (
+                radius_km / (111.0 * math.cos(math.radians(lat))) if lat != 0 else radius_km / 111.0
+            )
 
             lat - lat_delta
             lat + lat_delta
@@ -221,7 +227,7 @@ class PleiadesGISConnector(BaseConnector):
                     "portal_type": "Place",
                     "review_state": "published",
                     "b_size": limit * 2,  # Get extra to filter
-                }
+                },
             )
 
             # This is a basic implementation - for production would need

@@ -142,8 +142,12 @@ def resolve_battle(
         "winner": overall_winner,
         "challenger_wins": c_wins,
         "defender_wins": d_wins,
-        "challenger_synergies": describe_synergies(challenger_deck, commander_empire_id=challenger_commander),
-        "defender_synergies": describe_synergies(defender_deck, commander_empire_id=defender_commander),
+        "challenger_synergies": describe_synergies(
+            challenger_deck, commander_empire_id=challenger_commander
+        ),
+        "defender_synergies": describe_synergies(
+            defender_deck, commander_empire_id=defender_commander
+        ),
     }
 
 
@@ -180,11 +184,13 @@ def apply_battle_result(
     effective_stake = battle.stake_credits * (battle.snap_multiplier or 1)
     if effective_stake > 0 and winner_user:
         winner_user.credits += effective_stake * 2
-        session.add(CreditGrant(
-            user_id=winner_user.id,
-            amount=effective_stake * 2,
-            reason="card_battle_stake_win",
-        ))
+        session.add(
+            CreditGrant(
+                user_id=winner_user.id,
+                amount=effective_stake * 2,
+                reason="card_battle_stake_win",
+            )
+        )
 
     # Update player stats
     for user, is_winner in [
@@ -212,11 +218,13 @@ def apply_battle_result(
     # Winner gets credits + chance at card drop
     if winner_user:
         winner_user.credits += BATTLE_WIN_CREDITS
-        session.add(CreditGrant(
-            user_id=winner_user.id,
-            amount=BATTLE_WIN_CREDITS,
-            reason="card_battle_win",
-        ))
+        session.add(
+            CreditGrant(
+                user_id=winner_user.id,
+                amount=BATTLE_WIN_CREDITS,
+                reason="card_battle_win",
+            )
+        )
 
         # Random card drop
         rng = random.Random(str(battle.id) + "drop")  # noqa: S311 — game logic
@@ -225,18 +233,20 @@ def apply_battle_result(
             from api.cardgame.packs import _pick_card
 
             owned = {
-                r[0] for r in
-                session.query(CardCollection.site_id)
+                r[0]
+                for r in session.query(CardCollection.site_id)
                 .filter(CardCollection.user_id == winner_user.id)
                 .all()
             }
             card = _pick_card(session, 1, owned)
             if card:
-                session.add(CardCollection(
-                    user_id=winner_user.id,
-                    site_id=card.site_id,
-                    acquired_via="battle_drop",
-                ))
+                session.add(
+                    CardCollection(
+                        user_id=winner_user.id,
+                        site_id=card.site_id,
+                        acquired_via="battle_drop",
+                    )
+                )
                 ps = session.get(CardPlayerStats, winner_user.id)
                 if ps:
                     ps.total_cards += 1

@@ -94,7 +94,7 @@ def clean_description(description: str | None, max_length: int = 1000) -> str | 
 
     # Truncate if needed
     if len(text) > max_length:
-        text = text[:max_length - 3] + "..."
+        text = text[: max_length - 3] + "..."
 
     return text if text else None
 
@@ -258,10 +258,10 @@ def sanitize_filename(name: str, max_length: int = 100) -> str:
         return "unnamed"
 
     # Remove/replace unsafe characters
-    safe = re.sub(r'[<>:"/\\|?*]', '_', name)
-    safe = re.sub(r'\s+', '_', safe)
-    safe = re.sub(r'_+', '_', safe)
-    safe = safe.strip('_')
+    safe = re.sub(r'[<>:"/\\|?*]', "_", name)
+    safe = re.sub(r"\s+", "_", safe)
+    safe = re.sub(r"_+", "_", safe)
+    safe = safe.strip("_")
 
     # Truncate
     if len(safe) > max_length:

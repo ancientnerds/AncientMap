@@ -12,7 +12,7 @@ from pathlib import Path
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from PIL import Image
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -31,16 +31,29 @@ class SetHeroRequest(BaseModel):
     image_url: str
     attribution_url: str
 
+    @field_validator("image_url")
+    @classmethod
+    def validate_image_url(cls, v: str) -> str:
+        from urllib.parse import urlparse
+
+        parsed = urlparse(v)
+        allowed = ("upload.wikimedia.org", "commons.wikimedia.org", "i.imgur.com")
+        if parsed.scheme != "https" or parsed.hostname not in allowed:
+            raise ValueError(f"URL must be HTTPS from: {', '.join(allowed)}")
+        return v
+
 
 @router.get("/hero-status")
 async def get_hero_status(db: Session = Depends(get_db)):
     """Return hero image info for all sites that have one."""
-    result = db.execute(text("""
+    result = db.execute(
+        text("""
         SELECT DISTINCT ON (site_id) site_id::text, original_url, commons_page_url
         FROM wiki_images
         WHERE is_hero = true
         ORDER BY site_id, created_at DESC
-    """))
+    """)
+    )
     out = {}
     for row in result:
         sid_short = row[0].replace("-", "")[:8]
@@ -72,7 +85,9 @@ async def set_hero(
     async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
         resp = await client.get(body.image_url)
     if resp.status_code != 200:
-        raise HTTPException(status_code=400, detail=f"Failed to download image: HTTP {resp.status_code}")
+        raise HTTPException(
+            status_code=400, detail=f"Failed to download image: HTTP {resp.status_code}"
+        )
 
     # Process with PIL: resize + convert to WebP
     img = Image.open(BytesIO(resp.content))
@@ -101,7 +116,8 @@ async def set_hero(
     )
 
     # Upsert wiki_images row
-    db.execute(text("""
+    db.execute(
+        text("""
         INSERT INTO wiki_images (site_id, filename, original_url, commons_page_url, is_hero, source_type, width, height)
         VALUES (:sid, 'hero.webp', :orig, :attr, true, 'manual', :w, :h)
         ON CONFLICT ON CONSTRAINT uq_wiki_image_site_url
@@ -112,13 +128,15 @@ async def set_hero(
             source_type = 'manual',
             width = :w,
             height = :h
-    """), {
-        "sid": site_id,
-        "orig": body.image_url,
-        "attr": body.attribution_url,
-        "w": final_width,
-        "h": final_height,
-    })
+    """),
+        {
+            "sid": site_id,
+            "orig": body.image_url,
+            "attr": body.attribution_url,
+            "w": final_width,
+            "h": final_height,
+        },
+    )
 
     # Update thumbnail_url on unified_sites
     thumb_path = f"/data/images/wiki/{site_id_short}/hero.webp"
@@ -135,7 +153,8 @@ async def set_hero(
 @router.get("/{site_id}")
 async def get_wiki_images(site_id: str, db: Session = Depends(get_db)):
     """Get locally cached wiki images for a site."""
-    result = db.execute(text("""
+    result = db.execute(
+        text("""
         SELECT
             filename, original_url, commons_page_url,
             author, author_url, license, license_url,
@@ -144,24 +163,28 @@ async def get_wiki_images(site_id: str, db: Session = Depends(get_db)):
         FROM wiki_images
         WHERE site_id = :site_id
         ORDER BY sort_order
-    """), {"site_id": site_id})
+    """),
+        {"site_id": site_id},
+    )
 
     images = []
     for row in result:
         site_id_short = str(row.site_id).replace("-", "")[:8]
-        images.append({
-            "url": f"/data/images/wiki/{site_id_short}/{row.filename}",
-            "thumb": f"/data/images/wiki/{site_id_short}/{row.filename}",
-            "title": row.title,
-            "author": row.author,
-            "authorUrl": row.author_url,
-            "license": row.license,
-            "licenseUrl": row.license_url,
-            "commonsUrl": row.commons_page_url,
-            "isHero": row.is_hero,
-            "isLead": row.is_lead,
-            "width": row.width,
-            "height": row.height,
-        })
+        images.append(
+            {
+                "url": f"/data/images/wiki/{site_id_short}/{row.filename}",
+                "thumb": f"/data/images/wiki/{site_id_short}/{row.filename}",
+                "title": row.title,
+                "author": row.author,
+                "authorUrl": row.author_url,
+                "license": row.license,
+                "licenseUrl": row.license_url,
+                "commonsUrl": row.commons_page_url,
+                "isHero": row.is_hero,
+                "isLead": row.is_lead,
+                "width": row.width,
+                "height": row.height,
+            }
+        )
 
     return images

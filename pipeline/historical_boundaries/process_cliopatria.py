@@ -47,13 +47,15 @@ from loguru import logger
 # =============================================================================
 
 # Output directory
-OUTPUT_DIR = Path('ancient-nerds-map/public/data/historical')
+OUTPUT_DIR = Path("ancient-nerds-map/public/data/historical")
 
 # Cliopatria data paths
-CLIOPATRIA_ZIP_URL = 'https://github.com/Seshat-Global-History-Databank/cliopatria/raw/main/cliopatria.geojson.zip'
-CLIOPATRIA_CACHE_DIR = Path('data/raw')
-CLIOPATRIA_ZIP_PATH = CLIOPATRIA_CACHE_DIR / 'cliopatria.geojson.zip'
-CLIOPATRIA_GEOJSON_PATH = CLIOPATRIA_CACHE_DIR / 'cliopatria.geojson'
+CLIOPATRIA_ZIP_URL = (
+    "https://github.com/Seshat-Global-History-Databank/cliopatria/raw/main/cliopatria.geojson.zip"
+)
+CLIOPATRIA_CACHE_DIR = Path("data/raw")
+CLIOPATRIA_ZIP_PATH = CLIOPATRIA_CACHE_DIR / "cliopatria.geojson.zip"
+CLIOPATRIA_GEOJSON_PATH = CLIOPATRIA_CACHE_DIR / "cliopatria.geojson"
 
 # =============================================================================
 # SeshatID-based Matching (Primary Method)
@@ -64,96 +66,106 @@ CLIOPATRIA_GEOJSON_PATH = CLIOPATRIA_CACHE_DIR / 'cliopatria.geojson'
 
 EMPIRE_SESHAT_IDS = {
     # Ancient Near East (7 civilizations)
-    'egyptian': [
-        'eg_dynasty_1', 'eg_dynasty_2',  # Early Dynastic
-        'eg_old_k_1', 'eg_old_k_2',  # Old Kingdom
-        'eg_middle_k',  # Middle Kingdom
-        'eg_new_k_1', 'eg_new_k_2',  # New Kingdom
-        'eg_thebes_hyksos',  # Second Intermediate
-        'eg_thebes_libyan',  # Third Intermediate
-        'eg_ptolemaic_k_1', 'eg_ptolemaic_k_2',  # Ptolemaic
+    "egyptian": [
+        "eg_dynasty_1",
+        "eg_dynasty_2",  # Early Dynastic
+        "eg_old_k_1",
+        "eg_old_k_2",  # Old Kingdom
+        "eg_middle_k",  # Middle Kingdom
+        "eg_new_k_1",
+        "eg_new_k_2",  # New Kingdom
+        "eg_thebes_hyksos",  # Second Intermediate
+        "eg_thebes_libyan",  # Third Intermediate
+        "eg_ptolemaic_k_1",
+        "eg_ptolemaic_k_2",  # Ptolemaic
     ],
-    'akkadian': ['iq_akkad_emp'],
-    'elam': [
-        'ir_elam_proto', 'ir_elam_old', 'ir_elam_middle',  # Early through Middle Elamite
-        'ir_elam_neo',  # Neo-Elamite
+    "akkadian": ["iq_akkad_emp"],
+    "elam": [
+        "ir_elam_proto",
+        "ir_elam_old",
+        "ir_elam_middle",  # Early through Middle Elamite
+        "ir_elam_neo",  # Neo-Elamite
     ],
-    'babylonian': [
-        'iq_babylonia_1', 'iq_babylonia_2',  # Old Babylonian
-        'iq_bazi_dyn', 'iq_dynasty_e', 'iq_isin_dynasty2',  # Middle periods
-        'iq_neo_babylonian_emp',  # Neo-Babylonian
+    "babylonian": [
+        "iq_babylonia_1",
+        "iq_babylonia_2",  # Old Babylonian
+        "iq_bazi_dyn",
+        "iq_dynasty_e",
+        "iq_isin_dynasty2",  # Middle periods
+        "iq_neo_babylonian_emp",  # Neo-Babylonian
     ],
-    'assyrian': [
-        'iq_middle_assyrian_emp',  # Middle Assyrian
-        'iq_neo_assyrian_emp',  # Neo-Assyrian
+    "assyrian": [
+        "iq_middle_assyrian_emp",  # Middle Assyrian
+        "iq_neo_assyrian_emp",  # Neo-Assyrian
     ],
-    'hittite': ['tr_hatti_old_k', 'tr_hatti_new_k'],
-    'mitanni': ['sy_mitanni_k'],
-
+    "hittite": ["tr_hatti_old_k", "tr_hatti_new_k"],
+    "mitanni": ["sy_mitanni_k"],
     # Mediterranean (9 civilizations)
-    'minoan': ['gr_crete_new_palace', 'gr_crete_old_palace'],
-    'mycenaean': [],  # Uses name fallback
-    'phoenician': ['lb_phoenician_emp', 'lb_phoenicia'],
-    'etruscan': [],  # Uses name fallback
-    'greek': ['gr_macedonian_emp'],  # Limited SeshatIDs; uses name fallback
-    'macedonian': ['gr_macedonian_emp', 'gr_antigonid_emp'],
-    'carthaginian': ['tn_carthage_emp'],
-    'roman': [
-        'it_roman_rep_1', 'it_roman_rep_2', 'it_roman_rep_3',  # Republic
-        'it_roman_principate',  # Principate
-        'tr_roman_dominate',  # Dominate
-        'it_western_roman_emp',  # Western Empire
+    "minoan": ["gr_crete_new_palace", "gr_crete_old_palace"],
+    "mycenaean": [],  # Uses name fallback
+    "phoenician": ["lb_phoenician_emp", "lb_phoenicia"],
+    "etruscan": [],  # Uses name fallback
+    "greek": ["gr_macedonian_emp"],  # Limited SeshatIDs; uses name fallback
+    "macedonian": ["gr_macedonian_emp", "gr_antigonid_emp"],
+    "carthaginian": ["tn_carthage_emp"],
+    "roman": [
+        "it_roman_rep_1",
+        "it_roman_rep_2",
+        "it_roman_rep_3",  # Republic
+        "it_roman_principate",  # Principate
+        "tr_roman_dominate",  # Dominate
+        "it_western_roman_emp",  # Western Empire
     ],
-    'byzantine': [
-        'tr_byzantine_emp_1', 'tr_byzantine_emp_2', 'tr_byzantine_emp_3',
-        'tr_east_roman_emp',
+    "byzantine": [
+        "tr_byzantine_emp_1",
+        "tr_byzantine_emp_2",
+        "tr_byzantine_emp_3",
+        "tr_east_roman_emp",
     ],
-
     # Persian/Central Asia (5 civilizations)
-    'achaemenid': ['ir_achaemenid_emp'],
-    'seleucid': ['ir_seleucid_emp'],
-    'parthian': ['ir_parthian_emp_1'],
-    'kushan': ['af_kushan_emp', 'pk_kushan'],
-    'sassanid': ['ir_sassanid_emp_1', 'ir_sassanid_emp_2'],
-
+    "achaemenid": ["ir_achaemenid_emp"],
+    "seleucid": ["ir_seleucid_emp"],
+    "parthian": ["ir_parthian_emp_1"],
+    "kushan": ["af_kushan_emp", "pk_kushan"],
+    "sassanid": ["ir_sassanid_emp_1", "ir_sassanid_emp_2"],
     # East Asia (4 civilizations)
-    'shang': ['cn_erligang', 'cn_late_shang_dyn'],
-    'zhou': ['cn_western_zhou_dyn', 'cn_eastern_zhou_warring_states'],
-    'qin': ['cn_qin_emp'],
-    'han': ['cn_western_han_dyn', 'cn_eastern_han_dyn'],
-
+    "shang": ["cn_erligang", "cn_late_shang_dyn"],
+    "zhou": ["cn_western_zhou_dyn", "cn_eastern_zhou_warring_states"],
+    "qin": ["cn_qin_emp"],
+    "han": ["cn_western_han_dyn", "cn_eastern_han_dyn"],
     # South Asia (3 civilizations)
-    'indus_valley': [
-        'pk_kachi_ceramic_neolithic', 'pk_kachi_early_bronze',
-        'pk_kachi_mature_harappan', 'pk_kachi_late_harappan',
-        'pk_harappan',
+    "indus_valley": [
+        "pk_kachi_ceramic_neolithic",
+        "pk_kachi_early_bronze",
+        "pk_kachi_mature_harappan",
+        "pk_kachi_late_harappan",
+        "pk_harappan",
     ],
-    'maurya': ['in_mauryan_emp'],
-    'gupta': ['in_gupta_emp'],
-
+    "maurya": ["in_mauryan_emp"],
+    "gupta": ["in_gupta_emp"],
     # Africa (2 civilizations)
-    'kush': ['sd_kush_k'],
-    'axum': ['et_aksum_emp_1', 'et_aksum_emp_2', 'et_aksum_emp_3', 'et_ethiopian_k'],
-
+    "kush": ["sd_kush_k"],
+    "axum": ["et_aksum_emp_1", "et_aksum_emp_2", "et_aksum_emp_3", "et_ethiopian_k"],
     # Americas (6 civilizations)
-    'olmec': [],  # Uses name fallback
-    'zapotec': [
-        'mx_monte_alban_1_early', 'mx_monte_alban_1_late',  # Early Zapotec
-        'mx_monte_alban_2',  # Monte Alban II
-        'mx_monte_alban_3_a', 'mx_monte_alban_3_b_4',  # Classic period
+    "olmec": [],  # Uses name fallback
+    "zapotec": [
+        "mx_monte_alban_1_early",
+        "mx_monte_alban_1_late",  # Early Zapotec
+        "mx_monte_alban_2",  # Monte Alban II
+        "mx_monte_alban_3_a",
+        "mx_monte_alban_3_b_4",  # Classic period
     ],
-    'teotihuacan': ['mx_basin_of_mexico_7', 'mx_teotihuacan'],
-    'maya': [
-        'gt_tikal_early_classic',  # Classic Maya
-        'gt_tikal_terminal_classic',  # Terminal Classic
-        'gt_tikal_early_postclassic',  # Postclassic
-        'mx_maya_classic',
+    "teotihuacan": ["mx_basin_of_mexico_7", "mx_teotihuacan"],
+    "maya": [
+        "gt_tikal_early_classic",  # Classic Maya
+        "gt_tikal_terminal_classic",  # Terminal Classic
+        "gt_tikal_early_postclassic",  # Postclassic
+        "mx_maya_classic",
     ],
-    'aztec': ['mx_aztec_emp'],
-    'inca': ['pe_inca_emp'],
-
+    "aztec": ["mx_aztec_emp"],
+    "inca": ["pe_inca_emp"],
     # Medieval Europe (1 civilization)
-    'carolingian': ['fr_carolingian_emp_1', 'fr_carolingian_emp_2'],
+    "carolingian": ["fr_carolingian_emp_1", "fr_carolingian_emp_2"],
 }
 
 # =============================================================================
@@ -164,65 +176,63 @@ EMPIRE_SESHAT_IDS = {
 
 EMPIRE_NAME_PATTERNS = {
     # Ancient Near East
-    'egyptian': [
-        r'.*Kingdom.*Egypt',
-        r'.*Dynasty.*Egypt',
-        r'Ptolemaic.*',
-        r'Ancient Egypt.*',
+    "egyptian": [
+        r".*Kingdom.*Egypt",
+        r".*Dynasty.*Egypt",
+        r"Ptolemaic.*",
+        r"Ancient Egypt.*",
     ],
-    'akkadian': [r'Akkad.*Empire', r'Akkadian.*'],
-    'elam': [r'Elam.*', r'Elamite.*'],
-    'babylonian': [r'.*Babylon.*', r'Neo-Babylon.*'],
-    'assyrian': [r'.*Assyria.*', r'Neo-Assyria.*'],
-    'hittite': [r'Hittite.*', r'.*Hatti.*'],
-    'mitanni': [r'Mitanni.*', r'Mittani.*'],
-
+    "akkadian": [r"Akkad.*Empire", r"Akkadian.*"],
+    "elam": [r"Elam.*", r"Elamite.*"],
+    "babylonian": [r".*Babylon.*", r"Neo-Babylon.*"],
+    "assyrian": [r".*Assyria.*", r"Neo-Assyria.*"],
+    "hittite": [r"Hittite.*", r".*Hatti.*"],
+    "mitanni": [r"Mitanni.*", r"Mittani.*"],
     # Mediterranean
-    'minoan': [r'Minoan.*', r'.*Crete.*Palace'],
-    'mycenaean': [r'Mycenae.*', r'Mycenaean.*'],
-    'phoenician': [r'Phoenici.*', r'.*Phoenicia.*'],
-    'etruscan': [r'Etrusc.*', r'Etruria.*'],
-    'greek': [
-        r'.*Athens.*', r'.*Sparta.*', r'Greek.*', r'Hellenic.*',
-        r'Delian League', r'Greek City-States', r'Greek Dark Ages',
+    "minoan": [r"Minoan.*", r".*Crete.*Palace"],
+    "mycenaean": [r"Mycenae.*", r"Mycenaean.*"],
+    "phoenician": [r"Phoenici.*", r".*Phoenicia.*"],
+    "etruscan": [r"Etrusc.*", r"Etruria.*"],
+    "greek": [
+        r".*Athens.*",
+        r".*Sparta.*",
+        r"Greek.*",
+        r"Hellenic.*",
+        r"Delian League",
+        r"Greek City-States",
+        r"Greek Dark Ages",
     ],
-    'macedonian': [r'Macedon.*', r'Antigonid.*'],
-    'carthaginian': [r'Carthag.*'],
-    'roman': [r'Roman.*', r'Western Roman.*'],
-    'byzantine': [r'Byzantine.*', r'Eastern Roman.*'],
-
+    "macedonian": [r"Macedon.*", r"Antigonid.*"],
+    "carthaginian": [r"Carthag.*"],
+    "roman": [r"Roman.*", r"Western Roman.*"],
+    "byzantine": [r"Byzantine.*", r"Eastern Roman.*"],
     # Persian/Central Asia
-    'achaemenid': [r'Achaemenid.*'],
-    'seleucid': [r'Seleucid.*'],
-    'parthian': [r'Parthia.*', r'Arsacid.*'],
-    'kushan': [r'Kushan.*'],
-    'sassanid': [r'Sassanid.*', r'Sasanian.*'],
-
+    "achaemenid": [r"Achaemenid.*"],
+    "seleucid": [r"Seleucid.*"],
+    "parthian": [r"Parthia.*", r"Arsacid.*"],
+    "kushan": [r"Kushan.*"],
+    "sassanid": [r"Sassanid.*", r"Sasanian.*"],
     # East Asia
-    'shang': [r'Shang.*'],
-    'zhou': [r'(Western|Eastern) Zhou.*', r'Zhou Dynasty', r'Later Zhou'],
-    'qin': [r'Qin Dynasty', r'Qin Empire'],  # Careful: not "Qing"
-    'han': [r'Han Dynasty', r'.*Han.*Dynasty'],
-
+    "shang": [r"Shang.*"],
+    "zhou": [r"(Western|Eastern) Zhou.*", r"Zhou Dynasty", r"Later Zhou"],
+    "qin": [r"Qin Dynasty", r"Qin Empire"],  # Careful: not "Qing"
+    "han": [r"Han Dynasty", r".*Han.*Dynasty"],
     # South Asia
-    'indus_valley': [r'Harappa.*', r'Indus Valley.*', r'Mohenjo.*'],
-    'maurya': [r'Maurya.*'],
-    'gupta': [r'Gupta.*'],
-
+    "indus_valley": [r"Harappa.*", r"Indus Valley.*", r"Mohenjo.*"],
+    "maurya": [r"Maurya.*"],
+    "gupta": [r"Gupta.*"],
     # Africa
-    'kush': [r'Kush.*', r'Nubia.*', r'Meroe.*'],
-    'axum': [r'.*Axum.*', r'Aksumite.*', r'Ethiopian Empire'],
-
+    "kush": [r"Kush.*", r"Nubia.*", r"Meroe.*"],
+    "axum": [r".*Axum.*", r"Aksumite.*", r"Ethiopian Empire"],
     # Americas
-    'olmec': [r'Olmec.*', r'La Venta.*', r'San Lorenzo.*'],
-    'zapotec': [r'Zapotec.*', r'Monte Alban.*'],
-    'teotihuacan': [r'Teotihuac[aá]n.*'],
-    'maya': [r'Maya.*', r'Mayan.*', r'.*Mayan City-States', r'Itza Maya.*'],
-    'aztec': [r'Aztec.*', r'Mexica.*', r'Triple Alliance'],
-    'inca': [r'Inca.*', r'Tawantinsuyu'],
-
+    "olmec": [r"Olmec.*", r"La Venta.*", r"San Lorenzo.*"],
+    "zapotec": [r"Zapotec.*", r"Monte Alban.*"],
+    "teotihuacan": [r"Teotihuac[aá]n.*"],
+    "maya": [r"Maya.*", r"Mayan.*", r".*Mayan City-States", r"Itza Maya.*"],
+    "aztec": [r"Aztec.*", r"Mexica.*", r"Triple Alliance"],
+    "inca": [r"Inca.*", r"Tawantinsuyu"],
     # Medieval Europe
-    'carolingian': [r'.*Carolingian.*', r'Kingdom of the Franks', r'\(Kingdom of the Franks\)'],
+    "carolingian": [r".*Carolingian.*", r"Kingdom of the Franks", r"\(Kingdom of the Franks\)"],
 }
 
 # Legacy alias for backwards compatibility
@@ -264,11 +274,13 @@ def find_contiguous_range(years: list[int], max_gap: int = 300) -> tuple[list[in
     largest_era = max(eras, key=len)
     return largest_era, largest_era[0], largest_era[-1]
 
+
 from pipeline.historical_boundaries.empire_metadata import EMPIRE_METADATA
 
 # =============================================================================
 # Download
 # =============================================================================
+
 
 def download_cliopatria() -> Path:
     """Download Cliopatria dataset if not present."""
@@ -286,7 +298,11 @@ def download_cliopatria() -> Path:
             percent = count * block_size * 100 / total_size
             downloaded_mb = count * block_size / (1024 * 1024)
             total_mb = total_size / (1024 * 1024)
-            print(f"\r  Downloading: {percent:.1f}% ({downloaded_mb:.1f}/{total_mb:.1f} MB)", end='', flush=True)
+            print(
+                f"\r  Downloading: {percent:.1f}% ({downloaded_mb:.1f}/{total_mb:.1f} MB)",
+                end="",
+                flush=True,
+            )
 
     try:
         urllib.request.urlretrieve(CLIOPATRIA_ZIP_URL, CLIOPATRIA_ZIP_PATH, progress_hook)
@@ -294,9 +310,9 @@ def download_cliopatria() -> Path:
         logger.info(f"Downloaded to {CLIOPATRIA_ZIP_PATH}")
 
         logger.info("Extracting GeoJSON...")
-        with zipfile.ZipFile(CLIOPATRIA_ZIP_PATH, 'r') as zf:
+        with zipfile.ZipFile(CLIOPATRIA_ZIP_PATH, "r") as zf:
             for name in zf.namelist():
-                if name.endswith('.geojson'):
+                if name.endswith(".geojson"):
                     logger.info(f"  Extracting {name}...")
                     zf.extract(name, CLIOPATRIA_CACHE_DIR)
                     extracted = CLIOPATRIA_CACHE_DIR / name
@@ -318,13 +334,14 @@ def download_cliopatria() -> Path:
 # Data Loading
 # =============================================================================
 
+
 def load_cliopatria(path: Path = CLIOPATRIA_GEOJSON_PATH) -> dict:
     """Load Cliopatria GeoJSON data."""
     if not path.exists():
         download_cliopatria()
 
     logger.info(f"Loading Cliopatria data from {path}...")
-    with open(path, encoding='utf-8') as f:
+    with open(path, encoding="utf-8") as f:
         data = json.load(f)
 
     logger.info(f"Loaded {len(data.get('features', []))} features")
@@ -335,6 +352,7 @@ def load_cliopatria(path: Path = CLIOPATRIA_GEOJSON_PATH) -> dict:
 # Processing
 # =============================================================================
 
+
 def match_empire_by_seshat_id(seshat_id: str, empire_id: str) -> bool:
     """Check if a SeshatID matches an empire's configured IDs (primary matching method)."""
     if not seshat_id:
@@ -342,7 +360,7 @@ def match_empire_by_seshat_id(seshat_id: str, empire_id: str) -> bool:
     empire_seshat_ids = EMPIRE_SESHAT_IDS.get(empire_id, [])
     # Check exact match or if the seshat_id starts with one of our configured IDs
     for configured_id in empire_seshat_ids:
-        if seshat_id == configured_id or seshat_id.startswith(configured_id + ';'):
+        if seshat_id == configured_id or seshat_id.startswith(configured_id + ";"):
             return True
     return False
 
@@ -364,9 +382,9 @@ def match_empire(feature: dict, empire_id: str) -> bool:
     1. SeshatID-based matching (authoritative, reliable)
     2. Name-based pattern matching (fallback for features without SeshatID)
     """
-    props = feature.get('properties', {})
-    seshat_id = props.get('SeshatID', '')
-    name = props.get('Name', '')
+    props = feature.get("properties", {})
+    seshat_id = props.get("SeshatID", "")
+    name = props.get("Name", "")
 
     # Primary: SeshatID matching
     if match_empire_by_seshat_id(seshat_id, empire_id):
@@ -388,12 +406,13 @@ def calculate_centroid(geometry: dict) -> tuple[float, float]:
     except Exception:
         # Fallback: average of all coordinates
         coords = []
+
         def extract_coords(geom):
-            if geom['type'] == 'Polygon':
-                for ring in geom['coordinates']:
+            if geom["type"] == "Polygon":
+                for ring in geom["coordinates"]:
                     coords.extend(ring)
-            elif geom['type'] == 'MultiPolygon':
-                for poly in geom['coordinates']:
+            elif geom["type"] == "MultiPolygon":
+                for poly in geom["coordinates"]:
                     for ring in poly:
                         coords.extend(ring)
 
@@ -417,9 +436,9 @@ def extract_empire_features(data: dict, empire_id: str) -> dict[int, list[dict]]
     matched_by_seshat = 0
     matched_by_name = 0
 
-    for feature in data.get('features', []):
-        props = feature.get('properties', {})
-        seshat_id = props.get('SeshatID', '')
+    for feature in data.get("features", []):
+        props = feature.get("properties", {})
+        seshat_id = props.get("SeshatID", "")
 
         # Use new matching that checks SeshatID first, then name patterns
         if not match_empire(feature, empire_id):
@@ -432,8 +451,8 @@ def extract_empire_features(data: dict, empire_id: str) -> dict[int, list[dict]]
             matched_by_name += 1
 
         # Get temporal range
-        from_year = props.get('FromYear')
-        to_year = props.get('ToYear')
+        from_year = props.get("FromYear")
+        to_year = props.get("ToYear")
 
         if from_year is None:
             continue
@@ -447,7 +466,9 @@ def extract_empire_features(data: dict, empire_id: str) -> dict[int, list[dict]]
         features_by_year[year].append(feature)
 
     if features_by_year:
-        logger.debug(f"  Matched {matched_by_seshat} by SeshatID, {matched_by_name} by name pattern")
+        logger.debug(
+            f"  Matched {matched_by_seshat} by SeshatID, {matched_by_name} by name pattern"
+        )
 
     return dict(features_by_year)
 
@@ -460,25 +481,29 @@ def merge_features_to_geojson(features: list[dict], empire_id: str, year: int) -
     merged_features = []
 
     for feature in features:
-        geom = feature.get('geometry')
-        props = feature.get('properties', {})
+        geom = feature.get("geometry")
+        props = feature.get("properties", {})
 
         if geom:
-            merged_features.append({
-                'type': 'Feature',
-                'properties': {
-                    'name': props.get('Name', ''),
-                    'year': year,
-                    'area_km2': props.get('Area', 0),
-                    'seshat_id': props.get('SeshatID', ''),
-                    'from_year': props.get('FromYear'),
-                    'to_year': props.get('ToYear'),
-                },
-                'geometry': geom
-            })
+            merged_features.append(
+                {
+                    "type": "Feature",
+                    "properties": {
+                        "name": props.get("Name", ""),
+                        "year": year,
+                        "area_km2": props.get("Area", 0),
+                        "seshat_id": props.get("SeshatID", ""),
+                        "from_year": props.get("FromYear"),
+                        "to_year": props.get("ToYear"),
+                    },
+                    "geometry": geom,
+                }
+            )
 
     # Calculate overall centroid
-    all_centroids = [calculate_centroid(f['geometry']) for f in merged_features if f.get('geometry')]
+    all_centroids = [
+        calculate_centroid(f["geometry"]) for f in merged_features if f.get("geometry")
+    ]
     if all_centroids:
         avg_lat = sum(c[0] for c in all_centroids) / len(all_centroids)
         avg_lng = sum(c[1] for c in all_centroids) / len(all_centroids)
@@ -487,13 +512,13 @@ def merge_features_to_geojson(features: list[dict], empire_id: str, year: int) -
         centroid = [0, 0]
 
     return {
-        'type': 'FeatureCollection',
-        'properties': {
-            'empire_id': empire_id,
-            'year': year,
-            'centroid': centroid,
+        "type": "FeatureCollection",
+        "properties": {
+            "empire_id": empire_id,
+            "year": year,
+            "centroid": centroid,
         },
-        'features': merged_features
+        "features": merged_features,
     }
 
 
@@ -523,7 +548,7 @@ def process_empire(data: dict, empire_id: str, output_dir: Path) -> dict | None:
     for year, features in features_by_year.items():
         total_area = 0
         for feature in features:
-            area = feature.get('properties', {}).get('Area', 0)
+            area = feature.get("properties", {}).get("Area", 0)
             if area and isinstance(area, (int, float)):
                 total_area += area
         areas_by_year[year] = total_area
@@ -543,12 +568,12 @@ def process_empire(data: dict, empire_id: str, output_dir: Path) -> dict | None:
         geojson_data = merge_features_to_geojson(features, empire_id, year)
 
         # Store centroid
-        centroids[str(year)] = geojson_data['properties']['centroid']
+        centroids[str(year)] = geojson_data["properties"]["centroid"]
 
         # Write GeoJSON file
         output_path = empire_dir / f"{year}.geojson"
-        with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(geojson_data, f, separators=(',', ':'))
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(geojson_data, f, separators=(",", ":"))
 
     # Get metadata from config or derive from data
     meta = EMPIRE_METADATA.get(empire_id, {})
@@ -559,7 +584,9 @@ def process_empire(data: dict, empire_id: str, output_dir: Path) -> dict | None:
     contiguous_years, start_year, end_year = find_contiguous_range(years)
 
     if len(contiguous_years) < len(years):
-        logger.info(f"  Gap detection: {len(years)} years → {len(contiguous_years)} (range {start_year} to {end_year})")
+        logger.info(
+            f"  Gap detection: {len(years)} years → {len(contiguous_years)} (range {start_year} to {end_year})"
+        )
 
     # Re-calculate peak year within the contiguous range
     contiguous_areas = {y: areas_by_year.get(y, 0) for y in contiguous_years}
@@ -570,23 +597,23 @@ def process_empire(data: dict, empire_id: str, output_dir: Path) -> dict | None:
 
     # Create metadata.json — only include contiguous years
     metadata = {
-        'id': empire_id,
-        'name': meta.get('name', empire_id.replace('_', ' ').title()),
-        'region': meta.get('region', 'Unknown'),
-        'years': contiguous_years,
-        'defaultYear': peak_year,
-        'peakYear': peak_year,
-        'peakArea': areas_by_year.get(peak_year, 0),
-        'startYear': start_year,
-        'endYear': end_year,
-        'color': meta.get('color', 0x888888),
-        'centroids': {str(y): centroids[str(y)] for y in contiguous_years if str(y) in centroids},
-        'featureCount': {str(y): len(features_by_year[y]) for y in contiguous_years},
-        'areaByYear': {str(y): areas_by_year.get(y, 0) for y in contiguous_years},
+        "id": empire_id,
+        "name": meta.get("name", empire_id.replace("_", " ").title()),
+        "region": meta.get("region", "Unknown"),
+        "years": contiguous_years,
+        "defaultYear": peak_year,
+        "peakYear": peak_year,
+        "peakArea": areas_by_year.get(peak_year, 0),
+        "startYear": start_year,
+        "endYear": end_year,
+        "color": meta.get("color", 0x888888),
+        "centroids": {str(y): centroids[str(y)] for y in contiguous_years if str(y) in centroids},
+        "featureCount": {str(y): len(features_by_year[y]) for y in contiguous_years},
+        "areaByYear": {str(y): areas_by_year.get(y, 0) for y in contiguous_years},
     }
 
-    metadata_path = empire_dir / 'metadata.json'
-    with open(metadata_path, 'w', encoding='utf-8') as f:
+    metadata_path = empire_dir / "metadata.json"
+    with open(metadata_path, "w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=2)
 
     logger.info(f"  Exported {len(contiguous_years)} time periods: {start_year} to {end_year}")
@@ -597,8 +624,8 @@ def process_empire(data: dict, empire_id: str, output_dir: Path) -> dict | None:
 def list_unique_polities(data: dict) -> list[str]:
     """List all unique polity names in the dataset."""
     names = set()
-    for feature in data.get('features', []):
-        name = feature.get('properties', {}).get('Name', '')
+    for feature in data.get("features", []):
+        name = feature.get("properties", {}).get("Name", "")
         if name:
             names.add(name)
     return sorted(names)
@@ -609,24 +636,26 @@ def create_combined_metadata(all_metadata: list[dict], output_dir: Path):
     # Group by region
     by_region = defaultdict(list)
     for meta in all_metadata:
-        by_region[meta['region']].append({
-            'id': meta['id'],
-            'name': meta['name'],
-            'startYear': meta['startYear'],
-            'endYear': meta['endYear'],
-            'color': meta['color'],
-            'defaultYear': meta['defaultYear'],
-            'yearCount': len(meta['years']),
-        })
+        by_region[meta["region"]].append(
+            {
+                "id": meta["id"],
+                "name": meta["name"],
+                "startYear": meta["startYear"],
+                "endYear": meta["endYear"],
+                "color": meta["color"],
+                "defaultYear": meta["defaultYear"],
+                "yearCount": len(meta["years"]),
+            }
+        )
 
     combined = {
-        'empires': dict(sorted(by_region.items())),
-        'totalEmpires': len(all_metadata),
-        'regions': sorted(by_region.keys()),
+        "empires": dict(sorted(by_region.items())),
+        "totalEmpires": len(all_metadata),
+        "regions": sorted(by_region.keys()),
     }
 
-    output_path = output_dir / 'metadata.json'
-    with open(output_path, 'w', encoding='utf-8') as f:
+    output_path = output_dir / "metadata.json"
+    with open(output_path, "w", encoding="utf-8") as f:
         json.dump(combined, f, indent=2)
 
     logger.info(f"Created combined metadata with {len(all_metadata)} empires")
@@ -636,29 +665,25 @@ def create_combined_metadata(all_metadata: list[dict], output_dir: Path):
 # Main
 # =============================================================================
 
+
 def main():
-    parser = argparse.ArgumentParser(
-        description='Process Cliopatria historical boundaries'
+    parser = argparse.ArgumentParser(description="Process Cliopatria historical boundaries")
+    parser.add_argument(
+        "--list-empires", action="store_true", help="List all unique polity names in the dataset"
     )
     parser.add_argument(
-        '--list-empires', action='store_true',
-        help='List all unique polity names in the dataset'
+        "--list-configured", action="store_true", help="List all configured empire IDs"
+    )
+    parser.add_argument("--empire", "-e", type=str, help="Process only a specific empire (by ID)")
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        default=OUTPUT_DIR,
+        help=f"Output directory (default: {OUTPUT_DIR})",
     )
     parser.add_argument(
-        '--list-configured', action='store_true',
-        help='List all configured empire IDs'
-    )
-    parser.add_argument(
-        '--empire', '-e', type=str,
-        help='Process only a specific empire (by ID)'
-    )
-    parser.add_argument(
-        '--output', '-o', type=Path, default=OUTPUT_DIR,
-        help=f'Output directory (default: {OUTPUT_DIR})'
-    )
-    parser.add_argument(
-        '--no-download', action='store_true',
-        help='Do not auto-download Cliopatria data if missing'
+        "--no-download", action="store_true", help="Do not auto-download Cliopatria data if missing"
     )
 
     args = parser.parse_args()
@@ -715,13 +740,13 @@ def main():
         create_combined_metadata(all_metadata, args.output)
 
     elapsed = time.time() - start_time
-    logger.info(f"\n{'='*60}")
+    logger.info(f"\n{'=' * 60}")
     logger.info("COMPLETE!")
     logger.info(f"  Empires processed: {len(all_metadata)}")
     logger.info(f"  Time elapsed:      {elapsed:.1f} seconds")
     logger.info(f"  Output directory:  {args.output}")
-    logger.info(f"{'='*60}")
+    logger.info(f"{'=' * 60}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

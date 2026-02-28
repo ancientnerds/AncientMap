@@ -26,9 +26,7 @@ from pipeline.connectors.types import (
 )
 
 
-async def _gather_with_partial_results(
-    coros: list, timeout: float
-) -> list:
+async def _gather_with_partial_results(coros: list, timeout: float) -> list:
     """Run coroutines with a timeout, keeping results from those that finished.
 
     Unlike asyncio.wait_for(asyncio.gather(...)), this does NOT discard results
@@ -80,9 +78,7 @@ class ConnectorRegistry:
     _connector_status: dict[str, ConnectorStatus] = {}  # cached status
 
     # SPARQL endpoints need longer timeouts (30s instead of 10s)
-    SPARQL_CONNECTORS = {
-        "british_museum", "british_museum_coins", "nomisma", "ans", "edh"
-    }
+    SPARQL_CONNECTORS = {"british_museum", "british_museum_coins", "nomisma", "ans", "edh"}
 
     # Test queries for connector testing
     TEST_QUERIES = [
@@ -164,7 +160,7 @@ class ConnectorRegistry:
         for connector_id in cls._connector_classes:
             connector = cls.get(connector_id)
             if connector:
-                if not include_unavailable and not getattr(connector, 'available', True):
+                if not include_unavailable and not getattr(connector, "available", True):
                     continue
                 connectors.append(connector)
         return connectors
@@ -179,7 +175,7 @@ class ConnectorRegistry:
             if content_type in connector_class.content_types:
                 connector = cls.get(connector_id)
                 if connector:
-                    if not include_unavailable and not getattr(connector, 'available', True):
+                    if not include_unavailable and not getattr(connector, "available", True):
                         continue
                     connectors.append(connector)
         return connectors
@@ -424,10 +420,7 @@ class ConnectorRegistry:
 
         if content_types:
             type_set: set[ContentType] = set(content_types)
-            connectors = [
-                c for c in connectors
-                if any(ct in type_set for ct in c.content_types)
-            ]
+            connectors = [c for c in connectors if any(ct in type_set for ct in c.content_types)]
 
         if not connectors:
             return ContentSearchResult()
@@ -514,10 +507,7 @@ class ConnectorRegistry:
 
         if content_types:
             type_set: set[ContentType] = set(content_types)
-            connectors = [
-                c for c in connectors
-                if any(ct in type_set for ct in c.content_types)
-            ]
+            connectors = [c for c in connectors if any(ct in type_set for ct in c.content_types)]
 
         if not connectors:
             return ContentSearchResult()
@@ -605,7 +595,7 @@ class ConnectorRegistry:
         if not content_types:
             return "other"
 
-        type_values = {ct.value if hasattr(ct, 'value') else str(ct) for ct in content_types}
+        type_values = {ct.value if hasattr(ct, "value") else str(ct) for ct in content_types}
 
         if "model_3d" in type_values:
             return "3d_models"
@@ -634,19 +624,19 @@ class ConnectorRegistry:
     def _get_connector_tabs(cls, connector: BaseConnector) -> list[str]:
         """Determine which UI tabs a connector populates based on its content types."""
         TAB_MAPPING = {
-            'photo': 'Photos',
-            'video': 'Videos',
-            'artwork': 'Artworks',
-            'map': 'Maps',
-            'model_3d': '3D',
-            'artifact': 'Artifacts',
-            'coin': 'Artifacts',
-            'inscription': 'Books',
-            'primary_text': 'Books',
-            'manuscript': 'Books',
-            'book': 'Books',
-            'paper': 'Papers',
-            'document': 'Papers',
+            "photo": "Photos",
+            "video": "Videos",
+            "artwork": "Artworks",
+            "map": "Maps",
+            "model_3d": "3D",
+            "artifact": "Artifacts",
+            "coin": "Artifacts",
+            "inscription": "Books",
+            "primary_text": "Books",
+            "manuscript": "Books",
+            "book": "Books",
+            "paper": "Papers",
+            "document": "Papers",
         }
 
         content_types = connector.content_types
@@ -655,7 +645,7 @@ class ConnectorRegistry:
 
         tabs = set()
         for ct in content_types:
-            ct_value = ct.value if hasattr(ct, 'value') else str(ct)
+            ct_value = ct.value if hasattr(ct, "value") else str(ct)
             if ct_value in TAB_MAPPING:
                 tabs.add(TAB_MAPPING[ct_value])
 
@@ -689,15 +679,16 @@ class ConnectorRegistry:
             )
 
         # Check if connector is marked as unavailable
-        if hasattr(connector, 'available') and not connector.available:
-            reason = getattr(connector, 'unavailable_reason', None) or "Service unavailable"
+        if hasattr(connector, "available") and not connector.available:
+            reason = getattr(connector, "unavailable_reason", None) or "Service unavailable"
             connector_status = ConnectorStatus(
                 connector_id=connector.connector_id,
                 connector_name=connector.connector_name,
                 category=cls._get_connector_category(connector),
                 status="unavailable",
                 available=False,
-                base_url=getattr(connector, 'website_url', None) or getattr(connector, 'base_url', None),
+                base_url=getattr(connector, "website_url", None)
+                or getattr(connector, "base_url", None),
                 last_ping=datetime.now(UTC),
                 error_message=reason,
                 response_time_ms=0,
@@ -723,7 +714,8 @@ class ConnectorRegistry:
                     category=cls._get_connector_category(connector),
                     status="unavailable",
                     available=False,
-                    base_url=getattr(connector, 'website_url', None) or getattr(connector, 'base_url', None),
+                    base_url=getattr(connector, "website_url", None)
+                    or getattr(connector, "base_url", None),
                     last_ping=datetime.now(UTC),
                     error_message=result.error_message,
                     response_time_ms=result.response_time_ms,
@@ -743,7 +735,8 @@ class ConnectorRegistry:
                 category=cls._get_connector_category(connector),
                 status=status,
                 available=True,
-                base_url=getattr(connector, 'website_url', None) or getattr(connector, 'base_url', None),
+                base_url=getattr(connector, "website_url", None)
+                or getattr(connector, "base_url", None),
                 last_ping=datetime.now(UTC),
                 error_message=result.error_message,
                 item_count=result.item_count,
@@ -762,7 +755,8 @@ class ConnectorRegistry:
                 category=cls._get_connector_category(connector),
                 status="error",
                 available=True,
-                base_url=getattr(connector, 'website_url', None) or getattr(connector, 'base_url', None),
+                base_url=getattr(connector, "website_url", None)
+                or getattr(connector, "base_url", None),
                 last_ping=datetime.now(UTC),
                 error_message=f"Health check timed out after {effective_timeout}s",
                 tabs=cls._get_connector_tabs(connector),
@@ -777,7 +771,8 @@ class ConnectorRegistry:
                 category=cls._get_connector_category(connector),
                 status="error",
                 available=True,
-                base_url=getattr(connector, 'website_url', None) or getattr(connector, 'base_url', None),
+                base_url=getattr(connector, "website_url", None)
+                or getattr(connector, "base_url", None),
                 last_ping=datetime.now(UTC),
                 error_message=str(e),
                 tabs=cls._get_connector_tabs(connector),
@@ -806,10 +801,7 @@ class ConnectorRegistry:
             return []
 
         # Check all connectors in parallel
-        tasks = [
-            cls.check_connector_status(cid, timeout=timeout)
-            for cid in connector_ids
-        ]
+        tasks = [cls.check_connector_status(cid, timeout=timeout) for cid in connector_ids]
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -818,17 +810,22 @@ class ConnectorRegistry:
             if isinstance(result, Exception):
                 connector_id = connector_ids[i]
                 connector = cls.get(connector_id)
-                statuses.append(ConnectorStatus(
-                    connector_id=connector_id,
-                    connector_name=connector.connector_name if connector else connector_id,
-                    category=cls._get_connector_category(connector) if connector else "unknown",
-                    status="error",
-                    available=True,
-                    base_url=getattr(connector, 'website_url', None) or getattr(connector, 'base_url', None) if connector else None,
-                    last_ping=datetime.now(UTC),
-                    error_message=str(result),
-                    tabs=cls._get_connector_tabs(connector) if connector else [],
-                ))
+                statuses.append(
+                    ConnectorStatus(
+                        connector_id=connector_id,
+                        connector_name=connector.connector_name if connector else connector_id,
+                        category=cls._get_connector_category(connector) if connector else "unknown",
+                        status="error",
+                        available=True,
+                        base_url=getattr(connector, "website_url", None)
+                        or getattr(connector, "base_url", None)
+                        if connector
+                        else None,
+                        last_ping=datetime.now(UTC),
+                        error_message=str(result),
+                        tabs=cls._get_connector_tabs(connector) if connector else [],
+                    )
+                )
             else:
                 statuses.append(result)
 
@@ -843,7 +840,8 @@ class ConnectorRegistry:
 
             # Only test connectors that are available and not in error state
             testable_ids = [
-                s.connector_id for s in statuses
+                s.connector_id
+                for s in statuses
                 if s.available and s.status in ("ok", "warning", "unknown")
             ]
 
@@ -864,7 +862,7 @@ class ConnectorRegistry:
                 # Add api_docs_url if available
                 connector = cls.get(status.connector_id)
                 if connector:
-                    status.api_docs_url = getattr(connector, 'api_docs_url', None)
+                    status.api_docs_url = getattr(connector, "api_docs_url", None)
 
         return statuses
 
@@ -889,7 +887,7 @@ class ConnectorRegistry:
             return {}
 
         # Check if connector is available
-        if hasattr(connector, 'available') and not connector.available:
+        if hasattr(connector, "available") and not connector.available:
             return {}
 
         results: dict[str, QueryTestResult] = {}
@@ -897,9 +895,7 @@ class ConnectorRegistry:
         try:
             async with connector:
                 for query_id, query_name in cls.TEST_QUERIES:
-                    result = await cls._run_single_test(
-                        connector, query_id, query_name, timeout
-                    )
+                    result = await cls._run_single_test(connector, query_id, query_name, timeout)
                     results[query_id] = result
                     # Rate limit between queries
                     await asyncio.sleep(0.3)
@@ -932,10 +928,7 @@ class ConnectorRegistry:
         """
         start = time.time()
         try:
-            items = await asyncio.wait_for(
-                connector.search(query_name, limit=5),
-                timeout=timeout
-            )
+            items = await asyncio.wait_for(connector.search(query_name, limit=5), timeout=timeout)
             elapsed = (time.time() - start) * 1000
 
             # Extract sample items (up to 3)
@@ -991,29 +984,37 @@ class ConnectorRegistry:
                 connector = cls.get(connector_id)
                 if connector:
                     # Check if connector is marked as unavailable
-                    is_available = getattr(connector, 'available', True)
+                    is_available = getattr(connector, "available", True)
                     if not is_available:
-                        reason = getattr(connector, 'unavailable_reason', None) or "Service unavailable"
-                        statuses.append(ConnectorStatus(
-                            connector_id=connector.connector_id,
-                            connector_name=connector.connector_name,
-                            category=cls._get_connector_category(connector),
-                            status="unavailable",
-                            available=False,
-                            base_url=getattr(connector, 'website_url', None) or getattr(connector, 'base_url', None),
-                            error_message=reason,
-                            tabs=cls._get_connector_tabs(connector),
-                        ))
+                        reason = (
+                            getattr(connector, "unavailable_reason", None) or "Service unavailable"
+                        )
+                        statuses.append(
+                            ConnectorStatus(
+                                connector_id=connector.connector_id,
+                                connector_name=connector.connector_name,
+                                category=cls._get_connector_category(connector),
+                                status="unavailable",
+                                available=False,
+                                base_url=getattr(connector, "website_url", None)
+                                or getattr(connector, "base_url", None),
+                                error_message=reason,
+                                tabs=cls._get_connector_tabs(connector),
+                            )
+                        )
                     else:
-                        statuses.append(ConnectorStatus(
-                            connector_id=connector.connector_id,
-                            connector_name=connector.connector_name,
-                            category=cls._get_connector_category(connector),
-                            status="unknown",
-                            available=True,
-                            base_url=getattr(connector, 'website_url', None) or getattr(connector, 'base_url', None),
-                            tabs=cls._get_connector_tabs(connector),
-                        ))
+                        statuses.append(
+                            ConnectorStatus(
+                                connector_id=connector.connector_id,
+                                connector_name=connector.connector_name,
+                                category=cls._get_connector_category(connector),
+                                status="unknown",
+                                available=True,
+                                base_url=getattr(connector, "website_url", None)
+                                or getattr(connector, "base_url", None),
+                                tabs=cls._get_connector_tabs(connector),
+                            )
+                        )
         return statuses
 
     @classmethod

@@ -138,6 +138,7 @@ CREDIT_ROLES[ANCIENT_NERDS_ROLE_ID] = {
     "reason": "ancient_nerds_role",
 }
 
+
 def get_user_tier(roles: list[str]) -> str:
     """Return the highest tier name for a user's roles.
 
@@ -213,10 +214,13 @@ def process_credit_grants(session: Session, user: DiscordUser) -> None:
 
     # Find the highest monthly tier the user holds (skip lower ones to prevent double grants)
     monthly_roles_present = [
-        (rid, cfg) for rid, cfg in CREDIT_ROLES.items()
-        if rid in roles and cfg["type"] == "monthly"
+        (rid, cfg) for rid, cfg in CREDIT_ROLES.items() if rid in roles and cfg["type"] == "monthly"
     ]
-    highest_monthly_role = max(monthly_roles_present, key=lambda x: x[1]["amount"])[0] if monthly_roles_present else None
+    highest_monthly_role = (
+        max(monthly_roles_present, key=lambda x: x[1]["amount"])[0]
+        if monthly_roles_present
+        else None
+    )
 
     for role_id, config in CREDIT_ROLES.items():
         if role_id not in roles:
@@ -226,20 +230,26 @@ def process_credit_grants(session: Session, user: DiscordUser) -> None:
         reason = config["reason"]
 
         if role_type == "one_time":
-            existing = session.query(CreditGrant).filter(
-                CreditGrant.user_id == user.id,
-                CreditGrant.reason == reason,
-                CreditGrant.grant_period.is_(None),
-            ).first()
+            existing = (
+                session.query(CreditGrant)
+                .filter(
+                    CreditGrant.user_id == user.id,
+                    CreditGrant.reason == reason,
+                    CreditGrant.grant_period.is_(None),
+                )
+                .first()
+            )
             if not existing:
                 amount = config["amount"]
                 user.credits += amount
-                session.add(CreditGrant(
-                    user_id=user.id,
-                    amount=amount,
-                    reason=reason,
-                    grant_period=None,
-                ))
+                session.add(
+                    CreditGrant(
+                        user_id=user.id,
+                        amount=amount,
+                        reason=reason,
+                        grant_period=None,
+                    )
+                )
                 logger.info(f"Granted {amount} credits to {user.username} ({reason})")
 
         elif role_type == "monthly":
@@ -254,11 +264,15 @@ def process_credit_grants(session: Session, user: DiscordUser) -> None:
             max_balance = monthly_amount * cap_multiplier
 
             for period in get_eligible_periods(user.grant_anchor_date, now):
-                existing = session.query(CreditGrant).filter(
-                    CreditGrant.user_id == user.id,
-                    CreditGrant.reason == reason,
-                    CreditGrant.grant_period == period,
-                ).first()
+                existing = (
+                    session.query(CreditGrant)
+                    .filter(
+                        CreditGrant.user_id == user.id,
+                        CreditGrant.reason == reason,
+                        CreditGrant.grant_period == period,
+                    )
+                    .first()
+                )
                 if existing:
                     continue
 
@@ -267,13 +281,17 @@ def process_credit_grants(session: Session, user: DiscordUser) -> None:
                     continue
 
                 user.credits += effective
-                session.add(CreditGrant(
-                    user_id=user.id,
-                    amount=effective,
-                    reason=reason,
-                    grant_period=period,
-                ))
-                logger.info(f"Granted {effective} monthly credits to {user.username} ({reason}, period={period})")
+                session.add(
+                    CreditGrant(
+                        user_id=user.id,
+                        amount=effective,
+                        reason=reason,
+                        grant_period=period,
+                    )
+                )
+                logger.info(
+                    f"Granted {effective} monthly credits to {user.username} ({reason}, period={period})"
+                )
 
     session.flush()
 
@@ -309,6 +327,7 @@ async def discord_oauth_redirect(req: Request, return_to: str | None = None):
     _oauth_states[state] = (datetime.now(UTC).timestamp(), return_to)
 
     from urllib.parse import urlencode
+
     params = {
         "client_id": DISCORD_CLIENT_ID,
         "redirect_uri": DISCORD_REDIRECT_URI,
@@ -322,7 +341,9 @@ async def discord_oauth_redirect(req: Request, return_to: str | None = None):
 
 
 @router.get("/discord/callback")
-async def discord_oauth_callback(code: str | None = None, state: str | None = None, error: str | None = None):
+async def discord_oauth_callback(
+    code: str | None = None, state: str | None = None, error: str | None = None
+):
     """Handle Discord OAuth2 callback."""
     if error:
         return RedirectResponse(url="/account.html?error=access_denied")
@@ -355,7 +376,9 @@ async def discord_oauth_callback(code: str | None = None, state: str | None = No
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         if token_resp.status_code != 200:
-            logger.error(f"Discord token exchange failed: {token_resp.status_code} {token_resp.text}")
+            logger.error(
+                f"Discord token exchange failed: {token_resp.status_code} {token_resp.text}"
+            )
             return RedirectResponse(url="/account.html?error=token_exchange_failed")
 
         token_data = token_resp.json()
@@ -416,12 +439,21 @@ async def discord_oauth_callback(code: str | None = None, state: str | None = No
 
     # Upsert user in database
     with get_session() as session:
-        user = session.query(DiscordUser).filter(DiscordUser.discord_id == discord_id).with_for_update().first()
+        user = (
+            session.query(DiscordUser)
+            .filter(DiscordUser.discord_id == discord_id)
+            .with_for_update()
+            .first()
+        )
         if user:
             # Detect newly gained patron roles → reset anchor so no backdated credits
             old_roles = set(user.roles or [])
             new_roles = set(roles)
-            patron_role_ids = {PATRON_EXPLORER_ROLE_ID, PATRON_ARCHAEOLOGIST_ROLE_ID, PATRON_SCHOLAR_ROLE_ID}
+            patron_role_ids = {
+                PATRON_EXPLORER_ROLE_ID,
+                PATRON_ARCHAEOLOGIST_ROLE_ID,
+                PATRON_SCHOLAR_ROLE_ID,
+            }
             newly_gained_patron = (new_roles & patron_role_ids) - (old_roles & patron_role_ids)
             if newly_gained_patron:
                 user.grant_anchor_date = datetime.now(UTC)
@@ -446,6 +478,7 @@ async def discord_oauth_callback(code: str | None = None, state: str | None = No
 
         # Check login achievement
         from api.cardgame.achievements import check_achievements
+
         check_achievements(session, user.id, "login")
 
         jwt_token = create_token(str(user.id), discord_id)
@@ -469,7 +502,12 @@ async def get_me(user: DiscordUser = Depends(get_current_user)):
     try:
         # Process any pending credit grants (monthly accumulation, etc.)
         with get_session() as session:
-            db_user = session.query(DiscordUser).filter(DiscordUser.id == user.id).with_for_update().first()
+            db_user = (
+                session.query(DiscordUser)
+                .filter(DiscordUser.id == user.id)
+                .with_for_update()
+                .first()
+            )
             if db_user:
                 process_credit_grants(session, db_user)
                 credits = db_user.credits
@@ -488,8 +526,13 @@ async def get_me(user: DiscordUser = Depends(get_current_user)):
 
         # Next grant date for monthly tiers
         next_grant_date = None
-        if tier in ("explorer", "archaeologist", "scholar") and db_user and db_user.grant_anchor_date:
+        if (
+            tier in ("explorer", "archaeologist", "scholar")
+            and db_user
+            and db_user.grant_anchor_date
+        ):
             from datetime import timedelta
+
             anchor = db_user.grant_anchor_date
             now = datetime.now(UTC)
             # Find next anniversary of anchor day
@@ -536,9 +579,15 @@ async def get_credits(user: DiscordUser = Depends(get_current_user)):
         is_unlimited = db_user.is_unlimited if db_user else False
 
         # Recent usage (last 20)
-        usage = session.query(TokenUsageLog).filter(
-            TokenUsageLog.user_id == user.id,
-        ).order_by(TokenUsageLog.created_at.desc()).limit(20).all()
+        usage = (
+            session.query(TokenUsageLog)
+            .filter(
+                TokenUsageLog.user_id == user.id,
+            )
+            .order_by(TokenUsageLog.created_at.desc())
+            .limit(20)
+            .all()
+        )
 
         usage_list = [
             {
@@ -552,9 +601,13 @@ async def get_credits(user: DiscordUser = Depends(get_current_user)):
         ]
 
         # Total credits granted
-        grants = session.query(CreditGrant).filter(
-            CreditGrant.user_id == user.id,
-        ).all()
+        grants = (
+            session.query(CreditGrant)
+            .filter(
+                CreditGrant.user_id == user.id,
+            )
+            .all()
+        )
         grants_list = [
             {
                 "amount": g.amount,
@@ -609,6 +662,7 @@ async def admin_list_users(
             if role_ids:
                 from sqlalchemy import cast
                 from sqlalchemy.dialects.postgresql import ARRAY, TEXT
+
                 query = query.filter(DiscordUser.roles.op("?|")(cast(role_ids, ARRAY(TEXT))))
         users = query.order_by(DiscordUser.last_login.desc()).limit(100).all()
 
@@ -619,7 +673,8 @@ async def admin_list_users(
                     "username": u.username,
                     "avatar_url": (
                         f"https://cdn.discordapp.com/avatars/{u.discord_id}/{u.avatar_hash}.png?size=64"
-                        if u.avatar_hash else None
+                        if u.avatar_hash
+                        else None
                     ),
                     "credits": u.credits,
                     "is_unlimited": u.is_unlimited,
@@ -627,7 +682,9 @@ async def admin_list_users(
                     "is_og_nerd": OG_NERD_ROLE_ID in (u.roles or []),
                     "roles": u.roles or [],
                     "last_login": u.last_login.isoformat() if u.last_login else None,
-                    "grant_anchor_date": u.grant_anchor_date.isoformat() if u.grant_anchor_date else None,
+                    "grant_anchor_date": u.grant_anchor_date.isoformat()
+                    if u.grant_anchor_date
+                    else None,
                 }
                 for u in users
             ]
@@ -641,43 +698,58 @@ async def admin_adjust_credits(
 ):
     """Set, add, remove credits, or toggle unlimited for a user."""
     if body.action not in ("set", "add", "remove", "set_unlimited"):
-        raise HTTPException(status_code=400, detail="action must be 'set', 'add', 'remove', or 'set_unlimited'")
+        raise HTTPException(
+            status_code=400, detail="action must be 'set', 'add', 'remove', or 'set_unlimited'"
+        )
 
     with get_session() as session:
-        user = session.query(DiscordUser).filter(
-            DiscordUser.id == uuid.UUID(body.user_id),
-        ).with_for_update().first()
+        user = (
+            session.query(DiscordUser)
+            .filter(
+                DiscordUser.id == uuid.UUID(body.user_id),
+            )
+            .with_for_update()
+            .first()
+        )
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
         if body.action == "set_unlimited":
             user.is_unlimited = body.amount != 0
-            session.add(CreditGrant(
-                user_id=user.id,
-                amount=0,
-                reason="unlimited_set" if user.is_unlimited else "unlimited_removed",
-            ))
+            session.add(
+                CreditGrant(
+                    user_id=user.id,
+                    amount=0,
+                    reason="unlimited_set" if user.is_unlimited else "unlimited_removed",
+                )
+            )
         elif body.action == "set":
             user.credits = body.amount
-            session.add(CreditGrant(
-                user_id=user.id,
-                amount=body.amount,
-                reason="founder_grant",
-            ))
+            session.add(
+                CreditGrant(
+                    user_id=user.id,
+                    amount=body.amount,
+                    reason="founder_grant",
+                )
+            )
         elif body.action == "add":
             user.credits += body.amount
-            session.add(CreditGrant(
-                user_id=user.id,
-                amount=body.amount,
-                reason="founder_grant",
-            ))
+            session.add(
+                CreditGrant(
+                    user_id=user.id,
+                    amount=body.amount,
+                    reason="founder_grant",
+                )
+            )
         elif body.action == "remove":
             user.credits = max(0, user.credits - body.amount)
-            session.add(CreditGrant(
-                user_id=user.id,
-                amount=-body.amount,
-                reason="founder_grant",
-            ))
+            session.add(
+                CreditGrant(
+                    user_id=user.id,
+                    amount=-body.amount,
+                    reason="founder_grant",
+                )
+            )
 
         session.flush()
         new_credits = user.credits
@@ -693,9 +765,13 @@ async def admin_count_by_role(
 ):
     """Count users that have a specific role. Used for bulk grant preview."""
     with get_session() as session:
-        count = session.query(DiscordUser).filter(
-            DiscordUser.roles.op("?")(role_id),
-        ).count()
+        count = (
+            session.query(DiscordUser)
+            .filter(
+                DiscordUser.roles.op("?")(role_id),
+            )
+            .count()
+        )
     return {"count": count}
 
 
@@ -709,17 +785,24 @@ async def admin_bulk_credits(
         raise HTTPException(status_code=400, detail="amount must be positive")
 
     with get_session() as session:
-        users = session.query(DiscordUser).filter(
-            DiscordUser.roles.op("?")(body.role_id),
-        ).with_for_update().all()
+        users = (
+            session.query(DiscordUser)
+            .filter(
+                DiscordUser.roles.op("?")(body.role_id),
+            )
+            .with_for_update()
+            .all()
+        )
 
         for u in users:
             u.credits += body.amount
-            session.add(CreditGrant(
-                user_id=u.id,
-                amount=body.amount,
-                reason="bulk_role_grant",
-            ))
+            session.add(
+                CreditGrant(
+                    user_id=u.id,
+                    amount=body.amount,
+                    reason="bulk_role_grant",
+                )
+            )
 
         session.flush()
         affected = len(users)

@@ -248,17 +248,19 @@ class CTSProtocol:
                         if label:
                             citations.append(label)
 
-                    works.append(CTSWork(
-                        urn=ed_urn,
-                        title=work_title or ed_label or "",
-                        language=work_lang,
-                        description=ed_desc,
-                        textgroup=tg_urn,
-                        textgroup_name=tg_name,
-                        edition=ed_urn,
-                        label=ed_label,
-                        citation_scheme=citations,
-                    ))
+                    works.append(
+                        CTSWork(
+                            urn=ed_urn,
+                            title=work_title or ed_label or "",
+                            language=work_lang,
+                            description=ed_desc,
+                            textgroup=tg_urn,
+                            textgroup_name=tg_name,
+                            edition=ed_urn,
+                            label=ed_label,
+                            citation_scheme=citations,
+                        )
+                    )
 
         return works
 
@@ -269,12 +271,14 @@ class CTSProtocol:
         works = []
         # JSON API structure varies by implementation
         for item in data.get("textGroups", data.get("texts", [])):
-            works.append(CTSWork(
-                urn=item.get("urn", ""),
-                title=item.get("title", item.get("label", "")),
-                language=item.get("lang"),
-                description=item.get("description"),
-            ))
+            works.append(
+                CTSWork(
+                    urn=item.get("urn", ""),
+                    title=item.get("title", item.get("label", "")),
+                    language=item.get("lang"),
+                    description=item.get("description"),
+                )
+            )
 
         return works
 
@@ -310,10 +314,12 @@ class CTSProtocol:
         refs = []
         for reff in root.findall(".//cts:reff/cts:urn", CTS_NAMESPACES):
             if reff.text:
-                refs.append(CTSReference(
-                    urn=reff.text.strip(),
-                    level=level,
-                ))
+                refs.append(
+                    CTSReference(
+                        urn=reff.text.strip(),
+                        level=level,
+                    )
+                )
 
         return refs
 
@@ -328,11 +334,13 @@ class CTSProtocol:
             if isinstance(item, str):
                 refs.append(CTSReference(urn=item, level=level))
             elif isinstance(item, dict):
-                refs.append(CTSReference(
-                    urn=item.get("urn", ""),
-                    level=level,
-                    label=item.get("label"),
-                ))
+                refs.append(
+                    CTSReference(
+                        urn=item.get("urn", ""),
+                        level=level,
+                        label=item.get("label"),
+                    )
+                )
 
         return refs
 
@@ -477,11 +485,13 @@ class CTSProtocol:
 
                 passages = []
                 for hit in data.get("hits", data.get("results", [])):
-                    passages.append(CTSPassage(
-                        urn=hit.get("urn", ""),
-                        text=hit.get("content", hit.get("text", "")),
-                        title=hit.get("title"),
-                    ))
+                    passages.append(
+                        CTSPassage(
+                            urn=hit.get("urn", ""),
+                            text=hit.get("content", hit.get("text", "")),
+                            title=hit.get("title"),
+                        )
+                    )
 
                 return passages
 

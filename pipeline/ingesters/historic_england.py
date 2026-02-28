@@ -125,7 +125,7 @@ class HistoricEnglandIngester(BaseIngester):
                 "source": "Historic England",
                 "fetched_at": datetime.now(UTC).isoformat(),
                 "total_fetched": len(all_features),
-            }
+            },
         }
 
         atomic_write_json(dest_path, output)

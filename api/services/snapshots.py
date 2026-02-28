@@ -25,10 +25,26 @@ SNAPSHOTS_DIR = Path("public/data/snapshots")
 
 # Columns to capture in snapshots (everything except geom binary)
 _SNAPSHOT_COLUMNS = [
-    "id", "source_id", "source_record_id", "name", "name_normalized",
-    "lat", "lon", "site_type", "period_start", "period_end", "period_name",
-    "country", "description", "thumbnail_url", "source_url", "edited_by",
-    "raw_data", "parent_site_id", "created_at", "updated_at",
+    "id",
+    "source_id",
+    "source_record_id",
+    "name",
+    "name_normalized",
+    "lat",
+    "lon",
+    "site_type",
+    "period_start",
+    "period_end",
+    "period_name",
+    "country",
+    "description",
+    "thumbnail_url",
+    "source_url",
+    "edited_by",
+    "raw_data",
+    "parent_site_id",
+    "created_at",
+    "updated_at",
 ]
 
 
@@ -45,7 +61,9 @@ def create_snapshot(
         return None
 
     # Fetch current state of all affected rows
-    cols = ", ".join(f"{c}::text" if c in ("id", "parent_site_id") else c for c in _SNAPSHOT_COLUMNS)
+    cols = ", ".join(
+        f"{c}::text" if c in ("id", "parent_site_id") else c for c in _SNAPSHOT_COLUMNS
+    )
     rows = db.execute(
         text(f"SELECT {cols} FROM unified_sites WHERE id::text = ANY(:ids)"),
         {"ids": site_ids},
@@ -84,11 +102,13 @@ def create_snapshot(
         for dt_col in ("created_at", "updated_at"):
             if row_dict.get(dt_col) is not None:
                 row_dict[dt_col] = str(row_dict[dt_col])
-        row_params.append({
-            "snapshot_id": snapshot_id,
-            "site_id": row_dict["id"],
-            "old_data": json.dumps(row_dict),
-        })
+        row_params.append(
+            {
+                "snapshot_id": snapshot_id,
+                "site_id": row_dict["id"],
+                "old_data": json.dumps(row_dict),
+            }
+        )
 
     db.execute(
         text("""
@@ -222,8 +242,14 @@ def restore_snapshot(db: Session, snapshot_id: str, restored_by: str = "system")
 
 
 _DIFF_FIELDS = [
-    "name", "site_type", "period_start", "period_name",
-    "country", "description", "source_url", "thumbnail_url",
+    "name",
+    "site_type",
+    "period_start",
+    "period_name",
+    "country",
+    "description",
+    "source_url",
+    "thumbnail_url",
 ]
 
 
@@ -291,11 +317,13 @@ def preview_snapshot(db: Session, snapshot_id: str) -> dict | None:
             old_str = str(old_val) if old_val is not None else ""
             cur_str = str(cur_val) if cur_val is not None else ""
             if old_str != cur_str:
-                changed.append({
-                    "field": field,
-                    "current": cur_str or None,
-                    "restore_to": old_str or None,
-                })
+                changed.append(
+                    {
+                        "field": field,
+                        "current": cur_str or None,
+                        "restore_to": old_str or None,
+                    }
+                )
 
         site_entry["status"] = "changed" if changed else "unchanged"
         site_entry["fields"] = changed
@@ -369,23 +397,33 @@ def site_edit_history(db: Session, site_id: str, limit: int = 20) -> list[dict]:
         changes = []
         for field in _DIFF_FIELDS:
             old_val = old.get(field)
-            new_val = after.get(field) if isinstance(after, dict) else after.get(field, None) if hasattr(after, 'get') else None
+            new_val = (
+                after.get(field)
+                if isinstance(after, dict)
+                else after.get(field, None)
+                if hasattr(after, "get")
+                else None
+            )
             old_str = str(old_val) if old_val is not None else ""
             new_str = str(new_val) if new_val is not None else ""
             if old_str != new_str:
-                changes.append({
-                    "field": field,
-                    "before": old_str or None,
-                    "after": new_str or None,
-                })
+                changes.append(
+                    {
+                        "field": field,
+                        "before": old_str or None,
+                        "after": new_str or None,
+                    }
+                )
 
-        history.append({
-            "date": row.created_at.isoformat() + "+00:00",
-            "by": row.created_by,
-            "description": row.description,
-            "type": row.snapshot_type,
-            "changes": changes,
-        })
+        history.append(
+            {
+                "date": row.created_at.isoformat() + "+00:00",
+                "by": row.created_by,
+                "description": row.description,
+                "type": row.snapshot_type,
+                "changes": changes,
+            }
+        )
 
     return history
 
@@ -463,7 +501,8 @@ def export_file_snapshot(db: Session) -> str:
     now = datetime.now(UTC)
     snapshot_key = now.strftime("%Y-%m-%d_%H%M%S")
 
-    result = db.execute(text("""
+    result = db.execute(
+        text("""
         SELECT
             id, name, lat, lon, source_id, site_type,
             period_start, period_end, period_name, country,
@@ -472,7 +511,8 @@ def export_file_snapshot(db: Session) -> str:
         FROM unified_sites
         WHERE source_id IN ('ancient_nerds', 'lyra', 'ancient_nerds_community')
         ORDER BY source_id, name
-    """))
+    """)
+    )
 
     sites = []
     source_counts: dict[str, int] = defaultdict(int)
@@ -526,12 +566,14 @@ def export_file_snapshot(db: Session) -> str:
             manifest = json.load(f)
 
     snapshots = manifest["snapshots"]
-    snapshots.append({
-        "date": snapshot_key,
-        "file": snapshot_file,
-        "sites": len(sites),
-        "by_source": dict(source_counts),
-    })
+    snapshots.append(
+        {
+            "date": snapshot_key,
+            "file": snapshot_file,
+            "sites": len(sites),
+            "by_source": dict(source_counts),
+        }
+    )
     snapshots.sort(key=lambda s: s["date"], reverse=True)
     manifest["snapshots"] = snapshots
 

@@ -53,9 +53,7 @@ def get_active_pins(db: Session) -> dict[str, str | None]:
     now = time.time()
     if _pins_cache is not None and now - _pins_cache_ts < _PINS_CACHE_TTL:
         return _pins_cache
-    rows = db.execute(text(
-        "SELECT source_id, snapshot_date FROM source_version_pins"
-    )).fetchall()
+    rows = db.execute(text("SELECT source_id, snapshot_date FROM source_version_pins")).fetchall()
     _pins_cache = {r.source_id: r.snapshot_date for r in rows}
     _pins_cache_ts = now
     return _pins_cache
@@ -141,11 +139,13 @@ def _compute_diff(from_date: str, to_date: str) -> dict:
                 fields[display] = {"from": old_val, "to": new_val}
                 field_counts[display] = field_counts.get(display, 0) + 1
         if fields:
-            changed.append({
-                "id": sid,
-                "n": new.get("n", old.get("n", "")),
-                "fields": fields,
-            })
+            changed.append(
+                {
+                    "id": sid,
+                    "n": new.get("n", old.get("n", "")),
+                    "fields": fields,
+                }
+            )
 
     # Sort: changed by name, added/removed by name
     changed.sort(key=lambda x: x["n"].lower())
@@ -184,9 +184,7 @@ async def get_snapshot_diff(
     resolved_to = _resolve_date(to_date)
 
     if resolved_from == resolved_to:
-        raise HTTPException(
-            status_code=400, detail="Cannot diff a snapshot against itself"
-        )
+        raise HTTPException(status_code=400, detail="Cannot diff a snapshot against itself")
 
     result = _compute_diff(resolved_from, resolved_to)
     return JSONResponse(result)
@@ -236,18 +234,21 @@ async def set_pin(
     # Upsert
     if snap_date is None:
         # Unpin: delete the row
-        db.execute(text(
-            "DELETE FROM source_version_pins WHERE source_id = :sid"
-        ), {"sid": source_id})
+        db.execute(
+            text("DELETE FROM source_version_pins WHERE source_id = :sid"), {"sid": source_id}
+        )
     else:
-        db.execute(text("""
+        db.execute(
+            text("""
             INSERT INTO source_version_pins (source_id, snapshot_date, pinned_at, pinned_by)
             VALUES (:sid, :snap, NOW(), :by)
             ON CONFLICT (source_id) DO UPDATE SET
                 snapshot_date = EXCLUDED.snapshot_date,
                 pinned_at = EXCLUDED.pinned_at,
                 pinned_by = EXCLUDED.pinned_by
-        """), {"sid": source_id, "snap": snap_date, "by": edited_by})
+        """),
+            {"sid": source_id, "snap": snap_date, "by": edited_by},
+        )
 
     db.commit()
 

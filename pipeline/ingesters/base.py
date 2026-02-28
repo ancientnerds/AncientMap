@@ -100,11 +100,12 @@ class ParsedSite:
 
     This is the common format all ingesters should produce.
     """
+
     # Required fields
-    source_id: str              # ID in the source database
-    name: str                   # Primary name
-    lat: float                  # Latitude (WGS84)
-    lon: float                  # Longitude (WGS84)
+    source_id: str  # ID in the source database
+    name: str  # Primary name
+    lat: float  # Latitude (WGS84)
+    lon: float  # Longitude (WGS84)
 
     # Optional fields
     alternative_names: list[str] = field(default_factory=list)
@@ -128,6 +129,7 @@ class ParsedSite:
 @dataclass
 class IngesterResult:
     """Result of an ingestion run."""
+
     source_id: str
     success: bool
     records_fetched: int = 0
@@ -156,8 +158,8 @@ class BaseIngester(ABC):
     """
 
     # Class attributes to be set by subclasses
-    source_id: str = None           # e.g., "pleiades"
-    source_name: str = None         # e.g., "Pleiades"
+    source_id: str = None  # e.g., "pleiades"
+    source_name: str = None  # e.g., "Pleiades"
 
     def __init__(self, session=None, progress_callback=None):
         """
@@ -249,7 +251,9 @@ class BaseIngester(ABC):
         # Period validation
         if site.period_start is not None and site.period_end is not None:
             if site.period_start > site.period_end:
-                errors.append(f"period_start ({site.period_start}) > period_end ({site.period_end})")
+                errors.append(
+                    f"period_start ({site.period_start}) > period_end ({site.period_end})"
+                )
 
         return errors
 
@@ -264,10 +268,14 @@ class BaseIngester(ABC):
             Created SourceRecord or None if failed
         """
         # Check if record already exists
-        existing = self.session.query(SourceRecord).filter_by(
-            source_database_id=self.source_id,
-            source_record_id=site.source_id,
-        ).first()
+        existing = (
+            self.session.query(SourceRecord)
+            .filter_by(
+                source_database_id=self.source_id,
+                source_record_id=site.source_id,
+            )
+            .first()
+        )
 
         if existing:
             logger.debug(f"Record already exists: {self.source_id}:{site.source_id}")
@@ -310,7 +318,8 @@ class BaseIngester(ABC):
                 name=self.source_name,
                 description=self.source_info.get("description"),
                 url=self.source_info.get("url"),
-                api_endpoint=self.source_info.get("api_url") or self.source_info.get("download_url"),
+                api_endpoint=self.source_info.get("api_url")
+                or self.source_info.get("download_url"),
                 license=self.source_info.get("license"),
                 attribution_template=self.source_info.get("attribution"),
             )
@@ -381,7 +390,9 @@ class BaseIngester(ABC):
                 # Commit batch
                 if len(batch) >= batch_size:
                     self.session.commit()
-                    logger.info(f"Committed batch of {len(batch)} records (total: {result.records_saved})")
+                    logger.info(
+                        f"Committed batch of {len(batch)} records (total: {result.records_saved})"
+                    )
                     batch = []
 
             # Commit remaining

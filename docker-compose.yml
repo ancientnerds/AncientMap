@@ -102,6 +102,7 @@ services:
       REDIS_HOST: redis
       QDRANT_HOST: qdrant
       PATREON_WEBHOOK_SECRET: ${PATREON_WEBHOOK_SECRET:-}
+      TRUSTED_PROXY: "1"
     volumes:
       - ./public/data:/app/public/data
     depends_on:
