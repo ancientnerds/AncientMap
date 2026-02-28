@@ -608,10 +608,15 @@ def get_site_images(
     site: str,
     limit: int = 20,
 ) -> str:
-    """Get locally cached Wikipedia/Wikimedia Commons images for an archaeological site.
+    """Get Wikipedia/Wikimedia Commons images for an archaeological site.
 
-    Returns image URLs, attribution (author, license), and metadata.
-    Use this when users ask to see images or photos of a site.
+    Returns images with URLs, attribution, and metadata. Each image has:
+    - original_url: Direct image URL — use this for inline images: ![title](original_url)
+    - url: Local cached copy (may not be available)
+    - commons_url: Wikimedia Commons page (for attribution links, NOT for img src)
+
+    When displaying images, ALWAYS use original_url for the image source.
+    Include author and license as attribution below each image.
 
     Args:
         site: Site UUID or name (e.g. 'Pompeii', 'fa2293fa-5256-4a41-9e61-26844e54fde4').
@@ -663,10 +668,13 @@ def get_site_images(
         sid_short = str(r.site_id).replace("-", "")[:8]
         img = {
             "title": r.title,
+            "original_url": r.original_url,
             "url": f"/data/images/wiki/{sid_short}/{r.filename}",
             "commons_url": r.commons_page_url,
             "author": r.author,
+            "author_url": r.author_url,
             "license": r.license,
+            "license_url": r.license_url,
             "is_hero": r.is_hero,
             "source": r.source_type,
         }

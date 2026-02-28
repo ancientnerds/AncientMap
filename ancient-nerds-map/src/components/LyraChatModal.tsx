@@ -513,6 +513,18 @@ export default function LyraChatModal({
       // Normal link
       return <a {...props} href={href} target="_blank" rel="noopener noreferrer">{children}</a>
     },
+    img: ({ src, alt, ...props }: React.ImgHTMLAttributes<HTMLImageElement>) => {
+      if (!src) return null
+      return (
+        <img
+          {...props}
+          src={src}
+          alt={alt || ''}
+          onError={(e) => { e.currentTarget.style.display = 'none' }}
+          loading="lazy"
+        />
+      )
+    },
   }), [onHighlightSites, onFlyToSite, onOpenSitePopup, onClose]) // sidebarNews accessed via ref — no re-render on news events
 
   // Auto-scroll: only if user hasn't scrolled up
