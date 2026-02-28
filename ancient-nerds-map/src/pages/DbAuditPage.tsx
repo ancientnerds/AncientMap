@@ -299,6 +299,7 @@ export default function DbAuditPage() {
   const [uploadProgress, setUploadProgress] = useState({ sent: 0, total: 0, phase: '' })
   const [uploadMarkAudited, setUploadMarkAudited] = useState(false)
   const [uploadCreateSnapshot, setUploadCreateSnapshot] = useState(true)
+  const [uploadFieldFilter, setUploadFieldFilter] = useState<string | null>(null)
 
   const [creatingSnapshot, setCreatingSnapshot] = useState(false)
 
@@ -931,6 +932,7 @@ export default function DbAuditPage() {
   // Shared file processing for both input and drag & drop
   const processUploadFile = useCallback((file: File) => {
     setUploadFileName(file.name)
+    setUploadFieldFilter(null)
     const reader = new FileReader()
     reader.onload = () => {
       const text = reader.result as string
@@ -993,7 +995,7 @@ export default function DbAuditPage() {
   }, [processUploadFile])
 
   // Commit upload — sends in chunks to avoid timeouts
-  const CHUNK_SIZE = 200
+  const CHUNK_SIZE = 10
   const commitUpload = useCallback(async () => {
     if (!token || uploadParsed.length === 0) return
     setUploading(true)
@@ -1052,6 +1054,10 @@ export default function DbAuditPage() {
         totalInserted += result.inserted
         totalUpdated += result.updated
         if (result.errors) allErrors.push(...result.errors)
+        if (result.snapshot_error) {
+          console.error('Snapshot creation failed:', result.snapshot_error)
+          allErrors.push({ row: 0, name: 'SNAPSHOT', error: `Snapshot failed: ${result.snapshot_error}` })
+        }
 
         setUploadProgress({ sent, total, phase: `Batch ${ci + 1}/${chunks.length} done` })
       }
@@ -1407,7 +1413,7 @@ export default function DbAuditPage() {
           )}
         </>
       }>
-        <span className="page-header-title">Database Audit</span>
+        <span className="page-header-title">Database</span>
         <div className="db-source-badge" style={sourceFilter !== 'all' ? {
           borderColor: SOURCE_CONFIG[sourceFilter]?.color,
           background: SOURCE_CONFIG[sourceFilter]?.color + '15',
@@ -2134,13 +2140,20 @@ export default function DbAuditPage() {
                     return (
                       <div className="db-upload-field-breakdown">
                         {entries.map(([field, count]) => (
-                          <span key={field} className="db-field-change-pill">
+                          <span
+                            key={field}
+                            className={`db-field-change-pill db-field-change-clickable ${uploadFieldFilter === field ? 'db-field-change-active' : ''}`}
+                            onClick={() => setUploadFieldFilter(prev => prev === field ? null : field)}
+                          >
                             <span className="db-field-change-count">{count}</span>
                             {field.replace(/_/g, ' ')}
                           </span>
                         ))}
                         {newCount > 0 && (
-                          <span className="db-field-change-pill db-field-change-new">
+                          <span
+                            className={`db-field-change-pill db-field-change-new db-field-change-clickable ${uploadFieldFilter === '_new' ? 'db-field-change-active' : ''}`}
+                            onClick={() => setUploadFieldFilter(prev => prev === '_new' ? null : '_new')}
+                          >
                             <span className="db-field-change-count">{newCount}</span>
                             new sites
                           </span>
@@ -2152,7 +2165,11 @@ export default function DbAuditPage() {
                   {/* Diff view — only show sites with actual changes or inserts */}
                   <div className="db-upload-diff">
                     {uploadParsed
-                      .filter(p => p._status === 'insert' || (p._status === 'update' && p._changedFields && p._changedFields.length > 0))
+                      .filter(p => {
+                        if (uploadFieldFilter === '_new') return p._status === 'insert'
+                        if (uploadFieldFilter) return p._status === 'update' && p._changedFields?.includes(uploadFieldFilter)
+                        return p._status === 'insert' || (p._status === 'update' && p._changedFields && p._changedFields.length > 0)
+                      })
                       .slice(0, 100)
                       .map((p, i) => (
                         <div key={i} className={`db-diff-item db-diff-${p._status}`}>
@@ -2167,7 +2184,7 @@ export default function DbAuditPage() {
                           </div>
                           {p._status === 'update' && p._changedFields && p._currentData && (
                             <div className="db-diff-fields">
-                              {p._changedFields.map(field => {
+                              {(uploadFieldFilter && uploadFieldFilter !== '_new' ? p._changedFields.filter(f => f === uploadFieldFilter) : p._changedFields).map(field => {
                                 const oldVal = String((p._currentData as Record<string, unknown>)?.[field] ?? '')
                                 const newVal = String((p as unknown as Record<string, unknown>)[field] ?? '')
                                 const label = field.replace(/_/g, ' ')
@@ -2234,7 +2251,7 @@ export default function DbAuditPage() {
                 </button>
               </div>
               <div className="db-modal-footer-buttons">
-                <button className="db-btn db-btn-cancel" onClick={() => { setShowUploadModal(false); setUploadParsed([]); setUploadFileName(''); setUploadMarkAudited(false); setUploadCreateSnapshot(true) }} disabled={uploading}>Cancel</button>
+                <button className="db-btn db-btn-cancel" onClick={() => { setShowUploadModal(false); setUploadParsed([]); setUploadFileName(''); setUploadMarkAudited(false); setUploadCreateSnapshot(true); setUploadFieldFilter(null) }} disabled={uploading}>Cancel</button>
                 <button className={`db-btn ${uploadCreateSnapshot ? 'db-btn-commit' : 'db-btn-warn'}`} onClick={commitUpload} disabled={uploading || uploadParsed.filter(p => p._status !== 'error').length === 0} title={uploadCreateSnapshot ? 'Creates a snapshot of current state, then applies all changes' : 'No snapshot — changes cannot be rolled back!'}>
                   {uploading ? 'Applying...' : uploadCreateSnapshot ? 'Snapshot & Apply' : 'Apply Without Snapshot'}
                 </button>
