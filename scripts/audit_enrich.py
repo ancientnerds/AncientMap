@@ -911,7 +911,7 @@ def prepare_agent_batches(sites: list[dict]) -> dict:
             needs_research.append(entry)
 
     if not needs_research:
-        print("[WAVE 2] No sites need research — all data complete!", flush=True)
+        print("[WAVE 2] No sites need research -- all data complete!", flush=True)
         return {"total_needing_research": 0, "batches": 0}
 
     # Split into batches of ~50
@@ -1055,7 +1055,7 @@ def merge_results(dry_run: bool = False) -> dict:
     manual_review_items: list[dict] = []
 
     if dry_run:
-        print("[MERGE] DRY RUN — no database writes will be made.\n", flush=True)
+        print("[MERGE] DRY RUN -- no database writes will be made.\n", flush=True)
 
     ctx = engine.connect() if not dry_run else contextlib.nullcontext()
     with ctx as conn:
@@ -1076,10 +1076,27 @@ def merge_results(dry_run: bool = False) -> dict:
                 status = site_result.get("status", "unknown")
 
                 if status == "fixed":
-                    fixes = site_result.get("fixes", [])
+                    raw_fixes = site_result.get("fixes", [])
                     applied_any = False
 
+                    # Normalise fixes: accept both list-of-dicts and flat-dict formats
+                    if isinstance(raw_fixes, dict):
+                        # Flat dict format: {"field_name": value, ...}
+                        fixes = []
+                        for fld, val in raw_fixes.items():
+                            fixes.append({
+                                "field": fld,
+                                "old": None,
+                                "new": val,
+                                "confidence": "high",
+                            })
+                    else:
+                        fixes = raw_fixes
+
                     for fix in fixes:
+                        if not isinstance(fix, dict) or "field" not in fix:
+                            stats["validation_warnings"] += 1
+                            continue
                         field = fix["field"]
                         confidence = fix.get("confidence", "low")
 
@@ -1428,7 +1445,7 @@ def main() -> None:
     limit = args.limit
 
     print("=" * 60, flush=True)
-    print("  Ancient Nerds — Audit & Enrichment Orchestrator", flush=True)
+    print("  Ancient Nerds - Audit & Enrichment Orchestrator", flush=True)
     print("=" * 60, flush=True)
     print(f"  Sources: {', '.join(source_ids)}", flush=True)
     print(f"  Mode: {args.mode}", flush=True)
@@ -1455,7 +1472,7 @@ def main() -> None:
         run_enrichment_pipeline(card_sites=sites)
 
         print("\n" + "=" * 40, flush=True)
-        print("  APPLY: Enrichment → unified_sites", flush=True)
+        print("  APPLY: Enrichment -> unified_sites", flush=True)
         print("=" * 40, flush=True)
         apply_enrichment(overwrite=args.overwrite)
 
@@ -1480,7 +1497,7 @@ def main() -> None:
             return
 
     # Fetch candidates for audit (unless just merging/exporting/packaging/agents)
-    if phase not in ("merge", "export", "package", "agents"):
+    if phase not in ("merge", "export", "package", "agents", "apply"):
         sites = fetch_audit_candidates(source_ids, args.mode)
         if not sites:
             print("\n[AUDIT] No candidates found. Nothing to do.", flush=True)
@@ -1505,7 +1522,7 @@ def main() -> None:
     # Apply enrichment data to unified_sites
     if phase in (None, "apply"):
         print("\n" + "=" * 40, flush=True)
-        print("  APPLY: Enrichment → unified_sites", flush=True)
+        print("  APPLY: Enrichment -> unified_sites", flush=True)
         print("=" * 40, flush=True)
         apply_enrichment(overwrite=args.overwrite)
 
