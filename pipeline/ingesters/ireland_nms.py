@@ -139,7 +139,7 @@ class IrelandNMSIngester(BaseIngester):
                 "source": "Ireland National Monuments Service",
                 "fetched_at": datetime.now(UTC).isoformat(),
                 "total_fetched": len(all_features),
-            }
+            },
         }
 
         atomic_write_json(dest_path, output)

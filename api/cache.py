@@ -47,6 +47,7 @@ def get_redis_client():
 
     try:
         import redis
+
         redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
         _redis_client = redis.from_url(redis_url, decode_responses=True)
         _redis_client.ping()
@@ -141,6 +142,7 @@ def cache_delete_pattern(pattern: str) -> int:
 
     # Also delete from memory cache (simple prefix match)
     import fnmatch
+
     keys_to_delete = [k for k in _memory_cache.keys() if fnmatch.fnmatch(k, pattern)]
     for key in keys_to_delete:
         del _memory_cache[key]
@@ -158,6 +160,7 @@ def cached(key_prefix: str, ttl: int = 3600) -> Callable:
         async def get_sources():
             ...
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -184,4 +187,5 @@ def cached(key_prefix: str, ttl: int = 3600) -> Callable:
             return result
 
         return wrapper
+
     return decorator

@@ -10,7 +10,6 @@ Priority: P1
 API: http://nomisma.org/
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
@@ -109,10 +108,7 @@ class NomismaConnector(BaseConnector):
                 item_id = item_id[8:]
 
             # Get JSON-LD representation
-            response = await self.rest.get(
-                f"/id/{item_id}",
-                headers={"Accept": "application/json"}
-            )
+            response = await self.rest.get(f"/id/{item_id}", headers={"Accept": "application/json"})
 
             if not response:
                 return None

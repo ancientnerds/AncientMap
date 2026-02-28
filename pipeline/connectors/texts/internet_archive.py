@@ -10,7 +10,6 @@ Priority: P1
 API: https://archive.org/developers/
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
@@ -90,7 +89,9 @@ class InternetArchiveConnector(BaseConnector):
                         description=doc.get("description"),
                         url=f"https://archive.org/details/{identifier}",
                         thumbnail_url=f"https://archive.org/services/img/{identifier}",
-                        creator=doc.get("creator", [""])[0] if isinstance(doc.get("creator"), list) else doc.get("creator"),
+                        creator=doc.get("creator", [""])[0]
+                        if isinstance(doc.get("creator"), list)
+                        else doc.get("creator"),
                         date=doc.get("date"),
                         license=doc.get("licenseurl", self.license),
                         attribution=self.attribution,

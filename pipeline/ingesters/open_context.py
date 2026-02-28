@@ -121,8 +121,14 @@ class OpenContextIngester(BaseIngester):
                 break
 
             all_features.extend(features)
-            logger.info(f"Fetched {len(all_features):,} / {min(total_count, self.MAX_RECORDS):,} records")
-            self.report_progress(len(all_features), min(total_count, self.MAX_RECORDS), f"{len(all_features):,} records")
+            logger.info(
+                f"Fetched {len(all_features):,} / {min(total_count, self.MAX_RECORDS):,} records"
+            )
+            self.report_progress(
+                len(all_features),
+                min(total_count, self.MAX_RECORDS),
+                f"{len(all_features):,} records",
+            )
 
             # Check if we've reached the limit
             if len(all_features) >= self.MAX_RECORDS:
@@ -146,7 +152,7 @@ class OpenContextIngester(BaseIngester):
                 "fetched_at": datetime.now(UTC).isoformat(),
                 "total_available": total_count,
                 "total_fetched": len(all_features),
-            }
+            },
         }
 
         atomic_write_json(dest_path, output)

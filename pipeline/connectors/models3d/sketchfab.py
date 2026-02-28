@@ -11,7 +11,6 @@ Features:
 - Human-created models only (excludes AI-generated)
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
@@ -25,11 +24,38 @@ MIN_RELEVANCE_SCORE = 10
 
 # Archaeology-related keywords that boost relevance
 ARCHAEOLOGY_KEYWORDS = [
-    "ancient", "archaeological", "archaeology", "ruins", "temple", "tomb",
-    "pyramid", "monument", "historic", "historical", "heritage", "excavation",
-    "artifact", "artefact", "relic", "antique", "medieval", "roman", "greek",
-    "egyptian", "mesopotamian", "byzantine", "ottoman", "islamic", "christian",
-    "mosque", "church", "cathedral", "palace", "fortress", "castle", "citadel"
+    "ancient",
+    "archaeological",
+    "archaeology",
+    "ruins",
+    "temple",
+    "tomb",
+    "pyramid",
+    "monument",
+    "historic",
+    "historical",
+    "heritage",
+    "excavation",
+    "artifact",
+    "artefact",
+    "relic",
+    "antique",
+    "medieval",
+    "roman",
+    "greek",
+    "egyptian",
+    "mesopotamian",
+    "byzantine",
+    "ottoman",
+    "islamic",
+    "christian",
+    "mosque",
+    "church",
+    "cathedral",
+    "palace",
+    "fortress",
+    "castle",
+    "citadel",
 ]
 
 
@@ -127,7 +153,9 @@ class SketchfabConnector(BaseConnector):
                 try:
                     item = self._parse_result(result, query, primary_name, country)
                     if item:
-                        logger.debug(f"Sketchfab: Model '{item.title}' scored {item.relevance_score}")
+                        logger.debug(
+                            f"Sketchfab: Model '{item.title}' scored {item.relevance_score}"
+                        )
                         if item.relevance_score >= MIN_RELEVANCE_SCORE:
                             items.append(item)
                 except Exception as parse_err:
@@ -198,7 +226,9 @@ class SketchfabConnector(BaseConnector):
 
         # Use Sketchfab's default thumbnail URL as fallback
         if not thumbnail:
-            thumbnail = f"https://media.sketchfab.com/models/{uid}/thumbnails/initial/thumbnail.jpeg"
+            thumbnail = (
+                f"https://media.sketchfab.com/models/{uid}/thumbnails/initial/thumbnail.jpeg"
+            )
 
         # Safe user access - handle None values
         user = result.get("user") or {}

@@ -63,9 +63,7 @@ class CardStats(Base):
 
     site: Mapped["UnifiedSite"] = relationship("UnifiedSite", lazy="joined")
 
-    __table_args__ = (
-        Index("idx_card_stats_rarity", "rarity_tier", "rarity_score"),
-    )
+    __table_args__ = (Index("idx_card_stats_rarity", "rarity_tier", "rarity_score"),)
 
 
 class CardCollection(Base):
@@ -74,7 +72,9 @@ class CardCollection(Base):
     __tablename__ = "card_collections"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -104,7 +104,9 @@ class CardDeck(Base):
     __tablename__ = "card_decks"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -118,9 +120,7 @@ class CardDeck(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    __table_args__ = (
-        Index("idx_card_decks_user", "user_id"),
-    )
+    __table_args__ = (Index("idx_card_decks_user", "user_id"),)
 
 
 class CardBattle(Base):
@@ -129,7 +129,9 @@ class CardBattle(Base):
     __tablename__ = "card_battles"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     challenger_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -142,7 +144,9 @@ class CardBattle(Base):
         nullable=False,
     )
     status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="pending",
+        String(20),
+        nullable=False,
+        default="pending",
     )
     winner_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
@@ -196,7 +200,9 @@ class CardPackLog(Base):
     __tablename__ = "card_pack_log"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -208,9 +214,7 @@ class CardPackLog(Base):
     cards_received: Mapped[list] = mapped_column(JSONB, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
-    __table_args__ = (
-        Index("idx_card_pack_log_user", "user_id"),
-    )
+    __table_args__ = (Index("idx_card_pack_log_user", "user_id"),)
 
 
 class QuizSession(Base):
@@ -219,7 +223,9 @@ class QuizSession(Base):
     __tablename__ = "quiz_sessions"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -233,9 +239,7 @@ class QuizSession(Base):
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
-    __table_args__ = (
-        Index("idx_quiz_sessions_user", "user_id"),
-    )
+    __table_args__ = (Index("idx_quiz_sessions_user", "user_id"),)
 
 
 class ExpeditionProgress(Base):
@@ -244,7 +248,9 @@ class ExpeditionProgress(Base):
     __tablename__ = "expedition_progress"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -286,7 +292,9 @@ class EmpireCollection(Base):
     __tablename__ = "empire_collections"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -328,7 +336,9 @@ class UserAchievement(Base):
     __tablename__ = "user_achievements"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

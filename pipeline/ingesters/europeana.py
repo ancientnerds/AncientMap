@@ -149,7 +149,7 @@ class EuropeanaIngester(BaseIngester):
                 "total_items": len(all_items),
                 "queries": self.SEARCH_QUERIES,
                 "license": "Varies by item",
-            }
+            },
         }
 
         atomic_write_json(dest_path, output)
@@ -269,7 +269,9 @@ class EuropeanaIngester(BaseIngester):
             return None
 
         # Get title
-        title = self._get_first(item.get("title")) or self._get_first(item.get("dcTitleLangAware", {}).get("en"))
+        title = self._get_first(item.get("title")) or self._get_first(
+            item.get("dcTitleLangAware", {}).get("en")
+        )
         if not title:
             title = f"Europeana {item_id}"
 
@@ -343,7 +345,8 @@ class EuropeanaIngester(BaseIngester):
             if "bc" in date_str or "bce" in date_str:
                 # Ancient dates - try to extract
                 import re
-                numbers = re.findall(r'\d+', date_str)
+
+                numbers = re.findall(r"\d+", date_str)
                 if numbers:
                     year = -int(numbers[0])
                     return year, year

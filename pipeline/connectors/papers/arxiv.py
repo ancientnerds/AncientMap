@@ -263,7 +263,7 @@ class ArXivConnector(BaseConnector):
                 "stat:stat.AP",
             ]
 
-        from_date = (datetime.now().replace(hour=0, minute=0, second=0, microsecond=0))
+        from_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         from_date_str = from_date.strftime("%Y-%m-%d")
 
         all_items = []
@@ -323,7 +323,11 @@ class ArXivConnector(BaseConnector):
 
             # Summary/abstract
             summary_elem = entry.find("atom:summary", ATOM_NAMESPACES)
-            description = summary_elem.text.strip() if summary_elem is not None and summary_elem.text else None
+            description = (
+                summary_elem.text.strip()
+                if summary_elem is not None and summary_elem.text
+                else None
+            )
             if description:
                 description = " ".join(description.split())
 
@@ -336,7 +340,11 @@ class ArXivConnector(BaseConnector):
 
             # Published date
             published_elem = entry.find("atom:published", ATOM_NAMESPACES)
-            date = published_elem.text[:10] if published_elem is not None and published_elem.text else None
+            date = (
+                published_elem.text[:10]
+                if published_elem is not None and published_elem.text
+                else None
+            )
             date_numeric = int(date[:4]) if date else None
 
             # Categories

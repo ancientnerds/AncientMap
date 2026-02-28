@@ -8,14 +8,17 @@ rejected items. Matched items (already in DB) and not_a_site are excluded.
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from api.cache import cache_delete_pattern, cache_get, cache_set
 from api.services.jwt_auth import require_founder
+from api.services.rate_limiter import RateLimiter, get_client_ip
 from pipeline.database import DiscordUser, get_db
 from pipeline.utils.text import categorize_period, normalize_name
+
+_radar_limiter = RateLimiter(max_requests=10, window_seconds=60, namespace="heavy_radar")
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -24,7 +27,9 @@ CACHE_TTL = 300  # 5 minutes
 
 
 def find_similar_sites_batch(
-    db: Session, names: list[str], limit_per_name: int = 5,
+    db: Session,
+    names: list[str],
+    limit_per_name: int = 5,
 ) -> dict[str, list[dict]]:
     """
     Find similar sites for multiple names using pg_trgm.
@@ -56,9 +61,13 @@ def find_similar_sites_batch(
     matches_by_name: dict[str, list[dict]] = {n: [] for n in names}
 
     for qname in names:
-        rows = db.execute(per_name_query, {
-            "qname": qname, "limit": limit_per_name * 4,
-        }).fetchall()
+        rows = db.execute(
+            per_name_query,
+            {
+                "qname": qname,
+                "limit": limit_per_name * 4,
+            },
+        ).fetchall()
 
         seen_site_ids: set[str] = set()
         for row in rows:
@@ -74,16 +83,18 @@ def find_similar_sites_batch(
                 wiki_name = row.site_name.replace(" ", "_")
                 wikipedia_url = f"https://en.wikipedia.org/wiki/{wiki_name}"
 
-            matches_by_name[qname].append({
-                "site_id": sid,
-                "name": row.site_name,
-                "similarity": round(row.similarity, 2),
-                "thumbnail_url": row.thumbnail_url,
-                "wikipedia_url": wikipedia_url,
-                "country": row.country,
-                "source_id": row.source_id,
-                "source_name": row.source_name,
-            })
+            matches_by_name[qname].append(
+                {
+                    "site_id": sid,
+                    "name": row.site_name,
+                    "similarity": round(row.similarity, 2),
+                    "thumbnail_url": row.thumbnail_url,
+                    "wikipedia_url": wikipedia_url,
+                    "country": row.country,
+                    "source_id": row.source_id,
+                    "source_name": row.source_name,
+                }
+            )
 
             if len(matches_by_name[qname]) >= limit_per_name:
                 break
@@ -128,12 +139,14 @@ def _build_video_refs(videos_json: list[dict] | None) -> list[dict]:
             deep_url = f"https://www.youtube.com/watch?v={vid}"
             if ts > 0:
                 deep_url += f"&t={ts}s"
-            videos.append({
-                "video_id": vid,
-                "channel_name": v.get("channel_name", ""),
-                "timestamp_seconds": ts,
-                "deep_url": deep_url,
-            })
+            videos.append(
+                {
+                    "video_id": vid,
+                    "channel_name": v.get("channel_name", ""),
+                    "timestamp_seconds": ts,
+                    "deep_url": deep_url,
+                }
+            )
     return videos
 
 
@@ -151,7 +164,9 @@ def _flatten_facts(all_facts: list | None) -> list[str]:
 
 
 def _find_nearest_an_sites_batch(
-    db: Session, items: list[dict], max_km: float = 10.0,
+    db: Session,
+    items: list[dict],
+    max_km: float = 10.0,
 ) -> dict[str, dict]:
     """Find closest AN Originals site within max_km for each item with coords.
 
@@ -179,7 +194,8 @@ def _find_nearest_an_sites_batch(
 
     values_clause = ", ".join(value_fragments)
 
-    rows = db.execute(text(f"""
+    rows = db.execute(
+        text(f"""
         WITH candidates(idx, clat, clon) AS (
             VALUES {values_clause}
         )
@@ -196,7 +212,9 @@ def _find_nearest_an_sites_batch(
         WHERE SQRT(POW((c.clat - us.lat) * 111.0, 2)
                  + POW((c.clon - us.lon) * 111.0 * COS(RADIANS(c.clat)), 2)) <= :max_km
         ORDER BY c.idx, dist_km
-    """), params).fetchall()
+    """),
+        params,
+    ).fetchall()
 
     result: dict[str, dict] = {}
     for row in rows:
@@ -214,7 +232,8 @@ async def get_radar_map_data(db: Session = Depends(get_db)):
     if cached:
         return cached
 
-    rows = db.execute(text("""
+    rows = db.execute(
+        text("""
         SELECT id::text, source, COALESCE(corrected_name, name) AS display_name,
                COALESCE(enrichment_status, 'pending') AS enrichment_status,
                country, site_type, period_name, period_start, lat, lon,
@@ -234,7 +253,8 @@ async def get_radar_map_data(db: Session = Depends(get_db)):
         WHERE source IN ('lyra', 'user')
           AND COALESCE(enrichment_status, 'pending') NOT IN ('matched', 'not_a_site', 'failed')
           AND lat IS NOT NULL AND lon IS NOT NULL
-    """)).fetchall()
+    """)
+    ).fetchall()
 
     result = [dict(r._mapping) for r in rows]
     cache_set(cache_key, result, ttl=CACHE_TTL)
@@ -249,7 +269,8 @@ async def get_sites_map(db: Session = Depends(get_db)):
     if cached:
         return cached
 
-    rows = db.execute(text("""
+    rows = db.execute(
+        text("""
         SELECT id::text, name, lat, lon,
           (45
            + CASE WHEN country IS NOT NULL AND country != '' THEN 10 ELSE 0 END
@@ -261,7 +282,8 @@ async def get_sites_map(db: Session = Depends(get_db)):
           ) AS score
         FROM unified_sites
         WHERE lat IS NOT NULL AND lon IS NOT NULL
-    """)).fetchall()
+    """)
+    ).fetchall()
 
     result = {
         "cols": ["id", "n", "la", "lo", "sc"],
@@ -273,6 +295,7 @@ async def get_sites_map(db: Session = Depends(get_db)):
 
 @router.get("/list")
 async def get_radar(
+    req: Request,
     page: int = Query(1, ge=1),
     page_size: int = Query(24, ge=1, le=100),
     min_mentions: int = Query(1, ge=1),
@@ -287,13 +310,17 @@ async def get_radar(
     Excludes matched (already in DB), not_a_site, and failed items.
     Supports source_filter: 'all' (default), 'lyra' (radar), 'user' (community).
     """
+    if not _radar_limiter.check(get_client_ip(req)):
+        raise HTTPException(status_code=429, detail="Too many requests")
     cache_key = f"radar:list:{page}:{page_size}:{min_mentions}:{sort_by}:{status}:{source_filter}"
     cached = cache_get(cache_key)
     if cached:
         return cached
 
     # ── Status filter → SQL WHERE clause ───────────────────────────
-    status_clause = "COALESCE(uc.enrichment_status, 'pending') NOT IN ('failed', 'not_a_site', 'matched')"
+    status_clause = (
+        "COALESCE(uc.enrichment_status, 'pending') NOT IN ('failed', 'not_a_site', 'matched')"
+    )
     if status == "enriched":
         status_clause = "uc.enrichment_status = 'enriched'"
     elif status == "pending":
@@ -416,7 +443,7 @@ async def get_radar(
             rejected = row.enrichment_data.get("rejected_match", {})
             if rejected.get("reason") == "country_mismatch":
                 rejection_reason = (
-                    f"Matched to \"{rejected.get('site_name', '?')}\" "
+                    f'Matched to "{rejected.get("site_name", "?")}" '
                     f"({rejected.get('site_country', '?')}), "
                     f"but video context indicates {rejected.get('contribution_country', '?')}"
                 )
@@ -435,7 +462,9 @@ async def get_radar(
                 confidence = ident.get("confidence")
             if row.enrichment_data.get("wikidata"):
                 data_sources.append("wikidata")
-                if isinstance(row.enrichment_data["wikidata"], dict) and row.enrichment_data["wikidata"].get("wikipedia"):
+                if isinstance(row.enrichment_data["wikidata"], dict) and row.enrichment_data[
+                    "wikidata"
+                ].get("wikipedia"):
                     data_sources.append("wikipedia")
             if row.enrichment_data.get("research"):
                 data_sources.append("ai_research")
@@ -453,7 +482,9 @@ async def get_radar(
             if isinstance(wd, dict):
                 cc = wd.get("commons_category")
                 if cc:
-                    commons_url = f"https://commons.wikimedia.org/wiki/Category:{cc.replace(' ', '_')}"
+                    commons_url = (
+                        f"https://commons.wikimedia.org/wiki/Category:{cc.replace(' ', '_')}"
+                    )
                 elif wd.get("thumbnail_url"):
                     thumb = wd["thumbnail_url"]
                     # Extract filename from Wikimedia Commons thumbnail URL
@@ -526,7 +557,9 @@ async def get_radar(
                     if suggestions and suggestions[0]["similarity"] >= 0.6:
                         item["best_match"] = suggestions[0]
         except Exception:
-            logger.warning("Fuzzy suggestions failed — returning items without suggestions", exc_info=True)
+            logger.warning(
+                "Fuzzy suggestions failed — returning items without suggestions", exc_info=True
+            )
 
     response = {
         "items": page_items,
@@ -615,7 +648,10 @@ async def promote_to_db(
 
     # Must be enriched
     if item.get("enrichment_status") != "enriched":
-        raise HTTPException(status_code=409, detail=f"Cannot promote: status is '{item.get('enrichment_status')}', expected 'enriched'")
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot promote: status is '{item.get('enrichment_status')}', expected 'enriched'",
+        )
 
     # Must not already be promoted
     if item.get("promoted_site_id") is not None:
@@ -650,7 +686,8 @@ async def promote_to_db(
     name_norm = normalize_name(display_name)
 
     # INSERT into unified_sites
-    db.execute(text("""
+    db.execute(
+        text("""
         INSERT INTO unified_sites (
             id, source_id, source_record_id, name, name_normalized,
             lat, lon, geom,
@@ -664,40 +701,48 @@ async def promote_to_db(
             :country, :description, :thumbnail_url, :source_url,
             'radar_promote'
         )
-    """), {
-        "id": new_site_id,
-        "source_id": source_id,
-        "source_record_id": str(item["id"]),
-        "name": display_name,
-        "name_normalized": name_norm,
-        "lat": item["lat"],
-        "lon": item["lon"],
-        "site_type": item.get("site_type"),
-        "period_start": item.get("period_start"),
-        "period_end": item.get("period_end"),
-        "period_name": period_name,
-        "country": item.get("country"),
-        "description": item.get("description"),
-        "thumbnail_url": item.get("thumbnail_url"),
-        "source_url": item.get("wikipedia_url"),
-    })
+    """),
+        {
+            "id": new_site_id,
+            "source_id": source_id,
+            "source_record_id": str(item["id"]),
+            "name": display_name,
+            "name_normalized": name_norm,
+            "lat": item["lat"],
+            "lon": item["lon"],
+            "site_type": item.get("site_type"),
+            "period_start": item.get("period_start"),
+            "period_end": item.get("period_end"),
+            "period_name": period_name,
+            "country": item.get("country"),
+            "description": item.get("description"),
+            "thumbnail_url": item.get("thumbnail_url"),
+            "source_url": item.get("wikipedia_url"),
+        },
+    )
 
     # INSERT into unified_site_names for trigram search
-    db.execute(text("""
+    db.execute(
+        text("""
         INSERT INTO unified_site_names (site_id, name, name_normalized, name_type)
         VALUES (:site_id, :name, :name_normalized, 'label')
-    """), {
-        "site_id": new_site_id,
-        "name": display_name,
-        "name_normalized": name_norm,
-    })
+    """),
+        {
+            "site_id": new_site_id,
+            "name": display_name,
+            "name_normalized": name_norm,
+        },
+    )
 
     # UPDATE the contribution
-    db.execute(text("""
+    db.execute(
+        text("""
         UPDATE user_contributions
         SET enrichment_status = 'promoted', promoted_site_id = :site_id
         WHERE id = :id
-    """), {"site_id": new_site_id, "id": contribution_id})
+    """),
+        {"site_id": new_site_id, "id": contribution_id},
+    )
 
     db.commit()
 

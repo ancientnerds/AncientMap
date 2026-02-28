@@ -174,20 +174,3 @@ exclude_lines = [
 show_missing = true
 fail_under = 50  # Start with 50%, increase over time
 
-# =============================================================================
-# Black Configuration (if used alongside ruff)
-# =============================================================================
-[tool.black]
-line-length = 100
-target-version = ['py311']
-include = '\.pyi?$'
-exclude = '''
-/(
-    \.git
-  | \.venv
-  | venv
-  | __pycache__
-  | node_modules
-  | ancient-nerds-map
-)/
-'''

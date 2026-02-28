@@ -17,9 +17,16 @@ class StatusResponse(BaseModel):
 
     status: str = Field(description="Service status", json_schema_extra={"example": "ok"})
     version: str = Field(description="API version", json_schema_extra={"example": "1.0.0"})
-    commit: str = Field(description="Git commit hash of the running build", json_schema_extra={"example": "8c8b02f"})
-    total_sites: int = Field(description="Total archaeological sites in database (>0 = healthy)", json_schema_extra={"example": 750000})
-    source_count: int = Field(description="Number of active data sources", json_schema_extra={"example": 18})
+    commit: str = Field(
+        description="Git commit hash of the running build", json_schema_extra={"example": "8c8b02f"}
+    )
+    total_sites: int = Field(
+        description="Total archaeological sites in database (>0 = healthy)",
+        json_schema_extra={"example": 750000},
+    )
+    source_count: int = Field(
+        description="Number of active data sources", json_schema_extra={"example": 18}
+    )
 
 
 # =============================================================================
@@ -30,15 +37,36 @@ class StatusResponse(BaseModel):
 class SiteResult(BaseModel):
     """A single archaeological site in search results."""
 
-    id: str = Field(description="Unique site identifier (UUID)", json_schema_extra={"example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"})
+    id: str = Field(
+        description="Unique site identifier (UUID)",
+        json_schema_extra={"example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"},
+    )
     name: str = Field(description="Site name", json_schema_extra={"example": "Stonehenge"})
-    latitude: float = Field(description="Latitude in decimal degrees", json_schema_extra={"example": 51.1789})
-    longitude: float = Field(description="Longitude in decimal degrees", json_schema_extra={"example": -1.8262})
-    source_id: str = Field(description="Data source identifier", json_schema_extra={"example": "ancient_nerds"})
-    site_type: str | None = Field(None, description="Type of archaeological site", json_schema_extra={"example": "stone circle"})
-    period_start: int | None = Field(None, description="Estimated start date (negative = BC)", json_schema_extra={"example": -3000})
-    period_name: str | None = Field(None, description="Named period", json_schema_extra={"example": "Neolithic"})
-    country: str | None = Field(None, description="Country name", json_schema_extra={"example": "United Kingdom"})
+    latitude: float = Field(
+        description="Latitude in decimal degrees", json_schema_extra={"example": 51.1789}
+    )
+    longitude: float = Field(
+        description="Longitude in decimal degrees", json_schema_extra={"example": -1.8262}
+    )
+    source_id: str = Field(
+        description="Data source identifier", json_schema_extra={"example": "ancient_nerds"}
+    )
+    site_type: str | None = Field(
+        None,
+        description="Type of archaeological site",
+        json_schema_extra={"example": "stone circle"},
+    )
+    period_start: int | None = Field(
+        None,
+        description="Estimated start date (negative = BC)",
+        json_schema_extra={"example": -3000},
+    )
+    period_name: str | None = Field(
+        None, description="Named period", json_schema_extra={"example": "Neolithic"}
+    )
+    country: str | None = Field(
+        None, description="Country name", json_schema_extra={"example": "United Kingdom"}
+    )
     source_url: str | None = Field(None, description="Link to original source record")
 
 
@@ -66,10 +94,18 @@ class SourcePublic(BaseModel):
     """A data source contributing sites to the database."""
 
     id: str = Field(description="Source identifier", json_schema_extra={"example": "pleiades"})
-    name: str = Field(description="Human-readable source name", json_schema_extra={"example": "Pleiades"})
-    site_count: int = Field(description="Number of sites from this source", json_schema_extra={"example": 38000})
-    color: str = Field(description="Hex color for map display", json_schema_extra={"example": "#e74c3c"})
-    category: str | None = Field(None, description="Source category", json_schema_extra={"example": "ancient_world"})
+    name: str = Field(
+        description="Human-readable source name", json_schema_extra={"example": "Pleiades"}
+    )
+    site_count: int = Field(
+        description="Number of sites from this source", json_schema_extra={"example": 38000}
+    )
+    color: str = Field(
+        description="Hex color for map display", json_schema_extra={"example": "#e74c3c"}
+    )
+    category: str | None = Field(
+        None, description="Source category", json_schema_extra={"example": "ancient_world"}
+    )
     description: str | None = Field(None, description="Brief description of the source")
     license: str | None = Field(None, description="Data license (e.g. CC-BY-SA-4.0)")
     url: str | None = Field(None, description="Source website URL")
@@ -79,15 +115,27 @@ class SourceDetailResponse(BaseModel):
     """Detailed breakdown for a single data source."""
 
     id: str = Field(description="Source identifier", json_schema_extra={"example": "pleiades"})
-    name: str = Field(description="Human-readable source name", json_schema_extra={"example": "Pleiades"})
-    site_count: int = Field(description="Number of sites from this source", json_schema_extra={"example": 38000})
-    color: str = Field(description="Hex color for map display", json_schema_extra={"example": "#e74c3c"})
+    name: str = Field(
+        description="Human-readable source name", json_schema_extra={"example": "Pleiades"}
+    )
+    site_count: int = Field(
+        description="Number of sites from this source", json_schema_extra={"example": 38000}
+    )
+    color: str = Field(
+        description="Hex color for map display", json_schema_extra={"example": "#e74c3c"}
+    )
     category: str | None = Field(None, description="Source category")
     description: str | None = Field(None, description="Brief description of the source")
     license: str | None = Field(None, description="Data license")
     url: str | None = Field(None, description="Source website URL")
-    types: dict[str, int] = Field(description="Top site types with counts", json_schema_extra={"example": {"settlement": 12000, "temple": 3500}})
-    periods: dict[str, int] = Field(description="Period distribution with counts", json_schema_extra={"example": {"500 BC - 1 AD": 15000, "1 - 500 AD": 8000}})
+    types: dict[str, int] = Field(
+        description="Top site types with counts",
+        json_schema_extra={"example": {"settlement": 12000, "temple": 3500}},
+    )
+    periods: dict[str, int] = Field(
+        description="Period distribution with counts",
+        json_schema_extra={"example": {"500 BC - 1 AD": 15000, "1 - 500 AD": 8000}},
+    )
 
 
 class SourcesResponse(BaseModel):
@@ -138,7 +186,9 @@ class NewsFeedPublicResponse(BaseModel):
     """Paginated news feed response."""
 
     items: list[NewsItemPublic] = Field(description="News items")
-    total_count: int = Field(description="Total items matching filters", json_schema_extra={"example": 150})
+    total_count: int = Field(
+        description="Total items matching filters", json_schema_extra={"example": 150}
+    )
     page: int = Field(description="Current page number", json_schema_extra={"example": 1})
     has_more: bool = Field(description="Whether more pages are available")
 
@@ -163,9 +213,16 @@ class ChannelPublic(BaseModel):
 class StatsResponse(BaseModel):
     """Database statistics."""
 
-    total_sites: int = Field(description="Total archaeological sites in database", json_schema_extra={"example": 750000})
-    by_source: dict[str, int] = Field(description="Site count per data source", json_schema_extra={"example": {"pleiades": 38000, "dare": 22000}})
-    last_updated: str | None = Field(None, description="ISO 8601 timestamp of most recently updated site")
+    total_sites: int = Field(
+        description="Total archaeological sites in database", json_schema_extra={"example": 750000}
+    )
+    by_source: dict[str, int] = Field(
+        description="Site count per data source",
+        json_schema_extra={"example": {"pleiades": 38000, "dare": 22000}},
+    )
+    last_updated: str | None = Field(
+        None, description="ISO 8601 timestamp of most recently updated site"
+    )
 
 
 # =============================================================================
@@ -200,19 +257,44 @@ class FacetsResponse(BaseModel):
 class CardPublic(BaseModel):
     """A card description for an archaeological site."""
 
-    site_id: str = Field(description="Unique site identifier (UUID)", json_schema_extra={"example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"})
+    site_id: str = Field(
+        description="Unique site identifier (UUID)",
+        json_schema_extra={"example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"},
+    )
     name: str = Field(description="Site name", json_schema_extra={"example": "Parthenon"})
-    card_description: str = Field(description="Short card description (~200 chars)", json_schema_extra={"example": "Iconic temple atop the Athenian Acropolis, built in 447 BC as a monument to Athena."})
-    country: str | None = Field(None, description="Country name", json_schema_extra={"example": "Greece"})
-    site_type: str | None = Field(None, description="Type of archaeological site", json_schema_extra={"example": "temple"})
-    period_name: str | None = Field(None, description="Named historical period", json_schema_extra={"example": "Classical"})
-    category_group: str | None = Field(None, description="Category group (e.g. Settlements, Religious)", json_schema_extra={"example": "Religious"})
-    rarity_tier: int = Field(description="Rarity tier (1=Common, 2=Uncommon, 3=Rare, 4=Epic, 5=Legendary)", json_schema_extra={"example": 5})
-    rarity_name: str = Field(description="Rarity tier name", json_schema_extra={"example": "Legendary"})
+    card_description: str = Field(
+        description="Short card description (~200 chars)",
+        json_schema_extra={
+            "example": "Iconic temple atop the Athenian Acropolis, built in 447 BC as a monument to Athena."
+        },
+    )
+    country: str | None = Field(
+        None, description="Country name", json_schema_extra={"example": "Greece"}
+    )
+    site_type: str | None = Field(
+        None, description="Type of archaeological site", json_schema_extra={"example": "temple"}
+    )
+    period_name: str | None = Field(
+        None, description="Named historical period", json_schema_extra={"example": "Classical"}
+    )
+    category_group: str | None = Field(
+        None,
+        description="Category group (e.g. Settlements, Religious)",
+        json_schema_extra={"example": "Religious"},
+    )
+    rarity_tier: int = Field(
+        description="Rarity tier (1=Common, 2=Uncommon, 3=Rare, 4=Epic, 5=Legendary)",
+        json_schema_extra={"example": 5},
+    )
+    rarity_name: str = Field(
+        description="Rarity tier name", json_schema_extra={"example": "Legendary"}
+    )
     total_power: int = Field(description="Total power score", json_schema_extra={"example": 92})
     antiquity: int = Field(description="Antiquity stat", json_schema_extra={"example": 18})
     fortification: int = Field(description="Fortification stat", json_schema_extra={"example": 15})
-    cultural_influence: int = Field(description="Cultural influence stat", json_schema_extra={"example": 20})
+    cultural_influence: int = Field(
+        description="Cultural influence stat", json_schema_extra={"example": 20}
+    )
     mystery: int = Field(description="Mystery stat", json_schema_extra={"example": 19})
     legacy: int = Field(description="Legacy stat", json_schema_extra={"example": 20})
 

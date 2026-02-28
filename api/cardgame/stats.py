@@ -48,7 +48,7 @@ def compute_cultural_influence(
     if has_thumbnail:
         raw += 2
     raw += min(content_link_count, 4)  # cap at 4
-    raw += min(wiki_image_count, 3)    # cap at 3
+    raw += min(wiki_image_count, 3)  # cap at 3
     if has_source_url:
         raw += 2
     # Normalize 0-13 → 1-10

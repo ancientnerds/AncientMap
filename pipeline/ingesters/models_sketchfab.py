@@ -85,6 +85,7 @@ class SketchfabIngester(BaseIngester):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         from pipeline.api_config import get_sketchfab_api_key
+
         self.api_key = get_sketchfab_api_key()
 
     def fetch(self) -> Path:
@@ -219,7 +220,7 @@ class SketchfabIngester(BaseIngester):
                 "data_type": "3d_models",
                 "license": "Varies per model",
                 "note": "Models require Sketchfab embed or download for viewing",
-            }
+            },
         }
 
         atomic_write_json(dest_path, output)

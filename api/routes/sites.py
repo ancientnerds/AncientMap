@@ -14,21 +14,31 @@ import logging
 import random
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from api.cache import cache_delete_pattern, cache_get, cache_set
 from api.services.jwt_auth import require_founder
+from api.services.rate_limiter import RateLimiter, get_client_ip
 from pipeline.database import DiscordUser, get_db
 from pipeline.normalizers.site_type import normalize_site_type
+
+_heavy_limiter = RateLimiter(max_requests=10, window_seconds=60, namespace="heavy_sites")
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Paths to static sites JSON files (both need to be kept in sync)
-STATIC_SITES_PATH = Path(__file__).parent.parent.parent / "ancient-nerds-map" / "dist" / "data" / "sites" / "index.json"
+STATIC_SITES_PATH = (
+    Path(__file__).parent.parent.parent
+    / "ancient-nerds-map"
+    / "dist"
+    / "data"
+    / "sites"
+    / "index.json"
+)
 PUBLIC_SITES_PATH = Path(__file__).parent.parent.parent / "public" / "data" / "sites" / "index.json"
 
 # Cache for static sites (loaded once)
@@ -53,7 +63,7 @@ def _load_static_sites():
 
     logger.info(f"Loading static sites from {path}")
     try:
-        with open(path, encoding='utf-8') as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
 
         sites = data.get("sites", [])
@@ -76,6 +86,7 @@ def _filter_static_sites(sites, sources=None, site_type=None, period_max=None, s
         filtered = [s for s in filtered if s.get("t") == site_type]
 
     if period_max is not None:
+
         def period_matches(site):
             p = site.get("p")
             if p is None:
@@ -83,10 +94,11 @@ def _filter_static_sites(sites, sources=None, site_type=None, period_max=None, s
             if isinstance(p, list) and len(p) > 0:
                 return p[0] <= period_max  # Check period_start
             return True
+
         filtered = [s for s in filtered if period_matches(s)]
 
     # Apply pagination
-    return filtered[skip:skip + limit]
+    return filtered[skip : skip + limit]
 
 
 def _convert_static_site(site):
@@ -118,6 +130,7 @@ def _convert_static_site(site):
 
 class SiteUpdateRequest(BaseModel):
     """Request model for updating a site."""
+
     title: str = Field(..., max_length=500)
     location: str | None = Field(default=None, max_length=500)
     category: str = Field(..., max_length=100)
@@ -130,21 +143,23 @@ class SiteUpdateRequest(BaseModel):
 def _period_to_year(period: str) -> int | None:
     """Convert period name to approximate year for dot coloring."""
     period_years = {
-        '< 4500 BC': -5000,
-        '4500 - 3000 BC': -3750,
-        '3000 - 1500 BC': -2250,
-        '1500 - 500 BC': -1000,
-        '500 BC - 1 AD': -250,
-        '1 - 500 AD': 250,
-        '500 - 1000 AD': 750,
-        '1000 - 1500 AD': 1250,
-        '1500+ AD': 1750,
-        'Unknown': None,
+        "< 4500 BC": -5000,
+        "4500 - 3000 BC": -3750,
+        "3000 - 1500 BC": -2250,
+        "1500 - 500 BC": -1000,
+        "500 BC - 1 AD": -250,
+        "1 - 500 AD": 250,
+        "500 - 1000 AD": 750,
+        "1000 - 1500 AD": 1250,
+        "1500+ AD": 1750,
+        "Unknown": None,
     }
     return period_years.get(period)
 
 
-def _update_single_json_file(file_path: Path, site_id: str, site_update: 'SiteUpdateRequest') -> bool:
+def _update_single_json_file(
+    file_path: Path, site_id: str, site_update: "SiteUpdateRequest"
+) -> bool:
     """Update a single static JSON file with the edited site data."""
     if not file_path.exists():
         logger.warning(f"Static sites file not found: {file_path}")
@@ -152,7 +167,7 @@ def _update_single_json_file(file_path: Path, site_id: str, site_update: 'SiteUp
 
     try:
         # Load the JSON file
-        with open(file_path, encoding='utf-8') as f:
+        with open(file_path, encoding="utf-8") as f:
             data = json.load(f)
 
         sites = data.get("sites", [])
@@ -185,8 +200,8 @@ def _update_single_json_file(file_path: Path, site_id: str, site_update: 'SiteUp
 
         if updated:
             # Write back to file
-            with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, separators=(',', ':'))  # Compact JSON
+            with open(file_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, separators=(",", ":"))  # Compact JSON
             return True
         else:
             logger.warning(f"Site {site_id} not found in {file_path.name}")
@@ -197,7 +212,7 @@ def _update_single_json_file(file_path: Path, site_id: str, site_update: 'SiteUp
         return False
 
 
-def _update_static_json(site_id: str, site_update: 'SiteUpdateRequest'):
+def _update_static_json(site_id: str, site_update: "SiteUpdateRequest"):
     """Update both static JSON files with the edited site data."""
     dist_updated = _update_single_json_file(STATIC_SITES_PATH, site_id, site_update)
     public_updated = _update_single_json_file(PUBLIC_SITES_PATH, site_id, site_update)
@@ -208,8 +223,6 @@ def _update_static_json(site_id: str, site_update: 'SiteUpdateRequest'):
     return dist_updated or public_updated
 
 
-
-
 def _load_pinned_sites(
     source_id: str,
     snap_date: str,
@@ -218,6 +231,7 @@ def _load_pinned_sites(
 ) -> list[dict]:
     """Load sites for a pinned source from a snapshot JSON file."""
     from api.routes.snapshots import SNAPSHOTS_DIR
+
     path = SNAPSHOTS_DIR / f"{snap_date}.json"
     if not path.exists():
         logger.warning(f"Pinned snapshot not found: {snap_date}")
@@ -234,6 +248,7 @@ def _load_pinned_sites(
 
 @router.get("/all")
 async def get_all_sites(
+    req: Request,
     db: Session = Depends(get_db),
     source: list[str] | None = Query(None, description="Filter by source IDs"),
     site_type: str | None = Query(None, description="Filter by site type"),
@@ -252,17 +267,28 @@ async def get_all_sites(
 
     Falls back to static JSON if database is empty.
     """
+    if not _heavy_limiter.check(get_client_ip(req)):
+        raise HTTPException(status_code=429, detail="Too many requests")
     # Check active pins
     from api.routes.snapshots import get_active_pins
+
     pins = get_active_pins(db)
 
     # Determine which requested sources are pinned vs live
-    requested_sources = set(source) if source else {"ancient_nerds", "lyra", "ancient_nerds_community"}
-    pinned_sources: dict[str, str] = {sid: pins[sid] for sid in requested_sources if sid in pins and pins[sid] is not None}  # type: ignore[misc]
+    requested_sources = (
+        set(source) if source else {"ancient_nerds", "lyra", "ancient_nerds_community"}
+    )
+    pinned_sources: dict[str, str] = {
+        sid: pins[sid] for sid in requested_sources if sid in pins and pins[sid] is not None
+    }  # type: ignore[misc]
     live_sources = [sid for sid in requested_sources if sid not in pinned_sources]
 
     # Include pin fingerprint in cache key so pinned vs unpinned don't collide
-    pin_fp = ",".join(f"{k}={v}" for k, v in sorted(pinned_sources.items())) if pinned_sources else "none"
+    pin_fp = (
+        ",".join(f"{k}={v}" for k, v in sorted(pinned_sources.items()))
+        if pinned_sources
+        else "none"
+    )
     source_key = ",".join(sorted(requested_sources))
     cache_key = f"sites:all:{source_key}:{site_type or 'all'}:{period_max or 'all'}:{skip}:{limit}:pin={pin_fp}"
 
@@ -357,7 +383,9 @@ async def get_all_sites(
             # Do NOT silently fall back to static JSON — surface the error so
             # missing-column / query bugs are caught immediately instead of
             # serving stale data labelled as "postgres".
-            raise HTTPException(status_code=500, detail="Database query failed for live sites") from e
+            raise HTTPException(
+                status_code=500, detail="Database query failed for live sites"
+            ) from e
 
     data_source = "snapshot"
     if live_sources:
@@ -377,7 +405,9 @@ async def get_all_sites(
     if not pinned_sources:
         static_sites = _load_static_sites()
         if static_sites:
-            filtered = _filter_static_sites(static_sites, source, site_type, period_max, skip, limit)
+            filtered = _filter_static_sites(
+                static_sites, source, site_type, period_max, skip, limit
+            )
             converted = [_convert_static_site(s) for s in filtered]
             logger.info(f"Returning {len(converted)} sites from static JSON")
             return {
@@ -410,9 +440,7 @@ async def get_sites_in_viewport(
     """
     # Use PostGIS bounding box operator (&&) which leverages spatial index
     # ST_MakeEnvelope(xmin, ymin, xmax, ymax, srid) creates a bounding box
-    conditions = [
-        "geom && ST_MakeEnvelope(:min_lon, :min_lat, :max_lon, :max_lat, 4326)"
-    ]
+    conditions = ["geom && ST_MakeEnvelope(:min_lon, :min_lat, :max_lon, :max_lat, 4326)"]
     params: dict[str, object] = {
         "min_lat": min_lat,
         "max_lat": max_lat,
@@ -445,15 +473,17 @@ async def get_sites_in_viewport(
 
     sites = []
     for row in result:
-        sites.append({
-            "id": row.id,
-            "n": row.name,
-            "la": row.lat,
-            "lo": row.lon,
-            "s": row.source_id,
-            "t": row.site_type,
-            "p": row.period_start,
-        })
+        sites.append(
+            {
+                "id": row.id,
+                "n": row.name,
+                "la": row.lat,
+                "lo": row.lon,
+                "s": row.source_id,
+                "t": row.site_type,
+                "p": row.period_start,
+            }
+        )
 
     return {
         "count": len(sites),
@@ -463,6 +493,7 @@ async def get_sites_in_viewport(
 
 @router.get("/clustered")
 async def get_clustered_sites(
+    req: Request,
     resolution: int = Query(3, ge=0, le=7, description="H3 resolution (0=global, 7=fine)"),
     source: list[str] | None = Query(None),
     db: Session = Depends(get_db),
@@ -479,6 +510,8 @@ async def get_clustered_sites(
     - 4-5: Local view (city-level)
     - 6-7: Detailed view (neighborhood-level)
     """
+    if not _heavy_limiter.check(get_client_ip(req)):
+        raise HTTPException(status_code=429, detail="Too many requests")
     params = {}
     source_filter = ""
 
@@ -521,12 +554,14 @@ async def get_clustered_sites(
 
     clusters = []
     for row in result:
-        clusters.append({
-            "la": round(row.lat, 4),
-            "lo": round(row.lon, 4),
-            "c": row.count,
-            "s": row.source_id,
-        })
+        clusters.append(
+            {
+                "la": round(row.lat, 4),
+                "lo": round(row.lon, 4),
+                "c": row.count,
+                "s": row.source_id,
+            }
+        )
 
     return {
         "resolution": resolution,
@@ -537,14 +572,17 @@ async def get_clustered_sites(
 
 @router.get("/random")
 async def random_sites(
+    req: Request,
     limit: int = Query(50, ge=1, le=200, description="Number of random sites"),
     db: Session = Depends(get_db),
 ):
     """Return random sites proportionally sampled across all sources."""
+    if not _heavy_limiter.check(get_client_ip(req)):
+        raise HTTPException(status_code=429, detail="Too many requests")
     # Step 1: get per-source counts
-    counts_result = db.execute(text(
-        "SELECT source_id, COUNT(*) AS cnt FROM unified_sites GROUP BY source_id"
-    ))
+    counts_result = db.execute(
+        text("SELECT source_id, COUNT(*) AS cnt FROM unified_sites GROUP BY source_id")
+    )
     source_counts = [(row.source_id, row.cnt) for row in counts_result]
     if not source_counts:
         return {"count": 0, "sites": []}
@@ -650,13 +688,16 @@ async def search_sites(
         LIMIT :limit
     """)
 
-    result = db.execute(query, {
-        "norm": normalized,
-        "spaceless": spaceless,
-        "pattern": f"%{normalized_escaped}%",
-        "spaceless_pattern": f"%{spaceless_escaped}%",
-        "limit": limit,
-    })
+    result = db.execute(
+        query,
+        {
+            "norm": normalized,
+            "spaceless": spaceless,
+            "pattern": f"%{normalized_escaped}%",
+            "spaceless_pattern": f"%{spaceless_escaped}%",
+            "limit": limit,
+        },
+    )
     sites = []
     for row in result:
         site = {
@@ -696,6 +737,7 @@ async def get_snapshots(
 ):
     """List recent database snapshots, optionally filtered by source."""
     from api.services.snapshots import list_snapshots
+
     return {"snapshots": list_snapshots(db, limit, source_id=source_id)}
 
 
@@ -711,9 +753,14 @@ async def create_manual_snapshot_endpoint(
 
     valid_sources = {"ancient_nerds", "lyra", "ancient_nerds_community"}
     if source_id not in valid_sources:
-        raise HTTPException(status_code=400, detail=f"Invalid source_id. Must be one of: {', '.join(sorted(valid_sources))}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid source_id. Must be one of: {', '.join(sorted(valid_sources))}",
+        )
 
-    result = create_manual_snapshot(db, source_id, created_by=_user.username, description=description)
+    result = create_manual_snapshot(
+        db, source_id, created_by=_user.username, description=description
+    )
     if not result["snapshot_id"]:
         raise HTTPException(status_code=404, detail=f"No sites found for source '{source_id}'")
 
@@ -727,6 +774,7 @@ async def export_file_snapshot_endpoint(
 ):
     """Create a file snapshot of the current DB state (founders only)."""
     from api.services.snapshots import export_file_snapshot
+
     snapshot_key = export_file_snapshot(db)
     return {"snapshot_key": snapshot_key}
 
@@ -828,11 +876,14 @@ async def get_site_alternates(
         ORDER BY us.source_id, us.name
     """)
 
-    result = db.execute(query, {
-        "site_uuid": site_row.id,
-        "lat": site_row.lat,
-        "lon": site_row.lon,
-    })
+    result = db.execute(
+        query,
+        {
+            "site_uuid": site_row.id,
+            "lat": site_row.lat,
+            "lon": site_row.lon,
+        },
+    )
 
     alternates = []
     for row in result:
@@ -872,6 +923,7 @@ async def get_site_detail(
     """Get full details for a single site."""
     # Try UUID match first, then fall back to name search
     import uuid as _uuid
+
     try:
         _uuid.UUID(site_id)
         is_uuid = True
@@ -927,7 +979,6 @@ async def get_site_detail(
         "description": row.description,
         "thumbnailUrl": row.thumbnail_url,
         "sourceUrl": row.source_url,
-        "rawData": row.raw_data,
     }
     if row.card_description:
         resp["cardDescription"] = row.card_description
@@ -938,7 +989,9 @@ async def get_site_detail(
     return resp
 
 
-def _sync_to_radar(db: Session, site_id: str, site_update: 'SiteUpdateRequest', lat: float, lon: float) -> int:
+def _sync_to_radar(
+    db: Session, site_id: str, site_update: "SiteUpdateRequest", lat: float, lon: float
+) -> int:
     """Sync site changes to user_contributions via promoted_site_id FK. Returns synced count."""
     sync_result = db.execute(
         text("""
@@ -1013,18 +1066,21 @@ async def update_site(
         WHERE id::text = :site_id
     """)
 
-    db.execute(update_query, {
-        "site_id": site_id,
-        "name": site_update.title,
-        "description": site_update.description,
-        "lat": lat,
-        "lon": lon,
-        "site_type": normalize_site_type(site_update.category),
-        "period_name": site_update.period,
-        "period_start": period_start,
-        "source_url": site_update.sourceUrl,
-        "edited_by": edited_by,
-    })
+    db.execute(
+        update_query,
+        {
+            "site_id": site_id,
+            "name": site_update.title,
+            "description": site_update.description,
+            "lat": lat,
+            "lon": lon,
+            "site_type": normalize_site_type(site_update.category),
+            "period_name": site_update.period,
+            "period_start": period_start,
+            "source_url": site_update.sourceUrl,
+            "edited_by": edited_by,
+        },
+    )
 
     # Sync changes to user_contributions (radar) where promoted_site_id matches
     synced = _sync_to_radar(db, site_id, site_update, lat, lon)
@@ -1043,9 +1099,16 @@ async def update_site(
     global _static_sites_cache
     _static_sites_cache = None
 
-    logger.info(f"Updated site {site_id}: {site_update.title} (DB + static JSON: {static_updated}, radar synced: {synced}, invalidated {deleted} cache entries)")
+    logger.info(
+        f"Updated site {site_id}: {site_update.title} (DB + static JSON: {static_updated}, radar synced: {synced}, invalidated {deleted} cache entries)"
+    )
 
-    return {"success": True, "message": "Site updated successfully", "staticUpdated": static_updated, "radarSynced": synced}
+    return {
+        "success": True,
+        "message": "Site updated successfully",
+        "staticUpdated": static_updated,
+        "radarSynced": synced,
+    }
 
 
 # =============================================================================
@@ -1055,6 +1118,7 @@ async def update_site(
 
 class BatchSiteUpdate(BaseModel):
     """Single site update within a batch."""
+
     id: str = Field(..., max_length=100)
     title: str = Field(..., max_length=500)
     location: str | None = Field(default=None, max_length=500)
@@ -1098,7 +1162,8 @@ async def batch_update_sites(
 
     # Create snapshot before changes
     snapshot_id = create_snapshot(
-        db, site_ids,
+        db,
+        site_ids,
         created_by=edited_by,
         description=f"Edited {len(updates)} site{'s' if len(updates) != 1 else ''}",
         snapshot_type="edit",
@@ -1140,9 +1205,12 @@ async def batch_update_sites(
 
         # Sync to radar
         fake_req = SiteUpdateRequest(
-            title=update.title, category=update.category,
-            period=update.period, description=update.description,
-            sourceUrl=update.sourceUrl, coordinates=update.coordinates,
+            title=update.title,
+            category=update.category,
+            period=update.period,
+            description=update.description,
+            sourceUrl=update.sourceUrl,
+            coordinates=update.coordinates,
         )
         total_synced += _sync_to_radar(db, update.id, fake_req, lat, lon)
 
@@ -1157,6 +1225,7 @@ async def batch_update_sites(
 
     # Create file-based snapshot for version history dropdown
     from api.services.snapshots import export_file_snapshot
+
     file_snapshot_key = export_file_snapshot(db)
 
     return {
@@ -1174,6 +1243,7 @@ async def batch_update_sites(
 
 class ParsedSitePayload(BaseModel):
     """A site to be upserted via upload."""
+
     name: str = Field(..., max_length=500)
     lat: float
     lon: float
@@ -1191,6 +1261,7 @@ class ParsedSitePayload(BaseModel):
 
 class BatchUploadRequest(BaseModel):
     """Request body for batch upload."""
+
     sites: list[ParsedSitePayload]
     target_source: str
     create_snapshot: bool = True
@@ -1224,7 +1295,8 @@ async def batch_upload_sites(
     snapshot_id = None
     if update_ids and body.create_snapshot:
         snapshot_id = create_snapshot(
-            db, update_ids,
+            db,
+            update_ids,
             created_by=edited_by,
             description=f"Upload to {target_source} ({len(sites)} rows, {len(update_ids)} updates)",
             snapshot_type="upload",
@@ -1247,40 +1319,61 @@ async def batch_upload_sites(
         site_type = normalize_site_type(site.site_type) if site.site_type else None
 
         if site.existing_id:
-            update_params.append({
-                "site_id": site.existing_id,
-                "name": site.name, "lat": site.lat, "lon": site.lon,
-                "site_type": site_type, "period_name": site.period_name,
-                "period_start": period_start, "country": site.country,
-                "description": site.description, "source_url": site.source_url,
-                "thumbnail_url": site.thumbnail_url, "edited_by": edited_by,
-            })
-            if site.card_description or site.confidence_score is not None:
-                card_stats_params.append({
+            update_params.append(
+                {
                     "site_id": site.existing_id,
-                    "card_description": site.card_description,
-                    "confidence_score": site.confidence_score,
-                })
+                    "name": site.name,
+                    "lat": site.lat,
+                    "lon": site.lon,
+                    "site_type": site_type,
+                    "period_name": site.period_name,
+                    "period_start": period_start,
+                    "country": site.country,
+                    "description": site.description,
+                    "source_url": site.source_url,
+                    "thumbnail_url": site.thumbnail_url,
+                    "edited_by": edited_by,
+                }
+            )
+            if site.card_description or site.confidence_score is not None:
+                card_stats_params.append(
+                    {
+                        "site_id": site.existing_id,
+                        "card_description": site.card_description,
+                        "confidence_score": site.confidence_score,
+                    }
+                )
         else:
             new_id = str(_uuid.uuid4())
             name_norm = normalize_name(site.name) if site.name else site.name
             record_id = f"upload-{new_id[:8]}"
-            insert_params.append({
-                "id": new_id, "source_id": target_source,
-                "source_record_id": record_id,
-                "name": site.name, "name_normalized": name_norm,
-                "lat": site.lat, "lon": site.lon,
-                "site_type": site_type, "period_name": site.period_name,
-                "period_start": period_start, "country": site.country,
-                "description": site.description, "source_url": site.source_url,
-                "thumbnail_url": site.thumbnail_url, "edited_by": edited_by,
-            })
+            insert_params.append(
+                {
+                    "id": new_id,
+                    "source_id": target_source,
+                    "source_record_id": record_id,
+                    "name": site.name,
+                    "name_normalized": name_norm,
+                    "lat": site.lat,
+                    "lon": site.lon,
+                    "site_type": site_type,
+                    "period_name": site.period_name,
+                    "period_start": period_start,
+                    "country": site.country,
+                    "description": site.description,
+                    "source_url": site.source_url,
+                    "thumbnail_url": site.thumbnail_url,
+                    "edited_by": edited_by,
+                }
+            )
             if site.card_description or site.confidence_score is not None:
-                card_stats_params.append({
-                    "site_id": new_id,
-                    "card_description": site.card_description,
-                    "confidence_score": site.confidence_score,
-                })
+                card_stats_params.append(
+                    {
+                        "site_id": new_id,
+                        "card_description": site.card_description,
+                        "confidence_score": site.confidence_score,
+                    }
+                )
 
     # Batch UPDATE existing sites
     if update_params:
@@ -1391,6 +1484,7 @@ async def delete_site(
 
 class MarkAuditedRequest(BaseModel):
     """Mark all sites in a source as audited."""
+
     source_id: str = Field(..., max_length=50)
 
 

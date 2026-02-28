@@ -9,6 +9,8 @@ import { parseAnyCoordinate, formatCoordinate, applyCoordMask } from '../utils/c
 import { haversineDistance } from '../utils/geoMath'
 import SiteResultItem from './SiteResultItem'
 
+const DEFAULT_AGE_RANGE: [number, number] = [-5000, 500]
+
 interface SourceInfo {
   id: string
   name: string
@@ -145,7 +147,7 @@ function FilterPanel({
   onSiteListClick,
   selectedSiteIds = [],
   onResetAllFilters,
-  defaultAgeRange = [-5000, 500],
+  defaultAgeRange = DEFAULT_AGE_RANGE,
   loadedSourceIds = new Set<string>(),
   onLoadSources,
   searchWithinEmpires,

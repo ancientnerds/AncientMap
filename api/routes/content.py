@@ -41,6 +41,7 @@ REFRESH_COOLDOWN_SECONDS = 300  # 5 minutes between refreshes per IP
 # Response Models
 # ============================================================================
 
+
 class ContentItemResponse(BaseModel):
     """Single content item response."""
 
@@ -66,6 +67,7 @@ class ContentItemResponse(BaseModel):
     @classmethod
     def from_content_item(cls, item: ContentItem) -> "ContentItemResponse":
         """Convert ContentItem to response model."""
+
         # Helper to convert lists to strings (some connectors return lists)
         def ensure_string(val) -> str | None:
             if val is None:
@@ -157,7 +159,9 @@ class ConnectorStatusResponse(BaseModel):
     error_message: str | None = None
     item_count: int | None = None
     response_time_ms: float | None = None
-    tabs: list[str] = []  # UI tabs this connector populates (Photos, Artworks, Maps, 3D, Artifacts, Books)
+    tabs: list[
+        str
+    ] = []  # UI tabs this connector populates (Photos, Artworks, Maps, 3D, Artifacts, Books)
     # Test results (optional, populated when tests are run)
     test_results: dict[str, QueryTestResultResponse] | None = None
     api_docs_url: str | None = None
@@ -186,6 +190,7 @@ class ConnectorsStatusResponse(BaseModel):
 # Startup: Initialize Connectors
 # ============================================================================
 
+
 def _init_connectors():
     """Initialize connectors with API keys from environment."""
     api_keys: dict[str, str | None] = {
@@ -204,16 +209,15 @@ _init_connectors()
 # Endpoints
 # ============================================================================
 
+
 @router.get("/search", response_model=ContentSearchResponse)
 async def search_content(
     query: str = Query(..., min_length=1, description="Search query"),
     content_types: list[str] | None = Query(
-        default=None,
-        description="Filter by content types (photo, artifact, map, model_3d, etc.)"
+        default=None, description="Filter by content types (photo, artifact, map, model_3d, etc.)"
     ),
     sources: list[str] | None = Query(
-        default=None,
-        description="Filter to specific sources (met_museum, sketchfab, etc.)"
+        default=None, description="Filter to specific sources (met_museum, sketchfab, etc.)"
     ),
     limit: int = Query(default=50, ge=1, le=200, description="Maximum results"),
     timeout: float = Query(default=30.0, ge=1.0, le=60.0, description="Timeout in seconds"),
@@ -302,7 +306,9 @@ async def content_by_site(
     lat: float | None = Query(default=None, ge=-90, le=90),
     lon: float | None = Query(default=None, ge=-180, le=180),
     culture: str | None = Query(default=None, description="Culture/civilization"),
-    source_url: str | None = Query(default=None, description="Wikidata/Wikipedia URL for precise resolution"),
+    source_url: str | None = Query(
+        default=None, description="Wikidata/Wikipedia URL for precise resolution"
+    ),
     content_types: list[str] | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
     timeout: float = Query(default=45.0, ge=1.0, le=120.0),
@@ -416,8 +422,7 @@ async def list_content_types():
     """List all available content types."""
     return {
         "content_types": [
-            {"id": ct.value, "name": ct.name.replace("_", " ").title()}
-            for ct in ContentType
+            {"id": ct.value, "name": ct.name.replace("_", " ").title()} for ct in ContentType
         ]
     }
 
@@ -433,21 +438,18 @@ class SingleConnectorTestResponse(BaseModel):
 async def get_connectors_status(
     check_live: bool = Query(
         default=False,
-        description="If true, actively ping all connectors (slower but accurate). Otherwise returns cached status."
+        description="If true, actively ping all connectors (slower but accurate). Otherwise returns cached status.",
     ),
     timeout: float = Query(
-        default=10.0,
-        ge=1.0,
-        le=60.0,
-        description="Timeout in seconds for each health check"
+        default=10.0, ge=1.0, le=60.0, description="Timeout in seconds for each health check"
     ),
     include_tests: bool = Query(
         default=False,
-        description="If true, run test queries against all connectors (expensive operation)."
+        description="If true, run test queries against all connectors (expensive operation).",
     ),
     run_tests_for: str | None = Query(
         default=None,
-        description="Run tests for a single connector only (returns minimal response)."
+        description="Run tests for a single connector only (returns minimal response).",
     ),
 ):
     """
@@ -461,9 +463,7 @@ async def get_connectors_status(
 
     # Single connector test mode
     if run_tests_for:
-        test_results = await ConnectorRegistry.run_connector_tests(
-            run_tests_for, timeout=timeout
-        )
+        test_results = await ConnectorRegistry.run_connector_tests(run_tests_for, timeout=timeout)
         # Convert to response format
         test_results_response = {
             qid: QueryTestResultResponse(
@@ -540,16 +540,16 @@ async def get_connectors_status(
                 connector_name=s.connector_name,
                 category=s.category,
                 status=s.status,
-                available=getattr(s, 'available', True),
-                base_url=getattr(s, 'base_url', None),
+                available=getattr(s, "available", True),
+                base_url=getattr(s, "base_url", None),
                 last_ping=s.last_ping.isoformat() if s.last_ping else None,
                 last_sync=s.last_sync.isoformat() if s.last_sync else None,
                 error_message=s.error_message,
                 item_count=s.item_count,
                 response_time_ms=s.response_time_ms,
-                tabs=getattr(s, 'tabs', []),
-                test_results=convert_test_results(getattr(s, 'test_results', None)),
-                api_docs_url=getattr(s, 'api_docs_url', None),
+                tabs=getattr(s, "tabs", []),
+                test_results=convert_test_results(getattr(s, "test_results", None)),
+                api_docs_url=getattr(s, "api_docs_url", None),
             )
             for s in statuses
         ],
@@ -565,6 +565,7 @@ async def get_connectors_status(
 
 class RefreshResponse(BaseModel):
     """Response from connector refresh authorization."""
+
     verified: bool
     error: str | None = None
     message: str | None = None

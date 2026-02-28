@@ -289,9 +289,7 @@ class SparqlProtocol:
         if not languages:
             languages = ["en", ""]  # English or no language tag
 
-        conditions = " || ".join(
-            f'LANG(?{variable}) = "{lang}"' for lang in languages
-        )
+        conditions = " || ".join(f'LANG(?{variable}) = "{lang}"' for lang in languages)
         return f"FILTER({conditions})"
 
 

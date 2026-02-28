@@ -95,6 +95,7 @@ REQUEST_DELAY = 0.5
 # Name Matching Utilities
 # =============================================================================
 
+
 def normalize_name(name: str) -> str:
     """Normalize a name for matching."""
     if not name:
@@ -102,11 +103,11 @@ def normalize_name(name: str) -> str:
     # Lowercase
     name = name.lower()
     # Remove common suffixes
-    name = re.sub(r'\s*(3d\s*scan|photogrammetry|model|3d|scan)\s*$', '', name, flags=re.IGNORECASE)
+    name = re.sub(r"\s*(3d\s*scan|photogrammetry|model|3d|scan)\s*$", "", name, flags=re.IGNORECASE)
     # Remove special characters
-    name = re.sub(r'[^\w\s]', ' ', name)
+    name = re.sub(r"[^\w\s]", " ", name)
     # Normalize whitespace
-    name = ' '.join(name.split())
+    name = " ".join(name.split())
     return name
 
 
@@ -117,7 +118,7 @@ def extract_location_names(text: str) -> set[str]:
         return names
 
     # Split by common separators
-    parts = re.split(r'[,\-/|()]', text)
+    parts = re.split(r"[,\-/|()]", text)
     for part in parts:
         part = part.strip()
         if part and len(part) > 3:
@@ -194,7 +195,10 @@ def calculate_match_score(model: dict, site_name: str, site_alt_names: list[str]
 # Sketchfab API Functions
 # =============================================================================
 
-def fetch_models_for_query(query: str, api_key: str = None, max_results: int = MAX_RESULTS_PER_QUERY) -> list[dict]:
+
+def fetch_models_for_query(
+    query: str, api_key: str = None, max_results: int = MAX_RESULTS_PER_QUERY
+) -> list[dict]:
     """Fetch 3D models matching a search query."""
     models = []
 
@@ -352,6 +356,7 @@ def parse_model(item: dict) -> dict | None:
 # Database Functions
 # =============================================================================
 
+
 def get_sites_without_images(session: Session, limit: int = None) -> list[dict]:
     """Get sites that don't have thumbnail images yet."""
     query = """
@@ -374,29 +379,36 @@ def get_sites_without_images(session: Session, limit: int = None) -> list[dict]:
 
     sites = []
     for row in result.fetchall():
-        sites.append({
-            "id": str(row[0]),
-            "name": row[1],
-            "source_id": row[2],
-            "site_type": row[3],
-        })
+        sites.append(
+            {
+                "id": str(row[0]),
+                "name": row[1],
+                "source_id": row[2],
+                "site_type": row[3],
+            }
+        )
 
     return sites
 
 
-def update_site_thumbnail(session: Session, site_id: str, thumbnail_url: str, sketchfab_uid: str) -> bool:
+def update_site_thumbnail(
+    session: Session, site_id: str, thumbnail_url: str, sketchfab_uid: str
+) -> bool:
     """Update a site's thumbnail URL."""
     try:
-        session.execute(text("""
+        session.execute(
+            text("""
             UPDATE unified_sites
             SET thumbnail_url = :url,
                 raw_data = COALESCE(raw_data, '{}'::jsonb) || jsonb_build_object('sketchfab_model', :uid)
             WHERE id = :site_id
-        """), {
-            "url": thumbnail_url,
-            "site_id": site_id,
-            "uid": sketchfab_uid,
-        })
+        """),
+            {
+                "url": thumbnail_url,
+                "site_id": site_id,
+                "uid": sketchfab_uid,
+            },
+        )
         session.commit()
         return True
     except Exception as e:
@@ -407,13 +419,15 @@ def update_site_thumbnail(session: Session, site_id: str, thumbnail_url: str, sk
 
 def get_stats(session: Session) -> dict:
     """Get Sketchfab image statistics."""
-    result = session.execute(text("""
+    result = session.execute(
+        text("""
         SELECT
             COUNT(*) as total,
             COUNT(CASE WHEN thumbnail_url LIKE '%sketchfab%' THEN 1 END) as sketchfab_images,
             COUNT(thumbnail_url) as any_image
         FROM unified_sites
-    """)).fetchone()
+    """)
+    ).fetchone()
 
     return {
         "total_sites": result[0],
@@ -425,6 +439,7 @@ def get_stats(session: Session) -> dict:
 # =============================================================================
 # Main Matching Logic
 # =============================================================================
+
 
 def match_sketchfab_to_sites(limit: int = 10000, min_score: float = 50.0) -> dict:
     """
@@ -448,7 +463,7 @@ def match_sketchfab_to_sites(limit: int = 10000, min_score: float = 50.0) -> dic
     # Search by queries
     logger.info(f"Searching {len(SEARCH_QUERIES)} queries...")
     for i, query in enumerate(SEARCH_QUERIES):
-        logger.info(f"  [{i+1}/{len(SEARCH_QUERIES)}] '{query}'...")
+        logger.info(f"  [{i + 1}/{len(SEARCH_QUERIES)}] '{query}'...")
         models = fetch_models_for_query(query, api_key)
         for m in models:
             all_models[m["uid"]] = m
@@ -490,7 +505,7 @@ def match_sketchfab_to_sites(limit: int = 10000, min_score: float = 50.0) -> dic
                 score = calculate_match_score(
                     model,
                     site["name"],
-                    None  # No alternative names in DB schema
+                    None,  # No alternative names in DB schema
                 )
 
                 if score > best_score:
@@ -500,16 +515,15 @@ def match_sketchfab_to_sites(limit: int = 10000, min_score: float = 50.0) -> dic
             # Only accept good matches
             if best_model and best_score >= min_score and best_model.get("thumbnail_url"):
                 success = update_site_thumbnail(
-                    session,
-                    site["id"],
-                    best_model["thumbnail_url"],
-                    best_model["uid"]
+                    session, site["id"], best_model["thumbnail_url"], best_model["uid"]
                 )
 
                 if success:
                     matched += 1
                     if matched <= 10:
-                        logger.info(f"  Matched: {site['name']} -> {best_model['name']} (score: {best_score:.0f})")
+                        logger.info(
+                            f"  Matched: {site['name']} -> {best_model['name']} (score: {best_score:.0f})"
+                        )
 
         stats = get_stats(session)
 
@@ -532,27 +546,24 @@ def match_sketchfab_to_sites(limit: int = 10000, min_score: float = 50.0) -> dic
 # CLI Entry Point
 # =============================================================================
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="Match Sketchfab 3D models to archaeological sites"
     )
     parser.add_argument(
-        "--limit", "-l", type=int, default=10000,
-        help="Maximum sites to process (default: 10000)"
+        "--limit", "-l", type=int, default=10000, help="Maximum sites to process (default: 10000)"
     )
     parser.add_argument(
-        "--min-score", type=float, default=50.0,
-        help="Minimum match score (default: 50)"
+        "--min-score", type=float, default=50.0, help="Minimum match score (default: 50)"
     )
-    parser.add_argument(
-        "--stats", action="store_true",
-        help="Show statistics only"
-    )
+    parser.add_argument("--stats", action="store_true", help="Show statistics only")
 
     args = parser.parse_args()
 
     # Setup logging
     from pipeline.utils.logging import setup_logging
+
     setup_logging()
 
     if args.stats:

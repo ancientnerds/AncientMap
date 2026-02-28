@@ -96,13 +96,15 @@ class OXREPShipwrecksIngester(BaseIngester):
             logger.info(f"Parsed {len(all_wrecks):,} shipwrecks from Excel")
         else:
             logger.warning("Could not parse OXREP data. Creating placeholder.")
-            all_wrecks = [{
-                "id": "oxrep_placeholder",
-                "name": "OXREP Database",
-                "note": f"Download manually from {self.EXCEL_URL} and place in {self.raw_data_dir}",
-                "estimated_records": 2000,
-                "needs_manual_fetch": True,
-            }]
+            all_wrecks = [
+                {
+                    "id": "oxrep_placeholder",
+                    "name": "OXREP Database",
+                    "note": f"Download manually from {self.EXCEL_URL} and place in {self.raw_data_dir}",
+                    "estimated_records": 2000,
+                    "needs_manual_fetch": True,
+                }
+            ]
 
         self.report_progress(3, 3, f"{len(all_wrecks):,} wrecks")
 
@@ -118,7 +120,7 @@ class OXREPShipwrecksIngester(BaseIngester):
                 "data_type": "shipwrecks",
                 "license": "Academic - cite Strauss 2013",
                 "citation": "Strauss, J. (2013). Shipwrecks Database. Oxford Roman Economy Project.",
-            }
+            },
         }
 
         atomic_write_json(dest_path, output)
@@ -142,7 +144,7 @@ class OXREPShipwrecksIngester(BaseIngester):
             # Find the main data sheet
             sheet = None
             for sheet_name in wb.sheetnames:
-                if 'wreck' in sheet_name.lower() or 'data' in sheet_name.lower():
+                if "wreck" in sheet_name.lower() or "data" in sheet_name.lower():
                     sheet = wb[sheet_name]
                     break
             if sheet is None:
@@ -163,39 +165,39 @@ class OXREPShipwrecksIngester(BaseIngester):
             for i, h in enumerate(headers):
                 h.replace(" ", "_").replace("-", "_")
                 # Check for date columns FIRST (to avoid 'latest' matching 'lat')
-                if any(x in h for x in ['earliest', 'date_start', 'date_from', 'min_date']):
-                    col_map['date_start'] = i
-                elif any(x in h for x in ['latest', 'date_end', 'date_to', 'max_date']):
-                    col_map['date_end'] = i
-                elif h in ['latitude', 'lat']:
-                    col_map['lat'] = i
-                elif h in ['longitude', 'lon', 'long', 'lng']:
-                    col_map['lon'] = i
-                elif any(x in h for x in ['locid', 'id', 'number', 'strauss']):
-                    col_map['id'] = i
-                elif any(x in h for x in ['wreck_name', 'wreck name']):
-                    col_map['name'] = i
-                elif any(x in h for x in ['site_name', 'site name', 'name']):
-                    if 'name' not in col_map:  # Don't overwrite wreck_name
-                        col_map['name'] = i
-                elif any(x in h for x in ['region', 'area', 'location']):
-                    col_map['region'] = i
-                elif 'country' in h:
-                    col_map['country'] = i
-                elif 'depth' in h:
-                    col_map['depth'] = i
-                elif 'date' in h and 'date_start' not in col_map:
-                    col_map['date'] = i
-                elif any(x in h for x in ['cargo', 'contents', 'amphorae']):
-                    col_map['cargo'] = i
-                elif any(x in h for x in ['vessel', 'ship', 'type']):
-                    col_map['vessel_type'] = i
-                elif any(x in h for x in ['size', 'length', 'tonnage']):
-                    col_map['size'] = i
-                elif any(x in h for x in ['reference', 'bibliography', 'source']):
-                    col_map['bibliography'] = i
-                elif any(x in h for x in ['notes', 'comment', 'description']):
-                    col_map['notes'] = i
+                if any(x in h for x in ["earliest", "date_start", "date_from", "min_date"]):
+                    col_map["date_start"] = i
+                elif any(x in h for x in ["latest", "date_end", "date_to", "max_date"]):
+                    col_map["date_end"] = i
+                elif h in ["latitude", "lat"]:
+                    col_map["lat"] = i
+                elif h in ["longitude", "lon", "long", "lng"]:
+                    col_map["lon"] = i
+                elif any(x in h for x in ["locid", "id", "number", "strauss"]):
+                    col_map["id"] = i
+                elif any(x in h for x in ["wreck_name", "wreck name"]):
+                    col_map["name"] = i
+                elif any(x in h for x in ["site_name", "site name", "name"]):
+                    if "name" not in col_map:  # Don't overwrite wreck_name
+                        col_map["name"] = i
+                elif any(x in h for x in ["region", "area", "location"]):
+                    col_map["region"] = i
+                elif "country" in h:
+                    col_map["country"] = i
+                elif "depth" in h:
+                    col_map["depth"] = i
+                elif "date" in h and "date_start" not in col_map:
+                    col_map["date"] = i
+                elif any(x in h for x in ["cargo", "contents", "amphorae"]):
+                    col_map["cargo"] = i
+                elif any(x in h for x in ["vessel", "ship", "type"]):
+                    col_map["vessel_type"] = i
+                elif any(x in h for x in ["size", "length", "tonnage"]):
+                    col_map["size"] = i
+                elif any(x in h for x in ["reference", "bibliography", "source"]):
+                    col_map["bibliography"] = i
+                elif any(x in h for x in ["notes", "comment", "description"]):
+                    col_map["notes"] = i
 
             logger.info(f"Column mapping: {col_map}")
 
@@ -211,34 +213,34 @@ class OXREPShipwrecksIngester(BaseIngester):
                     return default
 
                 # Get ID
-                wreck_id = str(get_val('id', '')).strip()
-                if not wreck_id or wreck_id in ['', 'None']:
+                wreck_id = str(get_val("id", "")).strip()
+                if not wreck_id or wreck_id in ["", "None"]:
                     wreck_id = f"row_{row_idx}"
                 wreck_id = f"oxrep_{wreck_id}".replace(" ", "_").replace("/", "_")
 
                 # Get coordinates
-                lat = self._parse_float(get_val('lat'))
-                lon = self._parse_float(get_val('lon'))
+                lat = self._parse_float(get_val("lat"))
+                lon = self._parse_float(get_val("lon"))
 
                 # Parse dates
-                date_start = self._parse_year(get_val('date_start', get_val('date')))
-                date_end = self._parse_year(get_val('date_end'))
+                date_start = self._parse_year(get_val("date_start", get_val("date")))
+                date_end = self._parse_year(get_val("date_end"))
 
                 wreck = {
                     "id": wreck_id,
-                    "name": str(get_val('name', f"Wreck {wreck_id}")),
+                    "name": str(get_val("name", f"Wreck {wreck_id}")),
                     "lat": lat,
                     "lon": lon,
-                    "location_name": str(get_val('region', '')),
-                    "country": str(get_val('country', '')),
-                    "depth_meters": self._parse_float(get_val('depth')),
+                    "location_name": str(get_val("region", "")),
+                    "country": str(get_val("country", "")),
+                    "depth_meters": self._parse_float(get_val("depth")),
                     "date_sunk_start": date_start,
                     "date_sunk_end": date_end,
-                    "vessel_type": str(get_val('vessel_type', '')),
-                    "cargo_type": str(get_val('cargo', '')),
-                    "size": str(get_val('size', '')),
-                    "bibliography": str(get_val('bibliography', '')),
-                    "notes": str(get_val('notes', '')),
+                    "vessel_type": str(get_val("vessel_type", "")),
+                    "cargo_type": str(get_val("cargo", "")),
+                    "size": str(get_val("size", "")),
+                    "bibliography": str(get_val("bibliography", "")),
+                    "notes": str(get_val("notes", "")),
                 }
 
                 all_wrecks.append(wreck)
@@ -248,6 +250,7 @@ class OXREPShipwrecksIngester(BaseIngester):
         except Exception as e:
             logger.error(f"Error parsing Excel file: {e}")
             import traceback
+
             traceback.print_exc()
 
         return all_wrecks
@@ -257,8 +260,8 @@ class OXREPShipwrecksIngester(BaseIngester):
         data = []
 
         # Find table rows
-        row_pattern = re.compile(r'<tr[^>]*>(.*?)</tr>', re.DOTALL | re.IGNORECASE)
-        cell_pattern = re.compile(r'<t[dh][^>]*>(.*?)</t[dh]>', re.DOTALL | re.IGNORECASE)
+        row_pattern = re.compile(r"<tr[^>]*>(.*?)</tr>", re.DOTALL | re.IGNORECASE)
+        cell_pattern = re.compile(r"<t[dh][^>]*>(.*?)</t[dh]>", re.DOTALL | re.IGNORECASE)
 
         rows = row_pattern.findall(html)
         headers = []
@@ -266,10 +269,12 @@ class OXREPShipwrecksIngester(BaseIngester):
         for i, row in enumerate(rows):
             cells = cell_pattern.findall(row)
             # Clean HTML tags from cells
-            cells = [re.sub(r'<[^>]+>', '', cell).strip() for cell in cells]
+            cells = [re.sub(r"<[^>]+>", "", cell).strip() for cell in cells]
 
-            if i == 0 and any(h.lower() in ['name', 'location', 'date', 'cargo', 'wreck'] for h in cells):
-                headers = [h.lower().replace(' ', '_') for h in cells]
+            if i == 0 and any(
+                h.lower() in ["name", "location", "date", "cargo", "wreck"] for h in cells
+            ):
+                headers = [h.lower().replace(" ", "_") for h in cells]
             elif headers and cells:
                 row_data = dict(zip(headers, cells, strict=False))
                 if row_data:
@@ -309,7 +314,9 @@ class OXREPShipwrecksIngester(BaseIngester):
             lat, lon = None, None
 
         # Parse dates
-        date_start = self._parse_year(item.get("date_start", item.get("date_from", item.get("min_date"))))
+        date_start = self._parse_year(
+            item.get("date_start", item.get("date_from", item.get("min_date")))
+        )
         date_end = self._parse_year(item.get("date_end", item.get("date_to", item.get("max_date"))))
 
         # Single date field
@@ -397,7 +404,7 @@ class OXREPShipwrecksIngester(BaseIngester):
         is_bce = "bce" in date_str.lower() or "bc" in date_str.lower()
 
         # Extract numbers
-        numbers = re.findall(r'\d+', date_str)
+        numbers = re.findall(r"\d+", date_str)
         if not numbers:
             return None, None
 

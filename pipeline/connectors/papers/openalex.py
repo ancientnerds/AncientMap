@@ -11,7 +11,6 @@ License: CC0
 API Docs: https://docs.openalex.org/
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
@@ -73,9 +72,7 @@ class OpenAlexConnector(BaseConnector):
     def __init__(self, api_key: str | None = None, **kwargs):
         super().__init__(api_key=api_key, **kwargs)
         # Use polite pool with email for better rate limits
-        headers = {
-            "User-Agent": "AncientNerdsMap/1.0 (mailto:contact@ancientnerds.com)"
-        }
+        headers = {"User-Agent": "AncientNerdsMap/1.0 (mailto:contact@ancientnerds.com)"}
         self.rest = RestProtocol(
             base_url=self.base_url,
             rate_limit=self.rate_limit,

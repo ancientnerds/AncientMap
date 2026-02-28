@@ -44,8 +44,8 @@ COMMONS_API_URL = "https://commons.wikimedia.org/w/api.php"
 WIKIDATA_SPARQL_URL = "https://query.wikidata.org/sparql"
 
 # Thumbnail widths for downloads
-THUMB_WIDTH = 800       # Hero / lead image
-GALLERY_WIDTH = 1600    # All other gallery images (avoids OOM on huge panoramas)
+THUMB_WIDTH = 800  # Hero / lead image
+GALLERY_WIDTH = 1600  # All other gallery images (avoids OOM on huge panoramas)
 MAX_RAW_BYTES = 50_000_000  # 50 MB — skip downloads larger than this
 
 # Rate limits per Wikimedia robot policy: 1s between requests, serial only
@@ -65,6 +65,7 @@ class RateLimitedError(Exception):
 
     def __init__(self, retry_after: float):
         self.retry_after = retry_after
+
 
 # Wikidata image properties to extract
 WIKIDATA_IMAGE_PROPS = {
@@ -556,9 +557,7 @@ def _fetch_subcategory_names(category_name: str) -> list[str]:
     return subcats
 
 
-def fetch_commons_category_images(
-    category_name: str, limit: int = 200
-) -> list[dict]:
+def fetch_commons_category_images(category_name: str, limit: int = 200) -> list[dict]:
     """
     Fetch image files from a Wikimedia Commons category and its subcategories.
 
@@ -682,7 +681,9 @@ def download_image(
             return None
 
         if len(raw_bytes) > MAX_RAW_BYTES:
-            logger.debug(f"Image too large ({len(raw_bytes) / 1_000_000:.1f} MB), skipping: {fetch_url}")
+            logger.debug(
+                f"Image too large ({len(raw_bytes) / 1_000_000:.1f} MB), skipping: {fetch_url}"
+            )
             return None
 
         # Convert to WebP for smaller file size and faster loading
@@ -742,14 +743,18 @@ def download_images_sequential(
                 if result:
                     ok_count += 1
                     sz = result[0] / 1024
-                    logger.info(f"  [{ok_count + len(results) - ok_count}/{total}] OK {sz:.0f}KB  {title}")
+                    logger.info(
+                        f"  [{ok_count + len(results) - ok_count}/{total}] OK {sz:.0f}KB  {title}"
+                    )
                 else:
                     logger.info(f"  [{len(results)}/{total}] SKIP  {title}")
                 time.sleep(DOWNLOAD_DELAY)
             except RateLimitedError as e:
                 max_retry_after = max(max_retry_after, e.retry_after)
                 failed.append(task)
-                logger.info(f"  [{len(results)}/{total}] 429 (retry-after {e.retry_after:.0f}s)  {title}")
+                logger.info(
+                    f"  [{len(results)}/{total}] 429 (retry-after {e.retry_after:.0f}s)  {title}"
+                )
             except Exception as e:
                 logger.info(f"  [{len(results)}/{total}] FAIL  {title}: {e}")
                 results.append((idx, img, orig_url, None))
@@ -757,11 +762,15 @@ def download_images_sequential(
         remaining = failed
         if remaining:
             cooldown = max(max_retry_after, 12.0)
-            logger.info(f"  Waiting {cooldown:.0f}s before retrying {len(remaining)} rate-limited images...")
+            logger.info(
+                f"  Waiting {cooldown:.0f}s before retrying {len(remaining)} rate-limited images..."
+            )
             time.sleep(cooldown)
 
     for task in remaining:
-        logger.info(f"  GAVE UP on {task[1].get('title', '?')[:60]} after {DOWNLOAD_RETRY_ROUNDS} rounds")
+        logger.info(
+            f"  GAVE UP on {task[1].get('title', '?')[:60]} after {DOWNLOAD_RETRY_ROUNDS} rounds"
+        )
         results.append((task[0], task[1], task[2], None))
 
     return results
@@ -829,7 +838,9 @@ def site_already_downloaded(site_id: str) -> bool:
         return count > 0
 
 
-def process_site(site: dict, dry_run: bool = False, max_per_category: int = 20, force: bool = False) -> int:
+def process_site(
+    site: dict, dry_run: bool = False, max_per_category: int = 20, force: bool = False
+) -> int:
     """
     Download images for a single site from all sources:
     1. Wikipedia article images (media-list REST API)
@@ -877,9 +888,7 @@ def process_site(site: dict, dry_run: bool = False, max_per_category: int = 20, 
         # Source 3: Commons category images
         commons_cat = wikidata.get("commons_category")
         if commons_cat:
-            cat_images = fetch_commons_category_images(
-                commons_cat, limit=max_per_category
-            )
+            cat_images = fetch_commons_category_images(commons_cat, limit=max_per_category)
             all_images.extend(cat_images)
             logger.debug(
                 f"  Commons category '{commons_cat}': {len(cat_images)} images for {site_name}"
@@ -1034,7 +1043,9 @@ def process_site(site: dict, dry_run: bool = False, max_per_category: int = 20, 
 
     skipped = sum(skip_flags)
     if skipped:
-        logger.debug(f"  {site_name}: skipped {skipped} already-downloaded, {len(download_tasks)} to download")
+        logger.debug(
+            f"  {site_name}: skipped {skipped} already-downloaded, {len(download_tasks)} to download"
+        )
 
     if not download_tasks:
         return downloaded
@@ -1133,7 +1144,9 @@ def run_downloader(
                 total_skipped += 1
             else:
                 to_process.append(site)
-        logger.info(f"Skipped {total_skipped} sites already downloaded, {len(to_process)} remaining")
+        logger.info(
+            f"Skipped {total_skipped} sites already downloaded, {len(to_process)} remaining"
+        )
     else:
         to_process = sites
         total_skipped = 0
@@ -1144,7 +1157,9 @@ def run_downloader(
     for i, site in enumerate(to_process):
         try:
             name = site["name"]
-            count = process_site(site, dry_run=dry_run, max_per_category=max_per_category, force=force)
+            count = process_site(
+                site, dry_run=dry_run, max_per_category=max_per_category, force=force
+            )
             total_downloaded += count
             if count > 0:
                 logger.info(f"  [{i + 1}/{len(to_process)}] {name}: {count} images")

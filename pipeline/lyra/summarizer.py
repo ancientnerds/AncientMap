@@ -51,23 +51,43 @@ SUMMARY_SCHEMA = {
                                     "site_type": {
                                         "type": "string",
                                         "enum": [
-                                            "settlement", "temple", "tomb", "fortification",
-                                            "megalithic", "cave", "rock_art", "port",
-                                            "monument", "inscription", "ruin",
+                                            "settlement",
+                                            "temple",
+                                            "tomb",
+                                            "fortification",
+                                            "megalithic",
+                                            "cave",
+                                            "rock_art",
+                                            "port",
+                                            "monument",
+                                            "inscription",
+                                            "ruin",
                                             "archaeological_site",
                                         ],
                                     },
                                     "period": {
                                         "type": "string",
                                         "enum": [
-                                            "< 4500 BC", "4500 - 3000 BC", "3000 - 1500 BC",
-                                            "1500 - 500 BC", "500 BC - 1 AD", "1 - 500 AD",
-                                            "500 - 1000 AD", "1000 - 1500 AD", "1500+ AD",
+                                            "< 4500 BC",
+                                            "4500 - 3000 BC",
+                                            "3000 - 1500 BC",
+                                            "1500 - 500 BC",
+                                            "500 BC - 1 AD",
+                                            "1 - 500 AD",
+                                            "500 - 1000 AD",
+                                            "1000 - 1500 AD",
+                                            "1500+ AD",
                                             "Unknown",
                                         ],
                                     },
                                 },
-                                "required": ["name", "country", "confidence", "site_type", "period"],
+                                "required": [
+                                    "name",
+                                    "country",
+                                    "confidence",
+                                    "site_type",
+                                    "period",
+                                ],
                                 "additionalProperties": False,
                             },
                             {"type": "null"},
@@ -120,11 +140,13 @@ def _check_relevance(
             model=settings.model_relevance,
             max_tokens=settings.max_tokens,
             temperature=0.0,
-            system=[{
-                "type": "text",
-                "text": system_prompt,
-                "cache_control": {"type": "ephemeral"},
-            }],
+            system=[
+                {
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
             messages=[{"role": "user", "content": user_content}],
             output_config={
                 "format": {
@@ -175,14 +197,14 @@ def _calculate_topic_limit(
     # Channel balancing: reduce topics for over-represented channels
     if avg_items > 0 and settings.channel_balance_factor > 0:
         ratio = channel_item_count / avg_items
-        if ratio > settings.channel_balance_factor * 2:   # >4x avg
+        if ratio > settings.channel_balance_factor * 2:  # >4x avg
             original = base_limit
             base_limit = max(1, base_limit // 3)
             logger.info(
                 f"Channel balance: {channel_item_count} items "
                 f"({ratio:.1f}x avg) -> {base_limit} topics (was {original})"
             )
-        elif ratio > settings.channel_balance_factor:      # >2x avg
+        elif ratio > settings.channel_balance_factor:  # >2x avg
             original = base_limit
             base_limit = max(1, base_limit // 2)
             logger.info(
@@ -256,11 +278,13 @@ def summarize_video(
             model=settings.model_summarize,
             max_tokens=settings.max_tokens,
             temperature=0.0,
-            system=[{
-                "type": "text",
-                "text": system_prompt,
-                "cache_control": {"type": "ephemeral"},
-            }],
+            system=[
+                {
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
             messages=[{"role": "user", "content": user_content}],
             output_config={
                 "format": {
@@ -291,8 +315,7 @@ def summarize_video(
 
     if len(key_topics) > topic_limit:
         logger.warning(
-            f"LLM returned {len(key_topics)} topics for {video.id}, "
-            f"truncating to {topic_limit}"
+            f"LLM returned {len(key_topics)} topics for {video.id}, truncating to {topic_limit}"
         )
         key_topics = key_topics[:topic_limit]
 
@@ -334,7 +357,9 @@ def summarize_video(
             # Extract raw transcript segment around the topic timestamp
             transcript_segment = None
             if ts_range and video.transcript_text:
-                segment = extract_transcript_segment(video.transcript_text, ts_range, buffer_seconds=60)
+                segment = extract_transcript_segment(
+                    video.transcript_text, ts_range, buffer_seconds=60
+                )
                 if segment and len(segment) > 20:
                     transcript_segment = segment[:500]
 
@@ -369,10 +394,14 @@ def summarize_pending_videos(settings: LyraSettings) -> int:
     """
     cutoff = datetime.now(UTC) - timedelta(days=settings.lookup_days)
     with get_session() as session:
-        pending = session.query(NewsVideo).filter(
-            NewsVideo.status == "transcribed",
-            NewsVideo.published_at >= cutoff,
-        ).all()
+        pending = (
+            session.query(NewsVideo)
+            .filter(
+                NewsVideo.status == "transcribed",
+                NewsVideo.published_at >= cutoff,
+            )
+            .all()
+        )
         session.expunge_all()
 
     # Query channel item counts for balancing (only within the lookback window)
@@ -392,7 +421,9 @@ def summarize_pending_videos(settings: LyraSettings) -> int:
     for video in pending:
         ch_count = channel_counts.get(video.channel_id, 0)
         try:
-            if summarize_video(video, settings, ch_count, avg_items, summary_prompt, relevance_prompt):
+            if summarize_video(
+                video, settings, ch_count, avg_items, summary_prompt, relevance_prompt
+            ):
                 count += 1
         except Exception:
             logger.exception(f"Failed to summarize video {video.id}, skipping")

@@ -2,6 +2,7 @@
 Backup utilities for AncientMap database operations.
 Automatically creates backups before destructive operations.
 """
+
 import os
 import subprocess
 from dataclasses import dataclass
@@ -18,6 +19,7 @@ class BackupResult:
     database_path: Path | None = None
     contributions_path: Path | None = None
     error: str | None = None
+
 
 # VPS paths
 BACKUP_DIR = Path("/var/www/ancientnerds/backups")
@@ -63,10 +65,20 @@ def create_backup(include_db: bool = True, include_contributions: bool = True) -
             env["PGPASSWORD"] = os.environ.get("POSTGRES_PASSWORD", "")
             with open(db_dst, "wb") as f:
                 subprocess.run(
-                    ["pg_dump", "-U", "ancient_map", "-h", "localhost", "-p", "5432", "-Fc", "ancient_map"],
+                    [
+                        "pg_dump",
+                        "-U",
+                        "ancient_map",
+                        "-h",
+                        "localhost",
+                        "-p",
+                        "5432",
+                        "-Fc",
+                        "ancient_map",
+                    ],
                     stdout=f,
                     env=env,
-                    check=True
+                    check=True,
                 )
             result.database_path = db_dst
             logger.info(f"Backed up database -> {db_dst}")
@@ -105,7 +117,9 @@ def list_backups() -> list[tuple[str, dict[str, Path]]]:
     return sorted(backups.items(), reverse=True)
 
 
-def restore_backup(timestamp: str, restore_db: bool = True, restore_contributions: bool = True) -> bool:
+def restore_backup(
+    timestamp: str, restore_db: bool = True, restore_contributions: bool = True
+) -> bool:
     """Restore from a specific backup.
 
     Args:
@@ -137,9 +151,21 @@ def restore_backup(timestamp: str, restore_db: bool = True, restore_contribution
                 env = os.environ.copy()
                 env["PGPASSWORD"] = os.environ.get("POSTGRES_PASSWORD", "")
                 subprocess.run(
-                    ["pg_restore", "-U", "ancient_map", "-h", "localhost", "-p", "5432", "-d", "ancient_map", "-c", str(db_src)],
+                    [
+                        "pg_restore",
+                        "-U",
+                        "ancient_map",
+                        "-h",
+                        "localhost",
+                        "-p",
+                        "5432",
+                        "-d",
+                        "ancient_map",
+                        "-c",
+                        str(db_src),
+                    ],
                     env=env,
-                    check=True
+                    check=True,
                 )
                 logger.info(f"Restored database from {db_src}")
             except FileNotFoundError:

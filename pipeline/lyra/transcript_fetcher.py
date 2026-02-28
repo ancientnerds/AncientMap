@@ -31,6 +31,7 @@ def _build_ytt_api(settings: LyraSettings) -> YouTubeTranscriptApi:
         return YouTubeTranscriptApi(proxy_config=proxy_config)
     return YouTubeTranscriptApi()
 
+
 SKIP_TITLE_KEYWORDS = ["trailer", "premiere", "teaser", "promo"]
 
 
@@ -75,7 +76,9 @@ def get_recent_videos(channel: NewsChannel, lookup_days: int, api_key: str) -> l
         try:
             published = datetime.fromisoformat(published_str.replace("Z", "+00:00"))
         except (ValueError, AttributeError):
-            logger.warning(f"Malformed publishedAt '{published_str}' for video {video_id}, skipping")
+            logger.warning(
+                f"Malformed publishedAt '{published_str}' for video {video_id}, skipping"
+            )
             continue
 
         if published < cutoff:
@@ -93,13 +96,15 @@ def get_recent_videos(channel: NewsChannel, lookup_days: int, api_key: str) -> l
             or f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
         )
 
-        videos.append({
-            "id": video_id,
-            "title": title,
-            "published_at": published,
-            "thumbnail_url": thumbnail_url,
-            "description": snippet.get("description"),
-        })
+        videos.append(
+            {
+                "id": video_id,
+                "title": title,
+                "published_at": published,
+                "thumbnail_url": thumbnail_url,
+                "description": snippet.get("description"),
+            }
+        )
 
     logger.info(f"YouTube API found {len(videos)} recent videos for {channel.name}")
     return videos
@@ -118,7 +123,9 @@ def fetch_transcript(video_id: str, settings: LyraSettings) -> tuple[str | None,
         return None, None
 
     # v1.x returns snippet objects with .text/.start/.duration attributes — convert to dicts
-    transcript_list = [{"text": s.text, "start": s.start, "duration": s.duration} for s in transcript]
+    transcript_list = [
+        {"text": s.text, "start": s.start, "duration": s.duration} for s in transcript
+    ]
 
     if not transcript_list:
         return None, None
@@ -206,7 +213,8 @@ def fetch_new_videos(settings: LyraSettings) -> int:
         with get_session() as session:
             # Get already-processed video IDs
             existing_ids = {
-                v.id for v in session.query(NewsVideo.id)
+                v.id
+                for v in session.query(NewsVideo.id)
                 .filter(NewsVideo.channel_id == channel.id)
                 .all()
             }
@@ -217,35 +225,39 @@ def fetch_new_videos(settings: LyraSettings) -> int:
 
                 logger.info(f"Fetching transcript for: {video_info['title']}")
                 try:
-                    transcript_text, duration = fetch_transcript(
-                        video_info["id"], settings
-                    )
+                    transcript_text, duration = fetch_transcript(video_info["id"], settings)
                 except PermanentVideoError as e:
                     logger.info(f"  -> skipped (permanently unavailable: {e!s:.80s})")
-                    session.add(NewsVideo(
-                        id=video_info["id"],
-                        channel_id=channel.id,
-                        title=video_info["title"],
-                        description=video_info.get("description"),
-                        published_at=video_info["published_at"],
-                        thumbnail_url=video_info.get("thumbnail_url"),
-                        status="skipped",
-                    ))
+                    session.add(
+                        NewsVideo(
+                            id=video_info["id"],
+                            channel_id=channel.id,
+                            title=video_info["title"],
+                            description=video_info.get("description"),
+                            published_at=video_info["published_at"],
+                            thumbnail_url=video_info.get("thumbnail_url"),
+                            status="skipped",
+                        )
+                    )
                     continue
 
                 # Skip short videos BEFORE fetching metadata (saves an API call)
                 if duration is not None and duration < settings.min_video_minutes:
-                    logger.info(f"  -> skipped ({duration:.1f} min < {settings.min_video_minutes} min minimum)")
-                    session.add(NewsVideo(
-                        id=video_info["id"],
-                        channel_id=channel.id,
-                        title=video_info["title"],
-                        description=video_info.get("description"),
-                        published_at=video_info["published_at"],
-                        duration_minutes=duration,
-                        thumbnail_url=video_info.get("thumbnail_url"),
-                        status="skipped",
-                    ))
+                    logger.info(
+                        f"  -> skipped ({duration:.1f} min < {settings.min_video_minutes} min minimum)"
+                    )
+                    session.add(
+                        NewsVideo(
+                            id=video_info["id"],
+                            channel_id=channel.id,
+                            title=video_info["title"],
+                            description=video_info.get("description"),
+                            published_at=video_info["published_at"],
+                            duration_minutes=duration,
+                            thumbnail_url=video_info.get("thumbnail_url"),
+                            status="skipped",
+                        )
+                    )
                     continue
 
                 metadata = _fetch_metadata_youtube_api(video_info["id"], settings.youtube_api_key)
@@ -296,7 +308,8 @@ def retry_failed_videos(settings: LyraSettings) -> int:
             .filter(
                 NewsVideo.status == "failed",
                 NewsVideo.published_at > cutoff,
-                (NewsVideo.last_attempted_at.is_(None)) | (NewsVideo.last_attempted_at < retry_after),
+                (NewsVideo.last_attempted_at.is_(None))
+                | (NewsVideo.last_attempted_at < retry_after),
             )
             .all()
         )
@@ -322,13 +335,17 @@ def retry_failed_videos(settings: LyraSettings) -> int:
 
                 if duration is not None and duration < settings.min_video_minutes:
                     video.status = "skipped"
-                    logger.info(f"    -> skipped ({duration:.1f} min < {settings.min_video_minutes} min minimum)")
+                    logger.info(
+                        f"    -> skipped ({duration:.1f} min < {settings.min_video_minutes} min minimum)"
+                    )
                     continue
 
                 video.status = "transcribed"
                 video.transcript_text = transcript_text
                 retried += 1
-                logger.info(f"    -> transcribed ({duration:.1f} min)" if duration else "    -> transcribed")
+                logger.info(
+                    f"    -> transcribed ({duration:.1f} min)" if duration else "    -> transcribed"
+                )
             else:
                 video.last_attempted_at = datetime.now(UTC)
                 logger.info("    -> still no transcript, will retry later")
@@ -348,7 +365,9 @@ def parse_timestamp_to_seconds(ts: str) -> int | None:
     return None
 
 
-def extract_transcript_segment(transcript_text: str, timestamp_range: str, buffer_seconds: int = 10) -> str:
+def extract_transcript_segment(
+    transcript_text: str, timestamp_range: str, buffer_seconds: int = 10
+) -> str:
     """Extract a segment of transcript around a timestamp range.
 
     Args:
@@ -402,7 +421,8 @@ def backfill_video_descriptions(settings: LyraSettings, max_per_cycle: int = 10)
         videos = (
             session.query(NewsVideo)
             .filter(
-                (NewsVideo.description.is_(None)) | (NewsVideo.description == "")
+                (NewsVideo.description.is_(None))
+                | (NewsVideo.description == "")
                 | (NewsVideo.tags.is_(None)),
                 NewsVideo.status != "skipped",
             )

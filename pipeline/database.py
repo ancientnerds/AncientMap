@@ -42,14 +42,14 @@ engine = create_engine(
     settings.database.url,
     echo=settings.pipeline.log_level == "DEBUG",
     pool_pre_ping=True,
-    pool_size=20,           # Increased from 10 for better concurrency
-    max_overflow=30,        # Increased from 20
-    pool_timeout=30,        # Connection timeout to prevent hanging
-    pool_recycle=1800,      # Recycle connections every 30 minutes
+    pool_size=20,  # Increased from 10 for better concurrency
+    max_overflow=30,  # Increased from 20
+    pool_timeout=30,  # Connection timeout to prevent hanging
+    pool_recycle=1800,  # Recycle connections every 30 minutes
     connect_args={
         "connect_timeout": 10,  # Connection timeout in seconds
-        "options": "-c statement_timeout=30000"  # 30s query timeout
-    }
+        "options": "-c statement_timeout=30000",  # 30s query timeout
+    },
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -82,14 +82,17 @@ def get_session():
 # Base Model
 # =============================================================================
 
+
 class Base(DeclarativeBase):
     """Base class for all models."""
+
     pass
 
 
 # =============================================================================
 # Site Models (Golden Records)
 # =============================================================================
+
 
 class Site(Base):
     """
@@ -98,6 +101,7 @@ class Site(Base):
     This represents the merged, canonical record created from one or more
     source records after deduplication.
     """
+
     __tablename__ = "sites"
 
     # Primary key
@@ -131,18 +135,26 @@ class Site(Base):
     site_type: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
 
     # Time period
-    period_start: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Year (negative = BCE)
+    period_start: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )  # Year (negative = BCE)
     period_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
     period_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Metadata
     source_count: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
-    names: Mapped[list["SiteName"]] = relationship("SiteName", back_populates="site", cascade="all, delete-orphan")
-    source_records: Mapped[list["SourceRecord"]] = relationship("SourceRecord", back_populates="site", cascade="all, delete-orphan")
+    names: Mapped[list["SiteName"]] = relationship(
+        "SiteName", back_populates="site", cascade="all, delete-orphan"
+    )
+    source_records: Mapped[list["SourceRecord"]] = relationship(
+        "SourceRecord", back_populates="site", cascade="all, delete-orphan"
+    )
 
     # Indexes (geom has spatial_index=True so no manual index needed)
     __table_args__ = (
@@ -161,10 +173,13 @@ class SiteName(Base):
     A site can have many names: ancient names, modern names, names in different
     languages, transliterations, etc.
     """
+
     __tablename__ = "site_names"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    site_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("sites.id", ondelete="CASCADE"), nullable=False)
+    site_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("sites.id", ondelete="CASCADE"), nullable=False
+    )
 
     # Name fields
     name: Mapped[str] = mapped_column(String(500), nullable=False)
@@ -172,21 +187,25 @@ class SiteName(Base):
 
     # Metadata
     language_code: Mapped[str | None] = mapped_column(String(10), nullable=True)  # ISO 639-1
-    script: Mapped[str | None] = mapped_column(String(50), nullable=True)  # latin, greek, arabic, etc.
-    name_type: Mapped[str | None] = mapped_column(String(50), nullable=True)  # ancient, modern, alternate
+    script: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )  # latin, greek, arabic, etc.
+    name_type: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )  # ancient, modern, alternate
     is_canonical: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Source tracking
-    source_record_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("source_records.id"), nullable=True)
+    source_record_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source_records.id"), nullable=True
+    )
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     # Relationships
     site: Mapped["Site"] = relationship("Site", back_populates="names")
 
-    __table_args__ = (
-        Index("idx_site_names_site", "site_id"),
-    )
+    __table_args__ = (Index("idx_site_names_site", "site_id"),)
 
     def __repr__(self) -> str:
         return f"<SiteName {self.name} (site={self.site_id})>"
@@ -196,12 +215,14 @@ class SiteName(Base):
 # Source Provenance Models
 # =============================================================================
 
+
 class SourceDatabase(Base):
     """
     Metadata about a source database.
 
     Tracks information about each data source we ingest from.
     """
+
     __tablename__ = "source_databases"
 
     id: Mapped[str] = mapped_column(String(50), primary_key=True)  # e.g., "pleiades", "unesco"
@@ -222,7 +243,9 @@ class SourceDatabase(Base):
     priority: Mapped[int] = mapped_column(Integer, default=50)
 
     # Relationships
-    records: Mapped[list["SourceRecord"]] = relationship("SourceRecord", back_populates="source_database")
+    records: Mapped[list["SourceRecord"]] = relationship(
+        "SourceRecord", back_populates="source_database"
+    )
 
     def __repr__(self) -> str:
         return f"<SourceDatabase {self.id}: {self.name}>"
@@ -234,6 +257,7 @@ class SourceRecord(Base):
 
     Preserves the complete original data for attribution and provenance.
     """
+
     __tablename__ = "source_records"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -255,7 +279,9 @@ class SourceRecord(Base):
         ForeignKey("source_databases.id"),
         nullable=False,
     )
-    source_record_id: Mapped[str] = mapped_column(String(500), nullable=False)  # ID in original database
+    source_record_id: Mapped[str] = mapped_column(
+        String(500), nullable=False
+    )  # ID in original database
     source_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
 
     # Original data
@@ -265,7 +291,9 @@ class SourceRecord(Base):
 
     # Precision metadata
     precision_meters: Mapped[float | None] = mapped_column(Float, nullable=True)
-    precision_reason: Mapped[str | None] = mapped_column(String(100), nullable=True)  # gps, digitized, protected
+    precision_reason: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )  # gps, digitized, protected
 
     # License and attribution
     license: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -280,7 +308,9 @@ class SourceRecord(Base):
 
     # Relationships
     site: Mapped[Optional["Site"]] = relationship("Site", back_populates="source_records")
-    source_database: Mapped["SourceDatabase"] = relationship("SourceDatabase", back_populates="records")
+    source_database: Mapped["SourceDatabase"] = relationship(
+        "SourceDatabase", back_populates="records"
+    )
 
     __table_args__ = (
         UniqueConstraint("source_database_id", "source_record_id", name="uq_source_record"),
@@ -296,12 +326,14 @@ class SourceRecord(Base):
 # Deduplication Models
 # =============================================================================
 
+
 class MatchDecision(Base):
     """
     Record of match decisions made during deduplication.
 
     Provides audit trail and training data for improving the matching model.
     """
+
     __tablename__ = "match_decisions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -327,10 +359,14 @@ class MatchDecision(Base):
 
     # Match result
     match_score: Mapped[float | None] = mapped_column(Float, nullable=True)
-    decision: Mapped[str] = mapped_column(String(50), nullable=False)  # auto_match, auto_reject, human_match, human_reject, pending
+    decision: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # auto_match, auto_reject, human_match, human_reject, pending
 
     # Who/what made the decision
-    decided_by: Mapped[str | None] = mapped_column(String(100), nullable=True)  # algorithm_v1, user:xyz
+    decided_by: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )  # algorithm_v1, user:xyz
     decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Feature vector used for decision
@@ -341,15 +377,14 @@ class MatchDecision(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
-    __table_args__ = (
-        Index("idx_match_decisions_site", "site_id"),
-    )
+    __table_args__ = (Index("idx_match_decisions_site", "site_id"),)
 
 
 class ReviewQueue(Base):
     """
     Queue of potential matches requiring human review.
     """
+
     __tablename__ = "review_queue"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -372,20 +407,21 @@ class ReviewQueue(Base):
 
     # Queue management
     priority: Mapped[int] = mapped_column(Integer, default=0)  # Higher = review first
-    status: Mapped[str] = mapped_column(String(50), default="pending")  # pending, in_review, completed, skipped
+    status: Mapped[str] = mapped_column(
+        String(50), default="pending"
+    )  # pending, in_review, completed, skipped
     assigned_to: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    __table_args__ = (
-        Index("idx_review_queue_status", "status", "priority"),
-    )
+    __table_args__ = (Index("idx_review_queue_status", "status", "priority"),)
 
 
 # =============================================================================
 # Unified Site Models (for Static Export)
 # =============================================================================
+
 
 class UnifiedSite(Base):
     """
@@ -394,6 +430,7 @@ class UnifiedSite(Base):
     This is a simplified table that holds ALL sites from all sources,
     optimized for bulk export to static JSON files.
     """
+
     __tablename__ = "unified_sites"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -455,7 +492,9 @@ class UnifiedSite(Base):
 
     # Relationships
     parent_site: Mapped["UnifiedSite | None"] = relationship(
-        "UnifiedSite", remote_side="UnifiedSite.id", foreign_keys=[parent_site_id],
+        "UnifiedSite",
+        remote_side="UnifiedSite.id",
+        foreign_keys=[parent_site_id],
     )
     content_links: Mapped[list["SiteContentLink"]] = relationship(
         "SiteContentLink", back_populates="site", cascade="all, delete-orphan"
@@ -474,6 +513,7 @@ class UnifiedSite(Base):
 
 class UnifiedSiteName(Base):
     """Alternate names for unified sites — powers site matching and search."""
+
     __tablename__ = "unified_site_names"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -501,6 +541,7 @@ class SiteContentLink(Base):
     Links sites to texts (ToposText), maps (David Rumsey),
     inscriptions (EDH), artworks, 3D models, etc.
     """
+
     __tablename__ = "site_content_links"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -513,8 +554,12 @@ class SiteContentLink(Base):
     )
 
     # Content identification
-    content_type: Mapped[str] = mapped_column(String(50), nullable=False)  # text, map, inscription, artwork, model
-    content_source: Mapped[str] = mapped_column(String(50), nullable=False)  # topostext, david_rumsey, edh, sketchfab
+    content_type: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # text, map, inscription, artwork, model
+    content_source: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # topostext, david_rumsey, edh, sketchfab
     content_id: Mapped[str] = mapped_column(String(255), nullable=False)
 
     # Content preview data (embedded for fast export)
@@ -551,6 +596,7 @@ class WikiImage(Base):
 
     Stores downloaded image metadata and attribution for self-hosted serving.
     """
+
     __tablename__ = "wiki_images"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -609,6 +655,7 @@ class SourceMeta(Base):
 
     Includes display info like colors and icons.
     """
+
     __tablename__ = "source_meta"
 
     id: Mapped[str] = mapped_column(String(50), primary_key=True)  # e.g., "pleiades"
@@ -618,7 +665,9 @@ class SourceMeta(Base):
     # Display
     color: Mapped[str | None] = mapped_column(String(7), nullable=True)  # Hex color
     icon: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    category: Mapped[str | None] = mapped_column(String(50), nullable=True)  # global, europe, americas, etc.
+    category: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )  # global, europe, americas, etc.
 
     # Stats
     record_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -647,10 +696,12 @@ class SourceMeta(Base):
 # API Models
 # =============================================================================
 
+
 class APIKey(Base):
     """
     API key for rate limiting and access control.
     """
+
     __tablename__ = "api_keys"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -669,7 +720,9 @@ class APIKey(Base):
     owner_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     # Tier and limits
-    tier: Mapped[str] = mapped_column(String(50), default="free")  # anonymous, free, pro, enterprise
+    tier: Mapped[str] = mapped_column(
+        String(50), default="free"
+    )  # anonymous, free, pro, enterprise
     rate_limit_override: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Custom limit
 
     # Status
@@ -691,6 +744,7 @@ class UsageLog(Base):
     """
     API usage logging for analytics and billing.
     """
+
     __tablename__ = "usage_logs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -738,6 +792,7 @@ class UserContribution(Base):
     All submissions go to this staging table before being
     approved and moved to unified_sites.
     """
+
     __tablename__ = "user_contributions"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -777,7 +832,9 @@ class UserContribution(Base):
     review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Lyra enrichment fields
-    enrichment_status: Mapped[str | None] = mapped_column(String(20), default="pending", nullable=True)
+    enrichment_status: Mapped[str | None] = mapped_column(
+        String(20), default="pending", nullable=True
+    )
     wikidata_id: Mapped[str | None] = mapped_column(String(20), nullable=True)
     wikipedia_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     thumbnail_url: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -811,6 +868,7 @@ class UserContribution(Base):
 
 class NewsChannel(Base):
     """YouTube channel tracked by the Lyra news pipeline."""
+
     __tablename__ = "news_channels"
 
     id: Mapped[str] = mapped_column(String(50), primary_key=True)  # YouTube channel ID
@@ -826,6 +884,7 @@ class NewsChannel(Base):
 
 class NewsVideo(Base):
     """YouTube video processed by the Lyra pipeline."""
+
     __tablename__ = "news_videos"
 
     id: Mapped[str] = mapped_column(String(20), primary_key=True)  # YouTube video ID
@@ -853,6 +912,7 @@ class NewsVideo(Base):
 
 class NewsItem(Base):
     """Individual news item (one key topic extracted from a video)."""
+
     __tablename__ = "news_items"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -896,6 +956,7 @@ class NewsItem(Base):
 
 class NewsArticle(Base):
     """Weekly digest article generated from video summaries."""
+
     __tablename__ = "news_articles"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -919,20 +980,31 @@ class NewsArticle(Base):
 
 class DbSnapshot(Base):
     """Snapshot of site rows before a batch edit or upload."""
+
     __tablename__ = "db_snapshots"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    created_by: Mapped[str] = mapped_column(String(50), nullable=False)  # "audit", "upload", "admin"
+    created_by: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # "audit", "upload", "admin"
     description: Mapped[str] = mapped_column(String(500), nullable=False)
-    snapshot_type: Mapped[str] = mapped_column(String(20), nullable=False)  # "edit" | "upload" | "manual"
+    snapshot_type: Mapped[str] = mapped_column(
+        String(20), nullable=False
+    )  # "edit" | "upload" | "manual"
     row_count: Mapped[int] = mapped_column(Integer, nullable=False)
-    source_id: Mapped[str | None] = mapped_column(String(50), nullable=True)  # which database this snapshot belongs to
+    source_id: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )  # which database this snapshot belongs to
 
     rows: Mapped[list["SnapshotRow"]] = relationship(
-        "SnapshotRow", back_populates="snapshot", cascade="all, delete-orphan",
+        "SnapshotRow",
+        back_populates="snapshot",
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:
@@ -941,6 +1013,7 @@ class DbSnapshot(Base):
 
 class SnapshotRow(Base):
     """Single row captured in a snapshot — stores pre-change state."""
+
     __tablename__ = "snapshot_rows"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -970,10 +1043,13 @@ class SnapshotRow(Base):
 
 class SourceVersionPin(Base):
     """Pin a specific snapshot version as the publicly served data for a source."""
+
     __tablename__ = "source_version_pins"
 
     source_id: Mapped[str] = mapped_column(String(50), primary_key=True)
-    snapshot_date: Mapped[str | None] = mapped_column(String(30), nullable=True)  # null = serve live DB
+    snapshot_date: Mapped[str | None] = mapped_column(
+        String(30), nullable=True
+    )  # null = serve live DB
     pinned_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     pinned_by: Mapped[str] = mapped_column(String(50), nullable=False)
 
@@ -988,23 +1064,30 @@ class SourceVersionPin(Base):
 
 class DiscordUser(Base):
     """Discord-authenticated user with Lyra credits."""
+
     __tablename__ = "discord_users"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     discord_id: Mapped[str] = mapped_column(String(30), unique=True, nullable=False, index=True)
     username: Mapped[str] = mapped_column(String(100), nullable=False)
     avatar_hash: Mapped[str | None] = mapped_column(String(100), nullable=True)
     roles: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     credits: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    is_unlimited: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    is_unlimited: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
     grant_anchor_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     last_login: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     credit_grants: Mapped[list["CreditGrant"]] = relationship("CreditGrant", back_populates="user")
-    token_usage_logs: Mapped[list["TokenUsageLog"]] = relationship("TokenUsageLog", back_populates="user")
+    token_usage_logs: Mapped[list["TokenUsageLog"]] = relationship(
+        "TokenUsageLog", back_populates="user"
+    )
 
     def __repr__(self) -> str:
         return f"<DiscordUser {self.username} ({self.discord_id})>"
@@ -1012,10 +1095,13 @@ class DiscordUser(Base):
 
 class PatreonEvent(Base):
     """Patreon webhook events for idempotent processing."""
+
     __tablename__ = "patreon_events"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     event_id: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
     event_type: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -1030,24 +1116,33 @@ class PatreonEvent(Base):
 
 class CreditGrant(Base):
     """Log of credit grants (OG Nerd role, future Patreon tiers, etc.)."""
+
     __tablename__ = "credit_grants"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("discord_users.id", ondelete="CASCADE"), nullable=False,
+        UUID(as_uuid=True),
+        ForeignKey("discord_users.id", ondelete="CASCADE"),
+        nullable=False,
     )
     amount: Mapped[int] = mapped_column(Integer, nullable=False)
     reason: Mapped[str] = mapped_column(String(100), nullable=False)
-    grant_period: Mapped[str | None] = mapped_column(String(7), nullable=True)  # "2026-02" for monthly, NULL for one-time
+    grant_period: Mapped[str | None] = mapped_column(
+        String(7), nullable=True
+    )  # "2026-02" for monthly, NULL for one-time
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     user: Mapped["DiscordUser"] = relationship("DiscordUser", back_populates="credit_grants")
 
     __table_args__ = (
         Index("idx_credit_grants_user_reason", "user_id", "reason"),
-        UniqueConstraint("user_id", "reason", "grant_period", name="uq_credit_grants_user_reason_period"),
+        UniqueConstraint(
+            "user_id", "reason", "grant_period", name="uq_credit_grants_user_reason_period"
+        ),
     )
 
     def __repr__(self) -> str:
@@ -1056,13 +1151,18 @@ class CreditGrant(Base):
 
 class TokenUsageLog(Base):
     """Per-request token usage for Lyra chat."""
+
     __tablename__ = "token_usage_logs"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("discord_users.id", ondelete="CASCADE"), nullable=False,
+        UUID(as_uuid=True),
+        ForeignKey("discord_users.id", ondelete="CASCADE"),
+        nullable=False,
     )
     input_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
     output_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -1072,9 +1172,7 @@ class TokenUsageLog(Base):
 
     user: Mapped["DiscordUser"] = relationship("DiscordUser", back_populates="token_usage_logs")
 
-    __table_args__ = (
-        Index("idx_token_usage_user_date", "user_id", "created_at"),
-    )
+    __table_args__ = (Index("idx_token_usage_user_date", "user_id", "created_at"),)
 
     def __repr__(self) -> str:
         return f"<TokenUsageLog {self.credits_used} credits by {self.user_id}>"
@@ -1087,16 +1185,23 @@ class TokenUsageLog(Base):
 
 class SiteLike(Base):
     """A user's like on an archaeological site (public, with count)."""
+
     __tablename__ = "site_likes"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("discord_users.id", ondelete="CASCADE"), nullable=False,
+        UUID(as_uuid=True),
+        ForeignKey("discord_users.id", ondelete="CASCADE"),
+        nullable=False,
     )
     site_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("unified_sites.id", ondelete="CASCADE"), nullable=False,
+        UUID(as_uuid=True),
+        ForeignKey("unified_sites.id", ondelete="CASCADE"),
+        nullable=False,
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
@@ -1108,16 +1213,23 @@ class SiteLike(Base):
 
 class SiteBookmark(Base):
     """A user's private bookmark on an archaeological site."""
+
     __tablename__ = "site_bookmarks"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("discord_users.id", ondelete="CASCADE"), nullable=False,
+        UUID(as_uuid=True),
+        ForeignKey("discord_users.id", ondelete="CASCADE"),
+        nullable=False,
     )
     site_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("unified_sites.id", ondelete="CASCADE"), nullable=False,
+        UUID(as_uuid=True),
+        ForeignKey("unified_sites.id", ondelete="CASCADE"),
+        nullable=False,
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
@@ -1134,6 +1246,7 @@ class SiteBookmark(Base):
 
 class VectorSyncState(Base):
     """Persistent state for Qdrant vector reindex operations."""
+
     __tablename__ = "vector_sync_state"
 
     collection: Mapped[str] = mapped_column(String(50), primary_key=True)
@@ -1148,6 +1261,7 @@ class VectorSyncState(Base):
 # =============================================================================
 # Helper Functions
 # =============================================================================
+
 
 def create_all_tables():
     """Create all database tables."""

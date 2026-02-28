@@ -12,7 +12,7 @@ DATE_CUTOFF_REST_OF_WORLD = 500
 
 # Americas bounding box (longitude-based)
 AMERICAS_LON_MIN = -170  # Western Alaska/Aleutians
-AMERICAS_LON_MAX = -30   # Eastern Brazil
+AMERICAS_LON_MAX = -30  # Eastern Brazil
 
 
 _BC_AD_RE = re.compile(
@@ -104,6 +104,7 @@ def parse_epoch_timestamp(ts: int) -> int | None:
     if ts is None:
         return None
     from datetime import datetime
+
     try:
         dt = datetime.fromtimestamp(ts)
         return dt.year

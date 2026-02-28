@@ -58,7 +58,7 @@ class GettyMuseumConnector(BaseConnector):
         self.rest = RestProtocol(
             base_url=self.base_url,
             rate_limit=self.rate_limit,
-            headers={"Accept": "text/html,application/xhtml+xml"}
+            headers={"Accept": "text/html,application/xhtml+xml"},
         )
 
     async def search(
@@ -105,7 +105,7 @@ class GettyMuseumConnector(BaseConnector):
             # Look for __NEXT_DATA__ or similar embedded state
             json_patterns = [
                 r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>',
-                r'window\.__INITIAL_STATE__\s*=\s*({.*?});',
+                r"window\.__INITIAL_STATE__\s*=\s*({.*?});",
                 r'"results"\s*:\s*(\[.*?\])',
             ]
 
@@ -122,10 +122,10 @@ class GettyMuseumConnector(BaseConnector):
                         elif isinstance(data, dict):
                             # Try common paths
                             results = (
-                                data.get("props", {}).get("pageProps", {}).get("results", []) or
-                                data.get("results", []) or
-                                data.get("objects", []) or
-                                data.get("items", [])
+                                data.get("props", {}).get("pageProps", {}).get("results", [])
+                                or data.get("results", [])
+                                or data.get("objects", [])
+                                or data.get("items", [])
                             )
 
                         for result in results[:limit]:
@@ -158,9 +158,11 @@ class GettyMuseumConnector(BaseConnector):
 
             # Extract thumbnail
             thumbnail = (
-                result.get("thumbnail") or
-                result.get("primaryImage") or
-                result.get("image", {}).get("url") if isinstance(result.get("image"), dict) else result.get("image")
+                result.get("thumbnail")
+                or result.get("primaryImage")
+                or result.get("image", {}).get("url")
+                if isinstance(result.get("image"), dict)
+                else result.get("image")
             )
 
             return ContentItem(
@@ -193,11 +195,11 @@ class GettyMuseumConnector(BaseConnector):
                 r'<a[^>]+href="(/art/collection/object/[^"]+)"[^>]*>.*?'
                 r'(?:<img[^>]+src="([^"]+)"[^>]*>)?.*?'
                 r'(?:<[^>]+class="[^"]*title[^"]*"[^>]*>([^<]+)<)?',
-                re.DOTALL | re.IGNORECASE
+                re.DOTALL | re.IGNORECASE,
             )
 
             # Also try to find object URLs
-            url_pattern = re.compile(r'/art/collection/object/([A-Z0-9]+)')
+            url_pattern = re.compile(r"/art/collection/object/([A-Z0-9]+)")
 
             seen_ids = set()
             for match in url_pattern.finditer(html):
@@ -216,8 +218,7 @@ class GettyMuseumConnector(BaseConnector):
 
                 # Extract title
                 title_match = re.search(
-                    r'(?:title|alt|aria-label)="([^"]+)"',
-                    context, re.IGNORECASE
+                    r'(?:title|alt|aria-label)="([^"]+)"', context, re.IGNORECASE
                 )
                 title = title_match.group(1) if title_match else f"Getty Object {object_id}"
 
@@ -226,7 +227,7 @@ class GettyMuseumConnector(BaseConnector):
                 img_match = re.search(r'<img[^>]+src="([^"]+)"', context)
                 if img_match:
                     thumbnail = img_match.group(1)
-                    if thumbnail.startswith('/'):
+                    if thumbnail.startswith("/"):
                         thumbnail = f"{self.base_url}{thumbnail}"
 
                 item = ContentItem(
@@ -261,13 +262,10 @@ class GettyMuseumConnector(BaseConnector):
             html = response.text
 
             # Extract title from page
-            title_match = re.search(
-                r'<h1[^>]*>(.*?)</h1>',
-                html, re.DOTALL
-            )
+            title_match = re.search(r"<h1[^>]*>(.*?)</h1>", html, re.DOTALL)
             title = "Unknown artwork"
             if title_match:
-                title = re.sub(r'<[^>]+>', '', title_match.group(1)).strip()
+                title = re.sub(r"<[^>]+>", "", title_match.group(1)).strip()
 
             # Extract image from og:image meta
             thumbnail = None

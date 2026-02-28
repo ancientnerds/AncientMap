@@ -32,7 +32,9 @@ class NCEITsunamisIngester(BaseIngester):
     source_name = "NCEI Tsunami Events"
 
     # ArcGIS REST endpoint for tsunami events (Layer 0)
-    API_URL = "https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/hazards/MapServer/0/query"
+    API_URL = (
+        "https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/hazards/MapServer/0/query"
+    )
 
     # Max records per request (ArcGIS limit)
     PAGE_SIZE = 1000
@@ -112,7 +114,7 @@ class NCEITsunamisIngester(BaseIngester):
                 "total_tsunamis": len(all_tsunamis),
                 "license": "Public Domain",
                 "attribution": "NOAA NCEI Natural Hazards",
-            }
+            },
         }
 
         atomic_write_json(dest_path, output)

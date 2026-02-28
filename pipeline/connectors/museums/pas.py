@@ -10,7 +10,6 @@ Priority: P2
 API: https://finds.org.uk/database/api
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
@@ -123,8 +122,7 @@ class PASConnector(BaseConnector):
                 item_id = item_id[4:]
 
             response = await self.rest.get(
-                f"/artefacts/record/id/{item_id}",
-                params={"format": "json"}
+                f"/artefacts/record/id/{item_id}", params={"format": "json"}
             )
 
             if response:

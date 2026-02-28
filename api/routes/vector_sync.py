@@ -40,15 +40,25 @@ def _load_persisted_state():
     try:
         with get_session() as session:
             row = session.execute(
-                text("SELECT last_completed_at, last_duration_seconds, last_result FROM vector_sync_state WHERE collection = 'all'")
+                text(
+                    "SELECT last_completed_at, last_duration_seconds, last_result FROM vector_sync_state WHERE collection = 'all'"
+                )
             ).fetchone()
             if row and row.last_completed_at:
-                _reindex_state["last_completed_at"] = row.last_completed_at.isoformat() + "Z" if row.last_completed_at.tzinfo is None else row.last_completed_at.isoformat()
+                _reindex_state["last_completed_at"] = (
+                    row.last_completed_at.isoformat() + "Z"
+                    if row.last_completed_at.tzinfo is None
+                    else row.last_completed_at.isoformat()
+                )
                 _reindex_state["last_duration_seconds"] = row.last_duration_seconds
                 _reindex_state["last_result"] = row.last_result
-                logger.info(f"[VECTOR-SYNC] Loaded persisted state: last run {_reindex_state['last_completed_at']}")
+                logger.info(
+                    f"[VECTOR-SYNC] Loaded persisted state: last run {_reindex_state['last_completed_at']}"
+                )
     except Exception as e:
-        logger.warning(f"[VECTOR-SYNC] Could not load persisted state (table may not exist yet): {e}")
+        logger.warning(
+            f"[VECTOR-SYNC] Could not load persisted state (table may not exist yet): {e}"
+        )
 
 
 def _persist_state(collection: str):
@@ -79,7 +89,9 @@ _load_persisted_state()
 
 
 class ReindexRequest(BaseModel):
-    collection: str | None = None  # "sites" | "news" | "transcripts" | "articles" | "empires" | None (all)
+    collection: str | None = (
+        None  # "sites" | "news" | "transcripts" | "articles" | "empires" | None (all)
+    )
     rebuild: bool = False
 
 
@@ -92,15 +104,13 @@ async def vector_sync_status():
         pg_sites = session.execute(
             text("SELECT COUNT(*) FROM unified_sites WHERE source_id = 'ancient_nerds'")
         ).scalar()
-        pg_news = session.execute(
-            text("SELECT COUNT(*) FROM news_items")
-        ).scalar()
+        pg_news = session.execute(text("SELECT COUNT(*) FROM news_items")).scalar()
         pg_transcripts = session.execute(
-            text("SELECT COUNT(*) FROM news_videos WHERE transcript_text IS NOT NULL AND status IN ('transcribed', 'summarized')")
+            text(
+                "SELECT COUNT(*) FROM news_videos WHERE transcript_text IS NOT NULL AND status IN ('transcribed', 'summarized')"
+            )
         ).scalar()
-        pg_articles = session.execute(
-            text("SELECT COUNT(*) FROM news_articles")
-        ).scalar()
+        pg_articles = session.execute(text("SELECT COUNT(*) FROM news_articles")).scalar()
 
     # Qdrant counts
     qdrant_available = True
@@ -145,7 +155,14 @@ async def vector_sync_status():
     empire_count = 0
     boundary_count = 0
     try:
-        meta_path = Path(__file__).resolve().parents[2] / "ancient-nerds-map" / "public" / "data" / "historical" / "metadata.json"
+        meta_path = (
+            Path(__file__).resolve().parents[2]
+            / "ancient-nerds-map"
+            / "public"
+            / "data"
+            / "historical"
+            / "metadata.json"
+        )
         meta = json.loads(meta_path.read_text())
         empire_count = meta.get("totalEmpires", 0)
         for region_empires in meta.get("empires", {}).values():
@@ -157,7 +174,14 @@ async def vector_sync_status():
     # Seshat polity count (source for empires Qdrant collection)
     seshat_polity_count = 0
     try:
-        polities_path = Path(__file__).resolve().parents[2] / "ancient-nerds-map" / "src" / "data" / "seshat" / "polities.json"
+        polities_path = (
+            Path(__file__).resolve().parents[2]
+            / "ancient-nerds-map"
+            / "src"
+            / "data"
+            / "seshat"
+            / "polities.json"
+        )
         polities_data = json.loads(polities_path.read_text())
         seshat_polity_count = len(polities_data.get("polities", {}))
     except Exception:
@@ -208,7 +232,9 @@ async def vector_sync_status():
         },
         "auto_reindex": {
             "enabled": _nightly_task is not None and not _nightly_task.done(),
-            "next_run_utc": _next_run_utc if (_nightly_task is not None and not _nightly_task.done()) else None,
+            "next_run_utc": _next_run_utc
+            if (_nightly_task is not None and not _nightly_task.done())
+            else None,
         },
     }
 
@@ -287,7 +313,9 @@ async def schedule_nightly_reindex():
         try:
             wait = _seconds_until_next(NIGHTLY_HOUR_UTC)
             _next_run_utc = (datetime.now(UTC) + timedelta(seconds=wait)).isoformat()
-            logger.info(f"[VECTOR-SYNC] Next nightly reindex at {_next_run_utc} ({wait / 3600:.1f}h from now)")
+            logger.info(
+                f"[VECTOR-SYNC] Next nightly reindex at {_next_run_utc} ({wait / 3600:.1f}h from now)"
+            )
             await asyncio.sleep(wait)
 
             if _reindex_state["running"]:

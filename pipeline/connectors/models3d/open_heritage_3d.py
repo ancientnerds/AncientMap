@@ -10,7 +10,6 @@ Priority: P3
 URL: https://artsandculture.google.com/project/open-heritage
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector

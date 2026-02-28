@@ -28,6 +28,7 @@ export function ZoomControls({
       <button
         className="zoom-btn"
         onClick={() => setZoom(z => Math.min(100, z + 1))}
+        aria-label="Zoom in"
       >+</button>
       <div className="zoom-slider-wrapper">
         <div className="zoom-slider-labels">
@@ -50,8 +51,9 @@ export function ZoomControls({
       <button
         className="zoom-btn"
         onClick={() => setZoom(z => Math.max(0, z - 1))}
+        aria-label="Zoom out"
       >−</button>
-      <button className="zoom-btn" onClick={onTogglePlay}>
+      <button className="zoom-btn" onClick={onTogglePlay} aria-label={isPlaying ? 'Pause rotation' : 'Resume rotation'}>
         {isPlaying ? (
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
             <rect x="6" y="4" width="4" height="16" rx="1" />

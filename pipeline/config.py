@@ -124,10 +124,10 @@ class RateLimitSettings(BaseSettings):
         extra="ignore",
     )
 
-    anonymous: int = 100      # requests per day
-    free: int = 1000          # requests per day
-    pro: int = 50000          # requests per day
-    enterprise: int = 0       # 0 = unlimited
+    anonymous: int = 100  # requests per day
+    free: int = 1000  # requests per day
+    pro: int = 50000  # requests per day
+    enterprise: int = 0  # 0 = unlimited
 
 
 class Settings(BaseSettings):
@@ -173,6 +173,7 @@ def get_ai_thread_limit() -> int:
     This ensures 2 threads are always available for the web server and frontend.
     """
     import os
+
     cpu_count = os.cpu_count() or 1
     return max(1, cpu_count - 2)
 

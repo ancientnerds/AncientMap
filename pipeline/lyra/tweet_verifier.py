@@ -94,11 +94,13 @@ def verify_single_post(
             model=model,
             max_tokens=_max_tokens,
             temperature=0.0,
-            system=[{
-                "type": "text",
-                "text": system_prompt,
-                "cache_control": {"type": "ephemeral"},
-            }],
+            system=[
+                {
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
             messages=[{"role": "user", "content": user_content}],
             output_config={
                 "format": {
@@ -124,7 +126,9 @@ def verify_single_post(
 
 
 def verify_video_posts(
-    video: NewsVideo, settings: LyraSettings, system_prompt: str | None = None,
+    video: NewsVideo,
+    settings: LyraSettings,
+    system_prompt: str | None = None,
 ) -> int:
     """Verify all posts for a video against its transcript.
 
@@ -142,24 +146,37 @@ def verify_video_posts(
         system_prompt = _load_prompt()
 
     with get_session() as session:
-        items = session.query(NewsItem).filter(
-            NewsItem.video_id == video.id,
-            NewsItem.post_text.isnot(None),
-            NewsItem.verified_at.is_(None),
-        ).all()
+        items = (
+            session.query(NewsItem)
+            .filter(
+                NewsItem.video_id == video.id,
+                NewsItem.post_text.isnot(None),
+                NewsItem.verified_at.is_(None),
+            )
+            .all()
+        )
 
         if not items:
             # All items already verified — transition the video if needed
             v = session.get(NewsVideo, video.id)
             if v and v.status == "posted":
                 v.status = "verified"
-                logger.info(f"Video {video.id}: all items already verified, transitioning to 'verified'")
+                logger.info(
+                    f"Video {video.id}: all items already verified, transitioning to 'verified'"
+                )
             return 0
 
         verified = 0
         skipped = 0
         for item in items:
-            result = verify_single_post(item, video.transcript_text, client, settings.model_verify, system_prompt, max_tokens=settings.max_tokens)
+            result = verify_single_post(
+                item,
+                video.transcript_text,
+                client,
+                settings.model_verify,
+                system_prompt,
+                max_tokens=settings.max_tokens,
+            )
             if not result:
                 skipped += 1
                 continue
@@ -175,7 +192,9 @@ def verify_video_posts(
                 modified = mod.get("modified_text", "") if mod else ""
                 if modified:
                     item.post_text = modified
-                    logger.info(f"Modified post for item {item.id}: {mod.get('changes_explained', '')}")
+                    logger.info(
+                        f"Modified post for item {item.id}: {mod.get('changes_explained', '')}"
+                    )
 
             # Update timestamp if verification found a more precise one
             ts = result.get("timestamp")
@@ -190,18 +209,24 @@ def verify_video_posts(
         session.flush()
 
         # Count remaining unverified items for this video
-        remaining = session.query(NewsItem).filter(
-            NewsItem.video_id == video.id,
-            NewsItem.post_text.isnot(None),
-            NewsItem.verified_at.is_(None),
-        ).count()
+        remaining = (
+            session.query(NewsItem)
+            .filter(
+                NewsItem.video_id == video.id,
+                NewsItem.post_text.isnot(None),
+                NewsItem.verified_at.is_(None),
+            )
+            .count()
+        )
 
         v = session.get(NewsVideo, video.id)
         if v:
             if remaining == 0:
                 v.status = "verified"
             else:
-                logger.warning(f"Video {video.id}: {remaining} items still unverified, keeping 'posted' for retry")
+                logger.warning(
+                    f"Video {video.id}: {remaining} items still unverified, keeping 'posted' for retry"
+                )
 
     logger.info(f"Verified {verified}/{len(items)} posts for video {video.id} ({skipped} skipped)")
     return verified
@@ -213,9 +238,7 @@ def verify_pending_posts(settings: LyraSettings) -> int:
     Returns total number of items verified.
     """
     with get_session() as session:
-        videos = session.query(NewsVideo).filter(
-            NewsVideo.status == "posted"
-        ).all()
+        videos = session.query(NewsVideo).filter(NewsVideo.status == "posted").all()
         session.expunge_all()
 
     system_prompt = _load_prompt()

@@ -111,7 +111,7 @@ class ToposTextIngester(BaseIngester):
                 "total_places": len(all_places),
                 "license": "CC BY-NC-SA 4.0 (attribution required)",
                 "description": "Index of ancient Greek and Latin texts with geographic references",
-            }
+            },
         }
 
         atomic_write_json(dest_path, output)

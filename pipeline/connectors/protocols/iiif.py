@@ -185,7 +185,7 @@ class IIIFProtocol:
             response = await self.client.get(
                 manifest_url,
                 headers={
-                    "Accept": "application/ld+json;profile=\"http://iiif.io/api/presentation/3/context.json\",application/json",
+                    "Accept": 'application/ld+json;profile="http://iiif.io/api/presentation/3/context.json",application/json',
                 },
             )
             response.raise_for_status()
@@ -286,15 +286,17 @@ class IIIFProtocol:
                         service_id = resource.get("@id", "")
 
                     if service_id:
-                        images.append({
-                            "id": canvas.get("@id"),
-                            "label": label,
-                            "width": canvas.get("width"),
-                            "height": canvas.get("height"),
-                            "service_url": service_id,
-                            "thumbnail_url": self.get_thumbnail_url(service_id, 400),
-                            "full_url": self.build_image_url(service_id),
-                        })
+                        images.append(
+                            {
+                                "id": canvas.get("@id"),
+                                "label": label,
+                                "width": canvas.get("width"),
+                                "height": canvas.get("height"),
+                                "service_url": service_id,
+                                "thumbnail_url": self.get_thumbnail_url(service_id, 400),
+                                "full_url": self.build_image_url(service_id),
+                            }
+                        )
                         break
 
         return images
@@ -339,15 +341,17 @@ class IIIFProtocol:
                         service_id = body.get("id", "")
 
                     if service_id:
-                        images.append({
-                            "id": canvas.get("id"),
-                            "label": label,
-                            "width": canvas.get("width"),
-                            "height": canvas.get("height"),
-                            "service_url": service_id,
-                            "thumbnail_url": self.get_thumbnail_url(service_id, 400),
-                            "full_url": self.build_image_url(service_id),
-                        })
+                        images.append(
+                            {
+                                "id": canvas.get("id"),
+                                "label": label,
+                                "width": canvas.get("width"),
+                                "height": canvas.get("height"),
+                                "service_url": service_id,
+                                "thumbnail_url": self.get_thumbnail_url(service_id, 400),
+                                "full_url": self.build_image_url(service_id),
+                            }
+                        )
                         break
 
         return images

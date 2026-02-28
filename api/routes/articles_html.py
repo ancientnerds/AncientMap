@@ -31,20 +31,20 @@ _HTML_HEADERS_SHORT = {"Cache-Control": "public, max-age=1800"}
 @router.get("/articles/")
 async def articles_listing(db: Session = Depends(get_db)):
     """HTML listing showing only the latest article."""
-    article = db.query(NewsArticle).order_by(
-        NewsArticle.created_at.desc()
-    ).first()
+    article = db.query(NewsArticle).order_by(NewsArticle.created_at.desc()).first()
 
     article_dicts = []
     if article:
-        article_dicts.append({
-            "title": article.title,
-            "summary": article.summary,
-            "slug": slugify(article.title),
-            "published_at": article.published_at.isoformat() if article.published_at else "",
-            "week_start": article.week_start.isoformat() if article.week_start else "",
-            "week_end": article.week_end.isoformat() if article.week_end else "",
-        })
+        article_dicts.append(
+            {
+                "title": article.title,
+                "summary": article.summary,
+                "slug": slugify(article.title),
+                "published_at": article.published_at.isoformat() if article.published_at else "",
+                "week_start": article.week_start.isoformat() if article.week_start else "",
+                "week_end": article.week_end.isoformat() if article.week_end else "",
+            }
+        )
 
     html = render_article_listing_html(article_dicts)
     return Response(content=html, media_type="text/html", headers=_HTML_HEADERS)
@@ -118,9 +118,7 @@ async def news_archive(db: Session = Depends(get_db)):
             joinedload(NewsItem.site),
         )
         .filter(NewsItem.post_text.isnot(None))
-        .filter(
-            (NewsItem.news_category != "speculative") | (NewsItem.news_category.is_(None))
-        )
+        .filter((NewsItem.news_category != "speculative") | (NewsItem.news_category.is_(None)))
         .order_by(NewsVideo.published_at.desc(), NewsItem.created_at.desc())
         .limit(200)
         .all()
@@ -140,14 +138,16 @@ async def news_archive(db: Session = Depends(get_db)):
 
         youtube_url = f"https://www.youtube.com/watch?v={video.id}" if video else ""
 
-        grouped[date_label].append({
-            "headline": item.headline,
-            "summary": item.summary,
-            "facts": item.facts,
-            "site_name": site.name if site else (item.site_name_extracted or ""),
-            "video_title": video.title if video else "",
-            "youtube_url": youtube_url,
-        })
+        grouped[date_label].append(
+            {
+                "headline": item.headline,
+                "summary": item.summary,
+                "facts": item.facts,
+                "site_name": site.name if site else (item.site_name_extracted or ""),
+                "video_title": video.title if video else "",
+                "youtube_url": youtube_url,
+            }
+        )
 
     # Convert to ordered list of tuples
     items_by_date = list(grouped.items())  # already ordered by query
@@ -155,9 +155,7 @@ async def news_archive(db: Session = Depends(get_db)):
     total_count = (
         db.query(NewsItem)
         .filter(NewsItem.post_text.isnot(None))
-        .filter(
-            (NewsItem.news_category != "speculative") | (NewsItem.news_category.is_(None))
-        )
+        .filter((NewsItem.news_category != "speculative") | (NewsItem.news_category.is_(None)))
         .count()
     )
 

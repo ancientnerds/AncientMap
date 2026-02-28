@@ -10,7 +10,6 @@ Priority: P2
 API: https://ctext.org/tools/api
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector

@@ -10,7 +10,6 @@ Priority: P1
 API: https://core.ac.uk/documentation/api/
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
@@ -79,7 +78,9 @@ class COREConnector(BaseConnector):
                         content_type=ContentType.PAPER,
                         title=result.get("title", "Untitled"),
                         description=result.get("abstract"),
-                        url=result.get("downloadUrl") or result.get("sourceFulltextUrls", [""])[0] if result.get("sourceFulltextUrls") else "",
+                        url=result.get("downloadUrl") or result.get("sourceFulltextUrls", [""])[0]
+                        if result.get("sourceFulltextUrls")
+                        else "",
                         creator=", ".join(result.get("authors", [])),
                         date=result.get("publishedDate"),
                         license=self.license,

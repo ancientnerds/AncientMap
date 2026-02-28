@@ -39,23 +39,86 @@ def _bust_radar_cache():
     except Exception as e:
         logger.debug(f"Radar cache-bust failed (API may be down): {e}")
 
+
 # Step registry: name -> (function_import_path, description, needs_settings)
 STEPS = {
-    "fetch":       ("pipeline.lyra.transcript_fetcher", "fetch_new_videos",            True,  "Fetched {n} new videos"),
-    "retry":       ("pipeline.lyra.transcript_fetcher", "retry_failed_videos",         True,  "Retried {n} failed videos"),
-    "summarize":   ("pipeline.lyra.summarizer",         "summarize_pending_videos",     True,  "Summarized {n} videos"),
-    "match":       ("pipeline.lyra.site_matcher",       "match_sites_for_pending_items", False, "Matched {n} news items to sites"),
-    "posts":       ("pipeline.lyra.tweet_generator",    "generate_pending_posts",       True,  "Generated {n} posts"),
-    "verify":      ("pipeline.lyra.tweet_verifier",     "verify_pending_posts",         True,  "Verified {n} posts"),
-    "rescore":     ("pipeline.lyra.significance_scorer", "rescore_pending_items",        True,  "Re-scored {n} items"),
-    "dedup":       ("pipeline.lyra.tweet_deduplicator", "deduplicate_posts",            True,  "Removed {n} duplicates"),
-    "screenshots": ("pipeline.lyra.screenshot_extractor", "extract_screenshots",        True,  "Extracted {n} screenshots"),
-    "backfill":    ("pipeline.lyra.transcript_fetcher", "backfill_video_descriptions",  True,  "Backfilled {n} video descriptions"),
-    "identify":    ("pipeline.lyra.site_identifier",    "identify_and_enrich_sites",    True,  "Identified/enriched {n} site discoveries"),
+    "fetch": (
+        "pipeline.lyra.transcript_fetcher",
+        "fetch_new_videos",
+        True,
+        "Fetched {n} new videos",
+    ),
+    "retry": (
+        "pipeline.lyra.transcript_fetcher",
+        "retry_failed_videos",
+        True,
+        "Retried {n} failed videos",
+    ),
+    "summarize": (
+        "pipeline.lyra.summarizer",
+        "summarize_pending_videos",
+        True,
+        "Summarized {n} videos",
+    ),
+    "match": (
+        "pipeline.lyra.site_matcher",
+        "match_sites_for_pending_items",
+        False,
+        "Matched {n} news items to sites",
+    ),
+    "posts": (
+        "pipeline.lyra.tweet_generator",
+        "generate_pending_posts",
+        True,
+        "Generated {n} posts",
+    ),
+    "verify": ("pipeline.lyra.tweet_verifier", "verify_pending_posts", True, "Verified {n} posts"),
+    "rescore": (
+        "pipeline.lyra.significance_scorer",
+        "rescore_pending_items",
+        True,
+        "Re-scored {n} items",
+    ),
+    "dedup": (
+        "pipeline.lyra.tweet_deduplicator",
+        "deduplicate_posts",
+        True,
+        "Removed {n} duplicates",
+    ),
+    "screenshots": (
+        "pipeline.lyra.screenshot_extractor",
+        "extract_screenshots",
+        True,
+        "Extracted {n} screenshots",
+    ),
+    "backfill": (
+        "pipeline.lyra.transcript_fetcher",
+        "backfill_video_descriptions",
+        True,
+        "Backfilled {n} video descriptions",
+    ),
+    "identify": (
+        "pipeline.lyra.site_identifier",
+        "identify_and_enrich_sites",
+        True,
+        "Identified/enriched {n} site discoveries",
+    ),
 }
 
 # Ordered step list matching the full pipeline sequence
-STEP_ORDER = ["fetch", "retry", "summarize", "match", "posts", "verify", "rescore", "dedup", "screenshots", "backfill", "identify"]
+STEP_ORDER = [
+    "fetch",
+    "retry",
+    "summarize",
+    "match",
+    "posts",
+    "verify",
+    "rescore",
+    "dedup",
+    "screenshots",
+    "backfill",
+    "identify",
+]
 
 # Steps that run less often than every cycle. Value = run every N cycles.
 # Unlisted steps run every cycle. With CYCLE_INTERVAL=3600, 24 ≈ daily.
@@ -65,7 +128,18 @@ STEP_INTERVALS: dict[str, int] = {
 
 # Named groups for --group CLI flag
 STEP_GROUPS: dict[str, list[str]] = {
-    "news":  ["fetch", "retry", "summarize", "match", "posts", "verify", "rescore", "dedup", "screenshots", "backfill"],
+    "news": [
+        "fetch",
+        "retry",
+        "summarize",
+        "match",
+        "posts",
+        "verify",
+        "rescore",
+        "dedup",
+        "screenshots",
+        "backfill",
+    ],
     "radar": ["identify"],
 }
 
@@ -108,10 +182,12 @@ def _log_cycle_summary(step_results: dict[str, tuple[int, float]], total_elapsed
     # Query DB for current state
     with engine.connect() as conn:
         # Discovery counts
-        rows = conn.execute(text(
-            "SELECT enrichment_status, COUNT(*) FROM user_contributions "
-            "WHERE source='lyra' GROUP BY enrichment_status ORDER BY enrichment_status"
-        )).fetchall()
+        rows = conn.execute(
+            text(
+                "SELECT enrichment_status, COUNT(*) FROM user_contributions "
+                "WHERE source='lyra' GROUP BY enrichment_status ORDER BY enrichment_status"
+            )
+        ).fetchall()
         discovery_counts = {row[0]: row[1] for row in rows}
         total_discoveries = sum(discovery_counts.values())
 
@@ -137,7 +213,15 @@ def _log_cycle_summary(step_results: dict[str, tuple[int, float]], total_elapsed
 
     # Discovery breakdown
     parts = []
-    for status in ["pending", "matched", "enriched", "promoted", "not_a_site", "rejected", "failed"]:
+    for status in [
+        "pending",
+        "matched",
+        "enriched",
+        "promoted",
+        "not_a_site",
+        "rejected",
+        "failed",
+    ]:
         if status in discovery_counts:
             parts.append(f"{discovery_counts[status]} {status}")
     lines.append(f"  Discoveries: {total_discoveries} ({', '.join(parts)})")
@@ -146,13 +230,16 @@ def _log_cycle_summary(step_results: dict[str, tuple[int, float]], total_elapsed
     logger.info("\n".join(lines))
 
 
-def run_pipeline(settings: LyraSettings, only_step: str | None = None, only_group: str | None = None) -> None:
+def run_pipeline(
+    settings: LyraSettings, only_step: str | None = None, only_group: str | None = None
+) -> None:
     """Run one full pipeline cycle, a single step, or a named group of steps."""
     global _cycle_count
 
     # Re-seed channels every cycle so new entries in channels.json are picked up
     # without restarting the container.
     from pipeline.lyra.channels import seed_channels
+
     seed_channels()
 
     cycle_start = time.time()
@@ -198,28 +285,33 @@ def run_pipeline(settings: LyraSettings, only_step: str | None = None, only_grou
 def _run_migrations(engine) -> None:
     """Run all database migrations (schema + data) for the Lyra pipeline."""
     with engine.connect() as conn:
-        conn.execute(text(
-            "ALTER TABLE news_items ADD COLUMN IF NOT EXISTS site_match_tried BOOLEAN DEFAULT FALSE"
-        ))
-        conn.execute(text(
-            "ALTER TABLE news_items ADD COLUMN IF NOT EXISTS significance INTEGER"
-        ))
-        conn.execute(text(
-            "ALTER TABLE news_items ADD COLUMN IF NOT EXISTS news_category VARCHAR(50)"
-        ))
-        conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS idx_news_items_significance ON news_items (significance)"
-        ))
-        conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS idx_news_items_news_category ON news_items (news_category)"
-        ))
-        conn.execute(text(
-            "ALTER TABLE news_items ADD COLUMN IF NOT EXISTS speculative_tag VARCHAR(50)"
-        ))
+        conn.execute(
+            text(
+                "ALTER TABLE news_items ADD COLUMN IF NOT EXISTS site_match_tried BOOLEAN DEFAULT FALSE"
+            )
+        )
+        conn.execute(text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS significance INTEGER"))
+        conn.execute(
+            text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS news_category VARCHAR(50)")
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_news_items_significance ON news_items (significance)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_news_items_news_category ON news_items (news_category)"
+            )
+        )
+        conn.execute(
+            text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS speculative_tag VARCHAR(50)")
+        )
         # One-time backfill: re-rescore videos with untagged speculative items
         # so the updated prompt assigns speculative_tag subcategories.
         # Naturally idempotent — no-op once all speculative items have tags.
-        conn.execute(text("""
+        conn.execute(
+            text("""
             UPDATE news_videos SET status = 'verified'
             WHERE status = 'rescored'
             AND id IN (
@@ -228,14 +320,18 @@ def _run_migrations(engine) -> None:
                 AND speculative_tag IS NULL
                 AND post_text IS NOT NULL
             )
-        """))
+        """)
+        )
         # Backfill any items that have post_text but no significance (e.g. from errors or old code)
-        conn.execute(text("""
+        conn.execute(
+            text("""
             UPDATE news_items SET significance = 3, news_category = 'general'
             WHERE post_text IS NOT NULL AND significance IS NULL
-        """))
+        """)
+        )
         # Create unified_site_names table if it doesn't exist (for alt-name matching)
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE TABLE IF NOT EXISTS unified_site_names (
                 id SERIAL PRIMARY KEY,
                 site_id UUID NOT NULL REFERENCES unified_sites(id) ON DELETE CASCADE,
@@ -244,86 +340,150 @@ def _run_migrations(engine) -> None:
                 language_code VARCHAR(10),
                 name_type VARCHAR(50)
             )
-        """))
-        conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS idx_usn_name_normalized ON unified_site_names (name_normalized)"
-        ))
-        conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS idx_usn_site ON unified_site_names (site_id)"
-        ))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_usn_name_normalized ON unified_site_names (name_normalized)"
+            )
+        )
+        conn.execute(
+            text("CREATE INDEX IF NOT EXISTS idx_usn_site ON unified_site_names (site_id)")
+        )
+        conn.execute(
+            text("""
             DO $$ BEGIN
                 ALTER TABLE unified_site_names
                     ADD CONSTRAINT uq_usn UNIQUE (site_id, name_normalized);
             EXCEPTION WHEN duplicate_table THEN NULL;
             END $$
-        """))
+        """)
+        )
         # Enable pg_trgm for fuzzy matching (used by discoveries API)
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE INDEX IF NOT EXISTS idx_usn_name_trgm
             ON unified_site_names USING gin (name_normalized gin_trgm_ops)
-        """))
+        """)
+        )
         # Pipeline heartbeat table (for LIVE status on frontend)
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE TABLE IF NOT EXISTS pipeline_heartbeats (
                 pipeline_name VARCHAR(50) PRIMARY KEY,
                 last_heartbeat TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
                 status VARCHAR(20) NOT NULL DEFAULT 'ok',
                 last_error TEXT
             )
-        """))
+        """)
+        )
 
         # Lyra auto-discovery migrations: new columns on user_contributions
-        conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS enrichment_status VARCHAR(20) DEFAULT 'pending'"))
-        conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS wikidata_id VARCHAR(20)"))
-        conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS wikipedia_url TEXT"))
-        conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS thumbnail_url TEXT"))
-        conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS period_start INTEGER"))
-        conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS period_end INTEGER"))
-        conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS period_name VARCHAR(100)"))
-        conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS score INTEGER NOT NULL DEFAULT 0"))
-        conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS last_facts_hash VARCHAR(64)"))
-        conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS enrichment_data JSONB"))
-        conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS promoted_site_id UUID REFERENCES unified_sites(id) ON DELETE SET NULL"))
-        conn.execute(text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS corrected_name VARCHAR(500)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_contributions_enrichment ON user_contributions (source, enrichment_status)"))
+        conn.execute(
+            text(
+                "ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS enrichment_status VARCHAR(20) DEFAULT 'pending'"
+            )
+        )
+        conn.execute(
+            text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS wikidata_id VARCHAR(20)")
+        )
+        conn.execute(
+            text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS wikipedia_url TEXT")
+        )
+        conn.execute(
+            text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS thumbnail_url TEXT")
+        )
+        conn.execute(
+            text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS period_start INTEGER")
+        )
+        conn.execute(
+            text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS period_end INTEGER")
+        )
+        conn.execute(
+            text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS period_name VARCHAR(100)")
+        )
+        conn.execute(
+            text(
+                "ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS score INTEGER NOT NULL DEFAULT 0"
+            )
+        )
+        conn.execute(
+            text(
+                "ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS last_facts_hash VARCHAR(64)"
+            )
+        )
+        conn.execute(
+            text("ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS enrichment_data JSONB")
+        )
+        conn.execute(
+            text(
+                "ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS promoted_site_id UUID REFERENCES unified_sites(id) ON DELETE SET NULL"
+            )
+        )
+        conn.execute(
+            text(
+                "ALTER TABLE user_contributions ADD COLUMN IF NOT EXISTS corrected_name VARCHAR(500)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_contributions_enrichment ON user_contributions (source, enrichment_status)"
+            )
+        )
 
         # New columns on news_videos
         conn.execute(text("ALTER TABLE news_videos ADD COLUMN IF NOT EXISTS description TEXT"))
         conn.execute(text("ALTER TABLE news_videos ADD COLUMN IF NOT EXISTS tags JSONB"))
-        conn.execute(text("ALTER TABLE news_videos ADD COLUMN IF NOT EXISTS last_attempted_at TIMESTAMP"))
+        conn.execute(
+            text("ALTER TABLE news_videos ADD COLUMN IF NOT EXISTS last_attempted_at TIMESTAMP")
+        )
 
         # Functional index for site_identifier queries on news_items
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_news_items_site_name_lower ON news_items (lower(site_name_extracted))"))
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_news_items_site_name_lower ON news_items (lower(site_name_extracted))"
+            )
+        )
 
         # Lyra RAG enrichment columns on news_items
-        conn.execute(text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS transcript_segment TEXT"))
+        conn.execute(
+            text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS transcript_segment TEXT")
+        )
         conn.execute(text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS entities JSONB"))
         conn.execute(text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS tags JSONB"))
 
         # Add updated_at column to unified_sites for edit tracking
-        conn.execute(text("ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP"))
+        conn.execute(
+            text("ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP")
+        )
 
         # Rename sources for branding
-        conn.execute(text("""
+        conn.execute(
+            text("""
             UPDATE source_meta SET name = 'ANCIENT NERDS Originals'
             WHERE id = 'ancient_nerds' AND name != 'ANCIENT NERDS Originals'
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             UPDATE source_meta SET name = 'ANCIENT NERDS Radar',
                 category = 'Primary', priority = 1, is_primary = true
             WHERE id = 'lyra'
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             UPDATE source_meta SET name = 'ANCIENT NERDS Community',
                 category = 'Primary', priority = 2, is_primary = true
             WHERE id = 'ancient_nerds_community'
-        """))
+        """)
+        )
 
         # Deduplicate lyra contributions: merge rows with same lower(name)
         # into the one with highest mention_count, delete the rest.
-        conn.execute(text("""
+        conn.execute(
+            text("""
             WITH dupes AS (
                 SELECT lower(name) AS lname,
                        array_agg(id ORDER BY mention_count DESC, created_at) AS ids,
@@ -338,8 +498,10 @@ def _run_migrations(engine) -> None:
             FROM dupes d
             WHERE uc.id = d.ids[1]
               AND lower(uc.name) = d.lname
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             WITH dupes AS (
                 SELECT lower(name) AS lname,
                        array_agg(id ORDER BY mention_count DESC, created_at) AS ids
@@ -352,45 +514,55 @@ def _run_migrations(engine) -> None:
             WHERE id IN (
                 SELECT unnest(ids[2:]) FROM dupes
             )
-        """))
+        """)
+        )
 
         # One-time resets: re-enrich discoveries processed with older prompts/logic.
         # Each reset uses a versioned flag in enrichment_data to run only once.
         # v4: improved prompt (new_site near-impossible) + Wikidata re-search + dedup
-        conn.execute(text("""
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET enrichment_status = 'pending', last_facts_hash = NULL
             WHERE source = 'lyra'
               AND enrichment_status IN ('enriched', 'enriching', 'matched')
               AND promoted_site_id IS NULL
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v4_reset'))
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v4_reset": true}'::jsonb
             WHERE source = 'lyra'
               AND promoted_site_id IS NULL
-        """))
+        """)
+        )
 
         # v5: tiered AI + country validation + tighter pg_trgm threshold
-        conn.execute(text("""
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET enrichment_status = 'pending', last_facts_hash = NULL
             WHERE source = 'lyra'
               AND enrichment_status IN ('enriched', 'enriching', 'matched')
               AND promoted_site_id IS NULL
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v5_reset'))
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v5_reset": true}'::jsonb
             WHERE source = 'lyra'
               AND promoted_site_id IS NULL
-        """))
+        """)
+        )
 
         # v6: re-enrich items missing wikipedia_url (Wikidata enrichment
         # for db_match was added after earlier resets already ran on VPS)
-        conn.execute(text("""
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET enrichment_status = 'pending', last_facts_hash = NULL
             WHERE source = 'lyra'
@@ -398,17 +570,21 @@ def _run_migrations(engine) -> None:
               AND wikipedia_url IS NULL
               AND promoted_site_id IS NULL
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v6_reset'))
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v6_reset": true}'::jsonb
             WHERE source = 'lyra'
               AND promoted_site_id IS NULL
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v6_reset'))
-        """))
+        """)
+        )
 
         # v7: retry — v6 flag was stamped prematurely on first deploy
-        conn.execute(text("""
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET enrichment_status = 'pending', last_facts_hash = NULL
             WHERE source = 'lyra'
@@ -416,52 +592,64 @@ def _run_migrations(engine) -> None:
               AND wikipedia_url IS NULL
               AND promoted_site_id IS NULL
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v7_reset'))
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v7_reset": true}'::jsonb
             WHERE source = 'lyra'
               AND promoted_site_id IS NULL
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v7_reset'))
-        """))
+        """)
+        )
 
         # v8: full rescan — new pipeline (AI identifies, code matches DB/Wikidata)
         # Reset ALL non-promoted items so they run through the rewritten prompt
-        conn.execute(text("""
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET enrichment_status = 'pending', last_facts_hash = NULL
             WHERE source = 'lyra'
               AND promoted_site_id IS NULL
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v8_reset'))
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v8_reset": true}'::jsonb
             WHERE source = 'lyra'
               AND promoted_site_id IS NULL
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v8_reset'))
-        """))
+        """)
+        )
 
         # v9: AI names only — metadata now comes from Wikipedia, not AI guesses
         # Reset ALL non-promoted items for re-identification with simplified prompt
-        conn.execute(text("""
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET enrichment_status = 'pending', last_facts_hash = NULL
             WHERE source = 'lyra'
               AND promoted_site_id IS NULL
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v9_reset'))
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v9_reset": true}'::jsonb
             WHERE source = 'lyra'
               AND promoted_site_id IS NULL
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v9_reset'))
-        """))
+        """)
+        )
 
         # Backfill corrected_name from enrichment_data for already-processed items
         # (including promoted ones that the v9 reset doesn't touch)
-        conn.execute(text("""
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET corrected_name = enrichment_data->'identification'->>'site_name'
             WHERE source = 'lyra'
@@ -469,11 +657,13 @@ def _run_migrations(engine) -> None:
               AND enrichment_data IS NOT NULL
               AND enrichment_data->'identification'->>'site_name' IS NOT NULL
               AND lower(trim(enrichment_data->'identification'->>'site_name')) != lower(trim(name))
-        """))
+        """)
+        )
 
         # Fix period_name: re-bucket from period_start using canonical 500-year buckets
         # Runs once via fix_period_buckets_v1 flag in enrichment_data
-        conn.execute(text("""
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET period_name = CASE
                 WHEN period_start < -4500 THEN '< 4500 BC'
@@ -489,18 +679,22 @@ def _run_migrations(engine) -> None:
             WHERE source = 'lyra'
               AND period_start IS NOT NULL
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'fix_period_buckets_v1'))
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"fix_period_buckets_v1": true}'::jsonb
             WHERE source = 'lyra'
               AND period_start IS NOT NULL
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'fix_period_buckets_v1'))
-        """))
+        """)
+        )
 
         # v10: re-enrich items missing period_start or site_type so Wikipedia
         # enrichment can fill them in (badges show gray/missing without these)
-        conn.execute(text("""
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET enrichment_status = 'pending', last_facts_hash = NULL
             WHERE source = 'lyra'
@@ -508,18 +702,22 @@ def _run_migrations(engine) -> None:
               AND promoted_site_id IS NULL
               AND (period_start IS NULL OR site_type IS NULL)
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v10_reset'))
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v10_reset": true}'::jsonb
             WHERE source = 'lyra'
               AND promoted_site_id IS NULL
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v10_reset'))
-        """))
+        """)
+        )
 
         # v11: retry country_mismatch rejections — comparison now normalizes name variants
         # (e.g. "United States" vs "United States of America" no longer mismatches)
-        conn.execute(text("""
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET enrichment_status = 'pending', last_facts_hash = NULL
             WHERE source = 'lyra'
@@ -527,19 +725,23 @@ def _run_migrations(engine) -> None:
               AND promoted_site_id IS NULL
               AND enrichment_data->'rejected_match'->>'reason' = 'country_mismatch'
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v11_reset'))
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v11_reset": true}'::jsonb
             WHERE source = 'lyra'
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v11_reset'))
               AND enrichment_data->'rejected_match'->>'reason' = 'country_mismatch'
-        """))
+        """)
+        )
 
         # v12: re-enrich items with non-canonical period_name (comma-formatted numbers
         # like "11,000+" weren't parsed by extract_period_from_text, leaving period_start NULL
         # and raw freetext in period_name). The fixed parser can now handle these.
-        conn.execute(text("""
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET enrichment_status = 'pending', last_facts_hash = NULL
             WHERE source = 'lyra'
@@ -552,17 +754,21 @@ def _run_migrations(engine) -> None:
                   '500 - 1000 AD', '1000 - 1500 AD', '1500+ AD', 'Unknown'
               )
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v12_reset'))
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v12_reset": true}'::jsonb
             WHERE source = 'lyra'
               AND promoted_site_id IS NULL
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v12_reset'))
-        """))
+        """)
+        )
 
         # Also fix promoted unified_sites that have period_start but non-canonical period_name
-        conn.execute(text("""
+        conn.execute(
+            text("""
             UPDATE unified_sites
             SET period_name = CASE
                 WHEN period_start < -4500 THEN '< 4500 BC'
@@ -582,10 +788,12 @@ def _run_migrations(engine) -> None:
                   '1500 - 500 BC', '500 BC - 1 AD', '1 - 500 AD',
                   '500 - 1000 AD', '1000 - 1500 AD', '1500+ AD'
               )
-        """))
+        """)
+        )
 
         # Data quality patches (countries, periods, aliases) — see data_patches.py
         from pipeline.lyra.data_patches import run_data_patches
+
         run_data_patches(conn)
 
         # v12b: fix promoted items where period_start is NULL but period_name has
@@ -595,61 +803,90 @@ def _run_migrations(engine) -> None:
         from pipeline.utils.text import categorize_period, extract_period_from_text
 
         canonical_periods = (
-            '< 4500 BC', '4500 - 3000 BC', '3000 - 1500 BC',
-            '1500 - 500 BC', '500 BC - 1 AD', '1 - 500 AD',
-            '500 - 1000 AD', '1000 - 1500 AD', '1500+ AD', 'Unknown',
+            "< 4500 BC",
+            "4500 - 3000 BC",
+            "3000 - 1500 BC",
+            "1500 - 500 BC",
+            "500 BC - 1 AD",
+            "1 - 500 AD",
+            "500 - 1000 AD",
+            "1000 - 1500 AD",
+            "1500+ AD",
+            "Unknown",
         )
 
         # Fix unified_sites
-        rows = conn.execute(text("""
+        rows = conn.execute(
+            text("""
             SELECT id, period_name FROM unified_sites
             WHERE source_id = 'lyra'
               AND period_start IS NULL
               AND period_name IS NOT NULL
-        """)).fetchall()
+        """)
+        ).fetchall()
         for row in rows:
             if row.period_name in canonical_periods:
                 continue
             period_start = extract_period_from_text(row.period_name)
             if period_start is not None:
-                conn.execute(text(
-                    "UPDATE unified_sites SET period_name = :pname, period_start = :pstart WHERE id = :id"
-                ), {"pname": categorize_period(period_start), "pstart": period_start, "id": row.id})
+                conn.execute(
+                    text(
+                        "UPDATE unified_sites SET period_name = :pname, period_start = :pstart WHERE id = :id"
+                    ),
+                    {
+                        "pname": categorize_period(period_start),
+                        "pstart": period_start,
+                        "id": row.id,
+                    },
+                )
 
         # Fix user_contributions (promoted ones the v12 reset skipped)
-        rows = conn.execute(text("""
+        rows = conn.execute(
+            text("""
             SELECT id, period_name FROM user_contributions
             WHERE source = 'lyra'
               AND promoted_site_id IS NOT NULL
               AND period_start IS NULL
               AND period_name IS NOT NULL
-        """)).fetchall()
+        """)
+        ).fetchall()
         for row in rows:
             if row.period_name in canonical_periods:
                 continue
             period_start = extract_period_from_text(row.period_name)
             if period_start is not None:
-                conn.execute(text(
-                    "UPDATE user_contributions SET period_name = :pname, period_start = :pstart WHERE id = :id"
-                ), {"pname": categorize_period(period_start), "pstart": period_start, "id": row.id})
+                conn.execute(
+                    text(
+                        "UPDATE user_contributions SET period_name = :pname, period_start = :pstart WHERE id = :id"
+                    ),
+                    {
+                        "pname": categorize_period(period_start),
+                        "pstart": period_start,
+                        "id": row.id,
+                    },
+                )
 
         # v13: external source matches should create radar cards (not be hidden as "matched").
         # Re-process items that were matched to external sources (not AN Originals, not promoted).
-        conn.execute(text("""
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET enrichment_status = 'pending', last_facts_hash = NULL
             WHERE source = 'lyra'
               AND enrichment_status = 'matched'
               AND promoted_site_id IS NULL
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v13_reset'))
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v13_reset": true}'::jsonb
             WHERE source = 'lyra'
               AND promoted_site_id IS NULL
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v13_reset'))
-        """))
+        """)
+        )
 
         # v14: Fix garbled site names in news_items text fields.
         # Replace site_name_extracted with canonical unified_sites.name
@@ -657,7 +894,8 @@ def _run_migrations(engine) -> None:
         # IMPORTANT: skip when extracted name is a substring of canonical name,
         # otherwise REPLACE expands on every restart (e.g. "Calico" inside
         # "Calico Early Man Site" causes exponential growth).
-        conn.execute(text("""
+        conn.execute(
+            text("""
             UPDATE news_items ni
             SET headline = REPLACE(ni.headline, ni.site_name_extracted, us.name),
                 post_text = REPLACE(ni.post_text, ni.site_name_extracted, us.name),
@@ -670,9 +908,11 @@ def _run_migrations(engine) -> None:
               AND (ni.headline LIKE '%' || ni.site_name_extracted || '%'
                    OR ni.post_text LIKE '%' || ni.site_name_extracted || '%'
                    OR ni.summary LIKE '%' || ni.site_name_extracted || '%')
-        """))
+        """)
+        )
         # Also fix facts (JSONB array of strings): replace garbled name in each element
-        conn.execute(text("""
+        conn.execute(
+            text("""
             UPDATE news_items ni
             SET facts = (
                 SELECT jsonb_agg(
@@ -687,7 +927,8 @@ def _run_migrations(engine) -> None:
               AND us.name NOT LIKE '%' || ni.site_name_extracted || '%'
               AND ni.facts IS NOT NULL
               AND ni.facts::text LIKE '%' || ni.site_name_extracted || '%'
-        """))
+        """)
+        )
 
         # v14b: Repair items corrupted by v14's substring expansion bug.
         # The v14 REPLACE(text, extracted, canonical) runs on every restart.
@@ -698,7 +939,8 @@ def _run_migrations(engine) -> None:
         # with canonical until stable.
         import json as _json
 
-        corrupted = conn.execute(text("""
+        corrupted = conn.execute(
+            text("""
             SELECT ni.id, us.name AS cname, ni.site_name_extracted AS extracted,
                    ni.headline, ni.post_text, ni.summary, ni.facts
             FROM news_items ni
@@ -706,11 +948,12 @@ def _run_migrations(engine) -> None:
             WHERE ni.site_name_extracted IS NOT NULL
               AND ni.site_name_extracted != us.name
               AND us.name LIKE '%' || ni.site_name_extracted || '%'
-        """)).fetchall()
+        """)
+        ).fetchall()
         for row in corrupted:
             idx = row.cname.index(row.extracted)
-            prefix = row.cname[:idx]                         # e.g. "Chaco Culture NHP- "
-            suffix = row.cname[idx + len(row.extracted):]    # e.g. " Early Man Site"
+            prefix = row.cname[:idx]  # e.g. "Chaco Culture NHP- "
+            suffix = row.cname[idx + len(row.extracted) :]  # e.g. " Early Man Site"
             # Build the two bloated patterns to collapse
             patterns = []
             if prefix:
@@ -744,32 +987,36 @@ def _run_migrations(engine) -> None:
                     if k not in _ALLOWED_COLLAPSE_COLS:
                         raise ValueError(f"Unexpected column in collapse migration: {k}")
                 sets = ", ".join(
-                    f"{k} = CAST(:{k} AS jsonb)" if k == "facts" else f"{k} = :{k}"
-                    for k in updates
+                    f"{k} = CAST(:{k} AS jsonb)" if k == "facts" else f"{k} = :{k}" for k in updates
                 )
                 updates["id"] = row.id
                 conn.execute(text(f"UPDATE news_items SET {sets} WHERE id = :id"), updates)
 
         # v15: retry all failed discoveries now that API has rate throttle + retry backoff
-        conn.execute(text("""
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET enrichment_status = 'pending', last_facts_hash = NULL
             WHERE source = 'lyra'
               AND enrichment_status = 'failed'
               AND promoted_site_id IS NULL
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v15_reset'))
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v15_reset": true}'::jsonb
             WHERE source = 'lyra'
               AND enrichment_status IN ('pending', 'failed')
               AND promoted_site_id IS NULL
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v15_reset'))
-        """))
+        """)
+        )
 
         # v16: rescore with recency-aware prompt — old discoveries were scored 7-9
-        conn.execute(text("""
+        conn.execute(
+            text("""
             UPDATE news_videos
             SET status = 'verified'
             WHERE status = 'rescored'
@@ -778,8 +1025,10 @@ def _run_migrations(engine) -> None:
                   WHERE post_text IS NOT NULL AND significance >= 6
               )
               AND (tags IS NULL OR NOT (tags @> '"__rescore_v16"'::jsonb))
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             UPDATE news_videos
             SET tags = COALESCE(tags, '[]'::jsonb) || '["__rescore_v16"]'::jsonb
             WHERE (tags IS NULL OR NOT (tags @> '"__rescore_v16"'::jsonb))
@@ -788,31 +1037,37 @@ def _run_migrations(engine) -> None:
                   SELECT DISTINCT video_id FROM news_items
                   WHERE post_text IS NOT NULL AND significance >= 6
               )
-        """))
+        """)
+        )
 
         # v_research: re-process ALL non-promoted items through the new deep
         # research pipeline (pre-research + multi-source search + gap-fill)
-        conn.execute(text("""
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET enrichment_status = 'pending', last_facts_hash = NULL
             WHERE source = 'lyra'
               AND enrichment_status IN ('enriched', 'failed')
               AND promoted_site_id IS NULL
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v_research_reset'))
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v_research_reset": true}'::jsonb
             WHERE source = 'lyra'
               AND promoted_site_id IS NULL
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v_research_reset'))
-        """))
+        """)
+        )
 
         # v_no_ai_guess: re-enrich AI-path items that got gap-fill/pre-research
         # data applied (now disabled). Clear AI-guessed fields so only verified
         # sources (Wikidata, Wikipedia, GeoNames, DB match) populate them.
         # Only affects items without Wikidata enrichment (AI-only path).
-        conn.execute(text("""
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET enrichment_status = 'pending', last_facts_hash = NULL
             WHERE source = 'lyra'
@@ -820,19 +1075,23 @@ def _run_migrations(engine) -> None:
               AND promoted_site_id IS NULL
               AND wikidata_id IS NULL
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v_no_ai_guess'))
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v_no_ai_guess": true}'::jsonb
             WHERE source = 'lyra'
               AND promoted_site_id IS NULL
               AND wikidata_id IS NULL
               AND (enrichment_data IS NULL OR NOT (enrichment_data ? 'v_no_ai_guess'))
-        """))
+        """)
+        )
 
         # v_an_dedup: re-enrich contributions that share a normalized name
         # with AN Originals sites — the new name-based AN check will match them
-        conn.execute(text("""
+        conn.execute(
+            text("""
             UPDATE user_contributions uc
             SET enrichment_status = 'pending', last_facts_hash = NULL
             FROM unified_sites us
@@ -842,8 +1101,10 @@ def _run_migrations(engine) -> None:
               AND us.source_id = 'ancient_nerds'
               AND us.name_normalized = lower(trim(COALESCE(uc.corrected_name, uc.name)))
               AND (uc.enrichment_data IS NULL OR NOT (uc.enrichment_data ? 'v_an_dedup'))
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             UPDATE user_contributions uc
             SET enrichment_data = COALESCE(enrichment_data, '{}'::jsonb) || '{"v_an_dedup": true}'::jsonb
             FROM unified_sites us
@@ -852,10 +1113,12 @@ def _run_migrations(engine) -> None:
               AND us.source_id = 'ancient_nerds'
               AND us.name_normalized = lower(trim(COALESCE(uc.corrected_name, uc.name)))
               AND (uc.enrichment_data IS NULL OR NOT (uc.enrichment_data ? 'v_an_dedup'))
-        """))
+        """)
+        )
 
         # Wiki images table for self-hosted Wikipedia/Commons images
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE TABLE IF NOT EXISTS wiki_images (
                 id SERIAL PRIMARY KEY,
                 site_id UUID NOT NULL REFERENCES unified_sites(id) ON DELETE CASCADE,
@@ -877,59 +1140,70 @@ def _run_migrations(engine) -> None:
                 height INTEGER,
                 created_at TIMESTAMP DEFAULT NOW()
             )
-        """))
-        conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS idx_wiki_images_site ON wiki_images (site_id)"
-        ))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("CREATE INDEX IF NOT EXISTS idx_wiki_images_site ON wiki_images (site_id)")
+        )
+        conn.execute(
+            text("""
             DO $$ BEGIN
                 ALTER TABLE wiki_images
                     ADD CONSTRAINT uq_wiki_image_site_url UNIQUE (site_id, original_url);
             EXCEPTION WHEN duplicate_table THEN NULL;
             END $$
-        """))
+        """)
+        )
 
         # Source version pins table (per-source snapshot pinning for public globe)
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE TABLE IF NOT EXISTS source_version_pins (
                 source_id VARCHAR(50) PRIMARY KEY,
                 snapshot_date VARCHAR(30),
                 pinned_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                 pinned_by VARCHAR(50) NOT NULL
             )
-        """))
+        """)
+        )
 
         # Fix wikipedia_url / wikidata_id swap: rows where wikipedia_url
         # points to wikidata.org should have the QID in wikidata_id instead
-        conn.execute(text("""
+        conn.execute(
+            text("""
             UPDATE user_contributions
             SET wikidata_id = substring(wikipedia_url from 'Q\\d+'),
                 wikipedia_url = NULL
             WHERE wikipedia_url LIKE '%wikidata.org%'
               AND (wikidata_id IS NULL OR wikidata_id = '')
-        """))
+        """)
+        )
 
         # One-time fix: re-fetch real published_at from YouTube API for videos
         # where datetime.now(UTC) fallback corrupted the date.
         # Done inline with conn (get_session has a shorter statement timeout).
-        _dates_fixed = conn.execute(text("""
+        _dates_fixed = conn.execute(
+            text("""
             SELECT 1 FROM news_videos
             WHERE tags IS NOT NULL AND tags @> '"__dates_fixed"'::jsonb
             LIMIT 1
-        """)).fetchone()
+        """)
+        ).fetchone()
         if not _dates_fixed:
             from datetime import datetime as _dt
 
             from pipeline.lyra.config import LyraSettings as _LS
+
             _api_key = _LS().youtube_api_key
             if _api_key:
                 from pipeline.utils.http import fetch_with_retry as _fetch
-                _all_ids = [r[0] for r in conn.execute(text(
-                    "SELECT id FROM news_videos"
-                )).fetchall()]
+
+                _all_ids = [
+                    r[0] for r in conn.execute(text("SELECT id FROM news_videos")).fetchall()
+                ]
                 _fixed = 0
                 for _i in range(0, len(_all_ids), 50):
-                    _batch = _all_ids[_i:_i + 50]
+                    _batch = _all_ids[_i : _i + 50]
                     try:
                         _resp = _fetch(
                             "https://www.googleapis.com/youtube/v3/videos",
@@ -945,16 +1219,19 @@ def _run_migrations(engine) -> None:
                             _real = _dt.fromisoformat(_pub.replace("Z", "+00:00"))
                         except (ValueError, AttributeError):
                             continue
-                        conn.execute(text(
-                            "UPDATE news_videos SET published_at = :d WHERE id = :id"
-                        ), {"d": _real, "id": _item["id"]})
+                        conn.execute(
+                            text("UPDATE news_videos SET published_at = :d WHERE id = :id"),
+                            {"d": _real, "id": _item["id"]},
+                        )
                         _fixed += 1
                 logger.info(f"Fixed published_at for {_fixed} videos")
             # Stamp sentinel so this doesn't run again
-            conn.execute(text("""
+            conn.execute(
+                text("""
                 UPDATE news_videos SET tags = COALESCE(tags, '[]'::jsonb) || '["__dates_fixed"]'::jsonb
                 WHERE id = (SELECT id FROM news_videos LIMIT 1)
-            """))
+            """)
+            )
 
         # Missing columns on unified_sites that models define but were never migrated
         conn.execute(text("ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS raw_data JSONB"))
@@ -962,68 +1239,94 @@ def _run_migrations(engine) -> None:
 
         # Site hierarchy: parent_site_id for "part of" relationships
         # (e.g. Great Sphinx → Giza Necropolis)
-        conn.execute(text(
-            "ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS parent_site_id UUID REFERENCES unified_sites(id) ON DELETE SET NULL"
-        ))
+        conn.execute(
+            text(
+                "ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS parent_site_id UUID REFERENCES unified_sites(id) ON DELETE SET NULL"
+            )
+        )
 
         # Edit tracking: who last edited the row
-        conn.execute(text(
-            "ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS edited_by VARCHAR(20) NOT NULL DEFAULT 'initial'"
-        ))
+        conn.execute(
+            text(
+                "ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS edited_by VARCHAR(20) NOT NULL DEFAULT 'initial'"
+            )
+        )
 
         # Normalize ALL site_type values through the canonical normalizer.
         # Runs every startup but only UPDATEs rows where the value actually changes.
         from pipeline.normalizers.site_type import normalize_site_type as _norm_type
 
-        _raw_types = conn.execute(text(
-            "SELECT DISTINCT site_type FROM unified_sites WHERE site_type IS NOT NULL"
-        )).fetchall()
+        _raw_types = conn.execute(
+            text("SELECT DISTINCT site_type FROM unified_sites WHERE site_type IS NOT NULL")
+        ).fetchall()
         for (raw,) in _raw_types:
             canonical = _norm_type(raw)
             if canonical != raw:
-                conn.execute(text(
-                    "UPDATE unified_sites SET site_type = :canonical WHERE site_type = :raw"
-                ), {"canonical": canonical, "raw": raw})
+                conn.execute(
+                    text("UPDATE unified_sites SET site_type = :canonical WHERE site_type = :raw"),
+                    {"canonical": canonical, "raw": raw},
+                )
 
-        _raw_types_uc = conn.execute(text(
-            "SELECT DISTINCT site_type FROM user_contributions WHERE site_type IS NOT NULL"
-        )).fetchall()
+        _raw_types_uc = conn.execute(
+            text("SELECT DISTINCT site_type FROM user_contributions WHERE site_type IS NOT NULL")
+        ).fetchall()
         for (raw,) in _raw_types_uc:
             canonical = _norm_type(raw)
             if canonical != raw:
-                conn.execute(text(
-                    "UPDATE user_contributions SET site_type = :canonical WHERE site_type = :raw"
-                ), {"canonical": canonical, "raw": raw})
+                conn.execute(
+                    text(
+                        "UPDATE user_contributions SET site_type = :canonical WHERE site_type = :raw"
+                    ),
+                    {"canonical": canonical, "raw": raw},
+                )
 
         # Pipeline efficiency: per-item verification tracking
         conn.execute(text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP"))
         # Backfill: mark items in already-verified videos so they don't re-run
-        conn.execute(text("""
+        conn.execute(
+            text("""
             UPDATE news_items SET verified_at = NOW()
             WHERE post_text IS NOT NULL
               AND verified_at IS NULL
               AND video_id IN (SELECT id FROM news_videos WHERE status IN ('verified', 'rescored'))
-        """))
+        """)
+        )
 
         # Pipeline efficiency: cap screenshot retry attempts across cycles
-        conn.execute(text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS screenshot_attempts INTEGER DEFAULT 0"))
+        conn.execute(
+            text(
+                "ALTER TABLE news_items ADD COLUMN IF NOT EXISTS screenshot_attempts INTEGER DEFAULT 0"
+            )
+        )
 
         # is_unlimited flag: decoupled from credits balance
-        conn.execute(text("ALTER TABLE discord_users ADD COLUMN IF NOT EXISTS is_unlimited BOOLEAN DEFAULT FALSE"))
+        conn.execute(
+            text(
+                "ALTER TABLE discord_users ADD COLUMN IF NOT EXISTS is_unlimited BOOLEAN DEFAULT FALSE"
+            )
+        )
         # Migrate legacy credits=-1 to the new flag
-        conn.execute(text("UPDATE discord_users SET is_unlimited = TRUE, credits = 0 WHERE credits = -1"))
+        conn.execute(
+            text("UPDATE discord_users SET is_unlimited = TRUE, credits = 0 WHERE credits = -1")
+        )
 
         # Role-based credit system: monthly grants with accumulation
-        conn.execute(text("ALTER TABLE discord_users ADD COLUMN IF NOT EXISTS grant_anchor_date TIMESTAMP"))
-        conn.execute(text("ALTER TABLE credit_grants ADD COLUMN IF NOT EXISTS grant_period VARCHAR(7)"))
-        conn.execute(text("""
+        conn.execute(
+            text("ALTER TABLE discord_users ADD COLUMN IF NOT EXISTS grant_anchor_date TIMESTAMP")
+        )
+        conn.execute(
+            text("ALTER TABLE credit_grants ADD COLUMN IF NOT EXISTS grant_period VARCHAR(7)")
+        )
+        conn.execute(
+            text("""
             DO $$ BEGIN
                 ALTER TABLE credit_grants
                     ADD CONSTRAINT uq_credit_grants_user_reason_period
                     UNIQUE (user_id, reason, grant_period);
             EXCEPTION WHEN duplicate_table THEN NULL;
             END $$
-        """))
+        """)
+        )
 
         # The UNIQUE(user_id, reason, grant_period) constraint does NOT prevent
         # duplicate one-time grants because NULL != NULL in PostgreSQL.
@@ -1031,7 +1334,8 @@ def _run_migrations(engine) -> None:
 
         # Deduplicate one-time grants before adding the unique index.
         # Keep the oldest row (smallest created_at) per (user_id, reason).
-        conn.execute(text("""
+        conn.execute(
+            text("""
             DELETE FROM credit_grants a
             USING credit_grants b
             WHERE a.user_id = b.user_id
@@ -1039,28 +1343,35 @@ def _run_migrations(engine) -> None:
               AND a.grant_period IS NULL
               AND b.grant_period IS NULL
               AND a.created_at > b.created_at
-        """))
+        """)
+        )
 
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE UNIQUE INDEX IF NOT EXISTS uq_credit_grants_one_time
             ON credit_grants (user_id, reason)
             WHERE grant_period IS NULL
-        """))
+        """)
+        )
 
         # Card descriptions column for Forgotten Worlds card game
-        conn.execute(text(
-            "ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS card_description VARCHAR(150)"
-        ))
-        conn.execute(text(
-            "ALTER TABLE card_stats ALTER COLUMN card_description TYPE VARCHAR(200)"
-        ))
+        conn.execute(
+            text("ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS card_description VARCHAR(150)")
+        )
+        conn.execute(text("ALTER TABLE card_stats ALTER COLUMN card_description TYPE VARCHAR(200)"))
 
         # Audit & enrichment tracking columns
-        conn.execute(text("ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS last_audited TIMESTAMP"))
-        conn.execute(text("ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS last_enriched TIMESTAMP"))
+        conn.execute(
+            text("ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS last_audited TIMESTAMP")
+        )
+        conn.execute(
+            text("ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS last_enriched TIMESTAMP")
+        )
 
         # Snapshot source tracking: which database a snapshot belongs to
-        conn.execute(text("ALTER TABLE db_snapshots ADD COLUMN IF NOT EXISTS source_id VARCHAR(50)"))
+        conn.execute(
+            text("ALTER TABLE db_snapshots ADD COLUMN IF NOT EXISTS source_id VARCHAR(50)")
+        )
 
         conn.commit()
 
@@ -1070,7 +1381,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Lyra news pipeline orchestrator")
     parser.add_argument("--once", action="store_true", help="Run a single pipeline cycle and exit")
     parser.add_argument("--step", choices=list(STEPS.keys()), help="Run only a single named step")
-    parser.add_argument("--group", choices=list(STEP_GROUPS.keys()), help="Run only steps in a named group")
+    parser.add_argument(
+        "--group", choices=list(STEP_GROUPS.keys()), help="Run only steps in a named group"
+    )
     args = parser.parse_args()
 
     setup_logging()
@@ -1080,32 +1393,38 @@ def main() -> None:
 
     # Create tables if they don't exist, then run migrations
     from pipeline.database import create_all_tables, engine
+
     create_all_tables()
     _run_migrations(engine)
 
     # Seed channels
     from pipeline.lyra.channels import seed_channels
+
     seed_channels()
 
     # Seed Lyra source for auto-discovered sites
     from pipeline.lyra.site_identifier import seed_lyra_source
+
     seed_lyra_source()
 
     # Seed Community source for user contributions
     from pipeline.database import SourceMeta, get_session
+
     with get_session() as session:
         if not session.get(SourceMeta, "ancient_nerds_community"):
-            session.add(SourceMeta(
-                id="ancient_nerds_community",
-                name="ANCIENT NERDS Community",
-                color="#22c55e",
-                category="Primary",
-                priority=2,
-                enabled=True,
-                enabled_by_default=False,
-                is_primary=True,
-                record_count=0,
-            ))
+            session.add(
+                SourceMeta(
+                    id="ancient_nerds_community",
+                    name="ANCIENT NERDS Community",
+                    color="#22c55e",
+                    category="Primary",
+                    priority=2,
+                    enabled=True,
+                    enabled_by_default=False,
+                    is_primary=True,
+                    record_count=0,
+                )
+            )
             session.commit()
 
     # --once or --step or --group: run and exit
@@ -1123,14 +1442,17 @@ def main() -> None:
 
         # Write heartbeat
         with engine.connect() as conn:
-            conn.execute(text("""
+            conn.execute(
+                text("""
                 INSERT INTO pipeline_heartbeats (pipeline_name, last_heartbeat, status, last_error)
                 VALUES ('lyra', NOW(), :status, :error)
                 ON CONFLICT (pipeline_name) DO UPDATE SET
                     last_heartbeat = NOW(),
                     status = EXCLUDED.status,
                     last_error = EXCLUDED.last_error
-            """), {"status": cycle_status, "error": cycle_error})
+            """),
+                {"status": cycle_status, "error": cycle_error},
+            )
             conn.commit()
         return
 
@@ -1159,14 +1481,17 @@ def main() -> None:
             # Write heartbeat so the API can report LIVE/OFFLINE
             try:
                 with engine.connect() as conn:
-                    conn.execute(text("""
+                    conn.execute(
+                        text("""
                         INSERT INTO pipeline_heartbeats (pipeline_name, last_heartbeat, status, last_error)
                         VALUES ('lyra', NOW(), :status, :error)
                         ON CONFLICT (pipeline_name) DO UPDATE SET
                             last_heartbeat = NOW(),
                             status = EXCLUDED.status,
                             last_error = EXCLUDED.last_error
-                    """), {"status": cycle_status, "error": cycle_error})
+                    """),
+                        {"status": cycle_status, "error": cycle_error},
+                    )
                     conn.commit()
             except Exception:
                 logger.exception("Failed to write heartbeat")

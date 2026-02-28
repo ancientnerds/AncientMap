@@ -10,7 +10,6 @@ Priority: P2
 URL: https://www.trismegistos.org/
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
@@ -56,7 +55,9 @@ class TrismegistosConnector(BaseConnector):
             # and CSV exports
 
             # Note: May need web scraping or CSV processing
-            logger.warning("Trismegistos connector not fully implemented - uses web interface/CSV exports")
+            logger.warning(
+                "Trismegistos connector not fully implemented - uses web interface/CSV exports"
+            )
             return []
 
         except Exception as e:

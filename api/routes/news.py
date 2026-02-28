@@ -169,10 +169,15 @@ async def get_news_feed(
     if cached:
         return cached
 
-    query = db.query(NewsItem).join(NewsVideo).options(
-        joinedload(NewsItem.video).joinedload(NewsVideo.channel),
-        joinedload(NewsItem.site),
-    ).filter(NewsItem.post_text.isnot(None))
+    query = (
+        db.query(NewsItem)
+        .join(NewsVideo)
+        .options(
+            joinedload(NewsItem.video).joinedload(NewsVideo.channel),
+            joinedload(NewsItem.site),
+        )
+        .filter(NewsItem.post_text.isnot(None))
+    )
 
     if channel_id:
         query = query.filter(NewsVideo.channel_id == channel_id)
@@ -225,9 +230,23 @@ async def get_news_feed(
     offset = (page - 1) * page_size
 
     if sort == "significance":
-        items = query.order_by(NewsItem.significance.desc().nullslast(), NewsVideo.published_at.desc(), NewsItem.created_at.desc()).offset(offset).limit(page_size).all()
+        items = (
+            query.order_by(
+                NewsItem.significance.desc().nullslast(),
+                NewsVideo.published_at.desc(),
+                NewsItem.created_at.desc(),
+            )
+            .offset(offset)
+            .limit(page_size)
+            .all()
+        )
     else:
-        items = query.order_by(NewsVideo.published_at.desc(), NewsItem.created_at.desc()).offset(offset).limit(page_size).all()
+        items = (
+            query.order_by(NewsVideo.published_at.desc(), NewsItem.created_at.desc())
+            .offset(offset)
+            .limit(page_size)
+            .all()
+        )
 
     result_items = []
     for item in items:
@@ -238,42 +257,46 @@ async def get_news_feed(
         youtube_url = f"https://www.youtube.com/watch?v={video.id}" if video else None
         youtube_deep_url = None
         if video and item.timestamp_seconds:
-            youtube_deep_url = f"https://www.youtube.com/watch?v={video.id}&t={item.timestamp_seconds}s"
+            youtube_deep_url = (
+                f"https://www.youtube.com/watch?v={video.id}&t={item.timestamp_seconds}s"
+            )
 
-        result_items.append(NewsItemResponse(
-            id=item.id,
-            headline=item.headline,
-            summary=item.summary,
-            post_text=item.post_text,
-            facts=item.facts,
-            timestamp_range=item.timestamp_range,
-            timestamp_seconds=item.timestamp_seconds,
-            screenshot_url=item.screenshot_url,
-            youtube_url=youtube_url,
-            youtube_deep_url=youtube_deep_url,
-            video=NewsVideoInfo(
-                id=video.id,
-                title=video.title,
-                channel_name=channel.name if channel else "Unknown",
-                channel_id=video.channel_id,
-                published_at=video.published_at.isoformat() if video.published_at else "",
-                thumbnail_url=video.thumbnail_url,
-                duration_minutes=video.duration_minutes,
-            ),
-            created_at=item.created_at.isoformat() if item.created_at else "",
-            site_id=str(site.id) if site else None,
-            site_name=site.name if site else None,
-            site_lat=site.lat if site else None,
-            site_lon=site.lon if site else None,
-            site_type=site.site_type if site else None,
-            site_period_name=site.period_name if site else None,
-            site_period_start=site.period_start if site else None,
-            site_country=site.country if site else None,
-            site_name_extracted=item.site_name_extracted if not site else None,
-            significance=item.significance,
-            news_category=item.news_category,
-            speculative_tag=item.speculative_tag,
-        ))
+        result_items.append(
+            NewsItemResponse(
+                id=item.id,
+                headline=item.headline,
+                summary=item.summary,
+                post_text=item.post_text,
+                facts=item.facts,
+                timestamp_range=item.timestamp_range,
+                timestamp_seconds=item.timestamp_seconds,
+                screenshot_url=item.screenshot_url,
+                youtube_url=youtube_url,
+                youtube_deep_url=youtube_deep_url,
+                video=NewsVideoInfo(
+                    id=video.id,
+                    title=video.title,
+                    channel_name=channel.name if channel else "Unknown",
+                    channel_id=video.channel_id,
+                    published_at=video.published_at.isoformat() if video.published_at else "",
+                    thumbnail_url=video.thumbnail_url,
+                    duration_minutes=video.duration_minutes,
+                ),
+                created_at=item.created_at.isoformat() if item.created_at else "",
+                site_id=str(site.id) if site else None,
+                site_name=site.name if site else None,
+                site_lat=site.lat if site else None,
+                site_lon=site.lon if site else None,
+                site_type=site.site_type if site else None,
+                site_period_name=site.period_name if site else None,
+                site_period_start=site.period_start if site else None,
+                site_country=site.country if site else None,
+                site_name_extracted=item.site_name_extracted if not site else None,
+                significance=item.significance,
+                news_category=item.news_category,
+                speculative_tag=item.speculative_tag,
+            )
+        )
 
     response = NewsFeedResponse(
         items=result_items,
@@ -404,9 +427,9 @@ async def get_news_channels(db: Session = Depends(get_db)):
     if cached:
         return cached
 
-    channels = db.query(NewsChannel).filter(
-        NewsChannel.enabled.is_(True)
-    ).order_by(NewsChannel.name).all()
+    channels = (
+        db.query(NewsChannel).filter(NewsChannel.enabled.is_(True)).order_by(NewsChannel.name).all()
+    )
 
     result = [
         NewsChannelResponse(
@@ -426,9 +449,7 @@ async def get_news_articles(
     db: Session = Depends(get_db),
 ):
     """Get weekly digest articles, newest first."""
-    articles = db.query(NewsArticle).order_by(
-        NewsArticle.created_at.desc()
-    ).limit(limit).all()
+    articles = db.query(NewsArticle).order_by(NewsArticle.created_at.desc()).limit(limit).all()
 
     return [
         NewsArticleResponse(
@@ -515,7 +536,9 @@ async def article_citations(article_id: int, db: Session = Depends(get_db)):
         youtube_url = f"https://www.youtube.com/watch?v={video.id}" if video else None
         youtube_deep_url = None
         if video and matched.timestamp_seconds:
-            youtube_deep_url = f"https://www.youtube.com/watch?v={video.id}&t={matched.timestamp_seconds}s"
+            youtube_deep_url = (
+                f"https://www.youtube.com/watch?v={video.id}&t={matched.timestamp_seconds}s"
+            )
 
         result[str(cit_num)] = NewsItemResponse(
             id=matched.id,
@@ -565,13 +588,13 @@ async def get_news_stats(db: Session = Depends(get_db)):
         return cached
 
     try:
-        total_items = db.query(func.count(NewsItem.id)).filter(
-            NewsItem.post_text.isnot(None)
-        ).scalar() or 0
+        total_items = (
+            db.query(func.count(NewsItem.id)).filter(NewsItem.post_text.isnot(None)).scalar() or 0
+        )
         total_videos = db.query(func.count(distinct(NewsItem.video_id))).scalar() or 0
-        total_channels = db.query(func.count(NewsChannel.id)).filter(
-            NewsChannel.enabled.is_(True)
-        ).scalar() or 0
+        total_channels = (
+            db.query(func.count(NewsChannel.id)).filter(NewsChannel.enabled.is_(True)).scalar() or 0
+        )
         total_articles = db.query(func.count(NewsArticle.id)).scalar() or 0
         total_mins = db.query(func.sum(NewsVideo.duration_minutes)).scalar() or 0
         total_duration_hours = round(total_mins / 60, 1) if total_mins else 0
@@ -579,9 +602,12 @@ async def get_news_stats(db: Session = Depends(get_db)):
         latest_str = latest.isoformat() if latest else None
 
         # Rejection breakdown
-        null_items = db.query(
-            NewsItem.news_category, func.count(NewsItem.id)
-        ).filter(NewsItem.post_text.is_(None)).group_by(NewsItem.news_category).all()
+        null_items = (
+            db.query(NewsItem.news_category, func.count(NewsItem.id))
+            .filter(NewsItem.post_text.is_(None))
+            .group_by(NewsItem.news_category)
+            .all()
+        )
 
         breakdown = RejectionBreakdown()
         for category, count in null_items:
@@ -621,7 +647,9 @@ async def get_lyra_status(db: Session = Depends(get_db)):
 
     try:
         row = db.execute(
-            text("SELECT last_heartbeat, status, last_error FROM pipeline_heartbeats WHERE pipeline_name = 'lyra'")
+            text(
+                "SELECT last_heartbeat, status, last_error FROM pipeline_heartbeats WHERE pipeline_name = 'lyra'"
+            )
         ).fetchone()
     except Exception as exc:
         db.rollback()

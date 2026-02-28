@@ -115,7 +115,16 @@ EXPEDITIONS: dict[str, dict] = {
     "sub_saharan": {
         "name": "African Kingdoms",
         "description": "The great civilizations of Sub-Saharan Africa, from Aksum to Great Zimbabwe.",
-        "countries": ["Ethiopia", "Zimbabwe", "Mali", "Nigeria", "Tanzania", "Kenya", "Ghana", "South Africa"],
+        "countries": [
+            "Ethiopia",
+            "Zimbabwe",
+            "Mali",
+            "Nigeria",
+            "Tanzania",
+            "Kenya",
+            "Ghana",
+            "South Africa",
+        ],
         "lore": [
             "Aksum was one of the four great powers of the ancient world alongside Rome.",
             "Great Zimbabwe's stone walls were built without mortar and still stand today.",
@@ -140,8 +149,16 @@ EXPEDITIONS: dict[str, dict] = {
         "name": "Mare Nostrum",
         "description": "Rome's lake — the civilizations that ringed the Mediterranean Sea.",
         "countries": [
-            "Italy", "Tunisia", "Libya", "Spain", "France",
-            "Croatia", "Algeria", "Morocco", "Malta", "Cyprus",
+            "Italy",
+            "Tunisia",
+            "Libya",
+            "Spain",
+            "France",
+            "Croatia",
+            "Algeria",
+            "Morocco",
+            "Malta",
+            "Cyprus",
         ],
         "lore": [
             "Carthage was Rome's greatest rival until its complete destruction in 146 BCE.",
@@ -198,6 +215,7 @@ def _build_npc_deck(
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def get_available_expeditions() -> list[dict]:
     """List all expedition definitions."""
     return [
@@ -213,23 +231,21 @@ def get_available_expeditions() -> list[dict]:
 
 def get_expedition_progress(session: Session, user_id) -> list[dict]:
     """Get user's progress on all expeditions."""
-    rows = (
-        session.query(ExpeditionProgress)
-        .filter(ExpeditionProgress.user_id == user_id)
-        .all()
-    )
+    rows = session.query(ExpeditionProgress).filter(ExpeditionProgress.user_id == user_id).all()
     progress_map = {r.expedition_id: r for r in rows}
 
     result = []
     for eid, exp in EXPEDITIONS.items():
         p = progress_map.get(eid)
-        result.append({
-            "expedition_id": eid,
-            "name": exp["name"],
-            "current_stage": p.current_stage if p else 0,
-            "completed": p.completed if p else False,
-            "started_at": p.created_at.isoformat() if p and p.created_at else None,
-        })
+        result.append(
+            {
+                "expedition_id": eid,
+                "name": exp["name"],
+                "current_stage": p.current_stage if p else 0,
+                "completed": p.completed if p else False,
+                "started_at": p.created_at.isoformat() if p and p.created_at else None,
+            }
+        )
     return result
 
 
@@ -286,27 +302,25 @@ def play_expedition_stage(
 
     # Load player's active deck
     deck_row = (
-        session.query(CardDeck)
-        .filter(CardDeck.user_id == user.id, CardDeck.is_active)
-        .first()
+        session.query(CardDeck).filter(CardDeck.user_id == user.id, CardDeck.is_active).first()
     )
     if not deck_row or len(deck_row.card_ids) < 5:
         raise ValueError("You need an active deck with at least 5 cards")
 
-    player_cards = [
-        session.get(CardStats, uuid.UUID(cid))
-        for cid in deck_row.card_ids
-    ]
+    player_cards = [session.get(CardStats, uuid.UUID(cid)) for cid in deck_row.card_ids]
     player_cards = [c for c in player_cards if c is not None]
 
     npc_deck = _build_npc_deck(session, exp["countries"], stage)
 
     from api.cardgame.battle import resolve_battle
+
     battle_seed = f"expedition_{expedition_id}_{user.id}_{stage}_{datetime.now(UTC).isoformat()}"
     # Pass player's commander if they have one on their active deck
     player_commander = deck_row.commander_empire_id if deck_row else None
     result = resolve_battle(
-        player_cards, npc_deck, battle_seed,
+        player_cards,
+        npc_deck,
+        battle_seed,
         challenger_commander=player_commander,
     )
 
@@ -314,18 +328,26 @@ def play_expedition_stage(
     player_won = result["winner"] == "challenger"
 
     lore = exp["lore"][stage - 1] if stage <= len(exp["lore"]) else ""
-    rewards: dict[str, object] = {"credits": 0, "xp": 0, "pack": None, "pack_cards": None, "empire_card": None}
+    rewards: dict[str, object] = {
+        "credits": 0,
+        "xp": 0,
+        "pack": None,
+        "pack_cards": None,
+        "empire_card": None,
+    }
 
     if player_won:
         progress.current_stage = stage
 
         rewards["credits"] = EXPEDITION_WIN_CREDITS
         user.credits += EXPEDITION_WIN_CREDITS
-        session.add(CreditGrant(
-            user_id=user.id,
-            amount=EXPEDITION_WIN_CREDITS,
-            reason=f"expedition_{expedition_id}_stage_{stage}",
-        ))
+        session.add(
+            CreditGrant(
+                user_id=user.id,
+                amount=EXPEDITION_WIN_CREDITS,
+                reason=f"expedition_{expedition_id}_stage_{stage}",
+            )
+        )
 
         rewards["xp"] = 15
         ps = session.get(CardPlayerStats, user.id)
@@ -341,13 +363,16 @@ def play_expedition_stage(
 
             # Award completion pack (give credits then open so audit trail is clean)
             from api.cardgame.packs import open_pack
+
             pack_cost = PACK_PRICES[EXPEDITION_COMPLETE_PACK]["cost"]
             user.credits += pack_cost
-            session.add(CreditGrant(
-                user_id=user.id,
-                amount=pack_cost,
-                reason=f"expedition_{expedition_id}_completion_pack",
-            ))
+            session.add(
+                CreditGrant(
+                    user_id=user.id,
+                    amount=pack_cost,
+                    reason=f"expedition_{expedition_id}_completion_pack",
+                )
+            )
             rewards["pack_cards"] = open_pack(session, user, EXPEDITION_COMPLETE_PACK)
 
             # Award empire card if this expedition has one
@@ -362,12 +387,15 @@ def play_expedition_stage(
                     .first()
                 )
                 if not existing:
-                    session.add(EmpireCollection(
-                        user_id=user.id,
-                        empire_id=empire_id,
-                        acquired_via=f"expedition_{expedition_id}",
-                    ))
+                    session.add(
+                        EmpireCollection(
+                            user_id=user.id,
+                            empire_id=empire_id,
+                            acquired_via=f"expedition_{expedition_id}",
+                        )
+                    )
                 from api.cardgame.constants import EMPIRE_DISPLAY_NAMES
+
                 rewards["empire_card"] = {
                     "empire_id": empire_id,
                     "name": EMPIRE_DISPLAY_NAMES.get(empire_id, empire_id),

@@ -15,7 +15,6 @@ The project data is still available via bulk downloads and SPARQL.
 See: https://edh.ub.uni-heidelberg.de/data
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
@@ -107,7 +106,9 @@ class EDHConnector(BaseConnector):
                         url=f"https://edh-www.adw.uni-heidelberg.de/edh/inschrift/{inscription.get('id', '')}",
                         place_name=inscription.get("findspot_modern"),
                         lat=float(inscription["latitude"]) if inscription.get("latitude") else None,
-                        lon=float(inscription["longitude"]) if inscription.get("longitude") else None,
+                        lon=float(inscription["longitude"])
+                        if inscription.get("longitude")
+                        else None,
                         license=self.license,
                         attribution=self.attribution,
                         raw_data=inscription,
@@ -128,7 +129,9 @@ class EDHConnector(BaseConnector):
             if item_id.startswith("edh:"):
                 item_id = item_id[4:]
 
-            response = await self.rest.get(f"/data/api/inscriptions/{item_id}", params={"format": "json"})
+            response = await self.rest.get(
+                f"/data/api/inscriptions/{item_id}", params={"format": "json"}
+            )
 
             if not response:
                 return None

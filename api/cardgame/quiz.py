@@ -30,6 +30,7 @@ class QuizAlreadySubmittedError(Exception):
 # Question generators
 # ---------------------------------------------------------------------------
 
+
 def _generate_age_comparison(session: Session, rng: random.Random) -> dict | None:
     """Which is older: A or B?"""
     rows = (
@@ -99,8 +100,8 @@ def _generate_category_question(session: Session, rng: random.Random) -> dict | 
     site = card.site
 
     all_groups = [
-        r[0] for r in
-        session.query(CardStats.category_group)
+        r[0]
+        for r in session.query(CardStats.category_group)
         .filter(CardStats.category_group != card.category_group)
         .distinct()
         .all()
@@ -201,6 +202,7 @@ _GENERATORS = [
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def generate_quiz(session: Session, user_id) -> dict:
     """Generate a quiz session with 5 questions.
 
@@ -235,8 +237,7 @@ def generate_quiz(session: Session, user_id) -> dict:
     quiz = QuizSession(
         user_id=user_id,
         questions=[
-            {k: v for k, v in q.items() if k not in ("correct", "explanation")}
-            for q in questions
+            {k: v for k, v in q.items() if k not in ("correct", "explanation")} for q in questions
         ],
         answers_key=[q["correct"] for q in questions],
         explanations=[q.get("explanation", "") for q in questions],
@@ -285,13 +286,15 @@ def submit_quiz_answers(
         is_correct = answer == quiz.answers_key[i]
         if is_correct:
             correct += 1
-        results.append({
-            "index": i,
-            "your_answer": answer,
-            "correct_answer": quiz.answers_key[i],
-            "is_correct": is_correct,
-            "explanation": quiz.explanations[i] if i < len(quiz.explanations) else "",
-        })
+        results.append(
+            {
+                "index": i,
+                "your_answer": answer,
+                "correct_answer": quiz.answers_key[i],
+                "is_correct": is_correct,
+                "explanation": quiz.explanations[i] if i < len(quiz.explanations) else "",
+            }
+        )
 
     total = len(quiz.answers_key)
     quiz.score = correct
@@ -303,11 +306,13 @@ def submit_quiz_answers(
 
     if credits_earned > 0:
         user.credits += credits_earned
-        session.add(CreditGrant(
-            user_id=user.id,
-            amount=credits_earned,
-            reason="quiz_reward",
-        ))
+        session.add(
+            CreditGrant(
+                user_id=user.id,
+                amount=credits_earned,
+                reason="quiz_reward",
+            )
+        )
 
     ps = session.get(CardPlayerStats, user.id)
     if not ps:
@@ -322,18 +327,20 @@ def submit_quiz_answers(
         from api.cardgame.packs import _card_to_dict, _pick_card
 
         owned = {
-            r[0] for r in
-            session.query(CardCollection.site_id)
+            r[0]
+            for r in session.query(CardCollection.site_id)
             .filter(CardCollection.user_id == user.id)
             .all()
         }
         card = _pick_card(session, QUIZ_PERFECT_BONUS_TIER, owned)
         if card:
-            session.add(CardCollection(
-                user_id=user.id,
-                site_id=card.site_id,
-                acquired_via="quiz_perfect",
-            ))
+            session.add(
+                CardCollection(
+                    user_id=user.id,
+                    site_id=card.site_id,
+                    acquired_via="quiz_perfect",
+                )
+            )
             ps.total_cards += 1
             bonus_card = _card_to_dict(session, card)
 

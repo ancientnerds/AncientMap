@@ -91,6 +91,9 @@ jobs:
       - name: Lint with ruff
         run: ruff check api/ pipeline/
 
+      - name: Check formatting with ruff
+        run: ruff format --check api/ pipeline/
+
       - name: Verify shared data is up to date
         run: python pipeline/generate_shared_data.py --verify
 

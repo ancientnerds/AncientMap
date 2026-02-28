@@ -14,7 +14,6 @@ Commercial use and redistribution are NOT permitted without explicit permission.
 This connector should only be used for reference links, not data copying.
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
@@ -71,7 +70,9 @@ class PackardConnector(BaseConnector):
                 item_id = item_id[8:]
 
             # PHI uses region/book/inscription identifiers
-            logger.warning("Packard Humanities Institute connector item retrieval not fully implemented")
+            logger.warning(
+                "Packard Humanities Institute connector item retrieval not fully implemented"
+            )
             return None
 
         except Exception as e:

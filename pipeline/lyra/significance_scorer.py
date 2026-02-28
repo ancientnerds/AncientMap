@@ -60,9 +60,13 @@ def rescore_pending_items(settings: LyraSettings) -> int:
 
     # Find verified videos that haven't been rescored yet
     with get_session() as session:
-        videos = session.query(NewsVideo).filter(
-            NewsVideo.status == "verified",
-        ).all()
+        videos = (
+            session.query(NewsVideo)
+            .filter(
+                NewsVideo.status == "verified",
+            )
+            .all()
+        )
         session.expunge_all()
 
     if not videos:
@@ -74,10 +78,14 @@ def rescore_pending_items(settings: LyraSettings) -> int:
 
     for video in videos:
         with get_session() as session:
-            items = session.query(NewsItem).filter(
-                NewsItem.video_id == video.id,
-                NewsItem.post_text.isnot(None),
-            ).all()
+            items = (
+                session.query(NewsItem)
+                .filter(
+                    NewsItem.video_id == video.id,
+                    NewsItem.post_text.isnot(None),
+                )
+                .all()
+            )
 
             if not items:
                 # No items to rescore — mark video as rescored
@@ -88,6 +96,7 @@ def rescore_pending_items(settings: LyraSettings) -> int:
 
             # Load channel name (video is detached, so query directly)
             from pipeline.database import NewsChannel
+
             ch = session.get(NewsChannel, video.channel_id)
             channel_name = ch.name if ch else video.channel_id
 
@@ -134,7 +143,9 @@ def rescore_pending_items(settings: LyraSettings) -> int:
                 if skipped == 0:
                     v.status = "rescored"
                 else:
-                    logger.warning(f"Video {video.id}: {skipped} items skipped, keeping 'verified' for retry")
+                    logger.warning(
+                        f"Video {video.id}: {skipped} items skipped, keeping 'verified' for retry"
+                    )
 
             total_rescored += rescored_count
 
@@ -169,11 +180,13 @@ def _rescore_item(
             model=settings.model_rescore,
             max_tokens=settings.max_tokens,
             temperature=0.0,
-            system=[{
-                "type": "text",
-                "text": system_prompt,
-                "cache_control": {"type": "ephemeral"},
-            }],
+            system=[
+                {
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
             messages=[{"role": "user", "content": user_content}],
             output_config={
                 "format": {

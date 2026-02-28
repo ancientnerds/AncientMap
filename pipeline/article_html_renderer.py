@@ -116,17 +116,17 @@ _SHARED_CSS = """
 
 def _first_image_url(content_md: str) -> str | None:
     """Extract the first markdown image URL from article content."""
-    m = re.search(r'!\[.*?\]\((\S+?)\)', content_md)
+    m = re.search(r"!\[.*?\]\((\S+?)\)", content_md)
     return m.group(1) if m else None
 
 
 def slugify(title: str) -> str:
     """Generate URL-safe slug from article title."""
     slug = title.lower().strip()
-    slug = re.sub(r'[^\w\s-]', '', slug)
-    slug = re.sub(r'[\s_]+', '-', slug)
-    slug = re.sub(r'-+', '-', slug)
-    slug = re.sub(r'^-|-$', '', slug)
+    slug = re.sub(r"[^\w\s-]", "", slug)
+    slug = re.sub(r"[\s_]+", "-", slug)
+    slug = re.sub(r"-+", "-", slug)
+    slug = re.sub(r"^-|-$", "", slug)
     return slug[:120]
 
 
@@ -165,7 +165,7 @@ def render_article_html(
     slug: str,
 ) -> str:
     """Render a single article as a full SEO-optimized HTML page."""
-    md = markdown.Markdown(extensions=['extra', 'smarty', 'toc'])
+    md = markdown.Markdown(extensions=["extra", "smarty", "toc"])
     body_html = md.convert(content_md)
 
     meta_desc = (summary or title)[:160]
@@ -233,8 +233,8 @@ def render_article_html(
         <article>
             <h1>{e_title}</h1>
             <div class="meta">
-                {f'<time datetime="{pub_date}">{pub_display}</time>' if pub_date else ''}
-                {f' &middot; Week of {date_range}' if date_range else ''}
+                {f'<time datetime="{pub_date}">{pub_display}</time>' if pub_date else ""}
+                {f" &middot; Week of {date_range}" if date_range else ""}
                 &middot; <a href="/articles/">All Articles</a>
                 &middot; <a href="/articles/{slug}/medium" style="color:#c02023">Copy for Medium</a>
                 &middot; <button onclick="copyLink()" class="copy-link-btn" title="Copy shareable link">Copy Link</button>
@@ -375,7 +375,11 @@ def render_news_archive_html(
                 facts_html = f'<ul class="facts">{facts_li}</ul>'
 
             site_tag = f'<span class="site-tag">{escape(site_name)}</span>' if site_name else ""
-            source = f'<a href="{escape(youtube_url)}" class="source-link" rel="noopener">From: {video_title}</a>' if youtube_url else ""
+            source = (
+                f'<a href="{escape(youtube_url)}" class="source-link" rel="noopener">From: {video_title}</a>'
+                if youtube_url
+                else ""
+            )
 
             item_cards.append(f"""
             <div class="news-item">
@@ -393,7 +397,9 @@ def render_news_archive_html(
             {"".join(item_cards)}
         </div>""")
 
-    body_html = "\n".join(groups_html) if groups_html else "<p>No news items yet. Check back soon!</p>"
+    body_html = (
+        "\n".join(groups_html) if groups_html else "<p>No news items yet. Check back soon!</p>"
+    )
 
     canonical = f"{BASE_URL}/news-archive/"
     schema_items = ", ".join(item_schemas[:50])  # Limit schema size
@@ -458,7 +464,7 @@ def render_medium_copy_html(
     slug: str,
 ) -> str:
     """Render a clean, light-themed page for copying into Medium's editor."""
-    md = markdown.Markdown(extensions=['extra', 'smarty'])
+    md = markdown.Markdown(extensions=["extra", "smarty"])
     body_html = md.convert(content_md)
     canonical = f"{BASE_URL}/articles/{slug}"
     e_title = escape(title)
@@ -576,4 +582,5 @@ def render_404_html(what: str = "Page") -> str:
 def _json_str(s: str) -> str:
     """Escape a string for safe JSON embedding inside a <script> tag."""
     import json
+
     return json.dumps(s, ensure_ascii=False)

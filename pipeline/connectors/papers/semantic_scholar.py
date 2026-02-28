@@ -11,7 +11,6 @@ License: ODC-BY
 API Docs: https://api.semanticscholar.org/api-docs/graph
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector

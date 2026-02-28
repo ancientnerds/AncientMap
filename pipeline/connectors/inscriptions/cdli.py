@@ -13,7 +13,6 @@ Note: CDLI has migrated to cdli.earth. The old SPARQL endpoint at
 cdli.ucla.edu/sparql no longer exists. No public search API is available.
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector

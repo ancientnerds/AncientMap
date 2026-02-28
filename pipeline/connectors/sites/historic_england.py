@@ -10,7 +10,6 @@ Priority: P1
 API: https://historicengland.org.uk/listing/the-list/data-downloads/
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
@@ -101,11 +100,7 @@ class HistoricEnglandConnector(BaseConnector):
         try:
             results = await self.arcgis.query_features(
                 layer_url=f"{self.base_url}/Listed_Buildings/FeatureServer/0",
-                geometry={
-                    "x": lon,
-                    "y": lat,
-                    "spatialReference": {"wkid": 4326}
-                },
+                geometry={"x": lon, "y": lat, "spatialReference": {"wkid": 4326}},
                 geometry_type="esriGeometryPoint",
                 spatial_rel="esriSpatialRelIntersects",
                 distance=radius_km * 1000,  # Convert to meters

@@ -62,6 +62,7 @@ def extract_article_from_wikipedia_url(url: str) -> str | None:
     m = _WIKI_ARTICLE_RE.search(url)
     if m:
         from urllib.parse import unquote
+
         return unquote(m.group(1)).replace("_", " ")
     return None
 
@@ -84,9 +85,7 @@ class WikimediaResolver:
             self._owns_client = True
         return self._http_client
 
-    async def resolve(
-        self, site_name: str, source_url: str | None = None
-    ) -> ResolvedEntity | None:
+    async def resolve(self, site_name: str, source_url: str | None = None) -> ResolvedEntity | None:
         """
         Resolve a site name (and optional source URL) to a Wikidata entity.
 
@@ -180,9 +179,7 @@ class WikimediaResolver:
             "format": "json",
         }
         try:
-            resp = await self.http_client.get(
-                _WIKIPEDIA_API, params=params, headers=_HEADERS
-            )
+            resp = await self.http_client.get(_WIKIPEDIA_API, params=params, headers=_HEADERS)
             if resp.status_code != 200:
                 return None
             data = resp.json()
@@ -202,9 +199,7 @@ class WikimediaResolver:
             "format": "json",
         }
         try:
-            resp = await self.http_client.get(
-                _WIKIPEDIA_API, params=params, headers=_HEADERS
-            )
+            resp = await self.http_client.get(_WIKIPEDIA_API, params=params, headers=_HEADERS)
             if resp.status_code != 200:
                 return None
             pages = resp.json().get("query", {}).get("pages", {})
@@ -223,9 +218,7 @@ class WikimediaResolver:
             "format": "json",
         }
         try:
-            resp = await self.http_client.get(
-                _WIKIDATA_API, params=params, headers=_HEADERS
-            )
+            resp = await self.http_client.get(_WIKIDATA_API, params=params, headers=_HEADERS)
             if resp.status_code != 200:
                 return None
             entity = resp.json().get("entities", {}).get(qid, {})

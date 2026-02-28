@@ -49,47 +49,47 @@ class GeoNamesIngester(BaseIngester):
     # Archaeological feature codes to include
     ARCHAEOLOGICAL_FEATURE_CODES: set[str] = {
         # Historic/Archaeological
-        "ANS",    # ancient site
-        "RUIN",   # ruin(s)
+        "ANS",  # ancient site
+        "RUIN",  # ruin(s)
         "RUINS",  # ruins
-        "CSTL",   # castle
-        "MNMT",   # monument
-        "TMPL",   # temple(s)
-        "PYR",    # pyramid
-        "PYRS",   # pyramids
-        "AMTH",   # amphitheater
-        "HSTS",   # historic site
-        "PAL",    # palace
-        "TOWR",   # tower
-        "FRT",    # fort
-        "FRST",   # fortress
-        "WALL",   # wall
-        "GRVE",   # grave
-        "CMTY",   # cemetery
-        "TMB",    # tomb(s)
-        "BTYD",   # boatyard (ancient harbors)
-        "MOLE",   # mole (ancient harbor structure)
-        "PIER",   # pier
-        "AQDC",   # aqueduct
-        "BDG",    # bridge
-        "RDGE",   # road/ridge (ancient roads)
-        "CH",     # church (historic)
-        "MSQE",   # mosque (historic)
-        "SHRN",   # shrine
-        "CVNT",   # convent
-        "MSTY",   # monastery
-        "ABB",    # abbey
-        "CTHDRL", # cathedral
-        "SQR",    # square (historic plaza)
-        "THTR",   # theater
-        "STDM",   # stadium
-        "BTHS",   # baths
-        "LIBR",   # library (ancient)
-        "MUS",    # museum (site museums)
-        "ZOO",    # zoo (ancient menageries)
-        "CAVE",   # cave(s) - can be archaeological
-        "CMPL",   # complex (archaeological complex)
-        "OBPT",   # observation point (ancient)
+        "CSTL",  # castle
+        "MNMT",  # monument
+        "TMPL",  # temple(s)
+        "PYR",  # pyramid
+        "PYRS",  # pyramids
+        "AMTH",  # amphitheater
+        "HSTS",  # historic site
+        "PAL",  # palace
+        "TOWR",  # tower
+        "FRT",  # fort
+        "FRST",  # fortress
+        "WALL",  # wall
+        "GRVE",  # grave
+        "CMTY",  # cemetery
+        "TMB",  # tomb(s)
+        "BTYD",  # boatyard (ancient harbors)
+        "MOLE",  # mole (ancient harbor structure)
+        "PIER",  # pier
+        "AQDC",  # aqueduct
+        "BDG",  # bridge
+        "RDGE",  # road/ridge (ancient roads)
+        "CH",  # church (historic)
+        "MSQE",  # mosque (historic)
+        "SHRN",  # shrine
+        "CVNT",  # convent
+        "MSTY",  # monastery
+        "ABB",  # abbey
+        "CTHDRL",  # cathedral
+        "SQR",  # square (historic plaza)
+        "THTR",  # theater
+        "STDM",  # stadium
+        "BTHS",  # baths
+        "LIBR",  # library (ancient)
+        "MUS",  # museum (site museums)
+        "ZOO",  # zoo (ancient menageries)
+        "CAVE",  # cave(s) - can be archaeological
+        "CMPL",  # complex (archaeological complex)
+        "OBPT",  # observation point (ancient)
     }
 
     # Feature code to site type mapping
@@ -159,7 +159,7 @@ class GeoNamesIngester(BaseIngester):
 
         # Extract the ZIP file
         logger.info(f"Extracting {zip_path}...")
-        with zipfile.ZipFile(zip_path, 'r') as zf:
+        with zipfile.ZipFile(zip_path, "r") as zf:
             # The main file is allCountries.txt
             zf.extract("allCountries.txt", self.raw_data_dir)
             extracted_path = self.raw_data_dir / "allCountries.txt"
@@ -209,7 +209,9 @@ class GeoNamesIngester(BaseIngester):
             for line in f:
                 count += 1
                 if count % 1000000 == 0:
-                    logger.info(f"Processed {count:,} lines, found {matched:,} archaeological sites")
+                    logger.info(
+                        f"Processed {count:,} lines, found {matched:,} archaeological sites"
+                    )
 
                 # Parse TSV line
                 parts = line.strip().split("\t")
@@ -257,7 +259,9 @@ class GeoNamesIngester(BaseIngester):
             site_type = self.TYPE_MAPPING.get(feature_code, "other")
 
             # Build alternative names list
-            alternative_names = [n.strip() for n in alt_names if n.strip() and n.strip() != name][:10]
+            alternative_names = [n.strip() for n in alt_names if n.strip() and n.strip() != name][
+                :10
+            ]
 
             # Source URL
             source_url = f"https://www.geonames.org/{geoname_id}"

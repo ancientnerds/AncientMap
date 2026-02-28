@@ -99,7 +99,7 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
           <span className="news-feed-live-text">{online ? 'LIVE' : 'OFFLINE'}</span>
         </div>
         <div className="news-feed-actions">
-          <button className="news-feed-btn" onClick={onClose} title="Close">
+          <button className="news-feed-btn" onClick={onClose} title="Close" aria-label="Close news feed">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18"></line>
               <line x1="6" y1="6" x2="18" y2="18"></line>

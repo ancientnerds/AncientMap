@@ -10,7 +10,6 @@ Priority: P3
 URL: https://intarch.ac.uk/
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector

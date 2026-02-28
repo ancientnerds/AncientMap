@@ -45,6 +45,7 @@ DB_UPDATE_BATCH_SIZE = 100
 # GeoRSS Parsing
 # =============================================================================
 
+
 def fetch_georss(lat: float, lon: float) -> str | None:
     """
     Fetch GeoRSS feed for a location.
@@ -106,73 +107,73 @@ def parse_georss(xml_content: str) -> list[dict]:
 
         # GeoRSS/RSS namespaces
         namespaces = {
-            'georss': 'http://www.georss.org/georss',
-            'media': 'http://search.yahoo.com/mrss/',
+            "georss": "http://www.georss.org/georss",
+            "media": "http://search.yahoo.com/mrss/",
         }
 
         # Find all items
-        for item in root.findall('.//item'):
+        for item in root.findall(".//item"):
             site = {}
 
             # Get title
-            title_elem = item.find('title')
+            title_elem = item.find("title")
             if title_elem is not None:
-                site['name'] = title_elem.text
+                site["name"] = title_elem.text
 
             # Get link (to extract site ID)
-            link_elem = item.find('link')
+            link_elem = item.find("link")
             if link_elem is not None:
-                site['link'] = link_elem.text
+                site["link"] = link_elem.text
                 # Extract site ID from URL
-                match = re.search(r'sid=(\d+)', link_elem.text or '')
+                match = re.search(r"sid=(\d+)", link_elem.text or "")
                 if match:
-                    site['id'] = match.group(1)
+                    site["id"] = match.group(1)
 
             # Get coordinates
-            point_elem = item.find('.//georss:point', namespaces)
+            point_elem = item.find(".//georss:point", namespaces)
             if point_elem is None:
                 # Try without namespace
                 for child in item.iter():
-                    if child.tag.endswith('point'):
+                    if child.tag.endswith("point"):
                         point_elem = child
                         break
 
             if point_elem is not None and point_elem.text:
                 try:
                     lat, lon = point_elem.text.strip().split()
-                    site['lat'] = float(lat)
-                    site['lon'] = float(lon)
+                    site["lat"] = float(lat)
+                    site["lon"] = float(lon)
                 except (ValueError, IndexError):
                     pass
 
             # Get image/thumbnail from various sources
             # Try media:thumbnail
-            thumb_elem = item.find('.//media:thumbnail', namespaces)
+            thumb_elem = item.find(".//media:thumbnail", namespaces)
             if thumb_elem is not None:
-                site['thumbnail'] = thumb_elem.get('url')
+                site["thumbnail"] = thumb_elem.get("url")
 
             # Try media:content
-            if 'thumbnail' not in site:
-                media_elem = item.find('.//media:content', namespaces)
+            if "thumbnail" not in site:
+                media_elem = item.find(".//media:content", namespaces)
                 if media_elem is not None:
-                    site['thumbnail'] = media_elem.get('url')
+                    site["thumbnail"] = media_elem.get("url")
 
             # Try enclosure (common RSS image element)
-            if 'thumbnail' not in site:
-                enclosure = item.find('enclosure')
-                if enclosure is not None and enclosure.get('type', '').startswith('image'):
-                    site['thumbnail'] = enclosure.get('url')
+            if "thumbnail" not in site:
+                enclosure = item.find("enclosure")
+                if enclosure is not None and enclosure.get("type", "").startswith("image"):
+                    site["thumbnail"] = enclosure.get("url")
 
             # Try description for image URLs
-            if 'thumbnail' not in site:
-                desc_elem = item.find('description')
+            if "thumbnail" not in site:
+                desc_elem = item.find("description")
                 if desc_elem is not None and desc_elem.text:
                     # Look for img src in HTML description
                     img_match = re.search(r'<img[^>]+src="([^"]+)"', desc_elem.text)
                     if img_match:
-                        site['thumbnail'] = img_match.group(1)
+                        site["thumbnail"] = img_match.group(1)
 
-            if site.get('id') or (site.get('lat') and site.get('lon')):
+            if site.get("id") or (site.get("lat") and site.get("lon")):
                 sites.append(site)
 
     except ET.ParseError as e:
@@ -184,6 +185,7 @@ def parse_georss(xml_content: str) -> list[dict]:
 # =============================================================================
 # Database Operations
 # =============================================================================
+
 
 def get_megalithic_sites_without_images(session: Session, limit: int = None) -> list[tuple]:
     """Get Megalithic Portal sites without thumbnail_url."""
@@ -204,9 +206,7 @@ def update_site_thumbnail(session: Session, site_id: str, thumbnail_url: str) ->
     """Update thumbnail_url for a site."""
     try:
         session.execute(
-            update(UnifiedSite)
-            .where(UnifiedSite.id == site_id)
-            .values(thumbnail_url=thumbnail_url)
+            update(UnifiedSite).where(UnifiedSite.id == site_id).values(thumbnail_url=thumbnail_url)
         )
         return True
     except Exception as e:
@@ -217,6 +217,7 @@ def update_site_thumbnail(session: Session, site_id: str, thumbnail_url: str) ->
 # =============================================================================
 # Main Processing
 # =============================================================================
+
 
 def fetch_images_for_megalithic_sites(
     session: Session,
@@ -259,21 +260,21 @@ def fetch_images_for_megalithic_sites(
         best_match = None
         for gs in georss_sites:
             # Match by Megalithic Portal ID
-            if gs.get('id') == source_record_id:
+            if gs.get("id") == source_record_id:
                 best_match = gs
                 break
 
             # Match by proximity (within ~0.001 degrees = ~100m)
-            if gs.get('lat') and gs.get('lon'):
-                dist = ((gs['lat'] - lat)**2 + (gs['lon'] - lon)**2)**0.5
+            if gs.get("lat") and gs.get("lon"):
+                dist = ((gs["lat"] - lat) ** 2 + (gs["lon"] - lon) ** 2) ** 0.5
                 if dist < 0.001:
-                    if not best_match or dist < best_match.get('_dist', float('inf')):
-                        gs['_dist'] = dist
+                    if not best_match or dist < best_match.get("_dist", float("inf")):
+                        gs["_dist"] = dist
                         best_match = gs
 
         # Update if we found an image
-        if best_match and best_match.get('thumbnail'):
-            if update_site_thumbnail(session, str(site_id), best_match['thumbnail']):
+        if best_match and best_match.get("thumbnail"):
+            if update_site_thumbnail(session, str(site_id), best_match["thumbnail"]):
                 updated += 1
 
                 if updated % DB_UPDATE_BATCH_SIZE == 0:
@@ -289,7 +290,8 @@ def fetch_images_for_megalithic_sites(
 
 def get_stats(session: Session) -> dict:
     """Get image statistics for Megalithic Portal sites."""
-    result = session.execute(text("""
+    result = session.execute(
+        text("""
         SELECT
             COUNT(*) as total,
             COUNT(thumbnail_url) as with_image,
@@ -297,7 +299,8 @@ def get_stats(session: Session) -> dict:
             ROUND(100.0 * COUNT(thumbnail_url) / NULLIF(COUNT(*), 0), 2) as coverage_pct
         FROM unified_sites
         WHERE source_id = 'megalithic_portal'
-    """))
+    """)
+    )
     row = result.fetchone()
 
     return {
@@ -325,6 +328,7 @@ def print_stats(stats: dict):
 # Main Entry Point
 # =============================================================================
 
+
 def run_megalithic_images(limit: int = None, stats_only: bool = False):
     """Run Megalithic Portal image fetching."""
     with get_session() as session:
@@ -334,7 +338,7 @@ def run_megalithic_images(limit: int = None, stats_only: bool = False):
         if stats_only:
             return stats
 
-        if stats['without_image'] == 0:
+        if stats["without_image"] == 0:
             logger.info("All Megalithic Portal sites have images!")
             return stats
 
@@ -352,14 +356,8 @@ def main():
     parser = argparse.ArgumentParser(
         description="Fetch images for Megalithic Portal sites from GeoRSS API"
     )
-    parser.add_argument(
-        "--limit", "-l", type=int, default=None,
-        help="Maximum sites to process"
-    )
-    parser.add_argument(
-        "--stats", action="store_true",
-        help="Print statistics only"
-    )
+    parser.add_argument("--limit", "-l", type=int, default=None, help="Maximum sites to process")
+    parser.add_argument("--stats", action="store_true", help="Print statistics only")
 
     args = parser.parse_args()
 

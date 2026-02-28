@@ -45,76 +45,76 @@ async def get_sitemap(db: Session = Depends(get_db)):
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"',
         '        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">',
-        '',
-        '  <!-- Homepage -->',
-        '  <url>',
-        f'    <loc>{BASE_URL}/</loc>',
-        f'    <lastmod>{today}</lastmod>',
-        '    <changefreq>weekly</changefreq>',
-        '    <priority>1.0</priority>',
-        '    <image:image>',
-        f'      <image:loc>{BASE_URL}/landing/og-image.png</image:loc>',
-        '      <image:title>Ancient Nerds Interactive Archaeological Research Platform</image:title>',
-        '      <image:caption>Explore over 750,000 archaeological sites worldwide on an interactive 3D globe</image:caption>',
-        '    </image:image>',
-        '  </url>',
-        '',
-        '  <!-- Interactive Globe -->',
-        '  <url>',
-        f'    <loc>{BASE_URL}/globe.html</loc>',
-        f'    <lastmod>{today}</lastmod>',
-        '    <changefreq>weekly</changefreq>',
-        '    <priority>0.9</priority>',
-        '  </url>',
-        '',
-        '  <!-- Archaeology News -->',
-        '  <url>',
-        f'    <loc>{BASE_URL}/news.html</loc>',
-        f'    <lastmod>{today}</lastmod>',
-        '    <changefreq>daily</changefreq>',
-        '    <priority>0.8</priority>',
-        '  </url>',
-        '',
-        '  <!-- Lyra AI Assistant -->',
-        '  <url>',
-        f'    <loc>{BASE_URL}/lyra.html</loc>',
-        f'    <lastmod>{today}</lastmod>',
-        '    <changefreq>monthly</changefreq>',
-        '    <priority>0.7</priority>',
-        '  </url>',
-        '',
-        '  <!-- Discovery Radar -->',
-        '  <url>',
-        f'    <loc>{BASE_URL}/radar.html</loc>',
-        f'    <lastmod>{today}</lastmod>',
-        '    <changefreq>daily</changefreq>',
-        '    <priority>0.7</priority>',
-        '  </url>',
-        '',
-        '  <!-- Weekly Articles (SPA) -->',
-        '  <url>',
-        f'    <loc>{BASE_URL}/articles.html</loc>',
-        f'    <lastmod>{today}</lastmod>',
-        '    <changefreq>weekly</changefreq>',
-        '    <priority>0.7</priority>',
-        '  </url>',
-        '',
-        '  <!-- SEO: Crawlable article listing -->',
-        '  <url>',
-        f'    <loc>{BASE_URL}/articles/</loc>',
-        f'    <lastmod>{today}</lastmod>',
-        '    <changefreq>weekly</changefreq>',
-        '    <priority>0.8</priority>',
-        '  </url>',
-        '',
-        '  <!-- SEO: Crawlable news archive -->',
-        '  <url>',
-        f'    <loc>{BASE_URL}/news-archive/</loc>',
-        f'    <lastmod>{today}</lastmod>',
-        '    <changefreq>daily</changefreq>',
-        '    <priority>0.8</priority>',
-        '  </url>',
-        '',
+        "",
+        "  <!-- Homepage -->",
+        "  <url>",
+        f"    <loc>{BASE_URL}/</loc>",
+        f"    <lastmod>{today}</lastmod>",
+        "    <changefreq>weekly</changefreq>",
+        "    <priority>1.0</priority>",
+        "    <image:image>",
+        f"      <image:loc>{BASE_URL}/landing/og-image.png</image:loc>",
+        "      <image:title>Ancient Nerds Interactive Archaeological Research Platform</image:title>",
+        "      <image:caption>Explore over 750,000 archaeological sites worldwide on an interactive 3D globe</image:caption>",
+        "    </image:image>",
+        "  </url>",
+        "",
+        "  <!-- Interactive Globe -->",
+        "  <url>",
+        f"    <loc>{BASE_URL}/globe.html</loc>",
+        f"    <lastmod>{today}</lastmod>",
+        "    <changefreq>weekly</changefreq>",
+        "    <priority>0.9</priority>",
+        "  </url>",
+        "",
+        "  <!-- Archaeology News -->",
+        "  <url>",
+        f"    <loc>{BASE_URL}/news.html</loc>",
+        f"    <lastmod>{today}</lastmod>",
+        "    <changefreq>daily</changefreq>",
+        "    <priority>0.8</priority>",
+        "  </url>",
+        "",
+        "  <!-- Lyra AI Assistant -->",
+        "  <url>",
+        f"    <loc>{BASE_URL}/lyra.html</loc>",
+        f"    <lastmod>{today}</lastmod>",
+        "    <changefreq>monthly</changefreq>",
+        "    <priority>0.7</priority>",
+        "  </url>",
+        "",
+        "  <!-- Discovery Radar -->",
+        "  <url>",
+        f"    <loc>{BASE_URL}/radar.html</loc>",
+        f"    <lastmod>{today}</lastmod>",
+        "    <changefreq>daily</changefreq>",
+        "    <priority>0.7</priority>",
+        "  </url>",
+        "",
+        "  <!-- Weekly Articles (SPA) -->",
+        "  <url>",
+        f"    <loc>{BASE_URL}/articles.html</loc>",
+        f"    <lastmod>{today}</lastmod>",
+        "    <changefreq>weekly</changefreq>",
+        "    <priority>0.7</priority>",
+        "  </url>",
+        "",
+        "  <!-- SEO: Crawlable article listing -->",
+        "  <url>",
+        f"    <loc>{BASE_URL}/articles/</loc>",
+        f"    <lastmod>{today}</lastmod>",
+        "    <changefreq>weekly</changefreq>",
+        "    <priority>0.8</priority>",
+        "  </url>",
+        "",
+        "  <!-- SEO: Crawlable news archive -->",
+        "  <url>",
+        f"    <loc>{BASE_URL}/news-archive/</loc>",
+        f"    <lastmod>{today}</lastmod>",
+        "    <changefreq>daily</changefreq>",
+        "    <priority>0.8</priority>",
+        "  </url>",
+        "",
     ]
 
     # Add each site
@@ -124,14 +124,16 @@ async def get_sitemap(db: Session = Depends(get_db)):
         # Use updated_at if available, otherwise use today
         lastmod = site.updated_at.strftime("%Y-%m-%d") if site.updated_at else today
 
-        xml_parts.extend([
-            '  <url>',
-            f'    <loc>{site_url}</loc>',
-            f'    <lastmod>{lastmod}</lastmod>',
-            '    <changefreq>monthly</changefreq>',
-            '    <priority>0.8</priority>',
-            '  </url>',
-        ])
+        xml_parts.extend(
+            [
+                "  <url>",
+                f"    <loc>{site_url}</loc>",
+                f"    <lastmod>{lastmod}</lastmod>",
+                "    <changefreq>monthly</changefreq>",
+                "    <priority>0.8</priority>",
+                "  </url>",
+            ]
+        )
 
     # --- Articles (high SEO value: keyword-rich, regularly updated) ---
     articles = db.query(NewsArticle).order_by(NewsArticle.created_at.desc()).all()
@@ -139,25 +141,27 @@ async def get_sitemap(db: Session = Depends(get_db)):
         slug = slugify(article.title)
         article_url = f"{BASE_URL}/articles/{slug}"
         lastmod = article.published_at.strftime("%Y-%m-%d") if article.published_at else today
-        xml_parts.extend([
-            '  <url>',
-            f'    <loc>{escape(article_url)}</loc>',
-            f'    <lastmod>{lastmod}</lastmod>',
-            '    <changefreq>monthly</changefreq>',
-            '    <priority>0.9</priority>',
-            '  </url>',
-        ])
+        xml_parts.extend(
+            [
+                "  <url>",
+                f"    <loc>{escape(article_url)}</loc>",
+                f"    <lastmod>{lastmod}</lastmod>",
+                "    <changefreq>monthly</changefreq>",
+                "    <priority>0.9</priority>",
+                "  </url>",
+            ]
+        )
 
-    xml_parts.append('</urlset>')
+    xml_parts.append("</urlset>")
 
-    xml_content = '\n'.join(xml_parts)
+    xml_content = "\n".join(xml_parts)
 
     return Response(
         content=xml_content,
         media_type="application/xml",
         headers={
             "Cache-Control": "public, max-age=86400",  # Cache for 1 day
-        }
+        },
     )
 
 
@@ -182,5 +186,5 @@ async def get_sitemap_index():
         media_type="application/xml",
         headers={
             "Cache-Control": "public, max-age=86400",
-        }
+        },
     )

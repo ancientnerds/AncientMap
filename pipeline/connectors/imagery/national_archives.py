@@ -10,7 +10,6 @@ Priority: P2
 API: https://www.archives.gov/developer
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
@@ -93,7 +92,12 @@ class NationalArchivesConnector(BaseConnector):
                         description=desc.get("item", {}).get("scopeAndContentNote"),
                         url=f"https://catalog.archives.gov/id/{result.get('naId', '')}",
                         thumbnail_url=thumbnail,
-                        date=desc.get("item", {}).get("productionDateArray", {}).get("productionDate", [{}])[0].get("year") if desc.get("item", {}).get("productionDateArray") else None,
+                        date=desc.get("item", {})
+                        .get("productionDateArray", {})
+                        .get("productionDate", [{}])[0]
+                        .get("year")
+                        if desc.get("item", {}).get("productionDateArray")
+                        else None,
                         license=self.license,
                         attribution=self.attribution,
                         raw_data=result,

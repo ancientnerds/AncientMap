@@ -40,10 +40,15 @@ def _stat_bar(value: int, max_val: int = 10) -> str:
 def _get_user_or_none(discord_id: str):
     """Look up DiscordUser by discord_id, return None if not found."""
     from pipeline.database import DiscordUser, get_session
+
     with get_session() as session:
-        user = session.query(DiscordUser).filter(
-            DiscordUser.discord_id == discord_id,
-        ).first()
+        user = (
+            session.query(DiscordUser)
+            .filter(
+                DiscordUser.discord_id == discord_id,
+            )
+            .first()
+        )
         if user:
             session.expunge(user)
         return user
@@ -73,12 +78,16 @@ def register_commands(bot: discord.Client) -> None:
                     .first()
                 )
                 if not site:
-                    await interaction.followup.send(f"No card found matching '{name}'.", ephemeral=True)
+                    await interaction.followup.send(
+                        f"No card found matching '{name}'.", ephemeral=True
+                    )
                     return
 
                 card = session.get(CardStats, site.id)
                 if not card:
-                    await interaction.followup.send(f"'{site.name}' doesn't have card stats yet.", ephemeral=True)
+                    await interaction.followup.send(
+                        f"'{site.name}' doesn't have card stats yet.", ephemeral=True
+                    )
                     return
 
                 color = RARITY_COLORS.get(card.rarity_tier, 0x9E9E9E)
@@ -113,17 +122,22 @@ def register_commands(bot: discord.Client) -> None:
 
                 # Meta
                 embed.add_field(name="Total Power", value=str(card.total_power), inline=True)
-                embed.add_field(name="Rarity", value=f"{rarity_name} (Tier {card.rarity_tier})", inline=True)
+                embed.add_field(
+                    name="Rarity", value=f"{rarity_name} (Tier {card.rarity_tier})", inline=True
+                )
                 embed.add_field(name="Type", value=card.category_group, inline=True)
 
                 # Empire affiliations
                 from api.cardgame.constants import EMPIRE_DISPLAY_NAMES
+
                 card_empires = card.empires or []
                 if card_empires:
                     empire_names = [EMPIRE_DISPLAY_NAMES.get(e, e) for e in card_empires]
                     embed.add_field(name="Empires", value=", ".join(empire_names), inline=False)
                 else:
-                    embed.add_field(name="Empires", value="Pre-Empire Site (Ancient Anchor)", inline=False)
+                    embed.add_field(
+                        name="Empires", value="Pre-Empire Site (Ancient Anchor)", inline=False
+                    )
 
                 if site.thumbnail_url:
                     embed.set_thumbnail(url=site.thumbnail_url)
@@ -138,7 +152,8 @@ def register_commands(bot: discord.Client) -> None:
     async def card_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, app_commands.CommandOnCooldown):
             await interaction.response.send_message(
-                f"Please wait {error.retry_after:.0f}s.", ephemeral=True,
+                f"Please wait {error.retry_after:.0f}s.",
+                ephemeral=True,
             )
 
     # -------------------------------------------------------------------
@@ -181,8 +196,7 @@ def register_commands(bot: discord.Client) -> None:
                 total = query.count()
                 per_page = 10
                 rows = (
-                    query
-                    .order_by(CardStats.rarity_tier.desc(), CardStats.total_power.desc())
+                    query.order_by(CardStats.rarity_tier.desc(), CardStats.total_power.desc())
                     .offset((page - 1) * per_page)
                     .limit(per_page)
                     .all()
@@ -218,7 +232,8 @@ def register_commands(bot: discord.Client) -> None:
     async def cards_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, app_commands.CommandOnCooldown):
             await interaction.response.send_message(
-                f"Please wait {error.retry_after:.0f}s.", ephemeral=True,
+                f"Please wait {error.retry_after:.0f}s.",
+                ephemeral=True,
             )
 
     # -------------------------------------------------------------------
@@ -226,10 +241,14 @@ def register_commands(bot: discord.Client) -> None:
     # -------------------------------------------------------------------
     @bot.tree.command(name="pack", description="Open a card pack")
     @app_commands.describe(pack_type="Pack type: bronze, silver, gold, legendary")
-    @app_commands.choices(pack_type=[
-        app_commands.Choice(name=f"{name.title()} ({p['cost']} credits, {p['cards']} cards)", value=name)
-        for name, p in PACK_PRICES.items()
-    ])
+    @app_commands.choices(
+        pack_type=[
+            app_commands.Choice(
+                name=f"{name.title()} ({p['cost']} credits, {p['cards']} cards)", value=name
+            )
+            for name, p in PACK_PRICES.items()
+        ]
+    )
     @app_commands.checks.cooldown(1, 10.0)
     async def pack_command(interaction: discord.Interaction, pack_type: str):
         discord_id = str(interaction.user.id)
@@ -247,12 +266,17 @@ def register_commands(bot: discord.Client) -> None:
             from pipeline.database import DiscordUser, get_session
 
             with get_session() as session:
-                user = session.query(DiscordUser).filter(
-                    DiscordUser.discord_id == discord_id,
-                ).first()
+                user = (
+                    session.query(DiscordUser)
+                    .filter(
+                        DiscordUser.discord_id == discord_id,
+                    )
+                    .first()
+                )
                 if not user:
                     await interaction.followup.send(
-                        "Sign in at ancientnerds.com first.", ephemeral=True,
+                        "Sign in at ancientnerds.com first.",
+                        ephemeral=True,
                     )
                     return
 
@@ -277,7 +301,9 @@ def register_commands(bot: discord.Client) -> None:
                     power = card.get("total_power", 0)
                     lines.append(f"**{name}** — {rarity_name} | Power: {power}")
 
-                embed.description = "\n".join(lines) if lines else "No cards received (all duplicates refunded)"
+                embed.description = (
+                    "\n".join(lines) if lines else "No cards received (all duplicates refunded)"
+                )
                 embed.set_footer(text=f"Credits remaining: {user.credits:,} | ancientnerds.com")
 
                 await interaction.followup.send(embed=embed, ephemeral=True)
@@ -289,7 +315,8 @@ def register_commands(bot: discord.Client) -> None:
     async def pack_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, app_commands.CommandOnCooldown):
             await interaction.response.send_message(
-                f"Please wait {error.retry_after:.0f}s.", ephemeral=True,
+                f"Please wait {error.retry_after:.0f}s.",
+                ephemeral=True,
             )
 
     # -------------------------------------------------------------------
@@ -305,12 +332,17 @@ def register_commands(bot: discord.Client) -> None:
             from pipeline.database import DiscordUser, get_session
 
             with get_session() as session:
-                user = session.query(DiscordUser).filter(
-                    DiscordUser.discord_id == discord_id,
-                ).first()
+                user = (
+                    session.query(DiscordUser)
+                    .filter(
+                        DiscordUser.discord_id == discord_id,
+                    )
+                    .first()
+                )
                 if not user:
                     await interaction.followup.send(
-                        "Sign in at ancientnerds.com first.", ephemeral=True,
+                        "Sign in at ancientnerds.com first.",
+                        ephemeral=True,
                     )
                     return
 
@@ -344,7 +376,8 @@ def register_commands(bot: discord.Client) -> None:
     async def daily_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, app_commands.CommandOnCooldown):
             await interaction.response.send_message(
-                f"Please wait {error.retry_after:.0f}s.", ephemeral=True,
+                f"Please wait {error.retry_after:.0f}s.",
+                ephemeral=True,
             )
 
     # -------------------------------------------------------------------
@@ -352,10 +385,12 @@ def register_commands(bot: discord.Client) -> None:
     # -------------------------------------------------------------------
     @bot.tree.command(name="deck", description="View or manage your battle deck")
     @app_commands.describe(action="What to do with your deck")
-    @app_commands.choices(action=[
-        app_commands.Choice(name="View active deck", value="view"),
-        app_commands.Choice(name="List all decks", value="list"),
-    ])
+    @app_commands.choices(
+        action=[
+            app_commands.Choice(name="View active deck", value="view"),
+            app_commands.Choice(name="List all decks", value="list"),
+        ]
+    )
     @app_commands.checks.cooldown(1, 5.0)
     async def deck_command(interaction: discord.Interaction, action: str = "view"):
         discord_id = str(interaction.user.id)
@@ -363,7 +398,9 @@ def register_commands(bot: discord.Client) -> None:
         try:
             user = _get_user_or_none(discord_id)
             if not user:
-                await interaction.followup.send("Sign in at ancientnerds.com first.", ephemeral=True)
+                await interaction.followup.send(
+                    "Sign in at ancientnerds.com first.", ephemeral=True
+                )
                 return
 
             from api.cardgame.models import CardDeck, CardStats
@@ -371,11 +408,7 @@ def register_commands(bot: discord.Client) -> None:
 
             with get_session() as session:
                 if action == "list":
-                    decks = (
-                        session.query(CardDeck)
-                        .filter(CardDeck.user_id == user.id)
-                        .all()
-                    )
+                    decks = session.query(CardDeck).filter(CardDeck.user_id == user.id).all()
                     if not decks:
                         await interaction.followup.send(
                             "No decks yet. Build one at ancientnerds.com/cards",
@@ -411,8 +444,11 @@ def register_commands(bot: discord.Client) -> None:
 
                     # Commander info
                     from api.cardgame.constants import EMPIRE_DISPLAY_NAMES, EMPIRE_THEMATIC_STATS
+
                     if deck.commander_empire_id:
-                        cmd_name = EMPIRE_DISPLAY_NAMES.get(deck.commander_empire_id, deck.commander_empire_id)
+                        cmd_name = EMPIRE_DISPLAY_NAMES.get(
+                            deck.commander_empire_id, deck.commander_empire_id
+                        )
                         cmd_stat = EMPIRE_THEMATIC_STATS.get(deck.commander_empire_id, "")
                         embed.add_field(
                             name="Commander",
@@ -430,7 +466,9 @@ def register_commands(bot: discord.Client) -> None:
                         site = session.get(UnifiedSite, cid)
                         if card and site:
                             rarity_name = RARITY_NAMES.get(card.rarity_tier, "?")
-                            lines.append(f"**{site.name}** — {rarity_name} | Power: {card.total_power}")
+                            lines.append(
+                                f"**{site.name}** — {rarity_name} | Power: {card.total_power}"
+                            )
                     embed.description = "\n".join(lines) if lines else "Empty deck"
 
                     # Show active synergies
@@ -444,9 +482,16 @@ def register_commands(bot: discord.Client) -> None:
                             continue
                     if deck_cards:
                         from api.cardgame.synergies import describe_synergies
-                        synergy_lines = describe_synergies(deck_cards, commander_empire_id=deck.commander_empire_id)
+
+                        synergy_lines = describe_synergies(
+                            deck_cards, commander_empire_id=deck.commander_empire_id
+                        )
                         if synergy_lines:
-                            embed.add_field(name="Active Synergies", value="\n".join(synergy_lines), inline=False)
+                            embed.add_field(
+                                name="Active Synergies",
+                                value="\n".join(synergy_lines),
+                                inline=False,
+                            )
 
                     embed.set_footer(text="ancientnerds.com")
                     await interaction.followup.send(embed=embed, ephemeral=True)
@@ -459,7 +504,8 @@ def register_commands(bot: discord.Client) -> None:
     async def deck_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, app_commands.CommandOnCooldown):
             await interaction.response.send_message(
-                f"Please wait {error.retry_after:.0f}s.", ephemeral=True,
+                f"Please wait {error.retry_after:.0f}s.",
+                ephemeral=True,
             )
 
     # -------------------------------------------------------------------
@@ -493,7 +539,8 @@ def register_commands(bot: discord.Client) -> None:
 
         if stake > BATTLE_MAX_STAKE:
             await interaction.response.send_message(
-                f"Maximum stake is {BATTLE_MAX_STAKE:,} credits.", ephemeral=True,
+                f"Maximum stake is {BATTLE_MAX_STAKE:,} credits.",
+                ephemeral=True,
             )
             return
 
@@ -503,12 +550,20 @@ def register_commands(bot: discord.Client) -> None:
             from pipeline.database import DiscordUser, get_session
 
             with get_session() as session:
-                challenger = session.query(DiscordUser).filter(
-                    DiscordUser.discord_id == discord_id,
-                ).first()
-                defender = session.query(DiscordUser).filter(
-                    DiscordUser.discord_id == opponent_discord_id,
-                ).first()
+                challenger = (
+                    session.query(DiscordUser)
+                    .filter(
+                        DiscordUser.discord_id == discord_id,
+                    )
+                    .first()
+                )
+                defender = (
+                    session.query(DiscordUser)
+                    .filter(
+                        DiscordUser.discord_id == opponent_discord_id,
+                    )
+                    .first()
+                )
 
                 if not challenger or not defender:
                     await interaction.followup.send(
@@ -517,12 +572,22 @@ def register_commands(bot: discord.Client) -> None:
                     return
 
                 # Check active decks
-                c_deck = session.query(CardDeck).filter(
-                    CardDeck.user_id == challenger.id, CardDeck.is_active,
-                ).first()
-                d_deck = session.query(CardDeck).filter(
-                    CardDeck.user_id == defender.id, CardDeck.is_active,
-                ).first()
+                c_deck = (
+                    session.query(CardDeck)
+                    .filter(
+                        CardDeck.user_id == challenger.id,
+                        CardDeck.is_active,
+                    )
+                    .first()
+                )
+                d_deck = (
+                    session.query(CardDeck)
+                    .filter(
+                        CardDeck.user_id == defender.id,
+                        CardDeck.is_active,
+                    )
+                    .first()
+                )
 
                 if not c_deck or len(c_deck.card_ids) < 5:
                     await interaction.followup.send(
@@ -572,7 +637,9 @@ def register_commands(bot: discord.Client) -> None:
             )
             embed.set_footer(text="Expires in 5 minutes | ancientnerds.com")
 
-            view = DuelView(battle_id=battle_id, challenger_id=discord_id, defender_id=opponent_discord_id)
+            view = DuelView(
+                battle_id=battle_id, challenger_id=discord_id, defender_id=opponent_discord_id
+            )
             await interaction.followup.send(embed=embed, view=view)
 
         except Exception as e:
@@ -583,7 +650,8 @@ def register_commands(bot: discord.Client) -> None:
     async def duel_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, app_commands.CommandOnCooldown):
             await interaction.response.send_message(
-                f"Please wait {error.retry_after:.0f}s.", ephemeral=True,
+                f"Please wait {error.retry_after:.0f}s.",
+                ephemeral=True,
             )
 
     # -------------------------------------------------------------------
@@ -591,12 +659,14 @@ def register_commands(bot: discord.Client) -> None:
     # -------------------------------------------------------------------
     @bot.tree.command(name="leaderboard", description="Card game rankings")
     @app_commands.describe(sort="Sort by")
-    @app_commands.choices(sort=[
-        app_commands.Choice(name="Wins", value="wins"),
-        app_commands.Choice(name="Collection size", value="cards"),
-        app_commands.Choice(name="XP", value="power"),
-        app_commands.Choice(name="Best streak", value="streak"),
-    ])
+    @app_commands.choices(
+        sort=[
+            app_commands.Choice(name="Wins", value="wins"),
+            app_commands.Choice(name="Collection size", value="cards"),
+            app_commands.Choice(name="XP", value="power"),
+            app_commands.Choice(name="Best streak", value="streak"),
+        ]
+    )
     @app_commands.checks.cooldown(1, 10.0)
     async def leaderboard_command(interaction: discord.Interaction, sort: str = "wins"):
         await interaction.response.defer(ephemeral=True)
@@ -646,16 +716,21 @@ def register_commands(bot: discord.Client) -> None:
             await interaction.followup.send("Something went wrong.", ephemeral=True)
 
     @leaderboard_command.error
-    async def leaderboard_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    async def leaderboard_error(
+        interaction: discord.Interaction, error: app_commands.AppCommandError
+    ):
         if isinstance(error, app_commands.CommandOnCooldown):
             await interaction.response.send_message(
-                f"Please wait {error.retry_after:.0f}s.", ephemeral=True,
+                f"Please wait {error.retry_after:.0f}s.",
+                ephemeral=True,
             )
 
     # -------------------------------------------------------------------
     # /quiz — Daily knowledge quiz (Phase C)
     # -------------------------------------------------------------------
-    @bot.tree.command(name="quiz", description="Test your archaeology knowledge! 5 questions, earn credits & XP")
+    @bot.tree.command(
+        name="quiz", description="Test your archaeology knowledge! 5 questions, earn credits & XP"
+    )
     @app_commands.checks.cooldown(1, 10.0)
     async def quiz_command(interaction: discord.Interaction):
         discord_id = str(interaction.user.id)
@@ -664,7 +739,8 @@ def register_commands(bot: discord.Client) -> None:
             user = _get_user_or_none(discord_id)
             if not user:
                 await interaction.followup.send(
-                    "Sign in at ancientnerds.com first.", ephemeral=True,
+                    "Sign in at ancientnerds.com first.",
+                    ephemeral=True,
                 )
                 return
 
@@ -704,13 +780,16 @@ def register_commands(bot: discord.Client) -> None:
     async def quiz_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, app_commands.CommandOnCooldown):
             await interaction.response.send_message(
-                f"Please wait {error.retry_after:.0f}s.", ephemeral=True,
+                f"Please wait {error.retry_after:.0f}s.",
+                ephemeral=True,
             )
 
     # -------------------------------------------------------------------
     # /expedition — PvE campaign (Phase D)
     # -------------------------------------------------------------------
-    @bot.tree.command(name="expedition", description="Play a themed archaeological expedition (PvE)")
+    @bot.tree.command(
+        name="expedition", description="Play a themed archaeological expedition (PvE)"
+    )
     @app_commands.checks.cooldown(1, 10.0)
     async def expedition_command(interaction: discord.Interaction):
         discord_id = str(interaction.user.id)
@@ -719,7 +798,8 @@ def register_commands(bot: discord.Client) -> None:
             user = _get_user_or_none(discord_id)
             if not user:
                 await interaction.followup.send(
-                    "Sign in at ancientnerds.com first.", ephemeral=True,
+                    "Sign in at ancientnerds.com first.",
+                    ephemeral=True,
                 )
                 return
 
@@ -742,7 +822,9 @@ def register_commands(bot: discord.Client) -> None:
                 stage = p["current_stage"] if p else 0
                 completed = p["completed"] if p else False
                 status = "Completed" if completed else f"Stage {stage}/{exp['stages']}"
-                embed.add_field(name=exp["name"], value=f"{exp['description']}\n*{status}*", inline=False)
+                embed.add_field(
+                    name=exp["name"], value=f"{exp['description']}\n*{status}*", inline=False
+                )
 
             embed.set_footer(text="ancientnerds.com")
 
@@ -754,10 +836,13 @@ def register_commands(bot: discord.Client) -> None:
             await interaction.followup.send("Something went wrong.", ephemeral=True)
 
     @expedition_command.error
-    async def expedition_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    async def expedition_error(
+        interaction: discord.Interaction, error: app_commands.AppCommandError
+    ):
         if isinstance(error, app_commands.CommandOnCooldown):
             await interaction.response.send_message(
-                f"Please wait {error.retry_after:.0f}s.", ephemeral=True,
+                f"Please wait {error.retry_after:.0f}s.",
+                ephemeral=True,
             )
 
     # -------------------------------------------------------------------
@@ -809,7 +894,9 @@ def register_commands(bot: discord.Client) -> None:
                 color=color,
             )
             embed.add_field(name="Region", value=region, inline=True)
-            embed.add_field(name="Period", value=f"{_year_fmt(start)} – {_year_fmt(end)}", inline=True)
+            embed.add_field(
+                name="Period", value=f"{_year_fmt(start)} – {_year_fmt(end)}", inline=True
+            )
             embed.add_field(
                 name="Thematic Stat",
                 value=thematic_stat.replace("_", " ").title(),
@@ -832,7 +919,8 @@ def register_commands(bot: discord.Client) -> None:
     async def empire_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, app_commands.CommandOnCooldown):
             await interaction.response.send_message(
-                f"Please wait {error.retry_after:.0f}s.", ephemeral=True,
+                f"Please wait {error.retry_after:.0f}s.",
+                ephemeral=True,
             )
 
     # -------------------------------------------------------------------
@@ -847,7 +935,8 @@ def register_commands(bot: discord.Client) -> None:
             user = _get_user_or_none(discord_id)
             if not user:
                 await interaction.followup.send(
-                    "Sign in at ancientnerds.com first.", ephemeral=True,
+                    "Sign in at ancientnerds.com first.",
+                    ephemeral=True,
                 )
                 return
 
@@ -878,7 +967,9 @@ def register_commands(bot: discord.Client) -> None:
             for ec in owned:
                 name = EMPIRE_DISPLAY_NAMES.get(ec.empire_id, ec.empire_id)
                 stat = EMPIRE_THEMATIC_STATS.get(ec.empire_id, "?")
-                lines.append(f"**{name}** — {stat.replace('_', ' ').title()} | via {ec.acquired_via}")
+                lines.append(
+                    f"**{name}** — {stat.replace('_', ' ').title()} | via {ec.acquired_via}"
+                )
             embed.description = "\n".join(lines)
             embed.set_footer(text="Use /deck set-commander to equip one | ancientnerds.com")
 
@@ -892,13 +983,16 @@ def register_commands(bot: discord.Client) -> None:
     async def empires_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, app_commands.CommandOnCooldown):
             await interaction.response.send_message(
-                f"Please wait {error.retry_after:.0f}s.", ephemeral=True,
+                f"Please wait {error.retry_after:.0f}s.",
+                ephemeral=True,
             )
 
     # -------------------------------------------------------------------
     # /set-commander <empire> — Equip a commander to your active deck
     # -------------------------------------------------------------------
-    @bot.tree.command(name="set-commander", description="Equip an empire commander to your active deck")
+    @bot.tree.command(
+        name="set-commander", description="Equip an empire commander to your active deck"
+    )
     @app_commands.describe(empire="Empire name (or 'none' to remove)")
     @app_commands.checks.cooldown(1, 5.0)
     async def set_commander_command(interaction: discord.Interaction, empire: str):
@@ -908,7 +1002,8 @@ def register_commands(bot: discord.Client) -> None:
             user = _get_user_or_none(discord_id)
             if not user:
                 await interaction.followup.send(
-                    "Sign in at ancientnerds.com first.", ephemeral=True,
+                    "Sign in at ancientnerds.com first.",
+                    ephemeral=True,
                 )
                 return
 
@@ -982,10 +1077,13 @@ def register_commands(bot: discord.Client) -> None:
             await interaction.followup.send("Something went wrong.", ephemeral=True)
 
     @set_commander_command.error
-    async def set_commander_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    async def set_commander_error(
+        interaction: discord.Interaction, error: app_commands.AppCommandError
+    ):
         if isinstance(error, app_commands.CommandOnCooldown):
             await interaction.response.send_message(
-                f"Please wait {error.retry_after:.0f}s.", ephemeral=True,
+                f"Please wait {error.retry_after:.0f}s.",
+                ephemeral=True,
             )
 
 
@@ -993,9 +1091,11 @@ def register_commands(bot: discord.Client) -> None:
 # Duel Accept/Decline UI with Snap mechanic (Phase B)
 # ---------------------------------------------------------------------------
 
+
 def _build_round_lines(result: dict, up_to: int | None = None) -> list[str]:
     """Build round-by-round display lines from battle result."""
     from pipeline.database import UnifiedSite, get_session
+
     rounds = result["rounds"][:up_to] if up_to else result["rounds"]
     lines = []
     with get_session() as session:
@@ -1081,7 +1181,9 @@ class DuelView(discord.ui.View):
     @discord.ui.button(label="Accept", style=discord.ButtonStyle.green, emoji="\u2694\ufe0f")
     async def accept_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if str(interaction.user.id) != self.defender_id:
-            await interaction.response.send_message("Only the challenged player can accept.", ephemeral=True)
+            await interaction.response.send_message(
+                "Only the challenged player can accept.", ephemeral=True
+            )
             return
 
         await interaction.response.defer()
@@ -1097,18 +1199,33 @@ class DuelView(discord.ui.View):
                     self.stop()
                     return
 
-                challenger = session.query(DiscordUser).filter(
-                    DiscordUser.id == battle.challenger_id,
-                ).with_for_update().first()
-                defender = session.query(DiscordUser).filter(
-                    DiscordUser.id == battle.defender_id,
-                ).with_for_update().first()
+                challenger = (
+                    session.query(DiscordUser)
+                    .filter(
+                        DiscordUser.id == battle.challenger_id,
+                    )
+                    .with_for_update()
+                    .first()
+                )
+                defender = (
+                    session.query(DiscordUser)
+                    .filter(
+                        DiscordUser.id == battle.defender_id,
+                    )
+                    .with_for_update()
+                    .first()
+                )
 
                 # Escrow stakes
                 if battle.stake_credits > 0:
-                    if challenger.credits < battle.stake_credits or defender.credits < battle.stake_credits:
+                    if (
+                        challenger.credits < battle.stake_credits
+                        or defender.credits < battle.stake_credits
+                    ):
                         battle.status = "cancelled"
-                        await interaction.followup.send("Not enough credits for the stake. Duel cancelled.")
+                        await interaction.followup.send(
+                            "Not enough credits for the stake. Duel cancelled."
+                        )
                         self.stop()
                         return
                     challenger.credits -= battle.stake_credits
@@ -1117,12 +1234,22 @@ class DuelView(discord.ui.View):
                 battle.status = "active"
 
                 # Load decks
-                c_deck_row = session.query(CardDeck).filter(
-                    CardDeck.user_id == battle.challenger_id, CardDeck.is_active,
-                ).first()
-                d_deck_row = session.query(CardDeck).filter(
-                    CardDeck.user_id == battle.defender_id, CardDeck.is_active,
-                ).first()
+                c_deck_row = (
+                    session.query(CardDeck)
+                    .filter(
+                        CardDeck.user_id == battle.challenger_id,
+                        CardDeck.is_active,
+                    )
+                    .first()
+                )
+                d_deck_row = (
+                    session.query(CardDeck)
+                    .filter(
+                        CardDeck.user_id == battle.defender_id,
+                        CardDeck.is_active,
+                    )
+                    .first()
+                )
 
                 c_cards = [session.get(CardStats, uuid.UUID(cid)) for cid in c_deck_row.card_ids]
                 d_cards = [session.get(CardStats, uuid.UUID(cid)) for cid in d_deck_row.card_ids]
@@ -1133,7 +1260,9 @@ class DuelView(discord.ui.View):
                 c_commander = c_deck_row.commander_empire_id if c_deck_row else None
                 d_commander = d_deck_row.commander_empire_id if d_deck_row else None
                 result = resolve_battle(
-                    c_cards, d_cards, self.battle_id,
+                    c_cards,
+                    d_cards,
+                    self.battle_id,
                     challenger_commander=c_commander,
                     defender_commander=d_commander,
                 )
@@ -1192,7 +1321,9 @@ class DuelView(discord.ui.View):
     @discord.ui.button(label="Decline", style=discord.ButtonStyle.red, emoji="\u274c")
     async def decline_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if str(interaction.user.id) != self.defender_id:
-            await interaction.response.send_message("Only the challenged player can decline.", ephemeral=True)
+            await interaction.response.send_message(
+                "Only the challenged player can decline.", ephemeral=True
+            )
             return
 
         from api.cardgame.models import CardBattle
@@ -1206,7 +1337,9 @@ class DuelView(discord.ui.View):
         for item in self.children:
             item.disabled = True
         await interaction.response.edit_message(
-            content="Duel declined.", embed=None, view=self,
+            content="Duel declined.",
+            embed=None,
+            view=self,
         )
         self.stop()
 
@@ -1239,7 +1372,9 @@ class SnapView(discord.ui.View):
         self.original_stake = original_stake
         self.continued: set[str] = set()  # discord IDs who pressed Continue
 
-    @discord.ui.button(label="Snap! (2x stakes)", style=discord.ButtonStyle.danger, emoji="\ud83d\udca5")
+    @discord.ui.button(
+        label="Snap! (2x stakes)", style=discord.ButtonStyle.danger, emoji="\ud83d\udca5"
+    )
     async def snap_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         user_id = str(interaction.user.id)
         if user_id not in (self.challenger_id, self.defender_id):
@@ -1335,12 +1470,22 @@ class SnapView(discord.ui.View):
             )
             if battle:
                 battle.snap_multiplier = snap_multiplier
-                challenger = session.query(DiscordUser).filter(
-                    DiscordUser.id == battle.challenger_id,
-                ).with_for_update().first()
-                defender = session.query(DiscordUser).filter(
-                    DiscordUser.id == battle.defender_id,
-                ).with_for_update().first()
+                challenger = (
+                    session.query(DiscordUser)
+                    .filter(
+                        DiscordUser.id == battle.challenger_id,
+                    )
+                    .with_for_update()
+                    .first()
+                )
+                defender = (
+                    session.query(DiscordUser)
+                    .filter(
+                        DiscordUser.id == battle.defender_id,
+                    )
+                    .with_for_update()
+                    .first()
+                )
                 apply_battle_result(session, battle, self.result, challenger, defender)
 
 
@@ -1369,7 +1514,9 @@ class SnapResponseView(discord.ui.View):
     @discord.ui.button(label="Accept (2x stakes)", style=discord.ButtonStyle.green)
     async def accept_snap(self, interaction: discord.Interaction, button: discord.ui.Button):
         if str(interaction.user.id) != self.opponent_id:
-            await interaction.response.send_message("Only the opponent can respond.", ephemeral=True)
+            await interaction.response.send_message(
+                "Only the opponent can respond.", ephemeral=True
+            )
             return
 
         await interaction.response.defer()
@@ -1388,12 +1535,22 @@ class SnapResponseView(discord.ui.View):
             if battle:
                 battle.snap_multiplier = 2
                 # Escrow additional stake from both players
-                challenger = session.query(DiscordUser).filter(
-                    DiscordUser.id == battle.challenger_id,
-                ).with_for_update().first()
-                defender = session.query(DiscordUser).filter(
-                    DiscordUser.id == battle.defender_id,
-                ).with_for_update().first()
+                challenger = (
+                    session.query(DiscordUser)
+                    .filter(
+                        DiscordUser.id == battle.challenger_id,
+                    )
+                    .with_for_update()
+                    .first()
+                )
+                defender = (
+                    session.query(DiscordUser)
+                    .filter(
+                        DiscordUser.id == battle.defender_id,
+                    )
+                    .with_for_update()
+                    .first()
+                )
 
                 additional = battle.stake_credits  # double means pay original again
                 if challenger.credits >= additional and defender.credits >= additional:
@@ -1404,7 +1561,10 @@ class SnapResponseView(discord.ui.View):
                 apply_battle_result(session, battle, self.result, challenger, defender)
 
         embed = _build_result_embed(
-            self.result, self.challenger_id, self.defender_id, snap_multiplier=2,
+            self.result,
+            self.challenger_id,
+            self.defender_id,
+            snap_multiplier=2,
         )
         for item in self.children:
             item.disabled = True
@@ -1415,7 +1575,9 @@ class SnapResponseView(discord.ui.View):
     @discord.ui.button(label="Retreat", style=discord.ButtonStyle.red, emoji="\ud83c\udff3\ufe0f")
     async def retreat_snap(self, interaction: discord.Interaction, button: discord.ui.Button):
         if str(interaction.user.id) != self.opponent_id:
-            await interaction.response.send_message("Only the opponent can respond.", ephemeral=True)
+            await interaction.response.send_message(
+                "Only the opponent can respond.", ephemeral=True
+            )
             return
 
         await interaction.response.defer()
@@ -1434,12 +1596,22 @@ class SnapResponseView(discord.ui.View):
             )
             if battle:
                 battle.snap_multiplier = 1
-                challenger = session.query(DiscordUser).filter(
-                    DiscordUser.id == battle.challenger_id,
-                ).with_for_update().first()
-                defender = session.query(DiscordUser).filter(
-                    DiscordUser.id == battle.defender_id,
-                ).with_for_update().first()
+                challenger = (
+                    session.query(DiscordUser)
+                    .filter(
+                        DiscordUser.id == battle.challenger_id,
+                    )
+                    .with_for_update()
+                    .first()
+                )
+                defender = (
+                    session.query(DiscordUser)
+                    .filter(
+                        DiscordUser.id == battle.defender_id,
+                    )
+                    .with_for_update()
+                    .first()
+                )
 
                 # Override result: snapper wins by retreat
                 retreat_result = dict(self.result)
@@ -1451,7 +1623,9 @@ class SnapResponseView(discord.ui.View):
                 apply_battle_result(session, battle, retreat_result, challenger, defender)
 
         embed = _build_result_embed(
-            self.result, self.challenger_id, self.defender_id,
+            self.result,
+            self.challenger_id,
+            self.defender_id,
             retreated_by=self.opponent_id,
         )
         for item in self.children:
@@ -1475,12 +1649,22 @@ class SnapResponseView(discord.ui.View):
             )
             if battle:
                 battle.snap_multiplier = 1
-                challenger = session.query(DiscordUser).filter(
-                    DiscordUser.id == battle.challenger_id,
-                ).with_for_update().first()
-                defender = session.query(DiscordUser).filter(
-                    DiscordUser.id == battle.defender_id,
-                ).with_for_update().first()
+                challenger = (
+                    session.query(DiscordUser)
+                    .filter(
+                        DiscordUser.id == battle.challenger_id,
+                    )
+                    .with_for_update()
+                    .first()
+                )
+                defender = (
+                    session.query(DiscordUser)
+                    .filter(
+                        DiscordUser.id == battle.defender_id,
+                    )
+                    .with_for_update()
+                    .first()
+                )
 
                 retreat_result = dict(self.result)
                 if self.snapper_id == self.challenger_id:
@@ -1493,6 +1677,7 @@ class SnapResponseView(discord.ui.View):
 # ---------------------------------------------------------------------------
 # Quiz UI (Phase C)
 # ---------------------------------------------------------------------------
+
 
 class QuizView(discord.ui.View):
     """Interactive quiz — shows one question at a time with answer buttons."""
@@ -1524,7 +1709,9 @@ class QuizView(discord.ui.View):
     def _make_callback(self, choice: str):
         async def callback(interaction: discord.Interaction):
             if str(interaction.user.id) != self.discord_id:
-                await interaction.response.send_message("This is someone else's quiz.", ephemeral=True)
+                await interaction.response.send_message(
+                    "This is someone else's quiz.", ephemeral=True
+                )
                 return
 
             self.answers.append(choice)
@@ -1554,15 +1741,22 @@ class QuizView(discord.ui.View):
         from pipeline.database import DiscordUser, get_session
 
         with get_session() as session:
-            user = session.query(DiscordUser).filter(
-                DiscordUser.discord_id == self.discord_id,
-            ).first()
+            user = (
+                session.query(DiscordUser)
+                .filter(
+                    DiscordUser.discord_id == self.discord_id,
+                )
+                .first()
+            )
             if not user:
                 await interaction.followup.send("User not found.", ephemeral=True)
                 return
 
             result = submit_quiz_answers(
-                session, user, self.quiz_data["session_id"], self.answers,
+                session,
+                user,
+                self.quiz_data["session_id"],
+                self.answers,
             )
 
         embed = discord.Embed(
@@ -1594,6 +1788,7 @@ class QuizView(discord.ui.View):
 # Expedition UI (Phase D)
 # ---------------------------------------------------------------------------
 
+
 class ExpeditionListView(discord.ui.View):
     """List expeditions with Play buttons."""
 
@@ -1605,7 +1800,11 @@ class ExpeditionListView(discord.ui.View):
             prog = next((p for p in progress if p["expedition_id"] == exp["id"]), None)
             stage = prog["current_stage"] if prog else 0
             completed = prog["completed"] if prog else False
-            label = f"{exp['name']} ({stage}/{exp['stages']})" if not completed else f"{exp['name']} (Done)"
+            label = (
+                f"{exp['name']} ({stage}/{exp['stages']})"
+                if not completed
+                else f"{exp['name']} (Done)"
+            )
             style = discord.ButtonStyle.secondary if completed else discord.ButtonStyle.green
             btn = discord.ui.Button(
                 label=label[:80],
@@ -1629,9 +1828,13 @@ class ExpeditionListView(discord.ui.View):
             from pipeline.database import DiscordUser, get_session
 
             with get_session() as session:
-                user = session.query(DiscordUser).filter(
-                    DiscordUser.discord_id == self.discord_id,
-                ).first()
+                user = (
+                    session.query(DiscordUser)
+                    .filter(
+                        DiscordUser.discord_id == self.discord_id,
+                    )
+                    .first()
+                )
                 if not user:
                     await interaction.followup.send("User not found.", ephemeral=True)
                     return
@@ -1670,7 +1873,9 @@ class ExpeditionListView(discord.ui.View):
                 if result["rewards"]["xp"]:
                     reward_parts.append(f"+{result['rewards']['xp']} XP")
                 if result["rewards"]["pack"]:
-                    reward_parts.append(f"Completion reward: **{result['rewards']['pack'].title()} Pack!**")
+                    reward_parts.append(
+                        f"Completion reward: **{result['rewards']['pack'].title()} Pack!**"
+                    )
                 if result["rewards"].get("empire_card"):
                     ec = result["rewards"]["empire_card"]
                     reward_parts.append(f"Empire Card unlocked: **{ec['name']}**!")

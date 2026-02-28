@@ -76,6 +76,7 @@ EXTRACT_METADATA_SCHEMA = {
     "additionalProperties": False,
 }
 
+
 def _resolve_site_type_from_p31(instance_of_qids: list[str]) -> str | None:
     """Resolve P31 QIDs to a site_type by fetching their labels from Wikidata.
 
@@ -169,17 +170,19 @@ def seed_lyra_source() -> None:
         existing = session.get(SourceMeta, "lyra")
         if existing:
             return
-        session.add(SourceMeta(
-            id="lyra",
-            name="ANCIENT NERDS Radar",
-            color="#8b5cf6",
-            category="Primary",
-            priority=1,
-            enabled=True,
-            enabled_by_default=False,
-            is_primary=True,
-            record_count=0,
-        ))
+        session.add(
+            SourceMeta(
+                id="lyra",
+                name="ANCIENT NERDS Radar",
+                color="#8b5cf6",
+                category="Primary",
+                priority=1,
+                enabled=True,
+                enabled_by_default=False,
+                is_primary=True,
+                record_count=0,
+            )
+        )
     logger.info("Seeded 'lyra' source_meta row")
 
 
@@ -204,20 +207,26 @@ def identify_and_enrich_sites(settings: LyraSettings) -> int:
 
     with get_session() as session:
         # Get candidates: pending items first, then failed, then others
-        contributions = session.query(UserContribution).filter(
-            UserContribution.source == "lyra",
-            UserContribution.enrichment_status.in_(["pending", "enriched", "enriching", "rejected", "failed"]),
-            UserContribution.promoted_site_id.is_(None),
-        ).order_by(
-            case(
-                (UserContribution.enrichment_status == "pending", 0),
-                (UserContribution.enrichment_status == "failed", 1),
-                else_=2,
-            ),
-            UserContribution.mention_count.desc(),
-        ).limit(
-            settings.max_identifications_per_cycle
-        ).all()
+        contributions = (
+            session.query(UserContribution)
+            .filter(
+                UserContribution.source == "lyra",
+                UserContribution.enrichment_status.in_(
+                    ["pending", "enriched", "enriching", "rejected", "failed"]
+                ),
+                UserContribution.promoted_site_id.is_(None),
+            )
+            .order_by(
+                case(
+                    (UserContribution.enrichment_status == "pending", 0),
+                    (UserContribution.enrichment_status == "failed", 1),
+                    else_=2,
+                ),
+                UserContribution.mention_count.desc(),
+            )
+            .limit(settings.max_identifications_per_cycle)
+            .all()
+        )
 
         if not contributions:
             logger.info("No pending candidates to identify")
@@ -244,15 +253,23 @@ def identify_and_enrich_sites(settings: LyraSettings) -> int:
                 # doesn't poison the session for the rest.
                 with session.begin_nested():
                     result = _process_single(
-                        session, contribution, client, system_prompt, settings, promoted_ids,
-                        pick_entity_prompt, extract_metadata_prompt,
+                        session,
+                        contribution,
+                        client,
+                        system_prompt,
+                        settings,
+                        promoted_ids,
+                        pick_entity_prompt,
+                        extract_metadata_prompt,
                     )
                     if result:
                         processed += 1
                     else:
                         logger.info(f"  [{contribution.name}] _process_single returned False")
             except Exception:
-                logger.exception(f"Failed to process contribution {contribution.id}: {contribution.name}")
+                logger.exception(
+                    f"Failed to process contribution {contribution.id}: {contribution.name}"
+                )
                 try:
                     contribution.enrichment_status = "failed"
                 except Exception:
@@ -294,8 +311,13 @@ def _process_single(
     )
 
     # Skip if facts haven't changed since last processing
-    if contribution.last_facts_hash == facts_hash and contribution.enrichment_status in ("enriched", "rejected"):
-        logger.info(f"  [{contribution.name}] Skipping — facts unchanged (status={contribution.enrichment_status})")
+    if contribution.last_facts_hash == facts_hash and contribution.enrichment_status in (
+        "enriched",
+        "rejected",
+    ):
+        logger.info(
+            f"  [{contribution.name}] Skipping — facts unchanged (status={contribution.enrichment_status})"
+        )
         return False
 
     # Inject rejection context so AI avoids the same bad match
@@ -318,7 +340,9 @@ def _process_single(
     user_prompt = _build_user_prompt(contribution, facts, video_contexts, transcript_segments)
 
     identification = _call_ai(
-        client, settings.model_identify, user_prompt,
+        client,
+        settings.model_identify,
+        user_prompt,
         schema=IDENTIFY_SITE_SCHEMA,
         system_prompt=system_prompt,
         max_tokens=settings.max_tokens,
@@ -330,8 +354,13 @@ def _process_single(
 
     # Escalate low/medium confidence to review model
     confidence = identification.get("confidence", "unknown")
-    if confidence in ("low", "medium") and settings.model_identify != settings.model_identify_escalation:
-        sonnet_result = _escalate_to_sonnet(client, settings, user_prompt, json.dumps(identification), identification)
+    if (
+        confidence in ("low", "medium")
+        and settings.model_identify != settings.model_identify_escalation
+    ):
+        sonnet_result = _escalate_to_sonnet(
+            client, settings, user_prompt, json.dumps(identification), identification
+        )
         if sonnet_result:
             identification = sonnet_result
 
@@ -345,8 +374,7 @@ def _process_single(
     corrected_name = identification.get("site_name", "")
     confidence = identification.get("confidence", "unknown")
     logger.info(
-        f"  [{contribution.name}] Identified as '{corrected_name}' "
-        f"(confidence: {confidence})"
+        f"  [{contribution.name}] Identified as '{corrected_name}' (confidence: {confidence})"
     )
 
     # Store corrected name when AI fixed the caption garbling
@@ -358,7 +386,9 @@ def _process_single(
     db_candidates = _fetch_db_candidates(session, search_name, threshold=settings.pg_trgm_threshold)
     if db_candidates:
         top3 = ", ".join(f"{c['name']}({c['similarity']})" for c in db_candidates[:3])
-        logger.info(f"  [{contribution.name}] DB candidates for '{search_name}': {len(db_candidates)} (top: {top3})")
+        logger.info(
+            f"  [{contribution.name}] DB candidates for '{search_name}': {len(db_candidates)} (top: {top3})"
+        )
 
         best = db_candidates[0]
         if best["similarity"] >= settings.pg_trgm_threshold:
@@ -369,25 +399,57 @@ def _process_single(
                 and abs(best["similarity"] - db_candidates[1]["similarity"]) <= 0.1
             ):
                 disambiguated = _disambiguate_db_candidates(
-                    client, settings, search_name, db_candidates[:5], facts, video_contexts,
+                    client,
+                    settings,
+                    search_name,
+                    db_candidates[:5],
+                    facts,
+                    video_contexts,
                 )
                 if disambiguated:
                     best = disambiguated
 
-            return _handle_db_match(session, contribution, best, identification, settings, facts, video_contexts, all_candidates=db_candidates, promoted_ids=promoted_ids)
+            return _handle_db_match(
+                session,
+                contribution,
+                best,
+                identification,
+                settings,
+                facts,
+                video_contexts,
+                all_candidates=db_candidates,
+                promoted_ids=promoted_ids,
+            )
 
     # Also try with original name if different
     if corrected_name and corrected_name.lower().strip() != contribution.name.lower().strip():
-        orig_candidates = _fetch_db_candidates(session, contribution.name, threshold=settings.pg_trgm_threshold)
+        orig_candidates = _fetch_db_candidates(
+            session, contribution.name, threshold=settings.pg_trgm_threshold
+        )
         if orig_candidates and orig_candidates[0]["similarity"] >= settings.pg_trgm_threshold:
-            logger.info(f"  [{contribution.name}] DB match via original name: {orig_candidates[0]['name']}")
-            return _handle_db_match(session, contribution, orig_candidates[0], identification, settings, facts, video_contexts, all_candidates=orig_candidates, promoted_ids=promoted_ids)
+            logger.info(
+                f"  [{contribution.name}] DB match via original name: {orig_candidates[0]['name']}"
+            )
+            return _handle_db_match(
+                session,
+                contribution,
+                orig_candidates[0],
+                identification,
+                settings,
+                facts,
+                video_contexts,
+                all_candidates=orig_candidates,
+                promoted_ids=promoted_ids,
+            )
 
     # Step 3: Full research protocol (replaces simple Wikidata-only path)
     logger.info(f"  [{contribution.name}] No DB match — starting deep research for '{search_name}'")
     research = research_site(
-        search_name, client, settings,
-        facts=facts, video_contexts=video_contexts,
+        search_name,
+        client,
+        settings,
+        facts=facts,
+        video_contexts=video_contexts,
     )
 
     # Step 3a: Re-search local DB with AI-generated alternative names
@@ -397,7 +459,9 @@ def _process_single(
         for alt_name in research.pre_research["alternative_names"]:
             if not alt_name or alt_name.lower().strip() == search_name.lower().strip():
                 continue
-            alt_candidates = _fetch_db_candidates(session, alt_name, threshold=settings.pg_trgm_threshold)
+            alt_candidates = _fetch_db_candidates(
+                session, alt_name, threshold=settings.pg_trgm_threshold
+            )
             if alt_candidates and alt_candidates[0]["similarity"] >= settings.pg_trgm_threshold:
                 logger.info(
                     f"  [{contribution.name}] DB match via alternative name '{alt_name}': "
@@ -411,14 +475,26 @@ def _process_single(
                     and abs(best["similarity"] - alt_candidates[1]["similarity"]) <= 0.1
                 ):
                     disambiguated = _disambiguate_db_candidates(
-                        client, settings, alt_name, alt_candidates[:5], facts, video_contexts,
+                        client,
+                        settings,
+                        alt_name,
+                        alt_candidates[:5],
+                        facts,
+                        video_contexts,
                     )
                     if disambiguated:
                         best = disambiguated
 
                 result = _handle_db_match(
-                    session, contribution, best, identification, settings,
-                    facts, video_contexts, all_candidates=alt_candidates, promoted_ids=promoted_ids,
+                    session,
+                    contribution,
+                    best,
+                    identification,
+                    settings,
+                    facts,
+                    video_contexts,
+                    all_candidates=alt_candidates,
+                    promoted_ids=promoted_ids,
                 )
                 # Store research aliases for the matched site
                 if result and contribution.enrichment_data:
@@ -426,7 +502,10 @@ def _process_single(
                     matched_site_id = db_match.get("site_id")
                     if matched_site_id:
                         _store_research_aliases(
-                            session, uuid.UUID(matched_site_id), research, search_name,
+                            session,
+                            uuid.UUID(matched_site_id),
+                            research,
+                            search_name,
                         )
                 return result
 
@@ -435,15 +514,23 @@ def _process_single(
     if research.best_match and research.best_match.get("qid"):
         qid = research.best_match["qid"]
         # Build a wikidata_candidates list for the existing handler
-        wikidata_candidates = [{
-            "qid": qid,
-            "label": research.best_match.get("label", ""),
-            "description": research.best_match.get("description", ""),
-        }]
+        wikidata_candidates = [
+            {
+                "qid": qid,
+                "label": research.best_match.get("label", ""),
+                "description": research.best_match.get("description", ""),
+            }
+        ]
         logger.info(f"  [{contribution.name}] Research found Wikidata match: {qid}")
         result = _handle_wikidata_match(
-            session, contribution, identification, wikidata_candidates,
-            client, settings, pick_entity_prompt, extract_metadata_prompt,
+            session,
+            contribution,
+            identification,
+            wikidata_candidates,
+            client,
+            settings,
+            pick_entity_prompt,
+            extract_metadata_prompt,
         )
         # Pre-research data used only for search names, not field population
 
@@ -464,7 +551,10 @@ def _process_single(
         # Step 7: Synthetic description if still empty
         if not contribution.description:
             contribution.description = _generate_synthetic_description(
-                search_name, contribution.site_type, contribution.country, contribution.period_name,
+                search_name,
+                contribution.site_type,
+                contribution.country,
+                contribution.period_name,
             )
 
         # Re-score after gap-fill
@@ -475,16 +565,22 @@ def _process_single(
         }
         _maybe_promote(session, contribution, search_name, settings)
         if contribution.promoted_site_id:
-            _store_garble_alias(session, contribution.promoted_site_id, contribution.name, search_name)
+            _store_garble_alias(
+                session, contribution.promoted_site_id, contribution.name, search_name
+            )
             _store_research_aliases(session, contribution.promoted_site_id, research, search_name)
         return result
 
     # If research found a GeoNames or Wikipedia match but no Wikidata QID
     if research.best_match:
-        logger.info(f"  [{contribution.name}] Research found non-Wikidata match: {research.best_match.get('source')}")
+        logger.info(
+            f"  [{contribution.name}] Research found non-Wikidata match: {research.best_match.get('source')}"
+        )
 
     # Apply all knowledge from research (pre-research + gap-fill)
-    return _handle_ai_enriched_site(session, contribution, identification, research, search_name, settings)
+    return _handle_ai_enriched_site(
+        session, contribution, identification, research, search_name, settings
+    )
 
 
 def _call_ai(
@@ -508,11 +604,13 @@ def _call_ai(
     }
 
     if system_prompt:
-        create_kwargs["system"] = [{
-            "type": "text",
-            "text": system_prompt,
-            "cache_control": {"type": "ephemeral"},
-        }]
+        create_kwargs["system"] = [
+            {
+                "type": "text",
+                "text": system_prompt,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ]
 
     # Extended thinking is incompatible with temperature
     if "thinking" not in kwargs:
@@ -550,7 +648,9 @@ def _call_ai(
     return None
 
 
-def _aggregate_facts(session: Session, contribution: UserContribution) -> tuple[list[str], list[dict], list[str]]:
+def _aggregate_facts(
+    session: Session, contribution: UserContribution
+) -> tuple[list[str], list[dict], list[str]]:
     """Aggregate facts, video context, and transcript segments for a candidate.
 
     Uses func.lower() for matching — same approach as site_matcher._upsert_lyra_suggestion
@@ -560,9 +660,9 @@ def _aggregate_facts(session: Session, contribution: UserContribution) -> tuple[
     Returns (facts, video_contexts, transcript_segments).
     """
     name_lower = contribution.name.lower().strip()
-    items = session.query(NewsItem).filter(
-        func.lower(NewsItem.site_name_extracted) == name_lower
-    ).all()
+    items = (
+        session.query(NewsItem).filter(func.lower(NewsItem.site_name_extracted) == name_lower).all()
+    )
 
     all_facts: list[str] = []
     video_contexts = []
@@ -612,7 +712,9 @@ def _compute_facts_hash(facts: list[str], video_contexts: list[dict] | None = No
     return hashlib.sha256(content.encode()).hexdigest()
 
 
-def _fetch_db_candidates(session: Session, name: str, limit: int = 10, threshold: float = 0.35) -> list[dict]:
+def _fetch_db_candidates(
+    session: Session, name: str, limit: int = 10, threshold: float = 0.35
+) -> list[dict]:
     """Fetch top DB candidate matches via pg_trgm fuzzy matching."""
     normalized = normalize_name(name)
     if not normalized or len(normalized) < 3:
@@ -623,8 +725,12 @@ def _fetch_db_candidates(session: Session, name: str, limit: int = 10, threshold
         # Without this, a caught exception leaves PostgreSQL in "aborted" state
         # and all subsequent SQL in the same session fails with InFailedSqlTransaction.
         with session.begin_nested():
-            session.execute(text("SET LOCAL pg_trgm.word_similarity_threshold = :threshold"), {"threshold": threshold})
-            rows = session.execute(text("""
+            session.execute(
+                text("SET LOCAL pg_trgm.word_similarity_threshold = :threshold"),
+                {"threshold": threshold},
+            )
+            rows = session.execute(
+                text("""
                 SELECT usn.site_id, us.name AS site_name,
                        us.country, us.source_id,
                        word_similarity(:qname, usn.name_normalized) AS similarity
@@ -633,7 +739,9 @@ def _fetch_db_candidates(session: Session, name: str, limit: int = 10, threshold
                 WHERE :qname <% usn.name_normalized
                 ORDER BY usn.name_normalized <->> :qname
                 LIMIT :limit
-            """), {"qname": normalized, "limit": limit * 3}).fetchall()
+            """),
+                {"qname": normalized, "limit": limit * 3},
+            ).fetchall()
     except Exception as e:
         logger.warning(f"pg_trgm query failed for '{name}': {e}")
         return []
@@ -645,13 +753,15 @@ def _fetch_db_candidates(session: Session, name: str, limit: int = 10, threshold
         if sid in seen:
             continue
         seen.add(sid)
-        candidates.append({
-            "site_id": sid,
-            "name": row.site_name,
-            "country": row.country,
-            "source": row.source_id,
-            "similarity": round(row.similarity, 2),
-        })
+        candidates.append(
+            {
+                "site_id": sid,
+                "name": row.site_name,
+                "country": row.country,
+                "source": row.source_id,
+                "similarity": round(row.similarity, 2),
+            }
+        )
         if len(candidates) >= limit:
             break
 
@@ -685,7 +795,7 @@ def _disambiguate_db_candidates(
     for i, c in enumerate(candidates):
         country_str = f" [{c['country']}]" if c.get("country") else ""
         formatted_parts.append(
-            f"  {i+1}. {c['name']}{country_str} (source: {c['source']}, similarity: {c['similarity']})"
+            f"  {i + 1}. {c['name']}{country_str} (source: {c['source']}, similarity: {c['similarity']})"
         )
 
     facts_text = "\n".join(f"- {f}" for f in facts[:15]) if facts else "(none)"
@@ -706,7 +816,11 @@ def _disambiguate_db_candidates(
         return None
 
     chosen_idx = result.get("chosen_index")
-    if chosen_idx is not None and isinstance(chosen_idx, int) and 1 <= chosen_idx <= len(candidates):
+    if (
+        chosen_idx is not None
+        and isinstance(chosen_idx, int)
+        and 1 <= chosen_idx <= len(candidates)
+    ):
         chosen = candidates[chosen_idx - 1]
         logger.info(
             f"  [{name}] AI disambiguated: picked #{chosen_idx} '{chosen['name']}' "
@@ -715,7 +829,6 @@ def _disambiguate_db_candidates(
         return chosen
 
     return None
-
 
 
 def _check_enwiki_sitelinks(qids: list[str]) -> dict[str, bool]:
@@ -810,11 +923,13 @@ def _pick_wikidata_entity(
             model=model,
             max_tokens=_get_settings().max_tokens,
             temperature=0.0,
-            system=[{
-                "type": "text",
-                "text": "Pick the Wikidata entity that best matches the archaeological site.",
-                "cache_control": {"type": "ephemeral"},
-            }],
+            system=[
+                {
+                    "type": "text",
+                    "text": "Pick the Wikidata entity that best matches the archaeological site.",
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
             messages=[{"role": "user", "content": prompt}],
             prefill="Q",
         )
@@ -940,7 +1055,11 @@ def _enrich_from_wikidata(qid: str) -> dict:
             md5 = hashlib.md5(safe_name.encode()).hexdigest()
             encoded_name = urllib.parse.quote(safe_name, safe="")
             # SVG/PDF files need .png appended for the thumbnail render
-            thumb_suffix = f"{encoded_name}.png" if safe_name.lower().endswith((".svg", ".pdf")) else encoded_name
+            thumb_suffix = (
+                f"{encoded_name}.png"
+                if safe_name.lower().endswith((".svg", ".pdf"))
+                else encoded_name
+            )
             result["thumbnail_url"] = (
                 f"https://upload.wikimedia.org/wikipedia/commons/thumb/"
                 f"{md5[0]}/{md5[0:2]}/{encoded_name}/300px-{thumb_suffix}"
@@ -1032,14 +1151,15 @@ def _extract_metadata_from_wikipedia(
 
     Returns {"period": "...", "site_type": "..."} or None.
     """
-    extract_system_prompt = extract_metadata_prompt or EXTRACT_METADATA_PROMPT_PATH.read_text(encoding="utf-8")
-    user_content = (
-        f'Site: "{site_name}"\n\n'
-        f"<wikipedia_text>\n{wiki_text[:2000]}\n</wikipedia_text>"
+    extract_system_prompt = extract_metadata_prompt or EXTRACT_METADATA_PROMPT_PATH.read_text(
+        encoding="utf-8"
     )
+    user_content = f'Site: "{site_name}"\n\n<wikipedia_text>\n{wiki_text[:2000]}\n</wikipedia_text>'
 
     result = _call_ai(
-        client, model, user_content,
+        client,
+        model,
+        user_content,
         schema=EXTRACT_METADATA_SCHEMA,
         system_prompt=extract_system_prompt,
     )
@@ -1132,11 +1252,13 @@ def _escalate_to_sonnet(
             model=settings.model_identify_escalation,
             max_tokens=settings.max_tokens,
             temperature=0.0,
-            system=[{
-                "type": "text",
-                "text": ESCALATION_SYSTEM_PROMPT,
-                "cache_control": {"type": "ephemeral"},
-            }],
+            system=[
+                {
+                    "type": "text",
+                    "text": ESCALATION_SYSTEM_PROMPT,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
             messages=[{"role": "user", "content": user_content}],
             output_config={
                 "format": {
@@ -1206,7 +1328,9 @@ def _generate_synthetic_description(
     return " ".join(parts)
 
 
-def _store_garble_alias(session: Session, site_id: uuid.UUID, garbled_name: str, canonical_name: str) -> None:
+def _store_garble_alias(
+    session: Session, site_id: uuid.UUID, garbled_name: str, canonical_name: str
+) -> None:
     """Store a garbled caption name as an alias for faster future matching.
 
     Only stores if the garbled name differs from the canonical name and
@@ -1217,31 +1341,43 @@ def _store_garble_alias(session: Session, site_id: uuid.UUID, garbled_name: str,
     if not garbled_normalized or garbled_normalized == canonical_normalized:
         return
 
-    existing = session.query(UnifiedSiteName).filter(
-        UnifiedSiteName.site_id == site_id,
-        UnifiedSiteName.name_normalized == garbled_normalized,
-    ).first()
+    existing = (
+        session.query(UnifiedSiteName)
+        .filter(
+            UnifiedSiteName.site_id == site_id,
+            UnifiedSiteName.name_normalized == garbled_normalized,
+        )
+        .first()
+    )
     if existing:
         return
 
-    session.add(UnifiedSiteName(
-        site_id=site_id,
-        name=garbled_name,
-        name_normalized=garbled_normalized,
-        name_type="caption_garble",
-    ))
+    session.add(
+        UnifiedSiteName(
+            site_id=site_id,
+            name=garbled_name,
+            name_normalized=garbled_normalized,
+            name_type="caption_garble",
+        )
+    )
     logger.info(f"  Stored garble alias: '{garbled_name}' -> site {site_id}")
 
 
-def _check_spatial_an_match(session: Session, lat: float, lon: float, threshold_km: float = 2.0) -> UnifiedSite | None:
+def _check_spatial_an_match(
+    session: Session, lat: float, lon: float, threshold_km: float = 2.0
+) -> UnifiedSite | None:
     """Find AN Originals site within threshold_km of given coordinates."""
     # ~0.018 degrees per km at equator (conservative)
     delta = threshold_km / 111.0
-    return session.query(UnifiedSite).filter(
-        UnifiedSite.source_id == "ancient_nerds",
-        UnifiedSite.lat.between(lat - delta, lat + delta),
-        UnifiedSite.lon.between(lon - delta, lon + delta),
-    ).first()
+    return (
+        session.query(UnifiedSite)
+        .filter(
+            UnifiedSite.source_id == "ancient_nerds",
+            UnifiedSite.lat.between(lat - delta, lat + delta),
+            UnifiedSite.lon.between(lon - delta, lon + delta),
+        )
+        .first()
+    )
 
 
 def _check_name_an_match(session: Session, site_name: str) -> UnifiedSite | None:
@@ -1251,31 +1387,47 @@ def _check_name_an_match(session: Session, site_name: str) -> UnifiedSite | None
         return None
 
     # Exact normalized match
-    match = session.query(UnifiedSite).filter(
-        UnifiedSite.source_id == "ancient_nerds",
-        UnifiedSite.name_normalized == normalized,
-    ).first()
+    match = (
+        session.query(UnifiedSite)
+        .filter(
+            UnifiedSite.source_id == "ancient_nerds",
+            UnifiedSite.name_normalized == normalized,
+        )
+        .first()
+    )
     if match:
         return match
 
     # Spaceless match (e.g. "table des marchand" vs "tabledesmarchand")
     spaceless = normalized.replace(" ", "")
-    match = session.query(UnifiedSite).filter(
-        UnifiedSite.source_id == "ancient_nerds",
-        func.replace(UnifiedSite.name_normalized, ' ', '') == spaceless,
-    ).first()
+    match = (
+        session.query(UnifiedSite)
+        .filter(
+            UnifiedSite.source_id == "ancient_nerds",
+            func.replace(UnifiedSite.name_normalized, " ", "") == spaceless,
+        )
+        .first()
+    )
     if match:
         return match
 
     # Also check alternate names table
-    alt = session.query(UnifiedSiteName).filter(
-        UnifiedSiteName.name_normalized == normalized,
-    ).first()
+    alt = (
+        session.query(UnifiedSiteName)
+        .filter(
+            UnifiedSiteName.name_normalized == normalized,
+        )
+        .first()
+    )
     if alt:
-        site = session.query(UnifiedSite).filter(
-            UnifiedSite.id == alt.site_id,
-            UnifiedSite.source_id == "ancient_nerds",
-        ).first()
+        site = (
+            session.query(UnifiedSite)
+            .filter(
+                UnifiedSite.id == alt.site_id,
+                UnifiedSite.source_id == "ancient_nerds",
+            )
+            .first()
+        )
         if site:
             return site
 
@@ -1283,7 +1435,10 @@ def _check_name_an_match(session: Session, site_name: str) -> UnifiedSite | None
 
 
 def _store_research_aliases(
-    session: Session, site_id: uuid.UUID, research, canonical_name: str,
+    session: Session,
+    site_id: uuid.UUID,
+    research,
+    canonical_name: str,
 ) -> None:
     """Store AI-generated alternative names as site aliases for future matching."""
     if not research or not research.pre_research:
@@ -1296,17 +1451,23 @@ def _store_research_aliases(
         alt_norm = normalize_name(alt)
         if not alt_norm or alt_norm == canonical_norm:
             continue
-        existing = session.query(UnifiedSiteName).filter(
-            UnifiedSiteName.site_id == site_id,
-            UnifiedSiteName.name_normalized == alt_norm,
-        ).first()
+        existing = (
+            session.query(UnifiedSiteName)
+            .filter(
+                UnifiedSiteName.site_id == site_id,
+                UnifiedSiteName.name_normalized == alt_norm,
+            )
+            .first()
+        )
         if not existing:
-            session.add(UnifiedSiteName(
-                site_id=site_id,
-                name=alt,
-                name_normalized=alt_norm,
-                name_type="research_alias",
-            ))
+            session.add(
+                UnifiedSiteName(
+                    site_id=site_id,
+                    name=alt,
+                    name_normalized=alt_norm,
+                    name_type="research_alias",
+                )
+            )
             logger.info(f"  Stored research alias: '{alt}' -> site {site_id}")
 
 
@@ -1403,17 +1564,21 @@ def _handle_db_match(
 
     # Update all related NewsItems to point to this site
     name_lower = contribution.name.lower().strip()
-    updated = session.query(NewsItem).filter(
-        func.lower(NewsItem.site_name_extracted) == name_lower,
-        NewsItem.site_id.is_(None),
-    ).update(
-        {NewsItem.site_id: site.id},
-        synchronize_session="fetch",
+    updated = (
+        session.query(NewsItem)
+        .filter(
+            func.lower(NewsItem.site_name_extracted) == name_lower,
+            NewsItem.site_id.is_(None),
+        )
+        .update(
+            {NewsItem.site_id: site.id},
+            synchronize_session="fetch",
+        )
     )
 
     # Prefer AN Originals / promoted candidate if present anywhere in the list
     an_candidate = None
-    for cand in (all_candidates or []):
+    for cand in all_candidates or []:
         try:
             cand_uuid = uuid.UUID(cand["site_id"])
         except (ValueError, TypeError):
@@ -1437,23 +1602,27 @@ def _handle_db_match(
     if db_candidate["source"] == "ancient_nerds" or site_uuid in promoted_ids:
         contribution.enrichment_status = "matched"
         contribution.enrichment_data = {"identification": identification, "db_match": db_candidate}
-        logger.info(f"DB match (AN/promoted): '{contribution.name}' -> '{site.name}' ({updated} items linked)")
+        logger.info(
+            f"DB match (AN/promoted): '{contribution.name}' -> '{site.name}' ({updated} items linked)"
+        )
     else:
         # External source match — visible on Radar, enriched with metadata from ALL matching sources
         # Merge metadata from all external candidates (best similarity first, fill gaps)
         external_sources = []
-        for cand in (all_candidates or []):
+        for cand in all_candidates or []:
             if cand["source"] == "ancient_nerds" or uuid.UUID(cand["site_id"]) in promoted_ids:
                 continue
             cand_site = session.get(UnifiedSite, uuid.UUID(cand["site_id"]))
             if cand_site:
                 fill_contrib_from_site(contribution, cand_site)
-                external_sources.append({
-                    "source_id": cand["source"],
-                    "site_id": cand["site_id"],
-                    "name": cand["name"],
-                    "source_url": cand_site.source_url,
-                })
+                external_sources.append(
+                    {
+                        "source_id": cand["source"],
+                        "site_id": cand["site_id"],
+                        "name": cand["name"],
+                        "source_url": cand_site.source_url,
+                    }
+                )
 
         contribution.enrichment_status = "enriched"
         contribution.enrichment_data = {
@@ -1493,8 +1662,10 @@ def _handle_wikidata_match(
         c["has_wikipedia"] = sitelinks.get(c["qid"], False)
 
     best_qid = _pick_wikidata_entity(
-        client, settings.model_identify,
-        site_name, contribution.country,
+        client,
+        settings.model_identify,
+        site_name,
+        contribution.country,
         contribution.site_type,
         wikidata_candidates,
         pick_entity_prompt,
@@ -1504,7 +1675,9 @@ def _handle_wikidata_match(
     # still use the first QID for structured Wikidata enrichment
     if not best_qid and wikidata_candidates:
         best_qid = wikidata_candidates[0]["qid"]
-        logger.info(f"  [{site_name}] No Wikipedia candidates — using {best_qid} for structured enrichment only")
+        logger.info(
+            f"  [{site_name}] No Wikipedia candidates — using {best_qid} for structured enrichment only"
+        )
 
     enrichment = {}
     if best_qid:
@@ -1523,7 +1696,10 @@ def _handle_wikidata_match(
         for time_key in ("inception_time", "start_time"):
             parsed_year = _parse_wikidata_time(enrichment.get(time_key, ""))
             if parsed_year is not None:
-                if contribution.period_start is not None and contribution.period_start != parsed_year:
+                if (
+                    contribution.period_start is not None
+                    and contribution.period_start != parsed_year
+                ):
                     logger.info(
                         f"  [{site_name}] Wikidata {time_key} overriding period_start: "
                         f"{contribution.period_start} → {parsed_year}"
@@ -1564,12 +1740,20 @@ def _handle_wikidata_match(
                     client, settings.model_identify, site_name, wiki_text, extract_metadata_prompt
                 )
                 if metadata:
-                    if metadata.get("period") and metadata["period"] != "Unknown" and contribution.period_start is None:
+                    if (
+                        metadata.get("period")
+                        and metadata["period"] != "Unknown"
+                        and contribution.period_start is None
+                    ):
                         period_start = extract_period_from_text(metadata["period"])
                         if period_start is not None:
                             contribution.period_start = period_start
                             contribution.period_name = categorize_period(period_start)
-                    if metadata.get("site_type") and metadata["site_type"] != "Unknown" and not contribution.site_type:
+                    if (
+                        metadata.get("site_type")
+                        and metadata["site_type"] != "Unknown"
+                        and not contribution.site_type
+                    ):
                         contribution.site_type = normalize_site_type(metadata["site_type"])
 
     _validate_period_start(contribution)
@@ -1595,7 +1779,11 @@ def _handle_wikidata_match(
         contribution.enrichment_data = {
             "identification": identification,
             "wikidata": enrichment,
-            "an_match": {"an_site_id": str(an_match.id), "an_site_name": an_match.name, "match_type": match_type},
+            "an_match": {
+                "an_site_id": str(an_match.id),
+                "an_site_name": an_match.name,
+                "match_type": match_type,
+            },
         }
         contribution.score = _compute_score(contribution)
         return True
@@ -1611,7 +1799,10 @@ def _handle_wikidata_match(
     # Step 7: Synthetic description when Wikipedia text is missing
     if not contribution.description:
         contribution.description = _generate_synthetic_description(
-            site_name, contribution.site_type, contribution.country, contribution.period_name,
+            site_name,
+            contribution.site_type,
+            contribution.country,
+            contribution.period_name,
         )
 
     # Store full enrichment data
@@ -1639,8 +1830,16 @@ def _handle_wikidata_match(
 
 
 _ANCIENT_TYPES = {
-    "Temple", "Megalithic", "Tomb", "Settlement", "Fortification",
-    "Amphitheatre", "Theatre", "Stadium", "Infrastructure", "Rock Art",
+    "Temple",
+    "Megalithic",
+    "Tomb",
+    "Settlement",
+    "Fortification",
+    "Amphitheatre",
+    "Theatre",
+    "Stadium",
+    "Infrastructure",
+    "Rock Art",
 }
 
 _GENERIC_SITE_TYPES = {"Archaeological Site", "Ruin", "Unknown", None, ""}
@@ -1718,7 +1917,11 @@ def _handle_ai_enriched_site(
         contribution.enrichment_data = {
             "identification": identification,
             "research": research.to_dict() if research else None,
-            "an_match": {"an_site_id": str(an_match.id), "an_site_name": an_match.name, "match_type": match_type},
+            "an_match": {
+                "an_site_id": str(an_match.id),
+                "an_site_name": an_match.name,
+                "match_type": match_type,
+            },
         }
         contribution.score = _compute_score(contribution)
         return True
@@ -1726,7 +1929,10 @@ def _handle_ai_enriched_site(
     # Step 7: Synthetic description when no source provided one
     if not contribution.description:
         contribution.description = _generate_synthetic_description(
-            search_name, contribution.site_type, contribution.country, contribution.period_name,
+            search_name,
+            contribution.site_type,
+            contribution.country,
+            contribution.period_name,
         )
 
     contribution.enrichment_data = {
@@ -1883,10 +2089,14 @@ def _promote_to_unified_sites(
     """
     # Check for duplicate: same name within lyra source
     normalized = normalize_name(site_name)
-    existing = session.query(UnifiedSite).filter(
-        UnifiedSite.source_id == "lyra",
-        UnifiedSite.name_normalized == normalized,
-    ).all()
+    existing = (
+        session.query(UnifiedSite)
+        .filter(
+            UnifiedSite.source_id == "lyra",
+            UnifiedSite.name_normalized == normalized,
+        )
+        .all()
+    )
 
     for ex in existing:
         # Same name AND within ~50km = duplicate (handles "Temple of Apollo" in different locations)
@@ -1894,7 +2104,9 @@ def _promote_to_unified_sites(
             lat_diff = abs(contribution.lat - ex.lat)
             lon_diff = abs(contribution.lon - ex.lon)
             if lat_diff < 0.5 and lon_diff < 0.5:  # ~50km at mid-latitudes
-                logger.info(f"Site '{site_name}' already exists near ({ex.lat}, {ex.lon}) as lyra source")
+                logger.info(
+                    f"Site '{site_name}' already exists near ({ex.lat}, {ex.lon}) as lyra source"
+                )
                 return ex.id
         else:
             # No coords to compare — treat same name as duplicate
@@ -1934,22 +2146,26 @@ def _promote_to_unified_sites(
     session.add(site)
 
     # Add canonical name to unified_site_names
-    session.add(UnifiedSiteName(
-        site_id=site_id,
-        name=site_name,
-        name_normalized=normalized,
-        name_type="label",
-    ))
+    session.add(
+        UnifiedSiteName(
+            site_id=site_id,
+            name=site_name,
+            name_normalized=normalized,
+            name_type="label",
+        )
+    )
 
     # Add alternate name if contribution name differs
     contrib_normalized = normalize_name(contribution.name)
     if contrib_normalized != normalized:
-        session.add(UnifiedSiteName(
-            site_id=site_id,
-            name=contribution.name,
-            name_normalized=contrib_normalized,
-            name_type="alias",
-        ))
+        session.add(
+            UnifiedSiteName(
+                site_id=site_id,
+                name=contribution.name,
+                name_normalized=contrib_normalized,
+                name_type="alias",
+            )
+        )
 
     # Update all related NewsItems to point to the new site
     name_lower = contribution.name.lower().strip()
@@ -1962,9 +2178,7 @@ def _promote_to_unified_sites(
     )
 
     # Update source_meta record count
-    session.query(SourceMeta).filter(
-        SourceMeta.id == "lyra"
-    ).update(
+    session.query(SourceMeta).filter(SourceMeta.id == "lyra").update(
         {SourceMeta.record_count: SourceMeta.record_count + 1},
         synchronize_session="fetch",
     )

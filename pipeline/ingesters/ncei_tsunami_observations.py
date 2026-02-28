@@ -68,7 +68,9 @@ class NCEITsunamiObservationsIngester(BaseIngester):
 
                 # API returns {"items": [...]} or direct array
                 if isinstance(data, dict):
-                    observations = data.get("items", data.get("runups", data.get("observations", [])))
+                    observations = data.get(
+                        "items", data.get("runups", data.get("observations", []))
+                    )
                 else:
                     observations = data
 
@@ -86,7 +88,9 @@ class NCEITsunamiObservationsIngester(BaseIngester):
             logger.error(f"Failed to fetch NCEI tsunami observations: {e}")
 
         logger.info(f"Total observations: {len(all_observations):,}")
-        self.report_progress(len(all_observations), len(all_observations), f"{len(all_observations):,} observations")
+        self.report_progress(
+            len(all_observations), len(all_observations), f"{len(all_observations):,} observations"
+        )
 
         # Save to file
         output = {
@@ -100,7 +104,7 @@ class NCEITsunamiObservationsIngester(BaseIngester):
                 "data_type": "tsunami_observations",
                 "license": "Public Domain",
                 "attribution": "NOAA National Centers for Environmental Information",
-            }
+            },
         }
 
         atomic_write_json(dest_path, output)

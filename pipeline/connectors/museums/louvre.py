@@ -55,9 +55,7 @@ class LouvreConnector(BaseConnector):
     def __init__(self, api_key: str | None = None, **kwargs):
         super().__init__(api_key=api_key, **kwargs)
         self.rest = RestProtocol(
-            base_url=self.base_url,
-            rate_limit=self.rate_limit,
-            headers={"Accept-Language": "en,fr"}
+            base_url=self.base_url, rate_limit=self.rate_limit, headers={"Accept-Language": "en,fr"}
         )
 
     async def search(
@@ -101,7 +99,7 @@ class LouvreConnector(BaseConnector):
             # Pattern: <article class="card">...<a href="/en/oeuvre/...">...<img src="...">...
             card_pattern = re.compile(
                 r'<article[^>]*class="[^"]*card[^"]*"[^>]*>(.*?)</article>',
-                re.DOTALL | re.IGNORECASE
+                re.DOTALL | re.IGNORECASE,
             )
 
             for match in card_pattern.finditer(html):
@@ -120,34 +118,36 @@ class LouvreConnector(BaseConnector):
                     full_url = f"{self.base_url}{relative_url}"
 
                     # Extract ID from URL (e.g., /en/oeuvre/ark:/53355/cl010062370)
-                    id_match = re.search(r'ark:/(\d+/[a-z0-9]+)', relative_url)
-                    item_id = id_match.group(1) if id_match else relative_url.split('/')[-1]
+                    id_match = re.search(r"ark:/(\d+/[a-z0-9]+)", relative_url)
+                    item_id = id_match.group(1) if id_match else relative_url.split("/")[-1]
 
                     # Extract title
                     title_match = re.search(
                         r'<h\d[^>]*class="[^"]*card__title[^"]*"[^>]*>(.*?)</h\d>',
-                        card_html, re.DOTALL
+                        card_html,
+                        re.DOTALL,
                     )
                     title = "Unknown artwork"
                     if title_match:
-                        title = re.sub(r'<[^>]+>', '', title_match.group(1)).strip()
+                        title = re.sub(r"<[^>]+>", "", title_match.group(1)).strip()
 
                     # Extract thumbnail
                     thumbnail = None
                     img_match = re.search(r'<img[^>]+src="([^"]+)"', card_html)
                     if img_match:
                         thumbnail = img_match.group(1)
-                        if thumbnail.startswith('/'):
+                        if thumbnail.startswith("/"):
                             thumbnail = f"{self.base_url}{thumbnail}"
 
                     # Extract subtitle/description (often contains artist, date)
                     desc_match = re.search(
                         r'<p[^>]*class="[^"]*card__subtitle[^"]*"[^>]*>(.*?)</p>',
-                        card_html, re.DOTALL
+                        card_html,
+                        re.DOTALL,
                     )
                     description = None
                     if desc_match:
-                        description = re.sub(r'<[^>]+>', '', desc_match.group(1)).strip()
+                        description = re.sub(r"<[^>]+>", "", desc_match.group(1)).strip()
 
                     item = ContentItem(
                         id=f"louvre:{item_id}",
@@ -191,10 +191,10 @@ class LouvreConnector(BaseConnector):
             html = response.text
 
             # Extract title from page
-            title_match = re.search(r'<h1[^>]*>(.*?)</h1>', html, re.DOTALL)
+            title_match = re.search(r"<h1[^>]*>(.*?)</h1>", html, re.DOTALL)
             title = "Unknown artwork"
             if title_match:
-                title = re.sub(r'<[^>]+>', '', title_match.group(1)).strip()
+                title = re.sub(r"<[^>]+>", "", title_match.group(1)).strip()
 
             # Extract main image
             thumbnail = None

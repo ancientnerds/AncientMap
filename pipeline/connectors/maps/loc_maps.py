@@ -10,7 +10,6 @@ Priority: P1
 API: https://www.loc.gov/maps/
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector

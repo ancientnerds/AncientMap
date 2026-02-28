@@ -10,7 +10,6 @@ Priority: P3
 API: https://developers.google.com/books/docs/v1/getting_started
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector

@@ -173,8 +173,12 @@ class EDHInscriptionsIngester(BaseIngester):
                 "inscription_type": text_row.get("i_gattung", ""),
                 "object_type": text_row.get("denkmaltyp", ""),
                 "material": text_row.get("material", ""),
-                "date_start": self._parse_year(text_row.get("dat_von", text_row.get("dat_jahr_a", ""))),
-                "date_end": self._parse_year(text_row.get("dat_bis", text_row.get("dat_jahr_e", ""))),
+                "date_start": self._parse_year(
+                    text_row.get("dat_von", text_row.get("dat_jahr_a", ""))
+                ),
+                "date_end": self._parse_year(
+                    text_row.get("dat_bis", text_row.get("dat_jahr_e", ""))
+                ),
                 "height_cm": self._parse_float(text_row.get("hoehe", "")),
                 "width_cm": self._parse_float(text_row.get("breite", "")),
                 "depth_cm": self._parse_float(text_row.get("tiefe", "")),
@@ -203,7 +207,7 @@ class EDHInscriptionsIngester(BaseIngester):
                 "data_type": "latin_inscriptions",
                 "license": "CC BY-SA 4.0",
                 "citation": "Epigraphic Database Heidelberg, https://edh.ub.uni-heidelberg.de/",
-            }
+            },
         }
 
         atomic_write_json(dest_path, output)
@@ -311,7 +315,9 @@ class EDHInscriptionsIngester(BaseIngester):
             "height_cm": self._parse_float(item.get("height", item.get("hoehe", ""))),
             "width_cm": self._parse_float(item.get("width", item.get("breite", ""))),
             "depth_cm": self._parse_float(item.get("depth", item.get("tiefe", ""))),
-            "letters_height_cm": self._parse_float(item.get("letter_height", item.get("buchstabenhoehe", ""))),
+            "letters_height_cm": self._parse_float(
+                item.get("letter_height", item.get("buchstabenhoehe", ""))
+            ),
             "current_location": item.get("repository", item.get("aufbewahrung", "")),
             "inventory_number": item.get("inventory", item.get("inv_nr", "")),
             "bibliography": item.get("bibliography", item.get("literatur", "")),
@@ -339,7 +345,7 @@ class EDHInscriptionsIngester(BaseIngester):
             return None
         try:
             # Remove units if present
-            v = re.sub(r'[^\d.\-]', '', str(value))
+            v = re.sub(r"[^\d.\-]", "", str(value))
             return float(v) if v else None
         except (ValueError, TypeError):
             return None

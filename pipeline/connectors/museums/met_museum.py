@@ -7,7 +7,6 @@ One of the best museum APIs with high rate limits (80 req/s).
 API docs: https://metmuseum.github.io/
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
@@ -108,7 +107,7 @@ class MetMuseumConnector(BaseConnector):
             logger.debug(f"Met: Found {len(object_ids)} objects for '{query}'")
 
             # Limit the IDs we'll fetch details for
-            object_ids = object_ids[offset:offset + limit * 2]
+            object_ids = object_ids[offset : offset + limit * 2]
 
             # Fetch object details
             items = []
@@ -219,7 +218,7 @@ class MetMuseumConnector(BaseConnector):
             async with self.rest:
                 response = await self.rest.get("objects", {"departmentIds": department_id})
 
-            object_ids = response.get("objectIDs", [])[:limit * 2]
+            object_ids = response.get("objectIDs", [])[: limit * 2]
 
             items = []
             async with self.rest:

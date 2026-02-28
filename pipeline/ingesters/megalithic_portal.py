@@ -133,7 +133,7 @@ class MegalithicPortalIngester(BaseIngester):
                 "source_url": "https://www.megalithic.co.uk/",
                 "fetched_at": datetime.now(UTC).isoformat(),
                 "total_sites": len(sites),
-            }
+            },
         }
 
         atomic_write_json(json_path, output)
@@ -158,9 +158,9 @@ class MegalithicPortalIngester(BaseIngester):
         """
         sites = []
 
-        with zipfile.ZipFile(kmz_path, 'r') as zf:
+        with zipfile.ZipFile(kmz_path, "r") as zf:
             # Find the KML file inside
-            kml_files = [f for f in zf.namelist() if f.endswith('.kml')]
+            kml_files = [f for f in zf.namelist() if f.endswith(".kml")]
             if not kml_files:
                 logger.error("No KML file found in KMZ")
                 return sites
@@ -188,11 +188,11 @@ class MegalithicPortalIngester(BaseIngester):
         root = ET.fromstring(kml_content)
 
         # KML namespace
-        ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+        ns = {"kml": "http://www.opengis.net/kml/2.2"}
 
         # Also try without namespace for older KML files
         for placemark in root.iter():
-            if placemark.tag.endswith('Placemark'):
+            if placemark.tag.endswith("Placemark"):
                 site = self._parse_placemark(placemark, ns)
                 if site:
                     sites.append(site)
@@ -210,6 +210,7 @@ class MegalithicPortalIngester(BaseIngester):
         Returns:
             Site dict or None
         """
+
         # Helper to get text from element
         def get_text(elem, tag):
             for child in elem.iter():
@@ -217,16 +218,16 @@ class MegalithicPortalIngester(BaseIngester):
                     return child.text
             return None
 
-        name = get_text(placemark, 'name')
-        description = get_text(placemark, 'description')
-        coordinates = get_text(placemark, 'coordinates')
+        name = get_text(placemark, "name")
+        description = get_text(placemark, "description")
+        coordinates = get_text(placemark, "coordinates")
 
         if not name or not coordinates:
             return None
 
         # Parse coordinates (lon,lat,alt format)
         try:
-            coord_parts = coordinates.strip().split(',')
+            coord_parts = coordinates.strip().split(",")
             lon = float(coord_parts[0])
             lat = float(coord_parts[1])
         except (ValueError, IndexError):
@@ -245,7 +246,7 @@ class MegalithicPortalIngester(BaseIngester):
         site_id = None
         if description:
             # Look for article.php?sid=XXXXXXX pattern
-            match = re.search(r'sid=(\d+)', description)
+            match = re.search(r"sid=(\d+)", description)
             if match:
                 site_id = match.group(1)
 
@@ -307,7 +308,7 @@ class MegalithicPortalIngester(BaseIngester):
         description = site.get("description", "")
         if description:
             # Strip HTML tags
-            description = re.sub(r'<[^>]+>', '', description)
+            description = re.sub(r"<[^>]+>", "", description)
             description = description[:500]
 
         # Build source URL

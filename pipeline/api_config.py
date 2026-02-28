@@ -117,7 +117,9 @@ def print_config_status():
     for name, service, key_name, url in services:
         key = get_api_key(service, key_name)
         status = "OK" if key else "MISSING"
-        masked = f"{key[:4]}...{key[-4:]}" if key and len(key) > 8 else ("SET" if key else "NOT SET")
+        masked = (
+            f"{key[:4]}...{key[-4:]}" if key and len(key) > 8 else ("SET" if key else "NOT SET")
+        )
         print(f"{name:15} [{status:7}] {masked:20} {url}")
 
     print("=" * 70)

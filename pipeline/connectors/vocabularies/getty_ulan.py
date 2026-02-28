@@ -10,7 +10,6 @@ Priority: P2
 API: http://vocab.getty.edu/
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector

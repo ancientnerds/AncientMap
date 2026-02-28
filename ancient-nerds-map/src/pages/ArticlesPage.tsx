@@ -177,6 +177,7 @@ function ArticleScreenshot({ src, alt, citationItems }: {
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             referrerPolicy="strict-origin-when-cross-origin"
             allowFullScreen
+            title="YouTube video"
           />
         </div>
       ) : (
@@ -683,14 +684,17 @@ export default function ArticlesPage() {
                 {hero.summary && (
                   <p className="articles-hero-summary">{hero.summary}</p>
                 )}
-                {firstImageUrl(hero) && (
-                  <img
-                    src={firstImageUrl(hero)!}
-                    alt=""
-                    className="articles-hero-img"
-                    loading="lazy"
-                  />
-                )}
+                {(() => {
+                  const img = firstImageUrl(hero)
+                  return img ? (
+                    <img
+                      src={img}
+                      alt={hero.title}
+                      className="articles-hero-img"
+                      loading="lazy"
+                    />
+                  ) : null
+                })()}
               </div>
               <div className="articles-hero-actions">
                 <button className="articles-hero-cta" onClick={(e) => { e.stopPropagation(); openArticle(hero) }}>
@@ -712,14 +716,17 @@ export default function ArticlesPage() {
                       className="articles-grid-card"
                       onClick={() => openArticle(article)}
                     >
-                      {firstImageUrl(article) && (
-                        <img
-                          src={firstImageUrl(article)!}
-                          alt=""
-                          className="articles-grid-card-img"
-                          loading="lazy"
-                        />
-                      )}
+                      {(() => {
+                        const img = firstImageUrl(article)
+                        return img ? (
+                          <img
+                            src={img}
+                            alt={article.title}
+                            className="articles-grid-card-img"
+                            loading="lazy"
+                          />
+                        ) : null
+                      })()}
                       <h2 className="articles-grid-card-title">{article.title}</h2>
                       <span className="articles-grid-card-date">
                         {formatDateRange(article.week_start, article.week_end)}

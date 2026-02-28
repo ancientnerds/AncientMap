@@ -148,13 +148,32 @@ class ContentItem:
 
         # Add optional fields if present
         optional_fields = [
-            "description", "thumbnail_url", "media_url", "embed_url",
-            "creator", "creator_url", "date", "date_numeric",
-            "period", "period_start", "period_end", "culture",
-            "lat", "lon", "place_name", "country",
-            "license", "license_url", "attribution",
-            "object_type", "material", "dimensions", "museum",
-            "view_count", "like_count", "relevance_score",
+            "description",
+            "thumbnail_url",
+            "media_url",
+            "embed_url",
+            "creator",
+            "creator_url",
+            "date",
+            "date_numeric",
+            "period",
+            "period_start",
+            "period_end",
+            "culture",
+            "lat",
+            "lon",
+            "place_name",
+            "country",
+            "license",
+            "license_url",
+            "attribution",
+            "object_type",
+            "material",
+            "dimensions",
+            "museum",
+            "view_count",
+            "like_count",
+            "relevance_score",
         ]
 
         for field_name in optional_fields:
@@ -340,9 +359,7 @@ class ConnectorStatus:
             "tabs": self.tabs,
         }
         if self.test_results is not None:
-            result["test_results"] = {
-                qid: tr.to_dict() for qid, tr in self.test_results.items()
-            }
+            result["test_results"] = {qid: tr.to_dict() for qid, tr in self.test_results.items()}
         if self.api_docs_url is not None:
             result["api_docs_url"] = self.api_docs_url
         return result

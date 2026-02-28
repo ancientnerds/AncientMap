@@ -10,7 +10,6 @@ Features:
 - Date extraction from metadata
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector
@@ -23,9 +22,23 @@ MIN_RELEVANCE_SCORE = 25
 
 # Map-related keywords that boost relevance
 MAP_KEYWORDS = [
-    "map", "carte", "mapa", "karte", "plan", "atlas", "chart",
-    "ancient", "antique", "historical", "historic", "old",
-    "region", "territory", "empire", "kingdom", "province"
+    "map",
+    "carte",
+    "mapa",
+    "karte",
+    "plan",
+    "atlas",
+    "chart",
+    "ancient",
+    "antique",
+    "historical",
+    "historic",
+    "old",
+    "region",
+    "territory",
+    "empire",
+    "kingdom",
+    "province",
 ]
 
 

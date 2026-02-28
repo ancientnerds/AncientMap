@@ -11,7 +11,6 @@ URL: https://www.cyark.org/
 WARNING: CyArk content is for non-commercial use only per their Data Use Policy.
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector

@@ -35,13 +35,14 @@ LOW_CREDIT_MAX_HISTORY = 5
 def _account_age_seconds(discord_id: str) -> float:
     """Calculate account age from Discord snowflake ID."""
     snowflake = int(discord_id)
-    created_ms = ((snowflake >> 22) + _DISCORD_EPOCH)
+    created_ms = (snowflake >> 22) + _DISCORD_EPOCH
     return time.time() - (created_ms / 1000)
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _split_response(text: str, limit: int = 1900) -> list[str]:
     """Split text into chunks that fit Discord's message limit."""
@@ -80,7 +81,6 @@ async def _build_history(
     return history
 
 
-
 def _build_sites_embed(sites: list[dict]) -> discord.Embed:
     """Build a compact embed showing referenced archaeological sites."""
     embed = discord.Embed(title="Referenced Sites", color=0xC02023)
@@ -100,6 +100,7 @@ def _build_sites_embed(sites: list[dict]) -> discord.Embed:
 # ---------------------------------------------------------------------------
 # Core ask logic
 # ---------------------------------------------------------------------------
+
 
 async def _handle_ask(
     discord_id: str,
@@ -123,9 +124,14 @@ async def _handle_ask(
 
     # Look up user (with row lock for credit deduction)
     with get_session() as session:
-        user = session.query(DiscordUser).filter(
-            DiscordUser.discord_id == discord_id,
-        ).with_for_update().first()
+        user = (
+            session.query(DiscordUser)
+            .filter(
+                DiscordUser.discord_id == discord_id,
+            )
+            .with_for_update()
+            .first()
+        )
         if not user:
             raise ValueError(
                 "You need to sign in at [ancientnerds.com](https://ancientnerds.com/account.html) first."
@@ -145,7 +151,11 @@ async def _handle_ask(
             session.commit()
 
     # Anti-exploit: limit history length for low-credit users
-    if history and deposit_remaining < LOW_CREDIT_THRESHOLD and len(history) > LOW_CREDIT_MAX_HISTORY:
+    if (
+        history
+        and deposit_remaining < LOW_CREDIT_THRESHOLD
+        and len(history) > LOW_CREDIT_MAX_HISTORY
+    ):
         history = history[-LOW_CREDIT_MAX_HISTORY:]
 
     # Run the agent (non-streaming, collect full response)
@@ -175,6 +185,7 @@ async def _handle_ask(
         if not is_unlimited:
             with get_session() as session:
                 from sqlalchemy import update
+
                 session.execute(
                     update(DiscordUser)
                     .where(DiscordUser.id == user_id)
@@ -194,19 +205,22 @@ async def _handle_ask(
 
         with get_session() as session:
             from sqlalchemy import update
+
             if additional > 0:
                 session.execute(
                     update(DiscordUser)
                     .where(DiscordUser.id == user_id)
                     .values(credits=DiscordUser.credits - additional)
                 )
-            session.add(TokenUsageLog(
-                user_id=user_id,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                voyage_tokens=voyage_tokens,
-                credits_used=credits_used,
-            ))
+            session.add(
+                TokenUsageLog(
+                    user_id=user_id,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    voyage_tokens=voyage_tokens,
+                    credits_used=credits_used,
+                )
+            )
             session.commit()
 
     response_text = full_text or "I wasn't able to generate a response. Please try again."
@@ -228,6 +242,7 @@ async def _send_response(
 # ---------------------------------------------------------------------------
 # Bot class
 # ---------------------------------------------------------------------------
+
 
 class LyraBot(discord.Client):
     """Discord bot client for Lyra Whiskerbyte."""
@@ -275,7 +290,9 @@ class LyraBot(discord.Client):
             try:
                 history = await _build_history(message.channel, current_msg=message)
                 text, sites = await _handle_ask(
-                    discord_id, message.content, history=history,
+                    discord_id,
+                    message.content,
+                    history=history,
                 )
                 for chunk in _split_response(text):
                     await message.reply(chunk)
@@ -295,7 +312,9 @@ class LyraBot(discord.Client):
             try:
                 history = await _build_history(message.channel, current_msg=message)
                 text, sites = await _handle_ask(
-                    discord_id, message.content, history=history,
+                    discord_id,
+                    message.content,
+                    history=history,
                 )
                 await _send_response(message.channel, text, sites)
             except ValueError as e:
@@ -330,7 +349,8 @@ def _get_bot() -> LyraBot:
             # Try to create a thread for the conversation
             display_name = interaction.user.display_name
             followup_msg = await interaction.followup.send(
-                f"**{display_name}** asked: {question[:200]}", wait=True,
+                f"**{display_name}** asked: {question[:200]}",
+                wait=True,
             )
             try:
                 thread_name = f"Lyra | {question[:90]}"
@@ -350,7 +370,8 @@ def _get_bot() -> LyraBot:
         except Exception:
             logger.exception(f"/ask error for {discord_id}")
             await interaction.followup.send(
-                "Something went wrong. Please try again later.", ephemeral=True,
+                "Something went wrong. Please try again later.",
+                ephemeral=True,
             )
 
     @ask_command.error
@@ -373,9 +394,13 @@ def _get_bot() -> LyraBot:
             discord_id = str(interaction.user.id)
 
             with get_session() as session:
-                user = session.query(DiscordUser).filter(
-                    DiscordUser.discord_id == discord_id,
-                ).first()
+                user = (
+                    session.query(DiscordUser)
+                    .filter(
+                        DiscordUser.discord_id == discord_id,
+                    )
+                    .first()
+                )
                 if not user:
                     await interaction.response.send_message(
                         "You haven't signed in yet. Visit [ancientnerds.com](https://ancientnerds.com/account.html) to connect your account.",
@@ -423,7 +448,8 @@ def _get_bot() -> LyraBot:
             print(f"[DISCORD] /credits error: {e}", flush=True)
             if not interaction.response.is_done():
                 await interaction.response.send_message(
-                    "Something went wrong checking credits.", ephemeral=True,
+                    "Something went wrong checking credits.",
+                    ephemeral=True,
                 )
 
     @credits_command.error
@@ -437,14 +463,17 @@ def _get_bot() -> LyraBot:
             print(f"[DISCORD] /credits command error: {error}", flush=True)
             if not interaction.response.is_done():
                 await interaction.response.send_message(
-                    "Something went wrong.", ephemeral=True,
+                    "Something went wrong.",
+                    ephemeral=True,
                 )
 
     @_bot.tree.command(name="link", description="Link your Discord to your Ancient Nerds account")
     @app_commands.checks.cooldown(1, 60.0)
     async def link_command(interaction: discord.Interaction):
         if not _link_limiter.check(str(interaction.user.id)):
-            await interaction.response.send_message("Please wait before using /link again.", ephemeral=True)
+            await interaction.response.send_message(
+                "Please wait before using /link again.", ephemeral=True
+            )
             return
         await interaction.response.send_message(
             "Sign in at **[ancientnerds.com/account](https://ancientnerds.com/account.html)** to link your Discord account and start chatting with Lyra!",
@@ -455,12 +484,14 @@ def _get_bot() -> LyraBot:
     async def link_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, app_commands.CommandOnCooldown):
             await interaction.response.send_message(
-                f"Please wait {error.retry_after:.0f}s.", ephemeral=True,
+                f"Please wait {error.retry_after:.0f}s.",
+                ephemeral=True,
             )
         else:
             logger.error(f"/link command error: {error}")
 
     from api.cardgame import register_commands
+
     register_commands(_bot)
 
     return _bot

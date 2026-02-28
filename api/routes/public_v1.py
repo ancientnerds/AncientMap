@@ -72,14 +72,27 @@ async def rate_limit_dependency(request: Request, response: Response):
 
 # Default source colors (same as internal sources router)
 _SOURCE_COLORS = {
-    "ancient_nerds": "#FFD700", "lyra": "#8b5cf6", "ancient_nerds_community": "#22c55e",
-    "pleiades": "#e74c3c", "dare": "#6c5ce7", "topostext": "#00bcd4",
-    "unesco": "#ffd700", "wikidata": "#9966ff", "osm_historic": "#ff9800",
-    "historic_england": "#c0392b", "ireland_nms": "#ff6699", "arachne": "#8e44ad",
-    "megalithic_portal": "#9966cc", "sacred_sites": "#ff69b4", "rock_art": "#e67e22",
-    "inscriptions_edh": "#5dade2", "coins_nomisma": "#d4af37",
-    "shipwrecks_oxrep": "#0066ff", "volcanic_holvol": "#ff0000",
-    "eamena": "#d35400", "open_context": "#2980b9",
+    "ancient_nerds": "#FFD700",
+    "lyra": "#8b5cf6",
+    "ancient_nerds_community": "#22c55e",
+    "pleiades": "#e74c3c",
+    "dare": "#6c5ce7",
+    "topostext": "#00bcd4",
+    "unesco": "#ffd700",
+    "wikidata": "#9966ff",
+    "osm_historic": "#ff9800",
+    "historic_england": "#c0392b",
+    "ireland_nms": "#ff6699",
+    "arachne": "#8e44ad",
+    "megalithic_portal": "#9966cc",
+    "sacred_sites": "#ff69b4",
+    "rock_art": "#e67e22",
+    "inscriptions_edh": "#5dade2",
+    "coins_nomisma": "#d4af37",
+    "shipwrecks_oxrep": "#0066ff",
+    "volcanic_holvol": "#ff0000",
+    "eamena": "#d35400",
+    "open_context": "#2980b9",
     "default": "#ff00ff",
 }
 
@@ -137,9 +150,9 @@ def create_public_api() -> FastAPI:
             return cached
 
         total = db.execute(text("SELECT COUNT(*) FROM unified_sites")).scalar()
-        source_count = db.execute(text(
-            "SELECT COUNT(*) FROM source_meta WHERE enabled = true"
-        )).scalar()
+        source_count = db.execute(
+            text("SELECT COUNT(*) FROM source_meta WHERE enabled = true")
+        ).scalar()
 
         response = StatusResponse(
             status="ok",
@@ -170,11 +183,27 @@ def create_public_api() -> FastAPI:
     async def get_sites_geojson(
         response: Response,
         db: Session = Depends(get_db),
-        source: list[str] | None = Query(None, description="Filter by source IDs (e.g. ancient_nerds, pleiades, dare, unesco, wikidata). Accepts multiple values. Use /facets to list all available source IDs."),
-        country: str | None = Query(None, description="Filter by country name, case-insensitive (e.g. Italy, Greece, Egypt, Turkey). Use /facets to list all countries."),
-        period: int | None = Query(None, description="Max period_start year. Negative values = BC (e.g. -3000 for 3000 BC). Typical range: -5000 to 1500."),
-        type: str | None = Query(None, alias="type", description="Filter by site type (e.g. temple, settlement, fort, tomb, theater). Use /facets to list all types (returned as 'categories')."),
-        bbox: str | None = Query(None, description="Bounding box: minlon,minlat,maxlon,maxlat (e.g. -10.5,35.0,45.0,72.0 for Europe)"),
+        source: list[str] | None = Query(
+            None,
+            description="Filter by source IDs (e.g. ancient_nerds, pleiades, dare, unesco, wikidata). Accepts multiple values. Use /facets to list all available source IDs.",
+        ),
+        country: str | None = Query(
+            None,
+            description="Filter by country name, case-insensitive (e.g. Italy, Greece, Egypt, Turkey). Use /facets to list all countries.",
+        ),
+        period: int | None = Query(
+            None,
+            description="Max period_start year. Negative values = BC (e.g. -3000 for 3000 BC). Typical range: -5000 to 1500.",
+        ),
+        type: str | None = Query(
+            None,
+            alias="type",
+            description="Filter by site type (e.g. temple, settlement, fort, tomb, theater). Use /facets to list all types (returned as 'categories').",
+        ),
+        bbox: str | None = Query(
+            None,
+            description="Bounding box: minlon,minlat,maxlon,maxlat (e.g. -10.5,35.0,45.0,72.0 for Europe)",
+        ),
         limit: int = Query(10000, ge=1, le=50000, description="Max features returned"),
     ):
         parts = [
@@ -197,9 +226,17 @@ def create_public_api() -> FastAPI:
                 coords = [float(c) for c in bbox.split(",")]
                 if len(coords) != 4:
                     raise ValueError
-                bbox_parsed = {"minlon": coords[0], "minlat": coords[1], "maxlon": coords[2], "maxlat": coords[3]}
+                bbox_parsed = {
+                    "minlon": coords[0],
+                    "minlat": coords[1],
+                    "maxlon": coords[2],
+                    "maxlat": coords[3],
+                }
             except (ValueError, IndexError):
-                raise HTTPException(status_code=400, detail="Invalid bbox format. Expected: minlon,minlat,maxlon,maxlat") from None
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid bbox format. Expected: minlon,minlat,maxlon,maxlat",
+                ) from None
 
         conditions = []
         params: dict = {"limit": limit}
@@ -248,11 +285,13 @@ def create_public_api() -> FastAPI:
             if row.thumbnail_url:
                 properties["thumbnail_url"] = row.thumbnail_url
 
-            features.append({
-                "type": "Feature",
-                "geometry": {"type": "Point", "coordinates": [row.lon, row.lat]},
-                "properties": properties,
-            })
+            features.append(
+                {
+                    "type": "Feature",
+                    "geometry": {"type": "Point", "coordinates": [row.lon, row.lat]},
+                    "properties": properties,
+                }
+            )
 
         geojson = {
             "type": "FeatureCollection",
@@ -304,11 +343,14 @@ def create_public_api() -> FastAPI:
                 name
             LIMIT :limit
         """)
-        result = db.execute(query, {
-            "pattern": f"%{q_escaped}%",
-            "exact": q_clean,
-            "limit": limit,
-        })
+        result = db.execute(
+            query,
+            {
+                "pattern": f"%{q_escaped}%",
+                "exact": q_clean,
+                "limit": limit,
+            },
+        )
 
         results = [
             SiteResult(
@@ -493,18 +535,22 @@ def create_public_api() -> FastAPI:
             raise HTTPException(status_code=404, detail="Source not found")
 
         # Type breakdown (top 20)
-        type_result = db.execute(text("""
+        type_result = db.execute(
+            text("""
             SELECT site_type, COUNT(*) as count
             FROM unified_sites
             WHERE source_id = :source_id AND site_type IS NOT NULL
             GROUP BY site_type
             ORDER BY count DESC
             LIMIT 20
-        """), {"source_id": source_id})
+        """),
+            {"source_id": source_id},
+        )
         types = {row.site_type: row.count for row in type_result}
 
         # Period breakdown
-        period_result = db.execute(text("""
+        period_result = db.execute(
+            text("""
             SELECT
                 CASE
                     WHEN period_start IS NULL THEN 'Unknown'
@@ -523,7 +569,9 @@ def create_public_api() -> FastAPI:
             WHERE source_id = :source_id
             GROUP BY period
             ORDER BY MIN(COALESCE(period_start, 0))
-        """), {"source_id": source_id})
+        """),
+            {"source_id": source_id},
+        )
         periods = {row.period: row.count for row in period_result}
 
         name = source_id.replace("_", " ").title()
@@ -576,9 +624,9 @@ def create_public_api() -> FastAPI:
         offset = (page - 1) * page_size
 
         # Total count of published items
-        count_result = db.execute(text(
-            "SELECT COUNT(*) FROM news_items WHERE post_text IS NOT NULL"
-        ))
+        count_result = db.execute(
+            text("SELECT COUNT(*) FROM news_items WHERE post_text IS NOT NULL")
+        )
         total_count = count_result.scalar()
 
         query = text("""
@@ -612,7 +660,9 @@ def create_public_api() -> FastAPI:
             youtube_url = f"https://www.youtube.com/watch?v={row.video_id}"
             youtube_deep_url = None
             if row.timestamp_seconds:
-                youtube_deep_url = f"https://www.youtube.com/watch?v={row.video_id}&t={row.timestamp_seconds}s"
+                youtube_deep_url = (
+                    f"https://www.youtube.com/watch?v={row.video_id}&t={row.timestamp_seconds}s"
+                )
 
             site_ref = None
             if row.site_id:
@@ -623,22 +673,26 @@ def create_public_api() -> FastAPI:
                     longitude=row.site_lon,
                 )
 
-            items.append(NewsItemPublic(
-                id=row.id,
-                headline=row.headline,
-                summary=row.summary,
-                youtube_url=youtube_url,
-                youtube_deep_url=youtube_deep_url,
-                video=NewsVideoPublic(
-                    id=row.video_id,
-                    title=row.video_title,
-                    channel_name=row.channel_name,
-                    published_at=row.video_published_at.isoformat() if row.video_published_at else "",
-                    thumbnail_url=row.video_thumbnail,
-                ),
-                site=site_ref,
-                created_at=row.created_at.isoformat() if row.created_at else "",
-            ))
+            items.append(
+                NewsItemPublic(
+                    id=row.id,
+                    headline=row.headline,
+                    summary=row.summary,
+                    youtube_url=youtube_url,
+                    youtube_deep_url=youtube_deep_url,
+                    video=NewsVideoPublic(
+                        id=row.video_id,
+                        title=row.video_title,
+                        channel_name=row.channel_name,
+                        published_at=row.video_published_at.isoformat()
+                        if row.video_published_at
+                        else "",
+                        thumbnail_url=row.video_thumbnail,
+                    ),
+                    site=site_ref,
+                    created_at=row.created_at.isoformat() if row.created_at else "",
+                )
+            )
 
         response = NewsFeedPublicResponse(
             items=items,
@@ -699,17 +753,19 @@ def create_public_api() -> FastAPI:
             return cached
 
         total = db.execute(text("SELECT COUNT(*) FROM unified_sites")).scalar()
-        result = db.execute(text("""
+        result = db.execute(
+            text("""
             SELECT source_id, COUNT(*) as count
             FROM unified_sites
             GROUP BY source_id
             ORDER BY count DESC
-        """))
+        """)
+        )
         by_source = {row.source_id: row.count for row in result}
 
-        last_updated_row = db.execute(text(
-            "SELECT MAX(COALESCE(updated_at, created_at)) FROM unified_sites"
-        )).scalar()
+        last_updated_row = db.execute(
+            text("SELECT MAX(COALESCE(updated_at, created_at)) FROM unified_sites")
+        ).scalar()
         last_updated = last_updated_row.isoformat() if last_updated_row else None
 
         response = StatsResponse(total_sites=total, by_source=by_source, last_updated=last_updated)
@@ -743,23 +799,28 @@ def create_public_api() -> FastAPI:
             return cached
 
         # Distinct site types
-        cat_result = db.execute(text(
-            "SELECT DISTINCT site_type FROM unified_sites "
-            "WHERE site_type IS NOT NULL AND site_type != '' "
-            "ORDER BY site_type"
-        ))
+        cat_result = db.execute(
+            text(
+                "SELECT DISTINCT site_type FROM unified_sites "
+                "WHERE site_type IS NOT NULL AND site_type != '' "
+                "ORDER BY site_type"
+            )
+        )
         categories = [row[0] for row in cat_result]
 
         # Distinct countries
-        country_result = db.execute(text(
-            "SELECT DISTINCT country FROM unified_sites "
-            "WHERE country IS NOT NULL AND country != '' "
-            "ORDER BY country"
-        ))
+        country_result = db.execute(
+            text(
+                "SELECT DISTINCT country FROM unified_sites "
+                "WHERE country IS NOT NULL AND country != '' "
+                "ORDER BY country"
+            )
+        )
         countries = [row[0] for row in country_result]
 
         # Sources with counts
-        source_result = db.execute(text("""
+        source_result = db.execute(
+            text("""
             SELECT
                 sm.id as source_id,
                 sm.name,
@@ -775,7 +836,9 @@ def create_public_api() -> FastAPI:
             ) sc ON sm.id = sc.source_id
             WHERE sm.enabled = true
             ORDER BY COALESCE(sc.count, 0) DESC
-        """), {"default_color": _SOURCE_COLORS["default"]})
+        """),
+            {"default_color": _SOURCE_COLORS["default"]},
+        )
 
         sources = [
             FacetSource(
@@ -821,7 +884,9 @@ def create_public_api() -> FastAPI:
         site_id: str | None = Query(None, description="Filter by site UUID"),
         country: str | None = Query(None, description="Filter by country name (case-insensitive)"),
         rarity: int | None = Query(None, ge=1, le=5, description="Filter by rarity tier (1-5)"),
-        category: str | None = Query(None, description="Filter by category group (e.g. Settlements, Religious)"),
+        category: str | None = Query(
+            None, description="Filter by category group (e.g. Settlements, Religious)"
+        ),
         limit: int = Query(50, ge=1, le=200, description="Max results"),
         offset: int = Query(0, ge=0, description="Pagination offset"),
         db: Session = Depends(get_db),

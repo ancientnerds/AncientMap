@@ -27,7 +27,7 @@ async def seo_site_page(
     db: Session = Depends(get_db),
 ):
     """Serve pre-rendered HTML for crawlers hitting /?site={uuid}."""
-    if not re.match(r'^[0-9a-fA-F-]{36}$', site_id):
+    if not re.match(r"^[0-9a-fA-F-]{36}$", site_id):
         return HTMLResponse(content="Invalid site ID", status_code=400)
 
     site = get_site_data(site_id, db)
@@ -35,7 +35,7 @@ async def seo_site_page(
         return HTMLResponse(content="Site not found", status_code=404)
 
     # Nginx proxies over HTTP internally; force https for public URLs
-    base_url = str(request.base_url).rstrip('/').replace('http://', 'https://')
+    base_url = str(request.base_url).rstrip("/").replace("http://", "https://")
     country_escaped = html.escape(site["country"])
     site_type_escaped = html.escape(site["site_type"] or "Archaeological site")
     og_image_url = f"{base_url}/api/og/{site_id}"
@@ -126,7 +126,7 @@ async def seo_site_page(
 </head>
 <body>
     <h1>{title_escaped}</h1>
-    <p class="meta">{site_type_escaped}{' &mdash; ' + country_escaped if site["country"] else ''}{' &mdash; ' + coord_str if coord_str else ''}</p>
+    <p class="meta">{site_type_escaped}{" &mdash; " + country_escaped if site["country"] else ""}{" &mdash; " + coord_str if coord_str else ""}</p>
     <p class="description">{desc_escaped}</p>
     <p><a href="/site.html?id={html.escape(site_id)}">View on Ancient Nerds Map</a></p>
 </body>

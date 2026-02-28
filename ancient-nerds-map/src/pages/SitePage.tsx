@@ -53,6 +53,8 @@ export default function SitePage() {
     )
   }
 
+  const flagUrl = site?.location ? getCountryFlatFlagUrl(site.location) : null
+
   return (
     <div className="site-page">
       <PageHeader currentPage="site" hideLyra>
@@ -61,8 +63,8 @@ export default function SitePage() {
           {site.location && (
             <>
               {' '}&mdash;{' '}
-              {getCountryFlatFlagUrl(site.location) && (
-                <img src={getCountryFlatFlagUrl(site.location)!} alt="" className="page-header-flag" />
+              {flagUrl && (
+                <img src={flagUrl} alt="" className="page-header-flag" />
               )}
               {site.location}
             </>

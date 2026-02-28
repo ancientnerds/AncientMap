@@ -280,6 +280,7 @@ class ArcGISProtocol:
         # Convert radius to approximate degrees
         # (1 degree ≈ 111km at equator, less at higher latitudes)
         import math
+
         lat_factor = math.cos(math.radians(lat))
         radius_deg = radius_meters / 111000
 
@@ -394,6 +395,7 @@ class ArcGISProtocol:
     def _serialize_geometry(self, geometry: dict[str, Any]) -> str:
         """Serialize geometry to JSON string."""
         import json
+
         return json.dumps(geometry)
 
     def extract_coordinates(

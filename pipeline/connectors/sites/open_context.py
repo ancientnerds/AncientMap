@@ -10,7 +10,6 @@ Priority: P1
 API: https://opencontext.org/about/services
 """
 
-
 from loguru import logger
 
 from pipeline.connectors.base import BaseConnector

@@ -22,24 +22,32 @@ def get_site_interaction_status(
 ):
     """Get like count and current user's like/bookmark status for a site."""
     with get_session() as session:
-        like_count = session.query(func.count(SiteLike.id)).filter(
-            SiteLike.site_id == site_id,
-        ).scalar()
+        like_count = (
+            session.query(func.count(SiteLike.id))
+            .filter(
+                SiteLike.site_id == site_id,
+            )
+            .scalar()
+        )
 
         liked = False
         bookmarked = False
         if user:
             liked = session.query(
-                session.query(SiteLike).filter(
+                session.query(SiteLike)
+                .filter(
                     SiteLike.user_id == user.id,
                     SiteLike.site_id == site_id,
-                ).exists()
+                )
+                .exists()
             ).scalar()
             bookmarked = session.query(
-                session.query(SiteBookmark).filter(
+                session.query(SiteBookmark)
+                .filter(
                     SiteBookmark.user_id == user.id,
                     SiteBookmark.site_id == site_id,
-                ).exists()
+                )
+                .exists()
             ).scalar()
 
     return {"like_count": like_count, "liked": liked, "bookmarked": bookmarked}
@@ -52,10 +60,14 @@ def toggle_like(
 ):
     """Toggle the current user's like on a site. Returns new state + count."""
     with get_session() as session:
-        existing = session.query(SiteLike).filter(
-            SiteLike.user_id == user.id,
-            SiteLike.site_id == site_id,
-        ).first()
+        existing = (
+            session.query(SiteLike)
+            .filter(
+                SiteLike.user_id == user.id,
+                SiteLike.site_id == site_id,
+            )
+            .first()
+        )
 
         if existing:
             session.delete(existing)
@@ -65,13 +77,18 @@ def toggle_like(
             liked = True
 
         session.flush()
-        like_count = session.query(func.count(SiteLike.id)).filter(
-            SiteLike.site_id == site_id,
-        ).scalar()
+        like_count = (
+            session.query(func.count(SiteLike.id))
+            .filter(
+                SiteLike.site_id == site_id,
+            )
+            .scalar()
+        )
 
         new_achievements = []
         if liked:
             from api.cardgame.achievements import check_achievements
+
             new_achievements = check_achievements(session, user.id, "site_like")
 
         session.commit()
@@ -86,10 +103,14 @@ def toggle_bookmark(
 ):
     """Toggle the current user's bookmark on a site."""
     with get_session() as session:
-        existing = session.query(SiteBookmark).filter(
-            SiteBookmark.user_id == user.id,
-            SiteBookmark.site_id == site_id,
-        ).first()
+        existing = (
+            session.query(SiteBookmark)
+            .filter(
+                SiteBookmark.user_id == user.id,
+                SiteBookmark.site_id == site_id,
+            )
+            .first()
+        )
 
         if existing:
             session.delete(existing)
@@ -101,6 +122,7 @@ def toggle_bookmark(
         new_achievements = []
         if bookmarked:
             from api.cardgame.achievements import check_achievements
+
             new_achievements = check_achievements(session, user.id, "site_bookmark")
 
         session.commit()
@@ -132,8 +154,7 @@ def get_my_likes(user: DiscordUser = Depends(get_current_user)):
             .all()
         )
         return [
-            {**_site_summary(site), "liked_at": liked_at.isoformat()}
-            for site, liked_at in rows
+            {**_site_summary(site), "liked_at": liked_at.isoformat()} for site, liked_at in rows
         ]
 
 
@@ -148,7 +169,4 @@ def get_my_bookmarks(user: DiscordUser = Depends(get_current_user)):
             .order_by(SiteBookmark.created_at.desc())
             .all()
         )
-        return [
-            {**_site_summary(site), "bookmarked_at": bm_at.isoformat()}
-            for site, bm_at in rows
-        ]
+        return [{**_site_summary(site), "bookmarked_at": bm_at.isoformat()} for site, bm_at in rows]

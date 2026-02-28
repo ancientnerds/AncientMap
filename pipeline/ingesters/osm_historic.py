@@ -41,17 +41,17 @@ class OSMHistoricIngester(BaseIngester):
     # Historic tags to fetch
     HISTORIC_TAGS = [
         "archaeological_site",  # 220K
-        "ruins",                # 173K
-        "tomb",                 # 72K
-        "monument",             # 71K
-        "castle",               # 53K
-        "citywalls",            # 17K
-        "fort",                 # 9K
-        "roman_road",           # 4K
-        "megalith",             # ~3K
-        "city_gate",            # 9K
-        "aqueduct",             # ~2K
-        "temple",               # ~1K
+        "ruins",  # 173K
+        "tomb",  # 72K
+        "monument",  # 71K
+        "castle",  # 53K
+        "citywalls",  # 17K
+        "fort",  # 9K
+        "roman_road",  # 4K
+        "megalith",  # ~3K
+        "city_gate",  # 9K
+        "aqueduct",  # ~2K
+        "temple",  # ~1K
     ]
 
     # World divided into regions (south, west, north, east)
@@ -147,7 +147,9 @@ class OSMHistoricIngester(BaseIngester):
         with ThreadPoolExecutor(max_workers=self.MAX_PARALLEL) as executor:
             # Submit all queries
             future_to_query = {
-                executor.submit(self._query_overpass_sync, tag, bbox, i % len(self.OVERPASS_ENDPOINTS)): (tag, region_name, bbox)
+                executor.submit(
+                    self._query_overpass_sync, tag, bbox, i % len(self.OVERPASS_ENDPOINTS)
+                ): (tag, region_name, bbox)
                 for i, (tag, region_name, bbox) in enumerate(all_queries)
             }
 
@@ -169,11 +171,15 @@ class OSMHistoricIngester(BaseIngester):
                             new_count += 1
 
                     if new_count > 0:
-                        logger.info(f"[{completed}/{total_queries}] {tag}/{region_name}: +{new_count:,} (total: {len(all_elements):,})")
+                        logger.info(
+                            f"[{completed}/{total_queries}] {tag}/{region_name}: +{new_count:,} (total: {len(all_elements):,})"
+                        )
 
                 except Exception as e:
                     failed += 1
-                    logger.warning(f"[{completed}/{total_queries}] {tag}/{region_name}: FAILED - {e}")
+                    logger.warning(
+                        f"[{completed}/{total_queries}] {tag}/{region_name}: FAILED - {e}"
+                    )
 
                 # Update progress
                 self.report_progress(completed, total_queries, f"{len(all_elements):,} sites")
@@ -195,7 +201,7 @@ class OSMHistoricIngester(BaseIngester):
                 "tags_queried": self.HISTORIC_TAGS,
                 "regions_queried": list(self.REGIONS.keys()),
                 "failed_queries": failed,
-            }
+            },
         }
 
         atomic_write_json(dest_path, output)

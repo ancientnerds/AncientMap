@@ -70,11 +70,15 @@ When displaying site images from the get_site_images tool:
 """
 
 
-def _build_context_prompt(context_type: str, context_id: str | None, context_year: int | None) -> str:
+def _build_context_prompt(
+    context_type: str, context_id: str | None, context_year: int | None
+) -> str:
     """Build additional context for the system prompt based on where the user opened the chat."""
     if context_type == "global" or not context_id:
         return ""
-    logger.debug(f"Building context prompt: type={context_type}, id={context_id}, year={context_year}")
+    logger.debug(
+        f"Building context prompt: type={context_type}, id={context_id}, year={context_year}"
+    )
 
     if context_type == "site":
         # Pre-fetch site data for context \u2014 placed as structured data, not as
@@ -105,7 +109,7 @@ def _build_context_prompt(context_type: str, context_id: str | None, context_yea
         data = _load_seshat_data()
         polity = data.get("polities", {}).get(context_id)
         if polity:
-            name = polity.get('name', context_id)
+            name = polity.get("name", context_id)
             year_info = f" at year {context_year}" if context_year else ""
             return (
                 f"\n\n## Current Context \u2014 Empire\n"
