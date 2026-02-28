@@ -239,7 +239,13 @@ def _stream_response_with_credits(
                     # Collect tool metadata from done event for achievement context
                     tool_meta = {}
                     meta = chunk.get("metadata", {})
-                    for key in ("site_ids_found", "countries_found", "periods_found", "tool_calls_count", "history_length"):
+                    for key in (
+                        "site_ids_found",
+                        "countries_found",
+                        "periods_found",
+                        "tool_calls_count",
+                        "history_length",
+                    ):
                         if key in meta:
                             tool_meta[key] = meta[key]
 
@@ -360,6 +366,7 @@ def _reconcile_credits(
 
         # Read back streak for frontend
         from api.cardgame.models import CardPlayerStats
+
         ps = session.get(CardPlayerStats, user_id)
         streak = (ps.feature_flags or {}).get("lyra_chat_streak", 0) if ps else 0
 

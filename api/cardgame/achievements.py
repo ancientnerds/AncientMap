@@ -2112,6 +2112,7 @@ def _check_single(
             flags["lyra_countries_seen"] = list(seen)
             ps.feature_flags = flags
             from sqlalchemy.orm.attributes import flag_modified
+
             flag_modified(ps, "feature_flags")
         return len(seen) >= 10
 
@@ -2130,6 +2131,7 @@ def _check_single(
             flags["lyra_periods_seen"] = list(seen)
             ps.feature_flags = flags
             from sqlalchemy.orm.attributes import flag_modified
+
             flag_modified(ps, "feature_flags")
         return len(seen) >= 5
 
@@ -2153,6 +2155,7 @@ def _check_single(
             flags["lyra_sites_discovered"] = list(seen)
             ps.feature_flags = flags
             from sqlalchemy.orm.attributes import flag_modified
+
             flag_modified(ps, "feature_flags")
         return len(seen) >= 50
 
