@@ -36,7 +36,7 @@ export function useGalleryData({
   useEffect(() => {
     if (!siteId || isOffline) return
     setIsLoadingWikiImages(true)
-    fetchSiteImages(title, { location, siteId })
+    fetchSiteImages(title, { location, siteId, wikipediaUrl: sourceUrl })
       .then(result => {
         setWikiImages(result.wikipedia.map(img => ({
           thumb: img.thumb,
@@ -51,7 +51,7 @@ export function useGalleryData({
       })
       .catch(() => setWikiImages([]))
       .finally(() => setIsLoadingWikiImages(false))
-  }, [siteId])
+  }, [siteId, sourceUrl])
 
   const fetchFn = useCallback(
     (tier: ContentTier) => contentService.getContentForSiteTier({

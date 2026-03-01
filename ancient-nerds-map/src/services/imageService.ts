@@ -105,8 +105,8 @@ export async function fetchSiteImages(
     let images: ImageResult[]
 
     if (options.wikipediaUrl) {
-      const title = extractTitleFromUrl(options.wikipediaUrl)
-      images = title ? await fetchArticleImages(title) : []
+      const parsed = extractTitleFromUrl(options.wikipediaUrl)
+      images = parsed ? await fetchArticleImages(parsed.title, parsed.lang) : []
     } else {
       images = await searchAndFetchImages(name)
     }
@@ -289,16 +289,19 @@ function thumbToOriginal(thumbUrl: string): string {
   return url
 }
 
-function extractTitleFromUrl(wikipediaUrl: string): string | null {
+function extractTitleFromUrl(wikipediaUrl: string): { title: string; lang: string } | null {
   try {
     const url = new URL(wikipediaUrl)
-    if (!/\.wikipedia\.org$/i.test(url.hostname)) return null
+    const hostMatch = url.hostname.match(/^(\w+)\.wikipedia\.org$/i)
+    if (!hostMatch) return null
+
+    const lang = hostMatch[1]
 
     const wikiMatch = url.pathname.match(/^\/wiki\/(.+)$/)
-    if (wikiMatch) return decodeURIComponent(wikiMatch[1])
+    if (wikiMatch) return { title: decodeURIComponent(wikiMatch[1]), lang }
 
     const titleParam = url.searchParams.get('title')
-    if (titleParam) return decodeURIComponent(titleParam)
+    if (titleParam) return { title: decodeURIComponent(titleParam), lang }
 
     return null
   } catch {
