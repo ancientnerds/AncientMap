@@ -22,6 +22,13 @@ export interface ImageAttribution {
   license?: string
 }
 
+export interface ReferenceLink {
+  url: string
+  title: string
+  domain: string
+  kind: string
+}
+
 export interface SiteData {
   id: string
   title: string
@@ -39,6 +46,7 @@ export interface SiteData {
   altNames?: string[]
   bestWikiUrl?: string
   sourceLanguage?: string
+  referenceLinks?: ReferenceLink[]
 }
 
 // Period list derived from centralized PERIOD_COLORS
@@ -90,6 +98,9 @@ export async function fetchSites(): Promise<SiteData[]> {
     altNames: site.altNames,
     bestWikiUrl: site.bestWikiUrl,
     sourceLanguage: site.sourceLanguage,
+    referenceLinks: site.referenceLinks?.map(r => ({
+      url: r.u, title: r.t, domain: r.d, kind: r.k,
+    })),
   }))
 }
 
@@ -143,6 +154,9 @@ export function getCurrentSites(): SiteData[] {
     altNames: site.altNames,
     bestWikiUrl: site.bestWikiUrl,
     sourceLanguage: site.sourceLanguage,
+    referenceLinks: site.referenceLinks?.map(r => ({
+      url: r.u, title: r.t, domain: r.d, kind: r.k,
+    })),
   }))
 }
 

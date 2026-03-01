@@ -303,6 +303,42 @@ class StaticExporter:
             for source, count in sorted(source_counts.items(), key=lambda x: -x[1])[:10]:
                 logger.info(f"    {source}: {count:,}")
 
+    def _load_reference_links(self, session) -> dict[str, list[dict]]:
+        """Load reference links (web-searched) grouped by site_id.
+
+        Returns top 5 per site sorted by relevance_score descending.
+        """
+        result = session.execute(
+            text("""
+            SELECT
+                site_id::text,
+                content_url,
+                title,
+                relevance_score,
+                link_metadata
+            FROM site_content_links
+            WHERE content_type = 'reference'
+            AND content_url IS NOT NULL
+            ORDER BY site_id, relevance_score DESC
+        """)
+        )
+
+        refs: dict[str, list[dict]] = defaultdict(list)
+        for row in result:
+            site_id = row.site_id
+            if len(refs[site_id]) >= 5:
+                continue
+            meta = row.link_metadata or {}
+            ref: dict = {
+                "u": row.content_url,
+                "t": row.title[:200] if row.title else "",
+                "d": meta.get("domain", ""),
+                "k": meta.get("link_type", "article"),
+            }
+            refs[site_id].append(ref)
+
+        return dict(refs)
+
     def _export_site_details(self):
         """Export full site details chunked by region."""
         logger.info("\nExporting site details by region...")
@@ -311,6 +347,11 @@ class StaticExporter:
         details_dir.mkdir(parents=True, exist_ok=True)
 
         with get_session() as session:
+            # Pre-load reference links for all sites
+            ref_links = self._load_reference_links(session)
+            if ref_links:
+                logger.info(f"  Loaded reference links for {len(ref_links):,} sites")
+
             for region_id, region_config in REGIONS.items():
                 bounds = region_config["bounds"]
 
@@ -347,7 +388,7 @@ class StaticExporter:
                 sites = {}
                 for row in result:
                     site_id = str(row.id)
-                    sites[site_id] = {
+                    site_data: dict = {
                         "id": site_id,
                         "source": row.source_id,
                         "source_record_id": row.source_record_id,
@@ -367,6 +408,13 @@ class StaticExporter:
                         "thumbnail": row.thumbnail_url,
                         "url": row.source_url,
                     }
+
+                    # Add reference links if available
+                    site_refs = ref_links.get(site_id)
+                    if site_refs:
+                        site_data["refs"] = site_refs
+
+                    sites[site_id] = site_data
 
                 if sites:
                     output = {

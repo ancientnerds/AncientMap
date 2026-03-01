@@ -172,6 +172,13 @@ export interface LocationSectionProps {
   onMinimize?: () => void
 }
 
+export interface ReferenceLink {
+  url: string
+  title: string
+  domain: string
+  kind: string  // article, academic, database, museum, unesco, government, project
+}
+
 export interface DescriptionSectionProps {
   description?: string
   sourceId: string
@@ -183,6 +190,7 @@ export interface DescriptionSectionProps {
   isFounder?: boolean
   bestWikiUrl?: string
   sourceLanguage?: string
+  referenceLinks?: ReferenceLink[]
 }
 
 export interface MapSectionProps {

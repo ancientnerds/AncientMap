@@ -70,6 +70,14 @@ export interface SiteCompact {
   an?: string[]   // alternate names (optional, Latin-script only)
 }
 
+/** Compact reference link from API */
+export interface ReferenceLink {
+  u: string   // url
+  t: string   // title
+  d: string   // domain
+  k: string   // kind (article, academic, database, museum, unesco, government, project)
+}
+
 /** Expanded site for internal use */
 export interface Site {
   id: string
@@ -90,6 +98,7 @@ export interface Site {
   cardDescription?: string  // short card description from card_stats
   bestWikiUrl?: string    // best Wikipedia article URL (from enrichment)
   sourceLanguage?: string // source language of best wiki article (e.g. "de")
+  referenceLinks?: ReferenceLink[]  // web-searched reference links
 }
 
 /** sites/index.json file format */
