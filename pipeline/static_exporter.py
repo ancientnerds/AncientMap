@@ -240,7 +240,8 @@ class StaticExporter:
                     us.source_url,
                     cs.card_description,
                     cs.best_wiki_url,
-                    cs.source_language
+                    cs.source_language,
+                    us.raw_data
                 FROM unified_sites us
                 LEFT JOIN card_stats cs ON cs.site_id = us.id
                 ORDER BY us.source_id, us.name
@@ -285,6 +286,18 @@ class StaticExporter:
                 site_alt = alt_names_map.get(str(row.id))
                 if site_alt:
                     site["an"] = site_alt[:10]
+
+                # Description citations from enrichment pipeline
+                rd = row.raw_data
+                if isinstance(rd, str):
+                    import json as _json
+
+                    try:
+                        rd = _json.loads(rd)
+                    except (ValueError, TypeError):
+                        rd = None
+                if isinstance(rd, dict) and "description_citations" in rd:
+                    site["dc"] = rd["description_citations"]
 
                 sites.append(site)
                 source_counts[row.source_id] += 1
@@ -413,6 +426,18 @@ class StaticExporter:
                     site_refs = ref_links.get(site_id)
                     if site_refs:
                         site_data["refs"] = site_refs
+
+                    # Description citations from enrichment pipeline
+                    rd = row.raw_data
+                    if isinstance(rd, str):
+                        import json as _json
+
+                        try:
+                            rd = _json.loads(rd)
+                        except (ValueError, TypeError):
+                            rd = None
+                    if isinstance(rd, dict) and "description_citations" in rd:
+                        site_data["description_citations"] = rd["description_citations"]
 
                     sites[site_id] = site_data
 
