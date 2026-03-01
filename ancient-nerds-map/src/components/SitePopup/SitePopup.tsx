@@ -514,7 +514,7 @@ export default function SitePopup({
         <div className="popup-content-side">
           <HeroHeader
             title={displaySite.title}
-            heroImageSrc={galleryHook.heroImageSrc}
+            heroImageSrc={galleryHook.heroImageSrc || displaySite.image}
             isLoadingImages={galleryHook.isLoadingImages}
             sourceInfo={sourceInfo}
             sourceName={sourceName}
