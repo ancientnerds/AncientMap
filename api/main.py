@@ -97,6 +97,8 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE unified_sites ADD COLUMN IF NOT EXISTS last_audited TIMESTAMP",
             # Ensure card_stats enrichment columns exist (model defines them but create_all won't add to existing table)
             "ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS confidence_score FLOAT",
+            "ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS source_language VARCHAR(10)",
+            "ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS best_wiki_url VARCHAR(500)",
             # Ensure db_snapshots has source_id column (added after initial table creation)
             "ALTER TABLE db_snapshots ADD COLUMN IF NOT EXISTS source_id VARCHAR(50)",
             # Strip orphaned [N] citation markers from sites lacking citation metadata
