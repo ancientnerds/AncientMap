@@ -32,8 +32,10 @@ Usage:
     python scripts/audit_enrich.py --phase export           # Only: re-export static JSON
     python scripts/audit_enrich.py --phase web-links          # Prepare batches for reference link discovery
     python scripts/audit_enrich.py --phase web-links-merge    # Merge discovered reference links → DB
-    python scripts/audit_enrich.py --phase deep-research      # Prepare batches for multi-source description rewrite
-    python scripts/audit_enrich.py --phase deep-research-merge # Merge deep-research results → DB
+    python scripts/audit_enrich.py --phase cited-description     # Prepare batches for cited description writing
+    python scripts/audit_enrich.py --phase cited-description-merge # Validate cited description results
+    python scripts/audit_enrich.py --phase verify-citations      # Prepare batches for citation verification
+    python scripts/audit_enrich.py --phase verify-citations-merge # Merge verified citations → DB
     python scripts/audit_enrich.py --limit 3                # Test with 3 random sites
     python scripts/audit_enrich.py --api-url https://ancientnerds.com  # Use production API
 """
@@ -61,7 +63,6 @@ from pipeline.utils.text import categorize_period
 OUTPUT_DIR = Path(__file__).parent.parent / "output"
 BATCH_DIR = OUTPUT_DIR / "audit_batches"
 WEBLINK_DIR = OUTPUT_DIR / "weblink_batches"
-DEEP_RESEARCH_DIR = OUTPUT_DIR / "deep_research_batches"
 CITED_DESC_DIR = OUTPUT_DIR / "cited_description_batches"
 VERIFICATION_DIR = OUTPUT_DIR / "verification_batches"
 
@@ -96,20 +97,22 @@ def _fetch_geojson(api_url: str, source_id: str) -> list[dict]:
     for feat in features:
         props = feat.get("properties", {})
         coords = feat.get("geometry", {}).get("coordinates", [None, None])
-        sites.append({
-            "site_id": props.get("id"),
-            "source_id": props.get("source_id", source_id),
-            "name": props.get("name"),
-            "lon": coords[0],
-            "lat": coords[1],
-            "site_type": props.get("site_type"),
-            "period_start": props.get("period_start"),
-            "period_name": props.get("period_name"),
-            "country": props.get("country"),
-            "description": props.get("description"),
-            "source_url": props.get("source_url"),
-            "thumbnail_url": props.get("thumbnail_url"),
-        })
+        sites.append(
+            {
+                "site_id": props.get("id"),
+                "source_id": props.get("source_id", source_id),
+                "name": props.get("name"),
+                "lon": coords[0],
+                "lat": coords[1],
+                "site_type": props.get("site_type"),
+                "period_start": props.get("period_start"),
+                "period_name": props.get("period_name"),
+                "country": props.get("country"),
+                "description": props.get("description"),
+                "source_url": props.get("source_url"),
+                "thumbnail_url": props.get("thumbnail_url"),
+            }
+        )
     return sites
 
 
@@ -141,7 +144,8 @@ def sync_from_production(api_url: str, source_ids: list[str]) -> dict:
     with engine.connect() as conn:
         conn.execute(text("SET statement_timeout = '300s'"))
         # Create temp table
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE TEMP TABLE _sync_incoming (
                 site_id TEXT PRIMARY KEY,
                 source_id TEXT,
@@ -156,11 +160,12 @@ def sync_from_production(api_url: str, source_ids: list[str]) -> dict:
                 source_url TEXT,
                 thumbnail_url TEXT
             ) ON COMMIT DROP
-        """))
+        """)
+        )
 
         # Batch insert into temp table (chunks of 500)
         for i in range(0, len(valid), 500):
-            chunk = valid[i:i + 500]
+            chunk = valid[i : i + 500]
             values_parts = []
             params = {}
             for j, site in enumerate(chunk):
@@ -191,7 +196,8 @@ def sync_from_production(api_url: str, source_ids: list[str]) -> dict:
         print(f"  Loaded {len(valid)} sites into temp table", flush=True)
 
         # Batch UPDATE existing sites from temp table
-        result_upd = conn.execute(text("""
+        result_upd = conn.execute(
+            text("""
             UPDATE unified_sites us SET
                 name = si.name,
                 lat = si.lat,
@@ -206,11 +212,13 @@ def sync_from_production(api_url: str, source_ids: list[str]) -> dict:
                 updated_at = NOW()
             FROM _sync_incoming si
             WHERE us.id::text = si.site_id
-        """))
+        """)
+        )
         updated = result_upd.rowcount
 
         # Batch INSERT new sites (exist on production but not locally)
-        result_ins = conn.execute(text("""
+        result_ins = conn.execute(
+            text("""
             INSERT INTO unified_sites (
                 id, source_id, name, lat, lon, geom,
                 site_type, period_start, period_name,
@@ -226,7 +234,8 @@ def sync_from_production(api_url: str, source_ids: list[str]) -> dict:
             FROM _sync_incoming si
             LEFT JOIN unified_sites us ON us.id::text = si.site_id
             WHERE us.id IS NULL
-        """))
+        """)
+        )
         inserted = result_ins.rowcount
 
         conn.commit()
@@ -239,7 +248,10 @@ def sync_from_production(api_url: str, source_ids: list[str]) -> dict:
 # Phase: Fetch Candidates
 # =============================================================================
 
-def fetch_audit_candidates(source_ids: list[str], mode: str, limit: int | None = None) -> list[dict]:
+
+def fetch_audit_candidates(
+    source_ids: list[str], mode: str, limit: int | None = None
+) -> list[dict]:
     """Query unified_sites for audit candidates.
 
     In default mode, skips sites audited within the last 90 days.
@@ -283,22 +295,24 @@ def fetch_audit_candidates(source_ids: list[str], mode: str, limit: int | None =
 
     sites = []
     for row in rows:
-        sites.append({
-            "site_id": row.site_id,
-            "source_id": row.source_id,
-            "name": row.name,
-            "lat": row.lat,
-            "lon": row.lon,
-            "site_type": row.site_type,
-            "period_start": row.period_start,
-            "period_end": row.period_end,
-            "period_name": row.period_name,
-            "country": row.country,
-            "description": row.description,
-            "source_url": row.source_url,
-            "edited_by": row.edited_by,
-            "last_audited": row.last_audited.isoformat() if row.last_audited else None,
-        })
+        sites.append(
+            {
+                "site_id": row.site_id,
+                "source_id": row.source_id,
+                "name": row.name,
+                "lat": row.lat,
+                "lon": row.lon,
+                "site_type": row.site_type,
+                "period_start": row.period_start,
+                "period_end": row.period_end,
+                "period_name": row.period_name,
+                "country": row.country,
+                "description": row.description,
+                "source_url": row.source_url,
+                "edited_by": row.edited_by,
+                "last_audited": row.last_audited.isoformat() if row.last_audited else None,
+            }
+        )
 
     OUTPUT_DIR.mkdir(exist_ok=True)
     output_path = OUTPUT_DIR / "audit_sites.json"
@@ -320,6 +334,7 @@ def fetch_audit_candidates(source_ids: list[str], mode: str, limit: int | None =
 # =============================================================================
 # Wave 0: Mechanical Fixes
 # =============================================================================
+
 
 def run_mechanical_fixes(sites: list[dict]) -> dict:
     """Apply deterministic fixes: site_type normalization, period recomputation,
@@ -398,9 +413,9 @@ def run_mechanical_fixes(sites: list[dict]) -> dict:
 
         # --- Site type normalization ---
         # Fetch distinct raw site_types across all sources
-        raw_types = conn.execute(text(
-            "SELECT DISTINCT site_type FROM unified_sites WHERE site_type IS NOT NULL"
-        )).fetchall()
+        raw_types = conn.execute(
+            text("SELECT DISTINCT site_type FROM unified_sites WHERE site_type IS NOT NULL")
+        ).fetchall()
 
         for (raw,) in raw_types:
             canonical = normalize_site_type(raw)
@@ -418,11 +433,13 @@ def run_mechanical_fixes(sites: list[dict]) -> dict:
 
         # --- Period name recomputation ---
         # For sites with period_start but mismatched period_name
-        rows = conn.execute(text("""
+        rows = conn.execute(
+            text("""
             SELECT id::text AS site_id, period_start, period_name
             FROM unified_sites
             WHERE period_start IS NOT NULL
-        """)).fetchall()
+        """)
+        ).fetchall()
 
         for row in rows:
             expected = categorize_period(row.period_start)
@@ -448,14 +465,18 @@ def run_mechanical_fixes(sites: list[dict]) -> dict:
                 stats["period_name_recomputed"] += 1
 
         # --- Country backfill from coordinates ---
-        rows = conn.execute(text("""
+        rows = conn.execute(
+            text("""
             SELECT id::text AS site_id, lat, lon
             FROM unified_sites
             WHERE country IS NULL AND lat IS NOT NULL AND lon IS NOT NULL
-        """)).fetchall()
+        """)
+        ).fetchall()
 
         if rows:
-            print(f"  Country backfill: checking {len(rows)} sites with NULL country...", flush=True)
+            print(
+                f"  Country backfill: checking {len(rows)} sites with NULL country...", flush=True
+            )
         for row in rows:
             country = lookup_country(row.lat, row.lon)
             if country:
@@ -491,6 +512,7 @@ def run_mechanical_fixes(sites: list[dict]) -> dict:
 # =============================================================================
 # Wave 1: Wikidata Enrichment Pipeline
 # =============================================================================
+
 
 def run_enrichment_pipeline(card_sites: list[dict] | None = None) -> dict:
     """Run the existing enrichment scripts in sequence.
@@ -618,8 +640,7 @@ def apply_enrichment(overwrite: bool = False) -> dict:
 
     # Filter to high-confidence matches
     hc_site_ids = {
-        sid for sid, match in qids.items()
-        if match.get("confidence", 0) >= MIN_CONFIDENCE
+        sid for sid, match in qids.items() if match.get("confidence", 0) >= MIN_CONFIDENCE
     }
     print(f"[APPLY] {len(hc_site_ids)} sites with confidence >= {MIN_CONFIDENCE}", flush=True)
 
@@ -669,14 +690,18 @@ def apply_enrichment(overwrite: bool = False) -> dict:
                 old_val = row.period_start
                 if old_val != new_val:
                     updates["period_start"] = new_val
-                    stat_key = "period_start_overwritten" if old_val is not None else "period_start_filled"
-                    change_log.append({
-                        "site_id": site_id,
-                        "field": "period_start",
-                        "old": old_val,
-                        "new": new_val,
-                        "source": "wikidata_P571",
-                    })
+                    stat_key = (
+                        "period_start_overwritten" if old_val is not None else "period_start_filled"
+                    )
+                    change_log.append(
+                        {
+                            "site_id": site_id,
+                            "field": "period_start",
+                            "old": old_val,
+                            "new": new_val,
+                            "source": "wikidata_P571",
+                        }
+                    )
                     stats[stat_key] += 1
 
             # period_name recomputation (after period_start fill)
@@ -685,14 +710,20 @@ def apply_enrichment(overwrite: bool = False) -> dict:
                 new_period_name = categorize_period(effective_period_start)
                 if new_period_name and new_period_name != row.period_name:
                     updates["period_name"] = new_period_name
-                    stat_key = "period_name_overwritten" if row.period_name is not None else "period_name_filled"
-                    change_log.append({
-                        "site_id": site_id,
-                        "field": "period_name",
-                        "old": row.period_name,
-                        "new": new_period_name,
-                        "source": "computed_from_period_start",
-                    })
+                    stat_key = (
+                        "period_name_overwritten"
+                        if row.period_name is not None
+                        else "period_name_filled"
+                    )
+                    change_log.append(
+                        {
+                            "site_id": site_id,
+                            "field": "period_name",
+                            "old": row.period_name,
+                            "new": new_period_name,
+                            "source": "computed_from_period_start",
+                        }
+                    )
                     stats[stat_key] += 1
 
             # thumbnail_url from P18 commons_image
@@ -700,14 +731,20 @@ def apply_enrichment(overwrite: bool = False) -> dict:
                 thumb_url = get_commons_thumb_url(site_claims["commons_image"], width=400)
                 if thumb_url != row.thumbnail_url:
                     updates["thumbnail_url"] = thumb_url
-                    stat_key = "thumbnail_url_overwritten" if row.thumbnail_url is not None else "thumbnail_url_filled"
-                    change_log.append({
-                        "site_id": site_id,
-                        "field": "thumbnail_url",
-                        "old": row.thumbnail_url,
-                        "new": thumb_url,
-                        "source": "wikidata_P18",
-                    })
+                    stat_key = (
+                        "thumbnail_url_overwritten"
+                        if row.thumbnail_url is not None
+                        else "thumbnail_url_filled"
+                    )
+                    change_log.append(
+                        {
+                            "site_id": site_id,
+                            "field": "thumbnail_url",
+                            "old": row.thumbnail_url,
+                            "new": thumb_url,
+                            "source": "wikidata_P18",
+                        }
+                    )
                     stats[stat_key] += 1
 
             # source_url from wiki article URL
@@ -715,9 +752,7 @@ def apply_enrichment(overwrite: bool = False) -> dict:
             existing_is_fragment = row.source_url and "#" in row.source_url
             new_is_dedicated = site_wiki.get("url") and "#" not in site_wiki["url"]
             if site_wiki.get("url") and (
-                row.source_url is None
-                or overwrite
-                or (existing_is_fragment and new_is_dedicated)
+                row.source_url is None or overwrite or (existing_is_fragment and new_is_dedicated)
             ):
                 new_url = site_wiki["url"]
                 if new_url != row.source_url:
@@ -728,13 +763,15 @@ def apply_enrichment(overwrite: bool = False) -> dict:
                         stat_key = "source_url_overwritten"
                     else:
                         stat_key = "source_url_filled"
-                    change_log.append({
-                        "site_id": site_id,
-                        "field": "source_url",
-                        "old": row.source_url,
-                        "new": new_url,
-                        "source": "wikipedia_article",
-                    })
+                    change_log.append(
+                        {
+                            "site_id": site_id,
+                            "field": "source_url",
+                            "old": row.source_url,
+                            "new": new_url,
+                            "source": "wikipedia_article",
+                        }
+                    )
                     stats[stat_key] += 1
 
             # description from Wikipedia extract (first 500 chars)
@@ -742,14 +779,20 @@ def apply_enrichment(overwrite: bool = False) -> dict:
                 desc = site_wiki["extract"][:500]
                 if desc != row.description:
                     updates["description"] = desc
-                    stat_key = "description_overwritten" if row.description is not None else "description_filled"
-                    change_log.append({
-                        "site_id": site_id,
-                        "field": "description",
-                        "old": row.description,
-                        "new": desc,
-                        "source": "wikipedia_extract",
-                    })
+                    stat_key = (
+                        "description_overwritten"
+                        if row.description is not None
+                        else "description_filled"
+                    )
+                    change_log.append(
+                        {
+                            "site_id": site_id,
+                            "field": "description",
+                            "old": row.description,
+                            "new": desc,
+                            "source": "wikipedia_extract",
+                        }
+                    )
                     stats[stat_key] += 1
 
             # country from P17 (fallback when reverse geocoding missed it)
@@ -757,14 +800,18 @@ def apply_enrichment(overwrite: bool = False) -> dict:
                 new_country = site_claims["country"]
                 if new_country != row.country:
                     updates["country"] = new_country
-                    stat_key = "country_overwritten" if row.country is not None else "country_filled"
-                    change_log.append({
-                        "site_id": site_id,
-                        "field": "country",
-                        "old": row.country,
-                        "new": new_country,
-                        "source": "wikidata_P17",
-                    })
+                    stat_key = (
+                        "country_overwritten" if row.country is not None else "country_filled"
+                    )
+                    change_log.append(
+                        {
+                            "site_id": site_id,
+                            "field": "country",
+                            "old": row.country,
+                            "new": new_country,
+                            "source": "wikidata_P17",
+                        }
+                    )
                     stats[stat_key] += 1
 
             if not updates:
@@ -809,6 +856,7 @@ def apply_enrichment(overwrite: bool = False) -> dict:
 # =============================================================================
 # Wave 2: Prepare Agent Batches
 # =============================================================================
+
 
 def prepare_agent_batches(sites: list[dict]) -> dict:
     """Identify sites needing research and split into agent batches.
@@ -899,9 +947,7 @@ def prepare_agent_batches(sites: list[dict]) -> dict:
         if not src_url:
             issues.append("source_url is missing — find authoritative reference")
         elif "#" in src_url:
-            issues.append(
-                "source_url is a fragment link (#section) — find dedicated article"
-            )
+            issues.append("source_url is a fragment link (#section) — find dedicated article")
 
         # Thumbnail URL missing and no Wikidata P18
         if not site.get("thumbnail_url") and not claim.get("commons_image"):
@@ -929,7 +975,7 @@ def prepare_agent_batches(sites: list[dict]) -> dict:
     batches = []
     for i in range(0, len(needs_research), batch_size):
         batch_num = f"{len(batches) + 1:03d}"
-        batch_sites = needs_research[i:i + batch_size]
+        batch_sites = needs_research[i : i + batch_size]
         batch = {
             "batch_id": batch_num,
             "sites": batch_sites,
@@ -946,8 +992,7 @@ def prepare_agent_batches(sites: list[dict]) -> dict:
         "batch_count": len(batches),
         "batch_size": batch_size,
         "batches": {
-            bid: {"status": "pending", "input": f"batch_{bid}_input.json"}
-            for bid in batches
+            bid: {"status": "pending", "input": f"batch_{bid}_input.json"} for bid in batches
         },
     }
     manifest_path = BATCH_DIR / "merge_manifest.json"
@@ -963,7 +1008,10 @@ def prepare_agent_batches(sites: list[dict]) -> dict:
     print(f"[WAVE 2] Prepared {len(batches)} batches ({len(needs_research)} sites)", flush=True)
     print(f"  Batch files: {BATCH_DIR}/batch_NNN_input.json", flush=True)
     print(f"  Manifest: {manifest_path}", flush=True)
-    print(f"\n  Next: Launch agents to process each batch (see AUDIT_ENRICHMENT.md Step 3)", flush=True)
+    print(
+        f"\n  Next: Launch agents to process each batch (see AUDIT_ENRICHMENT.md Step 3)",
+        flush=True,
+    )
 
     return stats
 
@@ -972,7 +1020,10 @@ def show_agent_status() -> None:
     """Show batch status and handoff instructions for Wave 2 agent research."""
     manifest_path = BATCH_DIR / "merge_manifest.json"
     if not manifest_path.exists():
-        print("[AGENTS] No manifest found. Run --phase verify first to create batch files.", flush=True)
+        print(
+            "[AGENTS] No manifest found. Run --phase verify first to create batch files.",
+            flush=True,
+        )
         return
 
     with open(manifest_path, encoding="utf-8") as f:
@@ -982,7 +1033,9 @@ def show_agent_status() -> None:
     total_sites = manifest.get("total_sites", 0)
 
     pending = [bid for bid, info in batches.items() if info.get("status") == "pending"]
-    completed = [bid for bid, info in batches.items() if info.get("status") in ("merged", "completed")]
+    completed = [
+        bid for bid, info in batches.items() if info.get("status") in ("merged", "completed")
+    ]
     has_results = []
     for bid in pending:
         result_path = BATCH_DIR / f"batch_{bid}_results.json"
@@ -1016,7 +1069,10 @@ def show_agent_status() -> None:
                 print(f"    {count:>4}x  {key}", flush=True)
 
         if has_results:
-            print(f"\n  {len(has_results)} batch(es) already have results (ready to merge).", flush=True)
+            print(
+                f"\n  {len(has_results)} batch(es) already have results (ready to merge).",
+                flush=True,
+            )
             remaining = len(pending) - len(has_results)
             if remaining > 0:
                 print(f"  {remaining} batch(es) still need agent research.", flush=True)
@@ -1034,6 +1090,7 @@ def show_agent_status() -> None:
 # Merge Agent Results (Post-Wave 2)
 # =============================================================================
 
+
 def merge_results(dry_run: bool = False) -> dict:
     """Read all batch result files and apply fixes to the database.
 
@@ -1049,16 +1106,30 @@ def merge_results(dry_run: bool = False) -> dict:
     with open(manifest_path, encoding="utf-8") as f:
         manifest = json.load(f)
 
-    ALLOWED_MERGE_FIELDS = frozenset({
-        "name", "site_type", "period_start", "period_end", "period_name",
-        "country", "description", "source_url", "thumbnail_url",
-    })
+    ALLOWED_MERGE_FIELDS = frozenset(
+        {
+            "name",
+            "site_type",
+            "period_start",
+            "period_end",
+            "period_name",
+            "country",
+            "description",
+            "source_url",
+            "thumbnail_url",
+        }
+    )
 
     canonical_types_lower = {t.lower() for t in CANONICAL_TYPES}
 
     stats = {
-        "auto_applied": 0, "verified": 0, "manual": 0, "skipped_low": 0,
-        "deferred_medium": 0, "validation_warnings": 0, "batches_merged": 0,
+        "auto_applied": 0,
+        "verified": 0,
+        "manual": 0,
+        "skipped_low": 0,
+        "deferred_medium": 0,
+        "validation_warnings": 0,
+        "batches_merged": 0,
     }
     manual_review_items: list[dict] = []
 
@@ -1092,12 +1163,14 @@ def merge_results(dry_run: bool = False) -> dict:
                         # Flat dict format: {"field_name": value, ...}
                         fixes = []
                         for fld, val in raw_fixes.items():
-                            fixes.append({
-                                "field": fld,
-                                "old": None,
-                                "new": val,
-                                "confidence": "high",
-                            })
+                            fixes.append(
+                                {
+                                    "field": fld,
+                                    "old": None,
+                                    "new": val,
+                                    "confidence": "high",
+                                }
+                            )
                     else:
                         fixes = raw_fixes
 
@@ -1115,18 +1188,23 @@ def merge_results(dry_run: bool = False) -> dict:
 
                         # Defer medium-confidence fixes to manual review
                         if confidence == "medium":
-                            manual_review_items.append({
-                                "site_id": site_id,
-                                "fix": fix,
-                                "batch_id": batch_id,
-                                "reason": "medium confidence — needs human verification",
-                            })
+                            manual_review_items.append(
+                                {
+                                    "site_id": site_id,
+                                    "fix": fix,
+                                    "batch_id": batch_id,
+                                    "reason": "medium confidence — needs human verification",
+                                }
+                            )
                             stats["deferred_medium"] += 1
                             continue
 
                         # Only high-confidence fixes reach here
                         if field not in ALLOWED_MERGE_FIELDS:
-                            print(f"  WARNING: Skipping unknown field '{field}' for {site_id}", flush=True)
+                            print(
+                                f"  WARNING: Skipping unknown field '{field}' for {site_id}",
+                                flush=True,
+                            )
                             stats["validation_warnings"] += 1
                             continue
 
@@ -1207,12 +1285,14 @@ def merge_results(dry_run: bool = False) -> dict:
                 elif status == "verified":
                     stats["verified"] += 1
                 elif status == "manual":
-                    manual_review_items.append({
-                        "site_id": site_id,
-                        "manual_notes": site_result.get("manual_notes", ""),
-                        "batch_id": batch_id,
-                        "reason": "agent flagged for manual review",
-                    })
+                    manual_review_items.append(
+                        {
+                            "site_id": site_id,
+                            "manual_notes": site_result.get("manual_notes", ""),
+                            "batch_id": batch_id,
+                            "reason": "agent flagged for manual review",
+                        }
+                    )
                     stats["manual"] += 1
 
                 if not dry_run and conn:
@@ -1261,7 +1341,9 @@ def merge_results(dry_run: bool = False) -> dict:
         review_path = OUTPUT_DIR / "audit_manual_review.json"
         with open(review_path, "w", encoding="utf-8") as f:
             json.dump(manual_review_items, f, indent=2, ensure_ascii=False)
-        print(f"\n  Manual review items: {review_path} ({len(manual_review_items)} items)", flush=True)
+        print(
+            f"\n  Manual review items: {review_path} ({len(manual_review_items)} items)", flush=True
+        )
 
     prefix = "[MERGE DRY RUN]" if dry_run else "[MERGE]"
     print(f"{prefix} Complete:", flush=True)
@@ -1274,6 +1356,7 @@ def merge_results(dry_run: bool = False) -> dict:
 # =============================================================================
 # Phase: Package for db.html Upload
 # =============================================================================
+
 
 def package_for_upload(source_ids: list[str], candidate_site_ids: set[str] | None = None) -> dict:
     """Export cleaned sites from local DB as GeoJSON files for upload via db.html.
@@ -1378,6 +1461,7 @@ def package_for_upload(source_ids: list[str], candidate_site_ids: set[str] | Non
 # =============================================================================
 # Export Static JSON
 # =============================================================================
+
 
 def export_static() -> None:
     """Re-export static JSON files after database changes."""
@@ -1530,8 +1614,7 @@ def prepare_weblinks_batches(batch_size: int = 10, limit: int | None = None) -> 
         "batch_count": len(batches),
         "batch_size": batch_size,
         "batches": {
-            bid: {"status": "pending", "input": f"batch_{bid}_input.json"}
-            for bid in batches
+            bid: {"status": "pending", "input": f"batch_{bid}_input.json"} for bid in batches
         },
     }
     manifest_path = WEBLINK_DIR / "manifest.json"
@@ -1542,7 +1625,7 @@ def prepare_weblinks_batches(batch_size: int = 10, limit: int | None = None) -> 
     print(f"  Batch files: {WEBLINK_DIR}/batch_NNN_input.json", flush=True)
     print(f"  Manifest: {manifest_path}", flush=True)
     print(f"\n  Next steps:", flush=True)
-    print(f'    1. Launch agents to process each batch with WebSearch', flush=True)
+    print(f"    1. Launch agents to process each batch with WebSearch", flush=True)
     print(f"    2. Save results as batch_NNN_results.json", flush=True)
     print(f"    3. Run: python scripts/audit_enrich.py --phase web-links-merge", flush=True)
 
@@ -1668,39 +1751,31 @@ def merge_weblinks(dry_run: bool = False) -> dict:
 
 
 # =============================================================================
-# Deep Research: Multi-Source Description Rewrite (Claude Agent + WebFetch)
+# Cited Description Writing (Phase 2 of Verified Enrichment Pipeline)
 # =============================================================================
 
-DEEP_RESEARCH_AGENT_PROMPT = """\
-You are a research agent rewriting descriptions for ancient/archaeological sites using \
-multiple sources. Your goal: transform single-source Wikipedia descriptions into comprehensive, \
-multi-source descriptions grounded in real evidence.
+CITED_DESC_AGENT_PROMPT = """\
+You are writing verified, cited descriptions for archaeological sites.
 
 ## Your task
 
-1. Read the batch input file: `output/deep_research_batches/batch_{BATCH_ID}_input.json`
-2. For each site, WebFetch the top 2-3 reference URLs (prefer quality: "high")
-3. Synthesize a NEW description and card_description from ALL available sources
-4. Write results to: `output/deep_research_batches/batch_{BATCH_ID}_results.json`
-
-## Description writing rules (500-1000 chars)
-
-Structure:
-- [Archaeological identity + dating] — [What the site IS and why it matters].
-- [Key findings/features from specialist sources].
-- [Cultural/historical significance].
-- [Heritage status if applicable].
-
-Rules:
-- 500-1000 characters (hard limits)
-- Ground EVERY fact in a source you can cite (Wikipedia extract, Wikidata claims, or a WebFetched URL)
-- Include facts from multiple sources — don't just reword Wikipedia
-- When reference URL fetches fail, lean on Wikipedia + Wikidata but mark confidence as "medium"
-- No hedging language ("it is believed", "possibly", "some scholars think") unless citing a specific debate
-- No generic filler ("important site", "rich history", "ancient ruins")
-- Prefer concrete details: dimensions, artifact counts, inscription quotes, engineering feats
-- Include heritage designations when available (UNESCO, Scheduled Monument, etc.)
-- Use the site's period_start and period_name for dating context
+1. Read the batch input file: `output/cited_description_batches/batch_{BATCH_ID}_input.json`
+2. For each site, you receive:
+   - Current description (Wikipedia-based)
+   - Reference links discovered by web search
+   - Wikipedia extract
+   - Wikidata enrichment data
+3. WebFetch the top 3 reference URLs (prefer quality: "high")
+4. Before using a fetched page, VERIFY it's about THIS specific archaeological site:
+   - Does it mention the correct country/region?
+   - Is it about archaeology/history (not a namesake — video game, modern building, hotel)?
+   - If wrong entity, skip it and note in fetch_errors
+5. Write a new description (500-800 chars, HARD LIMIT 900) with [1][2][3] citation markers
+   - Count characters carefully. Descriptions over 900 chars WILL BE REJECTED.
+   - Aim for 600-750 chars. Be concise. Prefer shorter sentences.
+6. Write a card_description (max 200 chars) — see style guide below
+7. Every factual claim MUST have a [N] citation
+8. Extract relevant excerpts from each fetched page (max 500 chars each)
 
 ## Card description style guide (max 200 chars)
 
@@ -1731,505 +1806,6 @@ Anti-examples (DON'T write like this):
 - "An important archaeological site with rich history." (generic)
 - "Located in Turkey, this ancient temple..." (mentions country)
 - "Date unknown. A mysterious site in the desert." (says "date unknown")
-
-## Anti-hallucination rules
-
-1. Only include facts from: the wiki_extract, Wikidata enrichment claims, or WebFetched reference URLs
-2. Every description MUST record a sources_used array listing domains/sources actually used
-3. If ALL reference URL fetches fail → confidence = "medium", lean on Wikipedia + Wikidata only
-4. Descriptions with < 2 sources at "high" confidence will be auto-rejected by merge
-
-## Output format
-
-Write this exact JSON structure to the results file:
-
-```json
-{
-  "batch_id": "NNN",
-  "sites": {
-    "<site_id>": {
-      "status": "improved|unchanged|failed",
-      "description": {
-        "text": "...",
-        "char_count": 714,
-        "sources_used": ["wikipedia", "historicengland.org.uk", "unesco.org"],
-        "confidence": "high"
-      },
-      "card_description": {
-        "text": "...",
-        "char_count": 170
-      },
-      "corrections": [],
-      "fetch_errors": ["https://example.com/dead-link — 404"]
-    }
-  },
-  "stats": {
-    "improved": 8,
-    "unchanged": 1,
-    "failed": 1
-  }
-}
-```
-
-Status values:
-- "improved" — new description is better than the original (multi-source, more detail)
-- "unchanged" — current description is already excellent or no new info found
-- "failed" — could not produce a valid description (explain in fetch_errors)
-
-corrections array (optional): If you discover factual errors during research, report them:
-```json
-{"field": "period_start", "old": 200, "new": -200, "confidence": "high", "evidence": "..."}
-```
-
-## Process each site
-
-1. Read its current_description, wiki_extract, enrichment data, and reference_links
-2. WebFetch the top 2-3 reference URLs (prefer quality: "high"). Use the WebFetch tool.
-3. Extract key facts not in the Wikipedia description
-4. Synthesize a new description combining all sources (500-1000 chars)
-5. Write a new card_description (max 200 chars) following the style guide
-6. Record sources_used and set confidence level
-
-IMPORTANT: Every site_id from the input MUST appear in the output. Do not skip any site.
-
-After processing all sites, count the stats and write the output file.
-Print a one-line summary: "Batch {BATCH_ID} complete: X improved, Y unchanged, Z failed"
-"""
-
-
-def prepare_deep_research_batches(batch_size: int = 10, limit: int | None = None) -> dict:
-    """Prepare batch input files for deep research description rewrite.
-
-    Queries sites that have reference links, embeds all available context
-    (description, wiki extract, enrichment data, reference links), and
-    creates JSON batch files for agents to process.
-    """
-    print("\n[DEEP-RESEARCH] Preparing batches for multi-source description rewrite...", flush=True)
-
-    DEEP_RESEARCH_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Load enrichment data files
-    enrichment_qids = {}
-    enrichment_claims = {}
-    enrichment_wiki = {}
-
-    qids_path = OUTPUT_DIR / "enrichment_qids.json"
-    claims_path = OUTPUT_DIR / "enrichment_claims.json"
-    wiki_path = OUTPUT_DIR / "enrichment_wiki.json"
-
-    if qids_path.exists():
-        with open(qids_path, encoding="utf-8") as f:
-            enrichment_qids = json.load(f).get("matches", {})
-        print(f"  Loaded {len(enrichment_qids)} QID matches", flush=True)
-
-    if claims_path.exists():
-        with open(claims_path, encoding="utf-8") as f:
-            enrichment_claims = json.load(f).get("claims", {})
-        print(f"  Loaded {len(enrichment_claims)} claim records", flush=True)
-
-    if wiki_path.exists():
-        with open(wiki_path, encoding="utf-8") as f:
-            enrichment_wiki = json.load(f).get("articles", {})
-        print(f"  Loaded {len(enrichment_wiki)} wiki extracts", flush=True)
-
-    with engine.connect() as conn:
-        # Get sites that have reference links (Phase A complete) but haven't been deep-researched yet
-        # Also include sites without reference links — they still benefit from Wikidata + Wikipedia rewrite
-        query_str = """
-            SELECT
-                us.id::text AS site_id,
-                us.name,
-                us.country,
-                us.site_type,
-                us.period_name,
-                us.period_start,
-                us.source_url,
-                us.description,
-                us.raw_data
-            FROM unified_sites us
-            WHERE us.source_id = 'ancient_nerds'
-            AND (us.raw_data IS NULL OR us.raw_data->>'description_pre_enrichment' IS NULL)
-            ORDER BY us.name
-        """
-        if limit:
-            query_str += f" LIMIT {limit}"
-
-        rows = conn.execute(text(query_str)).fetchall()
-
-        if not rows:
-            print("[DEEP-RESEARCH] All sites already processed. Nothing to do.", flush=True)
-            return {"total_sites": 0, "batches": 0}
-
-        # Fetch reference links for all sites
-        ref_rows = conn.execute(text("""
-            SELECT
-                site_id::text,
-                title,
-                content_url,
-                link_metadata->>'domain' AS domain,
-                link_metadata->>'link_type' AS link_type,
-                CASE WHEN relevance_score >= 0.85 THEN 'high' ELSE 'medium' END AS quality
-            FROM site_content_links
-            WHERE content_type = 'reference'
-            ORDER BY site_id, relevance_score DESC
-        """)).fetchall()
-
-        # Fetch all card descriptions in one query
-        card_desc_rows = conn.execute(text("""
-            SELECT site_id::text, card_description
-            FROM card_stats
-            WHERE site_id IN (
-                SELECT id FROM unified_sites WHERE source_id = 'ancient_nerds'
-            )
-        """)).fetchall()
-
-    # Group reference links by site_id
-    ref_links_by_site: dict[str, list[dict]] = {}
-    for ref in ref_rows:
-        ref_map = dict(ref._mapping)
-        sid = ref_map.pop("site_id")
-        ref_links_by_site.setdefault(sid, []).append(ref_map)
-
-    # Map card descriptions by site_id
-    card_descs: dict[str, str] = {}
-    for cd_row in card_desc_rows:
-        card_descs[cd_row[0]] = cd_row[1]
-
-    # Build site entries with all context
-    sites = []
-    for row in rows:
-        r = dict(row._mapping)
-        site_id = r["site_id"]
-        name = r["name"]
-
-        # Look up enrichment data by site_id
-        qid_entry = enrichment_qids.get(site_id, {})
-        claims_entry = enrichment_claims.get(site_id, {})
-        wiki_entry = enrichment_wiki.get(site_id, {})
-
-        # Build enrichment context
-        enrichment = {}
-        if qid_entry.get("qid"):
-            enrichment["qid"] = qid_entry["qid"]
-        if claims_entry.get("heritage"):
-            enrichment["heritage"] = claims_entry["heritage"]
-        if claims_entry.get("inception") is not None:
-            enrichment["inception"] = claims_entry["inception"]
-        if claims_entry.get("commons_image"):
-            enrichment["commons_image"] = claims_entry["commons_image"]
-
-        site_entry = {
-            "site_id": site_id,
-            "name": name,
-            "country": r["country"],
-            "site_type": r["site_type"],
-            "period_start": r["period_start"],
-            "period_name": r["period_name"],
-            "source_url": r["source_url"],
-            "current_description": r["description"],
-            "current_card_description": card_descs.get(site_id),
-            "enrichment": enrichment,
-            "wiki_extract": wiki_entry.get("extract", ""),
-            "reference_links": ref_links_by_site.get(site_id, []),
-        }
-        sites.append(site_entry)
-
-    # Split into batches
-    batches = []
-    for i in range(0, len(sites), batch_size):
-        batch_num = f"{len(batches) + 1:03d}"
-        batch_sites = sites[i : i + batch_size]
-        batch = {
-            "batch_id": batch_num,
-            "sites": batch_sites,
-        }
-        batch_path = DEEP_RESEARCH_DIR / f"batch_{batch_num}_input.json"
-        with open(batch_path, "w", encoding="utf-8") as f:
-            json.dump(batch, f, indent=2, ensure_ascii=False, default=str)
-        batches.append(batch_num)
-
-    # Write manifest
-    manifest = {
-        "created": datetime.now(timezone.utc).isoformat(),
-        "total_sites": len(sites),
-        "batch_count": len(batches),
-        "batch_size": batch_size,
-        "batches": {
-            bid: {"status": "pending", "input": f"batch_{bid}_input.json"}
-            for bid in batches
-        },
-    }
-    manifest_path = DEEP_RESEARCH_DIR / "manifest.json"
-    with open(manifest_path, "w", encoding="utf-8") as f:
-        json.dump(manifest, f, indent=2, ensure_ascii=False)
-
-    sites_with_refs = sum(1 for s in sites if s["reference_links"])
-    sites_without_refs = len(sites) - sites_with_refs
-
-    print(f"[DEEP-RESEARCH] Prepared {len(batches)} batches ({len(sites)} sites)", flush=True)
-    print(f"  Sites with reference links: {sites_with_refs}", flush=True)
-    print(f"  Sites without reference links: {sites_without_refs}", flush=True)
-    print(f"  Batch files: {DEEP_RESEARCH_DIR}/batch_NNN_input.json", flush=True)
-    print(f"  Manifest: {manifest_path}", flush=True)
-    print(f"\n  Next steps:", flush=True)
-    print(f"    1. Launch agents to process each batch (10 per wave)", flush=True)
-    print(f"    2. Agent writes batch_NNN_results.json", flush=True)
-    print(f"    3. Run: python scripts/audit_enrich.py --phase deep-research-merge", flush=True)
-
-    return {"total_sites": len(sites), "batches": len(batches), "batch_size": batch_size}
-
-
-def merge_deep_research(dry_run: bool = False) -> dict:
-    """Merge deep research results into unified_sites and card_stats.
-
-    Reads batch result files, validates descriptions, backs up originals
-    in raw_data, and writes new descriptions and card_descriptions.
-    """
-    manifest_path = DEEP_RESEARCH_DIR / "manifest.json"
-    if not manifest_path.exists():
-        print("[DEEP-RESEARCH-MERGE] No manifest found. Run --phase deep-research first.", flush=True)
-        return {"error": "no manifest"}
-
-    with open(manifest_path, encoding="utf-8") as f:
-        manifest = json.load(f)
-
-    stats = {
-        "batches_processed": 0,
-        "descriptions_updated": 0,
-        "card_descriptions_updated": 0,
-        "corrections_applied": 0,
-        "skipped_validation": 0,
-        "skipped_low_confidence": 0,
-        "errors": 0,
-    }
-
-    for batch_id, batch_info in manifest.get("batches", {}).items():
-        if batch_info.get("status") == "merged":
-            continue
-
-        result_path = DEEP_RESEARCH_DIR / f"batch_{batch_id}_results.json"
-        if not result_path.exists():
-            continue
-
-        with open(result_path, encoding="utf-8") as f:
-            results = json.load(f)
-
-        site_results = results.get("sites", {})
-
-        if dry_run:
-            for site_id, site_data in site_results.items():
-                status = site_data.get("status", "?")
-                desc = site_data.get("description", {})
-                card = site_data.get("card_description", {})
-                desc_len = len(desc.get("text", ""))
-                card_len = len(card.get("text", ""))
-                sources = desc.get("sources_used", [])
-                conf = desc.get("confidence", "?")
-                print(
-                    f"  [DRY-RUN] {site_id[:8]}.. status={status} "
-                    f"desc={desc_len}c card={card_len}c "
-                    f"sources={len(sources)} conf={conf}",
-                    flush=True,
-                )
-            stats["batches_processed"] += 1
-            continue
-
-        with engine.connect() as conn:
-            for site_id, site_data in site_results.items():
-                status = site_data.get("status")
-                if status in ("unchanged", "failed"):
-                    continue
-
-                desc_data = site_data.get("description", {})
-                card_data = site_data.get("card_description", {})
-                desc_text = desc_data.get("text", "")
-                card_text = card_data.get("text", "")
-                sources_used = desc_data.get("sources_used", [])
-                confidence = desc_data.get("confidence", "low")
-
-                # Validate description length (500-1000 chars)
-                if len(desc_text) < 400 or len(desc_text) > 1100:
-                    print(
-                        f"  [SKIP] {site_id[:8]}.. description length {len(desc_text)} "
-                        f"outside 400-1100 range",
-                        flush=True,
-                    )
-                    stats["skipped_validation"] += 1
-                    continue
-
-                # Validate card_description length (max 200 chars)
-                if card_text and len(card_text) > 210:
-                    print(
-                        f"  [SKIP] {site_id[:8]}.. card_description length {len(card_text)} > 210",
-                        flush=True,
-                    )
-                    stats["skipped_validation"] += 1
-                    continue
-
-                # Reject low-confidence descriptions with < 2 sources
-                if confidence == "high" and len(sources_used) < 2:
-                    print(
-                        f"  [SKIP] {site_id[:8]}.. claims high confidence but only "
-                        f"{len(sources_used)} sources",
-                        flush=True,
-                    )
-                    stats["skipped_low_confidence"] += 1
-                    continue
-
-                # Skip low confidence entirely
-                if confidence == "low":
-                    stats["skipped_low_confidence"] += 1
-                    continue
-
-                # Backup original description in raw_data before overwriting
-                try:
-                    conn.execute(
-                        text("""
-                            UPDATE unified_sites
-                            SET raw_data = COALESCE(raw_data, '{}'::jsonb) ||
-                                jsonb_build_object('description_pre_enrichment', description)
-                            WHERE id = CAST(:site_id AS uuid)
-                            AND (raw_data IS NULL OR raw_data->>'description_pre_enrichment' IS NULL)
-                        """),
-                        {"site_id": site_id},
-                    )
-
-                    # Write new description
-                    conn.execute(
-                        text("""
-                            UPDATE unified_sites
-                            SET description = :desc, edited_by = 'deep_research'
-                            WHERE id = CAST(:site_id AS uuid)
-                        """),
-                        {"site_id": site_id, "desc": desc_text},
-                    )
-                    stats["descriptions_updated"] += 1
-
-                    # Write new card_description
-                    if card_text:
-                        conn.execute(
-                            text("""
-                                UPDATE card_stats
-                                SET card_description = :card_desc
-                                WHERE site_id = CAST(:site_id AS uuid)
-                            """),
-                            {"site_id": site_id, "card_desc": card_text[:200]},
-                        )
-                        stats["card_descriptions_updated"] += 1
-
-                except Exception as e:
-                    print(f"  [ERROR] {site_id[:8]}.. {e}", flush=True)
-                    stats["errors"] += 1
-                    continue
-
-                # Process corrections (period_start fixes etc.)
-                for correction in site_data.get("corrections", []):
-                    field = correction.get("field")
-                    old_val = correction.get("old")
-                    new_val = correction.get("new")
-                    corr_conf = correction.get("confidence", "low")
-
-                    if corr_conf != "high" or field not in ("period_start",):
-                        continue
-
-                    try:
-                        if old_val is None:
-                            conn.execute(
-                                text(f"""
-                                    UPDATE unified_sites
-                                    SET {field} = :new_val, edited_by = 'deep_research'
-                                    WHERE id = CAST(:site_id AS uuid) AND {field} IS NULL
-                                """),
-                                {"site_id": site_id, "new_val": new_val},
-                            )
-                        else:
-                            conn.execute(
-                                text(f"""
-                                    UPDATE unified_sites
-                                    SET {field} = :new_val, edited_by = 'deep_research'
-                                    WHERE id = CAST(:site_id AS uuid) AND {field} = :old_val
-                                """),
-                                {"site_id": site_id, "new_val": new_val, "old_val": old_val},
-                            )
-                        stats["corrections_applied"] += 1
-                    except Exception as e:
-                        print(f"  [ERROR] correction {site_id[:8]}.. {field}: {e}", flush=True)
-
-            conn.commit()
-
-        # Update manifest
-        manifest["batches"][batch_id]["status"] = "merged"
-        stats["batches_processed"] += 1
-
-    # Save updated manifest
-    with open(manifest_path, "w", encoding="utf-8") as f:
-        json.dump(manifest, f, indent=2, ensure_ascii=False)
-
-    # Update card_descriptions.json output file
-    if not dry_run and stats["card_descriptions_updated"] > 0:
-        _update_card_descriptions_file()
-
-    print(f"[DEEP-RESEARCH-MERGE] Processed {stats['batches_processed']} batches", flush=True)
-    print(f"  Descriptions updated: {stats['descriptions_updated']}", flush=True)
-    print(f"  Card descriptions updated: {stats['card_descriptions_updated']}", flush=True)
-    print(f"  Corrections applied: {stats['corrections_applied']}", flush=True)
-    print(f"  Skipped (validation): {stats['skipped_validation']}", flush=True)
-    print(f"  Skipped (low confidence): {stats['skipped_low_confidence']}", flush=True)
-    if stats["errors"]:
-        print(f"  Errors: {stats['errors']}", flush=True)
-
-    return stats
-
-
-def _update_card_descriptions_file():
-    """Re-export card_descriptions.json from the database."""
-    out_path = OUTPUT_DIR / "card_descriptions.json"
-    with engine.connect() as conn:
-        rows = conn.execute(
-            text("""
-                SELECT us.id::text AS site_id, us.name, cs.card_description
-                FROM unified_sites us
-                JOIN card_stats cs ON cs.site_id = us.id
-                WHERE us.source_id = 'ancient_nerds'
-                AND cs.card_description IS NOT NULL
-                AND cs.card_description != ''
-                ORDER BY us.name
-            """)
-        ).fetchall()
-
-    descriptions = {row.site_id: {"name": row.name, "card_description": row.card_description} for row in rows}
-
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(descriptions, f, indent=2, ensure_ascii=False)
-
-    print(f"  Updated {out_path} ({len(descriptions)} descriptions)", flush=True)
-
-
-# =============================================================================
-# Cited Description Writing (Phase 2 of Verified Enrichment Pipeline)
-# =============================================================================
-
-CITED_DESC_AGENT_PROMPT = """\
-You are writing verified, cited descriptions for archaeological sites.
-
-## Your task
-
-1. Read the batch input file: `output/cited_description_batches/batch_{BATCH_ID}_input.json`
-2. For each site, you receive:
-   - Current description (Wikipedia-based)
-   - Reference links discovered by web search
-   - Wikipedia extract
-   - Wikidata enrichment data
-3. WebFetch the top 3 reference URLs (prefer quality: "high")
-4. Before using a fetched page, VERIFY it's about THIS specific archaeological site:
-   - Does it mention the correct country/region?
-   - Is it about archaeology/history (not a namesake — video game, modern building, hotel)?
-   - If wrong entity, skip it and note in fetch_errors
-5. Write a new description (500-800 chars, HARD LIMIT 900) with [1][2][3] citation markers
-   - Count characters carefully. Descriptions over 900 chars WILL BE REJECTED.
-   - Aim for 600-750 chars. Be concise. Prefer shorter sentences.
-6. Every factual claim MUST have a [N] citation
-7. Extract relevant excerpts from each fetched page (max 500 chars each)
 
 ## Citation rules
 
@@ -2272,6 +1848,10 @@ Write this exact JSON structure to `output/cited_description_batches/batch_{BATC
         "citations": [
           {"n": 1, "url": "https://...", "title": "Page Title", "domain": "example.com", "claim": "exact claim text this citation supports"}
         ]
+      },
+      "card_description": {
+        "text": "Built 9,600 BC — 6,000 years before Stonehenge...",
+        "char_count": 170
       },
       "fetched_excerpts": {
         "https://example.com/page": "Relevant text extracted from this page (max 500 chars)..."
@@ -2368,7 +1948,8 @@ def prepare_cited_description_batches(batch_size: int = 10, limit: int | None = 
             return {"total_sites": 0, "batches": 0}
 
         # Fetch reference links for all sites
-        ref_rows = conn.execute(text("""
+        ref_rows = conn.execute(
+            text("""
             SELECT
                 site_id::text,
                 title,
@@ -2379,16 +1960,19 @@ def prepare_cited_description_batches(batch_size: int = 10, limit: int | None = 
             FROM site_content_links
             WHERE content_type = 'reference'
             ORDER BY site_id, relevance_score DESC
-        """)).fetchall()
+        """)
+        ).fetchall()
 
         # Fetch card descriptions
-        card_desc_rows = conn.execute(text("""
+        card_desc_rows = conn.execute(
+            text("""
             SELECT site_id::text, card_description
             FROM card_stats
             WHERE site_id IN (
                 SELECT id FROM unified_sites WHERE source_id = 'ancient_nerds'
             )
-        """)).fetchall()
+        """)
+        ).fetchall()
 
     # Group reference links by site_id
     ref_links_by_site: dict[str, list[dict]] = {}
@@ -2459,8 +2043,7 @@ def prepare_cited_description_batches(batch_size: int = 10, limit: int | None = 
         "batch_count": len(batches),
         "batch_size": batch_size,
         "batches": {
-            bid: {"status": "pending", "input": f"batch_{bid}_input.json"}
-            for bid in batches
+            bid: {"status": "pending", "input": f"batch_{bid}_input.json"} for bid in batches
         },
     }
     manifest_path = CITED_DESC_DIR / "manifest.json"
@@ -2497,7 +2080,9 @@ def merge_cited_descriptions(dry_run: bool = False) -> dict:
     """
     manifest_path = CITED_DESC_DIR / "manifest.json"
     if not manifest_path.exists():
-        print("[CITED-DESC-MERGE] No manifest found. Run --phase cited-description first.", flush=True)
+        print(
+            "[CITED-DESC-MERGE] No manifest found. Run --phase cited-description first.", flush=True
+        )
         return {"error": "no manifest"}
 
     with open(manifest_path, encoding="utf-8") as f:
@@ -2550,7 +2135,7 @@ def merge_cited_descriptions(dry_run: bool = False) -> dict:
                 for cit in citations:
                     missing = [k for k in ("n", "url", "title", "domain", "claim") if k not in cit]
                     if missing:
-                        errors.append(f"citation [{ cit.get('n', '?') }] missing fields: {missing}")
+                        errors.append(f"citation [{cit.get('n', '?')}] missing fields: {missing}")
 
                 # Validate fetched_excerpts exist for cited URLs
                 cited_urls = {c["url"] for c in citations if "url" in c}
@@ -2559,14 +2144,22 @@ def merge_cited_descriptions(dry_run: bool = False) -> dict:
                     if url not in fetched_excerpts and url not in fetch_error_urls:
                         errors.append(f"no fetched excerpt for cited URL: {url[:60]}")
 
+                # Validate card_description length (max 210 chars with tolerance)
+                card_desc = site_data.get("card_description", {})
+                card_text = card_desc.get("text", "") if isinstance(card_desc, dict) else ""
+                if card_text and len(card_text) > 210:
+                    errors.append(f"card_description length {len(card_text)} > 210")
+
                 if errors:
                     batch_valid = False
                     stats["validation_errors"] += len(errors)
-                    validation_errors.append({
-                        "batch_id": batch_id,
-                        "site_id": site_id,
-                        "errors": errors,
-                    })
+                    validation_errors.append(
+                        {
+                            "batch_id": batch_id,
+                            "site_id": site_id,
+                            "errors": errors,
+                        }
+                    )
                     if dry_run:
                         for err in errors:
                             print(f"  [WARN] {site_id[:8]}.. {err}", flush=True)
@@ -2627,6 +2220,7 @@ Your job is to check what's in front of you, not to research further.
    - `citations`: Array of objects, each with {n, url, title, domain, claim}
    - `fetched_excerpts`: Dict mapping URL → extracted text from that page (max 500 chars each).
      This includes Wikipedia extracts for any cited Wikipedia URLs.
+   - `card_description`: Short card text (max 200 chars) — pass through unchanged
    - `site_id`: The site's unique ID
    - `source_batch`: Which Phase 2 batch this came from
 
@@ -2650,8 +2244,8 @@ For each [N] citation, check:
 ## Scoring
 
 verification_score = verified_claims / total_claims
-- score >= 0.5 → verdict: "pass" (description is usable)
-- score < 0.5 → verdict: "fail" (too many unverified claims, keep original)
+- score >= 0.7 → verdict: "pass" (description is usable)
+- score < 0.7 → verdict: "fail" (too many unverified claims, keep original)
 
 ## Output format
 
@@ -2666,6 +2260,7 @@ Write this exact JSON structure to `output/verification_batches/batch_{BATCH_ID}
       "verified_citations": [
         {"n": 1, "url": "https://...", "title": "...", "domain": "...", "claim": "..."}
       ],
+      "card_description": "Passed through from input unchanged",
       "removed_claims": [
         {"original_n": 2, "claim": "The site was founded in 500 BC", "reason": "Source does not mention founding date"}
       ],
@@ -2758,15 +2353,22 @@ def prepare_verification_batches(batch_size: int = 10, limit: int | None = None)
                 for citation in desc["citations"]:
                     url = citation.get("url", "")
                     if "wikipedia.org" in url and url not in fetched_excerpts:
-                        fetched_excerpts[url] = wiki_extract[:500]
+                        fetched_excerpts[url] = wiki_extract[:2000]
 
-            verification_sites.append({
-                "site_id": site_id,
-                "description": desc["text"],
-                "citations": desc["citations"],
-                "fetched_excerpts": fetched_excerpts,
-                "source_batch": batch_id,
-            })
+            # Pass through card_description from Phase 2 results
+            card_desc = site_data.get("card_description", {})
+            card_text = card_desc.get("text", "") if isinstance(card_desc, dict) else ""
+
+            verification_sites.append(
+                {
+                    "site_id": site_id,
+                    "description": desc["text"],
+                    "citations": desc["citations"],
+                    "fetched_excerpts": fetched_excerpts,
+                    "card_description": card_text,
+                    "source_batch": batch_id,
+                }
+            )
 
     if not verification_sites:
         print("[VERIFY] No improved sites found in Phase 2 results. Nothing to verify.", flush=True)
@@ -2796,8 +2398,7 @@ def prepare_verification_batches(batch_size: int = 10, limit: int | None = None)
         "batch_count": len(batches),
         "batch_size": batch_size,
         "batches": {
-            bid: {"status": "pending", "input": f"batch_{bid}_input.json"}
-            for bid in batches
+            bid: {"status": "pending", "input": f"batch_{bid}_input.json"} for bid in batches
         },
     }
     manifest_path = VERIFICATION_DIR / "manifest.json"
@@ -2812,7 +2413,11 @@ def prepare_verification_batches(batch_size: int = 10, limit: int | None = None)
     print(f"    2. Agent writes batch_NNN_results.json", flush=True)
     print(f"    3. Run: python scripts/audit_enrich.py --phase verify-citations-merge", flush=True)
 
-    return {"total_sites": len(verification_sites), "batches": len(batches), "batch_size": batch_size}
+    return {
+        "total_sites": len(verification_sites),
+        "batches": len(batches),
+        "batch_size": batch_size,
+    }
 
 
 # =============================================================================
@@ -2821,16 +2426,20 @@ def prepare_verification_batches(batch_size: int = 10, limit: int | None = None)
 
 
 def merge_verification(dry_run: bool = False) -> dict:
-    """Merge verification results into unified_sites.
+    """Merge verification results into unified_sites and card_stats.
 
-    For verdict 'pass' (score >= 0.5):
+    For verdict 'pass' (score >= 0.7):
     - Backup original description in raw_data->description_pre_enrichment
+    - For re-enrichment: backup current enriched version in description_prev_enrichment
     - Write verified_description to unified_sites.description
     - Write verified_citations to raw_data->description_citations
+    - Write card_description to card_stats
 
     For verdict 'fail':
     - Keep original description
     - Add to manual review list
+
+    Auto-exports static JSON if any descriptions were updated.
     """
     manifest_path = VERIFICATION_DIR / "manifest.json"
     if not manifest_path.exists():
@@ -2843,12 +2452,16 @@ def merge_verification(dry_run: bool = False) -> dict:
     stats = {
         "batches_processed": 0,
         "descriptions_updated": 0,
+        "card_descriptions_updated": 0,
         "kept_original": 0,
         "total_claims_removed": 0,
         "errors": 0,
     }
     failed_sites: list[dict] = []
     source_batches_consumed: set[str] = set()  # Phase 2 batch IDs consumed by verification
+
+    # Build card_description lookup from verification input files
+    card_descs_by_site: dict[str, str] = {}
 
     for batch_id, batch_info in manifest.get("batches", {}).items():
         if batch_info.get("status") == "merged":
@@ -2859,6 +2472,7 @@ def merge_verification(dry_run: bool = False) -> dict:
             continue
 
         # Track which Phase 2 batches are consumed by this verification batch
+        # and collect card_descriptions from input
         input_path = VERIFICATION_DIR / f"batch_{batch_id}_input.json"
         if input_path.exists():
             with open(input_path, encoding="utf-8") as f:
@@ -2866,6 +2480,8 @@ def merge_verification(dry_run: bool = False) -> dict:
             for site in input_data.get("sites", []):
                 if site.get("source_batch"):
                     source_batches_consumed.add(site["source_batch"])
+                if site.get("card_description"):
+                    card_descs_by_site[site["site_id"]] = site["card_description"]
 
         with open(result_path, encoding="utf-8") as f:
             results = json.load(f)
@@ -2894,7 +2510,7 @@ def merge_verification(dry_run: bool = False) -> dict:
                 removed_claims = site_data.get("removed_claims", [])
                 stats["total_claims_removed"] += len(removed_claims)
 
-                if verdict == "pass" and score >= 0.5:
+                if verdict == "pass" and score >= 0.7:
                     verified_desc = site_data.get("verified_description", "")
                     verified_citations = site_data.get("verified_citations", [])
 
@@ -2903,7 +2519,20 @@ def merge_verification(dry_run: bool = False) -> dict:
                         continue
 
                     try:
-                        # Backup original description
+                        # Idempotency: if already enriched, back up current enriched version
+                        conn.execute(
+                            text("""
+                                UPDATE unified_sites
+                                SET raw_data = COALESCE(raw_data, '{}'::jsonb) ||
+                                    jsonb_build_object('description_prev_enrichment', description)
+                                WHERE id = CAST(:site_id AS uuid)
+                                AND edited_by = 'cited_enrichment'
+                                AND (raw_data IS NULL OR raw_data->>'description_prev_enrichment' IS NULL)
+                            """),
+                            {"site_id": site_id},
+                        )
+
+                        # Backup original description (first-time enrichment)
                         conn.execute(
                             text("""
                                 UPDATE unified_sites
@@ -2933,21 +2562,41 @@ def merge_verification(dry_run: bool = False) -> dict:
                         )
                         stats["descriptions_updated"] += 1
 
+                        # Write card_description to card_stats
+                        # Prefer from verification result, fall back to input passthrough
+                        card_text = site_data.get("card_description", "") or card_descs_by_site.get(
+                            site_id, ""
+                        )
+                        if card_text:
+                            conn.execute(
+                                text("""
+                                    UPDATE card_stats
+                                    SET card_description = :card_desc
+                                    WHERE site_id = CAST(:site_id AS uuid)
+                                """),
+                                {"site_id": site_id, "card_desc": card_text[:200]},
+                            )
+                            stats["card_descriptions_updated"] += 1
+
                     except Exception as e:
                         print(f"  [ERROR] {site_id[:8]}.. {e}", flush=True)
                         stats["errors"] += 1
 
                 else:
-                    # verdict == "fail" or score < 0.5 — keep original
+                    # verdict == "fail" or score < 0.7 — keep original
                     stats["kept_original"] += 1
-                    failed_sites.append({
-                        "site_id": site_id,
-                        "batch_id": batch_id,
-                        "verdict": verdict,
-                        "verification_score": score,
-                        "removed_claims": removed_claims,
-                        "reason": "verification score below threshold" if score < 0.5 else "all claims failed",
-                    })
+                    failed_sites.append(
+                        {
+                            "site_id": site_id,
+                            "batch_id": batch_id,
+                            "verdict": verdict,
+                            "verification_score": score,
+                            "removed_claims": removed_claims,
+                            "reason": "verification score below 0.7"
+                            if score < 0.7
+                            else "all claims failed",
+                        }
+                    )
 
             conn.commit()
 
@@ -2971,22 +2620,32 @@ def merge_verification(dry_run: bool = False) -> dict:
                         cited_manifest["batches"][src_bid]["status"] = "merged"
                 with open(cited_manifest_path, "w", encoding="utf-8") as f:
                     json.dump(cited_manifest, f, indent=2, ensure_ascii=False)
-                print(f"  Marked {len(source_batches_consumed)} Phase 2 batches as merged", flush=True)
+                print(
+                    f"  Marked {len(source_batches_consumed)} Phase 2 batches as merged", flush=True
+                )
 
     # Write failed sites for manual review
     if failed_sites:
         review_path = OUTPUT_DIR / "manual_review_failed_verification.json"
         with open(review_path, "w", encoding="utf-8") as f:
             json.dump(failed_sites, f, indent=2, ensure_ascii=False)
-        print(f"\n  Failed verification review: {review_path} ({len(failed_sites)} sites)", flush=True)
+        print(
+            f"\n  Failed verification review: {review_path} ({len(failed_sites)} sites)", flush=True
+        )
 
     prefix = "[VERIFY-MERGE DRY RUN]" if dry_run else "[VERIFY-MERGE]"
     print(f"{prefix} Processed {stats['batches_processed']} batches", flush=True)
     print(f"  Descriptions updated: {stats['descriptions_updated']}", flush=True)
+    print(f"  Card descriptions updated: {stats['card_descriptions_updated']}", flush=True)
     print(f"  Kept original (failed verification): {stats['kept_original']}", flush=True)
     print(f"  Total claims removed: {stats['total_claims_removed']}", flush=True)
     if stats["errors"]:
         print(f"  Errors: {stats['errors']}", flush=True)
+
+    # Auto-export static JSON if any descriptions were updated
+    if not dry_run and stats["descriptions_updated"] > 0:
+        print("\n[VERIFY-MERGE] Auto-exporting static JSON...", flush=True)
+        export_static()
 
     return stats
 
@@ -2995,10 +2654,9 @@ def merge_verification(dry_run: bool = False) -> dict:
 # Main
 # =============================================================================
 
+
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Unified Database Audit & Enrichment Orchestrator"
-    )
+    parser = argparse.ArgumentParser(description="Unified Database Audit & Enrichment Orchestrator")
     parser.add_argument(
         "--mode",
         choices=["default", "full"],
@@ -3012,7 +2670,23 @@ def main() -> None:
     )
     parser.add_argument(
         "--phase",
-        choices=["sync", "mechanical", "enrich", "apply", "verify", "agents", "merge", "package", "export", "web-links", "web-links-merge", "deep-research", "deep-research-merge", "cited-description", "cited-description-merge", "verify-citations", "verify-citations-merge"],
+        choices=[
+            "sync",
+            "mechanical",
+            "enrich",
+            "apply",
+            "verify",
+            "agents",
+            "merge",
+            "package",
+            "export",
+            "web-links",
+            "web-links-merge",
+            "cited-description",
+            "cited-description-merge",
+            "verify-citations",
+            "verify-citations-merge",
+        ],
         help="Run only a specific phase",
     )
     parser.add_argument(
@@ -3058,7 +2732,14 @@ def main() -> None:
 
     # --limit mode: skip sync & mechanical, run enrichment + apply + package on N random sites
     # (but not when running web-links phases — those handle --limit themselves)
-    if limit and phase not in ("web-links", "web-links-merge", "deep-research", "deep-research-merge", "cited-description", "cited-description-merge", "verify-citations", "verify-citations-merge"):
+    if limit and phase not in (
+        "web-links",
+        "web-links-merge",
+        "cited-description",
+        "cited-description-merge",
+        "verify-citations",
+        "verify-citations-merge",
+    ):
         sites = fetch_audit_candidates(source_ids, args.mode, limit=limit)
         if not sites:
             print("\n[AUDIT] No candidates found. Nothing to do.", flush=True)
@@ -3097,7 +2778,19 @@ def main() -> None:
             return
 
     # Fetch candidates for audit (unless just merging/exporting/packaging/agents/weblinks)
-    if phase not in ("merge", "export", "package", "agents", "apply", "web-links", "web-links-merge", "deep-research", "deep-research-merge", "cited-description", "cited-description-merge", "verify-citations", "verify-citations-merge"):
+    if phase not in (
+        "merge",
+        "export",
+        "package",
+        "agents",
+        "apply",
+        "web-links",
+        "web-links-merge",
+        "cited-description",
+        "cited-description-merge",
+        "verify-citations",
+        "verify-citations-merge",
+    ):
         sites = fetch_audit_candidates(source_ids, args.mode)
         if not sites:
             print("\n[AUDIT] No candidates found. Nothing to do.", flush=True)
@@ -3165,11 +2858,13 @@ def main() -> None:
         with engine.connect() as conn:
             # Batch update in chunks of 500
             for i in range(0, len(site_ids), 500):
-                chunk = site_ids[i:i + 500]
+                chunk = site_ids[i : i + 500]
                 placeholders = ", ".join(f":id_{j}" for j in range(len(chunk)))
                 params = {f"id_{j}": sid for j, sid in enumerate(chunk)}
                 conn.execute(
-                    text(f"UPDATE unified_sites SET last_audited = NOW() WHERE id::text IN ({placeholders})"),
+                    text(
+                        f"UPDATE unified_sites SET last_audited = NOW() WHERE id::text IN ({placeholders})"
+                    ),
                     params,
                 )
             conn.commit()
@@ -3202,20 +2897,6 @@ def main() -> None:
         print("  WEB-LINKS: Merge Reference Link Results", flush=True)
         print("=" * 40, flush=True)
         merge_weblinks(dry_run=args.dry_run)
-
-    # Deep research: prepare batches
-    if phase == "deep-research":
-        print("\n" + "=" * 40, flush=True)
-        print("  DEEP-RESEARCH: Prepare Description Rewrite Batches", flush=True)
-        print("=" * 40, flush=True)
-        prepare_deep_research_batches(batch_size=10, limit=limit)
-
-    # Deep research: merge results
-    if phase == "deep-research-merge":
-        print("\n" + "=" * 40, flush=True)
-        print("  DEEP-RESEARCH: Merge Description Rewrite Results", flush=True)
-        print("=" * 40, flush=True)
-        merge_deep_research(dry_run=args.dry_run)
 
     # Cited description: prepare batches (Phase 2)
     if phase == "cited-description":
