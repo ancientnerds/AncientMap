@@ -15,7 +15,7 @@
 }
 
 .news-feed-item:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--accent-glow-04);
 }
 
 .news-feed-item.expanded {
@@ -184,7 +184,7 @@
   line-height: 1.5;
   color: rgba(255, 255, 255, 0.7);
   padding-left: 10px;
-  border-left: 2px solid rgba(192, 32, 35, 0.4);
+  border-left: 2px solid var(--accent-glow-40);
 }
 
 .news-card-watch {
@@ -192,18 +192,18 @@
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  color: var(--brand-primary);
+  color: var(--accent-primary);
   text-decoration: none;
   padding: 6px 12px;
-  border: 1px solid rgba(192, 32, 35, 0.3);
+  border: 1px solid var(--accent-glow-30);
   border-radius: 4px;
   transition: all 0.2s;
   width: fit-content;
 }
 
 .news-card-watch:hover {
-  background: rgba(192, 32, 35, 0.1);
-  border-color: rgba(192, 32, 35, 0.5);
+  background: var(--accent-glow-10);
+  border-color: var(--accent-glow-50);
 }
 
 .news-card-ts {
@@ -233,9 +233,9 @@
   align-items: center;
   gap: 5px;
   font-size: 11px;
-  color: var(--brand-primary);
+  color: var(--accent-primary);
   background: none;
-  border: 1px solid rgba(192, 32, 35, 0.3);
+  border: 1px solid var(--accent-glow-30);
   border-radius: 4px;
   padding: 3px 8px;
   cursor: pointer;
@@ -245,9 +245,9 @@
 }
 
 .news-feed-map-link:hover {
-  background: rgba(192, 32, 35, 0.1);
-  border-color: rgba(192, 32, 35, 0.5);
-  color: var(--brand-primary-hover);
+  background: var(--accent-glow-10);
+  border-color: var(--accent-glow-50);
+  color: var(--accent-primary);
 }
 
 .news-feed-item:hover .news-card-post-text {
@@ -259,7 +259,7 @@
 }
 
 .news-feed-item.has-site:hover {
-  border-color: rgba(192, 32, 35, 0.3);
+  border-color: var(--accent-glow-30);
 }
 
 .news-feed-site-block {
@@ -324,7 +324,7 @@
 }
 
 .news-page-card.expanded {
-  border-color: rgba(192, 32, 35, 0.3);
+  border-color: var(--accent-glow-30);
 }
 
 .news-page-card-body {
@@ -421,9 +421,9 @@
   letter-spacing: 0.4px;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.55);
-  background: rgba(255, 255, 255, 0.07);
-  border-left: 1px solid rgba(255, 255, 255, 0.1);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--accent-glow-06);
+  border-left: 1px solid var(--accent-glow-10);
+  border-bottom: 1px solid var(--accent-glow-10);
   padding: 3px 8px;
   border-radius: 0 0 0 4px;
   line-height: 1;
@@ -505,7 +505,7 @@
 
 /* Citation links that have popovers get a subtle indicator */
 .article-citation-link.has-popover {
-  border-bottom: 1px dotted rgba(192, 32, 35, 0.4);
+  border-bottom: 1px dotted var(--accent-glow-40);
   cursor: pointer;
 }
 

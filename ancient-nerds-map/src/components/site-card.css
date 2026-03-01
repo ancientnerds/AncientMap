@@ -13,7 +13,7 @@
 
 .site-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 1px var(--accent-glow-10);
 }
 
 .site-card:focus-visible {
@@ -243,7 +243,7 @@
   justify-content: space-between;
   margin-top: auto;
   padding-top: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--accent-glow-06);
 }
 
 /* Source badge — pill-shaped, matching news card style */
