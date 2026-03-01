@@ -406,12 +406,14 @@ async def get_all_sites(
                         refs_by_site[sid] = []
                     if len(refs_by_site[sid]) < 5:
                         meta = rrow.link_metadata or {}
-                        refs_by_site[sid].append({
-                            "u": rrow.content_url,
-                            "t": (rrow.title or "")[:200],
-                            "d": meta.get("domain", ""),
-                            "k": meta.get("link_type", "article"),
-                        })
+                        refs_by_site[sid].append(
+                            {
+                                "u": rrow.content_url,
+                                "t": (rrow.title or "")[:200],
+                                "d": meta.get("domain", ""),
+                                "k": meta.get("link_type", "article"),
+                            }
+                        )
                 # Merge refs into site dicts
                 if refs_by_site:
                     site_map = {s["id"]: s for s in all_sites}
