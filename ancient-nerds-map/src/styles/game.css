@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    Forgotten Worlds — Game Rules Page
-   Follows site UI standards: --bg-main, --border-color, --primary-red,
+   Follows site UI standards: --surface-page, --border-accent, --brand-primary,
    Orbitron headings, Inter body, same card/button patterns as other pages.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -10,8 +10,8 @@
   height: 100vh;
   height: 100dvh;
   overflow-y: auto;
-  background: var(--bg-main, #0a1520);
-  color: var(--text-primary, #e8e8e8);
+  background: var(--surface-page);
+  color: var(--text-primary);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
@@ -33,7 +33,7 @@
 .game-coming-soon {
   flex-shrink: 0;
   transform: rotate(-12deg);
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 0.85rem;
   font-weight: 700;
   letter-spacing: 2px;
@@ -82,13 +82,13 @@
 }
 
 .game-toc-label {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 0.55rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   opacity: 0.35;
   padding: 0 0.5rem 0.35rem;
-  border-bottom: 1px solid var(--border-color, rgba(0, 180, 180, 0.12));
+  border-bottom: 1px solid var(--border-accent);
   margin-bottom: 0.25rem;
 }
 
@@ -112,7 +112,7 @@
 
 .game-toc-link.active {
   color: #fff;
-  border-left-color: var(--primary-red, #c02023);
+  border-left-color: var(--brand-primary);
   background: rgba(192, 32, 35, 0.08);
 }
 
@@ -129,17 +129,17 @@
 }
 
 .game-section h2 {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 1.1rem;
   font-weight: 600;
   letter-spacing: 1px;
   margin: 0 0 0.75rem;
   padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--border-color, rgba(0, 180, 180, 0.12));
+  border-bottom: 1px solid var(--border-accent);
 }
 
 .game-section h3 {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 0.85rem;
   font-weight: 600;
   letter-spacing: 0.5px;
@@ -183,8 +183,8 @@
   flex-direction: column;
   gap: 0.25rem;
   padding: 1rem;
-  background: var(--bg-card, rgba(0, 20, 25, 0.35));
-  border: 1px solid var(--border-color, rgba(0, 180, 180, 0.12));
+  background: var(--surface-raised);
+  border: 1px solid var(--border-accent);
   border-radius: 8px;
 }
 
@@ -212,7 +212,7 @@
 .game-cta-btn {
   display: inline-block;
   padding: 0.7rem 2rem;
-  background: var(--primary-red, #c02023);
+  background: var(--brand-primary);
   color: #fff;
   border-radius: 6px;
   text-decoration: none;
@@ -235,12 +235,12 @@
 .game-section thead th {
   text-align: left;
   padding: 0.5rem 0.75rem;
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 0.6rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   opacity: 0.4;
-  border-bottom: 1px solid var(--border-color, rgba(0, 180, 180, 0.12));
+  border-bottom: 1px solid var(--border-accent);
 }
 
 .game-section tbody td {
@@ -292,7 +292,7 @@
   align-items: baseline;
   gap: 0.75rem;
   padding: 0.5rem 0.75rem;
-  background: var(--bg-card, rgba(0, 20, 25, 0.35));
+  background: var(--surface-raised);
   border-left: 3px solid;
   border-radius: 0 4px 4px 0;
 }
@@ -322,7 +322,7 @@
   margin-top: 1rem;
   padding: 0.75rem 1rem;
   background: rgba(0, 180, 180, 0.04);
-  border: 1px solid var(--border-color, rgba(0, 180, 180, 0.12));
+  border: 1px solid var(--border-accent);
   border-radius: 6px;
   font-size: 0.85rem;
   line-height: 1.55;
@@ -338,8 +338,8 @@
 
 .game-synergy-card {
   padding: 1rem;
-  background: var(--bg-card, rgba(0, 20, 25, 0.35));
-  border: 1px solid var(--border-color, rgba(0, 180, 180, 0.12));
+  background: var(--surface-raised);
+  border: 1px solid var(--border-accent);
   border-radius: 8px;
 }
 
@@ -351,7 +351,7 @@
 
 .game-synergy-bonus {
   font-size: 0.88rem;
-  color: #4CAF50;
+  color: var(--status-ok-alt);
   font-weight: 500;
   margin-bottom: 0.35rem;
 }
@@ -384,8 +384,8 @@
   flex-direction: column;
   gap: 0.2rem;
   padding: 0.75rem 1rem;
-  background: var(--bg-card, rgba(0, 20, 25, 0.35));
-  border: 1px solid var(--border-color, rgba(0, 180, 180, 0.12));
+  background: var(--surface-raised);
+  border: 1px solid var(--border-accent);
   border-radius: 8px;
 }
 
@@ -417,7 +417,7 @@
   display: flex;
   gap: 1rem;
   padding: 0.75rem 1rem;
-  background: var(--bg-card, rgba(0, 20, 25, 0.35));
+  background: var(--surface-raised);
   border-radius: 6px;
 }
 
@@ -427,7 +427,7 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  background: var(--primary-red, #c02023);
+  background: var(--brand-primary);
   color: #fff;
   border-radius: 50%;
   font-weight: 700;
@@ -458,13 +458,13 @@
 .game-pack {
   text-align: center;
   padding: 1.25rem 1rem;
-  background: var(--bg-card, rgba(0, 20, 25, 0.35));
+  background: var(--surface-raised);
   border: 2px solid;
   border-radius: 10px;
 }
 
 .game-pack-name {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 0.9rem;
   font-weight: 600;
   letter-spacing: 0.5px;
@@ -495,7 +495,7 @@
 }
 
 .game-legendary-cell {
-  color: #FFC107;
+  color: var(--tier-star);
   font-weight: 600;
 }
 
@@ -509,7 +509,7 @@
 
 .game-quiz-type {
   padding: 0.5rem 0.75rem;
-  background: var(--bg-card, rgba(0, 20, 25, 0.35));
+  background: var(--surface-raised);
   border-radius: 4px;
   font-size: 0.85rem;
 }
@@ -527,7 +527,7 @@
 }
 
 .game-rewards-box h4 {
-  color: #4CAF50;
+  color: var(--status-ok-alt);
 }
 
 /* Expeditions */
@@ -541,7 +541,7 @@
 .game-expedition-tag {
   padding: 0.35rem 0.75rem;
   background: rgba(0, 180, 180, 0.06);
-  border: 1px solid var(--border-color, rgba(0, 180, 180, 0.12));
+  border: 1px solid var(--border-accent);
   border-radius: 20px;
   font-size: 0.82rem;
 }
@@ -562,8 +562,8 @@
 }
 
 .game-star-1 { color: #9E9E9E; }
-.game-star-2 { color: #FFC107; }
-.game-star-3 { color: #FFC107; text-shadow: 0 0 8px rgba(255, 193, 7, 0.5); }
+.game-star-2 { color: var(--tier-star); }
+.game-star-3 { color: var(--tier-star); text-shadow: 0 0 8px rgba(255, 193, 7, 0.5); }
 
 /* Evolution note */
 .game-evolution-note {
@@ -600,8 +600,8 @@
 
 .game-econ-group {
   padding: 1rem;
-  background: var(--bg-card, rgba(0, 20, 25, 0.35));
-  border: 1px solid var(--border-color, rgba(0, 180, 180, 0.12));
+  background: var(--surface-raised);
+  border: 1px solid var(--border-accent);
   border-radius: 8px;
 }
 

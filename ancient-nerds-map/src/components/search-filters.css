@@ -2,8 +2,8 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-accent);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -52,8 +52,8 @@
   width: 100%;
   padding: 6px 10px;
   margin-bottom: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--btn-secondary-bg);
+  border: 1px solid var(--border-default);
   border-radius: 4px;
   color: var(--text-primary);
   font-size: 0.8rem;
@@ -61,7 +61,7 @@
 }
 
 .sf-country-search:focus {
-  border-color: rgba(0, 180, 180, 0.4);
+  border-color: var(--border-accent-strong);
 }
 
 .sf-country-search::placeholder {

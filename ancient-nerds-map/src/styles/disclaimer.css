@@ -13,11 +13,11 @@
 
 .disclaimer-modal {
   position: relative;
-  background: var(--bg-card-solid);
+  background: var(--surface-raised-solid);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-radius: 12px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   width: 100%;
   max-width: 700px;
@@ -52,7 +52,7 @@
 }
 
 .disclaimer-content h2 {
-  color: var(--primary-red);
+  color: var(--brand-primary);
   font-size: 20px;
   font-weight: 600;
   margin: 0 0 20px 0;
@@ -62,7 +62,7 @@
 
 .disclaimer-section {
   margin-bottom: 8px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -109,7 +109,7 @@
   font-size: 12px;
   line-height: 1.6;
   color: var(--text-secondary);
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--border-accent);
 }
 
 .disclaimer-section-content p {
@@ -147,13 +147,13 @@
 }
 
 .disclaimer-section-content a {
-  color: var(--primary-red);
+  color: var(--brand-primary);
   text-decoration: none;
   transition: color 0.2s ease;
 }
 
 .disclaimer-section-content a:hover {
-  color: var(--primary-red-hover);
+  color: var(--brand-primary-hover);
   text-decoration: underline;
 }
 
@@ -166,13 +166,13 @@
 }
 
 .source-licenses a {
-  color: var(--primary-red);
+  color: var(--brand-primary);
   text-decoration: none;
   transition: color 0.2s ease;
 }
 
 .source-licenses a:hover {
-  color: var(--primary-red-hover);
+  color: var(--brand-primary-hover);
   text-decoration: underline;
 }
 
@@ -180,7 +180,7 @@
   font-style: italic;
   margin-top: 16px !important;
   padding-top: 12px;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--border-accent);
 }
 
 .contact-links {
@@ -197,7 +197,7 @@
   background: rgba(192, 32, 35, 0.1);
   border: 1px solid rgba(192, 32, 35, 0.3);
   border-radius: 6px;
-  color: var(--primary-red);
+  color: var(--brand-primary);
   font-size: 12px;
   text-decoration: none;
   transition: all 0.2s ease;
@@ -205,13 +205,13 @@
 
 .contact-links a:hover {
   background: rgba(192, 32, 35, 0.2);
-  border-color: var(--primary-red);
+  border-color: var(--brand-primary);
 }
 
 .disclaimer-footer {
   margin-top: 20px;
   padding-top: 16px;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--border-accent);
   text-align: center;
   font-size: 11px;
   color: var(--text-muted);

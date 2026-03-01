@@ -11,7 +11,7 @@
   border-radius: 12px;
   overflow: hidden;
   position: relative;
-  background: rgb(0, 15, 20);
+  background: var(--surface-deep);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
   transition: transform 0.2s;
   display: flex;
@@ -45,11 +45,11 @@
 .gc-showcase .gc-hero { flex: 1 1 0; min-height: 0; max-height: 38%; height: auto; }
 
 /* Rarity border colors (applied via inline style for glow, but we handle border-color) */
-.gc-common    { border-color: rgba(150, 150, 150, 0.3); }
-.gc-uncommon  { border-color: rgba(76, 175, 80, 0.5); }
-.gc-rare      { border-color: rgba(0, 180, 180, 0.5); }
-.gc-epic      { border-color: rgba(156, 39, 176, 0.6); }
-.gc-legendary { border-color: rgba(255, 193, 7, 0.7); }
+.gc-common    { border-color: var(--rarity-common); }
+.gc-uncommon  { border-color: var(--rarity-uncommon); }
+.gc-rare      { border-color: var(--rarity-rare); }
+.gc-epic      { border-color: var(--rarity-epic); }
+.gc-legendary { border-color: var(--rarity-legendary); }
 
 /* --------------------------------------------------------------------------
    Hero image area
@@ -60,7 +60,7 @@
   width: 100%;
   height: 175px;
   overflow: hidden;
-  background: rgb(0, 15, 20);
+  background: var(--surface-deep);
 }
 
 .gc-hero img {
@@ -95,7 +95,7 @@
     rgba(0, 15, 20, 0) 0%,
     rgba(0, 15, 20, 0.3) 30%,
     rgba(0, 15, 20, 0.7) 60%,
-    rgb(0, 15, 20) 100%
+    var(--surface-deep) 100%
   );
   z-index: 2;
   pointer-events: none;
@@ -118,7 +118,7 @@
    -------------------------------------------------------------------------- */
 
 .gc-title {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-weight: 700;
   color: #ffffff;
   line-height: 1.2;
@@ -165,7 +165,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 0.55rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -322,7 +322,7 @@
 }
 
 .gc-star-filled {
-  color: #FFC107;
+  color: var(--tier-star);
   font-size: 0.75rem;
   line-height: 1;
   text-shadow: 0 0 6px rgba(255, 193, 7, 0.5);
@@ -346,7 +346,7 @@
 
 .gc-star-progress-fill {
   height: 100%;
-  background: #FFC107;
+  background: var(--tier-star);
   border-radius: 2px;
 }
 
@@ -385,7 +385,7 @@
 }
 
 .gc-power {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 1.1rem;
   font-weight: 700;
   letter-spacing: 1px;
@@ -416,7 +416,7 @@
 
 .gc-row-num {
   font-size: 12px;
-  color: #888;
+  color: var(--text-secondary);
   width: 20px;
   text-align: right;
   flex-shrink: 0;
@@ -438,7 +438,7 @@
 .gc-row-name {
   font-size: 13px;
   font-weight: 500;
-  color: #e0e0e0;
+  color: var(--text-body);
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -455,7 +455,7 @@
   border-radius: 50%;
   border: 1px solid rgba(239, 68, 68, 0.3);
   background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
+  color: var(--status-error);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -485,7 +485,7 @@
 }
 
 .gc-detail {
-  background: #1a2530;
+  background: var(--surface-page);
   border-radius: 12px;
   max-width: 400px;
   width: 100%;
@@ -598,7 +598,7 @@
   border-radius: 12px;
   overflow: hidden;
   position: relative;
-  background: rgb(0, 15, 20);
+  background: var(--surface-deep);
   border: 1px solid var(--empire-color);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 24px var(--empire-glow);
   transition: transform 0.2s;
@@ -626,7 +626,7 @@
 }
 
 .gc-empire-name {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 0.82rem;
   font-weight: 700;
   color: var(--empire-color);
@@ -675,7 +675,7 @@
 }
 
 .gc-empire-stat-label {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 0.48rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -684,7 +684,7 @@
 
 .gc-empire-stat-value {
   margin-left: auto;
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 0.6rem;
   font-weight: 600;
   letter-spacing: 0.5px;
@@ -701,7 +701,7 @@
 }
 
 .gc-empire-commander-label {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 0.45rem;
   text-transform: uppercase;
   letter-spacing: 1.5px;
@@ -710,7 +710,7 @@
 
 .gc-empire-commander-bonus {
   font-size: 0.68rem;
-  color: #4CAF50;
+  color: var(--status-ok-alt);
   font-weight: 500;
 }
 

@@ -42,8 +42,8 @@
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: var(--primary-red);
-  font-family: 'Orbitron', sans-serif;
+  color: var(--brand-primary);
+  font-family: var(--font-heading);
   text-transform: uppercase;
   letter-spacing: 1px;
 }
@@ -75,7 +75,7 @@
 .dm-close-btn:hover {
   background: rgba(192, 32, 35, 0.2);
   border-color: rgba(192, 32, 35, 0.4);
-  color: var(--primary-red);
+  color: var(--brand-primary);
 }
 
 /* Mode Toggle */
@@ -102,19 +102,19 @@
 }
 
 .dm-mode-led.online {
-  background: #4ade80;
-  color: #4ade80;
+  background: var(--status-ok-light);
+  color: var(--status-ok-light);
 }
 
 .dm-mode-led.offline {
-  background: #f59e0b;
-  color: #f59e0b;
+  background: var(--status-warning);
+  color: var(--status-warning);
 }
 
 .dm-mode-label {
   font-size: 12px;
   font-weight: 500;
-  color: #d0d0d0;
+  color: var(--text-body);
 }
 
 .dm-mode-btn {
@@ -129,13 +129,13 @@
 }
 
 .dm-mode-btn.go-offline {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
+  background: linear-gradient(135deg, var(--status-warning), #d97706);
   border: none;
   color: white;
 }
 
 .dm-mode-btn.go-offline:hover {
-  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  background: linear-gradient(135deg, var(--accent-amber), var(--status-warning));
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
 }
@@ -147,7 +147,7 @@
 }
 
 .dm-mode-btn.go-online:hover {
-  background: linear-gradient(135deg, #4ade80, #22c55e);
+  background: linear-gradient(135deg, var(--status-ok-light), #22c55e);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
 }
@@ -169,7 +169,7 @@
 
 .storage-used {
   height: 100%;
-  background: linear-gradient(90deg, var(--primary-red), #ff4040);
+  background: linear-gradient(90deg, var(--brand-primary), #ff4040);
   border-radius: 3px;
   transition: width 0.3s ease;
   position: absolute;
@@ -179,7 +179,7 @@
 
 .storage-preview {
   height: 100%;
-  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+  background: linear-gradient(90deg, var(--status-warning), var(--accent-amber));
   border-radius: 3px;
   position: absolute;
   top: 0;
@@ -206,16 +206,16 @@
 }
 
 .storage-preview-text {
-  color: #fbbf24;
+  color: var(--accent-amber);
   font-weight: 500;
 }
 
 .storage-quota {
-  color: #606060;
+  color: var(--text-dimmed);
 }
 
 .storage-total {
-  color: #4ade80;
+  color: var(--status-ok-light);
   font-weight: 500;
 }
 
@@ -244,7 +244,7 @@
 }
 
 .dm-tab.active {
-  color: var(--primary-red);
+  color: var(--brand-primary);
 }
 
 .dm-tab.active::after {
@@ -254,7 +254,7 @@
   left: 0;
   right: 0;
   height: 2px;
-  background: var(--primary-red);
+  background: var(--brand-primary);
 }
 
 /* Content area */
@@ -293,7 +293,7 @@
   background: rgba(192, 32, 35, 0.15);
   border: 1px solid rgba(192, 32, 35, 0.3);
   border-radius: 4px;
-  color: var(--primary-red);
+  color: var(--brand-primary);
   font-size: 10px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -313,7 +313,7 @@
 .dm-section-note {
   margin: -4px 0 10px;
   font-size: 10px;
-  color: #707070;
+  color: var(--text-muted);
   font-style: italic;
 }
 
@@ -370,8 +370,8 @@
 }
 
 .dm-checkbox.checked {
-  background: var(--primary-red);
-  border-color: var(--primary-red);
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
 }
 
 .dm-checkbox svg {
@@ -389,12 +389,12 @@
 .item-name {
   flex: 1;
   font-size: 12px;
-  color: #d0d0d0;
+  color: var(--text-body);
 }
 
 .item-meta {
   font-size: 10px;
-  color: #606060;
+  color: var(--text-dimmed);
   font-variant-numeric: tabular-nums;
 }
 
@@ -404,7 +404,7 @@
   border: 1px solid rgba(74, 222, 128, 0.3);
   border-radius: 3px;
   font-size: 9px;
-  color: #4ade80;
+  color: var(--status-ok-light);
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
@@ -416,7 +416,7 @@
   border: 1px solid rgba(59, 130, 246, 0.4);
   border-radius: 3px;
   font-size: 9px;
-  color: #60a5fa;
+  color: var(--accent-blue);
   cursor: pointer;
   transition: all 0.2s ease;
   text-transform: uppercase;
@@ -447,7 +447,7 @@
 .dm-region-title {
   font-size: 10px;
   font-weight: 600;
-  color: var(--primary-red);
+  color: var(--brand-primary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 6px;
@@ -463,7 +463,7 @@
 
 .progress-label {
   font-size: 11px;
-  color: #fbbf24;
+  color: var(--accent-amber);
   margin-bottom: 8px;
   font-weight: 500;
 }
@@ -478,7 +478,7 @@
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+  background: linear-gradient(90deg, var(--status-warning), var(--accent-amber));
   border-radius: 4px;
   transition: width 0.15s ease-out;
   position: relative;
@@ -512,7 +512,7 @@
 .progress-text {
   margin-top: 6px;
   font-size: 10px;
-  color: #a0a0a0;
+  color: var(--text-faint);
   text-align: right;
 }
 
@@ -531,12 +531,12 @@
 }
 
 .dm-status .download-status {
-  color: #fbbf24;
+  color: var(--accent-amber);
   font-weight: 500;
 }
 
 .dm-status .ready-status {
-  color: #4ade80;
+  color: var(--status-ok-light);
 }
 
 .dm-status .empty-status {
@@ -553,7 +553,7 @@
   background: transparent;
   border: 1px solid rgba(255, 100, 100, 0.3);
   border-radius: 4px;
-  color: #ff6b6b;
+  color: var(--status-error-soft);
   font-size: 11px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -571,7 +571,7 @@
 
 .dm-download-btn {
   padding: 6px 16px;
-  background: var(--primary-red);
+  background: var(--brand-primary);
   border: none;
   border-radius: 4px;
   color: white;
@@ -582,7 +582,7 @@
 }
 
 .dm-download-btn:hover:not(:disabled) {
-  background: var(--primary-red-hover);
+  background: var(--brand-primary-hover);
 }
 
 .dm-download-btn:disabled {
@@ -640,15 +640,15 @@
 
 .dm-confirm-icon {
   margin-bottom: 16px;
-  color: #ff6b6b;
+  color: var(--status-error-soft);
 }
 
 .dm-confirm-dialog h3 {
   margin: 0 0 12px;
   font-size: 16px;
   font-weight: 600;
-  color: #ff6b6b;
-  font-family: 'Orbitron', sans-serif;
+  color: var(--status-error-soft);
+  font-family: var(--font-heading);
   letter-spacing: 0.5px;
 }
 

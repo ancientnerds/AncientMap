@@ -1,6 +1,6 @@
 .site-card {
-  background: rgb(0, 15, 20);
-  border: 1px solid var(--border-color);
+  background: var(--surface-deep);
+  border: 1px solid var(--border-accent);
   border-radius: 8px;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -17,7 +17,7 @@
 }
 
 .site-card:focus-visible {
-  outline: 2px solid var(--primary-red);
+  outline: 2px solid var(--brand-primary);
   outline-offset: 2px;
 }
 
@@ -45,7 +45,7 @@
 .site-card-hero-shimmer {
   position: absolute;
   inset: 0;
-  background: rgb(0, 20, 30);
+  background: var(--surface-deep-alt);
   overflow: hidden;
 }
 
@@ -102,7 +102,7 @@
     rgba(0, 15, 20, 0) 0%,
     rgba(0, 15, 20, 0.3) 30%,
     rgba(0, 15, 20, 0.7) 60%,
-    rgb(0, 15, 20) 100%
+    var(--surface-deep) 100%
   );
   z-index: 2;
   pointer-events: none;
@@ -132,17 +132,17 @@
 
 .site-card-title-row .meta-copy-btn:hover {
   opacity: 1;
-  color: var(--primary-red);
+  color: var(--brand-primary);
 }
 
 .site-card-title-row .meta-copy-btn.copied {
   opacity: 1;
-  color: #22c55e;
+  color: var(--status-ok);
 }
 
 /* Title inside hero — anchored to bottom */
 .site-card-title {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 1.3rem;
   font-weight: 600;
   color: var(--text-primary);
@@ -153,7 +153,7 @@
 
 /* Title without hero — compact, inside body */
 .site-card-title-plain {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 1.3rem;
   font-weight: 600;
   color: var(--text-primary);
@@ -210,12 +210,12 @@
 
 .site-card-coords .meta-copy-btn:hover {
   opacity: 1;
-  color: var(--primary-red);
+  color: var(--brand-primary);
 }
 
 .site-card-coords .meta-copy-btn.copied {
   opacity: 1;
-  color: #22c55e;
+  color: var(--status-ok);
 }
 
 /* Badges — single row */
@@ -264,7 +264,7 @@
   align-items: center;
   gap: 4px;
   font-size: 0.72rem;
-  color: var(--primary-red);
+  color: var(--brand-primary);
   text-decoration: none;
   font-weight: 500;
   transition: color 0.15s;
@@ -281,10 +281,10 @@
 
 .site-card-action-link:hover,
 .site-card-globe-link:hover {
-  color: var(--primary-red-hover);
+  color: var(--brand-primary-hover);
   text-decoration: underline;
 }
 
 .site-card-action-link.copied {
-  color: #4caf50;
+  color: var(--status-ok-alt);
 }

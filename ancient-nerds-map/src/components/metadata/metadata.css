@@ -35,7 +35,7 @@
 
 /* Dark semi-transparent background for badges over hero images */
 .popup-hero-content .meta-badge-lg {
-  background: rgba(0, 15, 20, 0.7);
+  background: var(--surface-raised-solid);
   backdrop-filter: blur(4px);
 }
 
@@ -101,10 +101,10 @@
 
 .meta-copy-btn:hover {
   opacity: 1;
-  color: var(--primary-red, #c02023);
+  color: var(--brand-primary);
 }
 
 .meta-copy-btn.copied {
   opacity: 1;
-  color: #22c55e;
+  color: var(--status-ok);
 }

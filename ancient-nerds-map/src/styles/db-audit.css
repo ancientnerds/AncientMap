@@ -4,9 +4,9 @@
   width: 100vw;
   height: 100vh;
   overflow-y: auto;
-  background: var(--bg-dark);
+  background: var(--surface-page);
   color: var(--text-primary);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-body);
   display: flex;
   flex-direction: column;
 }
@@ -22,7 +22,7 @@
 }
 
 .db-error {
-  color: var(--primary-red);
+  color: var(--brand-primary);
 }
 
 /* Header */
@@ -32,7 +32,7 @@
   align-items: center;
   gap: 6px;
   padding: 3px 4px 3px 10px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   border-radius: 16px;
   margin-left: 8px;
   transition: border-color 0.2s, background 0.2s;
@@ -46,7 +46,7 @@
 }
 
 .db-source-badge select {
-  background: var(--bg-card);
+  background: var(--surface-raised);
   border: none;
   color: var(--text-primary);
   font-size: 0.78rem;
@@ -60,7 +60,7 @@
 }
 
 .db-source-badge select option {
-  background: var(--bg-card-solid, #0a1a1f);
+  background: var(--surface-raised-solid);
   color: var(--text-primary);
 }
 
@@ -70,7 +70,7 @@
   align-items: center;
   gap: 6px;
   padding: 3px 4px 3px 10px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   border-radius: 16px;
   margin-left: 4px;
   transition: border-color 0.2s, background 0.2s;
@@ -84,7 +84,7 @@
 }
 
 .db-version-badge select {
-  background: var(--bg-card);
+  background: var(--surface-raised);
   border: none;
   color: var(--text-primary);
   font-size: 0.78rem;
@@ -98,13 +98,13 @@
 }
 
 .db-version-badge select option {
-  background: var(--bg-card-solid, #0a1a1f);
+  background: var(--surface-raised-solid);
   color: var(--text-primary);
 }
 
 .db-unlock-btn {
   background: transparent;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   color: var(--text-primary);
   padding: 6px 16px;
   border-radius: 6px;
@@ -114,7 +114,7 @@
 }
 
 .db-unlock-btn:hover {
-  border-color: var(--primary-red);
+  border-color: var(--brand-primary);
   background: rgba(192, 32, 35, 0.1);
 }
 
@@ -126,7 +126,7 @@
 
 .db-auth-unlocked {
   background: rgba(34, 197, 94, 0.15);
-  color: #22c55e;
+  color: var(--status-ok);
   border: 1px solid rgba(34, 197, 94, 0.3);
 }
 
@@ -141,8 +141,8 @@
 }
 
 .db-stat-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-accent);
   border-radius: 8px;
   padding: 12px 20px;
   min-width: 110px;
@@ -157,20 +157,20 @@
 }
 
 .db-stat-card:hover {
-  background: var(--bg-card-solid);
+  background: var(--surface-raised-solid);
 }
 
 .db-stat-card.active {
-  border-color: var(--primary-red);
+  border-color: var(--brand-primary);
   background: rgba(192, 32, 35, 0.1);
 }
 
 .db-stat-card.issue .db-stat-value {
-  color: #f59e0b;
+  color: var(--status-warning);
 }
 
 .db-stat-card.issue.active .db-stat-value {
-  color: var(--primary-red);
+  color: var(--brand-primary);
 }
 
 .db-stat-value {
@@ -193,7 +193,7 @@
   flex-wrap: wrap;
   gap: 8px 12px;
   padding: 10px 24px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-accent);
   flex-shrink: 0;
   position: relative;
   z-index: 5;
@@ -207,8 +207,8 @@
 
 .db-filter-group select,
 .db-filter-group input {
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-accent);
   color: var(--text-primary);
   padding: 6px 12px;
   border-radius: 6px;
@@ -220,11 +220,11 @@
 .db-filter-group select:focus,
 .db-filter-group input:focus {
   outline: none;
-  border-color: var(--primary-red);
+  border-color: var(--brand-primary);
 }
 
 .db-filter-group select option {
-  background: var(--bg-card-solid, #0a1a1f);
+  background: var(--surface-raised-solid);
   color: var(--text-primary);
 }
 
@@ -235,8 +235,8 @@
 }
 
 .db-search-wrap input {
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-accent);
   color: var(--text-primary);
   padding: 6px 28px 6px 12px;
   border-radius: 6px;
@@ -247,7 +247,7 @@
 
 .db-search-wrap input:focus {
   outline: none;
-  border-color: var(--primary-red);
+  border-color: var(--brand-primary);
 }
 
 .db-search-clear {
@@ -288,7 +288,7 @@
 
 .db-export-btn {
   background: transparent;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   color: var(--text-secondary);
   padding: 4px 10px;
   border-radius: 12px;
@@ -301,14 +301,14 @@
 
 .db-export-btn:hover {
   border-color: rgba(34, 197, 94, 0.5);
-  color: #22c55e;
+  color: var(--status-ok);
   background: rgba(34, 197, 94, 0.08);
 }
 
 .db-clear-filters {
   background: transparent;
   border: 1px solid rgba(239, 68, 68, 0.4);
-  color: #ef4444;
+  color: var(--status-error);
   padding: 4px 12px;
   border-radius: 6px;
   font-size: 0.78rem;
@@ -319,7 +319,7 @@
 
 .db-clear-filters:hover {
   background: rgba(239, 68, 68, 0.1);
-  border-color: #ef4444;
+  border-color: var(--status-error);
 }
 
 /* ─── Multi-select dropdown ───────────────────────────────────────────────── */
@@ -332,8 +332,8 @@
   align-items: center;
   gap: 6px;
   padding: 5px 10px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-accent);
   border-radius: 6px;
   color: var(--text-primary);
   font-size: 0.82rem;
@@ -348,7 +348,7 @@
 }
 
 .db-multiselect-trigger.has-selection {
-  border-color: var(--primary-red);
+  border-color: var(--brand-primary);
   background: rgba(192, 32, 35, 0.08);
 }
 
@@ -379,7 +379,7 @@
   min-width: 220px;
   max-height: 320px;
   background: rgba(0, 15, 20, 0.97);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   border-radius: 8px;
   backdrop-filter: blur(16px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
@@ -391,8 +391,8 @@
 .db-multiselect-search {
   margin: 8px 8px 0;
   padding: 6px 10px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-accent);
   border-radius: 4px;
   color: var(--text-primary);
   font-size: 0.8rem;
@@ -401,7 +401,7 @@
 
 .db-multiselect-search:focus {
   outline: none;
-  border-color: var(--primary-red);
+  border-color: var(--brand-primary);
 }
 
 .db-multiselect-actions {
@@ -413,7 +413,7 @@
 
 .db-multiselect-actions button {
   background: transparent;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   color: var(--text-secondary);
   padding: 2px 8px;
   border-radius: 4px;
@@ -469,7 +469,7 @@
 
 .db-multiselect-item input[type="checkbox"]:checked {
   background: rgba(192, 32, 35, 0.2);
-  border-color: var(--primary-red);
+  border-color: var(--brand-primary);
 }
 
 .db-multiselect-item input[type="checkbox"]:checked::after {
@@ -479,7 +479,7 @@
   top: 0px;
   width: 3px;
   height: 7px;
-  border: solid var(--primary-red);
+  border: solid var(--brand-primary);
   border-width: 0 1.5px 1.5px 0;
   transform: rotate(45deg);
 }
@@ -523,7 +523,7 @@
   text-transform: uppercase;
   letter-spacing: 1px;
   color: var(--text-secondary);
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-accent);
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
@@ -584,7 +584,7 @@
 
 .db-name-link:hover {
   text-decoration: underline;
-  color: var(--primary-red);
+  color: var(--brand-primary);
 }
 
 .db-td-name .meta-copy-btn {
@@ -679,7 +679,7 @@
 }
 
 .db-card-desc-text {
-  color: #a78bfa;
+  color: var(--accent-purple-light);
 }
 
 .db-td-desc {
@@ -720,7 +720,7 @@
 }
 
 .db-link-icon:hover {
-  color: var(--primary-red);
+  color: var(--brand-primary);
 }
 
 /* Image thumbnail */
@@ -736,7 +736,7 @@
 }
 
 .db-th-img-active {
-  color: var(--primary-red);
+  color: var(--brand-primary);
 }
 
 .db-thumb-wrap {
@@ -813,11 +813,11 @@
 }
 
 .db-hero-yes {
-  color: #4ade80;
+  color: var(--status-ok-light);
 }
 
 .db-hero-no {
-  color: var(--text-muted, #555);
+  color: var(--text-muted);
 }
 
 /* IMG column */
@@ -858,8 +858,8 @@
 .db-hero-popover {
   position: fixed;
   z-index: 1000;
-  background: var(--bg-card-solid, #0a1a1f);
-  border: 1px solid var(--border-color);
+  background: var(--surface-raised-solid);
+  border: 1px solid var(--border-accent);
   border-radius: 8px;
   padding: 12px;
   width: 300px;
@@ -878,8 +878,8 @@
 }
 
 .db-hero-input {
-  background: var(--bg-dark);
-  border: 1px solid var(--border-color);
+  background: var(--surface-page);
+  border: 1px solid var(--border-accent);
   border-radius: 4px;
   padding: 6px 8px;
   color: var(--text-primary);
@@ -891,16 +891,16 @@
 
 .db-hero-input:focus {
   outline: none;
-  border-color: var(--primary-red);
+  border-color: var(--brand-primary);
 }
 
 .db-hero-error {
-  color: var(--primary-red);
+  color: var(--brand-primary);
   font-size: 11px;
 }
 
 .db-hero-submit {
-  background: var(--primary-red);
+  background: var(--brand-primary);
   color: white;
   border: none;
   border-radius: 4px;
@@ -934,11 +934,11 @@
 }
 
 .db-edited-audit {
-  color: #60a5fa;
+  color: var(--accent-blue);
 }
 
 .db-edited-admin {
-  color: #f59e0b;
+  color: var(--status-warning);
 }
 
 /* Last edited (timestamp) column */
@@ -948,7 +948,7 @@
 }
 
 .db-audited-yes {
-  color: #22c55e;
+  color: var(--status-ok);
   font-size: 13px;
   cursor: default;
 }
@@ -1005,7 +1005,7 @@
 
 .db-badge.missing {
   background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
+  color: var(--status-error);
   border-color: rgba(239, 68, 68, 0.3);
 }
 
@@ -1013,8 +1013,8 @@
 .db-inline-select,
 .db-inline-input {
   width: 100%;
-  background: var(--bg-inner);
-  border: 1px solid var(--primary-red);
+  background: var(--surface-sunken);
+  border: 1px solid var(--brand-primary);
   color: var(--text-primary);
   padding: 4px 8px;
   border-radius: 4px;
@@ -1030,7 +1030,7 @@
 /* Edit button */
 .db-edit-btn {
   background: transparent;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   color: var(--text-secondary);
   width: 20px;
   height: 20px;
@@ -1047,8 +1047,8 @@
 }
 
 .db-edit-btn:hover {
-  border-color: var(--primary-red);
-  color: var(--primary-red);
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
 }
 
 .db-delete-btn {
@@ -1071,8 +1071,8 @@
 }
 
 .db-delete-btn:hover {
-  border-color: #ef4444;
-  color: #ef4444;
+  border-color: var(--status-error);
+  color: var(--status-error);
   background: rgba(239, 68, 68, 0.1);
   opacity: 1;
 }
@@ -1085,7 +1085,7 @@
 
 .db-load-more button {
   background: transparent;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   color: var(--text-secondary);
   padding: 8px 24px;
   border-radius: 6px;
@@ -1096,7 +1096,7 @@
 }
 
 .db-load-more button:hover {
-  border-color: var(--primary-red);
+  border-color: var(--brand-primary);
   color: var(--text-primary);
   background: rgba(192, 32, 35, 0.08);
 }
@@ -1104,7 +1104,7 @@
 /* Footer bar */
 .db-footer {
   padding: 10px 24px;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--border-accent);
   font-size: 0.8rem;
   color: var(--text-secondary);
   flex-shrink: 0;
@@ -1125,7 +1125,7 @@
 
 .db-modal {
   background: rgba(0, 20, 25, 0.95);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   border-radius: 12px;
   width: 90%;
   max-width: 520px;
@@ -1141,7 +1141,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-accent);
   flex-shrink: 0;
 }
 
@@ -1190,8 +1190,8 @@
 .db-field input,
 .db-field select,
 .db-field textarea {
-  background: var(--bg-inner);
-  border: 1px solid var(--border-color);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-accent);
   color: var(--text-primary);
   padding: 8px 12px;
   border-radius: 6px;
@@ -1204,7 +1204,7 @@
 .db-field select:focus,
 .db-field textarea:focus {
   outline: none;
-  border-color: var(--primary-red);
+  border-color: var(--brand-primary);
 }
 
 .db-checkbox-label {
@@ -1221,7 +1221,7 @@
 .db-checkbox-label input[type="checkbox"] {
   width: 16px;
   height: 16px;
-  accent-color: var(--primary-red);
+  accent-color: var(--brand-primary);
   cursor: pointer;
   padding: 0;
 }
@@ -1235,7 +1235,7 @@
 
 .db-field-hint code {
   font-size: 0.7rem;
-  background: var(--bg-inner);
+  background: var(--surface-sunken);
   padding: 1px 4px;
   border-radius: 3px;
 }
@@ -1251,7 +1251,7 @@
   justify-content: flex-end;
   gap: 10px;
   padding: 16px 20px;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--border-accent);
   flex-shrink: 0;
 }
 
@@ -1261,7 +1261,7 @@
   font-size: 0.85rem;
   cursor: pointer;
   font-family: inherit;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   transition: background 0.2s, border-color 0.2s;
 }
 
@@ -1280,13 +1280,13 @@
 }
 
 .db-btn-save {
-  background: var(--primary-red);
+  background: var(--brand-primary);
   color: white;
-  border-color: var(--primary-red);
+  border-color: var(--brand-primary);
 }
 
 .db-btn-save:hover:not(:disabled) {
-  background: var(--primary-red-hover);
+  background: var(--brand-primary-hover);
 }
 
 
@@ -1294,7 +1294,7 @@
 .db-upload-btn {
   background: transparent;
   border: 1px solid rgba(139, 92, 246, 0.5);
-  color: #8b5cf6;
+  color: var(--accent-purple);
   padding: 6px 16px;
   border-radius: 6px;
   cursor: pointer;
@@ -1304,7 +1304,7 @@
 }
 
 .db-upload-btn:hover {
-  border-color: #8b5cf6;
+  border-color: var(--accent-purple);
   background: rgba(139, 92, 246, 0.1);
 }
 
@@ -1333,7 +1333,7 @@
 /* ─── Pending row highlight ──────────────────────────────────────────────── */
 .db-row-pending {
   background: rgba(251, 191, 36, 0.06) !important;
-  border-left: 2px solid #fbbf24;
+  border-left: 2px solid var(--accent-amber);
 }
 
 /* ─── MetadataBadge overrides for table cells ────────────────────────────── */
@@ -1362,36 +1362,36 @@
 .db-pending-count {
   font-size: 0.9rem;
   font-weight: 500;
-  color: #fbbf24;
+  color: var(--accent-amber);
 }
 
 .db-btn-discard {
   background: transparent;
-  color: #ef4444;
+  color: var(--status-error);
   border-color: rgba(239, 68, 68, 0.4);
 }
 
 .db-btn-discard:hover:not(:disabled) {
   background: rgba(239, 68, 68, 0.1);
-  border-color: #ef4444;
+  border-color: var(--status-error);
 }
 
 .db-btn-commit {
-  background: #22c55e;
+  background: var(--status-ok);
   color: #000;
-  border-color: #22c55e;
+  border-color: var(--status-ok);
   font-weight: 500;
 }
 
 .db-btn-commit:hover:not(:disabled) {
-  background: #16a34a;
-  border-color: #16a34a;
+  background: var(--status-ok-dark);
+  border-color: var(--status-ok-dark);
 }
 
 .db-btn-warn {
-  background: #f59e0b;
+  background: var(--status-warning);
   color: #000;
-  border-color: #f59e0b;
+  border-color: var(--status-warning);
   font-weight: 500;
 }
 
@@ -1422,7 +1422,7 @@
 
 .db-upload-progress-bar-fill {
   height: 100%;
-  background: #22c55e;
+  background: var(--status-ok);
   border-radius: 4px;
   transition: width 0.3s ease;
 }
@@ -1430,12 +1430,12 @@
 .db-upload-progress-text {
   font-size: 15px;
   font-weight: 600;
-  color: #e0e0e0;
+  color: var(--text-body);
 }
 
 .db-upload-progress-sub {
   font-size: 12px;
-  color: #888;
+  color: var(--text-secondary);
 }
 
 /* ─── Review modal ───────────────────────────────────────────────────────── */
@@ -1477,7 +1477,7 @@
 }
 
 .db-review-old {
-  color: #ef4444;
+  color: var(--status-error);
   text-decoration: line-through;
   opacity: 0.7;
 }
@@ -1488,7 +1488,7 @@
 }
 
 .db-review-new {
-  color: #22c55e;
+  color: var(--status-ok);
   font-weight: 500;
 }
 
@@ -1532,7 +1532,7 @@
   align-items: center;
   gap: 6px;
   padding: 5px 12px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   border-radius: 16px;
   background: transparent;
   color: var(--text-secondary);
@@ -1578,7 +1578,7 @@
   gap: 6px;
   margin-right: auto;
   padding: 4px 10px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   border-radius: 14px;
   background: transparent;
   color: var(--text-secondary);
@@ -1597,7 +1597,7 @@
 .db-upload-audited-toggle.active {
   border-color: rgba(34, 197, 94, 0.5);
   background: rgba(34, 197, 94, 0.1);
-  color: #22c55e;
+  color: var(--status-ok);
 }
 
 .db-audited-remind {
@@ -1605,7 +1605,7 @@
 }
 
 @keyframes audited-pulse {
-  0%, 100% { border-color: var(--border-color); }
+  0%, 100% { border-color: var(--border-accent); }
   50% { border-color: rgba(251, 191, 36, 0.6); box-shadow: 0 0 6px rgba(251, 191, 36, 0.15); }
 }
 
@@ -1614,15 +1614,15 @@
   width: 14px;
   height: 14px;
   border-radius: 3px;
-  border: 1.5px solid var(--border-color);
+  border: 1.5px solid var(--border-accent);
   position: relative;
   transition: all 0.15s ease;
   flex-shrink: 0;
 }
 
 .db-toggle-check.checked {
-  border-color: #22c55e;
-  background: #22c55e;
+  border-color: var(--status-ok);
+  background: var(--status-ok);
 }
 
 .db-toggle-check.checked::after {
@@ -1639,7 +1639,7 @@
 
 /* ─── Drop zone ─────────────────────────────────────────────────────────── */
 .db-upload-dropzone {
-  border: 2px dashed var(--border-color);
+  border: 2px dashed var(--border-accent);
   border-radius: 10px;
   padding: 28px 16px;
   text-align: center;
@@ -1654,7 +1654,7 @@
 }
 
 .db-upload-dropzone.dragover {
-  border-color: var(--primary-red);
+  border-color: var(--brand-primary);
   background: rgba(192, 32, 35, 0.06);
 }
 
@@ -1704,10 +1704,10 @@
   font-weight: 500;
 }
 
-.db-upload-insert { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
-.db-upload-update { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+.db-upload-insert { background: rgba(34, 197, 94, 0.15); color: var(--status-ok); }
+.db-upload-update { background: rgba(251, 191, 36, 0.15); color: var(--accent-amber); }
 .db-upload-unchanged { background: rgba(255, 255, 255, 0.05); color: var(--text-secondary); }
-.db-upload-error { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+.db-upload-error { background: rgba(239, 68, 68, 0.15); color: var(--status-error); }
 
 /* Status pills */
 .db-upload-status-pill {
@@ -1719,9 +1719,9 @@
   letter-spacing: 0.5px;
 }
 
-.db-upload-status-insert { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
-.db-upload-status-update { background: rgba(251, 191, 36, 0.2); color: #fbbf24; }
-.db-upload-status-error { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+.db-upload-status-insert { background: rgba(34, 197, 94, 0.2); color: var(--status-ok); }
+.db-upload-status-update { background: rgba(251, 191, 36, 0.2); color: var(--accent-amber); }
+.db-upload-status-error { background: rgba(239, 68, 68, 0.2); color: var(--status-error); }
 
 /* ─── Per-field change breakdown ─────────────────────────────────────────── */
 .db-upload-field-breakdown {
@@ -1744,9 +1744,33 @@
   text-transform: capitalize;
 }
 
+.db-field-change-pill.db-field-change-clickable {
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+  user-select: none;
+}
+
+.db-field-change-pill.db-field-change-clickable:hover {
+  background: rgba(251, 191, 36, 0.22);
+}
+
+.db-field-change-pill.db-field-change-active {
+  background: rgba(251, 191, 36, 0.3);
+  box-shadow: 0 0 0 1.5px rgba(251, 191, 36, 0.6);
+}
+
 .db-field-change-pill.db-field-change-new {
   background: rgba(34, 197, 94, 0.1);
   color: rgba(34, 197, 94, 0.85);
+}
+
+.db-field-change-pill.db-field-change-new.db-field-change-clickable:hover {
+  background: rgba(34, 197, 94, 0.22);
+}
+
+.db-field-change-pill.db-field-change-new.db-field-change-active {
+  background: rgba(34, 197, 94, 0.3);
+  box-shadow: 0 0 0 1.5px rgba(34, 197, 94, 0.6);
 }
 
 .db-field-change-count {
@@ -1767,8 +1791,8 @@
   overflow: hidden;
 }
 
-.db-diff-item.db-diff-update { border-left: 3px solid #fbbf24; }
-.db-diff-item.db-diff-insert { border-left: 3px solid #22c55e; }
+.db-diff-item.db-diff-update { border-left: 3px solid var(--accent-amber); }
+.db-diff-item.db-diff-insert { border-left: 3px solid var(--status-ok); }
 
 .db-diff-header {
   display: flex;
@@ -1814,7 +1838,7 @@
 }
 
 .db-diff-old {
-  color: #ef4444;
+  color: var(--status-error);
   text-decoration: line-through;
   opacity: 0.75;
   word-break: break-word;
@@ -1831,7 +1855,7 @@
 }
 
 .db-diff-new {
-  color: #22c55e;
+  color: var(--status-ok);
   font-weight: 500;
   word-break: break-word;
   flex: 1;
@@ -1900,7 +1924,7 @@
   font-size: 0.8rem;
   color: var(--text-secondary);
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   border-radius: 6px;
   user-select: none;
   display: inline-flex;
@@ -1946,7 +1970,7 @@
 
 .db-btn-create-snapshot {
   background: transparent;
-  color: #fbbf24;
+  color: var(--accent-amber);
   border: 1px solid rgba(251, 191, 36, 0.4);
   padding: 4px 14px;
   border-radius: 16px;
@@ -1957,7 +1981,7 @@
 
 .db-btn-create-snapshot:hover:not(:disabled) {
   background: rgba(251, 191, 36, 0.1);
-  border-color: #fbbf24;
+  border-color: var(--accent-amber);
 }
 
 .db-btn-create-snapshot:disabled {
@@ -1982,8 +2006,8 @@
   display: flex;
   flex-direction: column;
   gap: 1px;
-  background: var(--bg-dark);
-  border: 1px solid var(--border-color);
+  background: var(--surface-page);
+  border: 1px solid var(--border-accent);
   border-top: none;
   border-radius: 0 6px 6px 6px;
   max-height: 350px;
@@ -1996,7 +2020,7 @@
   flex-direction: column;
   gap: 4px;
   padding: 8px 12px;
-  background: var(--bg-dark);
+  background: var(--surface-page);
   font-size: 0.78rem;
 }
 
@@ -2074,7 +2098,7 @@
 
 .db-btn-restore {
   background: transparent;
-  color: #60a5fa;
+  color: var(--accent-blue);
   border-color: rgba(96, 165, 250, 0.4);
   padding: 3px 10px;
   font-size: 0.72rem;
@@ -2082,12 +2106,12 @@
 
 .db-btn-restore:hover:not(:disabled) {
   background: rgba(96, 165, 250, 0.1);
-  border-color: #60a5fa;
+  border-color: var(--accent-blue);
 }
 
 .db-btn-preview {
   background: transparent;
-  color: #a78bfa;
+  color: var(--accent-purple-light);
   border-color: rgba(167, 139, 250, 0.4);
   padding: 4px 12px;
   font-size: 0.78rem;
@@ -2095,7 +2119,7 @@
 
 .db-btn-preview:hover:not(:disabled) {
   background: rgba(167, 139, 250, 0.1);
-  border-color: #a78bfa;
+  border-color: var(--accent-purple-light);
 }
 
 .db-snapshot-type {
@@ -2110,17 +2134,17 @@
 
 .db-snapshot-type-edit {
   background: rgba(96, 165, 250, 0.15);
-  color: #60a5fa;
+  color: var(--accent-blue);
 }
 
 .db-snapshot-type-upload {
   background: rgba(34, 197, 94, 0.15);
-  color: #22c55e;
+  color: var(--status-ok);
 }
 
 .db-snapshot-type-manual {
   background: rgba(251, 191, 36, 0.15);
-  color: #fbbf24;
+  color: var(--accent-amber);
 }
 
 .db-snapshot-preview-meta {
@@ -2184,8 +2208,8 @@
 }
 
 .db-diff-select-group select {
-  background: var(--bg-inner);
-  border: 1px solid var(--border-color);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-accent);
   color: var(--text-primary);
   padding: 7px 10px;
   border-radius: 6px;
@@ -2199,7 +2223,7 @@
 }
 
 .db-diff-select-group select option {
-  background: var(--bg-card-solid, #0a1a1f);
+  background: var(--surface-raised-solid);
   color: var(--text-primary);
 }
 
@@ -2210,7 +2234,7 @@
 }
 
 .db-diff-error {
-  color: #ef4444;
+  color: var(--status-error);
   font-size: 0.85rem;
   padding: 8px 12px;
   background: rgba(239, 68, 68, 0.1);
@@ -2244,19 +2268,19 @@
 
 .db-diff-pill-added {
   background: rgba(34, 197, 94, 0.15);
-  color: #22c55e;
+  color: var(--status-ok);
   border: 1px solid rgba(34, 197, 94, 0.3);
 }
 
 .db-diff-pill-removed {
   background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
+  color: var(--status-error);
   border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .db-diff-pill-changed {
   background: rgba(251, 191, 36, 0.15);
-  color: #fbbf24;
+  color: var(--accent-amber);
   border: 1px solid rgba(251, 191, 36, 0.3);
 }
 
@@ -2276,7 +2300,7 @@
 
 /* Sections */
 .db-diff-section {
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -2300,19 +2324,19 @@
 
 .db-diff-section-changed {
   background: rgba(251, 191, 36, 0.08);
-  color: #fbbf24;
+  color: var(--accent-amber);
   border-bottom: 1px solid rgba(251, 191, 36, 0.2);
 }
 
 .db-diff-section-added {
   background: rgba(34, 197, 94, 0.08);
-  color: #22c55e;
+  color: var(--status-ok);
   border-bottom: 1px solid rgba(34, 197, 94, 0.2);
 }
 
 .db-diff-section-removed {
   background: rgba(239, 68, 68, 0.08);
-  color: #ef4444;
+  color: var(--status-error);
   border-bottom: 1px solid rgba(239, 68, 68, 0.2);
 }
 
@@ -2495,7 +2519,7 @@
 .db-version-panel {
   padding: 10px 0 12px;
   background: rgba(0, 10, 15, 0.6);
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-accent);
 }
 
 .db-version-panel .db-version-panel-header {
@@ -2546,7 +2570,7 @@
   align-self: stretch;
   background: none;
   border: none;
-  color: var(--primary-red);
+  color: var(--brand-primary);
   cursor: pointer;
   opacity: 0.7;
   transition: opacity 0.15s;
@@ -2562,7 +2586,7 @@
   min-width: 180px;
   max-width: 280px;
   padding: 8px 12px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.02);
   cursor: pointer;
@@ -2589,8 +2613,8 @@
 }
 
 .db-version-card-create:hover {
-  color: #22c55e;
-  border-color: #22c55e;
+  color: var(--status-ok);
+  border-color: var(--status-ok);
   background: rgba(34, 197, 94, 0.08);
 }
 
@@ -2600,7 +2624,7 @@
 }
 
 .db-version-card.active {
-  border-color: var(--primary-red);
+  border-color: var(--brand-primary);
   background: rgba(192, 32, 35, 0.06);
 }
 
@@ -2622,12 +2646,12 @@
 
 .db-version-live {
   background: rgba(34, 197, 94, 0.2);
-  color: #22c55e;
+  color: var(--status-ok);
 }
 
 .db-version-pinned {
   background: rgba(251, 191, 36, 0.2);
-  color: #fbbf24;
+  color: var(--accent-amber);
 }
 
 .db-version-card-title {
@@ -2661,7 +2685,7 @@
   padding: 1px 5px;
   border-radius: 3px;
   background: rgba(34, 197, 94, 0.15);
-  color: #22c55e;
+  color: var(--status-ok);
   border: 1px solid rgba(34, 197, 94, 0.3);
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -2671,7 +2695,7 @@
   font-size: 0.68rem;
   padding: 2px 8px;
   border-radius: 4px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   background: rgba(255, 255, 255, 0.05);
   color: var(--text-secondary);
   cursor: pointer;
@@ -2687,13 +2711,13 @@
 
 .db-pin-btn-active {
   background: rgba(34, 197, 94, 0.12);
-  color: #22c55e;
+  color: var(--status-ok);
   border-color: rgba(34, 197, 94, 0.4);
 }
 
 .db-pin-btn-active:hover {
   background: rgba(239, 68, 68, 0.12);
-  color: #ef4444;
+  color: var(--status-error);
   border-color: rgba(239, 68, 68, 0.4);
 }
 
@@ -2714,7 +2738,7 @@
   gap: 6px;
   padding: 5px 12px;
   border-radius: 16px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   background: transparent;
   color: var(--text-primary);
   font-size: 0.8rem;
@@ -2736,7 +2760,7 @@
 }
 
 .db-qdrant-ok .db-qdrant-dot {
-  background: #22c55e;
+  background: var(--status-ok);
   box-shadow: 0 0 4px #22c55e88;
 }
 .db-qdrant-ok {
@@ -2744,7 +2768,7 @@
 }
 
 .db-qdrant-stale .db-qdrant-dot {
-  background: #f59e0b;
+  background: var(--status-warning);
   box-shadow: 0 0 4px #f59e0b88;
 }
 .db-qdrant-stale {
@@ -2752,7 +2776,7 @@
 }
 
 .db-qdrant-offline .db-qdrant-dot {
-  background: #ef4444;
+  background: var(--status-error);
   box-shadow: 0 0 4px #ef444488;
 }
 .db-qdrant-offline {
@@ -2783,7 +2807,7 @@
   right: 0;
   min-width: 260px;
   background: rgba(0, 10, 15, 0.98);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   border-radius: 8px;
   padding: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
@@ -2832,7 +2856,7 @@
 
 .db-qdrant-delta.stale {
   background: rgba(245, 158, 11, 0.15);
-  color: #f59e0b;
+  color: var(--status-warning);
 }
 
 .db-qdrant-delta.over {
@@ -2858,11 +2882,11 @@
   color: var(--text-secondary);
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--border-accent);
 }
 
 .db-qdrant-fail {
-  color: #ef4444;
+  color: var(--status-error);
 }
 
 .db-qdrant-actions {
@@ -2870,7 +2894,7 @@
   gap: 6px;
   margin-top: 10px;
   padding-top: 8px;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--border-accent);
 }
 
 .db-qdrant-actions button {
@@ -2878,7 +2902,7 @@
   padding: 5px 8px;
   font-size: 0.75rem;
   font-family: inherit;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   border-radius: 6px;
   background: transparent;
   color: var(--text-primary);
@@ -2887,7 +2911,7 @@
 }
 
 .db-qdrant-actions button:hover {
-  border-color: var(--primary-red);
+  border-color: var(--brand-primary);
   background: rgba(192, 32, 35, 0.1);
 }
 
@@ -2990,9 +3014,9 @@
   top: 24px;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--bg-card);
+  background: var(--surface-raised);
   color: var(--text-primary);
-  border: 1px solid var(--primary-red);
+  border: 1px solid var(--brand-primary);
   border-radius: 8px;
   padding: 10px 20px;
   font-size: 0.9rem;
