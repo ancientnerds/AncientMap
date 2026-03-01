@@ -37,6 +37,8 @@ interface AuditSite {
   ea?: string      // edited_at (ISO timestamp)
   aud?: string     // last_audited (ISO timestamp)
   cf?: number      // confidence_score (0.0-1.0)
+  dc?: { n: number; url: string; title: string; domain: string }[]  // description_citations
+  rf?: { u: string; t: string; d: string; k: string }[]            // reference_links
 }
 
 type IssueFilter = 'all' | 'no_period' | 'no_type' | 'no_country' | 'suspect_modern' | 'no_desc' | 'no_card_desc' | 'no_source' | 'no_image' | 'no_coords'
@@ -1210,6 +1212,8 @@ export default function DbAuditPage() {
       sourceUrl: s.u || undefined,
       sourceId: s.s,
       coordinates: [s.lo, s.la],
+      descriptionCitations: s.dc || undefined,
+      referenceLinks: s.rf?.map(r => ({ url: r.u, title: r.t, domain: r.d, kind: r.k })),
     })
   }, [])
 
