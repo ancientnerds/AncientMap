@@ -616,7 +616,7 @@
 }
 
 .db-id-text {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-family: var(--font-body);
   font-size: 11px;
   color: var(--text-secondary);
   opacity: 0.5;
@@ -650,7 +650,7 @@
 
 /* Coordinates */
 .db-td-coords {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-family: var(--font-body);
   font-size: 12px;
   white-space: nowrap;
   color: var(--text-secondary);
