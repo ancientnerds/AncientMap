@@ -15930,7 +15930,7 @@ body.news-feed-open .empire-borders-window {
   color: #ff6b6b;
 }
 
-/* Welcome screen */
+/* Welcome screen (legacy) */
 .lyra-chat-welcome-text {
   color: #3a6a3a;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
@@ -15945,6 +15945,62 @@ body.news-feed-open .empire-borders-window {
 .lyra-chat-example-btn:hover:not(:disabled) {
   background: rgba(0, 204, 102, 0.06);
   border-color: #2a5a2a;
+  color: #00cc66;
+}
+
+/* Welcome screen (LyraWelcome component) */
+.lyra-welcome-name {
+  color: #00cc66;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  text-shadow: 0 0 8px rgba(0, 204, 102, 0.2);
+}
+.lyra-welcome-subtitle {
+  color: #3a6a3a;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+.lyra-welcome-avatar {
+  border: 2px solid #1a3a1a;
+  box-shadow: 0 0 12px rgba(0, 204, 102, 0.15);
+}
+.lyra-welcome-avatar-ring {
+  border-color: rgba(0, 204, 102, 0.3);
+}
+.lyra-welcome-stats {
+  color: #3a6a3a;
+}
+.lyra-welcome-stats-sep { color: #1a2a1a; }
+
+/* Capability cards — terminal green */
+.lyra-welcome-cap-card {
+  background: rgba(0, 20, 10, 0.4);
+  border-color: #1a2a1a;
+  color: #4a8a4a;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+.lyra-welcome-cap-card:hover:not(:disabled) {
+  border-color: #2a5a2a;
+  background: rgba(0, 204, 102, 0.06);
+}
+.lyra-welcome-cap-label { color: #4a8a4a; }
+.lyra-welcome-cap-card:hover:not(:disabled) .lyra-welcome-cap-label { color: #00cc66; }
+.lyra-welcome-cap-desc { color: #2a4a2a; }
+
+/* Curated prompts — terminal green */
+.lyra-welcome-prompt-label {
+  color: #2a4a2a;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+.lyra-welcome-prompt-btn {
+  background: rgba(0, 20, 10, 0.3);
+  border-color: #1a2a1a;
+  color: #4a8a4a;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+.lyra-welcome-prompt-btn:hover:not(:disabled) {
+  border-color: #2a5a2a;
+  background: rgba(0, 204, 102, 0.05);
   color: #00cc66;
 }
 
