@@ -58,6 +58,7 @@ function metaSummary(node: PipelineNodeInstance): string {
   if (m.sites != null && m.news != null) parts.push(`${m.sites}s ${m.news}n`)
   if (m.has_tools === false && node.stageId === 'llm_round') parts.push('no tools')
   if (m.has_tools === true && node.stageId === 'llm_round') parts.push('tool calls')
+  if (m.round_tokens != null) parts.push(`${(m.round_tokens as number).toLocaleString()} tok`)
   if (m.total_tokens != null) parts.push(`${(m.total_tokens as number).toLocaleString()} tok`)
   return parts.join(' \u00b7 ')
 }
@@ -184,10 +185,6 @@ export default function PipelinePanel({ trace, isLive, onClose }: PipelinePanelP
                     const roundNum = round.meta?.round ?? ri + 1
                     const timing = round.status === 'active' ? '...' : formatMs(round.duration_ms)
                     const meta = metaSummary(round)
-                    // Count tool calls for this round
-                    const toolCount = round.meta?.has_tools ? 'tool calls' : ''
-                    const tokInfo = round.meta?.total_tokens ? `${(round.meta.total_tokens as number).toLocaleString()} tok` : ''
-                    const detail = [toolCount, tokInfo].filter(Boolean).join(' \u00b7 ')
                     return (
                       <div key={round.instanceId}>
                         <TreeLine
@@ -196,7 +193,7 @@ export default function PipelinePanel({ trace, isLive, onClose }: PipelinePanelP
                           timing={timing}
                           isLast={isLast}
                         />
-                        {(meta || detail) && <MetaLine text={meta || detail} isLast={isLast} />}
+                        {meta && <MetaLine text={meta} isLast={isLast} />}
                       </div>
                     )
                   })
@@ -220,10 +217,12 @@ export default function PipelinePanel({ trace, isLive, onClose }: PipelinePanelP
                 const status: PipelineNodeStatus = s.node?.status ?? 'idle'
                 const timing = status === 'active' ? '...' : status === 'idle' ? 'idle' : formatMs(s.node?.duration_ms ?? null)
                 const meta = s.node ? metaSummary(s.node) : ''
+                const error = s.node?.meta?.error ? String(s.node.meta.error) : null
                 return (
                   <div key={s.id}>
                     <TreeLine name={s.id} status={status} timing={timing} isLast={isLast} />
                     {meta && <MetaLine text={meta} isLast={isLast} />}
+                    {error && <MetaLine text={`\u2717 ${error}`} isLast={isLast} />}
                   </div>
                 )
               })}
