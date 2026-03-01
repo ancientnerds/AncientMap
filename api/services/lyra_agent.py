@@ -801,16 +801,25 @@ async def run_agent_stream(
                 )
                 continue
 
-            yield {
-                "type": "pipeline",
-                "stage": "tool_call",
-                "status": "start",
-                "duration_ms": None,
-                "meta": {"tool": str(tc["name"])},
-            }
             _t_tool = time.monotonic()
             try:
                 args = json.loads(str(tc["args"])) if tc["args"] else {}
+
+                # Summarize args for the pipeline panel (strip verbose fields)
+                _args_summary = {}
+                for k, v in args.items():
+                    if isinstance(v, str) and len(v) > 80:
+                        _args_summary[k] = v[:77] + "..."
+                    else:
+                        _args_summary[k] = v
+
+                yield {
+                    "type": "pipeline",
+                    "stage": "tool_call",
+                    "status": "start",
+                    "duration_ms": None,
+                    "meta": {"tool": str(tc["name"]), "args": _args_summary},
+                }
                 result = tool_fn.invoke(args)
                 tool_calls_made += 1
 
@@ -890,12 +899,22 @@ async def run_agent_stream(
                         pass
 
                 messages.append(ToolMessage(content=result, tool_call_id=str(tc["id"])))
+
+                # Count result items for the pipeline panel
+                _result_len = None
+                try:
+                    _parsed_result = json.loads(result)
+                    if isinstance(_parsed_result, list):
+                        _result_len = len(_parsed_result)
+                except Exception:
+                    pass
+
                 yield {
                     "type": "pipeline",
                     "stage": "tool_call",
                     "status": "done",
                     "duration_ms": int((time.monotonic() - _t_tool) * 1000),
-                    "meta": {"tool": str(tc["name"])},
+                    "meta": {"tool": str(tc["name"]), "result_len": _result_len},
                 }
 
             except Exception as e:
@@ -911,7 +930,7 @@ async def run_agent_stream(
                     "stage": "tool_call",
                     "status": "error",
                     "duration_ms": int((time.monotonic() - _t_tool) * 1000),
-                    "meta": {"tool": str(tc["name"])},
+                    "meta": {"tool": str(tc["name"]), "error": str(e)[:120]},
                 }
 
         yield {

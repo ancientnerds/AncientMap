@@ -15484,29 +15484,30 @@ body.news-feed-open .empire-borders-window {
 
 /* ── Pipeline Panel ── */
 
+/* ── Pipeline Panel — Terminal aesthetic ── */
 .lp-panel {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 300px;
-  max-width: 100%;
-  height: 100%;
-  background: rgba(16, 20, 28, 0.82);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  flex: 0 0 40%;
+  max-width: 40%;
+  min-width: 280px;
+  background: #0a0e14;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  color: #4a8a4a;
+  border-left: 1px solid #1a2a1a;
   display: flex;
   flex-direction: column;
-  z-index: 10;
-  animation: lyra-search-slide-in 0.2s ease;
+  overflow: hidden;
 }
 
 .lp-header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid #1a2a1a;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #00cc66;
   flex-shrink: 0;
 }
 
@@ -15514,27 +15515,23 @@ body.news-feed-open .empire-borders-window {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-family: 'Orbitron', sans-serif;
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  color: rgba(255, 255, 255, 0.8);
-  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #00cc66;
 }
 
 .lp-live-badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 9px;
-  font-weight: 700;
   color: #00c8c8;
-  letter-spacing: 1px;
+  font-size: 9px;
+  margin-left: 8px;
 }
 
 .lp-live-dot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: #00c8c8;
   animation: lp-live-pulse 1.5s ease-in-out infinite;
@@ -15543,119 +15540,77 @@ body.news-feed-open .empire-borders-window {
 .lp-body {
   flex: 1;
   overflow-y: auto;
-  overflow-x: hidden;
-  padding: 12px 8px;
+  padding: 8px 12px;
+  font-size: 11px;
+  line-height: 1.7;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+  scrollbar-color: #1a2a1a transparent;
 }
 
 .lp-footer {
-  padding: 8px 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 6px 12px;
+  border-top: 1px solid #1a2a1a;
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.4);
-  font-family: 'Orbitron', sans-serif;
-  letter-spacing: 0.3px;
-  text-align: center;
+  color: #3a6a3a;
+  letter-spacing: 0.05em;
 }
 
-/* SVG graph */
-.lp-graph { width: 100%; display: block; }
-
-/* Node rectangles */
-.lp-node-rect {
-  rx: 6;
-  ry: 6;
-  stroke-width: 1.2;
-  transition: fill 0.3s, stroke 0.3s;
+/* Section headers */
+.lp-section {
+  color: #2a4a2a;
+  margin-top: 12px;
+  margin-bottom: 2px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
-.lp-node-idle .lp-node-rect {
-  fill: rgba(255, 255, 255, 0.03);
-  stroke: rgba(255, 255, 255, 0.1);
+/* Tree lines */
+.lp-line {
+  display: flex;
+  align-items: baseline;
+  white-space: nowrap;
+  gap: 0;
 }
+.lp-connector { color: #3a3a3a; min-width: 24px; flex-shrink: 0; }
+.lp-name { flex: 1; min-width: 0; }
+.lp-status { margin: 0 6px; flex-shrink: 0; }
+.lp-timing { color: #3a6a3a; flex-shrink: 0; }
 
-.lp-node-active .lp-node-rect {
-  fill: rgba(0, 200, 200, 0.08);
-  stroke: rgba(0, 200, 200, 0.7);
-  animation: lp-node-glow 1.8s ease-in-out infinite;
+/* Status colors */
+.lp-line-idle .lp-name,
+.lp-line-idle .lp-status { color: #3a3a3a; }
+.lp-line-active .lp-name { color: #00cc66; }
+.lp-line-active .lp-status { color: #00cc66; animation: lp-pulse 1.5s ease-in-out infinite; }
+.lp-line-done .lp-name { color: #4a8a4a; }
+.lp-line-done .lp-status { color: #00cc66; }
+.lp-line-error .lp-name,
+.lp-line-error .lp-status { color: #ff4444; }
+.lp-line-skip .lp-name,
+.lp-line-skip .lp-status { color: #2a4a2a; }
+
+/* Meta / args / results (sub-lines under a tool) */
+.lp-meta {
+  color: #2a4a2a;
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+.lp-args { color: #3a6a3a; }
+.lp-result { color: #4a8a4a; }
+.lp-line-error + .lp-meta { color: #cc3333; }
 
-.lp-node-done .lp-node-rect {
-  fill: rgba(80, 200, 120, 0.06);
-  stroke: rgba(80, 200, 120, 0.5);
-}
-
-.lp-node-error .lp-node-rect {
-  fill: rgba(255, 80, 80, 0.08);
-  stroke: rgba(255, 80, 80, 0.6);
-}
-
-.lp-node-skip .lp-node-rect {
-  fill: rgba(255, 255, 255, 0.02);
-  stroke: rgba(255, 255, 255, 0.08);
-  stroke-dasharray: 4 3;
-}
-
-/* Node text */
-.lp-node-label {
-  fill: rgba(255, 255, 255, 0.85);
-  font-size: 10.5px;
-  font-weight: 600;
-  font-family: 'Inter', sans-serif;
-}
-
-.lp-node-sublabel {
-  fill: rgba(255, 255, 255, 0.35);
-  font-size: 8.5px;
-  font-family: 'Inter', sans-serif;
-}
-
-.lp-node-active .lp-node-label { fill: #00c8c8; }
-.lp-node-done .lp-node-label { fill: rgba(80, 200, 120, 0.9); }
-.lp-node-error .lp-node-label { fill: rgba(255, 80, 80, 0.9); }
-.lp-node-skip .lp-node-label { fill: rgba(255, 255, 255, 0.3); }
-.lp-node-skip .lp-node-sublabel { fill: rgba(255, 255, 255, 0.15); }
-
-/* Timing + meta badge */
-.lp-node-badge {
-  fill: rgba(255, 255, 255, 0.45);
-  font-size: 8px;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  animation: lp-timing-in 0.3s ease both;
-}
-
-.lp-node-done .lp-node-badge { fill: rgba(80, 200, 120, 0.6); }
-.lp-node-error .lp-node-badge { fill: rgba(255, 80, 80, 0.6); }
-
-/* Status icon */
-.lp-node-status-icon {
-  font-size: 9px;
-  dominant-baseline: central;
-}
-
-/* Edges */
-.lp-edge {
-  stroke: rgba(255, 255, 255, 0.08);
-  stroke-width: 1;
-  fill: none;
-  transition: stroke 0.3s;
-}
-
-.lp-edge-active {
-  stroke: rgba(0, 200, 200, 0.5);
-  stroke-dasharray: 6 6;
-  animation: lp-dash-flow 0.6s linear infinite;
-}
-
-.lp-edge-done {
-  stroke: rgba(80, 200, 120, 0.3);
-}
-
-/* Tool call indent */
-.lp-tool-indent .lp-node-rect {
-  rx: 4;
-  ry: 4;
+/* Backend group labels */
+.lp-backend-group { margin-bottom: 8px; }
+.lp-backend-label {
+  color: #00c8c8;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding-left: 4px;
+  margin-top: 6px;
+  margin-bottom: 2px;
 }
 
 /* Pipeline button in header */
@@ -15704,28 +15659,25 @@ body.news-feed-open .empire-borders-window {
 }
 
 /* Keyframes */
-@keyframes lp-node-glow {
-  0%, 100% { filter: drop-shadow(0 0 4px rgba(0, 200, 200, 0.4)); }
-  50%      { filter: drop-shadow(0 0 10px rgba(0, 200, 200, 0.9)); }
-}
-
-@keyframes lp-dash-flow {
-  to { stroke-dashoffset: -12; }
-}
-
-@keyframes lp-timing-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: translateY(0); }
+@keyframes lp-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 @keyframes lp-live-pulse {
   0%, 100% { opacity: 1; }
-  50%      { opacity: 0.3; }
+  50% { opacity: 0.3; }
 }
 
-/* Mobile: pipeline panel goes full-width */
-@media (max-width: 600px) {
-  .lp-panel { width: 100%; }
+/* Wider modal when pipeline is open */
+.lyra-chat-modal--with-pipeline {
+  width: min(1100px, calc(100vw - 32px));
+}
+
+/* Responsive: pipeline stacks below on mobile */
+@media (max-width: 768px) {
+  .lp-panel { flex: none; width: 100%; max-width: 100%; max-height: 40vh; border-left: none; border-top: 1px solid #1a2a1a; }
+  .lyra-chat-modal--with-pipeline { width: calc(100vw - 16px); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -15743,9 +15695,7 @@ body.news-feed-open .empire-borders-window {
   .lyra-discovery-bar,
   .lyra-discovery-count,
   .lp-panel,
-  .lp-node-active .lp-node-rect,
-  .lp-edge-active,
-  .lp-node-badge,
+  .lp-line-active .lp-status,
   .lp-live-dot { animation: none !important; transition: none !important; }
   .lyra-chat-typing-dots span { opacity: 0.7; }
   .lyra-welcome-section > * { opacity: 1; }

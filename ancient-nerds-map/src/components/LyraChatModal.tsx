@@ -1094,7 +1094,7 @@ export default function LyraChatModal({
   )
 
   const modalContent = (
-    <div className="lyra-chat-modal">
+    <div className={`lyra-chat-modal${pipelineOpen ? ' lyra-chat-modal--with-pipeline' : ''}`}>
       {header}
       {historyPanel}
 
