@@ -339,7 +339,8 @@ async def get_all_sites(
                     us.updated_at,
                     us.last_audited,
                     cs.card_description,
-                    cs.confidence_score
+                    cs.confidence_score,
+                    us.raw_data
                 FROM unified_sites us
                 LEFT JOIN card_stats cs ON cs.site_id = us.id
                 WHERE {where_clause}
@@ -380,6 +381,9 @@ async def get_all_sites(
                     site["ea"] = row.updated_at.isoformat()
                 if row.last_audited:
                     site["aud"] = row.last_audited.isoformat()
+                rd = row.raw_data
+                if isinstance(rd, dict) and "description_citations" in rd:
+                    site["dc"] = rd["description_citations"]
                 all_sites.append(site)
                 site_ids_list.append(row.id)
 
@@ -414,6 +418,7 @@ async def get_all_sites(
                     for sid, refs in refs_by_site.items():
                         if sid in site_map:
                             site_map[sid]["rf"] = refs
+
         except Exception as e:
             logger.error(f"Database query failed for live sources: {e}", exc_info=True)
             # Do NOT silently fall back to static JSON — surface the error so

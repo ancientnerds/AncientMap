@@ -78,6 +78,14 @@ export interface ReferenceLink {
   k: string   // kind (article, academic, database, museum, unesco, government, project)
 }
 
+/** Description citation from enrichment pipeline */
+export interface DescriptionCitation {
+  n: number   // citation number [1], [2], etc.
+  url: string
+  title: string
+  domain: string
+}
+
 /** Expanded site for internal use */
 export interface Site {
   id: string
@@ -99,6 +107,7 @@ export interface Site {
   bestWikiUrl?: string    // best Wikipedia article URL (from enrichment)
   sourceLanguage?: string // source language of best wiki article (e.g. "de")
   referenceLinks?: ReferenceLink[]  // web-searched reference links
+  descriptionCitations?: DescriptionCitation[]  // inline citation sources
 }
 
 /** sites/index.json file format */

@@ -9608,6 +9608,47 @@ body.hud-hidden .empire-borders-window {
   color: var(--brand-primary);
 }
 
+/* Citation superscript markers (inline in description text) */
+.popup-citation-sup {
+  font-size: 9px;
+  vertical-align: super;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  text-decoration: none;
+  margin: 0 1px;
+  opacity: 0.7;
+}
+.popup-citation-sup:hover {
+  color: var(--brand-primary);
+  opacity: 1;
+}
+
+/* Citation toggle button ([1] in bottom bar) */
+.popup-link-item.cite-toggle {
+  font-size: 10px;
+  font-family: monospace;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  width: auto;
+  padding: 0 8px;
+}
+.popup-link-item.cite-toggle:hover {
+  color: var(--text-secondary);
+  border-color: var(--text-tertiary);
+}
+.popup-link-item.cite-toggle.active {
+  color: var(--brand-primary);
+  border-color: var(--brand-primary);
+}
+
+/* Citation source favicon-only link */
+.popup-link-item.cite-source {
+  padding: 4px;
+}
+.popup-link-item.cite-source img {
+  border-radius: 2px;
+}
+
 /* ==========================================================================
    Admin Edit Mode
    ========================================================================== */
@@ -17280,6 +17321,13 @@ body.news-feed-open .empire-borders-window {
 .popup-link-item.admin:hover svg { color: var(--crt-600); }
 .popup-link-item.admin.active { background: var(--accent-glow-08); border-color: var(--crt-700); }
 .popup-link-item.admin.active svg { color: var(--crt-500); }
+
+/* Citation styles (CRT) */
+.popup-citation-sup { color: var(--crt-700); }
+.popup-citation-sup:hover { color: var(--accent-primary); }
+.popup-link-item.cite-toggle { color: var(--crt-700); }
+.popup-link-item.cite-toggle:hover { color: var(--crt-500); border-color: var(--crt-700); }
+.popup-link-item.cite-toggle.active { color: var(--accent-primary); border-color: var(--accent-primary); }
 
 /* Popup link (inline) */
 .site-popup .popup-link {

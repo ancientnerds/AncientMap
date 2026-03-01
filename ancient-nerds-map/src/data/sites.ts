@@ -47,6 +47,7 @@ export interface SiteData {
   bestWikiUrl?: string
   sourceLanguage?: string
   referenceLinks?: ReferenceLink[]
+  descriptionCitations?: { n: number; url: string; title: string; domain: string }[]
 }
 
 // Period list derived from centralized PERIOD_COLORS
@@ -101,6 +102,7 @@ export async function fetchSites(): Promise<SiteData[]> {
     referenceLinks: site.referenceLinks?.map(r => ({
       url: r.u, title: r.t, domain: r.d, kind: r.k,
     })),
+    descriptionCitations: site.descriptionCitations,
   }))
 }
 
@@ -157,6 +159,7 @@ export function getCurrentSites(): SiteData[] {
     referenceLinks: site.referenceLinks?.map(r => ({
       url: r.u, title: r.t, domain: r.d, kind: r.k,
     })),
+    descriptionCitations: site.descriptionCitations,
   }))
 }
 
