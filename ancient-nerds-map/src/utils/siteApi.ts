@@ -15,6 +15,9 @@ export interface ApiSiteDetail {
   description?: string
   cardDescription?: string
   sourceUrl?: string
+  bestWikiUrl?: string
+  sourceLanguage?: string
+  descriptionCitations?: { n: number; url: string; title: string; domain: string }[]
 }
 
 // Convert API detail response to SiteData - SINGLE SOURCE OF TRUTH
@@ -40,5 +43,8 @@ export function apiDetailToSiteData(detail: ApiSiteDetail): SiteData {
     cardDescription: detail.cardDescription,
     sourceId: detail.sourceId || 'unknown',
     sourceUrl: detail.sourceUrl,
+    bestWikiUrl: detail.bestWikiUrl,
+    sourceLanguage: detail.sourceLanguage,
+    descriptionCitations: detail.descriptionCitations,
   }
 }
