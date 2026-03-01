@@ -67,7 +67,7 @@ CITED_DESC_DIR = OUTPUT_DIR / "cited_description_batches"
 VERIFICATION_DIR = OUTPUT_DIR / "verification_batches"
 
 ALL_SOURCE_IDS = ["ancient_nerds"]
-DEFAULT_API_URL = "http://localhost:5175"
+DEFAULT_API_URL = "https://ancientnerds.com"
 
 # Re-audit sites older than 90 days
 AUDIT_FRESHNESS_DAYS = 90
@@ -2699,7 +2699,7 @@ def main() -> None:
         type=int,
         default=None,
         metavar="N",
-        help="Test mode: process only N random sites (skips sync and mechanical fixes)",
+        help="Test mode: process only N random sites (skips mechanical fixes)",
     )
     parser.add_argument(
         "--overwrite",
@@ -2730,7 +2730,7 @@ def main() -> None:
         print(f"  Overwrite: yes (verify + correct existing values)", flush=True)
     print("=" * 60, flush=True)
 
-    # --limit mode: skip sync & mechanical, run enrichment + apply + package on N random sites
+    # --limit mode: sync first, then run enrichment + apply + package on N random sites
     # (but not when running web-links phases — those handle --limit themselves)
     if limit and phase not in (
         "web-links",
@@ -2740,6 +2740,11 @@ def main() -> None:
         "verify-citations",
         "verify-citations-merge",
     ):
+        print("\n" + "=" * 40, flush=True)
+        print("  SYNC: Fetch Production -> Local DB", flush=True)
+        print("=" * 40, flush=True)
+        sync_from_production(args.api_url, source_ids)
+
         sites = fetch_audit_candidates(source_ids, args.mode, limit=limit)
         if not sites:
             print("\n[AUDIT] No candidates found. Nothing to do.", flush=True)
@@ -2767,15 +2772,14 @@ def main() -> None:
         print("=" * 60, flush=True)
         return
 
-    # Step 1: Sync from production API (always first)
-    if phase in (None, "sync"):
-        print("\n" + "=" * 40, flush=True)
-        print("  SYNC: Fetch Production -> Local DB", flush=True)
-        print("=" * 40, flush=True)
-        sync_from_production(args.api_url, source_ids)
-        if phase == "sync":
-            print("\n[SYNC] Done. Local DB now matches production.", flush=True)
-            return
+    # Step 1: Always sync from production API first
+    print("\n" + "=" * 40, flush=True)
+    print("  SYNC: Fetch Production -> Local DB", flush=True)
+    print("=" * 40, flush=True)
+    sync_from_production(args.api_url, source_ids)
+    if phase == "sync":
+        print("\n[SYNC] Done. Local DB now matches production.", flush=True)
+        return
 
     # Fetch candidates for audit (unless just merging/exporting/packaging/agents/weblinks)
     if phase not in (
