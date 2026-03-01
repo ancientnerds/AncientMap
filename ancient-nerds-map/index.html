@@ -108,7 +108,9 @@
       @font-face{font-family:'Inter';font-style:normal;font-weight:300;font-display:swap;src:url('/fonts/inter-300.woff2') format('woff2')}
       @font-face{font-family:'Inter';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/inter-400.woff2') format('woff2')}
       @font-face{font-family:'Cormorant Garamond';font-style:italic;font-weight:400;font-display:swap;src:url('/fonts/cormorant-garamond-400i.woff2') format('woff2')}
-      :root{--primary-red:#c02023;--primary-red-hover:#d42426;--bg-dark:#000;--text-primary:#fff;--text-secondary:#888;--text-muted:#787878}
+      @font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/jetbrains-mono-400.woff2') format('woff2')}
+      @font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:500;font-display:swap;src:url('/fonts/jetbrains-mono-500.woff2') format('woff2')}
+      :root{--brand-primary:#c02023;--brand-primary-hover:#d42426;--surface-page:#000;--text-primary:#fff;--text-secondary:#888;--text-muted:#787878;--accent-primary:#00cc66;--font-heading:'Orbitron',sans-serif;--font-body:'JetBrains Mono','Fira Code',monospace;--font-ui:'Inter',system-ui,-apple-system,sans-serif}
       *{margin:0;padding:0;box-sizing:border-box}
       img{max-width:100%;height:auto}
       html{scroll-behavior:smooth}
@@ -122,17 +124,17 @@
       .hero-overlay{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.2) 0%,transparent 30%,transparent 60%,rgba(0,0,0,.4) 80%,#000 100%)}
       .hero-content{position:relative;z-index:2;max-width:900px;padding:0 24px;text-align:center;margin-top:-100px}
       .hero-content .cta-primary,.final-cta .cta-primary{background:rgba(0,0,0,.7)}
-      .hero-content .cta-primary:hover,.final-cta .cta-primary:hover{background:var(--primary-red);color:#000}
+      .hero-content .cta-primary:hover,.final-cta .cta-primary:hover{background:var(--brand-primary);color:#000}
       .hero-bg-fade{padding:12px 80px;display:inline-block;text-align:center}
       .hero-logo{width:clamp(140px,40vw,208px);height:auto;margin-bottom:-30px;filter:drop-shadow(0 0 10px rgba(192,32,35,.5)) drop-shadow(0 0 20px rgba(192,32,35,.3)) drop-shadow(0 0 4px rgba(0,0,0,1)) drop-shadow(0 0 10px rgba(0,0,0,.8))}
-      .hero-title{position:relative;z-index:1;font-family:'Orbitron',sans-serif;font-size:clamp(2rem,4.5vw,3.5rem);font-weight:700;letter-spacing:.15em;margin-top:0;margin-bottom:8px;white-space:nowrap;color:var(--primary-red);text-shadow:0 0 10px rgba(192,32,35,.5),0 0 20px rgba(192,32,35,.3),0 0 40px rgba(192,32,35,.15),0 0 4px rgba(0,0,0,1),0 0 10px rgba(0,0,0,1)}
-      .hero-subtitle{font-family:'Orbitron',sans-serif;font-size:clamp(.9rem,2vw,1.2rem);font-weight:400;letter-spacing:.3em;color:#bbb;margin-bottom:24px;text-shadow:0 0 4px rgba(0,0,0,1),0 0 10px rgba(0,0,0,1),0 0 30px rgba(0,0,0,.9),0 0 60px rgba(0,0,0,.7)}
+      .hero-title{position:relative;z-index:1;font-family:var(--font-heading);font-size:clamp(2rem,4.5vw,3.5rem);font-weight:700;letter-spacing:.15em;margin-top:0;margin-bottom:8px;white-space:nowrap;color:var(--brand-primary);text-shadow:0 0 10px rgba(192,32,35,.5),0 0 20px rgba(192,32,35,.3),0 0 40px rgba(192,32,35,.15),0 0 4px rgba(0,0,0,1),0 0 10px rgba(0,0,0,1)}
+      .hero-subtitle{font-family:var(--font-heading);font-size:clamp(.9rem,2vw,1.2rem);font-weight:400;letter-spacing:.3em;color:#bbb;margin-bottom:24px;text-shadow:0 0 4px rgba(0,0,0,1),0 0 10px rgba(0,0,0,1),0 0 30px rgba(0,0,0,.9),0 0 60px rgba(0,0,0,.7)}
       .hero-tagline{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:clamp(1.1rem,2.5vw,1.5rem);color:#bbb;margin-bottom:40px;text-wrap:balance;text-shadow:0 0 4px rgba(0,0,0,1),0 0 10px rgba(0,0,0,1),0 0 30px rgba(0,0,0,.9),0 0 60px rgba(0,0,0,.7)}
       .hero-stats{display:flex;justify-content:center;gap:32px;flex-wrap:wrap;margin-bottom:40px}
       .hero-stat{text-align:center}
-      .hero-stat-value{font-family:'Orbitron',sans-serif;font-size:clamp(1.4rem,3vw,2rem);font-weight:700;color:var(--primary-red);text-shadow:0 0 4px rgba(0,0,0,1),0 0 10px rgba(0,0,0,1),0 0 30px rgba(0,0,0,.9),0 0 60px rgba(0,0,0,.7)}
-      .hero-stat-label{font-size:.8rem;color:var(--text-muted);letter-spacing:.1em;text-transform:uppercase;text-shadow:0 0 4px rgba(0,0,0,1),0 0 10px rgba(0,0,0,1),0 0 30px rgba(0,0,0,.9),0 0 60px rgba(0,0,0,.7)}
-      .cta-primary{display:inline-block;padding:16px 48px;background:transparent;border:1px solid var(--primary-red);color:var(--primary-red);text-decoration:none;font-family:'Orbitron',sans-serif;font-size:.95rem;font-weight:600;letter-spacing:.15em;border-radius:4px;cursor:pointer;transition:background .15s ease,color .15s ease,transform .1s ease}
+      .hero-stat-value{font-family:var(--font-heading);font-size:clamp(1.4rem,3vw,2rem);font-weight:700;color:var(--brand-primary);text-shadow:0 0 4px rgba(0,0,0,1),0 0 10px rgba(0,0,0,1),0 0 30px rgba(0,0,0,.9),0 0 60px rgba(0,0,0,.7)}
+      .hero-stat-label{font-size:.75rem;font-family:var(--font-body);color:var(--text-muted);letter-spacing:.1em;text-transform:uppercase;text-shadow:0 0 4px rgba(0,0,0,1),0 0 10px rgba(0,0,0,1),0 0 30px rgba(0,0,0,.9),0 0 60px rgba(0,0,0,.7)}
+      .cta-primary{display:inline-block;padding:16px 48px;background:transparent;border:1px solid var(--brand-primary);color:var(--brand-primary);text-decoration:none;font-family:var(--font-heading);font-size:.95rem;font-weight:600;letter-spacing:.15em;border-radius:4px;cursor:pointer;transition:background .15s ease,color .15s ease,transform .1s ease}
       .scroll-arrow{position:absolute;bottom:40px;left:50%;transform:translateX(-50%);z-index:2;animation:bounce 2s infinite;color:var(--text-muted);font-size:1.5rem;text-decoration:none}
       @keyframes bounce{0%,20%,50%,80%,100%{transform:translateX(-50%) translateY(0)}40%{transform:translateX(-50%) translateY(-12px)}60%{transform:translateX(-50%) translateY(-6px)}}
       @media(max-width:600px){.hero-stats{gap:20px}.hero-title{white-space:normal;letter-spacing:.08em;font-size:clamp(1.8rem,8vw,2.4rem)}.cta-primary{padding:14px 32px;font-size:.85rem}.hero-bg-fade{padding:12px 24px}}
