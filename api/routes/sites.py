@@ -1034,6 +1034,15 @@ async def get_site_detail(
         resp["bestWikiUrl"] = row.best_wiki_url
     if row.source_language:
         resp["sourceLanguage"] = row.source_language
+    # Extract description_citations from raw_data
+    rd = row.raw_data
+    if isinstance(rd, str):
+        try:
+            rd = json.loads(rd)
+        except (ValueError, TypeError):
+            rd = None
+    if isinstance(rd, dict) and "description_citations" in rd:
+        resp["descriptionCitations"] = rd["description_citations"]
     return resp
 
 
