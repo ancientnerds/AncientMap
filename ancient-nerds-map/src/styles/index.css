@@ -15486,9 +15486,9 @@ body.news-feed-open .empire-borders-window {
 
 /* ── Pipeline Panel — Terminal aesthetic ── */
 .lp-panel {
-  flex: 0 0 40%;
-  max-width: 40%;
-  min-width: 280px;
+  flex: 0 0 280px;
+  max-width: 280px;
+  min-width: 240px;
   background: #0a0e14;
   font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
   color: #4a8a4a;
@@ -15671,7 +15671,7 @@ body.news-feed-open .empire-borders-window {
 
 /* Wider modal when pipeline is open */
 .lyra-chat-modal--with-pipeline {
-  width: min(1100px, calc(100vw - 32px));
+  width: min(820px, calc(100vw - 32px));
 }
 
 /* Responsive: pipeline stacks below on mobile */
