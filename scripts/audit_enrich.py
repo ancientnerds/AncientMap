@@ -2021,8 +2021,8 @@ def merge_deep_research(dry_run: bool = False) -> dict:
                 status = site_data.get("status", "?")
                 desc = site_data.get("description", {})
                 card = site_data.get("card_description", {})
-                desc_len = desc.get("char_count", len(desc.get("text", "")))
-                card_len = card.get("char_count", len(card.get("text", "")))
+                desc_len = len(desc.get("text", ""))
+                card_len = len(card.get("text", ""))
                 sources = desc.get("sources_used", [])
                 conf = desc.get("confidence", "?")
                 print(
@@ -2241,7 +2241,20 @@ You are writing verified, cited descriptions for archaeological sites.
 - Number citations sequentially starting from [1]
 - ONLY cite URLs you successfully fetched or Wikipedia. Never cite a URL that returned an error.
 - If a fetch fails, add it to fetch_errors and do NOT cite it
-- If you cite Wikipedia, you MUST include a Wikipedia excerpt in fetched_excerpts (use the wiki_extract from input, or WebFetch the Wikipedia page)
+
+WIKIPEDIA CITATIONS:
+- If you cite Wikipedia, you MUST WebFetch the Wikipedia page first
+- Include the Wikipedia page content as an excerpt in fetched_excerpts
+- If the Wikipedia WebFetch fails, do NOT cite Wikipedia — use other sources instead
+- This is mandatory: citations without excerpts will be REJECTED in validation
+
+HANDLING FETCH FAILURES:
+- If a reference URL returns 403/blocked/timeout, do NOT just skip it
+- Use WebSearch to find an alternative authoritative source about the same site
+- Search: "{site_name} {country} archaeological" + keywords from the failed source's title
+- Include the alternative URL and its excerpt in your output
+- Common blocked domains: historicengland.org.uk, UNESCO, academic publishers (Springer, Wiley, Elsevier)
+- Always try to have at least 2 working cited sources per description
 
 ## Output format
 
@@ -2544,9 +2557,7 @@ def merge_cited_descriptions(dry_run: bool = False) -> dict:
                 fetch_error_urls = {e.split(" — ")[0] for e in site_data.get("fetch_errors", [])}
                 for url in cited_urls:
                     if url not in fetched_excerpts and url not in fetch_error_urls:
-                        # Wikipedia source_url citations don't need fetched excerpts
-                        if "wikipedia.org" not in url:
-                            errors.append(f"no fetched excerpt for cited URL: {url[:60]}")
+                        errors.append(f"no fetched excerpt for cited URL: {url[:60]}")
 
                 if errors:
                     batch_valid = False
@@ -2601,6 +2612,12 @@ def merge_cited_descriptions(dry_run: bool = False) -> dict:
 
 VERIFICATION_AGENT_PROMPT = """\
 You are an independent fact-checker for archaeological site descriptions.
+
+CRITICAL CONSTRAINT:
+You MUST ONLY verify claims against the fetched_excerpts provided in the input.
+Do NOT use WebSearch, WebFetch, or any external tools to verify claims.
+If no excerpt exists for a cited URL, the claim is UNVERIFIABLE — mark it for removal.
+Your job is to check what's in front of you, not to research further.
 
 ## Your task
 
