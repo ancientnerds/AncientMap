@@ -235,7 +235,7 @@ body::after {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 9998;
+  z-index: 2147483647;
   background: repeating-linear-gradient(
     to bottom,
     transparent 0px,

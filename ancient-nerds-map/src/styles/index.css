@@ -2931,7 +2931,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 }
 
 .contribute-select option {
-  background: #0a1a1f;
+  background: var(--surface-page);
   color: var(--text-primary);
 }
 
@@ -4392,7 +4392,7 @@ a.popup-window-btn {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #0a1a1f 0%, #0d2329 100%);
+  background: var(--surface-raised);
   gap: 12px;
   color: rgba(255, 255, 255, 0.5);
   font-size: 14px;
@@ -16342,7 +16342,7 @@ body.news-feed-open .empire-borders-window {
 }
 
 .articles-grid-card {
-  background: var(--bg-surface, #0f1f2a);
+  background: var(--surface-raised);
   border: 1px solid var(--border-accent);
   border-radius: 8px;
   padding: 20px;
@@ -16353,8 +16353,8 @@ body.news-feed-open .empire-borders-window {
 }
 
 .articles-grid-card:hover {
-  border-color: var(--accent-glow-30);
-  background: var(--bg-hover, #132530);
+  border-color: var(--crt-700);
+  background: var(--surface-crt-subtle);
 }
 
 .articles-grid-card-img {
@@ -16871,7 +16871,7 @@ body.news-feed-open .empire-borders-window {
 }
 
 .articles-attribution-channel {
-  background: var(--bg-surface, #0f1f2a);
+  background: var(--surface-raised);
   border: 1px solid var(--border-accent);
   border-radius: 8px;
   padding: 14px 16px;
@@ -16972,7 +16972,7 @@ body.news-feed-open .empire-borders-window {
   height: 40px;
   border-radius: 50%;
   border: 1px solid var(--border-accent);
-  background: var(--bg-surface, #0f1f2a);
+  background: var(--surface-raised);
   color: var(--text-secondary);
   cursor: pointer;
   display: flex;
