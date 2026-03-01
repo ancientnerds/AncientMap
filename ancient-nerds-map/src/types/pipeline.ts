@@ -45,6 +45,29 @@ export const PIPELINE_STAGES: PipelineNodeDef[] = [
   { id: 'done_credits', label: 'Done', sublabel: 'Credits + achievements' },
 ]
 
+export interface ToolDef {
+  name: string
+  label: string
+  backend: string
+}
+
+export const TOOL_REGISTRY: ToolDef[] = [
+  // PostgreSQL tools
+  { name: 'search_sites',     label: 'search_sites',     backend: 'PostgreSQL' },
+  { name: 'get_site_details', label: 'get_site_details', backend: 'PostgreSQL' },
+  { name: 'search_news',      label: 'search_news',      backend: 'PostgreSQL' },
+  { name: 'search_radar',     label: 'search_radar',     backend: 'PostgreSQL' },
+  { name: 'list_channels',    label: 'list_channels',    backend: 'PostgreSQL' },
+  { name: 'get_site_images',  label: 'get_site_images',  backend: 'PostgreSQL' },
+  // Qdrant tools
+  { name: 'vector_search',       label: 'vector_search',       backend: 'Qdrant' },
+  { name: 'search_transcripts',  label: 'search_transcripts',  backend: 'Qdrant' },
+  { name: 'search_articles',     label: 'search_articles',     backend: 'Qdrant' },
+  { name: 'search_empires',      label: 'search_empires',      backend: 'Qdrant' },
+  // Seshat tools
+  { name: 'get_empire_data', label: 'get_empire_data', backend: 'Seshat' },
+]
+
 /**
  * Pure function: apply a backend pipeline event to the node list.
  * Repeatable stages (llm_round, tool_call) create new instances on each "start".
@@ -112,7 +135,9 @@ export function applyPipelineEvent(
         ...updated[idx],
         status,
         duration_ms: event.duration_ms,
-        meta: event.meta ?? updated[idx].meta,
+        meta: event.meta
+          ? updated[idx].meta ? { ...updated[idx].meta, ...event.meta } : event.meta
+          : updated[idx].meta,
       }
       return updated
     }
