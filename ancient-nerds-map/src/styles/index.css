@@ -9602,6 +9602,30 @@ body.hud-hidden .empire-borders-window {
   color: rgba(90, 130, 115, 0.9);
 }
 
+/* Reference link buttons (favicon + domain) */
+.popup-link-item.ref-link {
+  gap: 5px;
+  padding: 4px 8px;
+  font-size: 11px;
+  max-width: 160px;
+}
+
+.ref-link-favicon {
+  flex-shrink: 0;
+  border-radius: 2px;
+}
+
+.ref-link-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+
+.popup-link-item.ref-link:hover .ref-link-label {
+  color: var(--primary-red);
+}
+
 /* ==========================================================================
    Admin Edit Mode
    ========================================================================== */

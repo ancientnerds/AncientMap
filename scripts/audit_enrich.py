@@ -30,6 +30,8 @@ Usage:
     python scripts/audit_enrich.py --phase merge            # Merge agent results → DB
     python scripts/audit_enrich.py --phase package          # Only: export cleaned DB for db.html upload
     python scripts/audit_enrich.py --phase export           # Only: re-export static JSON
+    python scripts/audit_enrich.py --phase web-links        # Prepare batches for reference link discovery
+    python scripts/audit_enrich.py --phase web-links-merge  # Merge discovered reference links → DB
     python scripts/audit_enrich.py --limit 3                # Test with 3 random sites
     python scripts/audit_enrich.py --api-url https://ancientnerds.com  # Use production API
 """
@@ -56,6 +58,7 @@ from pipeline.utils.text import categorize_period
 
 OUTPUT_DIR = Path(__file__).parent.parent / "output"
 BATCH_DIR = OUTPUT_DIR / "audit_batches"
+WEBLINK_DIR = OUTPUT_DIR / "weblink_batches"
 
 ALL_SOURCE_IDS = ["ancient_nerds"]
 DEFAULT_API_URL = "http://localhost:5175"
@@ -1393,6 +1396,247 @@ def export_static() -> None:
 
 
 # =============================================================================
+# Web Reference Links (Claude Agent + WebSearch)
+# =============================================================================
+
+WEBLINK_AGENT_PROMPT = """\
+You are discovering authoritative reference links for ancient/archaeological sites.
+
+For each site below, use web search to find 1-5 high-quality reference links.
+
+Priority order:
+1. Dedicated Wikipedia article (any language) — if the current source_url is a generic or fragment link
+2. Official excavation/project pages (university digs, archaeological missions)
+3. UNESCO World Heritage entries
+4. Museum collection pages (Met, British Museum, Louvre online)
+5. Quality articles from archaeology blogs, tourism sites, educational resources
+6. Academic papers (open access preferred)
+
+EXCLUDE:
+- Generic travel booking sites (tripadvisor, booking.com, viator, getyourguide)
+- Social media posts (facebook, instagram, twitter/x, tiktok)
+- AI-generated content farms
+- Paywalled content (unless JSTOR/academia with abstract)
+- Pinterest, Reddit threads, Quora answers
+- The site's existing source_url (already known)
+
+For each link found, output this JSON structure:
+{
+  "url": "https://...",
+  "title": "Page title as shown on the page",
+  "domain": "example.com",
+  "link_type": "article|academic|database|museum|unesco|government|project",
+  "quality": "high|medium",
+  "reason": "1-sentence why this is valuable"
+}
+
+Return your results as a JSON object mapping site_id to an array of links:
+{
+  "site_id_1": [ {link}, {link}, ... ],
+  "site_id_2": [ {link}, ... ],
+  ...
+}
+
+IMPORTANT: Only return high and medium quality links. Max 5 per site.
+If you cannot find any good links for a site, return an empty array for it.
+"""
+
+
+def prepare_weblinks_batches(batch_size: int = 10, limit: int | None = None) -> dict:
+    """Prepare batch input files for web reference link discovery agents.
+
+    Queries sites and creates JSON batch files with site context for agents
+    to search for authoritative reference links.
+    """
+    print("\n[WEB-LINKS] Preparing batches for reference link discovery...", flush=True)
+
+    WEBLINK_DIR.mkdir(parents=True, exist_ok=True)
+
+    with engine.connect() as conn:
+        # Get sites that don't yet have reference links
+        query = text("""
+            SELECT
+                us.id::text AS site_id,
+                us.name,
+                us.country,
+                us.site_type,
+                us.period_name,
+                us.period_start,
+                us.source_url,
+                LEFT(us.description, 200) AS description_preview
+            FROM unified_sites us
+            WHERE us.source_id = 'ancient_nerds'
+            AND us.id NOT IN (
+                SELECT DISTINCT site_id FROM site_content_links
+                WHERE content_type = 'reference'
+            )
+            ORDER BY us.name
+        """)
+        if limit:
+            query = text(str(query) + f" LIMIT {limit}")
+
+        rows = conn.execute(query).fetchall()
+
+    if not rows:
+        print("[WEB-LINKS] All sites already have reference links. Nothing to do.", flush=True)
+        return {"total_sites": 0, "batches": 0}
+
+    sites = [dict(row._mapping) for row in rows]
+
+    # Split into batches
+    batches = []
+    for i in range(0, len(sites), batch_size):
+        batch_num = f"{len(batches) + 1:03d}"
+        batch_sites = sites[i : i + batch_size]
+        batch = {
+            "batch_id": batch_num,
+            "prompt": WEBLINK_AGENT_PROMPT,
+            "sites": batch_sites,
+        }
+        batch_path = WEBLINK_DIR / f"batch_{batch_num}_input.json"
+        with open(batch_path, "w", encoding="utf-8") as f:
+            json.dump(batch, f, indent=2, ensure_ascii=False)
+        batches.append(batch_num)
+
+    # Write manifest
+    manifest = {
+        "created": datetime.now(timezone.utc).isoformat(),
+        "total_sites": len(sites),
+        "batch_count": len(batches),
+        "batch_size": batch_size,
+        "batches": {
+            bid: {"status": "pending", "input": f"batch_{bid}_input.json"}
+            for bid in batches
+        },
+    }
+    manifest_path = WEBLINK_DIR / "manifest.json"
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2, ensure_ascii=False)
+
+    print(f"[WEB-LINKS] Prepared {len(batches)} batches ({len(sites)} sites)", flush=True)
+    print(f"  Batch files: {WEBLINK_DIR}/batch_NNN_input.json", flush=True)
+    print(f"  Manifest: {manifest_path}", flush=True)
+    print(f"\n  Next steps:", flush=True)
+    print(f'    1. Launch agents to process each batch with WebSearch', flush=True)
+    print(f"    2. Save results as batch_NNN_results.json", flush=True)
+    print(f"    3. Run: python scripts/audit_enrich.py --phase web-links-merge", flush=True)
+
+    return {"total_sites": len(sites), "batches": len(batches), "batch_size": batch_size}
+
+
+def merge_weblinks(dry_run: bool = False) -> dict:
+    """Merge web reference link results into site_content_links table.
+
+    Reads batch result files, validates URLs, dedupes by domain per site,
+    and INSERTs into site_content_links with content_type='reference'.
+    """
+    manifest_path = WEBLINK_DIR / "manifest.json"
+    if not manifest_path.exists():
+        print("[WEB-LINKS-MERGE] No manifest found. Run --phase web-links first.", flush=True)
+        return {"error": "no manifest"}
+
+    with open(manifest_path, encoding="utf-8") as f:
+        manifest = json.load(f)
+
+    stats = {"batches_processed": 0, "links_inserted": 0, "links_skipped": 0, "errors": 0}
+
+    for batch_id, batch_info in manifest.get("batches", {}).items():
+        if batch_info.get("status") == "merged":
+            continue
+
+        result_path = WEBLINK_DIR / f"batch_{batch_id}_results.json"
+        if not result_path.exists():
+            continue
+
+        with open(result_path, encoding="utf-8") as f:
+            results = json.load(f)
+
+        if dry_run:
+            for site_id, links in results.items():
+                for link in links:
+                    print(
+                        f"  [DRY-RUN] {site_id[:8]}.. → {link.get('domain', '?')}: {link.get('title', '?')[:60]}",
+                        flush=True,
+                    )
+            stats["batches_processed"] += 1
+            continue
+
+        with engine.connect() as conn:
+            for site_id, links in results.items():
+                # Dedupe by domain — max 1 link per domain per site
+                seen_domains: set[str] = set()
+                for idx, link in enumerate(links[:5]):  # max 5 per site
+                    url = link.get("url", "")
+                    domain = link.get("domain", "")
+                    title = link.get("title", "")
+                    link_type = link.get("link_type", "article")
+                    quality = link.get("quality", "medium")
+
+                    if not url or not domain:
+                        stats["links_skipped"] += 1
+                        continue
+
+                    if domain in seen_domains:
+                        stats["links_skipped"] += 1
+                        continue
+                    seen_domains.add(domain)
+
+                    # Compute relevance score from quality + position
+                    base_score = 0.9 if quality == "high" else 0.7
+                    relevance = round(base_score - (idx * 0.05), 2)
+
+                    # Use domain+path-hash as content_id for uniqueness
+                    content_id = f"{domain}:{hash(url) & 0xFFFFFFFF:08x}"
+
+                    metadata = {
+                        "domain": domain,
+                        "link_type": link_type,
+                        "language": "en",
+                        "favicon_url": f"https://www.google.com/s2/favicons?domain={domain}&sz=16",
+                    }
+                    if link.get("reason"):
+                        metadata["reason"] = link["reason"]
+
+                    with contextlib.suppress(Exception):
+                        conn.execute(
+                            text("""
+                                INSERT INTO site_content_links
+                                    (site_id, content_type, content_source, content_id,
+                                     title, content_url, relevance_score, link_metadata)
+                                VALUES
+                                    (:site_id, 'reference', 'web_search', :content_id,
+                                     :title, :url, :relevance, :metadata::jsonb)
+                                ON CONFLICT (site_id, content_source, content_id) DO NOTHING
+                            """),
+                            {
+                                "site_id": site_id,
+                                "content_id": content_id,
+                                "title": title[:500],
+                                "url": url,
+                                "relevance": relevance,
+                                "metadata": json.dumps(metadata),
+                            },
+                        )
+                        stats["links_inserted"] += 1
+
+            conn.commit()
+
+        # Update manifest
+        manifest["batches"][batch_id]["status"] = "merged"
+        stats["batches_processed"] += 1
+
+    # Save updated manifest
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2, ensure_ascii=False)
+
+    print(f"[WEB-LINKS-MERGE] Processed {stats['batches_processed']} batches", flush=True)
+    print(f"  Links inserted: {stats['links_inserted']}", flush=True)
+    print(f"  Links skipped (dupe/invalid): {stats['links_skipped']}", flush=True)
+
+    return stats
+
+
+# =============================================================================
 # Main
 # =============================================================================
 
@@ -1413,7 +1657,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--phase",
-        choices=["sync", "mechanical", "enrich", "apply", "verify", "agents", "merge", "package", "export"],
+        choices=["sync", "mechanical", "enrich", "apply", "verify", "agents", "merge", "package", "export", "web-links", "web-links-merge"],
         help="Run only a specific phase",
     )
     parser.add_argument(
@@ -1496,8 +1740,8 @@ def main() -> None:
             print("\n[SYNC] Done. Local DB now matches production.", flush=True)
             return
 
-    # Fetch candidates for audit (unless just merging/exporting/packaging/agents)
-    if phase not in ("merge", "export", "package", "agents", "apply"):
+    # Fetch candidates for audit (unless just merging/exporting/packaging/agents/weblinks)
+    if phase not in ("merge", "export", "package", "agents", "apply", "web-links", "web-links-merge"):
         sites = fetch_audit_candidates(source_ids, args.mode)
         if not sites:
             print("\n[AUDIT] No candidates found. Nothing to do.", flush=True)
@@ -1588,6 +1832,20 @@ def main() -> None:
         print("  Export Static JSON", flush=True)
         print("=" * 40, flush=True)
         export_static()
+
+    # Web reference links: prepare batches
+    if phase == "web-links":
+        print("\n" + "=" * 40, flush=True)
+        print("  WEB-LINKS: Prepare Reference Link Batches", flush=True)
+        print("=" * 40, flush=True)
+        prepare_weblinks_batches(batch_size=10, limit=limit)
+
+    # Web reference links: merge results
+    if phase == "web-links-merge":
+        print("\n" + "=" * 40, flush=True)
+        print("  WEB-LINKS: Merge Reference Link Results", flush=True)
+        print("=" * 40, flush=True)
+        merge_weblinks(dry_run=args.dry_run)
 
     print("\n" + "=" * 60, flush=True)
     print("  Audit & Enrichment Complete", flush=True)

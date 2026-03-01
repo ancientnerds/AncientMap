@@ -2,6 +2,11 @@ import SiteMetadata from '../../SiteMetadata'
 import { isWikipediaUrl } from '../../../services/imageService'
 import type { DescriptionSectionProps } from '../types'
 
+/** Truncate domain label for display (e.g. "hiddenincatours.com" → "hiddenincatours") */
+function shortDomain(domain: string): string {
+  return domain.replace(/^www\./, '').replace(/\.(com|org|net|edu|gov|io|co\.uk)$/, '')
+}
+
 export function DescriptionSection({
   description,
   sourceId,
@@ -13,6 +18,7 @@ export function DescriptionSection({
   isFounder = false,
   bestWikiUrl,
   sourceLanguage,
+  referenceLinks,
 }: DescriptionSectionProps) {
   // Extract domain for source attribution (e.g. "de.wikipedia.org")
   const wikiSourceDomain = bestWikiUrl && sourceLanguage && sourceLanguage !== 'en'
@@ -61,6 +67,29 @@ export function DescriptionSection({
             </svg>
           </a>
         )}
+
+        {/* Reference links — favicon + domain buttons */}
+        {referenceLinks?.map((ref, i) => (
+          <a
+            key={i}
+            href={ref.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="popup-link-item ref-link"
+            title={ref.title}
+          >
+            <img
+              src={`https://www.google.com/s2/favicons?domain=${ref.domain}&sz=16`}
+              alt=""
+              width="16"
+              height="16"
+              className="ref-link-favicon"
+              loading="lazy"
+            />
+            <span className="ref-link-label">{shortDomain(ref.domain)}</span>
+          </a>
+        ))}
+
         <div className="popup-links-spacer" />
         {/* Admin button - subtle, on the right - only for founder on sites */}
         {isFounder && !isEmpireMode && (

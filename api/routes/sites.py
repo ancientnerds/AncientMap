@@ -349,6 +349,7 @@ async def get_all_sites(
 
             result = db.execute(query, params)
 
+            site_ids_list = []
             for row in result:
                 site = {
                     "id": row.id,
@@ -380,6 +381,39 @@ async def get_all_sites(
                 if row.last_audited:
                     site["aud"] = row.last_audited.isoformat()
                 all_sites.append(site)
+                site_ids_list.append(row.id)
+
+            # Batch-load reference links for all sites
+            if site_ids_list:
+                ref_result = db.execute(
+                    text("""
+                        SELECT site_id::text, content_url, title, link_metadata,
+                               relevance_score
+                        FROM site_content_links
+                        WHERE content_type = 'reference'
+                        AND content_url IS NOT NULL
+                        ORDER BY site_id, relevance_score DESC
+                    """)
+                )
+                refs_by_site: dict[str, list] = {}
+                for rrow in ref_result:
+                    sid = rrow.site_id
+                    if sid not in refs_by_site:
+                        refs_by_site[sid] = []
+                    if len(refs_by_site[sid]) < 5:
+                        meta = rrow.link_metadata or {}
+                        refs_by_site[sid].append({
+                            "u": rrow.content_url,
+                            "t": (rrow.title or "")[:200],
+                            "d": meta.get("domain", ""),
+                            "k": meta.get("link_type", "article"),
+                        })
+                # Merge refs into site dicts
+                if refs_by_site:
+                    site_map = {s["id"]: s for s in all_sites}
+                    for sid, refs in refs_by_site.items():
+                        if sid in site_map:
+                            site_map[sid]["rf"] = refs
         except Exception as e:
             logger.error(f"Database query failed for live sources: {e}", exc_info=True)
             # Do NOT silently fall back to static JSON — surface the error so
@@ -1295,15 +1329,21 @@ async def batch_upload_sites(
     # Separate inserts from updates
     update_ids = [s.existing_id for s in sites if s.existing_id]
     snapshot_id = None
+    snapshot_error = None
     if update_ids and body.create_snapshot:
-        snapshot_id = create_snapshot(
-            db,
-            update_ids,
-            created_by=edited_by,
-            description=f"Upload to {target_source} ({len(sites)} rows, {len(update_ids)} updates)",
-            snapshot_type="upload",
-            source_id=target_source,
-        )
+        try:
+            snapshot_id = create_snapshot(
+                db,
+                update_ids,
+                created_by=edited_by,
+                description=f"Upload to {target_source} ({len(sites)} rows, {len(update_ids)} updates)",
+                snapshot_type="upload",
+                source_id=target_source,
+            )
+        except Exception as e:
+            logger.error(f"Snapshot creation failed: {e}")
+            snapshot_error = str(e)
+            db.rollback()
 
     from pipeline.utils.text import normalize_name
 
@@ -1440,12 +1480,15 @@ async def batch_upload_sites(
     global _static_sites_cache
     _static_sites_cache = None
 
-    return {
+    result = {
         "snapshot_id": snapshot_id,
         "inserted": inserted,
         "updated": updated,
         "errors": errors,
     }
+    if snapshot_error:
+        result["snapshot_error"] = snapshot_error
+    return result
 
 
 # =============================================================================
