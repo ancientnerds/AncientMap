@@ -2,15 +2,15 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { config } from '../../config'
 
 const NAV_ITEMS = [
-  { page: 'globe', label: 'Globe', href: '/globe.html', theme: 'green', icon: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM2 12h20M12 2a15 15 0 0 1 4 10 15 15 0 0 1-4 10 15 15 0 0 1-4-10A15 15 0 0 1 12 2z' },
-  { page: 'search', label: 'Search', href: '/search.html', theme: 'amber', icon: 'M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z' },
-  { page: 'news', label: 'News Feed', href: '/news.html', theme: 'blue', icon: 'M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1m2 13a2 2 0 0 1-2-2V7m2 13a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2' },
-  { page: 'radar', label: 'Radar', href: '/radar.html', theme: 'radar', icon: 'M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83' },
-  { page: 'articles', label: 'Articles', href: '/articles.html', theme: 'white', icon: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z' },
-  { page: 'lyra', label: 'Lyra', href: '/lyra.html', theme: 'green', icon: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' },
-  { page: 'db', label: 'Database', href: '/db.html', theme: 'green', icon: 'M12 2C6.48 2 2 3.79 2 6v12c0 2.21 4.48 4 10 4s10-1.79 10-4V6c0-2.21-4.48-4-10-4zM2 12c0 2.21 4.48 4 10 4s10-1.79 10-4' },
-  { page: 'game', label: 'Card Game', href: '/game.html', theme: 'amber', icon: 'M4 4h4v4H4zM14 4h4v4h-4zM4 14h4v4H4zM14 14h4v4h-4zM9 9h4v4H9z' },
-  { page: 'api', label: 'API', href: '/api.html', theme: 'white', icon: 'M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z' },
+  { page: 'globe', label: 'Globe', href: '/globe.html', icon: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM2 12h20M12 2a15 15 0 0 1 4 10 15 15 0 0 1-4 10 15 15 0 0 1-4-10A15 15 0 0 1 12 2z' },
+  { page: 'search', label: 'Search', href: '/search.html', icon: 'M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z' },
+  { page: 'news', label: 'News Feed', href: '/news.html', icon: 'M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1m2 13a2 2 0 0 1-2-2V7m2 13a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2' },
+  { page: 'radar', label: 'Radar', href: '/radar.html', icon: 'M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83' },
+  { page: 'articles', label: 'Articles', href: '/articles.html', icon: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z' },
+  { page: 'lyra', label: 'Lyra', href: '/lyra.html', icon: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' },
+  { page: 'db', label: 'Database', href: '/db.html', icon: 'M12 2C6.48 2 2 3.79 2 6v12c0 2.21 4.48 4 10 4s10-1.79 10-4V6c0-2.21-4.48-4-10-4zM2 12c0 2.21 4.48 4 10 4s10-1.79 10-4' },
+  { page: 'game', label: 'Card Game', href: '/game.html', icon: 'M4 4h4v4H4zM14 4h4v4h-4zM4 14h4v4H4zM14 14h4v4h-4zM9 9h4v4H9z' },
+  { page: 'api', label: 'API', href: '/api.html', icon: 'M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z' },
 ]
 
 // Account/Sign In icons
@@ -72,8 +72,8 @@ export default function HamburgerNav({ currentPage, openInNewTab }: HamburgerNav
 
   // Build the auth link based on login state
   const authItem = isLoggedIn
-    ? { page: 'account', label: 'Account', href: '/account.html', theme: 'red', icon: ACCOUNT_ICON }
-    : { page: 'signin', label: 'Sign In', href: `${config.api.baseUrl}/auth/discord?return_to=${encodeURIComponent(window.location.pathname + window.location.search)}`, theme: 'red', icon: ACCOUNT_ICON }
+    ? { page: 'account', label: 'Account', href: '/account.html', icon: ACCOUNT_ICON }
+    : { page: 'signin', label: 'Sign In', href: `${config.api.baseUrl}/auth/discord?return_to=${encodeURIComponent(window.location.pathname + window.location.search)}`, icon: ACCOUNT_ICON }
 
   return (
     <div className="hamburger-nav">
@@ -100,7 +100,6 @@ export default function HamburgerNav({ currentPage, openInNewTab }: HamburgerNav
               key={item.page}
               href={item.href}
               className={`hamburger-link${currentPage === item.page ? ' active' : ''}`}
-              data-theme={item.theme}
               onClick={() => setOpen(false)}
               {...(openInNewTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
             >
@@ -114,7 +113,6 @@ export default function HamburgerNav({ currentPage, openInNewTab }: HamburgerNav
           <a
             href={authItem.href}
             className={`hamburger-link${currentPage === authItem.page ? ' active' : ''}`}
-            data-theme={authItem.theme}
             onClick={() => setOpen(false)}
             {...(openInNewTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
           >

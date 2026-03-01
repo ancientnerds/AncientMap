@@ -73,7 +73,7 @@
 
 .daily-btn:hover,
 .starter-btn:hover {
-  background: var(--accent-glow-15);
+  background: var(--surface-crt-strong);
   color: #fff;
 }
 
@@ -250,8 +250,8 @@
 .deck-active-badge {
   display: inline-block;
   padding: 0.2rem 0.6rem;
-  background: var(--accent-glow-10);
-  border: 1px solid var(--accent-glow-30);
+  background: var(--surface-crt);
+  border: 1px solid var(--crt-700);
   color: var(--accent-primary);
   border-radius: 4px;
   font-size: 0.7rem;
@@ -289,7 +289,7 @@
 }
 
 .leaderboard-table tbody tr:hover {
-  background: var(--accent-glow-04);
+  background: var(--surface-crt-subtle);
 }
 
 /* Packs */
@@ -346,8 +346,8 @@
 
 .pack-guarantee {
   padding: 0.15rem 0.5rem;
-  background: var(--accent-glow-08);
-  border: 1px solid var(--border-accent-subtle);
+  background: var(--surface-crt);
+  border: 1px solid var(--border-crt);
   border-radius: 3px;
   font-size: 0.65rem;
 }

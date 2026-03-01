@@ -9,6 +9,11 @@
   box-sizing: border-box;
 }
 
+/* Force monospace font on form elements (browsers use their own defaults) */
+input, button, select, textarea, optgroup {
+  font-family: inherit;
+}
+
 html, body {
   font-family: var(--font-body);
   background: var(--surface-page);
@@ -301,17 +306,17 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   width: 100%;
   margin-top: 8px;
   padding: 8px 12px;
-  background: var(--accent-glow-08);
+  background: var(--surface-crt);
   border: 1px solid var(--border-accent-medium);
   border-radius: 6px;
-  color: var(--text-secondary);
+  color: var(--crt-600);
   font-size: 11px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .offline-mode-btn:hover {
-  background: var(--accent-glow-15);
+  background: var(--surface-crt-strong);
   border-color: var(--border-accent-bright);
   color: var(--text-primary);
 }
@@ -772,7 +777,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 
 .connector-status-table td {
   padding: 10px 12px;
-  border-bottom: 1px solid var(--accent-glow-10);
+  border-bottom: 1px solid var(--border-crt);
   color: var(--text-secondary);
 }
 
@@ -781,7 +786,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 }
 
 .connector-status-table tbody tr:hover {
-  background: var(--accent-glow-08);
+  background: var(--surface-crt);
 }
 
 .connector-status-table .connector-name {
@@ -1026,7 +1031,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 }
 
 .connector-status-table tbody tr.expanded {
-  background: var(--accent-glow-12);
+  background: var(--surface-crt-strong);
 }
 
 /* Sample items grid */
@@ -1078,7 +1083,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 }
 
 .sample-item:hover {
-  background: var(--accent-glow-10);
+  background: var(--surface-crt);
 }
 
 .sample-thumbnail {
@@ -1124,7 +1129,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   padding: 4px 0;
   background: none;
   border: none;
-  border-top: 1px solid var(--accent-glow-15);
+  border-top: 1px solid var(--border-crt);
   color: var(--text-muted);
   font-size: 9px;
   cursor: pointer;
@@ -1299,7 +1304,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   width: 12px;
   height: 12px;
   background: rgba(0, 20, 25, 0.6);
-  border: 1px solid var(--accent-glow-30);
+  border: 1px solid var(--crt-700);
   border-radius: 2px;
   cursor: pointer;
   position: relative;
@@ -1356,9 +1361,9 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   gap: 6px;
   padding: 5px 10px;
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--crt-600);
   background: rgba(0, 20, 25, 0.6);
-  border: 1px solid var(--accent-glow-30);
+  border: 1px solid var(--crt-700);
   border-radius: 4px;
   cursor: pointer;
   transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
@@ -1367,7 +1372,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 .random-site-btn:hover {
   color: var(--text-primary);
   border-color: var(--brand-primary);
-  background: var(--accent-glow-15);
+  background: var(--surface-crt-strong);
 }
 
 .random-site-btn svg {
@@ -1386,9 +1391,9 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   justify-content: center;
   padding: 6px;
   background: transparent;
-  border: 1px solid var(--accent-glow-30);
+  border: 1px solid var(--crt-700);
   border-radius: 4px;
-  color: var(--text-secondary);
+  color: var(--crt-600);
   cursor: pointer;
   transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
   flex-shrink: 0;
@@ -1397,7 +1402,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 .random-site-btn-icon:hover {
   color: var(--brand-primary);
   border-color: var(--brand-primary);
-  background: var(--accent-glow-15);
+  background: var(--surface-crt-strong);
 }
 
 .random-site-btn-icon svg {
@@ -1447,7 +1452,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   padding: 8px 8px;
   background: transparent;
   border: none;
-  color: var(--text-secondary);
+  color: var(--crt-600);
   font-size: 11px;
   line-height: 1.2;
   cursor: pointer;
@@ -1459,12 +1464,12 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 }
 
 .search-proximity-tabs .tab-btn:hover {
-  background: var(--accent-glow-10);
+  background: var(--surface-crt);
   color: var(--text-primary);
 }
 
 .search-proximity-tabs .tab-btn.active {
-  background: var(--accent-glow-15);
+  background: var(--surface-crt-strong);
   color: var(--accent-primary);
 }
 
@@ -1545,7 +1550,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   padding: 0;
   background: transparent;
   border: none;
-  color: var(--text-secondary);
+  color: var(--crt-600);
   cursor: pointer;
   opacity: 0.6;
   transition: opacity 0.2s ease, color 0.2s ease;
@@ -1558,7 +1563,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 
 /* Live coordinates from globe hover */
 .coordinate-input.live-coords {
-  background: var(--accent-glow-15);
+  background: var(--surface-crt-strong);
   border-color: var(--accent-glow-50);
   color: var(--brand-primary);
 }
@@ -1579,7 +1584,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   background: rgba(0, 20, 25, 0.6);
   border: 1px solid var(--border-accent);
   border-radius: 4px;
-  color: var(--text-secondary);
+  color: var(--crt-600);
   font-size: 11px;
   cursor: pointer;
   transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
@@ -1596,7 +1601,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 }
 
 .proximity-btn.active {
-  background: var(--accent-glow-20);
+  background: var(--surface-crt-strong);
   border-color: var(--accent-primary);
   color: var(--accent-primary);
 }
@@ -1808,7 +1813,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 .clear-all-btn {
   padding: 2px 8px;
   background: transparent;
-  border: 1px solid var(--accent-glow-30);
+  border: 1px solid var(--crt-700);
   border-radius: 3px;
   color: var(--brand-primary);
   font-size: 10px;
@@ -1817,7 +1822,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 }
 
 .clear-all-btn:hover {
-  background: var(--accent-glow-10);
+  background: var(--surface-crt);
 }
 
 .measurement-item {
@@ -1870,7 +1875,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 }
 
 .measurement-delete-btn:hover {
-  background: var(--accent-glow-15);
+  background: var(--surface-crt-strong);
   color: var(--brand-primary);
 }
 
@@ -1905,7 +1910,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--text-secondary);
+  color: var(--crt-600);
   flex-shrink: 0;
 }
 
@@ -2505,7 +2510,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   justify-content: center;
   width: 32px;
   height: 32px;
-  color: var(--text-secondary);
+  color: var(--crt-600);
   text-decoration: none;
   border-radius: 4px;
   transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
@@ -2513,7 +2518,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 
 .social-link:hover {
   color: var(--brand-primary);
-  background: var(--accent-glow-15);
+  background: var(--surface-crt-strong);
 }
 
 /* ============================================
@@ -2528,7 +2533,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   width: 32px;
   height: 32px;
   padding: 0;
-  color: var(--text-secondary);
+  color: var(--crt-600);
   background: transparent;
   border: none;
   border-radius: 4px;
@@ -2539,13 +2544,13 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 
 .action-btn:hover {
   color: var(--brand-primary);
-  background: var(--accent-glow-15);
+  background: var(--surface-crt-strong);
 }
 
 /* Contribute Button - active state when picker is open */
 .action-btn.contribute-btn.active {
   color: var(--accent-primary);
-  background: var(--accent-glow-15);
+  background: var(--surface-crt-strong);
 }
 
 /* Disabled Action Buttons (Sign In, News Feed, etc.) */
@@ -2576,7 +2581,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 1px;
-  color: var(--text-secondary);
+  color: var(--crt-600);
   background: var(--surface-raised);
   backdrop-filter: blur(var(--blur-amount));
   -webkit-backdrop-filter: blur(var(--blur-amount));
@@ -2588,8 +2593,8 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 
 .signin-btn-full:hover {
   color: var(--brand-primary);
-  background: var(--accent-glow-10);
-  border-color: var(--accent-glow-30);
+  background: var(--surface-crt);
+  border-color: var(--crt-700);
 }
 
 .signin-popup {
@@ -2766,21 +2771,21 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 /* Reset form button */
 .form-reset-btn {
   background: transparent;
-  border: 1px solid var(--accent-glow-15);
+  border: 1px solid var(--border-crt);
   border-radius: 4px;
   padding: 4px 6px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-secondary);
+  color: var(--crt-600);
   transition: all 0.2s ease;
 }
 
 .form-reset-btn:hover {
   border-color: var(--brand-primary);
   color: var(--brand-primary);
-  background: var(--accent-glow-10);
+  background: var(--surface-crt);
 }
 
 /* Auto-save indicator in upper left */
@@ -7907,7 +7912,7 @@ body.hud-hidden .empire-borders-window {
 
 
 .tooltip-location {
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--crt-600);
   font-size: 11px;
   margin-top: 2px;
 }
@@ -7942,7 +7947,7 @@ body.hud-hidden .empire-borders-window {
   -webkit-backdrop-filter: blur(var(--blur-amount));
   padding: 6px 12px;
   border-radius: 4px;
-  border: 1px solid var(--accent-glow-20);
+  border: 1px solid var(--border-crt);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), 0 0 6px var(--accent-glow-15);
   min-width: 220px;
   text-align: center;
@@ -12585,13 +12590,13 @@ body.news-feed-open .empire-borders-window {
 
 .news-feed-lyra-bubble {
   position: relative;
-  background: var(--accent-glow-08);
-  border: 1px solid var(--accent-glow-15);
+  background: var(--surface-crt);
+  border: 1px solid var(--border-crt);
   border-radius: 8px;
   padding: 8px 10px;
   font-size: 11px;
   line-height: 1.45;
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--crt-400);
 }
 
 .news-feed-lyra-bubble::before {
@@ -12603,7 +12608,7 @@ body.news-feed-open .empire-borders-window {
   height: 0;
   border-top: 5px solid transparent;
   border-bottom: 5px solid transparent;
-  border-right: 6px solid var(--accent-glow-15);
+  border-right: 6px solid var(--border-crt);
 }
 
 /* Open in new tab link */
@@ -12615,7 +12620,7 @@ body.news-feed-open .empire-borders-window {
   margin: 0 16px;
   padding: 7px 0;
   font-size: 11px;
-  color: var(--text-secondary);
+  color: var(--crt-600);
   text-decoration: none;
   border-bottom: 1px solid var(--border-accent-subtle);
   transition: color 0.2s;
@@ -12630,7 +12635,7 @@ body.news-feed-open .empire-borders-window {
   margin: 0 16px;
   padding: 6px 10px;
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--crt-600);
   border-bottom: 1px solid var(--border-accent-subtle);
   text-align: center;
   flex-shrink: 0;
@@ -15743,7 +15748,7 @@ body.news-feed-open .empire-borders-window {
 
 /* Header */
 .lyra-chat-header {
-  background: rgba(0, 15, 5, 0.6);
+  background: var(--surface-crt-strong);
   border-bottom-color: var(--border-crt);
 }
 .lyra-chat-header-name {
@@ -15762,7 +15767,7 @@ body.news-feed-open .empire-borders-window {
 .lyra-credits-badge {
   font-family: var(--font-body);
   color: var(--accent-primary);
-  background: var(--accent-glow-06);
+  background: var(--surface-crt);
   border-color: var(--crt-900);
   border-radius: 2px;
 }
@@ -15771,7 +15776,7 @@ body.news-feed-open .empire-borders-window {
 }
 .lyra-chat-close-btn:hover {
   color: var(--accent-primary);
-  background: var(--accent-glow-08);
+  background: var(--surface-crt);
 }
 
 /* Icon buttons in header */
@@ -15780,11 +15785,11 @@ body.news-feed-open .empire-borders-window {
 }
 .lyra-chat-icon-btn:hover {
   color: var(--accent-primary);
-  background: var(--accent-glow-08);
+  background: var(--surface-crt);
 }
 .lyra-chat-icon-btn.active {
   color: var(--accent-primary);
-  background: var(--accent-glow-12);
+  background: var(--surface-crt-strong);
 }
 
 /* Messages area */
@@ -15795,7 +15800,7 @@ body.news-feed-open .empire-borders-window {
 
 /* Assistant messages */
 .lyra-chat-msg-assistant .lyra-chat-msg-text {
-  background: rgba(0, 20, 10, 0.5);
+  background: var(--surface-crt);
   border-color: var(--border-crt);
   color: var(--crt-300);
   border-radius: 4px;
@@ -15805,7 +15810,7 @@ body.news-feed-open .empire-borders-window {
 
 /* User messages — terminal prompt style */
 .lyra-chat-msg-user .lyra-chat-msg-text {
-  background: var(--accent-glow-06);
+  background: var(--surface-crt);
   border-color: var(--crt-900);
   color: var(--accent-primary);
   border-radius: 4px;
@@ -15815,7 +15820,7 @@ body.news-feed-open .empire-borders-window {
 
 /* Thinking bubble */
 .lyra-chat-thinking-bubble {
-  background: rgba(0, 20, 10, 0.4);
+  background: var(--surface-crt);
   border-color: var(--border-crt);
   border-left-color: var(--crt-700);
   border-radius: 4px;
@@ -15829,7 +15834,7 @@ body.news-feed-open .empire-borders-window {
 
 /* Typing dots — green */
 .lyra-chat-typing-dots {
-  background: rgba(0, 20, 10, 0.5);
+  background: var(--surface-crt);
   border-color: var(--border-crt);
   border-radius: 4px;
   border-top-left-radius: 0;
@@ -15850,10 +15855,10 @@ body.news-feed-open .empire-borders-window {
 /* Input area */
 .lyra-chat-input-area {
   border-top-color: var(--border-crt);
-  background: rgba(0, 10, 5, 0.5);
+  background: var(--surface-crt);
 }
 .lyra-chat-input {
-  background: rgba(0, 15, 8, 0.6);
+  background: var(--surface-crt-strong);
   border-color: var(--border-crt);
   color: var(--accent-primary);
   font-family: var(--font-body);
@@ -15889,7 +15894,7 @@ body.news-feed-open .empire-borders-window {
 
 /* Attach button */
 .lyra-chat-attach-btn { color: var(--crt-600); }
-.lyra-chat-attach-btn:hover:not(:disabled) { color: var(--accent-primary); background: var(--accent-glow-08); }
+.lyra-chat-attach-btn:hover:not(:disabled) { color: var(--accent-primary); background: var(--surface-crt); }
 
 /* Site buttons in messages */
 .lyra-chat-site-btn {
@@ -15921,14 +15926,14 @@ body.news-feed-open .empire-borders-window {
   font-family: var(--font-body);
 }
 .lyra-chat-example-btn {
-  background: rgba(0, 20, 10, 0.5);
+  background: var(--surface-crt);
   border-color: var(--border-crt);
   color: var(--crt-500);
   border-radius: 4px;
   font-family: var(--font-body);
 }
 .lyra-chat-example-btn:hover:not(:disabled) {
-  background: var(--accent-glow-06);
+  background: var(--surface-crt);
   border-color: var(--crt-700);
   color: var(--accent-primary);
 }
@@ -15948,7 +15953,7 @@ body.news-feed-open .empire-borders-window {
   box-shadow: 0 0 12px var(--accent-glow-15);
 }
 .lyra-welcome-avatar-ring {
-  border-color: var(--accent-glow-30);
+  border-color: var(--crt-700);
 }
 .lyra-welcome-stats {
   color: var(--crt-600);
@@ -15957,7 +15962,7 @@ body.news-feed-open .empire-borders-window {
 
 /* Capability cards — terminal green */
 .lyra-welcome-cap-card {
-  background: rgba(0, 20, 10, 0.4);
+  background: var(--surface-crt);
   border-color: var(--border-crt);
   color: var(--crt-500);
   border-radius: 4px;
@@ -15965,7 +15970,7 @@ body.news-feed-open .empire-borders-window {
 }
 .lyra-welcome-cap-card:hover:not(:disabled) {
   border-color: var(--crt-700);
-  background: var(--accent-glow-06);
+  background: var(--surface-crt);
 }
 .lyra-welcome-cap-label { color: var(--crt-500); }
 .lyra-welcome-cap-card:hover:not(:disabled) .lyra-welcome-cap-label { color: var(--accent-primary); }
@@ -15977,7 +15982,7 @@ body.news-feed-open .empire-borders-window {
   font-family: var(--font-body);
 }
 .lyra-welcome-prompt-btn {
-  background: rgba(0, 20, 10, 0.3);
+  background: var(--surface-crt-subtle);
   border-color: var(--border-crt);
   color: var(--crt-500);
   border-radius: 4px;
@@ -15985,14 +15990,14 @@ body.news-feed-open .empire-borders-window {
 }
 .lyra-welcome-prompt-btn:hover:not(:disabled) {
   border-color: var(--crt-700);
-  background: var(--accent-glow-05);
+  background: var(--surface-crt-subtle);
   color: var(--accent-primary);
 }
 
 /* Copy button */
 .lyra-chat-copy-btn {
   color: var(--crt-600);
-  background: rgba(0, 15, 8, 0.8);
+  background: var(--surface-crt-solid);
   border-color: var(--border-crt);
 }
 .lyra-chat-copy-btn:hover {
@@ -16004,20 +16009,20 @@ body.news-feed-open .empire-borders-window {
 .lyra-chat-msg-text a { color: var(--accent-secondary); }
 .lyra-chat-msg-text a:hover { color: var(--accent-secondary-hover); }
 .lyra-chat-msg-text code {
-  background: rgba(0, 30, 15, 0.6);
+  background: var(--surface-crt-strong);
   border-color: var(--border-crt);
   color: var(--accent-primary);
   font-family: var(--font-body);
 }
 .lyra-chat-msg-text pre {
-  background: rgba(0, 15, 8, 0.6);
+  background: var(--surface-crt-strong);
   border-color: var(--border-crt);
 }
 .lyra-chat-msg-text table {
   border-color: var(--border-crt);
 }
 .lyra-chat-msg-text th {
-  background: rgba(0, 20, 10, 0.5);
+  background: var(--surface-crt);
   border-color: var(--border-crt);
   color: var(--accent-primary);
 }
@@ -16078,7 +16083,7 @@ body.news-feed-open .empire-borders-window {
 
 /* Discovery bar */
 .lyra-discovery-bar {
-  background: var(--accent-glow-04);
+  background: var(--surface-crt-subtle);
   border-color: var(--crt-900);
   color: var(--crt-500);
   font-family: var(--font-body);
@@ -17127,7 +17132,7 @@ body.news-feed-open .empire-borders-window {
 .popup-minimized-icon { color: var(--crt-600); }
 .popup-minimized-title { color: var(--crt-500); }
 .popup-minimized-btn { color: var(--crt-600); }
-.popup-minimized-btn:hover { background: var(--accent-glow-10); color: var(--accent-primary); }
+.popup-minimized-btn:hover { background: var(--surface-crt); color: var(--accent-primary); }
 .popup-minimized-btn.close-btn:hover { background: var(--status-error-bright); color: var(--surface-page); }
 
 /* Window controls — green terminal buttons */
@@ -17137,7 +17142,7 @@ body.news-feed-open .empire-borders-window {
   color: var(--crt-600);
 }
 .popup-window-btn:hover {
-  background: var(--accent-glow-10);
+  background: var(--surface-crt);
   color: var(--accent-primary);
   border-color: var(--crt-700);
 }
@@ -17152,7 +17157,7 @@ body.news-feed-open .empire-borders-window {
   background: var(--surface-page);
 }
 .popup-hero-header::before {
-  background: rgba(0, 15, 5, 0.35);
+  background: var(--surface-crt-subtle);
 }
 .popup-hero-vignette {
   background: linear-gradient(
@@ -17206,12 +17211,12 @@ body.news-feed-open .empire-borders-window {
 
 /* Source badge — green terminal border */
 .popup-source {
-  background: rgba(0, 20, 10, 0.5);
+  background: var(--surface-crt);
   border-color: var(--border-crt);
   color: var(--crt-500);
 }
 .popup-source.clickable:hover {
-  background: var(--accent-glow-08);
+  background: var(--surface-crt);
 }
 .popup-hero-content .popup-source {
   background: rgba(10, 14, 20, 0.7);
@@ -17236,7 +17241,7 @@ body.news-feed-open .empire-borders-window {
 .popup-description.card-summary { color: var(--crt-300); }
 .popup-description.loading { color: rgba(74, 138, 74, 0.4); }
 .popup-description.empty { color: rgba(74, 138, 74, 0.3); }
-.popup-description::-webkit-scrollbar-track { background: var(--accent-glow-05); }
+.popup-description::-webkit-scrollbar-track { background: var(--surface-crt-subtle); }
 .popup-description::-webkit-scrollbar-thumb { background: var(--crt-900); }
 
 /* Badges */
@@ -17251,7 +17256,7 @@ body.news-feed-open .empire-borders-window {
 
 /* Site metadata grid */
 .site-metadata {
-  background: rgba(0, 20, 10, 0.3);
+  background: var(--surface-crt-subtle);
   border-color: var(--border-crt);
 }
 .site-metadata-label { color: var(--crt-800); }
@@ -17259,13 +17264,13 @@ body.news-feed-open .empire-borders-window {
 
 /* Links section */
 .popup-link-item {
-  background: rgba(0, 20, 10, 0.4);
+  background: var(--surface-crt);
   border-color: var(--border-crt);
   color: var(--crt-600);
 }
 .popup-link-item:hover {
   border-color: var(--accent-primary);
-  background: var(--accent-glow-08);
+  background: var(--surface-crt);
 }
 .popup-link-item.wikipedia svg { color: var(--crt-600); }
 .popup-link-item.wikipedia:hover svg { color: var(--accent-primary); }
@@ -17274,11 +17279,11 @@ body.news-feed-open .empire-borders-window {
 .popup-links-title { color: var(--crt-800); }
 
 /* Admin link — darker green */
-.popup-link-item.admin { background: rgba(0, 20, 10, 0.3); border-color: var(--border-crt); }
+.popup-link-item.admin { background: var(--surface-crt-subtle); border-color: var(--border-crt); }
 .popup-link-item.admin svg { color: var(--crt-800); }
-.popup-link-item.admin:hover { background: var(--accent-glow-06); border-color: var(--crt-700); }
+.popup-link-item.admin:hover { background: var(--surface-crt); border-color: var(--crt-700); }
 .popup-link-item.admin:hover svg { color: var(--crt-600); }
-.popup-link-item.admin.active { background: var(--accent-glow-08); border-color: var(--crt-700); }
+.popup-link-item.admin.active { background: var(--surface-crt); border-color: var(--crt-700); }
 .popup-link-item.admin.active svg { color: var(--crt-500); }
 
 /* Popup link (inline) */
@@ -17306,7 +17311,7 @@ body.news-feed-open .empire-borders-window {
 }
 
 /* Gallery grid scrollbar */
-.gallery-grid::-webkit-scrollbar-track { background: var(--accent-glow-03); }
+.gallery-grid::-webkit-scrollbar-track { background: var(--surface-crt-subtle); }
 .gallery-grid::-webkit-scrollbar-thumb { background: var(--crt-900); }
 
 /* Gallery items — green borders */
@@ -17338,18 +17343,18 @@ body.news-feed-open .empire-borders-window {
 }
 .gallery-tab:hover {
   color: var(--accent-primary);
-  background: var(--accent-glow-05);
+  background: var(--surface-crt-subtle);
 }
 .gallery-tab.active {
   color: var(--accent-primary);
-  background: var(--accent-glow-10);
-  border-color: var(--accent-glow-20);
+  background: var(--surface-crt);
+  border-color: var(--border-crt);
 }
 .gallery-tab-count {
-  background: var(--accent-glow-08);
+  background: var(--surface-crt);
 }
 .gallery-tab.active .gallery-tab-count {
-  background: var(--accent-glow-15);
+  background: var(--surface-crt-strong);
 }
 .gallery-tabs-arrow { color: var(--accent-primary); }
 .gallery-toggle-btn {
@@ -17359,16 +17364,16 @@ body.news-feed-open .empire-borders-window {
 .gallery-toggle-btn:hover {
   border-color: var(--accent-primary);
   color: var(--accent-primary);
-  background: var(--accent-glow-08);
+  background: var(--surface-crt);
 }
 
 /* Gallery text list (books/artifacts) */
 .gallery-text-item {
-  background: rgba(0, 20, 10, 0.3);
+  background: var(--surface-crt-subtle);
   border-color: var(--border-crt);
 }
 .gallery-text-item:hover {
-  background: var(--accent-glow-05);
+  background: var(--surface-crt-subtle);
   border-color: var(--crt-700);
 }
 
@@ -17401,7 +17406,7 @@ body.news-feed-open .empire-borders-window {
   color: var(--crt-600);
 }
 .map-loading-spinner {
-  border-color: var(--accent-glow-10);
+  border-color: var(--border-crt);
   border-top-color: var(--accent-primary);
 }
 
@@ -17414,7 +17419,7 @@ body.news-feed-open .empire-borders-window {
 .map-action-btn:hover {
   border-color: var(--accent-primary);
   color: var(--accent-primary);
-  background: var(--accent-glow-08);
+  background: var(--surface-crt);
 }
 .map-action-btn.close-btn:hover {
   background: var(--status-error-bright) !important;
@@ -17431,7 +17436,7 @@ body.news-feed-open .empire-borders-window {
 .admin-edit-field input,
 .admin-edit-field textarea,
 .admin-edit-field select {
-  background: rgba(0, 15, 8, 0.6);
+  background: var(--surface-crt-strong);
   border-color: var(--border-crt);
   color: var(--crt-300);
   font-family: var(--font-body);
@@ -17440,11 +17445,11 @@ body.news-feed-open .empire-borders-window {
 .admin-edit-field textarea:focus,
 .admin-edit-field select:focus {
   border-color: var(--crt-700);
-  background: rgba(0, 20, 10, 0.6);
+  background: var(--surface-crt-strong);
 }
 
 /* Source switcher */
-.source-switcher-trigger:hover { background: var(--accent-glow-08); }
+.source-switcher-trigger:hover { background: var(--surface-crt); }
 
 @media (prefers-reduced-motion: reduce) {
   .site-popup::after { display: none; }
