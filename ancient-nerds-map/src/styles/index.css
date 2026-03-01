@@ -17034,6 +17034,387 @@ body.news-feed-open .empire-borders-window {
   }
 }
 
+/* =========================================================================
+   SITE POPUP CRT TERMINAL OVERRIDES
+   Re-skins the site popup with the same CRT/matrix terminal aesthetic
+   as the Lyra chat. Single override block — cascade handles specificity.
+   ========================================================================= */
+
+/* CRT scanline overlay on popup */
+.site-popup::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 300;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 2px,
+    rgba(0, 0, 0, 0.04) 2px,
+    rgba(0, 0, 0, 0.04) 4px
+  );
+  border-radius: 8px;
+}
+
+/* Main container — dark terminal background */
+.site-popup {
+  background: #0a0e14;
+  border-color: #1a2a1a;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  box-shadow: 0 0 40px rgba(0, 204, 102, 0.05), 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+/* Overlay backdrop — darker green tint */
+.site-popup-overlay {
+  background: rgba(0, 5, 2, 0.85);
+}
+
+/* Minimized bar */
+.popup-minimized-bar {
+  background: rgba(10, 14, 20, 0.95);
+  border-color: #1a2a1a;
+}
+.popup-minimized-bar:hover {
+  background: rgba(10, 18, 24, 0.98);
+  border-color: #00cc66;
+}
+.popup-minimized-bar:hover .popup-minimized-icon { color: #00cc66; }
+.popup-minimized-bar:hover .popup-minimized-title { color: #00cc66; }
+.popup-minimized-icon { color: #3a6a3a; }
+.popup-minimized-title { color: #4a8a4a; }
+.popup-minimized-btn { color: #3a6a3a; }
+.popup-minimized-btn:hover { background: rgba(0, 204, 102, 0.1); color: #00cc66; }
+.popup-minimized-btn.close-btn:hover { background: #ff4444; color: #0a0e14; }
+
+/* Window controls — green terminal buttons */
+.popup-window-btn {
+  background: rgba(10, 14, 20, 0.85);
+  border-color: #1a2a1a;
+  color: #3a6a3a;
+}
+.popup-window-btn:hover {
+  background: rgba(0, 204, 102, 0.1);
+  color: #00cc66;
+  border-color: #2a5a2a;
+}
+.popup-window-btn.close-btn:hover {
+  background: #ff4444;
+  color: #0a0e14;
+  border-color: #ff4444;
+}
+
+/* Hero header — green vignette instead of teal */
+.popup-hero-header {
+  background: #0a0e14;
+}
+.popup-hero-header::before {
+  background: rgba(0, 15, 5, 0.35);
+}
+.popup-hero-vignette {
+  background: linear-gradient(
+    to bottom,
+    rgba(10, 14, 20, 0) 0%,
+    rgba(10, 14, 20, 0.3) 30%,
+    rgba(10, 14, 20, 0.7) 60%,
+    #0a0e14 100%
+  );
+}
+.popup-hero-bg.lazy-image--tv-on {
+  animation: hero-tv-on-crt 400ms ease-out;
+}
+@keyframes hero-tv-on-crt {
+  0%   { opacity: 0; filter: brightness(2) hue-rotate(60deg); }
+  50%  { opacity: 1; filter: brightness(1.2) hue-rotate(15deg); }
+  100% { opacity: 1; filter: brightness(1) hue-rotate(0deg); }
+}
+
+/* Hero actions — green instead of white */
+.hero-action-btn { color: rgba(74, 138, 74, 0.75); }
+.hero-action-btn:hover { color: #00cc66; }
+.hero-like-btn.active { color: #ff4444; }
+.hero-like-count { color: #4a8a4a; }
+.hero-bookmark-btn.active { color: #00cc66; }
+.hero-share-btn.active { color: #00cc66; }
+
+/* Ask Lyra — keep cyan accent */
+.hero-ask-lyra img { border-color: rgba(0, 204, 102, 0.3); }
+.hero-ask-lyra:hover img { border-color: rgba(0, 204, 102, 0.7); }
+.hero-ask-lyra-label { color: rgba(0, 204, 102, 0.85); }
+
+/* Title — terminal green, keep Orbitron */
+.popup-title-overlay {
+  color: #00cc66;
+  text-shadow:
+    0 0 8px rgba(0, 204, 102, 0.3),
+    -1px -1px 0 rgba(0, 0, 0, 0.8),
+    1px -1px 0 rgba(0, 0, 0, 0.8),
+    -1px 1px 0 rgba(0, 0, 0, 0.8),
+    1px 1px 0 rgba(0, 0, 0, 0.8);
+}
+.site-popup .popup-title {
+  color: #00cc66;
+  text-shadow: 0 0 6px rgba(0, 204, 102, 0.2);
+}
+.title-action-btn { color: #3a6a3a; }
+.title-action-btn:hover { color: #00cc66; }
+.title-action-btn.copied,
+.site-popup .popup-title-row .title-action-btn.copied { color: #00cc66; }
+.title-action-btn.copied svg,
+.site-popup .popup-title-row .title-action-btn.copied svg { stroke: #00cc66; }
+
+/* Hero credit */
+.popup-hero-credit { color: #2a4a2a; }
+.popup-hero-credit a { color: #3a6a3a; }
+.popup-hero-credit a:hover { color: #4a8a4a; }
+
+/* Source badge — green terminal border */
+.popup-source {
+  background: rgba(0, 20, 10, 0.5);
+  border-color: #1a2a1a;
+  color: #4a8a4a;
+}
+.popup-source.clickable:hover {
+  background: rgba(0, 204, 102, 0.08);
+}
+.popup-hero-content .popup-source {
+  background: rgba(10, 14, 20, 0.7);
+}
+
+/* Body area */
+.popup-body {
+  background: #0a0e14;
+}
+
+/* Location row */
+.site-popup .popup-location-row { color: #3a6a3a; }
+.site-popup .popup-coords-inline .coords-action-btn { color: #3a6a3a; }
+.site-popup .popup-coords-inline .coords-action-btn:hover { color: #00cc66; }
+.site-popup .popup-coords-inline .coords-action-btn.copied { color: #00cc66; }
+
+/* Description text — muted green */
+.site-popup .popup-description {
+  color: #b0d0b0;
+  text-shadow: 0 0 1px rgba(74, 138, 74, 0.15);
+}
+.popup-description.card-summary { color: #b0d0b0; }
+.popup-description.loading { color: rgba(74, 138, 74, 0.4); }
+.popup-description.empty { color: rgba(74, 138, 74, 0.3); }
+.popup-description::-webkit-scrollbar-track { background: rgba(0, 204, 102, 0.05); }
+.popup-description::-webkit-scrollbar-thumb { background: #1a3a1a; }
+
+/* Badges */
+.badge-category {
+  border-color: #1a2a1a;
+  color: #4a8a4a;
+}
+.badge-period {
+  border-color: #1a2a1a;
+  color: #3a6a3a;
+}
+
+/* Site metadata grid */
+.site-metadata {
+  background: rgba(0, 20, 10, 0.3);
+  border-color: #1a2a1a;
+}
+.site-metadata-label { color: #2a4a2a; }
+.site-metadata-value { color: #b0d0b0; }
+
+/* Links section */
+.popup-link-item {
+  background: rgba(0, 20, 10, 0.4);
+  border-color: #1a2a1a;
+  color: #3a6a3a;
+}
+.popup-link-item:hover {
+  border-color: #00cc66;
+  background: rgba(0, 204, 102, 0.08);
+}
+.popup-link-item.wikipedia svg { color: #3a6a3a; }
+.popup-link-item.wikipedia:hover svg { color: #00cc66; }
+.popup-link-item.ref-link .ref-link-label { color: #4a8a4a; }
+.popup-link-item.ref-link:hover .ref-link-label { color: #00cc66; }
+.popup-links-title { color: #2a4a2a; }
+
+/* Admin link — darker green */
+.popup-link-item.admin { background: rgba(0, 20, 10, 0.3); border-color: #1a2a1a; }
+.popup-link-item.admin svg { color: #2a4a2a; }
+.popup-link-item.admin:hover { background: rgba(0, 204, 102, 0.06); border-color: #2a5a2a; }
+.popup-link-item.admin:hover svg { color: #3a6a3a; }
+.popup-link-item.admin.active { background: rgba(0, 204, 102, 0.08); border-color: #2a5a2a; }
+.popup-link-item.admin.active svg { color: #4a8a4a; }
+
+/* Popup link (inline) */
+.site-popup .popup-link {
+  border-color: #1a2a1a;
+  color: #00cc66;
+}
+.site-popup .popup-link:hover { border-color: #00cc66; }
+
+/* Wiki source link */
+.popup-wiki-source-link { color: #3a6a3a; }
+.popup-wiki-source-link:hover { color: #00cc66; }
+
+/* Image attribution */
+.site-popup .popup-image-attribution {
+  background: linear-gradient(transparent, rgba(10, 14, 20, 0.95));
+  color: #2a4a2a;
+}
+.site-popup .popup-image-attribution a { color: #00cc66; }
+
+/* Gallery section — terminal dark */
+.popup-gallery-section {
+  border-top-color: #1a2a1a;
+  background: rgba(10, 14, 20, 0.5);
+}
+
+/* Gallery grid scrollbar */
+.gallery-grid::-webkit-scrollbar-track { background: rgba(0, 204, 102, 0.03); }
+.gallery-grid::-webkit-scrollbar-thumb { background: #1a3a1a; }
+
+/* Gallery items — green borders */
+.gallery-item {
+  border-color: #1a2a1a;
+}
+.gallery-item::after {
+  background: rgba(10, 14, 20, 0.35);
+}
+.gallery-item:hover {
+  border-color: #00cc66;
+}
+.gallery-item-credit {
+  background: linear-gradient(transparent, rgba(10, 14, 20, 0.9));
+  color: #3a6a3a;
+}
+.gallery-empty { color: #3a6a3a; }
+.gallery-subtext { color: #2a4a2a; }
+
+/* Gallery tabs — green terminal */
+.gallery-tabs-bar {
+  background: rgba(10, 14, 20, 0.8);
+  border-bottom-color: #1a2a1a;
+}
+.gallery-tab {
+  color: #3a6a3a;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 11px;
+}
+.gallery-tab:hover {
+  color: #00cc66;
+  background: rgba(0, 204, 102, 0.05);
+}
+.gallery-tab.active {
+  color: #00cc66;
+  background: rgba(0, 204, 102, 0.1);
+  border-color: rgba(0, 204, 102, 0.2);
+}
+.gallery-tab-count {
+  background: rgba(0, 204, 102, 0.08);
+}
+.gallery-tab.active .gallery-tab-count {
+  background: rgba(0, 204, 102, 0.15);
+}
+.gallery-tabs-arrow { color: #00cc66; }
+.gallery-toggle-btn {
+  border-color: #1a2a1a;
+  color: #3a6a3a;
+}
+.gallery-toggle-btn:hover {
+  border-color: #00cc66;
+  color: #00cc66;
+  background: rgba(0, 204, 102, 0.08);
+}
+
+/* Gallery text list (books/artifacts) */
+.gallery-text-item {
+  background: rgba(0, 20, 10, 0.3);
+  border-color: #1a2a1a;
+}
+.gallery-text-item:hover {
+  background: rgba(0, 204, 102, 0.05);
+  border-color: #2a5a2a;
+}
+
+/* Gallery item badges */
+.gallery-item-badge {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+.gallery-item-favicon {
+  background: rgba(10, 14, 20, 0.85);
+}
+
+/* Dev warning */
+.gallery-dev-warning { color: rgba(255, 180, 50, 0.5); }
+.gallery-dev-warning svg { stroke: rgba(255, 180, 50, 0.5); }
+
+/* Connector status */
+.connector-status {
+  border-top-color: #1a2a1a;
+  background: rgba(10, 14, 20, 0.6);
+}
+.connector-status-header {
+  color: #3a6a3a;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+.connector-status-header:hover { color: #00cc66; }
+
+/* Map section */
+.map-no-data {
+  background: linear-gradient(135deg, #0a0e14 0%, #0a1210 100%);
+  color: #3a6a3a;
+}
+.map-loading-spinner {
+  border-color: rgba(0, 204, 102, 0.1);
+  border-top-color: #00cc66;
+}
+
+/* Map action buttons — green */
+.map-action-btn {
+  background: rgba(10, 14, 20, 0.85);
+  border-color: #1a2a1a;
+  color: #4a8a4a;
+}
+.map-action-btn:hover {
+  border-color: #00cc66;
+  color: #00cc66;
+  background: rgba(0, 204, 102, 0.08);
+}
+.map-action-btn.close-btn:hover {
+  background: #ff4444 !important;
+  border-color: #ff4444 !important;
+  color: #0a0e14 !important;
+}
+.map-buttons-separator { background: #1a2a1a; }
+
+/* Admin edit mode */
+.admin-edit-field label {
+  color: #3a6a3a;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+.admin-edit-field input,
+.admin-edit-field textarea,
+.admin-edit-field select {
+  background: rgba(0, 15, 8, 0.6);
+  border-color: #1a2a1a;
+  color: #b0d0b0;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+.admin-edit-field input:focus,
+.admin-edit-field textarea:focus,
+.admin-edit-field select:focus {
+  border-color: #2a5a2a;
+  background: rgba(0, 20, 10, 0.6);
+}
+
+/* Source switcher */
+.source-switcher-trigger:hover { background: rgba(0, 204, 102, 0.08); }
+
+@media (prefers-reduced-motion: reduce) {
+  .site-popup::after { display: none; }
+  .popup-hero-bg.lazy-image--tv-on { animation: none; }
+}
+
 /* ============= DEMO MODE (video recording) ============= */
 /* Hides all UI except the globe canvas when body.demo-mode is set */
 /* Class names must match the actual DOM — verified against component source */
