@@ -269,7 +269,7 @@ body {
   margin-bottom: 16px;
   text-wrap: balance;
   color: var(--accent-primary);
-  text-shadow: 0 0 30px rgba(0, 204, 102, 0.2);
+  text-shadow: 0 0 30px var(--accent-glow-20);
 }
 
 .section-desc {
@@ -315,7 +315,7 @@ body {
 
 .feature-image-main:hover {
   transform: scale(1.02);
-  box-shadow: 0 0 60px rgba(0, 180, 180, 0.15);
+  box-shadow: 0 0 60px var(--accent-glow-15);
 }
 
 .thumbnail-strip {
@@ -891,7 +891,7 @@ body {
   max-width: 92vw;
   max-height: 92vh;
   border-radius: 8px;
-  box-shadow: 0 0 60px rgba(0,180,180,0.15);
+  box-shadow: 0 0 60px var(--accent-glow-15);
 }
 
 /* ─── Utility Classes ─── */
