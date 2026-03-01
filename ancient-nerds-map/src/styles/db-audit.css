@@ -32,7 +32,7 @@
   align-items: center;
   gap: 6px;
   padding: 3px 4px 3px 10px;
-  border: 1px solid var(--border-accent);
+  border: 1px solid var(--accent-glow-15);
   border-radius: 16px;
   margin-left: 8px;
   transition: border-color 0.2s, background 0.2s;
@@ -70,7 +70,7 @@
   align-items: center;
   gap: 6px;
   padding: 3px 4px 3px 10px;
-  border: 1px solid var(--border-accent);
+  border: 1px solid var(--accent-glow-15);
   border-radius: 16px;
   margin-left: 4px;
   transition: border-color 0.2s, background 0.2s;
@@ -115,7 +115,7 @@
 
 .db-unlock-btn:hover {
   border-color: var(--accent-primary);
-  background: var(--accent-glow-10);
+  background: var(--accent-glow-15);
 }
 
 .db-auth-badge {
@@ -142,7 +142,7 @@
 
 .db-stat-card {
   background: var(--surface-raised);
-  border: 1px solid var(--border-accent);
+  border: 1px solid var(--accent-glow-15);
   border-radius: 8px;
   padding: 12px 20px;
   min-width: 110px;
@@ -162,7 +162,8 @@
 
 .db-stat-card.active {
   border-color: var(--accent-primary);
-  background: var(--accent-glow-10);
+  background: var(--accent-glow-15);
+  box-shadow: 0 0 8px var(--accent-glow-20);
 }
 
 .db-stat-card.issue .db-stat-value {
@@ -349,7 +350,8 @@
 
 .db-multiselect-trigger.has-selection {
   border-color: var(--accent-primary);
-  background: var(--accent-glow-08);
+  background: var(--accent-glow-12);
+  box-shadow: 0 0 6px var(--accent-glow-15);
 }
 
 .db-multiselect-label {
@@ -874,7 +876,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--text-secondary);
+  color: var(--accent-primary);
 }
 
 .db-hero-input {
@@ -2537,7 +2539,7 @@
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text-tertiary);
+  color: var(--accent-primary);
 }
 
 .db-version-panel-count {
@@ -2818,7 +2820,7 @@
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: var(--text-secondary);
+  color: var(--accent-primary);
   margin-bottom: 8px;
 }
 

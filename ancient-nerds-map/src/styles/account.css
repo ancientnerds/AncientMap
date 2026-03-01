@@ -97,7 +97,7 @@
   flex-wrap: wrap;
   gap: 4px;
   margin-bottom: 1.5rem;
-  border-bottom: 1px solid var(--accent-glow-10);
+  border-bottom: 1px solid var(--accent-glow-15);
 }
 
 .account-tab {
@@ -125,6 +125,7 @@
 .account-tab.active {
   color: #fff;
   border-bottom-color: var(--accent-primary);
+  box-shadow: 0 0 8px var(--accent-glow-15);
 }
 
 .account-tab-count {
@@ -151,8 +152,8 @@
 
 /* Profile card */
 .account-card {
-  background: var(--accent-glow-04);
-  border: 1px solid var(--accent-glow-08);
+  background: var(--accent-glow-08);
+  border: 1px solid var(--accent-glow-15);
   border-radius: 12px;
   padding: 24px;
   margin-bottom: 24px;
@@ -221,8 +222,8 @@
   display: flex;
   gap: 20px;
   padding: 20px 0;
-  border-top: 1px solid var(--accent-glow-06);
-  border-bottom: 1px solid var(--accent-glow-06);
+  border-top: 1px solid var(--accent-glow-10);
+  border-bottom: 1px solid var(--accent-glow-10);
   margin-bottom: 16px;
 }
 
@@ -333,8 +334,8 @@
 .account-logout-btn {
   width: 100%;
   padding: 10px;
-  background: var(--accent-glow-06);
-  border: 1px solid var(--accent-glow-10);
+  background: var(--accent-glow-08);
+  border: 1px solid var(--accent-glow-15);
   border-radius: 8px;
   color: var(--text-faint);
   font-family: var(--font-body);
@@ -344,7 +345,7 @@
 }
 
 .account-logout-btn:hover {
-  background: var(--accent-glow-10);
+  background: var(--accent-glow-15);
   color: #fff;
 }
 
@@ -357,7 +358,7 @@
   font-family: var(--font-heading);
   font-size: 14px;
   font-weight: 600;
-  color: var(--text-body);
+  color: var(--accent-primary);
   margin: 0 0 12px;
   text-shadow: 0 0 20px var(--text-heading-glow);
   text-transform: uppercase;
@@ -375,8 +376,8 @@
   gap: 6px;
   margin-top: 8px;
   padding: 6px 12px;
-  background: var(--accent-glow-05);
-  border: 1px solid var(--accent-glow-10);
+  background: var(--accent-glow-10);
+  border: 1px solid var(--accent-glow-20);
   border-radius: 6px;
   color: rgba(255, 255, 255, 0.5);
   font-size: 12px;
@@ -386,7 +387,7 @@
 
 .account-expand-btn:hover {
   color: rgba(255, 255, 255, 0.8);
-  background: var(--accent-glow-08);
+  background: var(--accent-glow-15);
 }
 
 .account-expand-arrow {
@@ -413,12 +414,12 @@
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  border-bottom: 1px solid var(--accent-glow-08);
+  border-bottom: 1px solid var(--accent-glow-12);
 }
 
 .account-table td {
   padding: 8px 12px;
-  border-bottom: 1px solid var(--accent-glow-04);
+  border-bottom: 1px solid var(--accent-glow-06);
   color: var(--text-body);
 }
 
@@ -442,8 +443,8 @@
 .admin-search {
   width: 100%;
   padding: 10px 14px;
-  background: var(--accent-glow-06);
-  border: 1px solid var(--accent-glow-10);
+  background: var(--accent-glow-08);
+  border: 1px solid var(--accent-glow-15);
   border-radius: 8px;
   color: var(--text-body);
   font-family: var(--font-body);
@@ -494,7 +495,7 @@
 .admin-user-list {
   max-height: 320px;
   overflow-y: auto;
-  border: 1px solid var(--accent-glow-06);
+  border: 1px solid var(--accent-glow-10);
   border-radius: 8px;
   margin-bottom: 12px;
 }
@@ -506,7 +507,7 @@
   padding: 8px 12px;
   cursor: pointer;
   transition: background 0.15s;
-  border-bottom: 1px solid var(--accent-glow-04);
+  border-bottom: 1px solid var(--accent-glow-06);
 }
 
 .admin-user-row:last-child {
@@ -514,7 +515,7 @@
 }
 
 .admin-user-row:hover {
-  background: var(--accent-glow-04);
+  background: var(--accent-glow-06);
 }
 
 .admin-user-row.selected {
@@ -577,8 +578,8 @@
 
 /* Credit adjustment form */
 .admin-credit-form {
-  background: var(--accent-glow-03);
-  border: 1px solid var(--accent-glow-08);
+  background: var(--accent-glow-06);
+  border: 1px solid var(--accent-glow-12);
   border-radius: 8px;
   padding: 14px;
 }
@@ -618,8 +619,8 @@
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: var(--accent-glow-06);
-  border: 1px solid var(--accent-glow-10);
+  background: var(--accent-glow-08);
+  border: 1px solid var(--accent-glow-15);
   border-radius: 6px;
   color: var(--text-body);
   font-family: var(--font-body);
@@ -630,7 +631,7 @@
 }
 
 .action-dropdown-trigger:hover {
-  background: var(--accent-glow-08);
+  background: var(--accent-glow-12);
 }
 
 .action-dropdown-dot {
@@ -657,7 +658,7 @@
   min-width: 220px;
   background: rgba(0, 15, 20, 0.97);
   backdrop-filter: blur(16px);
-  border: 1px solid var(--accent-glow-10);
+  border: 1px solid var(--accent-glow-15);
   border-radius: 8px;
   padding: 4px;
   z-index: 100;
@@ -680,11 +681,11 @@
 }
 
 .action-dropdown-item:hover {
-  background: var(--accent-glow-06);
+  background: var(--accent-glow-08);
 }
 
 .action-dropdown-item.active {
-  background: var(--accent-glow-08);
+  background: var(--accent-glow-12);
 }
 
 .action-dropdown-item-text {
@@ -709,8 +710,8 @@
 .admin-amount-input {
   flex: 1;
   padding: 8px 10px;
-  background: var(--accent-glow-06);
-  border: 1px solid var(--accent-glow-10);
+  background: var(--accent-glow-08);
+  border: 1px solid var(--accent-glow-15);
   border-radius: 6px;
   color: var(--text-body);
   font-family: var(--font-body);
@@ -749,8 +750,8 @@
 
 .admin-shortcut-btn {
   padding: 5px 12px;
-  background: var(--accent-glow-05);
-  border: 1px solid var(--accent-glow-10);
+  background: var(--accent-glow-08);
+  border: 1px solid var(--accent-glow-15);
   border-radius: 14px;
   color: var(--text-faint);
   font-family: var(--font-body);
@@ -760,7 +761,7 @@
 }
 
 .admin-shortcut-btn:hover {
-  background: var(--accent-glow-10);
+  background: var(--accent-glow-15);
   color: #fff;
 }
 
@@ -822,7 +823,7 @@
 
 /* Bulk grant section */
 .admin-bulk-section {
-  border-top: 1px solid var(--accent-glow-06);
+  border-top: 1px solid var(--accent-glow-10);
   padding-top: 10px;
   margin-top: 4px;
   margin-bottom: 4px;
@@ -838,8 +839,8 @@
 .admin-bulk-select {
   flex: 1;
   padding: 8px 10px;
-  background: var(--accent-glow-06);
-  border: 1px solid var(--accent-glow-10);
+  background: var(--accent-glow-08);
+  border: 1px solid var(--accent-glow-15);
   border-radius: 6px;
   color: var(--text-body);
   font-family: var(--font-body);
@@ -887,8 +888,8 @@
   align-items: center;
   gap: 10px;
   padding: 8px;
-  background: var(--accent-glow-03);
-  border: 1px solid var(--accent-glow-06);
+  background: var(--accent-glow-05);
+  border: 1px solid var(--accent-glow-10);
   border-radius: 8px;
   text-decoration: none;
   color: inherit;
@@ -896,8 +897,8 @@
 }
 
 .account-site-card:hover {
-  background: var(--accent-glow-06);
-  border-color: var(--accent-glow-12);
+  background: var(--accent-glow-10);
+  border-color: var(--accent-glow-20);
 }
 
 .account-site-thumb {
@@ -912,7 +913,7 @@
   width: 48px;
   height: 48px;
   border-radius: 6px;
-  background: var(--accent-glow-05);
+  background: var(--accent-glow-08);
   flex-shrink: 0;
 }
 
@@ -964,8 +965,8 @@
 
 .deck-selector-slot {
   padding: 8px 16px;
-  background: var(--accent-glow-05);
-  border: 1px solid var(--accent-glow-10);
+  background: var(--accent-glow-10);
+  border: 1px solid var(--accent-glow-20);
   border-radius: 6px;
   color: rgba(255, 255, 255, 0.6);
   cursor: pointer;
@@ -982,7 +983,8 @@
 .deck-selector-slot.active {
   border-color: var(--accent-primary);
   color: #fff;
-  background: var(--accent-glow-10);
+  background: var(--accent-glow-15);
+  box-shadow: 0 0 8px var(--accent-glow-20);
 }
 
 .deck-star {
@@ -993,7 +995,7 @@
 .deck-selector-new {
   padding: 8px 16px;
   background: transparent;
-  border: 1px dashed var(--accent-glow-15);
+  border: 1px dashed var(--accent-glow-20);
   border-radius: 6px;
   color: rgba(255, 255, 255, 0.4);
   cursor: pointer;
@@ -1020,8 +1022,8 @@
 }
 
 .deck-builder-right {
-  background: var(--accent-glow-03);
-  border: 1px solid var(--accent-glow-08);
+  background: var(--accent-glow-06);
+  border: 1px solid var(--accent-glow-12);
   border-radius: 10px;
   padding: 16px;
   position: sticky;
@@ -1032,7 +1034,7 @@
   font-family: var(--font-heading);
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-body);
+  color: var(--accent-primary);
   margin: 0 0 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -1061,7 +1063,7 @@
 }
 
 .deck-name-input {
-  background: var(--accent-glow-06);
+  background: var(--accent-glow-08);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 4px;
   color: #fff;
@@ -1098,7 +1100,7 @@
 .deck-synergies {
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid var(--accent-glow-06);
+  border-top: 1px solid var(--accent-glow-10);
 }
 
 .deck-synergy-title {
@@ -1204,8 +1206,8 @@
 .collection-search {
   flex: 1;
   padding: 6px 10px;
-  background: var(--accent-glow-06);
-  border: 1px solid var(--accent-glow-10);
+  background: var(--accent-glow-08);
+  border: 1px solid var(--accent-glow-15);
   border-radius: 4px;
   color: var(--text-body);
   font-size: 13px;
@@ -1403,7 +1405,7 @@
 
 .achievements-progress-bar {
   height: 8px;
-  background: var(--accent-glow-08);
+  background: var(--accent-glow-12);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -1446,8 +1448,8 @@
   align-items: center;
   gap: 4px;
   padding: 6px 12px;
-  background: var(--accent-glow-05);
-  border: 1px solid var(--accent-glow-08);
+  background: var(--accent-glow-10);
+  border: 1px solid var(--accent-glow-15);
   border-radius: 20px;
   color: var(--text-secondary);
   font-family: var(--font-body);
@@ -1458,14 +1460,15 @@
 }
 
 .achievements-category-btn:hover {
-  background: var(--accent-glow-08);
+  background: var(--accent-glow-15);
   color: var(--text-body);
 }
 
 .achievements-category-btn.active {
-  background: var(--accent-glow-15);
+  background: var(--accent-glow-25);
   border-color: var(--accent-primary);
   color: #fff;
+  box-shadow: 0 0 8px var(--accent-glow-20);
 }
 
 .achievements-category-icon {
@@ -1484,8 +1487,8 @@
 }
 
 .achievement-card {
-  background: var(--accent-glow-04);
-  border: 1px solid var(--accent-glow-08);
+  background: var(--accent-glow-08);
+  border: 1px solid var(--accent-glow-15);
   border-radius: 12px;
   padding: 16px;
   display: flex;
@@ -1559,7 +1562,7 @@
   font-family: var(--font-body);
   font-size: 11px;
   color: var(--text-faint);
-  background: var(--accent-glow-06);
+  background: var(--accent-glow-08);
   padding: 2px 8px;
   border-radius: 6px;
 }

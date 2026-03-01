@@ -35,7 +35,7 @@
   gap: 12px;
   padding: 12px 20px;
   background: rgba(0, 0, 0, 0.2);
-  border-bottom: 1px solid var(--accent-glow-05);
+  border-bottom: 1px solid var(--accent-glow-15);
 }
 
 .lyra-discoveries-filter-label {
@@ -79,7 +79,7 @@
 .lyra-discovery-card:hover {
   border-color: var(--accent-glow-30);
   transform: translateY(-3px) scale(1.01);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--accent-glow-10);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--accent-glow-25);
 }
 
 .lyra-discovery-name-block {
@@ -122,15 +122,15 @@
   line-height: 1.4;
 }
 
-/* .lyra-discovery-score removed — replaced by .lyra-discovery-percentage */
+/* .lyra-discovery-score removed -- replaced by .lyra-discovery-percentage */
 
 .lyra-discovery-mentions {
   padding: 2px 8px;
   font-size: 11px;
   font-weight: 700;
   color: var(--accent-primary);
-  background: var(--accent-glow-15);
-  border: 1px solid var(--accent-glow-30);
+  background: var(--accent-glow-25);
+  border: 1px solid var(--accent-glow-40);
   border-radius: 4px;
   font-family: var(--font-heading);
 }
@@ -265,14 +265,14 @@
   font-size: 11px;
   font-weight: 500;
   color: var(--accent-glow-85);
-  background: var(--accent-glow-08);
-  border: 1px solid var(--border-accent);
+  background: var(--accent-glow-12);
+  border: 1px solid var(--accent-glow-20);
   border-radius: 4px;
   transition: all 0.15s;
 }
 
 .lyra-source-chip:hover {
-  background: var(--accent-glow-15);
+  background: var(--accent-glow-20);
   border-color: var(--border-accent-strong);
 }
 
@@ -334,9 +334,9 @@
   border-radius: 1px;
 }
 
-/* Hero styles removed — replaced by .lyra-discovery-image full-width thumbnail */
+/* Hero styles removed -- replaced by .lyra-discovery-image full-width thumbnail */
 
-/* Stats row removed — video/channel counts now in collapsible header */
+/* Stats row removed -- video/channel counts now in collapsible header */
 
 /* Filter groups */
 .lyra-filter-group {
@@ -764,13 +764,13 @@
   border: 1px solid rgba(78, 205, 196, 0.15);
 }
 
-/* Map wrapper — positions the card overlay relative to the map */
+/* Map wrapper -- positions the card overlay relative to the map */
 .radar-map-wrapper {
   position: relative;
   padding: 0 20px;
 }
 
-/* Card overlay — floats on right side of the map */
+/* Card overlay -- floats on right side of the map */
 .radar-map-card-overlay {
   position: absolute;
   top: 10px;
@@ -873,7 +873,7 @@
   box-shadow: 0 4px 16px rgba(0, 240, 255, 0.15);
 }
 
-/* ─── DB source badge on radar cards ─────────────────────────────────────── */
+/* --- DB source badge on radar cards --- */
 .lyra-db-badge {
   display: inline-block;
   padding: 1px 6px;
@@ -887,7 +887,7 @@
   vertical-align: middle;
 }
 
-/* ─── Promote (Add to DB) button ─────────────────────────────────────────── */
+/* --- Promote (Add to DB) button --- */
 .lyra-promote-btn {
   display: inline-flex;
   align-items: center;
