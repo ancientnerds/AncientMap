@@ -2088,7 +2088,7 @@ def merge_deep_research(dry_run: bool = False) -> dict:
                             UPDATE unified_sites
                             SET raw_data = COALESCE(raw_data, '{}'::jsonb) ||
                                 jsonb_build_object('description_pre_enrichment', description)
-                            WHERE id = :site_id::uuid
+                            WHERE id = CAST(:site_id AS uuid)
                             AND (raw_data IS NULL OR raw_data->>'description_pre_enrichment' IS NULL)
                         """),
                         {"site_id": site_id},
@@ -2099,7 +2099,7 @@ def merge_deep_research(dry_run: bool = False) -> dict:
                         text("""
                             UPDATE unified_sites
                             SET description = :desc, edited_by = 'deep_research'
-                            WHERE id = :site_id::uuid
+                            WHERE id = CAST(:site_id AS uuid)
                         """),
                         {"site_id": site_id, "desc": desc_text},
                     )
@@ -2111,7 +2111,7 @@ def merge_deep_research(dry_run: bool = False) -> dict:
                             text("""
                                 UPDATE card_stats
                                 SET card_description = :card_desc
-                                WHERE site_id = :site_id::uuid
+                                WHERE site_id = CAST(:site_id AS uuid)
                             """),
                             {"site_id": site_id, "card_desc": card_text[:200]},
                         )
@@ -2138,7 +2138,7 @@ def merge_deep_research(dry_run: bool = False) -> dict:
                                 text(f"""
                                     UPDATE unified_sites
                                     SET {field} = :new_val, edited_by = 'deep_research'
-                                    WHERE id = :site_id::uuid AND {field} IS NULL
+                                    WHERE id = CAST(:site_id AS uuid) AND {field} IS NULL
                                 """),
                                 {"site_id": site_id, "new_val": new_val},
                             )
@@ -2147,7 +2147,7 @@ def merge_deep_research(dry_run: bool = False) -> dict:
                                 text(f"""
                                     UPDATE unified_sites
                                     SET {field} = :new_val, edited_by = 'deep_research'
-                                    WHERE id = :site_id::uuid AND {field} = :old_val
+                                    WHERE id = CAST(:site_id AS uuid) AND {field} = :old_val
                                 """),
                                 {"site_id": site_id, "new_val": new_val, "old_val": old_val},
                             )
@@ -2892,7 +2892,7 @@ def merge_verification(dry_run: bool = False) -> dict:
                                 UPDATE unified_sites
                                 SET raw_data = COALESCE(raw_data, '{}'::jsonb) ||
                                     jsonb_build_object('description_pre_enrichment', description)
-                                WHERE id = :site_id::uuid
+                                WHERE id = CAST(:site_id AS uuid)
                                 AND (raw_data IS NULL OR raw_data->>'description_pre_enrichment' IS NULL)
                             """),
                             {"site_id": site_id},
@@ -2906,7 +2906,7 @@ def merge_verification(dry_run: bool = False) -> dict:
                                     raw_data = COALESCE(raw_data, '{}'::jsonb) ||
                                         jsonb_build_object('description_citations', CAST(:citations AS jsonb)),
                                     edited_by = 'cited_enrichment'
-                                WHERE id = :site_id::uuid
+                                WHERE id = CAST(:site_id AS uuid)
                             """),
                             {
                                 "site_id": site_id,
