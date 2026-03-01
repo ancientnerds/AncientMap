@@ -88,8 +88,8 @@
 .page-header-bubble {
   font-size: 11px;
   color: var(--text-secondary);
-  background: rgba(192, 32, 35, 0.08);
-  border: 1px solid rgba(192, 32, 35, 0.2);
+  background: var(--accent-glow-08);
+  border: 1px solid var(--accent-glow-20);
   border-radius: 8px;
   padding: 4px 10px;
   line-height: 1.4;
@@ -112,7 +112,7 @@
   height: 6px;
   border-radius: 50%;
   background: var(--accent-primary);
-  box-shadow: 0 0 6px var(--glow-green);
+  box-shadow: 0 0 6px var(--glow-accent);
   animation: page-header-live-pulse 2s ease infinite;
 }
 
@@ -256,7 +256,7 @@
   font-size: 13px;
 }
 .hamburger-link:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--accent-glow-05);
   color: var(--text-primary);
 }
 .hamburger-link.active {

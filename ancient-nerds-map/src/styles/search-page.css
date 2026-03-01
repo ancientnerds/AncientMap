@@ -62,7 +62,7 @@
   justify-content: center;
   width: 22px;
   height: 22px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--accent-glow-10);
   border: none;
   border-radius: 50%;
   color: var(--text-secondary);
@@ -72,7 +72,7 @@
 }
 
 .search-bar-clear:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--accent-glow-20);
   color: var(--text-primary);
 }
 
@@ -82,8 +82,8 @@
   gap: 6px;
   padding: 6px 12px;
   margin-left: auto;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--accent-glow-06);
+  border: 1px solid var(--accent-glow-10);
   border-radius: 6px;
   color: var(--text-secondary);
   font-size: 0.8rem;
@@ -93,13 +93,13 @@
 }
 
 .search-bar-filter-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--accent-glow-10);
 }
 
 .search-bar-filter-btn.active {
-  background: rgba(192, 32, 35, 0.15);
-  border-color: var(--brand-primary);
-  color: var(--brand-primary);
+  background: var(--accent-glow-15);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
 }
 
 .search-bar-filter-btn.has-filters::after {
@@ -107,7 +107,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--brand-primary);
+  background: var(--accent-primary);
 }
 
 /* Filters panel */
@@ -152,10 +152,10 @@
 
 /* Random chip — glow on hover when already active (re-shuffle) */
 .search-bar-inner .news-page-chip.active:hover {
-  background: rgba(192, 32, 35, 0.25);
+  background: var(--accent-glow-25);
   border-color: var(--brand-primary-hover);
   color: var(--brand-primary-hover);
-  box-shadow: 0 0 12px rgba(192, 32, 35, 0.3);
+  box-shadow: 0 0 12px var(--accent-glow-30);
 }
 
 /* Load more button */

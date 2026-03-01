@@ -187,6 +187,9 @@
   --accent-glow-90:        rgba(0, 204, 102, 0.90);
   --accent-glow-100:       rgba(0, 204, 102, 1.00);
 
+  /* — Heading glow (subtle phosphor haze on section titles) — */
+  --text-heading-glow:     var(--accent-glow-10);
+
   /* — Rarity (game cards — kept unique) — */
   --rarity-common:         var(--_palette-rarity-common);
   --rarity-uncommon:       var(--_palette-rarity-uncommon);
