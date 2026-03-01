@@ -6,7 +6,7 @@
  * Used tools show their args (WHY Lyra chose them) and result counts.
  */
 
-import { useMemo } from 'react'
+import { useMemo, useRef, useEffect, useState } from 'react'
 import type { PipelineTrace, PipelineNodeInstance, PipelineNodeStatus, ToolDef } from '../../types/pipeline'
 import { PIPELINE_STAGES, TOOL_REGISTRY } from '../../types/pipeline'
 
@@ -23,6 +23,11 @@ interface ToolView {
   args: Record<string, unknown> | null
   resultLen: number | null
   error: string | null
+}
+
+interface RoundInfo {
+  node: PipelineNodeInstance
+  toolNames: string[]
 }
 
 function statusIcon(status: PipelineNodeStatus): string {
@@ -56,21 +61,33 @@ function metaSummary(node: PipelineNodeInstance): string {
   if (m.count != null) parts.push(`${m.count} items`)
   if (m.message_count != null) parts.push(`${m.message_count} msgs`)
   if (m.sites != null && m.news != null) parts.push(`${m.sites}s ${m.news}n`)
-  if (m.has_tools === false && node.stageId === 'llm_round') parts.push('no tools')
-  if (m.has_tools === true && node.stageId === 'llm_round') parts.push('tool calls')
   if (m.round_tokens != null) parts.push(`${(m.round_tokens as number).toLocaleString()} tok`)
   if (m.total_tokens != null) parts.push(`${(m.total_tokens as number).toLocaleString()} tok`)
   return parts.join(' \u00b7 ')
 }
 
+/** Map each LLM round to the tool names called within it */
+function buildRoundInfos(nodes: PipelineNodeInstance[]): RoundInfo[] {
+  const rounds = nodes.filter(n => n.stageId === 'llm_round')
+  return rounds.map((round, ri) => {
+    const roundIdx = nodes.indexOf(round)
+    const nextRoundIdx = ri + 1 < rounds.length ? nodes.indexOf(rounds[ri + 1]) : nodes.length
+    const toolNames: string[] = []
+    for (let i = roundIdx + 1; i < nextRoundIdx; i++) {
+      if (nodes[i].stageId === 'tool_call' && nodes[i].meta?.tool) {
+        toolNames.push(String(nodes[i].meta!.tool))
+      }
+    }
+    return { node: round, toolNames }
+  })
+}
+
 function buildToolViews(nodes: PipelineNodeInstance[]): ToolView[] {
   return TOOL_REGISTRY.map(def => {
-    // Find matching tool_call nodes
     const matching = nodes.filter(n => n.stageId === 'tool_call' && n.meta?.tool === def.name)
     if (matching.length === 0) {
       return { def, status: 'idle', duration_ms: null, args: null, resultLen: null, error: null }
     }
-    // Use the last matching instance
     const node = matching[matching.length - 1]
     const args = (node.meta?.args as Record<string, unknown>) ?? null
     const resultLen = node.meta?.result_len != null ? Number(node.meta.result_len) : null
@@ -117,6 +134,23 @@ function ResultLine({ count, isLast }: { count: number; isLast: boolean }) {
   return <div className="lp-meta lp-result"><span className="lp-connector">{connector}</span>{'\u2192'} {count} result{count !== 1 ? 's' : ''}</div>
 }
 
+/** Live elapsed timer for active nodes */
+function useElapsedTimer(nodes: PipelineNodeInstance[], isLive: boolean) {
+  const [, setTick] = useState(0)
+  const hasActive = isLive && nodes.some(n => n.status === 'active')
+  useEffect(() => {
+    if (!hasActive) return
+    const id = setInterval(() => setTick(t => t + 1), 200)
+    return () => clearInterval(id)
+  }, [hasActive])
+}
+
+function activeElapsed(node: PipelineNodeInstance): string {
+  if (node.status !== 'active' || !node.startedAt) return '...'
+  const ms = Math.round(performance.now() - node.startedAt)
+  return formatMs(ms)
+}
+
 // ── Stage grouping ──
 
 interface StageGroup {
@@ -134,8 +168,13 @@ const BACKENDS = ['PostgreSQL', 'Qdrant', 'Seshat']
 
 export default function PipelinePanel({ trace, isLive, onClose }: PipelinePanelProps) {
   const nodes = trace?.nodes ?? []
+  const bodyRef = useRef<HTMLDivElement>(null)
 
   const toolViews = useMemo(() => buildToolViews(nodes), [nodes])
+  const roundInfos = useMemo(() => buildRoundInfos(nodes), [nodes])
+
+  // #4: Live elapsed timer — re-renders every 200ms while nodes are active
+  useElapsedTimer(nodes, isLive)
 
   const totalMs = useMemo(() => {
     const durations = nodes.filter(n => n.stageId !== 'tool_call' && n.stageId !== 'done_credits' && n.duration_ms != null)
@@ -143,16 +182,20 @@ export default function PipelinePanel({ trace, isLive, onClose }: PipelinePanelP
     return durations.reduce((sum, n) => sum + (n.duration_ms ?? 0), 0)
   }, [nodes])
 
-  // Group LLM rounds with their tool call counts
-  const llmRounds = useMemo(() => {
-    return nodes.filter(n => n.stageId === 'llm_round')
-  }, [nodes])
-
-  // Done node
   const doneNode = nodes.find(n => n.stageId === 'done_credits')
+
+  // #1: Auto-scroll to bottom during live streaming
+  useEffect(() => {
+    if (isLive && bodyRef.current) {
+      bodyRef.current.scrollTop = bodyRef.current.scrollHeight
+    }
+  }, [isLive, nodes])
 
   return (
     <div className="lp-panel">
+      {/* #5: CRT scanline overlay */}
+      <div className="lp-scanlines" />
+
       <div className="lp-header">
         <div className="lp-header-left">
           {'>'} PIPELINE TRACE
@@ -169,22 +212,33 @@ export default function PipelinePanel({ trace, isLive, onClose }: PipelinePanelP
         </button>
       </div>
 
-      <div className="lp-body">
+      <div className="lp-body" ref={bodyRef}>
         {/* Pipeline stage groups */}
         {STAGE_GROUPS.map(group => {
-          // For LLM rounds, use the repeatable instances
+          // For LLM rounds, use the repeatable instances with tool names
           if (group.stageIds[0] === 'llm_round') {
             return (
               <div key={group.label}>
                 <SectionHeader label={group.label} />
-                {llmRounds.length === 0 ? (
+                {roundInfos.length === 0 ? (
                   <TreeLine name="llm_round" status="idle" timing="idle" isLast={true} />
                 ) : (
-                  llmRounds.map((round, ri) => {
-                    const isLast = ri === llmRounds.length - 1
-                    const roundNum = round.meta?.round ?? ri + 1
-                    const timing = round.status === 'active' ? '...' : formatMs(round.duration_ms)
+                  roundInfos.map((ri, idx) => {
+                    const { node: round, toolNames } = ri
+                    const isLast = idx === roundInfos.length - 1
+                    const roundNum = round.meta?.round ?? idx + 1
+                    // #4: Live elapsed for active rounds
+                    const timing = round.status === 'active' ? activeElapsed(round) : formatMs(round.duration_ms)
                     const meta = metaSummary(round)
+                    // #3 + #6: Show tool count and names
+                    const hasTools = round.meta?.has_tools
+                    const toolLine = hasTools === false
+                      ? 'no tools'
+                      : toolNames.length > 0
+                        ? `${toolNames.length} tool${toolNames.length !== 1 ? 's' : ''}: ${toolNames.join(', ')}`
+                        : round.status === 'active' ? 'calling tools...' : null
+                    // Filter out the old "tool calls" / "no tools" from meta since we show it separately
+                    const metaClean = meta.replace(/\btool calls\b/, '').replace(/\bno tools\b/, '').replace(/\u00b7\s*\u00b7/g, '\u00b7').replace(/^\s*\u00b7\s*/, '').replace(/\s*\u00b7\s*$/, '').trim()
                     return (
                       <div key={round.instanceId}>
                         <TreeLine
@@ -193,7 +247,8 @@ export default function PipelinePanel({ trace, isLive, onClose }: PipelinePanelP
                           timing={timing}
                           isLast={isLast}
                         />
-                        {meta && <MetaLine text={meta} isLast={isLast} />}
+                        {metaClean && <MetaLine text={metaClean} isLast={isLast} />}
+                        {toolLine && <MetaLine text={toolLine} isLast={isLast} />}
                       </div>
                     )
                   })
@@ -215,7 +270,8 @@ export default function PipelinePanel({ trace, isLive, onClose }: PipelinePanelP
               {stageNodes.map((s, i) => {
                 const isLast = i === stageNodes.length - 1
                 const status: PipelineNodeStatus = s.node?.status ?? 'idle'
-                const timing = status === 'active' ? '...' : status === 'idle' ? 'idle' : formatMs(s.node?.duration_ms ?? null)
+                // #4: Live elapsed for active stages
+                const timing = status === 'active' ? activeElapsed(s.node!) : status === 'idle' ? 'idle' : formatMs(s.node?.duration_ms ?? null)
                 const meta = s.node ? metaSummary(s.node) : ''
                 const error = s.node?.meta?.error ? String(s.node.meta.error) : null
                 return (
@@ -230,15 +286,27 @@ export default function PipelinePanel({ trace, isLive, onClose }: PipelinePanelP
           )
         })}
 
-        {/* Tool calls section — all 11 tools grouped by backend */}
+        {/* Tool calls section — collapse idle backends (#2), show used tools */}
         <SectionHeader label="TOOL CALLS" />
         {BACKENDS.map(backend => {
           const tools = toolViews.filter(t => t.def.backend === backend)
+          const allIdle = tools.every(t => t.status === 'idle')
+
+          // #2: Collapse idle backends to a single dim line
+          if (allIdle) {
+            return (
+              <div key={backend} className="lp-backend-group">
+                <div className="lp-backend-label lp-backend-idle">{backend} <span className="lp-idle-count">{'\u00b7'} {tools.length} tools idle</span></div>
+              </div>
+            )
+          }
+
           return (
             <div key={backend} className="lp-backend-group">
               <div className="lp-backend-label">{backend}</div>
               {tools.map((tool, i) => {
                 const isLast = i === tools.length - 1
+                // #4: Live elapsed for active tools
                 const timing = tool.status === 'done' ? formatMs(tool.duration_ms)
                   : tool.status === 'active' ? '...'
                   : tool.status === 'error' ? formatMs(tool.duration_ms)
