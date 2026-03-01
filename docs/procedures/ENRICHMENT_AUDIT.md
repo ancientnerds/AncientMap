@@ -633,7 +633,7 @@ The audit targets **100% coverage** for all fields. The audit passes when all co
   ```bash
   cat fixes.sql | docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map
   ```
-- **`edited_by`:** Every audit UPDATE must set this to identify the source: `'audit_enrich'` (Waves 0-1), `'deep_research'` (deep-research merge), `'cited_enrichment'` (citation pipeline Phase 3).
+- **`edited_by`:** Every audit UPDATE must set this to identify the source: `'audit_enrich'` (Waves 0-1), `'cited_enrichment'` (citation pipeline Phase 3).
 
 **Windows notes:**
 - `docker cp` + `psql -f` can fail silently. Prefer piping: `cat file.sql | docker exec -i ...`
@@ -969,9 +969,6 @@ sync → mechanical → enrich → apply → verify → agents → merge
   → cited-description → (agents) → cited-description-merge
   → verify-citations → (agents) → verify-citations-merge
   → package → export
-
-Legacy phases (superseded by cited-description pipeline, kept for backwards compatibility):
-  → deep-research → (agents) → deep-research-merge
 ```
 
 ---
