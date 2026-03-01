@@ -99,7 +99,224 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS confidence_score FLOAT",
             # Ensure db_snapshots has source_id column (added after initial table creation)
             "ALTER TABLE db_snapshots ADD COLUMN IF NOT EXISTS source_id VARCHAR(50)",
+            # Strip orphaned [N] citation markers from sites lacking citation metadata
+            "UPDATE unified_sites SET description = regexp_replace(description, '\\s*\\[\\d+\\]', '', 'g') WHERE description ~ '\\[\\d+\\]' AND NOT (raw_data ? 'description_citations')",
         ]
+
+        # Populate description_citations for 10 enriched sites (one-time prod data fix).
+        # Uses parameterized queries to avoid SQLAlchemy parsing JSON colons as bind params.
+        import json as _json
+
+        _citation_seed = {
+            "f6b8fa8a-775c-4ee3-babd-1723dc03ba86": [
+                {
+                    "n": 1,
+                    "url": "https://grokipedia.com/page/Abri_de_la_Madeleine",
+                    "title": "Abri de la Madeleine - Grokipedia",
+                    "domain": "grokipedia.com",
+                },
+                {
+                    "n": 2,
+                    "url": "https://donsmaps.com/madeleine.html",
+                    "title": "La Madeleine - a rock shelter in the Dordogne",
+                    "domain": "donsmaps.com",
+                },
+                {
+                    "n": 3,
+                    "url": "https://www.artslookup.com/prehistoric/la-madeleine.html",
+                    "title": "La Madeleine: Magdalenian culture Type-Site",
+                    "domain": "artslookup.com",
+                },
+            ],
+            "23cb48d4-7ca0-4105-a97e-f60f67537bc9": [
+                {
+                    "n": 1,
+                    "url": "http://hillforts.arch.ox.ac.uk/records/EN3579.html",
+                    "title": "Atlas of Hillforts: Abbotsbury Castle",
+                    "domain": "hillforts.arch.ox.ac.uk",
+                },
+                {
+                    "n": 2,
+                    "url": "https://www.megalithic.co.uk/article.php?sid=4654",
+                    "title": "Abbotsbury Castle Hillfort - The Megalithic Portal",
+                    "domain": "megalithic.co.uk",
+                },
+                {
+                    "n": 3,
+                    "url": "https://www.digitaldigging.net/abbotsbury-castle-hillfort-dorset/",
+                    "title": "Abbotsbury Castle Hillfort, Dorset - Digital Digging",
+                    "domain": "digitaldigging.net",
+                },
+            ],
+            "d7b8c0a6-0e25-4c12-b63e-1e7abd9af00f": [
+                {
+                    "n": 1,
+                    "url": "https://www.environment.nsw.gov.au/topics/heritage/search-heritage-databases/aboriginal-heritage-information-management-system",
+                    "title": "Aboriginal Heritage Information Management System - NSW Environment",
+                    "domain": "environment.nsw.gov.au",
+                },
+                {
+                    "n": 2,
+                    "url": "https://www.aboriginalheritage.org/sites/identification/",
+                    "title": "Identifying Aboriginal Sites - Aboriginal Heritage Office",
+                    "domain": "aboriginalheritage.org",
+                },
+                {
+                    "n": 3,
+                    "url": "https://intarch.ac.uk/journal/issue52/8/index.html",
+                    "title": "Traces in a Lost Landscape - Dyarubbin/Nepean River",
+                    "domain": "intarch.ac.uk",
+                },
+            ],
+            "6d3bc9c6-2672-49a9-9934-9f56e37c8fde": [
+                {
+                    "n": 1,
+                    "url": "https://www.heritagegateway.org.uk/Gateway/Results_Single.aspx?uid=237986&resourceID=19191",
+                    "title": "Heritage Gateway - Abingdon Causewayed Enclosure",
+                    "domain": "heritagegateway.org.uk",
+                },
+                {
+                    "n": 2,
+                    "url": "https://archaeologydataservice.ac.uk/library/browse/issue.xhtml?recordId=1075392",
+                    "title": "Settlement patterns in the Oxford region - CBA Research Report 44",
+                    "domain": "archaeologydataservice.ac.uk",
+                },
+                {
+                    "n": 3,
+                    "url": "https://aaahsmap.abingdon.gov.uk/thought-category-period/neolithic/",
+                    "title": "Neolithic - Abingdon Map",
+                    "domain": "aaahsmap.abingdon.gov.uk",
+                },
+            ],
+            "383a0107-b7f7-4431-a752-590f3c0a42b2": [
+                {
+                    "n": 1,
+                    "url": "https://rijksmonumenten.nl/monument/531042/archeologie/aartswoud/",
+                    "title": "Archeologie in Aartswoud - Rijksmonument 531042",
+                    "domain": "rijksmonumenten.nl",
+                },
+                {
+                    "n": 2,
+                    "url": "https://en.wikipedia.org/wiki/Aartswoud",
+                    "title": "Aartswoud - Wikipedia",
+                    "domain": "en.wikipedia.org",
+                },
+            ],
+            "74fe5dc2-1e2c-4dd6-b4ed-3cb376c9cd50": [
+                {
+                    "n": 1,
+                    "url": "https://www.roman-britain.co.uk/places/aballava/",
+                    "title": "Hadrian's Wall Fort - Burgh-by-Sands (Aballava) - Roman Britain",
+                    "domain": "roman-britain.co.uk",
+                },
+                {
+                    "n": 2,
+                    "url": "https://www.cumbriacountyhistory.org.uk/first-recorded-african-community-britain-background-burgh-sands",
+                    "title": "The first recorded African community in Britain - Cumbria County History Trust",
+                    "domain": "cumbriacountyhistory.org.uk",
+                },
+            ],
+            "6cf72484-5b8f-44b0-acfe-fd70ebfa5f26": [
+                {
+                    "n": 1,
+                    "url": "https://heritagemalta.mt/explore/abbatija-tad-dejr/",
+                    "title": "Abbatija tad-Dejr Catacombs - Heritage Malta",
+                    "domain": "heritagemalta.mt",
+                },
+                {
+                    "n": 2,
+                    "url": "https://www.maltatina.com/abbatija-tad-dejr-rabat/",
+                    "title": "Abbatija tad-Dejr, Rabat - Maltatina",
+                    "domain": "maltatina.com",
+                },
+                {
+                    "n": 3,
+                    "url": "https://aroundus.com/p/8569297-abbatija-tad-dejr",
+                    "title": "Abbatija Tad-Dejr - AroundUs",
+                    "domain": "aroundus.com",
+                },
+            ],
+            "8a091738-3689-48f4-8e8b-565a3197c5d5": [
+                {
+                    "n": 1,
+                    "url": "https://www.andalucia.com/province/almeria/adra/history",
+                    "title": "History | Adra | Andalucia.com",
+                    "domain": "andalucia.com",
+                },
+                {
+                    "n": 2,
+                    "url": "https://liveinalmeria.com/en/adra-village/",
+                    "title": "Adra Village - Live in Almeria",
+                    "domain": "liveinalmeria.com",
+                },
+                {
+                    "n": 3,
+                    "url": "https://www.adra.es/en/web/guest/w/conocenos",
+                    "title": "Conocenos - Adra Official Site",
+                    "domain": "adra.es",
+                },
+            ],
+            "2753c6bb-1b90-4d49-8e59-b037bf1df930": [
+                {
+                    "n": 1,
+                    "url": "https://www.citedrive.com/en/discovery/geoarchaeological-and-microstratigraphic-view-of-a-neanderthal-settlement-at-rambla-de-ah%C3%ADllas-in-iberian-range-abrigo-de-la-quebrada-chelva-valenc/",
+                    "title": "Geoarchaeological view of Abrigo de la Quebrada",
+                    "domain": "citedrive.com",
+                },
+                {
+                    "n": 2,
+                    "url": "https://www.academia.edu/14960032/",
+                    "title": "Neanderthal use of plants at Abrigo de la Quebrada",
+                    "domain": "academia.edu",
+                },
+                {
+                    "n": 3,
+                    "url": "https://www.academia.edu/14960032/",
+                    "title": "Neanderthal use of plants at Abrigo de la Quebrada",
+                    "domain": "academia.edu",
+                },
+                {
+                    "n": 4,
+                    "url": "https://journals.ed.ac.uk/lithicstudies/article/view/783",
+                    "title": "Middle Palaeolithic flint procurement in Central Mediterranean Iberia",
+                    "domain": "journals.ed.ac.uk",
+                },
+            ],
+            "09289d39-3f1e-4bac-b14b-931cb421d40d": [
+                {
+                    "n": 1,
+                    "url": "http://www.perseus.tufts.edu/hopper/text?doc=Perseus:text:1999.04.0006:entry%3Dabodiacum",
+                    "title": "The Princeton Encyclopedia of Classical Sites: Abodiacum",
+                    "domain": "perseus.tufts.edu",
+                },
+                {
+                    "n": 2,
+                    "url": "https://klavierzimmer.wordpress.com/2016/05/28/in-via-abodiacum/",
+                    "title": "In via: Abodiacum - The Practice Room",
+                    "domain": "klavierzimmer.wordpress.com",
+                },
+                {
+                    "n": 3,
+                    "url": "https://museen-in-bayern.de/en/museums/museum-details/museum-abodiacum",
+                    "title": "Museum Abodiacum - Museen in Bayern",
+                    "domain": "museen-in-bayern.de",
+                },
+            ],
+        }
+        _cite_sql = _text("""
+            UPDATE unified_sites
+            SET raw_data = jsonb_set(
+                COALESCE(raw_data, cast('{}' as jsonb)),
+                '{description_citations}',
+                cast(:dc as jsonb)
+            )
+            WHERE id = :id
+              AND NOT (COALESCE(raw_data, cast('{}' as jsonb)) ? 'description_citations')
+        """)
+        for _sid, _dc in _citation_seed.items():
+            with engine.begin() as conn:
+                conn.execute(_text("SET statement_timeout = '120s'"))
+                conn.execute(_cite_sql, {"id": _sid, "dc": _json.dumps(_dc)})
         for _sql in _api_migrations:
             with engine.begin() as conn:
                 conn.execute(_text("SET statement_timeout = '120s'"))
