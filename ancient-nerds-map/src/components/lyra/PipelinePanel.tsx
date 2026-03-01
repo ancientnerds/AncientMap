@@ -193,8 +193,6 @@ export default function PipelinePanel({ trace, isLive, onClose }: PipelinePanelP
 
   return (
     <div className="lp-panel">
-      {/* #5: CRT scanline overlay */}
-      <div className="lp-scanlines" />
 
       <div className="lp-header">
         <div className="lp-header-left">

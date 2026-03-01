@@ -15728,6 +15728,330 @@ body.news-feed-open .empire-borders-window {
   .lyra-chat-modal--with-pipeline { width: calc(100vw - 16px); }
 }
 
+/* =========================================================================
+   LYRA CRT TERMINAL OVERRIDES
+   Re-skins the entire Lyra chat with a CRT/matrix terminal aesthetic.
+   ========================================================================= */
+
+/* CRT scanline overlay across entire modal */
+.lyra-crt-scanlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 2px,
+    rgba(0, 0, 0, 0.06) 2px,
+    rgba(0, 0, 0, 0.06) 4px
+  );
+  border-radius: 12px;
+}
+
+/* Modal container */
+.lyra-chat-modal {
+  background: #0a0e14;
+  border-color: #1a2a1a;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+}
+
+/* Header */
+.lyra-chat-header {
+  background: rgba(0, 15, 5, 0.6);
+  border-bottom-color: #1a2a1a;
+}
+.lyra-chat-header-name {
+  color: #00cc66;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+}
+.lyra-chat-header-status {
+  color: #3a6a3a;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+.lyra-chat-avatar {
+  border-color: #1a3a1a;
+}
+.lyra-credits-badge {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  color: #00cc66;
+  background: rgba(0, 204, 102, 0.06);
+  border-color: #1a3a1a;
+  border-radius: 2px;
+}
+.lyra-chat-close-btn {
+  color: #3a6a3a;
+}
+.lyra-chat-close-btn:hover {
+  color: #00cc66;
+  background: rgba(0, 204, 102, 0.08);
+}
+
+/* Icon buttons in header */
+.lyra-chat-icon-btn {
+  color: #3a6a3a;
+}
+.lyra-chat-icon-btn:hover {
+  color: #00cc66;
+  background: rgba(0, 204, 102, 0.08);
+}
+.lyra-chat-icon-btn.active {
+  color: #00cc66;
+  background: rgba(0, 204, 102, 0.12);
+}
+
+/* Messages area */
+.lyra-chat-messages {
+  scrollbar-color: #1a2a1a transparent;
+}
+.lyra-chat-messages::-webkit-scrollbar-thumb { background: #1a2a1a; }
+
+/* Assistant messages */
+.lyra-chat-msg-assistant .lyra-chat-msg-text {
+  background: rgba(0, 20, 10, 0.5);
+  border-color: #1a2a1a;
+  color: #b0d0b0;
+  border-radius: 4px;
+  border-top-left-radius: 0;
+  text-shadow: 0 0 2px rgba(74, 138, 74, 0.2);
+}
+
+/* User messages — terminal prompt style */
+.lyra-chat-msg-user .lyra-chat-msg-text {
+  background: rgba(0, 204, 102, 0.06);
+  border-color: #1a3a1a;
+  color: #00cc66;
+  border-radius: 4px;
+  border-top-right-radius: 0;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* Thinking bubble */
+.lyra-chat-thinking-bubble {
+  background: rgba(0, 20, 10, 0.4);
+  border-color: #1a2a1a;
+  border-left-color: #2a5a2a;
+  border-radius: 4px;
+  border-top-left-radius: 0;
+  color: #3a6a3a;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+.lyra-chat-thinking-bubble::before {
+  background: linear-gradient(90deg, transparent, rgba(0, 204, 102, 0.03), transparent);
+}
+
+/* Typing dots — green */
+.lyra-chat-typing-dots {
+  background: rgba(0, 20, 10, 0.5);
+  border-color: #1a2a1a;
+  border-radius: 4px;
+  border-top-left-radius: 0;
+}
+.lyra-chat-typing-dots span {
+  background: #00cc66;
+}
+
+/* Streaming cursor — green instead of red */
+.lyra-chat-msg-text.streaming > :last-child::after,
+.lyra-chat-msg-text.streaming > ul:last-child > li:last-child::after,
+.lyra-chat-msg-text.streaming > ol:last-child > li:last-child::after,
+.lyra-chat-msg-text.streaming > table:last-child tr:last-child td:last-child::after {
+  background: #00cc66;
+  box-shadow: 0 0 6px #00cc66, 0 0 12px rgba(0, 204, 102, 0.2), -4px 0 8px rgba(0, 204, 102, 0.15);
+}
+
+/* Input area */
+.lyra-chat-input-area {
+  border-top-color: #1a2a1a;
+  background: rgba(0, 10, 5, 0.5);
+}
+.lyra-chat-input {
+  background: rgba(0, 15, 8, 0.6);
+  border-color: #1a2a1a;
+  color: #00cc66;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  border-radius: 4px;
+  caret-color: #00cc66;
+}
+.lyra-chat-input:focus {
+  border-color: #2a5a2a;
+}
+.lyra-chat-input::placeholder {
+  color: #2a4a2a;
+}
+
+/* Send button — green terminal style */
+.lyra-chat-send-btn {
+  background: #1a3a1a;
+  border: 1px solid #2a5a2a;
+  color: #00cc66;
+  border-radius: 4px;
+}
+.lyra-chat-send-btn:hover:not(:disabled) {
+  background: #2a5a2a;
+}
+
+/* Stop button */
+.lyra-chat-stop-btn {
+  color: #ff4444;
+  background: rgba(255, 68, 68, 0.08);
+  border-color: rgba(255, 68, 68, 0.2);
+  border-radius: 2px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* Attach button */
+.lyra-chat-attach-btn { color: #3a6a3a; }
+.lyra-chat-attach-btn:hover:not(:disabled) { color: #00cc66; background: rgba(0, 204, 102, 0.08); }
+
+/* Site buttons in messages */
+.lyra-chat-site-btn {
+  color: #00c8c8;
+  background: rgba(0, 200, 200, 0.06);
+  border-color: #1a3a3a;
+  border-radius: 2px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+.lyra-chat-site-btn:hover {
+  background: rgba(0, 200, 200, 0.12);
+  border-color: #2a5a5a;
+}
+
+/* Error bar */
+.lyra-chat-error {
+  background: rgba(255, 68, 68, 0.05);
+  border-top-color: #3a1a1a;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+.lyra-chat-error button {
+  border-color: #3a1a1a;
+  color: #ff6b6b;
+}
+
+/* Welcome screen */
+.lyra-chat-welcome-text {
+  color: #3a6a3a;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+.lyra-chat-example-btn {
+  background: rgba(0, 20, 10, 0.5);
+  border-color: #1a2a1a;
+  color: #4a8a4a;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+.lyra-chat-example-btn:hover:not(:disabled) {
+  background: rgba(0, 204, 102, 0.06);
+  border-color: #2a5a2a;
+  color: #00cc66;
+}
+
+/* Copy button */
+.lyra-chat-copy-btn {
+  color: #3a6a3a;
+  background: rgba(0, 15, 8, 0.8);
+  border-color: #1a2a1a;
+}
+.lyra-chat-copy-btn:hover {
+  color: #00cc66;
+  border-color: #2a5a2a;
+}
+
+/* Markdown inside messages — tables, code, links */
+.lyra-chat-msg-text a { color: #00c8c8; }
+.lyra-chat-msg-text a:hover { color: #4ae0e0; }
+.lyra-chat-msg-text code {
+  background: rgba(0, 30, 15, 0.6);
+  border-color: #1a2a1a;
+  color: #00cc66;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+.lyra-chat-msg-text pre {
+  background: rgba(0, 15, 8, 0.6);
+  border-color: #1a2a1a;
+}
+.lyra-chat-msg-text table {
+  border-color: #1a2a1a;
+}
+.lyra-chat-msg-text th {
+  background: rgba(0, 20, 10, 0.5);
+  border-color: #1a2a1a;
+  color: #00cc66;
+}
+.lyra-chat-msg-text td {
+  border-color: #1a2a1a;
+}
+.lyra-chat-msg-text blockquote {
+  border-left-color: #2a5a2a;
+  color: #3a6a3a;
+}
+.lyra-chat-msg-text hr {
+  border-color: #1a2a1a;
+}
+.lyra-chat-msg-text h1,
+.lyra-chat-msg-text h2,
+.lyra-chat-msg-text h3,
+.lyra-chat-msg-text h4 {
+  color: #00cc66;
+}
+.lyra-chat-msg-text strong {
+  color: #6ab06a;
+}
+
+/* Search panel */
+.lyra-chat-search-panel {
+  background: rgba(10, 14, 20, 0.95);
+  border-left-color: #1a2a1a;
+}
+
+/* History panel */
+.lyra-chat-history-panel {
+  background: rgba(10, 14, 20, 0.97);
+  border-right-color: #1a2a1a;
+}
+
+/* Image previews */
+.lyra-chat-msg-image,
+.lyra-chat-image-preview-item img {
+  border-color: #1a2a1a;
+  border-radius: 4px;
+}
+
+/* Auth gate */
+.lyra-auth-gate-name {
+  color: #00cc66;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+.lyra-auth-gate-subtitle {
+  color: #3a6a3a;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* Token/credit badges in messages */
+.lyra-token-badge {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  color: #3a6a3a;
+}
+
+/* Discovery bar */
+.lyra-discovery-bar {
+  background: rgba(0, 204, 102, 0.04);
+  border-color: #1a3a1a;
+  color: #4a8a4a;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+.lyra-discovery-count {
+  color: #00cc66;
+}
+
+/* Remove old scanline from pipeline panel (now on modal) */
+.lp-scanlines { display: none; }
+
+/* Pipeline panel inherits CRT from modal — remove its own text-shadow to avoid doubling */
+.lp-panel { background: transparent; border-left-color: #1a2a1a; }
+
 @media (prefers-reduced-motion: reduce) {
   .lyra-chat-msg,
   .lyra-chat-typing-dots span,
