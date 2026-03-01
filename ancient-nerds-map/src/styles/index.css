@@ -17129,11 +17129,11 @@ body.news-feed-open .empire-borders-window {
   100% { opacity: 1; filter: brightness(1) hue-rotate(0deg); }
 }
 
-/* Hero actions — green instead of white */
-.hero-action-btn { color: rgba(74, 138, 74, 0.75); }
+/* Hero actions — white/grey with drop shadow, green on hover */
+.hero-action-btn { color: rgba(255, 255, 255, 0.8); filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.8)); }
 .hero-action-btn:hover { color: #00cc66; }
 .hero-like-btn.active { color: #ff4444; }
-.hero-like-count { color: #4a8a4a; }
+.hero-like-count { color: rgba(255, 255, 255, 0.9); }
 .hero-bookmark-btn.active { color: #00cc66; }
 .hero-share-btn.active { color: #00cc66; }
 
@@ -17142,19 +17142,12 @@ body.news-feed-open .empire-borders-window {
 .hero-ask-lyra:hover img { border-color: rgba(0, 204, 102, 0.7); }
 .hero-ask-lyra-label { color: rgba(0, 204, 102, 0.85); }
 
-/* Title — terminal green, keep Orbitron */
+/* Title — keep white for readability */
 .popup-title-overlay {
-  color: #00cc66;
-  text-shadow:
-    0 0 8px rgba(0, 204, 102, 0.3),
-    -1px -1px 0 rgba(0, 0, 0, 0.8),
-    1px -1px 0 rgba(0, 0, 0, 0.8),
-    -1px 1px 0 rgba(0, 0, 0, 0.8),
-    1px 1px 0 rgba(0, 0, 0, 0.8);
+  color: #ffffff;
 }
 .site-popup .popup-title {
-  color: #00cc66;
-  text-shadow: 0 0 6px rgba(0, 204, 102, 0.2);
+  color: #ffffff;
 }
 .title-action-btn { color: #3a6a3a; }
 .title-action-btn:hover { color: #00cc66; }
