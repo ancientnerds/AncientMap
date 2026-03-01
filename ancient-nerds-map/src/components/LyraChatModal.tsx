@@ -302,7 +302,7 @@ function TypewriterMessage({
     }
   }, [isStreaming, content.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const isTyping = isStreaming || revealedLen < content.length
+  const isTyping = isStreaming
   const partialContent = isTyping ? content.substring(0, revealedLen) : content
   // Q2: Only run enrichment (flags, coords, videos) after streaming completes — avoids ~500 redundant regex passes
   const displayedContent = useMemo(() => {
