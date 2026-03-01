@@ -15486,6 +15486,7 @@ body.news-feed-open .empire-borders-window {
 
 /* ── Pipeline Panel — Terminal aesthetic ── */
 .lp-panel {
+  position: relative;
   flex: 0 0 280px;
   max-width: 280px;
   min-width: 240px;
@@ -15497,6 +15498,22 @@ body.news-feed-open .empire-borders-window {
   flex-direction: column;
   overflow: hidden;
 }
+
+/* CRT scanline overlay */
+.lp-scanlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 2px,
+    rgba(0, 0, 0, 0.08) 2px,
+    rgba(0, 0, 0, 0.08) 4px
+  );
+}
+
 
 .lp-header {
   display: flex;
@@ -15545,6 +15562,7 @@ body.news-feed-open .empire-borders-window {
   line-height: 1.7;
   scrollbar-width: thin;
   scrollbar-color: #1a2a1a transparent;
+  text-shadow: 0 0 2px rgba(74, 138, 74, 0.3);
 }
 
 .lp-footer {
@@ -15611,6 +15629,12 @@ body.news-feed-open .empire-borders-window {
   padding-left: 4px;
   margin-top: 6px;
   margin-bottom: 2px;
+}
+.lp-backend-idle { color: #1a3a3a; }
+.lp-idle-count {
+  text-transform: none;
+  color: #2a2a2a;
+  letter-spacing: normal;
 }
 
 /* Pipeline button in header */
