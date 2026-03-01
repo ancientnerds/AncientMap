@@ -1,7 +1,7 @@
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ===================================================================
    Shared PageHeader + AiNoticeBanner + PageStatsBar
    Single source of truth for all page headers (news, radar, articles, db, lyra chat)
-   ═══════════════════════════════════════════════════════════════════════════ */
+   =================================================================== */
 
 .page-header {
   display: flex;
@@ -68,7 +68,7 @@
   margin-right: 4px;
 }
 
-/* ── LIVE indicator wrapper — pushed to the far right ── */
+/* -- LIVE indicator wrapper -- pushed to the far right -- */
 .page-header-live-wrap {
   margin-left: auto;
   flex-shrink: 0;
@@ -88,8 +88,8 @@
 .page-header-bubble {
   font-size: 11px;
   color: var(--text-secondary);
-  background: var(--accent-glow-08);
-  border: 1px solid var(--accent-glow-20);
+  background: var(--accent-glow-12);
+  border: 1px solid var(--accent-glow-30);
   border-radius: 8px;
   padding: 4px 10px;
   line-height: 1.4;
@@ -139,7 +139,7 @@
   50% { opacity: 0.3; }
 }
 
-/* ── AI notice banner ── */
+/* -- AI notice banner -- */
 .ai-notice-banner {
   text-align: center;
   padding: 5px 20px;
@@ -149,7 +149,7 @@
   border-bottom: 1px solid var(--accent-glow-06);
 }
 
-/* ── Stats bar below header ── */
+/* -- Stats bar below header -- */
 .page-stats-bar {
   display: flex;
   align-items: center;
@@ -164,7 +164,7 @@
 }
 
 .page-stats-bar strong {
-  color: var(--brand-primary);
+  color: var(--accent-primary);
   font-weight: 700;
 }
 
@@ -173,7 +173,7 @@
   flex-shrink: 0;
 }
 
-/* ── Responsive (≤640px) ── */
+/* -- Responsive (<=640px) -- */
 @media (max-width: 640px) {
   .page-header {
     padding: 6px 10px;
@@ -217,7 +217,7 @@
   }
 }
 
-/* ── Hamburger navigation ── */
+/* -- Hamburger navigation -- */
 .hamburger-nav {
   position: relative;
 }
@@ -256,7 +256,7 @@
   font-size: 13px;
 }
 .hamburger-link:hover {
-  background: var(--accent-glow-05);
+  background: var(--accent-glow-10);
   color: var(--text-primary);
 }
 .hamburger-link.active {
@@ -285,9 +285,9 @@
   margin: 4px 0;
 }
 
-/* Brand text is always visible — bubble shrinks instead */
+/* Brand text is always visible -- bubble shrinks instead */
 
-/* ── Page header speech bubble (lyra chat, no pointer, inline) ── */
+/* -- Page header speech bubble (lyra chat, no pointer, inline) -- */
 .page-header .lyra-chat-speech-bubble {
   margin-left: 4px;
 }

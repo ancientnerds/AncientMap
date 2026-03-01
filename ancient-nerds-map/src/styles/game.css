@@ -113,7 +113,8 @@
 .game-toc-link.active {
   color: #fff;
   border-left-color: var(--accent-primary);
-  background: var(--accent-glow-08);
+  background: var(--accent-glow-15);
+  box-shadow: 0 0 8px var(--accent-glow-15);
 }
 
 /* Main content area */
@@ -137,6 +138,7 @@
   padding-bottom: 0.5rem;
   border-bottom: 1px solid var(--border-accent);
   text-shadow: 0 0 20px var(--text-heading-glow);
+  color: var(--accent-primary);
 }
 
 .game-section h3 {
@@ -246,12 +248,12 @@
 
 .game-section tbody td {
   padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid var(--accent-glow-04);
+  border-bottom: 1px solid var(--accent-glow-06);
   vertical-align: top;
 }
 
 .game-section tbody tr:hover {
-  background: var(--accent-glow-03);
+  background: var(--accent-glow-05);
 }
 
 .game-stat-name {
@@ -322,8 +324,8 @@
 .game-advantage-note {
   margin-top: 1rem;
   padding: 0.75rem 1rem;
-  background: var(--accent-glow-04);
-  border: 1px solid var(--border-accent);
+  background: var(--accent-glow-08);
+  border: 1px solid var(--accent-glow-15);
   border-radius: 6px;
   font-size: 0.85rem;
   line-height: 1.55;
@@ -541,8 +543,8 @@
 
 .game-expedition-tag {
   padding: 0.35rem 0.75rem;
-  background: var(--accent-glow-06);
-  border: 1px solid var(--border-accent);
+  background: var(--accent-glow-12);
+  border: 1px solid var(--accent-glow-20);
   border-radius: 20px;
   font-size: 0.82rem;
 }
@@ -622,8 +624,8 @@
 
 /* Discord commands */
 .game-cmd code {
-  background: var(--accent-glow-08);
-  border: 1px solid var(--accent-glow-12);
+  background: var(--accent-glow-12);
+  border: 1px solid var(--accent-glow-20);
   padding: 0.15rem 0.4rem;
   border-radius: 3px;
   font-size: 0.82rem;

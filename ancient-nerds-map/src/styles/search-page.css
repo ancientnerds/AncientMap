@@ -82,8 +82,8 @@
   gap: 6px;
   padding: 6px 12px;
   margin-left: auto;
-  background: var(--accent-glow-06);
-  border: 1px solid var(--accent-glow-10);
+  background: var(--accent-glow-10);
+  border: 1px solid var(--accent-glow-20);
   border-radius: 6px;
   color: var(--text-secondary);
   font-size: 0.8rem;
@@ -93,13 +93,14 @@
 }
 
 .search-bar-filter-btn:hover {
-  background: var(--accent-glow-10);
+  background: var(--accent-glow-20);
 }
 
 .search-bar-filter-btn.active {
-  background: var(--accent-glow-15);
+  background: var(--accent-glow-25);
   border-color: var(--accent-primary);
   color: var(--accent-primary);
+  box-shadow: 0 0 8px var(--accent-glow-20);
 }
 
 .search-bar-filter-btn.has-filters::after {
@@ -150,7 +151,7 @@
   margin-bottom: 16px;
 }
 
-/* Random chip — glow on hover when already active (re-shuffle) */
+/* Random chip -- glow on hover when already active (re-shuffle) */
 .search-bar-inner .news-page-chip.active:hover {
   background: var(--accent-glow-25);
   border-color: var(--brand-primary-hover);
@@ -196,7 +197,7 @@
     font-size: 0.95rem;
   }
 
-  /* Action buttons — second row, pushed right */
+  /* Action buttons -- second row, pushed right */
   .search-bar-inner .search-bar-filter-btn {
     margin-left: auto;
   }

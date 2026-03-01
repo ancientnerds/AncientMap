@@ -15,7 +15,7 @@
 }
 
 .news-feed-item:hover {
-  background: var(--accent-glow-04);
+  background: var(--accent-glow-10);
 }
 
 .news-feed-item.expanded {
@@ -184,7 +184,7 @@
   line-height: 1.5;
   color: rgba(255, 255, 255, 0.7);
   padding-left: 10px;
-  border-left: 2px solid var(--accent-glow-40);
+  border-left: 2px solid var(--accent-glow-60);
 }
 
 .news-card-watch {
@@ -195,10 +195,11 @@
   color: var(--accent-primary);
   text-decoration: none;
   padding: 6px 12px;
-  border: 1px solid var(--accent-glow-30);
+  border: 1px solid var(--accent-glow-40);
   border-radius: 4px;
   transition: all 0.2s;
   width: fit-content;
+  box-shadow: 0 0 6px var(--accent-glow-10);
 }
 
 .news-card-watch:hover {
@@ -235,7 +236,7 @@
   font-size: 11px;
   color: var(--accent-primary);
   background: none;
-  border: 1px solid var(--accent-glow-30);
+  border: 1px solid var(--accent-glow-40);
   border-radius: 4px;
   padding: 3px 8px;
   cursor: pointer;
@@ -320,7 +321,7 @@
 .news-page-card:hover {
   border-color: var(--accent-glow-30);
   transform: translateY(-3px) scale(1.01);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--accent-glow-10);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--accent-glow-25);
 }
 
 .news-page-card.expanded {
@@ -421,9 +422,9 @@
   letter-spacing: 0.4px;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.55);
-  background: var(--accent-glow-06);
-  border-left: 1px solid var(--accent-glow-10);
-  border-bottom: 1px solid var(--accent-glow-10);
+  background: var(--accent-glow-12);
+  border-left: 1px solid var(--accent-glow-20);
+  border-bottom: 1px solid var(--accent-glow-20);
   padding: 3px 8px;
   border-radius: 0 0 0 4px;
   line-height: 1;
@@ -509,7 +510,7 @@
   cursor: pointer;
 }
 
-/* Pinned citation popover — click-to-pin mode */
+/* Pinned citation popover -- click-to-pin mode */
 .citation-popover--pinned {
   border-color: var(--accent-glow-30);
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--accent-glow-15);
