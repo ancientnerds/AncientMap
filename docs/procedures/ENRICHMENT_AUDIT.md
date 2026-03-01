@@ -147,6 +147,7 @@ python scripts/audit_enrich.py --api-url https://ancientnerds.com
 python scripts/audit_enrich.py --phase sync           # Fetch production → local DB
 python scripts/audit_enrich.py --phase mechanical      # Wave 0 only
 python scripts/audit_enrich.py --phase enrich          # Wave 1 only
+python scripts/audit_enrich.py --phase apply           # Apply enrichment → unified_sites
 python scripts/audit_enrich.py --phase verify          # Wave 2 prep (create batch files)
 python scripts/audit_enrich.py --phase agents          # Wave 2 batch status + handoff instructions
 python scripts/audit_enrich.py --phase merge --dry-run # Preview agent results merge
@@ -220,6 +221,7 @@ python scripts/export_card_sites.py      # Export sites
 python scripts/enrich_reconcile.py       # Match sites → Wikidata QIDs
 python scripts/enrich_fetch_claims.py    # Fetch structured claims
 python scripts/enrich_wiki_select.py     # Select best Wikipedia articles
+python scripts/enrich_import.py          # Import enrichment data → card_stats
 ```
 
 **Outputs:**
@@ -631,7 +633,7 @@ The audit targets **100% coverage** for all fields. The audit passes when all co
   ```bash
   cat fixes.sql | docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map
   ```
-- **`edited_by = 'audit'`:** Every audit UPDATE must include this to mark rows as audit-touched.
+- **`edited_by`:** Every audit UPDATE must set this to identify the source: `'audit_enrich'` (Waves 0-1), `'deep_research'` (deep-research merge), `'cited_enrichment'` (citation pipeline Phase 3).
 
 **Windows notes:**
 - `docker cp` + `psql -f` can fail silently. Prefer piping: `cat file.sql | docker exec -i ...`
@@ -691,7 +693,7 @@ For each site, selects the best Wikipedia article:
 | Wikipedia article quality | 0.1 | Article byte size > 5000 |
 | Date precision | 0.15 | Has inception and/or end dates |
 
-Flag low-confidence (<0.5) items for human review.
+Flag low-confidence (< 0.8) items for human review. Only sites with confidence >= 0.8 are auto-applied by `apply_enrichment()`.
 
 ---
 
@@ -719,6 +721,257 @@ For each site, produce a result entry with:
 
 Read your batch from: output/audit_batches/batch_NNN_input.json
 Write results to: output/audit_batches/batch_NNN_results.json
+```
+
+---
+
+## Wave 4: Verified Cited Enrichment Pipeline
+
+A three-phase pipeline that transforms single-source Wikipedia descriptions into cited, independently verified descriptions for all 5,005 `ancient_nerds` sites. Every factual claim has a `[N]` superscript citation linking to its source. An independent verification agent removes unverifiable claims.
+
+| Phase | What it does | Input | Output |
+|-------|-------------|-------|--------|
+| **1: Source Discovery** | Discovers 1-5 authoritative reference links per site | WebSearch | `site_content_links` table |
+| **2: Cited Description** | Writes descriptions with `[N]` citation markers | WebFetch + all enrichment data | `cited_description_batches/` results (validated, not in DB yet) |
+| **3: Verification** | Independent fact-check of each citation | Text analysis (no WebFetch) | `unified_sites.description` + `raw_data->description_citations` |
+
+### Storage Format
+
+- **Description text**: `unified_sites.description` — contains `[1][2][3]` markers inline
+- **Citations array**: `raw_data->description_citations` — JSON array mapping each `[N]` to URL, title, domain, claim
+- **Original backup**: `raw_data->description_pre_enrichment` — original description before enrichment
+
+### Resume Protocol
+
+**At the START of every Claude Code session**, run these checks and report progress:
+
+```bash
+# Check Phase 1 progress (web links)
+python -c "
+import json; m = json.load(open('output/weblink_batches/manifest.json', encoding='utf-8'))
+total = m['batch_count']; done = sum(1 for b in m['batches'].values() if b['status'] == 'merged')
+pending = sum(1 for b in m['batches'].values() if b['status'] == 'pending')
+print(f'Phase 1: {done}/{total} batches merged, {pending} pending')
+"
+
+# Check Phase 2 progress (cited descriptions)
+python -c "
+import json, pathlib
+m = json.load(open('output/cited_description_batches/manifest.json', encoding='utf-8'))
+total = m['batch_count']; done = sum(1 for b in m['batches'].values() if b['status'] in ('completed','merged'))
+pending = sum(1 for b in m['batches'].values() if b['status'] == 'pending')
+has_results = sum(1 for bid in m['batches'] if pathlib.Path(f'output/cited_description_batches/batch_{bid}_results.json').exists() and m['batches'][bid]['status'] == 'pending')
+print(f'Phase 2: {done}/{total} validated, {has_results} with results ready, {pending} pending')
+"
+
+# Check Phase 3 progress (verification)
+python -c "
+import json, pathlib
+m = json.load(open('output/verification_batches/manifest.json', encoding='utf-8'))
+total = m['batch_count']; done = sum(1 for b in m['batches'].values() if b['status'] == 'merged')
+pending = sum(1 for b in m['batches'].values() if b['status'] == 'pending')
+has_results = sum(1 for bid in m['batches'] if pathlib.Path(f'output/verification_batches/batch_{bid}_results.json').exists() and m['batches'][bid]['status'] != 'merged')
+print(f'Phase 3: {done}/{total} merged to DB, {has_results} with results ready, {pending} pending')
+"
+```
+
+Report format: "Phase 1: X/Y merged. Phase 2: X/Y validated. Phase 3: X/Y merged to DB."
+
+### Phase 1 Execution: Source Discovery
+
+Reuses existing `--phase web-links` infrastructure with enhanced disambiguation in the agent prompt.
+
+```bash
+# 1. Reset manifest (all batches back to pending for full re-run)
+python -c "
+import json
+m = json.load(open('output/weblink_batches/manifest.json', encoding='utf-8'))
+for b in m['batches'].values(): b['status'] = 'pending'
+json.dump(m, open('output/weblink_batches/manifest.json', 'w'), indent=2)
+print(f'Reset {len(m[\"batches\"])} batches to pending')
+"
+
+# 2. Launch 10 agents per wave (Claude Code does this)
+#    Each agent reads batch_NNN_input.json, does WebSearch, writes batch_NNN_results.json
+
+# 3. After each wave of agents completes:
+python scripts/audit_enrich.py --phase web-links-merge
+```
+
+#### Agent Launch Procedure (Phase 1)
+
+For each wave of up to 10 pending batches, launch Task agents with `subagent_type: "general-purpose"`. Each agent receives this prompt (replace `NNN` with batch number):
+
+```
+You are discovering authoritative reference links for ancient/archaeological sites.
+
+Read the batch input file: output/weblink_batches/batch_NNN_input.json
+
+For each site, use WebSearch to find 1-5 high-quality reference links.
+
+SEARCH QUERY CONSTRUCTION:
+- Always search: "{site_name} {country} archaeological site"
+- For ambiguous names, add: site_type, period, or region
+- Example: "Sun Temple Konark India ancient temple" not just "Sun Temple"
+
+RELEVANCE VERIFICATION:
+- Before including a link, verify the page is about THIS archaeological site
+- Check: does the page mention the correct country/region?
+- Check: is the content about archaeology/history, not a video game/restaurant/modern building?
+- If unsure, EXCLUDE the link
+
+Prioritize:
+1. Dedicated Wikipedia articles  2. Official excavation/project pages
+3. UNESCO entries  4. Museum collection pages  5. Quality articles  6. Academic papers
+
+EXCLUDE: travel booking sites, social media, AI content farms, paywalled content, Pinterest/Reddit/Quora, the site's existing source_url.
+
+Write results as JSON mapping site_id → array of {url, title, domain, link_type, quality, reason}
+to: output/weblink_batches/batch_NNN_results.json
+
+Max 5 links per site. Only high and medium quality. Empty array if nothing found.
+```
+
+Wait for all 10 agents to complete, then run `--phase web-links-merge`.
+
+### Phase 2 Execution: Cited Description Writing
+
+**Prerequisites:** Phase 1 must be fully complete. All sites need their reference links in the DB.
+
+```bash
+# 1. Prepare batches (all ancient_nerds sites)
+python scripts/audit_enrich.py --phase cited-description
+# Or test with a few:
+python scripts/audit_enrich.py --phase cited-description --limit 10
+
+# 2. Launch 10 agents per wave (Claude Code does this)
+#    Each agent reads batch_NNN_input.json, WebFetches reference URLs,
+#    writes cited descriptions with [N] markers to batch_NNN_results.json
+
+# 3. After each wave (format validation only, no DB writes):
+python scripts/audit_enrich.py --phase cited-description-merge
+# Or preview first:
+python scripts/audit_enrich.py --phase cited-description-merge --dry-run
+```
+
+#### Agent Launch Procedure (Phase 2)
+
+For each wave of up to 10 pending batches, launch Task agents with `subagent_type: "general-purpose"`. Each agent receives the prompt stored in `CITED_DESC_AGENT_PROMPT` in `scripts/audit_enrich.py` (replace `{BATCH_ID}` with the batch number).
+
+The agent:
+1. Reads the batch input file with all embedded context (description, reference links, enrichment, wiki extract)
+2. WebFetches the top 3 reference URLs per site (prefer quality: "high")
+3. Verifies each fetched page is about THIS specific site
+4. Writes a new description (500-1000 chars) with `[1][2][3]` citation markers
+5. Builds citations array mapping each `[N]` to URL, title, domain, and exact claim text
+6. Extracts relevant excerpts from each fetched page (max 500 chars each) for Phase 3
+7. Writes results to `batch_NNN_results.json`
+
+Wait for all 10 agents to complete, then run `--phase cited-description-merge` (validation only).
+
+### Phase 3 Execution: Independent Verification
+
+**Prerequisites:** Phase 2 batches must be validated (status: `completed`).
+
+```bash
+# 1. Prepare verification batches (reads Phase 2 completed results)
+python scripts/audit_enrich.py --phase verify-citations
+# Or test with a few:
+python scripts/audit_enrich.py --phase verify-citations --limit 10
+
+# 2. Launch 10 agents per wave (lighter agents — no WebFetch, text analysis only)
+#    Each agent reads batch_NNN_input.json, checks citations against excerpts,
+#    removes unverified claims, writes batch_NNN_results.json
+
+# 3. After each wave (writes verified descriptions to DB):
+python scripts/audit_enrich.py --phase verify-citations-merge
+# Or preview first:
+python scripts/audit_enrich.py --phase verify-citations-merge --dry-run
+```
+
+#### Agent Launch Procedure (Phase 3)
+
+For each wave of up to 10 pending batches, launch Task agents with `subagent_type: "general-purpose"`. Each agent receives the prompt stored in `VERIFICATION_AGENT_PROMPT` in `scripts/audit_enrich.py` (replace `{BATCH_ID}` with the batch number).
+
+The agent:
+1. Reads description with `[N]` markers, citations array, and source excerpts
+2. For each `[N]`, checks if the claim is supported by the source excerpt
+3. Removes entire sentences with unverifiable citations
+4. Renumbers remaining citations sequentially
+5. Computes `verification_score = verified_claims / total_claims`
+6. Sets `verdict: "pass"` if score >= 0.5, else `"fail"`
+7. Writes results to `batch_NNN_results.json`
+
+Wait for all 10 agents to complete, then run `--phase verify-citations-merge`.
+
+### Session Capacity
+
+- **Agents per wave:** 10 (Claude Code parallel limit)
+- **Sites per wave:** 100 (10 batches × 10 sites)
+- **Waves per session:** 3-5 (depends on context window)
+- **Total waves needed:** ~50 per phase (5,005 sites ÷ 100)
+- **Total sessions per phase:** ~10-17 (Phase 3 is lighter, ~5-10 sessions)
+
+### Quality Gates
+
+#### Phase 2: Format Validation (automatic in cited-description-merge)
+- Description length: 300-1100 chars (validation window; agent targets 500-1000)
+- Citations array: non-empty for improved descriptions
+- Each citation has: n, url, title, domain, claim
+- Fetched excerpts exist for cited non-Wikipedia URLs
+
+#### Phase 3: Verification Threshold (automatic in verify-citations-merge)
+- `verification_score >= 0.5` → description accepted, written to DB
+- `verification_score < 0.5` → description rejected, original kept
+- Removed claims logged in `output/manual_review_failed_verification.json`
+- Failed sites added to manual review list
+
+#### Spot Check (manual, every 5 waves)
+Pick 5 recently-verified sites and confirm:
+1. `[N]` markers in description map correctly to citations in `raw_data->description_citations`
+2. Each cited claim is actually present in the source
+3. No hallucinated facts survived verification
+4. Heritage designations included when available
+
+### Rollback
+
+Original descriptions are preserved before overwrite:
+
+```sql
+-- Check what was backed up
+SELECT name, raw_data->>'description_pre_enrichment' AS original
+FROM unified_sites
+WHERE raw_data->>'description_pre_enrichment' IS NOT NULL
+LIMIT 5;
+
+-- Check citations
+SELECT name, raw_data->'description_citations' AS citations
+FROM unified_sites
+WHERE raw_data->>'description_citations' IS NOT NULL
+LIMIT 5;
+
+-- Full rollback (all sites)
+UPDATE unified_sites
+SET description = raw_data->>'description_pre_enrichment'
+WHERE raw_data->>'description_pre_enrichment' IS NOT NULL;
+
+-- Remove citations data
+UPDATE unified_sites
+SET raw_data = raw_data - 'description_citations'
+WHERE raw_data->>'description_citations' IS NOT NULL;
+```
+
+### Full Phase Order (Updated)
+
+```
+sync → mechanical → enrich → apply → verify → agents → merge
+  → web-links → (agents) → web-links-merge
+  → cited-description → (agents) → cited-description-merge
+  → verify-citations → (agents) → verify-citations-merge
+  → package → export
+
+Legacy phases (superseded by cited-description pipeline, kept for backwards compatibility):
+  → deep-research → (agents) → deep-research-merge
 ```
 
 ---
