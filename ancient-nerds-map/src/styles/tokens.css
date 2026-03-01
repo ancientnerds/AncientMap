@@ -95,10 +95,10 @@
 
   /* — Text — */
   --text-primary:          var(--_palette-white);
-  --text-secondary:        var(--_palette-neutral-250);
-  --text-muted:            var(--_palette-neutral-300);
-  --text-dimmed:           var(--_palette-neutral-400);
-  --text-faint:            var(--_palette-neutral-200);
+  --text-secondary:        var(--crt-300);
+  --text-muted:            var(--crt-400);
+  --text-dimmed:           var(--crt-500);
+  --text-faint:            var(--crt-300);
   --text-heading:          var(--_palette-white);
   --text-link:             var(--_palette-cyan-500);
   --text-body:             var(--_palette-neutral-50);
@@ -134,16 +134,16 @@
   --brand-discord-hover:   #4752c4;
 
   /* — Borders — */
-  --border-default:        rgba(255, 255, 255, 0.1);
-  --border-subtle:         rgba(255, 255, 255, 0.06);
-  --border-hover:          rgba(255, 255, 255, 0.15);
+  --border-default:        var(--crt-800);
+  --border-subtle:         var(--crt-900);
+  --border-hover:          var(--crt-700);
   --border-accent:         rgba(0, 180, 180, 0.2);
   --border-accent-medium:  rgba(0, 180, 180, 0.25);
   --border-accent-strong:  rgba(0, 180, 180, 0.35);
   --border-accent-bright:  rgba(0, 180, 180, 0.4);
   --border-accent-subtle:  rgba(0, 180, 180, 0.08);
   --border-accent-vivid:   rgba(0, 180, 180, 0.8);
-  --border-crt:            var(--_palette-dark-700);
+  --border-crt:            var(--crt-800);
   --border-red:            #3a1a1a;
   --border-cyan:           #1a3a3a;
   --border-cyan-hover:     #2a5a5a;
@@ -152,8 +152,8 @@
   --btn-primary-bg:        var(--brand-primary);
   --btn-primary-bg-hover:  var(--brand-primary-hover);
   --btn-danger-text:       var(--status-error-soft);
-  --btn-secondary-bg:      rgba(255, 255, 255, 0.06);
-  --btn-secondary-bg-hover: rgba(255, 255, 255, 0.1);
+  --btn-secondary-bg:      var(--surface-crt-subtle);
+  --btn-secondary-bg-hover: var(--surface-crt);
 
   /* — Special — */
   --scrollbar-thumb:       rgba(192, 32, 35, 0.5);
@@ -165,7 +165,7 @@
   --focus-ring:            var(--accent-secondary);
   --blur-amount:           16px;
 
-  /* — Accent glow opacity ramp (themed per-page) — */
+  /* — Accent glow opacity ramp — */
   --accent-glow-03:        rgba(0, 204, 102, 0.03);
   --accent-glow-04:        rgba(0, 204, 102, 0.04);
   --accent-glow-05:        rgba(0, 204, 102, 0.05);
@@ -206,9 +206,9 @@
   /* — Typography — */
   --font-body:             'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
   --font-heading:          'Orbitron', 'JetBrains Mono', monospace;
-  --font-ui:               'Inter', system-ui, -apple-system, sans-serif;
+  --font-ui:               'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
 
-  /* — CRT palette shades (themed per-page) — */
+  /* — CRT palette shades (unified green phosphor) — */
   --crt-900:               var(--_palette-green-900);
   --crt-800:               var(--_palette-green-800);
   --crt-700:               var(--_palette-green-700);
@@ -216,13 +216,37 @@
   --crt-500:               var(--_palette-green-500);
   --crt-400:               var(--_palette-green-400);
   --crt-300:               var(--_palette-green-300);
-
+  /* — CRT surface tints (dark color-tinted backgrounds) — */
+  --surface-crt-subtle:  rgba(0, 20, 10, 0.3);
+  --surface-crt:         rgba(0, 20, 10, 0.5);
+  --surface-crt-strong:  rgba(0, 20, 10, 0.65);
+  --surface-crt-solid:   rgba(0, 15, 8, 0.85);
   /* — JSON Syntax Highlighting (api-docs) — */
   --syntax-key:            #5ccfe6;
   --syntax-string:         #bae67e;
   --syntax-number:         #d4bfff;
   --syntax-bool:           #ffa759;
 
+}
+
+/* ── Global CRT Scanlines ────────────────────────────────── */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 2px,
+    rgba(0, 0, 0, 0.04) 2px,
+    rgba(0, 0, 0, 0.04) 4px
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::after { display: none; }
 }
 
 /* ── Satellite Mode (higher opacity for bright imagery) ────── */
@@ -234,183 +258,3 @@ body.satellite-mode {
   --blur-amount:           20px;
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   Per-Page CRT Phosphor Color Themes
-   Each page gets a historically accurate phosphor color.
-   Body classes override accent-derived tokens only.
-   ═══════════════════════════════════════════════════════════════ */
-
-/* ── P3 Amber (Search, Card Game, Game) ────────────────────── */
-body.theme-amber {
-  --accent-primary:        #FF9500;
-  --glow-accent:           rgba(255, 149, 0, 0.6);
-  --accent-glow-03:        rgba(255, 149, 0, 0.03);
-  --accent-glow-04:        rgba(255, 149, 0, 0.04);
-  --accent-glow-05:        rgba(255, 149, 0, 0.05);
-  --accent-glow-06:        rgba(255, 149, 0, 0.06);
-  --accent-glow-08:        rgba(255, 149, 0, 0.08);
-  --accent-glow-10:        rgba(255, 149, 0, 0.10);
-  --accent-glow-12:        rgba(255, 149, 0, 0.12);
-  --accent-glow-15:        rgba(255, 149, 0, 0.15);
-  --accent-glow-20:        rgba(255, 149, 0, 0.20);
-  --accent-glow-25:        rgba(255, 149, 0, 0.25);
-  --accent-glow-30:        rgba(255, 149, 0, 0.30);
-  --accent-glow-40:        rgba(255, 149, 0, 0.40);
-  --accent-glow-45:        rgba(255, 149, 0, 0.45);
-  --accent-glow-50:        rgba(255, 149, 0, 0.50);
-  --accent-glow-60:        rgba(255, 149, 0, 0.60);
-  --accent-glow-70:        rgba(255, 149, 0, 0.70);
-  --accent-glow-80:        rgba(255, 149, 0, 0.80);
-  --accent-glow-85:        rgba(255, 149, 0, 0.85);
-  --accent-glow-90:        rgba(255, 149, 0, 0.90);
-  --accent-glow-100:       rgba(255, 149, 0, 1.00);
-  --border-accent:         rgba(255, 149, 0, 0.2);
-  --border-accent-medium:  rgba(255, 149, 0, 0.25);
-  --border-accent-strong:  rgba(255, 149, 0, 0.35);
-  --border-accent-bright:  rgba(255, 149, 0, 0.4);
-  --border-accent-subtle:  rgba(255, 149, 0, 0.08);
-  --border-accent-vivid:   rgba(255, 149, 0, 0.8);
-  --crt-900: #1a1500; --crt-800: #2a2200; --crt-700: #3a3000;
-  --crt-600: #5a4a00; --crt-500: #7a6a20; --crt-400: #b09030;
-  --crt-300: #d0b860;
-}
-
-/* ── P11 Blue (News Feed) ──────────────────────────────────── */
-body.theme-blue {
-  --accent-primary:        #4466FF;
-  --glow-accent:           rgba(68, 102, 255, 0.6);
-  --accent-glow-03:        rgba(68, 102, 255, 0.03);
-  --accent-glow-04:        rgba(68, 102, 255, 0.04);
-  --accent-glow-05:        rgba(68, 102, 255, 0.05);
-  --accent-glow-06:        rgba(68, 102, 255, 0.06);
-  --accent-glow-08:        rgba(68, 102, 255, 0.08);
-  --accent-glow-10:        rgba(68, 102, 255, 0.10);
-  --accent-glow-12:        rgba(68, 102, 255, 0.12);
-  --accent-glow-15:        rgba(68, 102, 255, 0.15);
-  --accent-glow-20:        rgba(68, 102, 255, 0.20);
-  --accent-glow-25:        rgba(68, 102, 255, 0.25);
-  --accent-glow-30:        rgba(68, 102, 255, 0.30);
-  --accent-glow-40:        rgba(68, 102, 255, 0.40);
-  --accent-glow-45:        rgba(68, 102, 255, 0.45);
-  --accent-glow-50:        rgba(68, 102, 255, 0.50);
-  --accent-glow-60:        rgba(68, 102, 255, 0.60);
-  --accent-glow-70:        rgba(68, 102, 255, 0.70);
-  --accent-glow-80:        rgba(68, 102, 255, 0.80);
-  --accent-glow-85:        rgba(68, 102, 255, 0.85);
-  --accent-glow-90:        rgba(68, 102, 255, 0.90);
-  --accent-glow-100:       rgba(68, 102, 255, 1.00);
-  --border-accent:         rgba(68, 102, 255, 0.2);
-  --border-accent-medium:  rgba(68, 102, 255, 0.25);
-  --border-accent-strong:  rgba(68, 102, 255, 0.35);
-  --border-accent-bright:  rgba(68, 102, 255, 0.4);
-  --border-accent-subtle:  rgba(68, 102, 255, 0.08);
-  --border-accent-vivid:   rgba(68, 102, 255, 0.8);
-  --crt-900: #0a0a2a; --crt-800: #141440; --crt-700: #1e1e5a;
-  --crt-600: #2a2a7a; --crt-500: #3a3a9a; --crt-400: #5050b8;
-  --crt-300: #7878d0;
-}
-
-/* ── P7 Radar Orange (Radar) ───────────────────────────────── */
-body.theme-radar {
-  --accent-primary:        #FFB500;
-  --glow-accent:           rgba(255, 181, 0, 0.6);
-  --accent-glow-03:        rgba(255, 181, 0, 0.03);
-  --accent-glow-04:        rgba(255, 181, 0, 0.04);
-  --accent-glow-05:        rgba(255, 181, 0, 0.05);
-  --accent-glow-06:        rgba(255, 181, 0, 0.06);
-  --accent-glow-08:        rgba(255, 181, 0, 0.08);
-  --accent-glow-10:        rgba(255, 181, 0, 0.10);
-  --accent-glow-12:        rgba(255, 181, 0, 0.12);
-  --accent-glow-15:        rgba(255, 181, 0, 0.15);
-  --accent-glow-20:        rgba(255, 181, 0, 0.20);
-  --accent-glow-25:        rgba(255, 181, 0, 0.25);
-  --accent-glow-30:        rgba(255, 181, 0, 0.30);
-  --accent-glow-40:        rgba(255, 181, 0, 0.40);
-  --accent-glow-45:        rgba(255, 181, 0, 0.45);
-  --accent-glow-50:        rgba(255, 181, 0, 0.50);
-  --accent-glow-60:        rgba(255, 181, 0, 0.60);
-  --accent-glow-70:        rgba(255, 181, 0, 0.70);
-  --accent-glow-80:        rgba(255, 181, 0, 0.80);
-  --accent-glow-85:        rgba(255, 181, 0, 0.85);
-  --accent-glow-90:        rgba(255, 181, 0, 0.90);
-  --accent-glow-100:       rgba(255, 181, 0, 1.00);
-  --border-accent:         rgba(255, 181, 0, 0.2);
-  --border-accent-medium:  rgba(255, 181, 0, 0.25);
-  --border-accent-strong:  rgba(255, 181, 0, 0.35);
-  --border-accent-bright:  rgba(255, 181, 0, 0.4);
-  --border-accent-subtle:  rgba(255, 181, 0, 0.08);
-  --border-accent-vivid:   rgba(255, 181, 0, 0.8);
-  --crt-900: #1a1600; --crt-800: #2a2500; --crt-700: #3a3500;
-  --crt-600: #5a5000; --crt-500: #7a7020; --crt-400: #b0a030;
-  --crt-300: #d0c060;
-}
-
-/* ── P4 White (Articles, API Docs) ─────────────────────────── */
-body.theme-white {
-  --accent-primary:        #A8B0B8;
-  --glow-accent:           rgba(168, 176, 184, 0.6);
-  --accent-glow-03:        rgba(168, 176, 184, 0.03);
-  --accent-glow-04:        rgba(168, 176, 184, 0.04);
-  --accent-glow-05:        rgba(168, 176, 184, 0.05);
-  --accent-glow-06:        rgba(168, 176, 184, 0.06);
-  --accent-glow-08:        rgba(168, 176, 184, 0.08);
-  --accent-glow-10:        rgba(168, 176, 184, 0.10);
-  --accent-glow-12:        rgba(168, 176, 184, 0.12);
-  --accent-glow-15:        rgba(168, 176, 184, 0.15);
-  --accent-glow-20:        rgba(168, 176, 184, 0.20);
-  --accent-glow-25:        rgba(168, 176, 184, 0.25);
-  --accent-glow-30:        rgba(168, 176, 184, 0.30);
-  --accent-glow-40:        rgba(168, 176, 184, 0.40);
-  --accent-glow-45:        rgba(168, 176, 184, 0.45);
-  --accent-glow-50:        rgba(168, 176, 184, 0.50);
-  --accent-glow-60:        rgba(168, 176, 184, 0.60);
-  --accent-glow-70:        rgba(168, 176, 184, 0.70);
-  --accent-glow-80:        rgba(168, 176, 184, 0.80);
-  --accent-glow-85:        rgba(168, 176, 184, 0.85);
-  --accent-glow-90:        rgba(168, 176, 184, 0.90);
-  --accent-glow-100:       rgba(168, 176, 184, 1.00);
-  --border-accent:         rgba(168, 176, 184, 0.2);
-  --border-accent-medium:  rgba(168, 176, 184, 0.25);
-  --border-accent-strong:  rgba(168, 176, 184, 0.35);
-  --border-accent-bright:  rgba(168, 176, 184, 0.4);
-  --border-accent-subtle:  rgba(168, 176, 184, 0.08);
-  --border-accent-vivid:   rgba(168, 176, 184, 0.8);
-  --crt-900: #181a1c; --crt-800: #282a2e; --crt-700: #383a40;
-  --crt-600: #505560; --crt-500: #687080; --crt-400: #8890a0;
-  --crt-300: #b0b8c0;
-}
-
-/* ── Brand Red (Account) ───────────────────────────────────── */
-body.theme-red {
-  --accent-primary:        #c02023;
-  --glow-accent:           rgba(192, 32, 35, 0.6);
-  --accent-glow-03:        rgba(192, 32, 35, 0.03);
-  --accent-glow-04:        rgba(192, 32, 35, 0.04);
-  --accent-glow-05:        rgba(192, 32, 35, 0.05);
-  --accent-glow-06:        rgba(192, 32, 35, 0.06);
-  --accent-glow-08:        rgba(192, 32, 35, 0.08);
-  --accent-glow-10:        rgba(192, 32, 35, 0.10);
-  --accent-glow-12:        rgba(192, 32, 35, 0.12);
-  --accent-glow-15:        rgba(192, 32, 35, 0.15);
-  --accent-glow-20:        rgba(192, 32, 35, 0.20);
-  --accent-glow-25:        rgba(192, 32, 35, 0.25);
-  --accent-glow-30:        rgba(192, 32, 35, 0.30);
-  --accent-glow-40:        rgba(192, 32, 35, 0.40);
-  --accent-glow-45:        rgba(192, 32, 35, 0.45);
-  --accent-glow-50:        rgba(192, 32, 35, 0.50);
-  --accent-glow-60:        rgba(192, 32, 35, 0.60);
-  --accent-glow-70:        rgba(192, 32, 35, 0.70);
-  --accent-glow-80:        rgba(192, 32, 35, 0.80);
-  --accent-glow-85:        rgba(192, 32, 35, 0.85);
-  --accent-glow-90:        rgba(192, 32, 35, 0.90);
-  --accent-glow-100:       rgba(192, 32, 35, 1.00);
-  --border-accent:         rgba(192, 32, 35, 0.2);
-  --border-accent-medium:  rgba(192, 32, 35, 0.25);
-  --border-accent-strong:  rgba(192, 32, 35, 0.35);
-  --border-accent-bright:  rgba(192, 32, 35, 0.4);
-  --border-accent-subtle:  rgba(192, 32, 35, 0.08);
-  --border-accent-vivid:   rgba(192, 32, 35, 0.8);
-  --crt-900: #1a0a0a; --crt-800: #2a1010; --crt-700: #3a1515;
-  --crt-600: #5a2020; --crt-500: #7a3030; --crt-400: #a04040;
-  --crt-300: #c06060;
-}

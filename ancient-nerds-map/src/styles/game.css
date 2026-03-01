@@ -12,7 +12,7 @@
   overflow-y: auto;
   background: var(--surface-page);
   color: var(--text-primary);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-body);
 }
 
 .game-logo-wrap {
@@ -37,16 +37,16 @@
   font-size: 0.85rem;
   font-weight: 700;
   letter-spacing: 2px;
-  color: #a8b2bc;
-  border: 3px solid #a8b2bc;
+  color: var(--crt-500);
+  border: 3px solid var(--crt-500);
   border-radius: 6px;
   padding: 6px 14px;
   white-space: nowrap;
   text-transform: uppercase;
   opacity: 0.85;
   box-shadow:
-    0 0 8px rgba(168, 178, 188, 0.2),
-    inset 0 0 8px rgba(168, 178, 188, 0.06);
+    0 0 8px var(--accent-glow-10),
+    inset 0 0 8px var(--accent-glow-04);
   pointer-events: none;
 }
 
@@ -96,7 +96,7 @@
   display: block;
   padding: 0.35rem 0.5rem;
   font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--crt-600);
   background: none;
   border: none;
   border-left: 2px solid transparent;
@@ -107,13 +107,13 @@
 }
 
 .game-toc-link:hover {
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--crt-400);
 }
 
 .game-toc-link.active {
   color: #fff;
   border-left-color: var(--accent-primary);
-  background: var(--accent-glow-15);
+  background: var(--surface-crt-strong);
   box-shadow: 0 0 8px var(--accent-glow-15);
 }
 
@@ -248,12 +248,12 @@
 
 .game-section tbody td {
   padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid var(--accent-glow-06);
+  border-bottom: 1px solid var(--border-crt);
   vertical-align: top;
 }
 
 .game-section tbody tr:hover {
-  background: var(--accent-glow-05);
+  background: var(--surface-crt-subtle);
 }
 
 .game-stat-name {
@@ -324,8 +324,8 @@
 .game-advantage-note {
   margin-top: 1rem;
   padding: 0.75rem 1rem;
-  background: var(--accent-glow-08);
-  border: 1px solid var(--accent-glow-15);
+  background: var(--surface-crt);
+  border: 1px solid var(--crt-700);
   border-radius: 6px;
   font-size: 0.85rem;
   line-height: 1.55;
@@ -543,8 +543,8 @@
 
 .game-expedition-tag {
   padding: 0.35rem 0.75rem;
-  background: var(--accent-glow-12);
-  border: 1px solid var(--accent-glow-20);
+  background: var(--surface-crt);
+  border: 1px solid var(--crt-700);
   border-radius: 20px;
   font-size: 0.82rem;
 }
@@ -624,8 +624,8 @@
 
 /* Discord commands */
 .game-cmd code {
-  background: var(--accent-glow-12);
-  border: 1px solid var(--accent-glow-20);
+  background: var(--surface-crt);
+  border: 1px solid var(--crt-700);
   padding: 0.15rem 0.4rem;
   border-radius: 3px;
   font-size: 0.82rem;

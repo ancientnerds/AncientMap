@@ -108,13 +108,14 @@
       @font-face{font-family:'Inter';font-style:normal;font-weight:300;font-display:swap;src:url('/fonts/inter-300.woff2') format('woff2')}
       @font-face{font-family:'Inter';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/inter-400.woff2') format('woff2')}
       @font-face{font-family:'Cormorant Garamond';font-style:italic;font-weight:400;font-display:swap;src:url('/fonts/cormorant-garamond-400i.woff2') format('woff2')}
+      @font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/ibm-plex-mono-400.woff2') format('woff2')}
+      @font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:500;font-display:swap;src:url('/fonts/ibm-plex-mono-500.woff2') format('woff2')}
       @font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/jetbrains-mono-400.woff2') format('woff2')}
-      @font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:500;font-display:swap;src:url('/fonts/jetbrains-mono-500.woff2') format('woff2')}
-      :root{--brand-primary:#c02023;--brand-primary-hover:#d42426;--surface-page:#000;--text-primary:#fff;--text-secondary:#888;--text-muted:#787878;--accent-primary:#00cc66;--font-heading:'Orbitron',sans-serif;--font-body:'JetBrains Mono','Fira Code',monospace;--font-ui:'Inter',system-ui,-apple-system,sans-serif}
+      :root{--brand-primary:#c02023;--brand-primary-hover:#d42426;--surface-page:#000;--text-primary:#fff;--text-secondary:#888;--text-muted:#787878;--accent-primary:#00cc66;--font-heading:'Orbitron',sans-serif;--font-body:'JetBrains Mono','Fira Code',monospace;--font-ui:'JetBrains Mono','Fira Code',monospace}
       *{margin:0;padding:0;box-sizing:border-box}
       img{max-width:100%;height:auto}
       html{scroll-behavior:smooth}
-      body{background:#000;color:var(--text-primary);font-family:'Inter',system-ui,-apple-system,sans-serif;line-height:1.6;overflow-x:hidden}
+      body{background:#000;color:var(--text-primary);font-family:'JetBrains Mono','Fira Code',monospace;line-height:1.6;overflow-x:hidden}
       .animate-in{opacity:0;transform:translateY(20px);transition:opacity .35s ease-out,transform .35s ease-out}
       .animate-in.visible{opacity:1;transform:translateY(0)}
       .hero{position:relative;height:100vh;height:100dvh;min-height:600px;display:flex;align-items:center;justify-content:center;text-align:center;overflow:hidden}

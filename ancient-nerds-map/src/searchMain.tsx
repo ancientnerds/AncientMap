@@ -4,8 +4,6 @@ import { OfflineProvider } from './contexts/OfflineContext'
 import SearchPage from './pages/SearchPage'
 import './styles/index.css'
 
-document.body.classList.add('theme-amber')
-
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <OfflineProvider>

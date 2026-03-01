@@ -279,7 +279,7 @@
 }
 .api-param-input::placeholder {
   color: rgba(255, 255, 255, 0.2);
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 10px;
 }
 .api-param-input:focus {
@@ -303,7 +303,7 @@
   border: 1px solid var(--accent-primary);
   background: var(--accent-glow-12);
   color: var(--accent-primary);
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
@@ -326,7 +326,7 @@
   border: 1px solid var(--border-accent);
   background: transparent;
   color: var(--text-secondary);
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 10px;
   font-weight: 600;
   cursor: pointer;
@@ -395,7 +395,7 @@
   border: 1px solid var(--border-accent);
   background: transparent;
   color: var(--text-secondary);
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 9px;
   font-weight: 600;
   text-transform: uppercase;
@@ -552,7 +552,7 @@
   border-radius: 12px;
   border: 1px dashed var(--border-accent-medium);
   background: transparent;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 10px;
   color: rgba(255, 255, 255, 0.4);
   cursor: pointer;
@@ -611,7 +611,7 @@
   border-radius: 4px;
   border: 1px solid var(--border-accent-medium);
   background: var(--accent-glow-10);
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 10px;
   color: var(--accent-glow-70);
   cursor: pointer;

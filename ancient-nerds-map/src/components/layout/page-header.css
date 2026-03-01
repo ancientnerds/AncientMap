@@ -263,19 +263,14 @@
   color: var(--brand-primary);
 }
 
-/* Per-page phosphor colors in nav */
-.hamburger-link[data-theme="green"] { color: #00cc66; }
-.hamburger-link[data-theme="amber"] { color: #FF9500; }
-.hamburger-link[data-theme="blue"]  { color: #4466FF; }
-.hamburger-link[data-theme="radar"] { color: #FFB500; }
-.hamburger-link[data-theme="white"] { color: #A8B0B8; }
-.hamburger-link[data-theme="red"]   { color: #c02023; }
+/* Unified CRT nav colors */
+.hamburger-link { color: var(--crt-400); }
 
-.hamburger-link[data-theme]:hover {
-  filter: brightness(1.3);
+.hamburger-link:hover {
+  color: var(--accent-primary);
 }
-.hamburger-link[data-theme].active {
-  filter: brightness(1.4);
+.hamburger-link.active {
+  color: var(--accent-primary);
   text-shadow: 0 0 8px currentColor;
 }
 
