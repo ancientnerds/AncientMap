@@ -559,7 +559,7 @@ async def run_agent_stream(
                 "stage": "filter_extraction",
                 "status": "error",
                 "duration_ms": _phase1_ms,
-                "meta": None,
+                "meta": {"error": str(filters_or_exc)[:120]},
             }
         else:
             news_filters = filters_or_exc
@@ -711,6 +711,7 @@ async def run_agent_stream(
             "meta": {"round": _round + 1},
         }
         _t_round = time.monotonic()
+        _round_tokens_before = total_input_tokens + total_output_tokens
         # Stream the LLM response
         collected_content = ""
         tool_calls: list[dict[str, str | int | None]] = []
@@ -758,12 +759,17 @@ async def run_agent_stream(
 
         # If no tool calls, we're done
         if not tool_calls:
+            _round_tokens = total_input_tokens + total_output_tokens - _round_tokens_before
             yield {
                 "type": "pipeline",
                 "stage": "llm_round",
                 "status": "done",
                 "duration_ms": int((time.monotonic() - _t_round) * 1000),
-                "meta": {"round": _round + 1, "has_tools": False},
+                "meta": {
+                    "round": _round + 1,
+                    "has_tools": False,
+                    "round_tokens": _round_tokens,
+                },
             }
             break
 
@@ -906,6 +912,12 @@ async def run_agent_stream(
                     _parsed_result = json.loads(result)
                     if isinstance(_parsed_result, list):
                         _result_len = len(_parsed_result)
+                    elif isinstance(_parsed_result, dict):
+                        # Handle dict-wrapped results (e.g. {"results": [...]})
+                        for key in ("results", "items", "data", "sites", "news"):
+                            if key in _parsed_result and isinstance(_parsed_result[key], list):
+                                _result_len = len(_parsed_result[key])
+                                break
                 except Exception:
                     pass
 
@@ -933,12 +945,17 @@ async def run_agent_stream(
                     "meta": {"tool": str(tc["name"]), "error": str(e)[:120]},
                 }
 
+        _round_tokens = total_input_tokens + total_output_tokens - _round_tokens_before
         yield {
             "type": "pipeline",
             "stage": "llm_round",
             "status": "done",
             "duration_ms": int((time.monotonic() - _t_round) * 1000),
-            "meta": {"round": _round + 1, "has_tools": True},
+            "meta": {
+                "round": _round + 1,
+                "has_tools": True,
+                "round_tokens": _round_tokens,
+            },
         }
 
         # Emit sites after tool calls
