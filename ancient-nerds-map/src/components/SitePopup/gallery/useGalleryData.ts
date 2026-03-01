@@ -14,6 +14,7 @@ interface UseGalleryDataOptions {
   lat: number
   lng: number
   sourceUrl?: string
+  thumbnailUrl?: string
   isOffline: boolean
 }
 
@@ -24,6 +25,7 @@ export function useGalleryData({
   lat,
   lng,
   sourceUrl,
+  thumbnailUrl,
   isOffline,
 }: UseGalleryDataOptions): GalleryHookReturn {
   const [activeGalleryTab, setActiveGalleryTab] = useState<GalleryTab>('photos')
@@ -112,7 +114,7 @@ export function useGalleryData({
   )
 
   const heroImage = wikiImages[0] || null
-  const heroImageSrc = heroImage?.full || photoItems[0]?.full
+  const heroImageSrc = heroImage?.full || thumbnailUrl || photoItems[0]?.full
 
   return {
     activeGalleryTab, setActiveGalleryTab,
