@@ -191,6 +191,7 @@ export interface DescriptionSectionProps {
   bestWikiUrl?: string
   sourceLanguage?: string
   referenceLinks?: ReferenceLink[]
+  descriptionCitations?: { n: number; url: string; title: string; domain: string }[]
 }
 
 export interface MapSectionProps {

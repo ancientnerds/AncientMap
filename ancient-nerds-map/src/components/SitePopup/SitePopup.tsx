@@ -722,6 +722,7 @@ export default function SitePopup({
                 bestWikiUrl={displaySite.bestWikiUrl}
                 sourceLanguage={displaySite.sourceLanguage}
                 referenceLinks={displaySite.referenceLinks}
+                descriptionCitations={displaySite.descriptionCitations}
               />
             )}
 

@@ -1,3 +1,4 @@
+import { useState, type ReactNode } from 'react'
 import SiteMetadata from '../../SiteMetadata'
 import { isWikipediaUrl } from '../../../services/imageService'
 import type { DescriptionSectionProps } from '../types'
@@ -5,6 +6,66 @@ import type { DescriptionSectionProps } from '../types'
 /** Truncate domain label for display (e.g. "hiddenincatours.com" → "hiddenincatours") */
 function shortDomain(domain: string): string {
   return domain.replace(/^www\./, '').replace(/\.(com|org|net|edu|gov|io|co\.uk)$/, '')
+}
+
+/** Build a citation lookup map from descriptionCitations array */
+function buildCitationMap(citations?: { n: number; url: string; title: string; domain: string }[]) {
+  const map = new Map<number, { url: string; title: string; domain: string }>()
+  if (citations) {
+    for (const c of citations) map.set(c.n, c)
+  }
+  return map
+}
+
+/** Render description text with superscript citation links */
+function renderWithCitations(
+  text: string,
+  citationMap: Map<number, { url: string; title: string; domain: string }>,
+): ReactNode[] {
+  const parts: ReactNode[] = []
+  const regex = /\[(\d+)\]/g
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+
+  while ((match = regex.exec(text)) !== null) {
+    // Text before the marker
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index))
+    }
+    const num = parseInt(match[1], 10)
+    const cite = citationMap.get(num)
+    if (cite) {
+      parts.push(
+        <a
+          key={`cite-${match.index}`}
+          href={cite.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="popup-citation-sup"
+          title={cite.title}
+        >
+          [{num}]
+        </a>
+      )
+    } else {
+      parts.push(
+        <sup key={`cite-${match.index}`} className="popup-citation-sup">[{num}]</sup>
+      )
+    }
+    lastIndex = regex.lastIndex
+  }
+
+  // Trailing text
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex))
+  }
+
+  return parts
+}
+
+/** Strip [N] citation markers from text */
+function stripCitations(text: string): string {
+  return text.replace(/\s*\[\d+\]/g, '')
 }
 
 export function DescriptionSection({
@@ -19,21 +80,54 @@ export function DescriptionSection({
   bestWikiUrl,
   sourceLanguage,
   referenceLinks,
+  descriptionCitations,
 }: DescriptionSectionProps) {
+  const [showCitations, setShowCitations] = useState(false)
+
   // Extract domain for source attribution (e.g. "de.wikipedia.org")
   const wikiSourceDomain = bestWikiUrl && sourceLanguage && sourceLanguage !== 'en'
     ? (() => { try { return new URL(bestWikiUrl).hostname } catch { return null } })()
     : null
 
+  const hasCitations = /\[\d+\]/.test(description || '')
+  const citationMap = buildCitationMap(descriptionCitations)
+
+  // Build unique citation source domains for favicon display
+  const citationSources: { domain: string; url: string; title: string }[] = []
+  const seenDomains = new Set<string>()
+  // Wikipedia domain from sourceUrl is already shown via its own icon — skip it
+  if (sourceUrl) {
+    try { seenDomains.add(new URL(sourceUrl).hostname.replace(/^www\./, '')) } catch { /* skip */ }
+  }
+  if (descriptionCitations) {
+    for (const c of descriptionCitations) {
+      const d = c.domain.replace(/^www\./, '')
+      if (!seenDomains.has(d)) {
+        seenDomains.add(d)
+        citationSources.push({ domain: c.domain, url: c.url, title: c.title })
+      }
+    }
+  }
+
+  // Render description content
+  let descriptionContent: ReactNode = null
+  if (rawDataLoading && isEmpireMode) {
+    descriptionContent = <p className="popup-description loading">Loading description from Wikipedia...</p>
+  } else if (description) {
+    if (hasCitations && showCitations) {
+      descriptionContent = <p className="popup-description">{renderWithCitations(description, citationMap)}</p>
+    } else if (hasCitations) {
+      descriptionContent = <p className="popup-description">{stripCitations(description)}</p>
+    } else {
+      descriptionContent = <p className="popup-description">{description}</p>
+    }
+  } else if (isEmpireMode) {
+    descriptionContent = <p className="popup-description empty">No description available</p>
+  }
+
   return (
     <>
-      {rawDataLoading && isEmpireMode ? (
-        <p className="popup-description loading">Loading description from Wikipedia...</p>
-      ) : description ? (
-        <p className="popup-description">{description}</p>
-      ) : isEmpireMode ? (
-        <p className="popup-description empty">No description available</p>
-      ) : null}
+      {descriptionContent}
 
       {/* Source attribution for non-English wiki sources */}
       {wikiSourceDomain && bestWikiUrl && (
@@ -68,6 +162,26 @@ export function DescriptionSection({
           </a>
         )}
 
+        {/* Citation source favicons */}
+        {citationSources.map((src, i) => (
+          <a
+            key={`cite-src-${i}`}
+            href={src.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="popup-link-item cite-source"
+            title={src.title}
+          >
+            <img
+              src={`https://www.google.com/s2/favicons?domain=${src.domain}&sz=32`}
+              alt=""
+              width="20"
+              height="20"
+              loading="lazy"
+            />
+          </a>
+        ))}
+
         {/* Reference links — favicon + domain buttons */}
         {referenceLinks?.map((ref, i) => (
           <a
@@ -91,6 +205,18 @@ export function DescriptionSection({
         ))}
 
         <div className="popup-links-spacer" />
+
+        {/* Citation toggle button */}
+        {hasCitations && (
+          <button
+            className={`popup-link-item cite-toggle${showCitations ? ' active' : ''}`}
+            onClick={() => setShowCitations(!showCitations)}
+            title={showCitations ? 'Hide citations' : 'Show citations'}
+          >
+            [1]
+          </button>
+        )}
+
         {/* Admin button - subtle, on the right - only for founder on sites */}
         {isFounder && !isEmpireMode && (
           <button

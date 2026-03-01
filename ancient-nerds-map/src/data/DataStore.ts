@@ -201,7 +201,7 @@ class DataStoreClass {
     return Array.from(this.sources.keys()).filter(id => !defaultIds.includes(id))
   }
 
-  private _parseSitesData(sites: Array<{ id: string; n: string; la: number; lo: number; s: string; t: string | null; p: number | null; pn?: string; d?: string; cd?: string; i?: string; c?: string; u?: string; an?: string[]; wu?: string; sl?: string; rf?: Array<{ u: string; t: string; d: string; k: string }> }>): Site[] {
+  private _parseSitesData(sites: Array<{ id: string; n: string; la: number; lo: number; s: string; t: string | null; p: number | null; pn?: string; d?: string; cd?: string; i?: string; c?: string; u?: string; an?: string[]; wu?: string; sl?: string; rf?: Array<{ u: string; t: string; d: string; k: string }>; dc?: Array<{ n: number; url: string; title: string; domain: string }> }>): Site[] {
     return sites.map(s => ({
       id: s.id,
       name: s.n,
@@ -221,6 +221,7 @@ class DataStoreClass {
       bestWikiUrl: s.wu || undefined,
       sourceLanguage: s.sl || undefined,
       referenceLinks: s.rf || undefined,
+      descriptionCitations: s.dc || undefined,
     }))
   }
 
