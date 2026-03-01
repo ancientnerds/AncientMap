@@ -55,6 +55,20 @@ def _extract_article_from_url(url: str) -> tuple[str, str] | None:
     return None
 
 
+def _extract_fragment_from_url(url: str) -> str | None:
+    """Extract meaningful fragment text from a Wikipedia URL.
+
+    E.g. 'https://en.wikipedia.org/wiki/Giza_pyramid_complex#Osiris_Shaft'
+    returns 'Osiris Shaft'.
+    """
+    m = re.search(r"wikipedia\.org/wiki/.+?#(.+)$", url)
+    if m:
+        frag = unquote(m.group(1)).replace("_", " ").strip()
+        if frag:
+            return frag
+    return None
+
+
 def _resolve_article_to_qid(client: httpx.Client, lang: str, title: str) -> str | None:
     """Resolve a Wikipedia article title to a Wikidata QID via API."""
     api_url = f"https://{lang}.wikipedia.org/w/api.php"
@@ -89,13 +103,15 @@ def strategy_url_extract(allowed_site_ids: set[str] | None = None) -> dict[str, 
             id_filter = f"AND id::text IN ({id_placeholders})"
 
         rows = conn.execute(text(f"""
-            SELECT id::text AS site_id, source_url
+            SELECT id::text AS site_id, source_url, name
             FROM unified_sites
             WHERE source_id = 'ancient_nerds'
               AND source_url IS NOT NULL
               AND source_url != ''
               {id_filter}
         """), params).fetchall()
+
+    _PRIORITY_LANGS = ["en", "de", "fr", "it", "es", "ar"]
 
     client = httpx.Client(headers=_HEADERS, timeout=30.0, follow_redirects=True)
     try:
@@ -111,11 +127,49 @@ def strategy_url_extract(allowed_site_ids: set[str] | None = None) -> dict[str, 
 
             # Try Wikipedia article -> QID
             article_info = _extract_article_from_url(url)
+            base_qid = None
+            lang = None
             if article_info:
                 lang, title = article_info
-                qid = _resolve_article_to_qid(client, lang, title)
-                if qid:
-                    matches[site_id] = {"qid": qid, "method": "url_wiki", "confidence": 0.95}
+                base_qid = _resolve_article_to_qid(client, lang, title)
+                if base_qid:
+                    matches[site_id] = {"qid": base_qid, "method": "url_wiki", "confidence": 0.95}
+
+            # Fragment-aware resolution: if URL has a fragment, try it as a standalone article
+            fragment = _extract_fragment_from_url(url)
+            if fragment:
+                # Build language priority list: source URL lang first, then priority langs
+                try_langs = []
+                if lang:
+                    try_langs.append(lang)
+                for tl in _PRIORITY_LANGS:
+                    if tl not in try_langs:
+                        try_langs.append(tl)
+
+                if base_qid:
+                    # Base article resolved — look for a more specific dedicated article
+                    for tl in try_langs:
+                        frag_qid = _resolve_article_to_qid(client, tl, fragment)
+                        if frag_qid and frag_qid != base_qid:
+                            matches[site_id] = {"qid": frag_qid, "method": "url_wiki_fragment", "confidence": 0.9}
+                            break
+                else:
+                    # Base article didn't resolve — try fragment directly
+                    for tl in try_langs:
+                        frag_qid = _resolve_article_to_qid(client, tl, fragment)
+                        if frag_qid:
+                            matches[site_id] = {"qid": frag_qid, "method": "url_wiki_fragment", "confidence": 0.85}
+                            break
+
+                # If fragment didn't resolve, try the site's own name
+                if site_id not in matches:
+                    site_name = row.name
+                    if site_name and site_name != fragment:
+                        for tl in try_langs:
+                            name_qid = _resolve_article_to_qid(client, tl, site_name)
+                            if name_qid:
+                                matches[site_id] = {"qid": name_qid, "method": "url_name_fallback", "confidence": 0.85}
+                                break
     finally:
         client.close()
 
