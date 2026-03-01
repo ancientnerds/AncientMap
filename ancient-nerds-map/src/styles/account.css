@@ -5,8 +5,8 @@
   height: 100vh;
   overflow-y: auto;
   overflow-x: hidden;
-  background: var(--bg-primary, #0a1520);
-  color: #e0e0e0;
+  background: var(--surface-page);
+  color: var(--text-body);
 }
 
 .account-content {
@@ -23,18 +23,18 @@
 .account-loading {
   text-align: center;
   padding: 80px 20px;
-  color: #888;
-  font-family: 'Inter', sans-serif;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
 }
 
 .account-error {
   background: rgba(192, 32, 35, 0.15);
   border: 1px solid rgba(192, 32, 35, 0.3);
-  color: #ff6b6b;
+  color: var(--status-error-soft);
   padding: 12px 16px;
   border-radius: 8px;
   margin-bottom: 20px;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 14px;
 }
 
@@ -55,7 +55,7 @@
 }
 
 .account-signin-title {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 20px;
   font-weight: 600;
   color: #fff;
@@ -63,9 +63,9 @@
 }
 
 .account-signin-desc {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 14px;
-  color: #888;
+  color: var(--text-secondary);
   margin: 0 0 24px;
   max-width: 360px;
 }
@@ -75,11 +75,11 @@
   align-items: center;
   gap: 10px;
   padding: 12px 28px;
-  background: #5865F2;
+  background: var(--brand-discord);
   color: white;
   border: none;
   border-radius: 8px;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
@@ -87,7 +87,7 @@
 }
 
 .account-discord-btn:hover {
-  background: #4752c4;
+  background: var(--brand-discord-hover);
 }
 
 /* Tab navigation */
@@ -106,7 +106,7 @@
   border: none;
   color: rgba(255, 255, 255, 0.5);
   cursor: pointer;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.9rem;
   border-bottom: 2px solid transparent;
   transition: color 0.2s, border-color 0.2s;
@@ -123,7 +123,7 @@
 
 .account-tab.active {
   color: #fff;
-  border-bottom-color: var(--primary-red, #c02023);
+  border-bottom-color: var(--brand-primary);
 }
 
 .account-tab-count {
@@ -136,15 +136,15 @@
 
 .account-tab.active .account-tab-count {
   background: rgba(192, 32, 35, 0.25);
-  color: var(--primary-red, #c02023);
+  color: var(--brand-primary);
 }
 
 /* Empty tab state */
 .account-empty-tab {
   text-align: center;
   padding: 3rem 1rem;
-  color: #888;
-  font-family: 'Inter', sans-serif;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
   font-size: 14px;
 }
 
@@ -178,9 +178,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 24px;
-  color: #5865F2;
+  color: var(--brand-discord);
 }
 
 .account-card-info {
@@ -190,7 +190,7 @@
 }
 
 .account-username {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 18px;
   font-weight: 600;
   color: #fff;
@@ -201,7 +201,7 @@
   display: inline-block;
   padding: 2px 10px;
   border-radius: 12px;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -232,16 +232,16 @@
 }
 
 .account-credits-label {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 12px;
-  color: #888;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 1px;
   margin-bottom: 4px;
 }
 
 .account-credits-value {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 36px;
   font-weight: 700;
   color: #fff;
@@ -249,9 +249,9 @@
 }
 
 .account-credits-note {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 12px;
-  color: #666;
+  color: var(--text-dimmed);
   margin-top: 4px;
 }
 
@@ -271,16 +271,16 @@
 }
 
 .account-mini-stat-value {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 16px;
   font-weight: 600;
   color: #fff;
 }
 
 .account-mini-stat-label {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 10px;
-  color: #888;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -296,19 +296,19 @@
 .account-action-btn {
   flex: 1;
   padding: 8px 16px;
-  border: 1px solid var(--primary-red, #c02023);
+  border: 1px solid var(--brand-primary);
   background: transparent;
-  color: var(--primary-red, #c02023);
+  color: var(--brand-primary);
   border-radius: 6px;
   cursor: pointer;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
   font-weight: 500;
   transition: background 0.2s, color 0.2s;
 }
 
 .account-action-btn:hover {
-  background: var(--primary-red, #c02023);
+  background: var(--brand-primary);
   color: #fff;
 }
 
@@ -323,7 +323,7 @@
   border: 1px solid rgba(76, 175, 80, 0.3);
   border-radius: 6px;
   margin-bottom: 16px;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
   color: #4caf50;
 }
@@ -335,8 +335,8 @@
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
-  color: #aaa;
-  font-family: 'Inter', sans-serif;
+  color: var(--text-faint);
+  font-family: var(--font-body);
   font-size: 13px;
   cursor: pointer;
   transition: background 0.2s, color 0.2s;
@@ -353,10 +353,10 @@
 }
 
 .account-section-title {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 14px;
   font-weight: 600;
-  color: #ccc;
+  color: var(--text-body);
   margin: 0 0 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -399,14 +399,14 @@
 .account-table {
   width: 100%;
   border-collapse: collapse;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
 }
 
 .account-table th {
   text-align: left;
   padding: 8px 12px;
-  color: #888;
+  color: var(--text-secondary);
   font-weight: 500;
   font-size: 11px;
   text-transform: uppercase;
@@ -417,16 +417,16 @@
 .account-table td {
   padding: 8px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  color: #ccc;
+  color: var(--text-body);
 }
 
 .account-credits-positive {
-  color: #22c55e;
+  color: var(--status-ok);
   font-weight: 600;
 }
 
 .account-credits-negative {
-  color: #ef4444;
+  color: var(--status-error);
   font-weight: 600;
 }
 
@@ -443,8 +443,8 @@
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
-  color: #e0e0e0;
-  font-family: 'Inter', sans-serif;
+  color: var(--text-body);
+  font-family: var(--font-body);
   font-size: 13px;
   outline: none;
   margin-bottom: 12px;
@@ -456,36 +456,36 @@
 }
 
 .admin-search::placeholder {
-  color: #666;
+  color: var(--text-dimmed);
 }
 
 .admin-loading {
   text-align: center;
   padding: 16px;
-  color: #666;
-  font-family: 'Inter', sans-serif;
+  color: var(--text-dimmed);
+  font-family: var(--font-body);
   font-size: 13px;
 }
 
 .admin-error {
   background: rgba(192, 32, 35, 0.15);
   border: 1px solid rgba(192, 32, 35, 0.3);
-  color: #ff6b6b;
+  color: var(--status-error-soft);
   padding: 8px 12px;
   border-radius: 6px;
   margin-bottom: 10px;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
 }
 
 .admin-success {
   background: rgba(0, 255, 46, 0.08);
   border: 1px solid rgba(0, 255, 46, 0.2);
-  color: #00ff2e;
+  color: var(--accent-primary);
   padding: 8px 12px;
   border-radius: 6px;
   margin-bottom: 10px;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
 }
 
@@ -517,7 +517,7 @@
 
 .admin-user-row.selected {
   background: rgba(0, 255, 46, 0.08);
-  border-left: 2px solid #00ff2e;
+  border-left: 2px solid var(--accent-primary);
 }
 
 .admin-user-avatar {
@@ -535,18 +535,18 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
   font-weight: 600;
-  color: #5865F2;
+  color: var(--brand-discord);
   flex-shrink: 0;
 }
 
 .admin-user-name {
   flex: 1;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
-  color: #e0e0e0;
+  color: var(--text-body);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -565,9 +565,9 @@
 }
 
 .admin-user-credits {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 13px;
-  color: #ccc;
+  color: var(--text-body);
   flex-shrink: 0;
   min-width: 50px;
   text-align: right;
@@ -582,9 +582,9 @@
 }
 
 .admin-credit-form-header {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
-  color: #ccc;
+  color: var(--text-body);
   margin-bottom: 10px;
 }
 
@@ -593,7 +593,7 @@
 }
 
 .admin-credit-form-current {
-  color: #888;
+  color: var(--text-secondary);
   font-size: 12px;
   margin-left: 4px;
 }
@@ -619,8 +619,8 @@
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
-  color: #e0e0e0;
-  font-family: 'Inter', sans-serif;
+  color: var(--text-body);
+  font-family: var(--font-body);
   font-size: 13px;
   cursor: pointer;
   transition: border-color 0.2s, background 0.2s;
@@ -644,7 +644,7 @@
 
 .action-dropdown-arrow {
   font-size: 10px;
-  color: #888;
+  color: var(--text-secondary);
   margin-left: 2px;
 }
 
@@ -671,7 +671,7 @@
   background: none;
   border: none;
   border-radius: 6px;
-  color: #e0e0e0;
+  color: var(--text-body);
   cursor: pointer;
   text-align: left;
   transition: background 0.15s;
@@ -692,16 +692,16 @@
 }
 
 .action-dropdown-item-label {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
   font-weight: 600;
   color: #fff;
 }
 
 .action-dropdown-item-desc {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 11px;
-  color: #888;
+  color: var(--text-secondary);
 }
 
 .admin-amount-input {
@@ -710,8 +710,8 @@
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
-  color: #e0e0e0;
-  font-family: 'Inter', sans-serif;
+  color: var(--text-body);
+  font-family: var(--font-body);
   font-size: 13px;
   outline: none;
   min-width: 0;
@@ -726,8 +726,8 @@
   background: rgba(0, 255, 46, 0.15);
   border: 1px solid rgba(0, 255, 46, 0.3);
   border-radius: 6px;
-  color: #00ff2e;
-  font-family: 'Inter', sans-serif;
+  color: var(--accent-primary);
+  font-family: var(--font-body);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -750,8 +750,8 @@
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 14px;
-  color: #aaa;
-  font-family: 'Inter', sans-serif;
+  color: var(--text-faint);
+  font-family: var(--font-body);
   font-size: 12px;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
@@ -764,32 +764,32 @@
 
 .admin-shortcut-btn.add {
   border-color: rgba(34, 197, 94, 0.25);
-  color: #22c55e;
+  color: var(--status-ok);
 }
 
 .admin-shortcut-btn.add:hover {
   background: rgba(34, 197, 94, 0.12);
-  color: #4ade80;
+  color: var(--status-ok-light);
 }
 
 .admin-shortcut-btn.set {
   border-color: rgba(59, 130, 246, 0.25);
-  color: #3b82f6;
+  color: var(--accent-blue);
 }
 
 .admin-shortcut-btn.set:hover {
   background: rgba(59, 130, 246, 0.12);
-  color: #60a5fa;
+  color: var(--accent-blue);
 }
 
 .admin-shortcut-btn.remove {
   border-color: rgba(239, 68, 68, 0.25);
-  color: #ef4444;
+  color: var(--status-error);
 }
 
 .admin-shortcut-btn.remove:hover {
   background: rgba(239, 68, 68, 0.12);
-  color: #f87171;
+  color: var(--status-error-soft);
 }
 
 /* Role filter chips */
@@ -802,7 +802,7 @@
 
 .admin-role-chip {
   padding: 2px 8px;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 10px;
   font-weight: 600;
   border: 1px solid;
@@ -839,8 +839,8 @@
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
-  color: #e0e0e0;
-  font-family: 'Inter', sans-serif;
+  color: var(--text-body);
+  font-family: var(--font-body);
   font-size: 13px;
   outline: none;
 }
@@ -850,8 +850,8 @@
 }
 
 .admin-bulk-select option {
-  background: #0a1520;
-  color: #e0e0e0;
+  background: var(--surface-page);
+  color: var(--text-body);
 }
 
 .admin-bulk-preview {
@@ -860,9 +860,9 @@
   border-left: 3px solid rgba(59, 130, 246, 0.6);
   background: rgba(59, 130, 246, 0.08);
   border-radius: 0 6px 6px 0;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
-  color: #ccc;
+  color: var(--text-body);
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -924,7 +924,7 @@
 .account-site-name {
   font-size: 13px;
   font-weight: 600;
-  color: #e0e0e0;
+  color: var(--text-body);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -932,7 +932,7 @@
 
 .account-site-country {
   font-size: 11px;
-  color: #888;
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -967,7 +967,7 @@
   border-radius: 6px;
   color: rgba(255, 255, 255, 0.6);
   cursor: pointer;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
   transition: border-color 0.2s, color 0.2s;
 }
@@ -978,13 +978,13 @@
 }
 
 .deck-selector-slot.active {
-  border-color: var(--primary-red, #c02023);
+  border-color: var(--brand-primary);
   color: #fff;
   background: rgba(192, 32, 35, 0.1);
 }
 
 .deck-star {
-  color: #FFC107;
+  color: var(--tier-star);
   margin-right: 4px;
 }
 
@@ -995,7 +995,7 @@
   border-radius: 6px;
   color: rgba(255, 255, 255, 0.4);
   cursor: pointer;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
   transition: border-color 0.2s, color 0.2s;
 }
@@ -1027,10 +1027,10 @@
 }
 
 .deck-panel-title {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 13px;
   font-weight: 600;
-  color: #ccc;
+  color: var(--text-body);
   margin: 0 0 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -1063,7 +1063,7 @@
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 4px;
   color: #fff;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 14px;
   padding: 4px 8px;
   outline: none;
@@ -1071,7 +1071,7 @@
 }
 
 .deck-card-count {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 14px;
   color: rgba(255, 255, 255, 0.5);
 }
@@ -1080,7 +1080,7 @@
 .deck-empty {
   text-align: center;
   padding: 2rem 1rem;
-  color: #666;
+  color: var(--text-dimmed);
   font-size: 13px;
 }
 
@@ -1100,9 +1100,9 @@
 }
 
 .deck-synergy-title {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 11px;
-  color: #888;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin: 0 0 8px;
@@ -1116,7 +1116,7 @@
 }
 
 .deck-synergy-label {
-  color: #ccc;
+  color: var(--text-body);
 }
 
 .deck-synergy-bonus {
@@ -1128,7 +1128,7 @@
 .deck-error {
   background: rgba(192, 32, 35, 0.15);
   border: 1px solid rgba(192, 32, 35, 0.3);
-  color: #ff6b6b;
+  color: var(--status-error-soft);
   padding: 8px 12px;
   border-radius: 6px;
   margin-top: 10px;
@@ -1157,7 +1157,7 @@
   border-radius: 6px;
   border: 1px solid;
   cursor: pointer;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
   font-weight: 500;
   transition: background 0.2s, color 0.2s;
@@ -1191,7 +1191,7 @@
 .deck-action-btn.delete {
   background: rgba(239, 68, 68, 0.1);
   border-color: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
+  color: var(--status-error);
 }
 
 .deck-action-btn.delete:hover {
@@ -1205,7 +1205,7 @@
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 4px;
-  color: #e0e0e0;
+  color: var(--text-body);
   font-size: 13px;
   outline: none;
 }
@@ -1215,7 +1215,7 @@
 }
 
 .collection-search::placeholder {
-  color: #666;
+  color: var(--text-dimmed);
 }
 
 .card-tile-dimmed {
@@ -1387,7 +1387,7 @@
 /* ============ ACHIEVEMENTS TAB ============ */
 
 .account-tab-count-alert {
-  background: var(--primary-red, #c02023) !important;
+  background: var(--brand-primary) !important;
   color: #fff !important;
 }
 
@@ -1408,7 +1408,7 @@
 
 .achievements-progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #cd7f32, #ffd700);
+  background: linear-gradient(90deg, var(--tier-bronze), var(--tier-gold));
   border-radius: 4px;
   transition: width 0.5s ease;
 }
@@ -1418,13 +1418,13 @@
   justify-content: space-between;
   align-items: center;
   margin-top: 6px;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
-  color: #888;
+  color: var(--text-secondary);
 }
 
 .achievements-unclaimed-badge {
-  background: var(--primary-red, #c02023);
+  background: var(--brand-primary);
   color: #fff;
   padding: 2px 8px;
   border-radius: 10px;
@@ -1447,8 +1447,8 @@
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 20px;
-  color: #888;
-  font-family: 'Inter', sans-serif;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
   font-size: 12px;
   cursor: pointer;
   white-space: nowrap;
@@ -1457,7 +1457,7 @@
 
 .achievements-category-btn:hover {
   background: rgba(255, 255, 255, 0.08);
-  color: #ccc;
+  color: var(--text-body);
 }
 
 .achievements-category-btn.active {
@@ -1518,7 +1518,7 @@
 }
 
 .achievement-tier-badge {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
@@ -1533,7 +1533,7 @@
 }
 
 .achievement-name {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 14px;
   font-weight: 600;
   color: #fff;
@@ -1541,9 +1541,9 @@
 }
 
 .achievement-desc {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 12px;
-  color: #888;
+  color: var(--text-secondary);
   line-height: 1.4;
 }
 
@@ -1554,9 +1554,9 @@
 }
 
 .achievement-reward-tag {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 11px;
-  color: #aaa;
+  color: var(--text-faint);
   background: rgba(255, 255, 255, 0.06);
   padding: 2px 8px;
   border-radius: 6px;
@@ -1565,11 +1565,11 @@
 .achievement-claim-btn {
   width: 100%;
   padding: 8px 0;
-  background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%);
+  background: linear-gradient(135deg, var(--tier-gold) 0%, var(--accent-orange) 100%);
   border: none;
   border-radius: 8px;
   color: #111;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
@@ -1591,10 +1591,9 @@
 
 .achievement-claimed-badge {
   text-align: center;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 12px;
   font-weight: 600;
-  color: #22c55e;
+  color: var(--status-ok);
   padding: 6px 0;
 }
-

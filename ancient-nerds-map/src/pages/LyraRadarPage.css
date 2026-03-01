@@ -10,7 +10,7 @@
   gap: 8px;
   padding: 8px 20px;
   font-size: 12px;
-  color: #f59e0b;
+  color: var(--status-warning);
   background: rgba(245, 158, 11, 0.08);
   border-bottom: 1px solid rgba(245, 158, 11, 0.15);
 }
@@ -23,9 +23,9 @@
   min-height: 100vh;
   height: 100vh;
   overflow-y: auto;
-  background: linear-gradient(180deg, #0a1a1f 0%, #0d1f25 100%);
+  background: var(--surface-page);
   color: rgba(255, 255, 255, 0.85);
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: var(--font-body);
   padding-bottom: 40px;
 }
 
@@ -68,8 +68,8 @@
 
 .lyra-discovery-card {
   position: relative;
-  background: var(--bg-card, rgba(8, 18, 26, 0.7));
-  border: 1px solid var(--border-color, rgba(0, 180, 180, 0.12));
+  background: var(--surface-raised);
+  border: 1px solid var(--border-accent);
   border-radius: 8px;
   padding: 16px;
   transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
@@ -92,7 +92,7 @@
   font-weight: 600;
   color: rgba(255, 255, 255, 0.9);
   line-height: 1.3;
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -127,11 +127,11 @@
   padding: 2px 8px;
   font-size: 11px;
   font-weight: 700;
-  color: #c02023;
+  color: var(--brand-primary);
   background: rgba(192, 32, 35, 0.15);
   border: 1px solid rgba(192, 32, 35, 0.3);
   border-radius: 4px;
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
 }
 
 /* Test card */
@@ -149,7 +149,7 @@
   top: 80px;
   left: 50%;
   transform: translateX(-50%) rotate(-30deg);
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 48px;
   font-weight: 900;
   letter-spacing: 10px;
@@ -223,7 +223,7 @@
   padding: 4px 10px;
   font-size: 11px;
   font-weight: 500;
-  color: #ff4444;
+  color: var(--status-error-bright);
   background: rgba(255, 68, 68, 0.1);
   border: 1px solid rgba(255, 68, 68, 0.2);
   border-radius: 4px;
@@ -356,50 +356,50 @@
 }
 
 .lyra-status-matched {
-  color: #22c55e;
+  color: var(--status-ok);
   background: rgba(34, 197, 94, 0.15);
   border: 1px solid rgba(34, 197, 94, 0.3);
 }
 
 .lyra-status-enriched {
-  color: #8b5cf6;
+  color: var(--accent-purple);
   background: rgba(139, 92, 246, 0.15);
   border: 1px solid rgba(139, 92, 246, 0.3);
 }
 
 .lyra-status-pending {
-  color: #6b7280;
+  color: var(--text-muted);
   background: rgba(107, 114, 128, 0.15);
   border: 1px solid rgba(107, 114, 128, 0.3);
 }
 
 .lyra-status-rejected {
-  color: #ef4444;
+  color: var(--status-error);
   background: rgba(239, 68, 68, 0.15);
   border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .lyra-status-added {
-  color: #22c55e;
+  color: var(--status-ok);
   background: rgba(34, 197, 94, 0.15);
   border: 1px solid rgba(34, 197, 94, 0.3);
 }
 
 /* Confidence badges */
 .lyra-confidence-high {
-  color: #22c55e;
+  color: var(--status-ok);
   background: rgba(34, 197, 94, 0.15);
   border: 1px solid rgba(34, 197, 94, 0.3);
 }
 
 .lyra-confidence-medium {
-  color: #f59e0b;
+  color: var(--status-warning);
   background: rgba(245, 158, 11, 0.15);
   border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
 .lyra-confidence-low {
-  color: #ef4444;
+  color: var(--status-error);
   background: rgba(239, 68, 68, 0.15);
   border: 1px solid rgba(239, 68, 68, 0.3);
 }
@@ -463,7 +463,7 @@
 }
 
 .lyra-best-match-pct {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 9px;
   opacity: 0.7;
 }
@@ -549,7 +549,7 @@
 .lyra-score-section {
   margin-bottom: 12px;
   padding-top: 10px;
-  border-top: 1px solid rgba(0, 180, 180, 0.12);
+  border-top: 1px solid var(--border-accent);
 }
 
 .lyra-score-header {
@@ -567,7 +567,7 @@
 }
 
 .lyra-discovery-percentage {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 20px;
   font-weight: 700;
 }
@@ -601,7 +601,7 @@
 }
 
 .lyra-score-points {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 9px;
   opacity: 0.7;
 }
@@ -703,7 +703,7 @@
 /* Nearby AN site proximity banner */
 .lyra-discovery-nearby-an {
   font-size: 11px;
-  color: #67e8f9;
+  color: var(--accent-secondary);
   background: rgba(103, 232, 249, 0.08);
   border-left: 2px solid rgba(103, 232, 249, 0.4);
   padding: 4px 8px;
@@ -833,15 +833,15 @@
 
 /* Mapbox popup overrides for dark theme */
 .radar-map-popup .mapboxgl-popup-content {
-  background: #1a2332;
-  color: #e0e0e0;
+  background: var(--surface-raised-solid);
+  color: var(--text-body);
   border-radius: 8px;
   padding: 8px 12px;
   font-size: 0.85rem;
   border: 1px solid rgba(78, 205, 196, 0.2);
 }
 .radar-map-popup .mapboxgl-popup-tip {
-  border-top-color: #1a2332;
+  border-top-color: var(--surface-raised-solid);
 }
 
 /* Scroll to top button */
@@ -879,7 +879,7 @@
   border-radius: 3px;
   font-size: 9px;
   font-weight: 600;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   letter-spacing: 0.5px;
   border: 1px solid;
   white-space: nowrap;
@@ -895,7 +895,7 @@
   margin-bottom: 10px;
   font-size: 12px;
   font-weight: 600;
-  color: #22c55e;
+  color: var(--status-ok);
   background: rgba(34, 197, 94, 0.1);
   border: 1px solid rgba(34, 197, 94, 0.3);
   border-radius: 6px;
@@ -907,5 +907,5 @@
 .lyra-promote-btn:hover {
   background: rgba(34, 197, 94, 0.2);
   border-color: rgba(34, 197, 94, 0.5);
-  color: #4ade80;
+  color: var(--status-ok-light);
 }

@@ -1,0 +1,206 @@
+/* ═══════════════════════════════════════════════════════════════
+   ANCIENT NERDS — Design Token System
+   Single source of truth for all colors, fonts, and spacing.
+   Components use ONLY Tier 2 (semantic) tokens.
+   ═══════════════════════════════════════════════════════════════ */
+
+:root {
+
+  /* ── Tier 1: Palette (raw colors, named by color) ────────── */
+
+  /* Greens */
+  --_palette-green-900: #1a3a1a;
+  --_palette-green-800: #2a4a2a;
+  --_palette-green-700: #2a5a2a;
+  --_palette-green-600: #3a6a3a;
+  --_palette-green-500: #4a8a4a;
+  --_palette-green-400: #6ab06a;
+  --_palette-green-300: #b0d0b0;
+  --_palette-green-bright: #00cc66;
+
+  /* Reds */
+  --_palette-red-brand: #c02023;
+  --_palette-red-brand-hover: #d42426;
+  --_palette-red-bright: #ff4444;
+  --_palette-red-light: #ff6b6b;
+  --_palette-red-dim: #cc3333;
+  --_palette-red-error: #ef4444;
+
+  /* Cyans / Teals */
+  --_palette-cyan-500: #00c8c8;
+  --_palette-cyan-hover: #4ae0e0;
+  --_palette-cyan-info: #00b4b4;
+
+  /* Yellows / Oranges / Ambers */
+  --_palette-yellow-500: #f5c518;
+  --_palette-orange-500: #f59e0b;
+  --_palette-amber-400: #fbbf24;
+  --_palette-gold: #ffd700;
+
+  /* Blues */
+  --_palette-blue-400: #60a5fa;
+  --_palette-blue-500: #3b82f6;
+  --_palette-purple-500: #8b5cf6;
+  --_palette-purple-400: #a78bfa;
+
+  /* Neutrals */
+  --_palette-dark-950: #000000;
+  --_palette-dark-900: #0a0e14;
+  --_palette-dark-850: #0a1210;
+  --_palette-dark-800: #0a1520;
+  --_palette-dark-750: #0a1a1f;
+  --_palette-dark-700: #1a2a1a;
+  --_palette-dark-650: #1a2530;
+  --_palette-neutral-600: #3a3a3a;
+  --_palette-neutral-500: #555555;
+  --_palette-neutral-400: #666666;
+  --_palette-neutral-350: #707070;
+  --_palette-neutral-300: #787878;
+  --_palette-neutral-250: #888888;
+  --_palette-neutral-200: #a0a0a0;
+  --_palette-neutral-150: #aaaaaa;
+  --_palette-neutral-100: #cccccc;
+  --_palette-neutral-50: #e0e0e0;
+  --_palette-white: #ffffff;
+
+  /* Status greens (different from CRT accent green) */
+  --_palette-status-green: #22c55e;
+  --_palette-status-green-light: #4ade80;
+  --_palette-status-green-dark: #16a34a;
+  --_palette-success-alt: #4caf50;
+
+  /* Game / rarity specific */
+  --_palette-rarity-common: rgba(150, 150, 150, 0.3);
+  --_palette-rarity-uncommon: rgba(76, 175, 80, 0.5);
+  --_palette-rarity-rare: rgba(0, 180, 180, 0.5);
+  --_palette-rarity-epic: rgba(156, 39, 176, 0.6);
+  --_palette-rarity-legendary: rgba(255, 193, 7, 0.7);
+
+
+  /* ── Tier 2: Semantic Tokens (named by role) ─────────────── */
+
+  /* — Surfaces — */
+  --surface-page:          var(--_palette-dark-900);
+  --surface-page-alt:      var(--_palette-dark-850);
+  --surface-raised:        rgba(0, 20, 25, 0.35);
+  --surface-raised-solid:  rgba(0, 15, 20, 0.7);
+  --surface-sunken:        rgba(0, 30, 35, 0.35);
+  --surface-input:         rgba(0, 20, 25, 0.6);
+  --surface-overlay:       rgba(0, 0, 0, 0.85);
+  --surface-modal:         rgba(0, 20, 25, 0.95);
+  --surface-deep:          rgb(0, 15, 20);
+  --surface-deep-alt:      rgb(0, 20, 30);
+  --surface-header:        rgba(0, 10, 15, 0.95);
+  --surface-footer:        rgba(0, 10, 15, 0.6);
+
+  /* — Text — */
+  --text-primary:          var(--_palette-white);
+  --text-secondary:        var(--_palette-neutral-250);
+  --text-muted:            var(--_palette-neutral-300);
+  --text-dimmed:           var(--_palette-neutral-400);
+  --text-faint:            var(--_palette-neutral-200);
+  --text-heading:          var(--_palette-white);
+  --text-link:             var(--_palette-cyan-500);
+  --text-body:             var(--_palette-neutral-50);
+
+  /* — Accents — */
+  --accent-primary:        var(--_palette-green-bright);
+  --accent-secondary:      var(--_palette-cyan-500);
+  --accent-secondary-hover: var(--_palette-cyan-hover);
+  --accent-warm:           var(--_palette-yellow-500);
+  --accent-orange:         var(--_palette-orange-500);
+  --accent-amber:          var(--_palette-amber-400);
+  --accent-blue:           var(--_palette-blue-400);
+  --accent-purple:         var(--_palette-purple-500);
+  --accent-purple-light:   var(--_palette-purple-400);
+
+  /* — Status — */
+  --status-ok:             var(--_palette-status-green);
+  --status-ok-light:       var(--_palette-status-green-light);
+  --status-ok-dark:        var(--_palette-status-green-dark);
+  --status-ok-alt:         var(--_palette-success-alt);
+  --status-warning:        var(--_palette-orange-500);
+  --status-error:          var(--_palette-red-error);
+  --status-error-bright:   var(--_palette-red-bright);
+  --status-error-soft:     var(--_palette-red-light);
+  --status-info:           var(--_palette-cyan-info);
+  --status-idle:           var(--_palette-neutral-600);
+  --status-idle-count:     #2a2a2a;
+
+  /* — Brand — */
+  --brand-primary:         var(--_palette-red-brand);
+  --brand-primary-hover:   var(--_palette-red-brand-hover);
+  --brand-discord:         #5865F2;
+  --brand-discord-hover:   #4752c4;
+
+  /* — Borders — */
+  --border-default:        rgba(255, 255, 255, 0.1);
+  --border-subtle:         rgba(255, 255, 255, 0.06);
+  --border-hover:          rgba(255, 255, 255, 0.15);
+  --border-accent:         rgba(0, 180, 180, 0.2);
+  --border-accent-strong:  rgba(0, 180, 180, 0.35);
+  --border-accent-subtle:  rgba(0, 180, 180, 0.08);
+  --border-crt:            var(--_palette-dark-700);
+  --border-red:            #3a1a1a;
+  --border-cyan:           #1a3a3a;
+  --border-cyan-hover:     #2a5a5a;
+
+  /* — Interactive / Buttons — */
+  --btn-primary-bg:        var(--brand-primary);
+  --btn-primary-bg-hover:  var(--brand-primary-hover);
+  --btn-danger-text:       var(--status-error-soft);
+  --btn-secondary-bg:      rgba(255, 255, 255, 0.06);
+  --btn-secondary-bg-hover: rgba(255, 255, 255, 0.1);
+
+  /* — Special — */
+  --scrollbar-thumb:       rgba(192, 32, 35, 0.5);
+  --scrollbar-thumb-hover: rgba(192, 32, 35, 0.7);
+  --scrollbar-track:       rgba(0, 0, 0, 0.2);
+  --glow-green:            rgba(0, 204, 102, 0.6);
+  --glow-cyan:             rgba(0, 180, 180, 0.1);
+  --focus-ring:            var(--accent-secondary);
+  --blur-amount:           16px;
+
+  /* — Rarity (game cards — kept unique) — */
+  --rarity-common:         var(--_palette-rarity-common);
+  --rarity-uncommon:       var(--_palette-rarity-uncommon);
+  --rarity-rare:           var(--_palette-rarity-rare);
+  --rarity-epic:           var(--_palette-rarity-epic);
+  --rarity-legendary:      var(--_palette-rarity-legendary);
+
+  /* — Tiers (achievements) — */
+  --tier-bronze:           #cd7f32;
+  --tier-silver:           #C0C0C0;
+  --tier-gold:             #ffd700;
+  --tier-star:             #FFC107;
+
+  /* — Typography — */
+  --font-body:             'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  --font-heading:          'Orbitron', 'JetBrains Mono', monospace;
+  --font-ui:               'Inter', system-ui, -apple-system, sans-serif;
+
+  /* — CRT palette shades (for direct use in CRT-styled components) — */
+  --crt-green-900:         var(--_palette-green-900);
+  --crt-green-800:         var(--_palette-green-800);
+  --crt-green-700:         var(--_palette-green-700);
+  --crt-green-600:         var(--_palette-green-600);
+  --crt-green-500:         var(--_palette-green-500);
+  --crt-green-400:         var(--_palette-green-400);
+  --crt-green-300:         var(--_palette-green-300);
+
+  /* — JSON Syntax Highlighting (api-docs) — */
+  --syntax-key:            #5ccfe6;
+  --syntax-string:         #bae67e;
+  --syntax-number:         #d4bfff;
+  --syntax-bool:           #ffa759;
+
+}
+
+/* ── Satellite Mode (higher opacity for bright imagery) ────── */
+body.satellite-mode {
+  --surface-raised:        rgba(0, 15, 20, 0.75);
+  --surface-raised-solid:  rgba(0, 10, 15, 0.88);
+  --surface-sunken:        rgba(0, 20, 25, 0.7);
+  --border-accent:         rgba(0, 180, 180, 0.35);
+  --blur-amount:           20px;
+}

@@ -2,8 +2,8 @@
 
 .cards-page {
   min-height: 100vh;
-  background: var(--bg-primary, #0a1520);
-  color: var(--text-primary, #e0d6c8);
+  background: var(--surface-page);
+  color: var(--text-primary);
 }
 
 .cards-container {
@@ -22,7 +22,7 @@
   display: inline-block;
   margin-top: 1rem;
   padding: 0.75rem 2rem;
-  background: var(--primary-red, #c02023);
+  background: var(--brand-primary);
   color: #fff;
   border-radius: 6px;
   text-decoration: none;
@@ -50,9 +50,9 @@
 .starter-btn {
   margin-left: auto;
   padding: 0.4rem 1rem;
-  border: 1px solid var(--primary-red, #c02023);
+  border: 1px solid var(--brand-primary);
   background: transparent;
-  color: var(--primary-red, #c02023);
+  color: var(--brand-primary);
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.85rem;
@@ -60,7 +60,7 @@
 
 .daily-btn:hover,
 .starter-btn:hover {
-  background: var(--primary-red, #c02023);
+  background: var(--brand-primary);
   color: #fff;
 }
 
@@ -104,7 +104,7 @@
 
 .cards-tab.active {
   color: #fff;
-  border-bottom-color: var(--primary-red, #c02023);
+  border-bottom-color: var(--brand-primary);
 }
 
 /* Section */
@@ -123,7 +123,7 @@
   padding: 0.4rem 0.75rem;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #e0d6c8;
+  color: var(--text-body);
   border-radius: 4px;
   font-size: 0.85rem;
 }
@@ -160,7 +160,7 @@
   padding: 0.4rem 1rem;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #e0d6c8;
+  color: var(--text-body);
   border-radius: 4px;
   cursor: pointer;
 }
@@ -185,7 +185,7 @@
 }
 
 .deck-card.deck-active {
-  border-color: var(--primary-red, #c02023);
+  border-color: var(--brand-primary);
 }
 
 .deck-name {
@@ -203,15 +203,15 @@
   padding: 0.3rem 0.75rem;
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #e0d6c8;
+  color: var(--text-body);
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.8rem;
 }
 
 .deck-activate-btn:hover {
-  border-color: var(--primary-red, #c02023);
-  color: var(--primary-red, #c02023);
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
 }
 
 .deck-active-badge {
@@ -219,7 +219,7 @@
   padding: 0.2rem 0.6rem;
   background: rgba(192, 32, 35, 0.2);
   border: 1px solid rgba(192, 32, 35, 0.4);
-  color: var(--primary-red, #c02023);
+  color: var(--brand-primary);
   border-radius: 4px;
   font-size: 0.75rem;
 }
@@ -270,9 +270,9 @@
   text-align: center;
 }
 
-.pack-bronze { border-color: #CD7F32; }
-.pack-silver { border-color: #C0C0C0; }
-.pack-gold { border-color: #FFD700; }
+.pack-bronze { border-color: var(--tier-bronze); }
+.pack-silver { border-color: var(--tier-silver); }
+.pack-gold { border-color: var(--tier-gold); }
 .pack-legendary { border-color: #9C27B0; box-shadow: 0 0 16px rgba(156, 39, 176, 0.2); }
 
 .pack-name {
@@ -310,7 +310,7 @@
 
 .pack-open-btn {
   padding: 0.5rem 1.5rem;
-  background: var(--primary-red, #c02023);
+  background: var(--brand-primary);
   border: none;
   color: #fff;
   border-radius: 6px;
@@ -334,7 +334,7 @@
   background: rgba(244, 67, 54, 0.15);
   border: 1px solid rgba(244, 67, 54, 0.3);
   border-radius: 6px;
-  color: #f44336;
+  color: var(--status-error);
   font-size: 0.85rem;
 }
 
@@ -353,7 +353,7 @@
   padding: 0.4rem 1.5rem;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #e0d6c8;
+  color: var(--text-body);
   border-radius: 4px;
   cursor: pointer;
 }

@@ -29,11 +29,11 @@
   align-items: center;
   gap: 8px;
   font-size: 11px;
-  color: var(--text-secondary, rgba(255, 255, 255, 0.5));
+  color: var(--text-secondary);
 }
 
 .news-card-channel {
-  color: var(--primary-red, #c02023);
+  color: var(--brand-primary);
   opacity: 0.8;
 }
 
@@ -192,7 +192,7 @@
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  color: var(--primary-red, #c02023);
+  color: var(--brand-primary);
   text-decoration: none;
   padding: 6px 12px;
   border: 1px solid rgba(192, 32, 35, 0.3);
@@ -207,13 +207,13 @@
 }
 
 .news-card-ts {
-  color: var(--text-secondary, rgba(255, 255, 255, 0.5));
+  color: var(--text-secondary);
   font-size: 10px;
 }
 
 .news-card-video-title {
   font-size: 10px;
-  color: var(--text-secondary, rgba(255, 255, 255, 0.5));
+  color: var(--text-secondary);
   font-style: italic;
   opacity: 0.7;
 }
@@ -233,7 +233,7 @@
   align-items: center;
   gap: 5px;
   font-size: 11px;
-  color: var(--primary-red);
+  color: var(--brand-primary);
   background: none;
   border: 1px solid rgba(192, 32, 35, 0.3);
   border-radius: 4px;
@@ -247,7 +247,7 @@
 .news-feed-map-link:hover {
   background: rgba(192, 32, 35, 0.1);
   border-color: rgba(192, 32, 35, 0.5);
-  color: var(--primary-red-hover);
+  color: var(--brand-primary-hover);
 }
 
 .news-feed-item:hover .news-card-post-text {
@@ -308,8 +308,8 @@
 
 /* Card */
 .news-page-card {
-  background: var(--bg-card, rgba(8, 18, 26, 0.7));
-  border: 1px solid var(--border-color, rgba(0, 180, 180, 0.12));
+  background: var(--surface-raised);
+  border: 1px solid var(--border-accent);
   border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
@@ -451,7 +451,7 @@
   width: 380px;
   max-width: calc(100vw - 16px);
   background: #08121a;
-  border: 1px solid var(--border-color, rgba(0, 180, 180, 0.15));
+  border: 1px solid var(--border-accent);
   border-radius: 8px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 180, 180, 0.08);
   animation: citation-popover-in 0.15s ease-out;
@@ -468,8 +468,8 @@
   width: 12px;
   height: 12px;
   background: #08121a;
-  border-right: 1px solid var(--border-color, rgba(0, 180, 180, 0.15));
-  border-bottom: 1px solid var(--border-color, rgba(0, 180, 180, 0.15));
+  border-right: 1px solid var(--border-accent);
+  border-bottom: 1px solid var(--border-accent);
   rotate: 45deg;
 }
 
@@ -479,8 +479,8 @@
   top: -6px;
   border-right: none;
   border-bottom: none;
-  border-left: 1px solid var(--border-color, rgba(0, 180, 180, 0.15));
-  border-top: 1px solid var(--border-color, rgba(0, 180, 180, 0.15));
+  border-left: 1px solid var(--border-accent);
+  border-top: 1px solid var(--border-accent);
 }
 
 /* Remove inner card border-bottom since popover already has a border */

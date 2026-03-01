@@ -1,20 +1,7 @@
+@import './tokens.css';
 @import './disclaimer.css';
 
 /* ANCIENT NERDS - Landing Page Styles */
-
-:root {
-  --primary-red: #c02023;
-  --primary-red-hover: #d42426;
-  --bg-dark: #000000;
-  --bg-card: rgba(0, 20, 25, 0.35);
-  --bg-card-solid: rgba(0, 15, 20, 0.7);
-  --border-color: rgba(0, 180, 180, 0.2);
-  --text-primary: #ffffff;
-  --text-secondary: #888888;
-  --text-muted: #787878;
-  --accent-cyan: rgba(0, 180, 180, 0.3);
-  --glow-cyan: rgba(0, 180, 180, 0.1);
-}
 
 * {
   margin: 0;
@@ -34,7 +21,7 @@ html {
 body {
   background: #000;
   color: var(--text-primary);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-ui);
   line-height: 1.6;
   overflow-x: hidden;
 }
@@ -140,7 +127,7 @@ body {
 
 .hero-content .cta-primary:hover,
 .final-cta .cta-primary:hover {
-  background: var(--primary-red);
+  background: var(--brand-primary);
   color: #000;
 }
 
@@ -164,14 +151,14 @@ body {
 .hero-title {
   position: relative;
   z-index: 1;
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: clamp(2rem, 4.5vw, 3.5rem);
   font-weight: 700;
   letter-spacing: 0.15em;
   margin-top: 0;
   margin-bottom: 8px;
   white-space: nowrap;
-  color: var(--primary-red);
+  color: var(--brand-primary);
   text-shadow:
     0 0 10px rgba(192, 32, 35, 0.5),
     0 0 20px rgba(192, 32, 35, 0.3),
@@ -181,11 +168,11 @@ body {
 }
 
 .hero-subtitle {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: clamp(0.9rem, 2vw, 1.2rem);
   font-weight: 400;
   letter-spacing: 0.3em;
-  color: #bbb;
+  color: var(--text-faint);
   margin-bottom: 24px;
   text-shadow: 0 0 4px rgba(0,0,0,1), 0 0 10px rgba(0,0,0,1), 0 0 30px rgba(0,0,0,0.9), 0 0 60px rgba(0,0,0,0.7);
 }
@@ -194,7 +181,7 @@ body {
   font-family: 'Cormorant Garamond', serif;
   font-style: italic;
   font-size: clamp(1.1rem, 2.5vw, 1.5rem);
-  color: #bbb;
+  color: var(--text-faint);
   margin-bottom: 40px;
   text-wrap: balance;
   text-shadow: 0 0 4px rgba(0,0,0,1), 0 0 10px rgba(0,0,0,1), 0 0 30px rgba(0,0,0,0.9), 0 0 60px rgba(0,0,0,0.7);
@@ -213,10 +200,10 @@ body {
 }
 
 .hero-stat-value {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: clamp(1.4rem, 3vw, 2rem);
   font-weight: 700;
-  color: var(--primary-red);
+  color: var(--brand-primary);
   text-shadow: 0 0 4px rgba(0,0,0,1), 0 0 10px rgba(0,0,0,1), 0 0 30px rgba(0,0,0,0.9), 0 0 60px rgba(0,0,0,0.7);
 }
 
@@ -232,10 +219,10 @@ body {
   display: inline-block;
   padding: 16px 48px;
   background: transparent;
-  border: 1px solid var(--primary-red);
-  color: var(--primary-red);
+  border: 1px solid var(--brand-primary);
+  color: var(--brand-primary);
   text-decoration: none;
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 0.95rem;
   font-weight: 600;
   letter-spacing: 0.15em;
@@ -245,7 +232,7 @@ body {
 }
 
 .cta-primary:hover {
-  background: var(--primary-red);
+  background: var(--brand-primary);
   color: #000;
 }
 
@@ -274,7 +261,7 @@ body {
 /* ─── Section Headers ─── */
 
 .section-label {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: clamp(1.4rem, 3vw, 2rem);
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -319,7 +306,7 @@ body {
   object-fit: cover;
   border-radius: 12px;
   box-shadow: 0 0 40px var(--glow-cyan);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   transition: transform 0.4s ease, box-shadow 0.4s ease;
 }
 
@@ -339,7 +326,7 @@ body {
   aspect-ratio: 16/9;
   object-fit: cover;
   border-radius: 8px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   opacity: 0.8;
   transition: opacity 0.3s, transform 0.3s;
   cursor: pointer;
@@ -387,7 +374,7 @@ body {
   object-fit: cover;
   object-position: top left;
   border-radius: 10px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   box-shadow: 0 0 40px var(--glow-cyan);
   cursor: pointer;
   transition: transform 0.3s;
@@ -469,7 +456,7 @@ body {
   aspect-ratio: 3/2;
   object-fit: cover;
   border-radius: 10px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   box-shadow: 0 0 30px var(--glow-cyan);
   transition: transform 0.3s;
 }
@@ -485,7 +472,7 @@ body {
   height: 120px;
   border-radius: 50%;
   margin-bottom: 16px;
-  border: 2px solid var(--border-color);
+  border: 2px solid var(--border-accent);
   box-shadow: 0 0 20px var(--glow-cyan);
 }
 
@@ -493,10 +480,10 @@ body {
   display: inline-block;
   margin-top: 24px;
   padding: 12px 32px;
-  border: 1px solid var(--primary-red);
-  color: var(--primary-red);
+  border: 1px solid var(--brand-primary);
+  color: var(--brand-primary);
   text-decoration: none;
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 0.85rem;
   font-weight: 500;
   letter-spacing: 0.1em;
@@ -506,7 +493,7 @@ body {
 }
 
 .cta-secondary:hover {
-  background: var(--primary-red);
+  background: var(--brand-primary);
   color: #000;
 }
 
@@ -524,8 +511,8 @@ body {
 
 .split-card {
   padding: 40px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-accent);
   border-radius: 16px;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -538,7 +525,7 @@ body {
   object-fit: cover;
   border-radius: 10px;
   margin: 20px 0;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
 }
 
 .split-card .section-label {
@@ -561,8 +548,8 @@ body {
 }
 
 .tool-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-accent);
   border-radius: 12px;
   padding: 20px;
   backdrop-filter: blur(16px);
@@ -572,7 +559,7 @@ body {
 }
 
 .tool-card:hover {
-  border-color: var(--accent-cyan);
+  border-color: var(--border-accent-strong);
   box-shadow: 0 0 30px var(--glow-cyan);
   transform: translateY(-4px);
 }
@@ -587,7 +574,7 @@ body {
 }
 
 .tool-card h3 {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 0.9rem;
   font-weight: 500;
   letter-spacing: 0.05em;
@@ -616,7 +603,7 @@ body {
   width: auto;
   object-fit: cover;
   border-radius: 12px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   box-shadow: 0 0 40px var(--glow-cyan);
 }
 
@@ -632,7 +619,7 @@ body {
 .source-badge {
   padding: 6px 16px;
   background: rgba(0, 20, 25, 0.6);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   border-radius: 20px;
   font-size: 0.8rem;
   color: var(--text-secondary);
@@ -647,7 +634,7 @@ body {
   margin: 24px auto;
   display: block;
   border-radius: 12px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
 }
 
 /* ─── Founders Section ─── */
@@ -658,7 +645,7 @@ body {
   object-fit: cover;
   border-radius: 12px;
   box-shadow: 0 0 40px var(--glow-cyan);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
 }
 
 .founders-detail {
@@ -677,7 +664,7 @@ body {
 .founders-loc {
   padding: 4px 14px;
   background: rgba(0, 20, 25, 0.6);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-accent);
   border-radius: 16px;
   font-size: 0.78rem;
   color: var(--text-secondary);
@@ -703,10 +690,10 @@ body {
   margin-top: 24px;
   padding: 14px 40px;
   background: transparent;
-  border: 1px solid #5865F2;
-  color: #5865F2;
+  border: 1px solid var(--brand-discord);
+  color: var(--brand-discord);
   text-decoration: none;
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 0.9rem;
   font-weight: 600;
   letter-spacing: 0.12em;
@@ -716,7 +703,7 @@ body {
 }
 
 .cta-discord:hover {
-  background: #5865F2;
+  background: var(--brand-discord);
   color: #000;
 }
 
@@ -802,7 +789,7 @@ body {
 }
 
 .footer-name {
-  font-family: 'Orbitron', sans-serif;
+  font-family: var(--font-heading);
   font-size: 0.85rem;
   letter-spacing: 0.1em;
 }
@@ -811,8 +798,8 @@ body {
   font-size: 0.6rem;
   padding: 2px 8px;
   background: transparent;
-  border: 1px solid #f0c040;
-  color: #f0c040;
+  border: 1px solid var(--accent-warm);
+  color: var(--accent-warm);
   border-radius: 3px;
   letter-spacing: 0.1em;
   font-weight: 600;
@@ -860,13 +847,13 @@ body {
 
 .footer-legal {
   font-size: 0.7rem;
-  color: #787878;
+  color: var(--text-muted);
   text-decoration: none;
   margin-top: 12px;
 }
 
 .footer-legal:hover {
-  color: #888;
+  color: var(--text-secondary);
 }
 
 /* ─── Image Lightbox ─── */

@@ -36,8 +36,8 @@
   width: 100%;
   height: 36px;
   padding: 0 12px;
-  background: rgba(0, 20, 25, 0.6);
-  border: 1px solid var(--border-color);
+  background: var(--surface-input);
+  border: 1px solid var(--border-accent);
   border-radius: 4px;
   color: var(--text-primary);
   font-size: 14px;
@@ -57,7 +57,7 @@
 .site-form-input:focus,
 .site-form-select:focus,
 .site-form-textarea:focus {
-  border-color: var(--primary-red);
+  border-color: var(--brand-primary);
 }
 
 .site-form-input::placeholder,
@@ -80,7 +80,7 @@
 }
 
 .site-form-select option {
-  background: #0a1a1f;
+  background: var(--surface-page);
   color: var(--text-primary);
 }
 
@@ -120,5 +120,5 @@
 
 .site-form-coord-clear:hover {
   opacity: 1;
-  color: var(--primary-red);
+  color: var(--brand-primary);
 }

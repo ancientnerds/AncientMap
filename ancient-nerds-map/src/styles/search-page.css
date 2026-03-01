@@ -2,7 +2,7 @@
   width: 100vw;
   height: 100vh;
   overflow-y: auto;
-  background: var(--bg-dark);
+  background: var(--surface-page);
   color: var(--text-primary);
 }
 
@@ -15,7 +15,7 @@
   position: sticky;
   top: 0;
   z-index: 10;
-  background: var(--bg-dark);
+  background: var(--surface-page);
 }
 
 .search-bar-wrap {
@@ -27,8 +27,8 @@
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-accent);
   border-radius: 8px;
 }
 
@@ -98,8 +98,8 @@
 
 .search-bar-filter-btn.active {
   background: rgba(192, 32, 35, 0.15);
-  border-color: var(--primary-red);
-  color: var(--primary-red);
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
 }
 
 .search-bar-filter-btn.has-filters::after {
@@ -107,7 +107,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--primary-red);
+  background: var(--brand-primary);
 }
 
 /* Filters panel */
@@ -153,8 +153,8 @@
 /* Random chip — glow on hover when already active (re-shuffle) */
 .search-bar-inner .news-page-chip.active:hover {
   background: rgba(192, 32, 35, 0.25);
-  border-color: var(--primary-red-hover);
-  color: var(--primary-red-hover);
+  border-color: var(--brand-primary-hover);
+  color: var(--brand-primary-hover);
   box-shadow: 0 0 12px rgba(192, 32, 35, 0.3);
 }
 
