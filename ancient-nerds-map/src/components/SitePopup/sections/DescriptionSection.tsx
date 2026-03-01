@@ -93,18 +93,23 @@ export function DescriptionSection({
   const citationMap = buildCitationMap(descriptionCitations)
 
   // Build unique citation source domains for favicon display
-  const citationSources: { domain: string; url: string; title: string }[] = []
-  const seenDomains = new Set<string>()
+  const citationSources: { domain: string; url: string; title: string; nums: number[] }[] = []
+  const seenDomains = new Map<string, number>() // domain → index in citationSources
   // Wikipedia domain from sourceUrl is already shown via its own icon — skip it
+  const skipDomains = new Set<string>()
   if (sourceUrl) {
-    try { seenDomains.add(new URL(sourceUrl).hostname.replace(/^www\./, '')) } catch { /* skip */ }
+    try { skipDomains.add(new URL(sourceUrl).hostname.replace(/^www\./, '')) } catch { /* skip */ }
   }
   if (descriptionCitations) {
     for (const c of descriptionCitations) {
       const d = c.domain.replace(/^www\./, '')
-      if (!seenDomains.has(d)) {
-        seenDomains.add(d)
-        citationSources.push({ domain: c.domain, url: c.url, title: c.title })
+      if (skipDomains.has(d)) continue
+      const existing = seenDomains.get(d)
+      if (existing !== undefined) {
+        citationSources[existing].nums.push(c.n)
+      } else {
+        seenDomains.set(d, citationSources.length)
+        citationSources.push({ domain: c.domain, url: c.url, title: c.title, nums: [c.n] })
       }
     }
   }
@@ -163,24 +168,27 @@ export function DescriptionSection({
         )}
 
         {/* Citation source favicons */}
-        {citationSources.map((src, i) => (
-          <a
-            key={`cite-src-${i}`}
-            href={src.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="popup-link-item cite-source"
-            title={src.title}
-          >
-            <img
-              src={`https://www.google.com/s2/favicons?domain=${src.domain}&sz=32`}
-              alt=""
-              width="20"
-              height="20"
-              loading="lazy"
-            />
-          </a>
-        ))}
+        {citationSources.map((src, i) => {
+          const label = `[${src.nums.join(',')}] ${src.title}`
+          return (
+            <a
+              key={`cite-src-${i}`}
+              href={src.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="popup-link-item cite-source"
+              title={label}
+            >
+              <img
+                src={`https://www.google.com/s2/favicons?domain=${src.domain}&sz=32`}
+                alt={label}
+                width="20"
+                height="20"
+                loading="lazy"
+              />
+            </a>
+          )
+        })}
 
         {/* Reference links — favicon + domain buttons */}
         {referenceLinks?.map((ref, i) => (

@@ -382,6 +382,11 @@ async def get_all_sites(
                 if row.last_audited:
                     site["aud"] = row.last_audited.isoformat()
                 rd = row.raw_data
+                if isinstance(rd, str):
+                    try:
+                        rd = json.loads(rd)
+                    except (ValueError, TypeError):
+                        rd = None
                 if isinstance(rd, dict) and "description_citations" in rd:
                     site["dc"] = rd["description_citations"]
                 all_sites.append(site)
