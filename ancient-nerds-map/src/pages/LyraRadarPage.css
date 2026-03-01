@@ -77,9 +77,9 @@
 }
 
 .lyra-discovery-card:hover {
-  border-color: rgba(0, 180, 180, 0.3);
+  border-color: var(--accent-glow-30);
   transform: translateY(-3px) scale(1.01);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 180, 180, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--accent-glow-10);
 }
 
 .lyra-discovery-name-block {
@@ -263,16 +263,16 @@
   padding: 4px 10px;
   font-size: 11px;
   font-weight: 500;
-  color: rgba(0, 180, 180, 0.85);
-  background: rgba(0, 180, 180, 0.08);
-  border: 1px solid rgba(0, 180, 180, 0.2);
+  color: var(--accent-glow-85);
+  background: var(--accent-glow-08);
+  border: 1px solid var(--border-accent);
   border-radius: 4px;
   transition: all 0.15s;
 }
 
 .lyra-source-chip:hover {
-  background: rgba(0, 180, 180, 0.15);
-  border-color: rgba(0, 180, 180, 0.35);
+  background: var(--accent-glow-15);
+  border-color: var(--border-accent-strong);
 }
 
 .lyra-source-name {
@@ -283,13 +283,13 @@
 }
 
 .lyra-source-link {
-  color: rgba(0, 180, 180, 0.6);
+  color: var(--accent-glow-60);
   transition: color 0.15s;
   display: inline-flex;
 }
 
 .lyra-source-link:hover {
-  color: rgba(0, 180, 180, 1);
+  color: var(--accent-glow-100);
 }
 
 /* Suggestions chips */
@@ -694,9 +694,9 @@
   padding: 1px 5px;
   font-size: 9px;
   font-weight: 600;
-  color: rgba(0, 180, 180, 0.85);
-  background: rgba(0, 180, 180, 0.1);
-  border: 1px solid rgba(0, 180, 180, 0.2);
+  color: var(--accent-glow-85);
+  background: var(--accent-glow-10);
+  border: 1px solid var(--border-accent);
   border-radius: 3px;
 }
 

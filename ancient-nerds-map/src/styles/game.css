@@ -321,7 +321,7 @@
 .game-advantage-note {
   margin-top: 1rem;
   padding: 0.75rem 1rem;
-  background: rgba(0, 180, 180, 0.04);
+  background: var(--accent-glow-04);
   border: 1px solid var(--border-accent);
   border-radius: 6px;
   font-size: 0.85rem;
@@ -540,7 +540,7 @@
 
 .game-expedition-tag {
   padding: 0.35rem 0.75rem;
-  background: rgba(0, 180, 180, 0.06);
+  background: var(--accent-glow-06);
   border: 1px solid var(--border-accent);
   border-radius: 20px;
   font-size: 0.82rem;
@@ -621,8 +621,8 @@
 
 /* Discord commands */
 .game-cmd code {
-  background: rgba(0, 180, 180, 0.08);
-  border: 1px solid rgba(0, 180, 180, 0.12);
+  background: var(--accent-glow-08);
+  border: 1px solid var(--accent-glow-12);
   padding: 0.15rem 0.4rem;
   border-radius: 3px;
   font-size: 0.82rem;

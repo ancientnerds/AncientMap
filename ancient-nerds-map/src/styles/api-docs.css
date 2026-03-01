@@ -55,7 +55,7 @@
   transition: border-color 0.2s;
 }
 .api-base-url:hover {
-  border-color: rgba(0, 180, 180, 0.4);
+  border-color: var(--border-accent-bright);
 }
 
 .api-base-label {
@@ -145,10 +145,10 @@
   transition: border-color 0.2s, background 0.2s;
 }
 .api-card:hover {
-  border-color: rgba(0, 180, 180, 0.35);
+  border-color: var(--border-accent-strong);
 }
 .api-card.expanded {
-  border-color: rgba(0, 180, 180, 0.35);
+  border-color: var(--border-accent-strong);
   background: rgba(0, 20, 25, 0.5);
 }
 
@@ -282,7 +282,7 @@
   font-size: 10px;
 }
 .api-param-input:focus {
-  border-color: rgba(0, 180, 180, 0.45);
+  border-color: var(--accent-glow-45);
 }
 
 /* ── Execute bar ── */
@@ -334,7 +334,7 @@
 }
 .api-exec-secondary:hover {
   color: var(--text-primary);
-  border-color: rgba(0, 180, 180, 0.4);
+  border-color: var(--border-accent-bright);
 }
 
 .api-exec-url {
@@ -404,7 +404,7 @@
 }
 .api-response-copy:hover {
   color: var(--text-primary);
-  border-color: rgba(0, 180, 180, 0.35);
+  border-color: var(--border-accent-strong);
 }
 
 .api-response-body {
@@ -447,7 +447,7 @@
   transition: border-color 0.2s;
 }
 .api-quickref.open {
-  border-color: rgba(0, 180, 180, 0.35);
+  border-color: var(--border-accent-strong);
 }
 
 .api-quickref-toggle {
@@ -539,8 +539,8 @@
 .api-quickref-tag {
   padding: 2px 7px;
   border-radius: 12px;
-  background: rgba(0, 180, 180, 0.06);
-  border: 1px solid rgba(0, 180, 180, 0.15);
+  background: var(--accent-glow-06);
+  border: 1px solid var(--accent-glow-15);
   font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
   font-size: 10px;
   color: rgba(255, 255, 255, 0.6);
@@ -549,7 +549,7 @@
 .api-quickref-more {
   padding: 2px 10px;
   border-radius: 12px;
-  border: 1px dashed rgba(0, 180, 180, 0.25);
+  border: 1px dashed var(--border-accent-medium);
   background: transparent;
   font-family: 'Inter', sans-serif;
   font-size: 10px;
@@ -559,7 +559,7 @@
 }
 .api-quickref-more:hover {
   color: var(--text-primary);
-  border-color: rgba(0, 180, 180, 0.45);
+  border-color: var(--accent-glow-45);
 }
 
 /* ── Parameter input enhancements ── */
@@ -579,9 +579,9 @@
   font-size: 8px;
   padding: 1px 5px;
   border-radius: 3px;
-  background: rgba(0, 180, 180, 0.08);
-  border: 1px solid rgba(0, 180, 180, 0.15);
-  color: rgba(0, 180, 180, 0.5);
+  background: var(--accent-glow-08);
+  border: 1px solid var(--accent-glow-15);
+  color: var(--accent-glow-50);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -608,18 +608,18 @@
 .api-example-btn {
   padding: 3px 10px;
   border-radius: 4px;
-  border: 1px solid rgba(0, 180, 180, 0.25);
-  background: rgba(0, 180, 180, 0.06);
+  border: 1px solid var(--border-accent-medium);
+  background: var(--accent-glow-06);
   font-family: 'Inter', sans-serif;
   font-size: 10px;
-  color: rgba(0, 180, 180, 0.7);
+  color: var(--accent-glow-70);
   cursor: pointer;
   transition: background 0.2s, color 0.2s, border-color 0.2s;
 }
 .api-example-btn:hover {
-  background: rgba(0, 180, 180, 0.12);
-  color: rgba(0, 180, 180, 0.9);
-  border-color: rgba(0, 180, 180, 0.4);
+  background: var(--accent-glow-12);
+  color: var(--accent-glow-90);
+  border-color: var(--border-accent-bright);
 }
 
 /* ── Responsive ── */

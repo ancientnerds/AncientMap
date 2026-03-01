@@ -146,7 +146,7 @@
   font-size: 11px;
   color: rgba(255, 255, 255, 0.35);
   background: rgba(0, 0, 0, 0.15);
-  border-bottom: 1px solid rgba(0, 180, 180, 0.06);
+  border-bottom: 1px solid var(--accent-glow-06);
 }
 
 /* ── Stats bar below header ── */
@@ -261,6 +261,22 @@
 }
 .hamburger-link.active {
   color: var(--brand-primary);
+}
+
+/* Per-page phosphor colors in nav */
+.hamburger-link[data-theme="green"] { color: #00cc66; }
+.hamburger-link[data-theme="amber"] { color: #FF9500; }
+.hamburger-link[data-theme="blue"]  { color: #4466FF; }
+.hamburger-link[data-theme="radar"] { color: #FFB500; }
+.hamburger-link[data-theme="white"] { color: #A8B0B8; }
+.hamburger-link[data-theme="red"]   { color: #c02023; }
+
+.hamburger-link[data-theme]:hover {
+  filter: brightness(1.3);
+}
+.hamburger-link[data-theme].active {
+  filter: brightness(1.4);
+  text-shadow: 0 0 8px currentColor;
 }
 
 .hamburger-divider {

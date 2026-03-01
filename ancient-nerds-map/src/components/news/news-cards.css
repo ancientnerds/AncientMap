@@ -6,7 +6,7 @@
 
 .news-feed-item {
   padding: 12px 16px;
-  border-bottom: 1px solid rgba(0, 180, 180, 0.08);
+  border-bottom: 1px solid var(--border-accent-subtle);
   cursor: pointer;
   transition: background 0.15s;
   display: flex;
@@ -166,7 +166,7 @@
 .news-card-expanded {
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid rgba(0, 180, 180, 0.08);
+  border-top: 1px solid var(--border-accent-subtle);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -318,9 +318,9 @@
 }
 
 .news-page-card:hover {
-  border-color: rgba(0, 180, 180, 0.3);
+  border-color: var(--accent-glow-30);
   transform: translateY(-3px) scale(1.01);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 180, 180, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--accent-glow-10);
 }
 
 .news-page-card.expanded {
@@ -453,7 +453,7 @@
   background: #08121a;
   border: 1px solid var(--border-accent);
   border-radius: 8px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 180, 180, 0.08);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--accent-glow-08);
   animation: citation-popover-in 0.15s ease-out;
   pointer-events: auto;
 }
@@ -511,8 +511,8 @@
 
 /* Pinned citation popover — click-to-pin mode */
 .citation-popover--pinned {
-  border-color: rgba(0, 180, 180, 0.3);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 180, 180, 0.15);
+  border-color: var(--accent-glow-30);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--accent-glow-15);
   cursor: grab;
 }
 
