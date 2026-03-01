@@ -271,6 +271,7 @@ export default function SitePopup({
     lat,
     lng,
     sourceUrl: displaySite.sourceUrl,
+    thumbnailUrl: displaySite.image,
     isOffline,
   })
 
@@ -514,7 +515,7 @@ export default function SitePopup({
         <div className="popup-content-side">
           <HeroHeader
             title={displaySite.title}
-            heroImageSrc={galleryHook.heroImageSrc || displaySite.image}
+            heroImageSrc={galleryHook.heroImageSrc}
             isLoadingImages={galleryHook.isLoadingImages}
             sourceInfo={sourceInfo}
             sourceName={sourceName}
