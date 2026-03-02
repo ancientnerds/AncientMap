@@ -138,6 +138,68 @@ export const SOURCE_DISPLAY_FIELDS: Record<string, FieldConfig[]> = {
     { key: 'ngo', label: 'NGO', format: 'text' },
     { key: 'area_km2', label: 'Area', format: 'number', unit: 'km²' },
   ],
+
+  // =============================================================================
+  // Archaeological / Heritage Sources
+  // =============================================================================
+
+  unesco: [
+    { key: 'category', label: 'Category', format: 'text' },
+    { key: 'criteria_txt', label: 'Criteria', format: 'text' },
+    { key: 'date_inscribed', label: 'Date Inscribed', format: 'text' },
+    { key: 'states_names', label: 'States', format: 'text' },
+    { key: 'region_en', label: 'Region', format: 'text' },
+    { key: 'area_hectares', label: 'Area', format: 'number', unit: 'ha' },
+    { key: 'danger', label: 'In Danger', format: 'boolean' },
+    { key: 'transboundary', label: 'Transboundary', format: 'boolean' },
+  ],
+
+  pleiades: [
+    { key: 'featureTypes', label: 'Feature Types', format: 'text' },
+    { key: 'timePeriodsKeys', label: 'Time Periods', format: 'text' },
+    { key: 'minDate', label: 'Earliest Date', format: 'year' },
+    { key: 'maxDate', label: 'Latest Date', format: 'year' },
+    { key: 'locationPrecision', label: 'Precision', format: 'text' },
+    { key: 'connectsWith', label: 'Connects With', format: 'text' },
+    { key: 'extent', label: 'Extent', format: 'text' },
+  ],
+
+  historic_england: [
+    { key: 'Name', label: 'Name', format: 'text' },
+    { key: 'ListEntry', label: 'List Entry', format: 'text' },
+    { key: 'SchedDate', label: 'Scheduled', format: 'text' },
+    { key: 'AmendDate', label: 'Amended', format: 'text' },
+    { key: 'NGR', label: 'Grid Ref', format: 'text' },
+    { key: 'area_ha', label: 'Area', format: 'number', unit: 'ha' },
+  ],
+
+  wikidata: [
+    { key: 'instance_type', label: 'Type', format: 'text' },
+    { key: 'country', label: 'Country', format: 'text' },
+    { key: 'inception', label: 'Inception', format: 'text' },
+    { key: 'dissolution', label: 'Dissolution', format: 'text' },
+    { key: 'website', label: 'Website', format: 'text' },
+    { key: 'commons_category', label: 'Commons', format: 'text' },
+  ],
+
+  arachne: [
+    { key: 'subtitle', label: 'Subtitle', format: 'text' },
+    { key: 'category', label: 'Category', format: 'text' },
+    { key: 'search_term', label: 'Search Term', format: 'text' },
+  ],
+
+  open_context: [
+    { key: 'project label', label: 'Project', format: 'text' },
+    { key: 'context label', label: 'Context', format: 'text' },
+    { key: 'item_category', label: 'Category', format: 'text' },
+    { key: 'uri', label: 'URI', format: 'text' },
+  ],
+
+  eamena: [
+    { key: 'displaydescription', label: 'Description', format: 'text' },
+    { key: 'site_function', label: 'Site Function', format: 'text' },
+    { key: 'condition', label: 'Condition', format: 'text' },
+  ],
 }
 
 /**
@@ -195,10 +257,46 @@ export function formatFieldValue(
   }
 }
 
+/** Keys to skip in generic fallback rendering */
+const SKIP_KEYS = new Set(['description_citations', 'description', 'short_description', 'name', 'title'])
+
+/** Prettify a raw_data key: snake_case/camelCase → Title Case */
+function prettifyKey(key: string): string {
+  // snake_case → space-separated
+  let result = key.replace(/_/g, ' ')
+  // camelCase → space-separated
+  result = result.replace(/([a-z])([A-Z])/g, '$1 $2')
+  // Title case
+  return result.replace(/\b\w/g, c => c.toUpperCase())
+}
+
+/** Format a generic value for display. Returns null if not displayable. */
+function formatGenericValue(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') return null
+  if (typeof value === 'boolean') return value ? 'Yes' : null
+  if (typeof value === 'number') return value.toLocaleString()
+  if (Array.isArray(value)) {
+    const items = value.filter(v => v !== null && v !== undefined && v !== '')
+    if (items.length === 0) return null
+    // Flatten simple arrays to comma-separated
+    if (items.every(v => typeof v === 'string' || typeof v === 'number')) {
+      return items.join(', ')
+    }
+    return null // Skip complex nested arrays
+  }
+  if (typeof value === 'object') return null // Skip nested objects
+  const str = String(value)
+  if (str.length === 0) return null
+  // Truncate very long strings
+  if (str.length > 200) return str.slice(0, 197) + '...'
+  return str
+}
+
 /**
  * Get displayable fields for a source.
  *
- * Filters to only fields that have non-null values in the raw_data.
+ * Uses curated config if available, otherwise falls back to generic rendering
+ * of all raw_data keys.
  */
 export function getDisplayableFields(
   sourceId: string,
@@ -207,25 +305,50 @@ export function getDisplayableFields(
   if (!rawData) return []
 
   const fieldConfigs = SOURCE_DISPLAY_FIELDS[sourceId]
-  if (!fieldConfigs) return []
 
-  const result: Array<{ config: FieldConfig; value: string }> = []
-
-  for (const config of fieldConfigs) {
-    const value = rawData[config.key]
-    const formatted = formatFieldValue(value, config)
-
-    if (formatted !== null) {
-      result.push({ config, value: formatted })
+  // Curated path: use defined field configs
+  if (fieldConfigs) {
+    const result: Array<{ config: FieldConfig; value: string }> = []
+    for (const config of fieldConfigs) {
+      const value = rawData[config.key]
+      const formatted = formatFieldValue(value, config)
+      if (formatted !== null) {
+        result.push({ config, value: formatted })
+      }
     }
+    return result
   }
 
+  // Generic fallback: auto-render all raw_data keys
+  const result: Array<{ config: FieldConfig; value: string }> = []
+  for (const [key, value] of Object.entries(rawData)) {
+    if (SKIP_KEYS.has(key) || key.startsWith('_')) continue
+    const formatted = formatGenericValue(value)
+    if (formatted !== null) {
+      result.push({
+        config: { key, label: prettifyKey(key) },
+        value: formatted,
+      })
+    }
+  }
   return result
 }
 
 /**
- * Check if a source has any displayable metadata fields.
+ * Check if a source has curated metadata fields.
  */
 export function hasMetadataFields(sourceId: string): boolean {
   return sourceId in SOURCE_DISPLAY_FIELDS
+}
+
+/**
+ * Check if rawData would produce displayable fields (curated or generic).
+ * Used to control "More Info" button visibility.
+ */
+export function hasDisplayableRawData(
+  sourceId: string,
+  rawData: Record<string, unknown> | null | undefined
+): boolean {
+  if (!rawData) return false
+  return getDisplayableFields(sourceId, rawData).length > 0
 }

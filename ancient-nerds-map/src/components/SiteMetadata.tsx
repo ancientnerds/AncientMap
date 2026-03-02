@@ -6,7 +6,7 @@
  */
 
 import { useMemo } from 'react'
-import { getDisplayableFields, hasMetadataFields } from '../config/sourceFields'
+import { getDisplayableFields } from '../config/sourceFields'
 
 interface SiteMetadataProps {
   sourceId: string
@@ -24,9 +24,7 @@ interface SiteMetadataProps {
 export default function SiteMetadata({ sourceId, rawData }: SiteMetadataProps) {
   // Get displayable fields (memoized for performance)
   const fields = useMemo(() => {
-    if (!rawData || !hasMetadataFields(sourceId)) {
-      return []
-    }
+    if (!rawData) return []
     return getDisplayableFields(sourceId, rawData)
   }, [sourceId, rawData])
 

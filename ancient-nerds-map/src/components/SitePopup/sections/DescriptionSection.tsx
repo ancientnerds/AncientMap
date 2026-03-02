@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import SiteMetadata from '../../SiteMetadata'
+import { hasDisplayableRawData } from '../../../config/sourceFields'
 import { isWikipediaUrl } from '../../../services/imageService'
 import type { DescriptionSectionProps } from '../types'
 
@@ -83,6 +84,9 @@ export function DescriptionSection({
   descriptionCitations,
 }: DescriptionSectionProps) {
   const [showCitations, setShowCitations] = useState(false)
+  const [showMoreInfo, setShowMoreInfo] = useState(false)
+
+  const hasMoreInfo = !rawDataLoading && hasDisplayableRawData(sourceId, rawData)
 
   // Extract domain for source attribution (e.g. "de.wikipedia.org")
   const wikiSourceDomain = bestWikiUrl && sourceLanguage && sourceLanguage !== 'en'
@@ -132,24 +136,25 @@ export function DescriptionSection({
 
   return (
     <>
-      {descriptionContent}
-
-      {/* Source attribution for non-English wiki sources */}
-      {wikiSourceDomain && bestWikiUrl && (
-        <a
-          href={bestWikiUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="popup-wiki-source-link"
-          title={`Description sourced from ${wikiSourceDomain}`}
-        >
-          Source: {wikiSourceDomain} →
-        </a>
-      )}
-
-      {/* Source-specific metadata (earthquakes, volcanoes, etc.) */}
-      {!rawDataLoading && (
+      {showMoreInfo ? (
         <SiteMetadata sourceId={sourceId} rawData={rawData} />
+      ) : (
+        <>
+          {descriptionContent}
+
+          {/* Source attribution for non-English wiki sources */}
+          {wikiSourceDomain && bestWikiUrl && (
+            <a
+              href={bestWikiUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="popup-wiki-source-link"
+              title={`Description sourced from ${wikiSourceDomain}`}
+            >
+              Source: {wikiSourceDomain} →
+            </a>
+          )}
+        </>
       )}
 
       <div className="popup-links-section">
@@ -213,6 +218,17 @@ export function DescriptionSection({
         ))}
 
         <div className="popup-links-spacer" />
+
+        {/* More Info toggle button */}
+        {hasMoreInfo && (
+          <button
+            className={`popup-link-item more-info-toggle${showMoreInfo ? ' active' : ''}`}
+            onClick={() => setShowMoreInfo(!showMoreInfo)}
+            title={showMoreInfo ? 'Show description' : 'Show source data'}
+          >
+            ℹ
+          </button>
+        )}
 
         {/* Citation toggle button */}
         {hasCitations && (

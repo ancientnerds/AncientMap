@@ -4,7 +4,6 @@ import { SiteData, PERIOD_COLORS, getSourceColor, getCategoryColor, getSourceInf
 import { config } from '../../config'
 import { useOffline } from '../../contexts/OfflineContext'
 import { reportAchievementEvent } from '../../utils/cardApi'
-import { hasMetadataFields } from '../../config/sourceFields'
 
 // Unified content service for gallery items
 import { toLightboxImages } from '../../services/connectors'
@@ -358,12 +357,8 @@ export default function SitePopup({
     setShowStreetView(false)
   }, [lat, lng])
 
-  // Fetch rawData for sources with metadata fields
+  // Fetch rawData for all sources (button visibility controlled by data existence)
   useEffect(() => {
-    if (!hasMetadataFields(displaySite.sourceId)) {
-      setRawData(null)
-      return
-    }
     if (isEmpireMode) return
     setRawDataLoading(true)
     fetch(`${config.api.baseUrl}/sites/${displaySite.id}`)
