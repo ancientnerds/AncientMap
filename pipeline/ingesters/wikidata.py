@@ -46,13 +46,19 @@ class WikidataIngester(BaseIngester):
     # Rate limiting
     REQUEST_DELAY = 2.0  # Wikidata recommends delays between queries
 
-    # Simpler SPARQL query - query one type at a time to avoid timeouts
+    # SPARQL query - query one type at a time to avoid timeouts
     SPARQL_QUERY = """
     SELECT ?item ?itemLabel ?itemDescription ?coord ?countryLabel
+           ?inception ?dissolution ?image ?website ?commonsCategory
     WHERE {{
       ?item wdt:P31 wd:{type_id} .
       ?item wdt:P625 ?coord .
       OPTIONAL {{ ?item wdt:P17 ?country . }}
+      OPTIONAL {{ ?item wdt:P571 ?inception . }}
+      OPTIONAL {{ ?item wdt:P576 ?dissolution . }}
+      OPTIONAL {{ ?item wdt:P18 ?image . }}
+      OPTIONAL {{ ?item wdt:P856 ?website . }}
+      OPTIONAL {{ ?item wdt:P373 ?commonsCategory . }}
       SERVICE wikibase:label {{ bd:serviceParam wikibase:language "en" . }}
     }}
     LIMIT {limit}
@@ -74,6 +80,17 @@ class WikidataIngester(BaseIngester):
         ("Q152095", "megalith"),
         ("Q35112", "amphitheater"),
         ("Q11315", "aqueduct"),
+        ("Q40080", "villa"),
+        ("Q128093", "necropolis"),
+        ("Q24354", "theatre"),
+        ("Q134308", "rock shelter"),
+        ("Q511721", "monastery"),
+        ("Q1261605", "tower"),
+        ("Q37056", "mine"),
+        ("Q185972", "grave"),
+        ("Q2831261", "wall"),
+        ("Q12076836", "bridge"),
+        ("Q271683", "citadel"),
     ]
 
     # Batch size for SPARQL queries
@@ -92,15 +109,23 @@ class WikidataIngester(BaseIngester):
         "monastery": "church",
         "castle": "fortress",
         "fortification": "fortress",
+        "citadel": "fortress",
         "cemetery": "cemetery",
+        "necropolis": "cemetery",
         "tumulus": "tumulus",
         "megalith": "megalith",
         "amphitheater": "amphitheater",
         "amphitheatre": "amphitheater",
+        "theatre": "theater",
         "aqueduct": "aqueduct",
         "road": "road",
         "bridge": "bridge",
         "tower": "monument",
+        "wall": "monument",
+        "villa": "villa",
+        "rock shelter": "cave",
+        "mine": "mine",
+        "grave": "tomb",
     }
 
     def fetch(self) -> Path:
@@ -294,7 +319,7 @@ class WikidataIngester(BaseIngester):
             lat=lat,
             lon=lon,
             alternative_names=[],
-            description=description[:500] if description else None,
+            description=description or None,
             site_type=site_type,
             period_start=period_start,
             period_end=period_end,
@@ -307,7 +332,12 @@ class WikidataIngester(BaseIngester):
                 "name": name,
                 "country": country,
                 "instance_type": instance_type,
-                "description": description[:200] if description else "",
+                "description": description or "",
+                "inception": result.get("inception", {}).get("value"),
+                "dissolution": result.get("dissolution", {}).get("value"),
+                "image": result.get("image", {}).get("value"),
+                "website": result.get("website", {}).get("value"),
+                "commons_category": result.get("commonsCategory", {}).get("value"),
             },
         )
 

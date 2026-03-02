@@ -314,7 +314,10 @@ class EAMENAIngester(BaseIngester):
             raw_data={
                 "resource_id": resource_id,
                 "displayname": display_name,
+                "displaydescription": result.get("displaydescription", ""),
                 "site_function": site_function,
+                "condition": condition,
+                "resource": result.get("resource", {}),
             },
         )
 

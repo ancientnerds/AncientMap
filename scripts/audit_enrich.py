@@ -102,21 +102,34 @@ def _compose_source_excerpt(source_db_id: str, raw_data: dict, original_desc: st
     if source_db_id == "pleiades":
         if raw_data.get("description"):
             parts.append(raw_data["description"])
-        if raw_data.get("placeTypes"):
-            parts.append(f"Place types: {raw_data['placeTypes']}")
-        if raw_data.get("timePeriods"):
-            parts.append(f"Time periods: {raw_data['timePeriods']}")
+        feat_types = raw_data.get("featureTypes") or raw_data.get("placeTypes")
+        if feat_types:
+            parts.append(f"Place types: {feat_types}")
+        time_periods = raw_data.get("timePeriodsKeys") or raw_data.get("timePeriods")
+        if time_periods:
+            parts.append(f"Time periods: {time_periods}")
     elif source_db_id == "unesco":
         if original_desc:
             parts.append(original_desc)
-        for key in ("criteria", "date_inscribed", "category", "region"):
+        criteria = raw_data.get("criteria_txt") or raw_data.get("criteria")
+        if criteria:
+            parts.append(f"Criteria: {criteria}")
+        for key in ("date_inscribed", "category", "region_en", "region"):
             if raw_data.get(key):
                 parts.append(f"{key.replace('_', ' ').title()}: {raw_data[key]}")
+                if key == "region_en":
+                    break  # Don't also add "region" if "region_en" was found
     elif source_db_id == "historic_england":
         if original_desc:
             parts.append(original_desc)
-        if raw_data.get("monument_type"):
-            parts.append(f"Monument type: {raw_data['monument_type']}")
+        # Extract monument type from Name field (pre-colon prefix)
+        name_val = raw_data.get("Name") or raw_data.get("NAME", "")
+        if ":" in name_val:
+            monument_type = name_val.split(":")[0].strip()
+        else:
+            monument_type = raw_data.get("monument_type", "")
+        if monument_type:
+            parts.append(f"Monument type: {monument_type}")
     text = ". ".join(parts)
     return text[:2000] if text else None
 

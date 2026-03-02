@@ -243,7 +243,7 @@ class ArachneIngester(BaseIngester):
         Returns:
             ParsedSite or None if invalid
         """
-        entity_id = str(result.get("entity_id", ""))
+        entity_id = str(result.get("entityId", result.get("entity_id", "")))
         if not entity_id:
             return None
 
@@ -318,13 +318,7 @@ class ArachneIngester(BaseIngester):
             precision_meters=100,
             precision_reason="arachne",
             source_url=source_url,
-            raw_data={
-                "entity_id": entity_id,
-                "title": title,
-                "subtitle": subtitle,
-                "category": category,
-                "place_name": place_name,
-            },
+            raw_data=result,
         )
 
     def _map_type(self, title: str, subtitle: str, category: str) -> str:
