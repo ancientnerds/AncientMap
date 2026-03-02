@@ -1041,8 +1041,10 @@ async def get_site_detail(
             rd = json.loads(rd)
         except (ValueError, TypeError):
             rd = None
-    if isinstance(rd, dict) and "description_citations" in rd:
-        resp["descriptionCitations"] = rd["description_citations"]
+    if isinstance(rd, dict):
+        if "description_citations" in rd:
+            resp["descriptionCitations"] = rd["description_citations"]
+        resp["rawData"] = rd
     return resp
 
 
