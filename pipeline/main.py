@@ -27,17 +27,19 @@ from pipeline.config import DATA_SOURCES
 from pipeline.database import SessionLocal, Site, SourceDatabase, SourceRecord
 from pipeline.ingesters import (
     ArachneIngester,
+    CanmoreScotlandIngester,
+    CofleinWalesIngester,
     DAREIngester,
     EAMENAIngester,
     EarthImpactsIngester,
-    EDHInscriptionsIngester,
-    EuropeanaIngester,
     GeoNamesIngester,
     HistoricEnglandIngester,
     HolVolIngester,
     IrelandNMSIngester,
+    LISTInscriptionsIngester,
+    LuwianAtlasIngester,
     MegalithicPortalIngester,
-    MetMuseumIngester,
+    MycenaeanAtlasIngester,
     NCEIEarthquakesIngester,
     NCEITsunamiObservationsIngester,
     NCEITsunamisIngester,
@@ -46,12 +48,18 @@ from pipeline.ingesters import (
     OpenContextIngester,
     OSMHistoricIngester,
     OXREPShipwrecksIngester,
+    PASFindsIngester,
+    PeruAmazonIngester,
     PleiadesIngester,
+    RadiocarbonPaleoIngester,
     RockArtIngester,
     SacredSitesIngester,
+    SeshatIngester,
     ToposTextIngester,
     UNESCOIngester,
+    ViciOrgIngester,
     WikidataIngester,
+    XinjiangSitesIngester,
 )
 from pipeline.ingesters.base import IngesterResult
 
@@ -73,26 +81,35 @@ INGESTERS = {
     "osm_historic": OSMHistoricIngester,
     "megalithic_portal": MegalithicPortalIngester,
     "topostext": ToposTextIngester,
+    "vici_org": ViciOrgIngester,
+    "canmore_scotland": CanmoreScotlandIngester,
+    "coflein_wales": CofleinWalesIngester,
+    "mycenaean_atlas": MycenaeanAtlasIngester,
+    "radiocarbon_paleo": RadiocarbonPaleoIngester,
+    "pas_finds": PASFindsIngester,
     # Epigraphy / Numismatics / Maritime
-    "inscriptions_edh": EDHInscriptionsIngester,
+    "list_inscriptions": LISTInscriptionsIngester,
     "coins_nomisma": NomismaIngester,
     "shipwrecks_oxrep": OXREPShipwrecksIngester,
     # Middle East / Africa
     "eamena": EAMENAIngester,
+    "luwian_atlas": LuwianAtlasIngester,
     # Sacred & Rock Art
     "sacred_sites": SacredSitesIngester,
     "rock_art": RockArtIngester,
     # Geological / Volcanic
     "earth_impacts": EarthImpactsIngester,
     "volcanic_holvol": HolVolIngester,
+    "boundaries_seshat": SeshatIngester,
+    # Americas
+    "peru_amazon": PeruAmazonIngester,
+    # Asia
+    "xinjiang_sites": XinjiangSitesIngester,
     # NCEI Hazards
     "ncei_earthquakes": NCEIEarthquakesIngester,
     "ncei_tsunamis": NCEITsunamisIngester,
     "ncei_tsunami_obs": NCEITsunamiObservationsIngester,
     "ncei_volcanoes": NCEIVolcanoesIngester,
-    # Museum Collections & Content
-    "europeana": EuropeanaIngester,
-    "met_museum": MetMuseumIngester,
 }
 
 
