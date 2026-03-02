@@ -12,6 +12,8 @@ Usage:
 """
 
 import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import click
@@ -128,7 +130,8 @@ def cli(debug):
 @click.option("--skip-fetch", is_flag=True, help="Use existing raw data instead of downloading")
 @click.option("--batch-size", type=int, default=1000, help="Batch size for database commits")
 @click.option("--verify-first", is_flag=True, help="Run smoke test before full ingestion")
-def ingest(source: str, skip_fetch: bool, batch_size: int, verify_first: bool):
+@click.option("--workers", type=int, default=8, help="Max parallel workers for verify (default: 8)")
+def ingest(source: str, skip_fetch: bool, batch_size: int, verify_first: bool, workers: int):
     """
     Ingest data from a source.
 
@@ -147,7 +150,7 @@ def ingest(source: str, skip_fetch: bool, batch_size: int, verify_first: bool):
     # Pre-flight verification
     if verify_first:
         console.print("[bold]Running pre-flight verification...[/bold]\n")
-        verify_results = _run_verify(sources, sample_size=5, skip_fetch=skip_fetch)
+        verify_results = _run_verify(sources, sample_size=5, skip_fetch=skip_fetch, workers=workers)
         failed = sum(1 for vr in verify_results if not vr.success)
         if failed:
             console.print(
@@ -416,34 +419,47 @@ def backup_restore(timestamp: str, db: bool, contributions: bool):
         console.print("[red]Restore failed[/red]")
 
 
-def _run_verify(sources: list[str], sample_size: int, skip_fetch: bool) -> list[VerifyResult]:
+def _run_verify(
+    sources: list[str], sample_size: int, skip_fetch: bool, workers: int = 1
+) -> list[VerifyResult]:
     """Run verification for a list of sources and print results table."""
-    results: list[VerifyResult] = []
+    results_dict: dict[str, VerifyResult] = {}
+    print_lock = threading.Lock()
+    completed_count = 0
+    total = len(sources)
 
-    for src in sources:
+    def verify_one(src: str) -> VerifyResult:
+        nonlocal completed_count
         ingester_class = INGESTERS[src]
-        console.print(f"  Verifying [bold]{src}[/bold]...", end=" ")
 
         try:
             with ingester_class() as ingester:
                 vr = ingester.verify(sample_size=sample_size, skip_fetch=skip_fetch)
-                results.append(vr)
-
-                if vr.success:
-                    console.print("[green]PASS[/green]")
-                else:
-                    console.print("[red]FAIL[/red]")
-
         except Exception as e:
             logger.exception(f"Error verifying {src}")
-            console.print("[red]CRASH[/red]")
-            results.append(
-                VerifyResult(
-                    source_id=src,
-                    success=False,
-                    error=f"CRASH: {e}",
-                )
-            )
+            vr = VerifyResult(source_id=src, success=False, error=f"CRASH: {e}")
+
+        with print_lock:
+            completed_count += 1
+            status = "[green]PASS[/green]" if vr.success else "[red]FAIL[/red]"
+            duration = f"({vr.duration_seconds:.1f}s)" if vr.duration_seconds else ""
+            console.print(f"  [{completed_count}/{total}] {src} {status} {duration}")
+
+        return vr
+
+    if workers <= 1:
+        for src in sources:
+            results_dict[src] = verify_one(src)
+    else:
+        console.print(f"  Running with {workers} parallel workers...\n")
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {executor.submit(verify_one, src): src for src in sources}
+            for future in as_completed(futures):
+                src = futures[future]
+                results_dict[src] = future.result()
+
+    # Preserve original order for table
+    results = [results_dict[src] for src in sources]
 
     # Print results table
     console.print("\n[bold]Verification Results[/bold]")
@@ -499,14 +515,15 @@ def _run_verify(sources: list[str], sample_size: int, skip_fetch: bool) -> list[
 @click.argument("source", type=click.Choice(list(INGESTERS.keys()) + ["all"]))
 @click.option("--sample-size", type=int, default=5, help="Number of records to sample per source")
 @click.option("--skip-fetch", is_flag=True, help="Use existing raw data")
-def verify(source: str, sample_size: int, skip_fetch: bool):
+@click.option("--workers", type=int, default=8, help="Max parallel workers (default: 8)")
+def verify(source: str, sample_size: int, skip_fetch: bool, workers: int):
     """Smoke test: fetch and validate sample records from sources."""
     console.print("\n[bold blue]ANCIENT NERDS - Source Verification[/bold blue]")
     console.print(f"Source: {source}")
     console.print(f"Sample size: {sample_size}\n")
 
     sources = list(INGESTERS.keys()) if source == "all" else [source]
-    results = _run_verify(sources, sample_size, skip_fetch)
+    results = _run_verify(sources, sample_size, skip_fetch, workers=workers)
 
     failed = sum(1 for vr in results if not vr.success)
     if failed:
