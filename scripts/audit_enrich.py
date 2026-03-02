@@ -2116,8 +2116,12 @@ def merge_cited_descriptions(dry_run: bool = False) -> dict:
 
             if status == "improved":
                 desc = site_data.get("description", {})
-                desc_text = desc.get("text", "")
-                citations = desc.get("citations", [])
+                if isinstance(desc, str):
+                    desc_text = desc
+                    citations = []
+                else:
+                    desc_text = desc.get("text", "")
+                    citations = desc.get("citations", [])
                 char_count = len(desc_text)
                 fetched_excerpts = site_data.get("fetched_excerpts", {})
 
@@ -2366,6 +2370,7 @@ def prepare_verification_batches(batch_size: int = 10, limit: int | None = None)
                     "citations": desc["citations"],
                     "fetched_excerpts": fetched_excerpts,
                     "card_description": card_text,
+                    "extracted_facts": site_data.get("extracted_facts", []),
                     "source_batch": batch_id,
                 }
             )
