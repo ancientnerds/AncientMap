@@ -52,6 +52,7 @@ from pipeline.ingesters import (
     UNESCOIngester,
     WikidataIngester,
 )
+from pipeline.ingesters.base import IngesterResult
 
 console = Console()
 
@@ -149,20 +150,32 @@ def ingest(source: str, skip_fetch: bool, batch_size: int):
             except Exception as e:
                 console.print(f"[red]Error ingesting {src}: {e}[/red]")
                 logger.exception(f"Error ingesting {src}")
+                results.append(IngesterResult(
+                    source_id=src,
+                    success=False,
+                    errors=[f"CRASH: {e}"],
+                ))
 
     # Print summary
     console.print("\n[bold]Ingestion Summary[/bold]")
     table = Table()
     table.add_column("Source")
     table.add_column("Status")
-    table.add_column("Fetched")
-    table.add_column("Parsed")
-    table.add_column("Saved")
-    table.add_column("Failed")
-    table.add_column("Duration")
+    table.add_column("Fetched", justify="right")
+    table.add_column("Parsed", justify="right")
+    table.add_column("Saved", justify="right")
+    table.add_column("Failed", justify="right")
+    table.add_column("Duration", justify="right")
+
+    problem_sources = []
 
     for result in results:
-        status = "[green]Success[/green]" if result.success else "[red]Failed[/red]"
+        if not result.success:
+            status = "[red]FAILED[/red]"
+        elif result.records_saved == 0:
+            status = "[yellow]EMPTY[/yellow]"
+        else:
+            status = "[green]OK[/green]"
         duration = f"{result.duration_seconds:.1f}s" if result.duration_seconds else "-"
 
         table.add_row(
@@ -175,7 +188,27 @@ def ingest(source: str, skip_fetch: bool, batch_size: int):
             duration,
         )
 
+        if not result.success or result.records_saved == 0 or result.errors:
+            problem_sources.append(result)
+
     console.print(table)
+
+    # Detailed error report
+    if problem_sources:
+        console.print(f"\n[bold red]⚠ {len(problem_sources)} source(s) need attention:[/bold red]")
+        for result in problem_sources:
+            label = "[red]FAILED[/red]" if not result.success else "[yellow]EMPTY[/yellow]"
+            console.print(f"\n  {label} [bold]{result.source_id}[/bold]")
+            if result.errors:
+                for err in result.errors[:5]:
+                    console.print(f"    → {err}")
+            elif result.records_saved == 0:
+                console.print(f"    → Fetched {result.records_fetched}, parsed {result.records_parsed}, saved 0")
+        console.print()
+        console.print("[dim]Retry individually:[/dim]")
+        for r in problem_sources:
+            console.print(f"  python -m pipeline.main ingest {r.source_id}")
+        console.print()
 
 
 @cli.command()
