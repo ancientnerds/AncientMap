@@ -5,7 +5,9 @@ All source-specific ingesters should inherit from BaseIngester and implement
 the required abstract methods.
 """
 
+import itertools
 import json
+import time
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -148,6 +150,22 @@ class IngesterResult:
         return None
 
 
+@dataclass
+class VerifyResult:
+    """Result of a smoke-test verification run."""
+
+    source_id: str
+    success: bool
+    records_sampled: int = 0
+    records_valid: int = 0
+    sample_errors: list[str] = field(default_factory=list)
+    fetch_ok: bool = False
+    parse_ok: bool = False
+    field_coverage: dict[str, int] = field(default_factory=dict)
+    duration_seconds: float | None = None
+    error: str | None = None
+
+
 class BaseIngester(ABC):
     """
     Abstract base class for data source ingesters.
@@ -256,6 +274,90 @@ class BaseIngester(ABC):
                 )
 
         return errors
+
+    def verify(self, sample_size: int = 5, skip_fetch: bool = False) -> VerifyResult:
+        """
+        Smoke test: fetch a small sample and validate records.
+
+        Args:
+            sample_size: Number of records to sample from parse()
+            skip_fetch: Use existing raw data instead of downloading
+
+        Returns:
+            VerifyResult with pass/fail and diagnostics
+        """
+        start = time.monotonic()
+        result = VerifyResult(source_id=self.source_id, success=False)
+
+        # Fetch
+        try:
+            if not skip_fetch:
+                raw_data_path = self.fetch()
+            else:
+                raw_files = list(self.raw_data_dir.glob("*"))
+                if not raw_files:
+                    result.error = f"No raw data files in {self.raw_data_dir}"
+                    result.duration_seconds = time.monotonic() - start
+                    return result
+                raw_data_path = max(raw_files, key=lambda p: p.stat().st_mtime)
+            result.fetch_ok = True
+        except Exception as e:
+            result.error = f"Fetch failed: {e}"
+            result.duration_seconds = time.monotonic() - start
+            return result
+
+        # Parse sample
+        try:
+            sample = list(itertools.islice(self.parse(raw_data_path), sample_size))
+            result.parse_ok = True
+        except Exception as e:
+            result.error = f"Parse failed: {e}"
+            result.duration_seconds = time.monotonic() - start
+            return result
+
+        result.records_sampled = len(sample)
+        if not sample:
+            result.error = "Parse returned 0 records"
+            result.duration_seconds = time.monotonic() - start
+            return result
+
+        # Validate each record
+        coverage = {"name": 0, "lat": 0, "lon": 0, "source_url": 0, "raw_data": 0}
+
+        for site in sample:
+            errors = self.validate_site(site)
+
+            # Additional quality checks
+            if not site.name or not site.name.strip():
+                errors.append("Empty name")
+            if site.lat == 0.0 and site.lon == 0.0:
+                errors.append("Coordinates are (0, 0) — likely placeholder")
+            if site.raw_data is None:
+                errors.append("Missing raw_data")
+            if site.source_url is None:
+                errors.append("Missing source_url")
+
+            if not errors:
+                result.records_valid += 1
+            else:
+                result.sample_errors.append(f"{site.source_id}: {', '.join(errors)}")
+
+            # Track field coverage
+            if site.name and site.name.strip():
+                coverage["name"] += 1
+            if site.lat is not None:
+                coverage["lat"] += 1
+            if site.lon is not None:
+                coverage["lon"] += 1
+            if site.source_url is not None:
+                coverage["source_url"] += 1
+            if site.raw_data is not None:
+                coverage["raw_data"] += 1
+
+        result.field_coverage = coverage
+        result.success = result.fetch_ok and result.parse_ok and result.records_valid > 0
+        result.duration_seconds = time.monotonic() - start
+        return result
 
     def save_source_record(self, site: ParsedSite) -> SourceRecord | None:
         """

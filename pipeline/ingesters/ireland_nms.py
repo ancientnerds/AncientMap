@@ -33,12 +33,12 @@ class IrelandNMSIngester(BaseIngester):
     source_id = "ireland_nms"
     source_name = "Ireland National Monuments Service"
 
-    # ArcGIS REST API endpoint (SMROpenData FeatureServer - correct as of 2025)
-    # Layer 3 = SMR_Located (monuments with coordinates)
+    # ArcGIS REST API endpoint (SMROpenData FeatureServer - updated 2026-03)
+    # Layer 0 = SMROpenData (only layer available; layer 3 was removed)
     # https://services-eu1.arcgis.com/HyjXgkV6KGMSF3jt/arcgis/rest/services/SMROpenData/FeatureServer
     ARCGIS_URL = (
         "https://services-eu1.arcgis.com/HyjXgkV6KGMSF3jt/arcgis/rest/services/"
-        "SMROpenData/FeatureServer/3/query"
+        "SMROpenData/FeatureServer/0/query"
     )
 
     # Pagination
@@ -194,10 +194,10 @@ class IrelandNMSIngester(BaseIngester):
         if not (51 <= lat <= 56 and -11 <= lon <= -5):
             return None
 
-        # Extract properties
-        smr_no = properties.get("SMR_NO", properties.get("smrs", ""))
+        # Extract properties (layer 0 field names as of 2026-03)
+        smr_no = properties.get("SMRS", properties.get("SMR_NO", ""))
         name = properties.get("NAME", properties.get("name", ""))
-        classification = properties.get("CLASS1", properties.get("class1", ""))
+        classification = properties.get("MONUMENT_CLASS", properties.get("CLASS1", ""))
         townland = properties.get("TOWNLAND", properties.get("townland", ""))
         county = properties.get("COUNTY", properties.get("county", ""))
 
@@ -222,8 +222,10 @@ class IrelandNMSIngester(BaseIngester):
 
         description = "; ".join(desc_parts) if desc_parts else None
 
-        # Source URL
-        source_url = f"https://maps.archaeology.ie/HistoricEnvironment/?SMESSION={smr_no}"
+        # Source URL — use WEBSITE_LINK from API if available
+        source_url = properties.get("WEBSITE_LINK") or (
+            f"https://maps.archaeology.ie/HistoricEnvironment/?SMESSION={smr_no}"
+        )
 
         return ParsedSite(
             source_id=smr_no,

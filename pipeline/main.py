@@ -61,7 +61,7 @@ from pipeline.ingesters import (
     WikidataIngester,
     XinjiangSitesIngester,
 )
-from pipeline.ingesters.base import IngesterResult
+from pipeline.ingesters.base import IngesterResult, VerifyResult
 
 console = Console()
 
@@ -127,7 +127,8 @@ def cli(debug):
 @click.argument("source", type=click.Choice(list(INGESTERS.keys()) + ["all"]))
 @click.option("--skip-fetch", is_flag=True, help="Use existing raw data instead of downloading")
 @click.option("--batch-size", type=int, default=1000, help="Batch size for database commits")
-def ingest(source: str, skip_fetch: bool, batch_size: int):
+@click.option("--verify-first", is_flag=True, help="Run smoke test before full ingestion")
+def ingest(source: str, skip_fetch: bool, batch_size: int, verify_first: bool):
     """
     Ingest data from a source.
 
@@ -142,6 +143,21 @@ def ingest(source: str, skip_fetch: bool, batch_size: int):
         sources = list(INGESTERS.keys())
     else:
         sources = [source]
+
+    # Pre-flight verification
+    if verify_first:
+        console.print("[bold]Running pre-flight verification...[/bold]\n")
+        verify_results = _run_verify(sources, sample_size=5, skip_fetch=skip_fetch)
+        failed = sum(1 for vr in verify_results if not vr.success)
+        if failed:
+            console.print(
+                f"\n[bold red]Aborting: {failed} source(s) failed verification.[/bold red]"
+            )
+            raise SystemExit(1)
+        console.print(
+            f"\n[green]Verification passed for {len(sources)} source(s). "
+            f"Starting full ingestion...[/green]\n"
+        )
 
     results = []
 
@@ -398,6 +414,103 @@ def backup_restore(timestamp: str, db: bool, contributions: bool):
         console.print(f"[green]Restore complete from backup: {timestamp}[/green]")
     else:
         console.print("[red]Restore failed[/red]")
+
+
+def _run_verify(sources: list[str], sample_size: int, skip_fetch: bool) -> list[VerifyResult]:
+    """Run verification for a list of sources and print results table."""
+    results: list[VerifyResult] = []
+
+    for src in sources:
+        ingester_class = INGESTERS[src]
+        console.print(f"  Verifying [bold]{src}[/bold]...", end=" ")
+
+        try:
+            with ingester_class() as ingester:
+                vr = ingester.verify(sample_size=sample_size, skip_fetch=skip_fetch)
+                results.append(vr)
+
+                if vr.success:
+                    console.print("[green]PASS[/green]")
+                else:
+                    console.print("[red]FAIL[/red]")
+
+        except Exception as e:
+            logger.exception(f"Error verifying {src}")
+            console.print("[red]CRASH[/red]")
+            results.append(
+                VerifyResult(
+                    source_id=src,
+                    success=False,
+                    error=f"CRASH: {e}",
+                )
+            )
+
+    # Print results table
+    console.print("\n[bold]Verification Results[/bold]")
+    table = Table()
+    table.add_column("Source")
+    table.add_column("Status")
+    table.add_column("Fetched")
+    table.add_column("Parsed")
+    table.add_column("Valid")
+    table.add_column("Coverage")
+    table.add_column("Time", justify="right")
+
+    for vr in results:
+        if vr.success:
+            status = "[green]PASS[/green]"
+        else:
+            status = "[red]FAIL[/red]"
+
+        fetched = "[green]OK[/green]" if vr.fetch_ok else "[red]ERR[/red]"
+        parsed = f"{vr.records_sampled}" if vr.parse_ok else "-"
+        valid = f"{vr.records_valid}/{vr.records_sampled}" if vr.records_sampled else "-"
+
+        cov_parts = []
+        for field_name, count in vr.field_coverage.items():
+            cov_parts.append(f"{field_name}:{count}")
+        coverage = " ".join(cov_parts) if cov_parts else "-"
+
+        duration = f"{vr.duration_seconds:.1f}s" if vr.duration_seconds else "-"
+
+        table.add_row(vr.source_id, status, fetched, parsed, valid, coverage, duration)
+
+    console.print(table)
+
+    # Summary
+    passed = sum(1 for vr in results if vr.success)
+    failed = len(results) - passed
+
+    console.print(f"\n[bold]{passed} passed[/bold], [bold]{failed} failed[/bold]")
+
+    if failed:
+        console.print("\n[bold red]Failed sources:[/bold red]")
+        for vr in results:
+            if not vr.success:
+                error_msg = vr.error or "; ".join(vr.sample_errors[:3])
+                console.print(f"  [red]x[/red] [bold]{vr.source_id}[/bold]: {error_msg}")
+    else:
+        console.print("\n[green]All sources verified. Safe to run full ingestion.[/green]")
+
+    return results
+
+
+@cli.command()
+@click.argument("source", type=click.Choice(list(INGESTERS.keys()) + ["all"]))
+@click.option("--sample-size", type=int, default=5, help="Number of records to sample per source")
+@click.option("--skip-fetch", is_flag=True, help="Use existing raw data")
+def verify(source: str, sample_size: int, skip_fetch: bool):
+    """Smoke test: fetch and validate sample records from sources."""
+    console.print("\n[bold blue]ANCIENT NERDS - Source Verification[/bold blue]")
+    console.print(f"Source: {source}")
+    console.print(f"Sample size: {sample_size}\n")
+
+    sources = list(INGESTERS.keys()) if source == "all" else [source]
+    results = _run_verify(sources, sample_size, skip_fetch)
+
+    failed = sum(1 for vr in results if not vr.success)
+    if failed:
+        raise SystemExit(1)
 
 
 @cli.command()
