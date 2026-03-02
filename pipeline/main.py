@@ -27,17 +27,28 @@ from pipeline.config import DATA_SOURCES
 from pipeline.database import SessionLocal, Site, SourceDatabase, SourceRecord
 from pipeline.ingesters import (
     ArachneIngester,
+    DAREIngester,
     EAMENAIngester,
+    EarthImpactsIngester,
+    EDHInscriptionsIngester,
     GeoNamesIngester,
     HistoricEnglandIngester,
+    HolVolIngester,
     IrelandNMSIngester,
-    # NCEI Hazards
+    MegalithicPortalIngester,
     NCEIEarthquakesIngester,
     NCEITsunamiObservationsIngester,
     NCEITsunamisIngester,
     NCEIVolcanoesIngester,
+    NomismaIngester,
     OpenContextIngester,
+    OSMHistoricIngester,
+    OXREPShipwrecksIngester,
     PleiadesIngester,
+    RockArtIngester,
+    SacredSitesIngester,
+    SeshatIngester,
+    ToposTextIngester,
     UNESCOIngester,
     WikidataIngester,
 )
@@ -56,8 +67,23 @@ INGESTERS = {
     "historic_england": HistoricEnglandIngester,
     "ireland_nms": IrelandNMSIngester,
     "arachne": ArachneIngester,
+    "dare": DAREIngester,
+    "osm_historic": OSMHistoricIngester,
+    "megalithic_portal": MegalithicPortalIngester,
+    "topostext": ToposTextIngester,
+    # Epigraphy / Numismatics / Maritime
+    "inscriptions_edh": EDHInscriptionsIngester,
+    "coins_nomisma": NomismaIngester,
+    "shipwrecks_oxrep": OXREPShipwrecksIngester,
     # Middle East / Africa
     "eamena": EAMENAIngester,
+    # Sacred & Rock Art
+    "sacred_sites": SacredSitesIngester,
+    "rock_art": RockArtIngester,
+    # Geological / Volcanic
+    "earth_impacts": EarthImpactsIngester,
+    "volcanic_holvol": HolVolIngester,
+    "boundaries_seshat": SeshatIngester,
     # NCEI Hazards
     "ncei_earthquakes": NCEIEarthquakesIngester,
     "ncei_tsunamis": NCEITsunamisIngester,
