@@ -150,11 +150,13 @@ def ingest(source: str, skip_fetch: bool, batch_size: int):
             except Exception as e:
                 console.print(f"[red]Error ingesting {src}: {e}[/red]")
                 logger.exception(f"Error ingesting {src}")
-                results.append(IngesterResult(
-                    source_id=src,
-                    success=False,
-                    errors=[f"CRASH: {e}"],
-                ))
+                results.append(
+                    IngesterResult(
+                        source_id=src,
+                        success=False,
+                        errors=[f"CRASH: {e}"],
+                    )
+                )
 
     # Print summary
     console.print("\n[bold]Ingestion Summary[/bold]")
@@ -203,7 +205,9 @@ def ingest(source: str, skip_fetch: bool, batch_size: int):
                 for err in result.errors[:5]:
                     console.print(f"    → {err}")
             elif result.records_saved == 0:
-                console.print(f"    → Fetched {result.records_fetched}, parsed {result.records_parsed}, saved 0")
+                console.print(
+                    f"    → Fetched {result.records_fetched}, parsed {result.records_parsed}, saved 0"
+                )
         console.print()
         console.print("[dim]Retry individually:[/dim]")
         for r in problem_sources:
