@@ -64,18 +64,17 @@ export default function SearchPage() {
   const sources: SourceInfo[] = useMemo(() => {
     const result: SourceInfo[] = []
     for (const [sourceId, meta] of Object.entries(sourcesMeta)) {
-      if ((!meta?.recordCount || meta.recordCount === 0) && !meta?.isPrimary) continue
       result.push({
         id: sourceId,
         name: meta?.name || sourceId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
         color: meta?.color || getSourceColor(sourceId),
         count: meta.recordCount || 0,
+        primary: meta?.isPrimary,
+        priority: meta?.priority ?? 999,
       })
     }
     return result.sort((a, b) => {
-      const PRIMARY: Record<string, number> = { 'ancient_nerds': 0, 'lyra': 1 }
-      const ao = PRIMARY[a.id] ?? 99, bo = PRIMARY[b.id] ?? 99
-      if (ao !== bo) return ao - bo
+      if (a.priority !== b.priority) return a.priority - b.priority
       return b.count - a.count
     })
   }, [sourcesMeta])

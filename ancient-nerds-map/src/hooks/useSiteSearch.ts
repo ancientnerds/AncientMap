@@ -35,6 +35,8 @@ export interface SourceInfo {
   name: string
   color: string
   count: number
+  primary?: boolean
+  priority: number
 }
 
 interface SpatialFilter {

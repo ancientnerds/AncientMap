@@ -396,6 +396,7 @@ class ConnectorRegistry:
         content_types: list[ContentType] | None = None,
         limit_per_source: int = 10,
         timeout: float = 30.0,
+        **connector_kwargs,
     ) -> ContentSearchResult:
         """
         Get all content related to an archaeological site.
@@ -435,6 +436,7 @@ class ConnectorRegistry:
                     lon=lon,
                     limit=limit_per_source,
                     source_url=source_url,
+                    **connector_kwargs,
                 )
                 return (connector.connector_id, items, None)
             except Exception as e:

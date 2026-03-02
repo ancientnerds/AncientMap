@@ -504,6 +504,7 @@ class RockArtIngester(BaseIngester):
                 "name": name,
                 "country": country,
                 "art_type": art_type,
+                "period": period,
             },
         )
 

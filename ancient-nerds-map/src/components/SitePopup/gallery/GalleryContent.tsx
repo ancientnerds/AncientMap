@@ -23,6 +23,8 @@ export function GalleryContent({
   isOffline,
   onItemClick,
   isExpanded,
+  sketchfabCategoryFilter,
+  onSketchfabCategoryFilterChange,
 }: GalleryContentProps) {
 
   // Videos tab - grid with play overlay on each thumbnail
@@ -235,6 +237,22 @@ export function GalleryContent({
     )
   }
 
+  // 3D Models tab - category filter toggle (shown when online, above content)
+  const sketchfabFilterToggle = activeTab === '3dmodels' && !isOffline && onSketchfabCategoryFilterChange && (
+    <div className="gallery-3d-filter-bar">
+      <button
+        className={`gallery-3d-filter-btn${sketchfabCategoryFilter ? ' active' : ''}`}
+        onClick={() => onSketchfabCategoryFilterChange(!sketchfabCategoryFilter)}
+        title={sketchfabCategoryFilter ? 'Remove Cultural Heritage filter' : 'Apply Cultural Heritage filter for more relevant results'}
+      >
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+        </svg>
+        Cultural Heritage only
+      </button>
+    </div>
+  )
+
   // Artifacts tab - show offline notice when offline
   if (activeTab === 'artifacts' && isOffline) {
     return (
@@ -256,6 +274,7 @@ export function GalleryContent({
   if (isLoading && items.length === 0) {
     return (
       <div className="gallery-grid-container">
+        {sketchfabFilterToggle}
         <div className="gallery-loading">
           <div className="map-loading-spinner" />
         </div>
@@ -266,6 +285,7 @@ export function GalleryContent({
   if (!isLoading && items.length === 0) {
     return (
       <div className="gallery-grid-container">
+        {sketchfabFilterToggle}
         <div className="gallery-empty">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.5">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -278,5 +298,10 @@ export function GalleryContent({
     )
   }
 
-  return <GalleryGrid items={items} onItemClick={onItemClick} isExpanded={isExpanded} />
+  return (
+    <>
+      {sketchfabFilterToggle}
+      <GalleryGrid items={items} onItemClick={onItemClick} isExpanded={isExpanded} />
+    </>
+  )
 }

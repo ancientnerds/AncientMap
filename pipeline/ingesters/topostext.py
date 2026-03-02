@@ -217,12 +217,7 @@ class ToposTextIngester(BaseIngester):
             precision_meters=1000,  # Literature references often imprecise
             precision_reason="literary_reference",
             source_url=source_url,
-            raw_data={
-                "topostext_id": place_id,
-                "pleiades_id": place.get("pleiades_id"),
-                "text_count": ref_count,
-                "place_type": place.get("type"),
-            },
+            raw_data={k: v for k, v in place.items() if k not in ("lat", "lon", "geometry")},
         )
 
     def _get_period_from_texts(self, texts: list) -> tuple:

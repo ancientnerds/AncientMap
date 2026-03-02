@@ -31,11 +31,13 @@ from pipeline.ingesters import (
     EAMENAIngester,
     EarthImpactsIngester,
     EDHInscriptionsIngester,
+    EuropeanaIngester,
     GeoNamesIngester,
     HistoricEnglandIngester,
     HolVolIngester,
     IrelandNMSIngester,
     MegalithicPortalIngester,
+    MetMuseumIngester,
     NCEIEarthquakesIngester,
     NCEITsunamiObservationsIngester,
     NCEITsunamisIngester,
@@ -47,7 +49,6 @@ from pipeline.ingesters import (
     PleiadesIngester,
     RockArtIngester,
     SacredSitesIngester,
-    SeshatIngester,
     ToposTextIngester,
     UNESCOIngester,
     WikidataIngester,
@@ -84,12 +85,14 @@ INGESTERS = {
     # Geological / Volcanic
     "earth_impacts": EarthImpactsIngester,
     "volcanic_holvol": HolVolIngester,
-    "boundaries_seshat": SeshatIngester,
     # NCEI Hazards
     "ncei_earthquakes": NCEIEarthquakesIngester,
     "ncei_tsunamis": NCEITsunamisIngester,
     "ncei_tsunami_obs": NCEITsunamiObservationsIngester,
     "ncei_volcanoes": NCEIVolcanoesIngester,
+    # Museum Collections & Content
+    "europeana": EuropeanaIngester,
+    "met_museum": MetMuseumIngester,
 }
 
 

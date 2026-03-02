@@ -251,6 +251,7 @@ export const contentService = {
       content_types: tierConfig.types,
       limit: params.limit,
       timeout: tierConfig.timeout,
+      sketchfab_category_filter: params.sketchfabCategoryFilter ?? false,
     })
 
     setCache(cacheKey, result)

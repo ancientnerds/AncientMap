@@ -30,6 +30,7 @@ export function useGalleryData({
 }: UseGalleryDataOptions): GalleryHookReturn {
   const [activeGalleryTab, setActiveGalleryTab] = useState<GalleryTab>('photos')
   const [isGalleryExpanded, setIsGalleryExpanded] = useState(false)
+  const [sketchfabCategoryFilter, setSketchfabCategoryFilter] = useState(false)
 
   // Internal Wikipedia image fetching
   const [wikiImages, setWikiImages] = useState<GalleryImage[]>([])
@@ -63,11 +64,12 @@ export function useGalleryData({
       lon: lng,
       source_url: sourceUrl,
       limit: 200,
+      sketchfabCategoryFilter,
     }, tier),
-    [title, location, lat, lng, sourceUrl]
+    [title, location, lat, lng, sourceUrl, sketchfabCategoryFilter]
   )
 
-  const tiered = useTieredFetch(fetchFn, `${title}-${lat}-${lng}`, !isOffline)
+  const tiered = useTieredFetch(fetchFn, `${title}-${lat}-${lng}-${sketchfabCategoryFilter}`, !isOffline)
 
   // Merge Wikipedia images with backend photos (deduped)
   const wikiItems: UnifiedGalleryItem[] = useMemo(() =>
@@ -119,6 +121,7 @@ export function useGalleryData({
   return {
     activeGalleryTab, setActiveGalleryTab,
     isGalleryExpanded, setIsGalleryExpanded,
+    sketchfabCategoryFilter, setSketchfabCategoryFilter,
     photoItems, videoItems, mapItems, sketchfabItems, artifactItems, artworkItems, bookItems, paperItems, mythItems,
     currentItems,
     isLoadingImages: isLoadingWikiImages || tiered.tier1Loading,

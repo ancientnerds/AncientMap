@@ -515,6 +515,7 @@ export default function SitePopup({
             sourceInfo={sourceInfo}
             sourceName={sourceName}
             sourceColor={sourceColor}
+            sourceUrl={displaySite.sourceUrl}
             category={displaySite.category}
             period={displaySite.period}
             catColor={catColor}
@@ -841,6 +842,8 @@ export default function SitePopup({
           isOffline={isOffline}
           onItemClick={handleItemClick}
           isExpanded={galleryHook.isGalleryExpanded}
+          sketchfabCategoryFilter={galleryHook.sketchfabCategoryFilter}
+          onSketchfabCategoryFilterChange={galleryHook.setSketchfabCategoryFilter}
         />
 
         {/* Gallery Footer: Connector Status + Dev Warning */}

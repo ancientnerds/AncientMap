@@ -318,6 +318,14 @@ class EuropeanaIngester(BaseIngester):
                 "thumbnail": thumbnail,
                 "place_label": place_name,
                 "rights": self._get_first(item.get("rights")),
+                "title": title,
+                "description": description,
+                "year": self._get_first(item.get("year")),
+                "creator": self._get_first(item.get("dcCreator")),
+                "format": self._get_first(item.get("dcFormat")),
+                "language": self._get_first(item.get("dcLanguage")),
+                "subject": self._get_first(item.get("dcSubject")),
+                "publisher": self._get_first(item.get("dcPublisher")),
             },
         )
 

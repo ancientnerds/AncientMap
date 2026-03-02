@@ -700,6 +700,7 @@ class SacredSitesIngester(BaseIngester):
                 "name": name,
                 "country": country,
                 "religion": religion,
+                "site_type": site_type,
             },
         )
 

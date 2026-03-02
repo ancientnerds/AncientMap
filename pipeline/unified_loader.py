@@ -172,8 +172,17 @@ SOURCE_CONFIG = {
         "license": "CC0",
         "attribution": "Wikidata",
     },
-    # GeoNames removed - 13.4M records with no period data, would add noise
-    # Other sources (Pleiades, DARE, Wikidata) already cover ancient sites with proper dating
+    "geonames": {
+        "name": "GeoNames",
+        "description": "Archaeological features from GeoNames gazetteer",
+        "color": "#607d8b",  # Blue-gray
+        "icon": "map-pin",
+        "category": "Global",
+        "file_pattern": "geonames.json",
+        "format": "json_sites",
+        "license": "CC BY 4.0",
+        "attribution": "GeoNames",
+    },
     # Priority 3: Regional databases
     "osm_historic": {
         "name": "OpenStreetMap Historic",
@@ -359,29 +368,6 @@ SOURCE_CONFIG = {
         "attribution": "NOAA NCEI Natural Hazards",
     },
     # 3D Models
-    "models_sketchfab": {
-        "name": "Sketchfab 3D Models",
-        "description": "3D scans of archaeological sites",
-        "color": "#1da1f2",  # Sketchfab blue
-        "icon": "cube",
-        "category": "3D Models",
-        "file_pattern": "models_sketchfab.json",
-        "format": "json_sites",
-        "license": "Various",
-        "attribution": "Sketchfab",
-    },
-    # Boundaries
-    "boundaries_seshat": {
-        "name": "Seshat Boundaries",
-        "description": "Historical polity boundaries",
-        "color": "#a29bfe",  # Light purple (boundaries)
-        "icon": "boundary",
-        "category": "Boundaries",
-        "file_pattern": "boundaries_seshat.json",
-        "format": "json_sites",
-        "license": "CC BY-NC-SA 4.0",
-        "attribution": "Seshat Databank",
-    },
     # Middle East & Africa
     "eamena": {
         "name": "EAMENA",
@@ -418,18 +404,18 @@ SOURCE_CONFIG = {
         "license": "CC BY-SA 4.0",
         "attribution": "Europeana",
     },
-    # Historical Maps (content source - bbox, not points)
-    "david_rumsey": {
-        "name": "David Rumsey Maps",
-        "description": "Historical map collection",
-        "color": "#8b4513",  # Saddle brown
-        "icon": "map-old",
-        "category": "Maps",
-        "file_pattern": "david_rumsey.json",
-        "format": "maps",  # Special handling - content source
-        "license": "CC BY-NC-SA 3.0",
-        "attribution": "David Rumsey Map Collection",
+    "met_museum": {
+        "name": "Metropolitan Museum",
+        "description": "Ancient art from the Met's collection",
+        "color": "#e4002b",  # Met red
+        "icon": "museum",
+        "category": "Museums",
+        "file_pattern": "met_museum.json",
+        "format": "json_sites",
+        "license": "CC0",
+        "attribution": "The Metropolitan Museum of Art",
     },
+    # Historical Maps (content source - bbox, not points)
 }
 
 # Site types to EXCLUDE from Wikidata and OSM (mostly medieval/modern)
@@ -885,7 +871,7 @@ class UnifiedLoader:
                 name = props.get("name_en") or props.get("full_name", "")
                 record_id = str(props.get("id_no", props.get("OBJECTID", "")))
                 site_type = "heritage_site"
-                source_url = props.get("hyperlink", "")
+                source_url = f"https://whc.unesco.org/en/list/{record_id}" if record_id else ""
             elif source_id == "historic_england":
                 name = props.get("Name", "")
                 record_id = str(props.get("ListEntry", props.get("OBJECTID", "")))
@@ -1715,13 +1701,6 @@ class UnifiedLoader:
                         "alternate_names": parts[3] if len(parts) > 3 else None,
                     },
                 }
-
-    def _parse_maps(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
-        """Parse David Rumsey historical maps (content source - skip for sites)."""
-        # Historical maps don't represent sites - they're content to link TO sites
-        # Return empty iterator; maps will be used in content_linker.py
-        logger.info("David Rumsey maps will be processed in content_linker.py, not as sites")
-        return iter([])
 
     def _map_geonames_type(self, feature_class: str, feature_code: str) -> str:
         """Map GeoNames feature class/code to site type."""

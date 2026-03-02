@@ -7,7 +7,7 @@ Searches Sketchfab for 3D models of archaeological sites and artifacts.
 Features:
 - Relevance scoring based on site name matching
 - Archaeology keyword boosting
-- Cultural heritage category filtering
+- Optional cultural heritage category filtering (disabled by default)
 - Human-created models only (excludes AI-generated)
 """
 
@@ -19,7 +19,6 @@ from pipeline.connectors.registry import ConnectorRegistry
 from pipeline.connectors.types import AuthType, ContentItem, ContentType, ProtocolType
 
 # Minimum relevance score to include a model (0-100)
-# Lowered to 10 since Sketchfab already filters by cultural-heritage-history category
 MIN_RELEVANCE_SCORE = 10
 
 # Archaeology-related keywords that boost relevance
@@ -118,6 +117,7 @@ class SketchfabConnector(BaseConnector):
 
         location = kwargs.get("location", "")
         country = kwargs.get("country") or self.extract_country(location)
+        use_category_filter = kwargs.get("use_category_filter", False)
 
         # Extract primary search name
         primary_name = self.extract_primary_name(query)
@@ -128,9 +128,11 @@ class SketchfabConnector(BaseConnector):
             "q": search_term,
             "sort_by": "-likeCount",
             "count": min(limit * 2, 50),  # Get extra for filtering
-            "categories": "cultural-heritage-history",
             "ai_generated": "false",
         }
+
+        if use_category_filter:
+            params["categories"] = "cultural-heritage-history"
 
         try:
             async with self.rest:

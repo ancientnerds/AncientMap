@@ -335,6 +335,7 @@ class MegalithicPortalIngester(BaseIngester):
                 "id": site_id,
                 "name": name,
                 "raw_type": site.get("raw_type", ""),
+                "description": site.get("description", ""),
             },
         )
 

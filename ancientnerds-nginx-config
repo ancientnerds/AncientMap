@@ -82,23 +82,17 @@ server {
         gzip_static on;
     }
 
-    # SEO: Pre-rendered HTML for crawlers hitting /?site={uuid}
-    # Nginx internally rewrites bot requests to /seo/site/{uuid} → FastAPI
+    # Redirect legacy /?site={uuid} URLs to the canonical /site.html?id={uuid}
+    # Applies to all visitors (bots and users) — Googlebot follows the 301 and
+    # hits /site.html which has its own pre-rendering block below.
     location = / {
-        set $seo_redirect "";
-        if ($is_bot) {
-            set $seo_redirect "B";
-        }
         if ($arg_site ~ "^[0-9a-fA-F-]{36}$") {
-            set $seo_redirect "${seo_redirect}S";
-        }
-        if ($seo_redirect = "BS") {
-            rewrite ^ /seo/site/$arg_site? last;
+            return 301 /site.html?id=$arg_site;
         }
         try_files /index.html =404;
     }
 
-    # Internal: proxied pre-rendered site pages (only reachable via rewrite above)
+    # Internal: proxied pre-rendered site pages (reached via rewrite in /site.html block)
     location /seo/site/ {
         internal;
         proxy_pass http://127.0.0.1:8000/seo/site/;

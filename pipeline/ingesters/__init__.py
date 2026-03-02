@@ -9,10 +9,8 @@ from a specific source into our standard schema.
 from pipeline.ingesters.ancient_nerds_original import AncientNerdsOriginalIngester
 from pipeline.ingesters.arachne import ArachneIngester
 from pipeline.ingesters.base import BaseIngester, IngesterResult, ParsedSite
-from pipeline.ingesters.boundaries_seshat import SeshatIngester
 from pipeline.ingesters.coins_nomisma import NomismaIngester
 from pipeline.ingesters.dare import DAREIngester
-from pipeline.ingesters.david_rumsey import DavidRumseyIngester
 
 # Regional ingesters - Middle East / Africa
 from pipeline.ingesters.eamena import EAMENAIngester
@@ -28,7 +26,6 @@ from pipeline.ingesters.megalithic_portal import MegalithicPortalIngester
 
 # Museum collections & Texts
 from pipeline.ingesters.met_museum import MetMuseumIngester
-from pipeline.ingesters.models_sketchfab import SketchfabIngester
 
 # NCEI Hazards
 from pipeline.ingesters.ncei_earthquakes import NCEIEarthquakesIngester
@@ -78,14 +75,11 @@ __all__ = [
     # Specialized
     "OSMHistoricIngester",
     "MegalithicPortalIngester",
-    "DavidRumseyIngester",
     "OXREPShipwrecksIngester",
     "NomismaIngester",
     "EDHInscriptionsIngester",
     "HolVolIngester",
     "EarthImpactsIngester",
-    "SketchfabIngester",
-    "SeshatIngester",
     # NCEI Hazards
     "NCEIEarthquakesIngester",
     "NCEITsunamisIngester",

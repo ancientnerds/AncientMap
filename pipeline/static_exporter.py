@@ -146,6 +146,8 @@ class StaticExporter:
                     sm.icon,
                     sm.category,
                     sm.enabled_by_default,
+                    sm.is_primary,
+                    sm.priority,
                     sm.license,
                     sm.attribution,
                     COALESCE(sm.record_count, 0) as record_count
@@ -168,6 +170,8 @@ class StaticExporter:
                     "lic": row.license,
                     "att": row.attribution,
                     "on": row.enabled_by_default,
+                    "pri": row.is_primary,
+                    "p": row.priority,
                 }
                 total_count += row.record_count
 

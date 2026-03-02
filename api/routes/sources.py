@@ -75,11 +75,9 @@ def _load_static_sources():
                 "color": info.get(
                     "c", DEFAULT_SOURCE_COLORS.get(source_id, DEFAULT_SOURCE_COLORS["default"])
                 ),
-                "isPrimary": source_id in ("ancient_nerds", "lyra"),
+                "isPrimary": info.get("pri", False),
                 "enabledByDefault": info.get("on", False),
-                "priority": 0
-                if source_id == "ancient_nerds"
-                else (1 if source_id == "lyra" else 50),
+                "priority": info.get("p", 50),
                 "category": info.get("cat"),
                 "description": info.get("d"),
             }

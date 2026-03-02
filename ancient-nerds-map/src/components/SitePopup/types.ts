@@ -142,6 +142,7 @@ export interface HeroHeaderProps {
   sourceInfo: { name: string; url?: string } | undefined
   sourceName: string
   sourceColor: string
+  sourceUrl?: string
   category: string
   period: string
   catColor: string
@@ -291,6 +292,8 @@ export interface GalleryContentProps {
   isOffline: boolean
   onItemClick: (index: number) => void
   isExpanded?: boolean
+  sketchfabCategoryFilter?: boolean
+  onSketchfabCategoryFilterChange?: (value: boolean) => void
 }
 
 export interface AdminEditPanelProps {

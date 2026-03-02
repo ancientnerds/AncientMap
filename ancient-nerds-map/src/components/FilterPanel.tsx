@@ -16,6 +16,8 @@ interface SourceInfo {
   name: string
   color: string
   count: number
+  primary?: boolean
+  priority: number
 }
 
 interface SearchResult {
@@ -1000,10 +1002,9 @@ function FilterPanel({
 
             {/* Source Legend - Interactive */}
         {filterMode === 'source' && sources.length > 0 && (() => {
-          // Split into primary (ancient_nerds + lyra) and secondary sources
-          const PRIMARY_IDS = new Set(['ancient_nerds', 'lyra', 'ancient_nerds_community'])
-          const primarySources = sources.filter(s => PRIMARY_IDS.has(s.id))
-          const secondarySources = sources.filter(s => !PRIMARY_IDS.has(s.id))
+          // Split into primary and secondary using the flag from source metadata
+          const primarySources = sources.filter(s => s.primary)
+          const secondarySources = sources.filter(s => !s.primary)
 
           return (
             <div className="source-legend-interactive">

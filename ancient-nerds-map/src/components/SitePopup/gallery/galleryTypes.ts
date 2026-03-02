@@ -55,6 +55,10 @@ export interface GalleryHookReturn {
   // Compat for ModelViewer
   sketchfabModels: SketchfabModelCompat[]
 
+  // Sketchfab category filter toggle
+  sketchfabCategoryFilter: boolean
+  setSketchfabCategoryFilter: (value: boolean) => void
+
   // Connector status metadata
   sourcesSearched: string[]
   sourcesFailed: string[]

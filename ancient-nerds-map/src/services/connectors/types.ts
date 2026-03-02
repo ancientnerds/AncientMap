@@ -102,6 +102,7 @@ export interface ContentBySiteParams {
   contentTypes?: ContentType[]
   limit?: number
   timeout?: number
+  sketchfabCategoryFilter?: boolean
 }
 
 /** Parameters for getting content by empire */

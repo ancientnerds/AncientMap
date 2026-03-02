@@ -288,6 +288,16 @@ class GeoNamesIngester(BaseIngester):
                     "feature_code": feature_code,
                     "country_code": country_code,
                     "alternatenames": parts[3][:500] if parts[3] else "",
+                    "cc2": parts[9] if len(parts) > 9 and parts[9] else None,
+                    "admin1_code": parts[10] if len(parts) > 10 and parts[10] else None,
+                    "admin2_code": parts[11] if len(parts) > 11 and parts[11] else None,
+                    "admin3_code": parts[12] if len(parts) > 12 and parts[12] else None,
+                    "admin4_code": parts[13] if len(parts) > 13 and parts[13] else None,
+                    "population": int(parts[14]) if len(parts) > 14 and parts[14] else None,
+                    "elevation": int(parts[15]) if len(parts) > 15 and parts[15] else None,
+                    "dem": int(parts[16]) if len(parts) > 16 and parts[16] else None,
+                    "timezone": parts[17] if len(parts) > 17 and parts[17] else None,
+                    "modification_date": parts[18] if len(parts) > 18 and parts[18] else None,
                 },
             )
 

@@ -7539,6 +7539,39 @@ body.hud-hidden .empire-borders-window {
   opacity: 1;
 }
 
+/* Source badge row: badge + external link button */
+.source-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.source-link-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background: var(--surface-sunken);
+  opacity: 0.7;
+  transition: opacity 0.2s, background 0.2s;
+  cursor: pointer;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.source-link-btn:hover {
+  opacity: 1;
+  background: var(--accent-glow-10);
+}
+
+.popup-hero-content .source-link-btn {
+  background: rgba(0, 15, 20, 0.7);
+  backdrop-filter: blur(4px);
+}
+
 /* Source Switcher Dropdown */
 .source-switcher-wrap {
   display: inline-flex;
@@ -9283,6 +9316,41 @@ body.hud-hidden .empire-borders-window {
   padding: 12px;
   overflow: hidden;
   position: relative;
+}
+
+.gallery-3d-filter-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+  position: relative;
+  z-index: 2;
+}
+
+.gallery-3d-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 99px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.gallery-3d-filter-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: var(--text-primary);
+}
+
+.gallery-3d-filter-btn.active {
+  background: rgba(192, 32, 35, 0.2);
+  border-color: rgba(192, 32, 35, 0.5);
+  color: #e88;
 }
 
 /* Background haze overlay for gallery section */

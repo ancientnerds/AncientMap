@@ -335,6 +335,7 @@ out center;"""
                 "osm_id": elem_id,
                 "historic": historic,
                 "wikidata": wikidata,
+                **{k: v for k, v in tags.items() if k not in ("name", "name:en")},
             },
         )
 

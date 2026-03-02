@@ -287,6 +287,7 @@ class OpenContextIngester(BaseIngester):
                 "label": label,
                 "item_category": item_category,
                 "thumbnail": thumbnail,
+                "geometry_type": geometry.get("type") if geometry else None,
             },
         )
 

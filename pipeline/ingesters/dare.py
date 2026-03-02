@@ -236,11 +236,8 @@ class DAREIngester(BaseIngester):
             precision_reason="dare",
             source_url=source_url,
             raw_data={
-                "id": dare_id,
-                "name": name,
-                "ancient_name": ancient_name,
-                "feature_type": feature_type,
-                "country": country,
+                **properties,
+                "dare_id": dare_id,
             },
         )
 

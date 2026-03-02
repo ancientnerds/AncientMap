@@ -312,6 +312,10 @@ async def content_by_site(
     content_types: list[str] | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
     timeout: float = Query(default=45.0, ge=1.0, le=120.0),
+    sketchfab_category_filter: bool = Query(
+        default=False,
+        description="Restrict Sketchfab results to the Cultural Heritage & History category",
+    ),
 ):
     """
     Get all content related to an archaeological site.
@@ -334,6 +338,7 @@ async def content_by_site(
         content_types=parsed_types,
         limit_per_source=limit // 5,
         timeout=timeout,
+        use_category_filter=sketchfab_category_filter,
     )
 
     return ContentSearchResponse(

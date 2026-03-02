@@ -73,13 +73,17 @@ interface SourceInfo {
   name: string
   color: string
   count: number
+  primary?: boolean
+  priority: number
 }
 
 interface SourceMeta {
   n: string
   c: string
   cnt: number
-  primary?: boolean
+  pri?: boolean   // is_primary from DB
+  p?: number      // priority from DB (lower = higher)
+  on?: boolean    // enabled_by_default
 }
 
 // Check for standalone popup mode (opened via ?site= URL)
@@ -732,7 +736,9 @@ function AppContent() {
             n: source.name,
             c: source.color,
             cnt: source.recordCount,
-            primary: source.isPrimary
+            pri: source.isPrimary,
+            p: source.priority ?? 999,
+            on: source.enabledByDefault,
           }
         }
         setSourcesMeta(sourcesMetaMap)
@@ -852,27 +858,21 @@ function AppContent() {
   const sources: SourceInfo[] = useMemo(() => {
     const result: SourceInfo[] = []
 
-    // Include ALL sources from metadata that have sites (cnt > 0)
-    // Use meta.cnt (total count from sources.json) for display and sorting
+    // Include ALL sources from metadata — no filtering, fully data-driven
     for (const [sourceId, meta] of Object.entries(sourcesMeta)) {
-      // Skip sources with no sites (placeholder entries) — but always show primary sources
-      if ((!meta?.cnt || meta.cnt === 0) && !meta?.primary) continue
-
       result.push({
         id: sourceId,
         name: meta?.n || sourceId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
         color: meta?.c || SOURCE_COLORS[sourceId] || SOURCE_COLORS.default || '#9ca3af',
-        count: meta.cnt
+        count: meta.cnt,
+        primary: meta.pri,
+        priority: meta.p ?? 999,
       })
     }
 
+    // Sort by priority (from DB), then by count descending
     return result.sort((a, b) => {
-      // Primary sources at the top: ancient_nerds first, then lyra
-      const PRIMARY_ORDER: Record<string, number> = { 'ancient_nerds': 0, 'lyra': 1 }
-      const aOrder = PRIMARY_ORDER[a.id] ?? 99
-      const bOrder = PRIMARY_ORDER[b.id] ?? 99
-      if (aOrder !== bOrder) return aOrder - bOrder
-      // Then sort by count (descending)
+      if (a.priority !== b.priority) return a.priority - b.priority
       return b.count - a.count
     })
   }, [sourcesMeta])
@@ -1169,18 +1169,23 @@ function AppContent() {
   // Default age range constant
   const DEFAULT_AGE_RANGE: [number, number] = [-5000, 1500]
 
-  // Reset all filters to defaults
+  // Reset all filters to defaults (uses enabledByDefault from source metadata)
   const handleResetAllFilters = useCallback(() => {
-    // Reset sources first (to Ancient Nerds only)
-    setSelectedSources(['ancient_nerds'])
+    const defaultIds = Object.entries(sourcesMeta)
+      .filter(([, meta]) => meta.on)
+      .map(([id]) => id)
+    // Fallback to first primary source if none are enabledByDefault
+    const resetIds = defaultIds.length > 0
+      ? defaultIds
+      : Object.entries(sourcesMeta).filter(([, m]) => m.pri).map(([id]) => id)
+    setSelectedSources(resetIds)
     setAgeRange(DEFAULT_AGE_RANGE)
-    // Compute categories/countries from default source (ancient_nerds)
-    const defaultSourceSites = sites.filter(s => s.sourceId === 'ancient_nerds')
+    const defaultSourceSites = sites.filter(s => resetIds.includes(s.sourceId))
     const defaultCategories = [...new Set(defaultSourceSites.map(s => s.category).filter(Boolean))].sort()
     const defaultCountries = [...new Set(defaultSourceSites.map(s => extractCountry(s.location)).filter(c => c !== 'Unknown'))].sort()
     setSelectedCategories(defaultCategories)
     setSelectedCountries(defaultCountries)
-  }, [sites])
+  }, [sites, sourcesMeta])
 
   // Handle category change with auto-centering
   const handleCategoryChange = useCallback((newCategories: string[]) => {

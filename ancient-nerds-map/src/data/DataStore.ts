@@ -65,8 +65,8 @@ class DataStoreClass {
       return
     }
 
-    // PARALLEL FETCH: Load sources, sites, and image index simultaneously for faster startup
-    // Hardcode default source 'ancient_nerds' to enable parallel fetch
+    // PARALLEL FETCH: Load sources + initial sites simultaneously for faster startup
+    // Must hardcode initial source since enabledByDefault is only known after sources load
     const DEFAULT_SOURCE = 'ancient_nerds'
 
     const [sourcesResponse, sitesResponse] = await Promise.all([

@@ -239,13 +239,7 @@ class IrelandNMSIngester(BaseIngester):
             precision_meters=50,
             precision_reason="ireland_nms",
             source_url=source_url,
-            raw_data={
-                "smr_no": smr_no,
-                "name": name,
-                "classification": classification,
-                "townland": townland,
-                "county": county,
-            },
+            raw_data=properties,
         )
 
     def _map_type(self, classification: str) -> str:
