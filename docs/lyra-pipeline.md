@@ -44,7 +44,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    YT["YouTube RSS\n(35 channels)"] -->|transcripts| NV[(news_videos)]
+    YT["YouTube RSS\n(39 channels)"] -->|transcripts| NV[(news_videos)]
     NV -->|MiniMax summarize| NI[(news_items)]
     NI -->|exact/spaceless match| US[(unified_sites\nunified_site_names)]
     NI -->|unmatched names| UC[(user_contributions\nsource='lyra')]
@@ -418,7 +418,7 @@ flowchart TD
 
 The orchestrator runs `main()` which:
 1. Applies auto-migrations (new columns, indexes, table renames)
-2. Seeds `source_meta` ('lyra') and `news_channels` (35 YouTube channels)
+2. Seeds `source_meta` ('lyra') and `news_channels` (39 YouTube channels)
 3. Applies versioned resets (v4-v15 + named resets) to re-queue items when prompts/logic change
 4. Enters infinite loop: run pipeline every hour, generate article weekly, heartbeat after each cycle
 

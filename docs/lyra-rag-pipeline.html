@@ -409,7 +409,7 @@
 <div class="container">
 
 <h1>Lyra Pipeline &mdash; Full Architecture</h1>
-<p class="subtitle">News pipeline + RAG agent + model optimization &mdash; Ancient Nerds Map &mdash; Feb 2026</p>
+<p class="subtitle">News pipeline + RAG agent + model optimization &mdash; Ancient Nerds Map &mdash; Mar 2026</p>
 
 <!-- ================================================================== -->
 <!-- OVERVIEW STATS -->
@@ -437,7 +437,7 @@
     <div class="label">RAG Agent Tools</div>
   </div>
   <div class="stat-card">
-    <div class="value" style="color: var(--orange);">35</div>
+    <div class="value" style="color: var(--orange);">39</div>
     <div class="label">YouTube Channels</div>
   </div>
 </div>
@@ -473,7 +473,7 @@
       <div class="node node-index">
         <div class="node-title">Fetch New Videos <span class="badge badge-existing">IO</span></div>
         <div class="node-desc">
-          RSS feed from 35 archaeology YouTube channels &rarr; filter by min 5 min duration &rarr; download transcript via <code>youtube-transcript-api</code> (with proxy fallback) &rarr; trim first 2 min (intros). Creates <code>NewsVideo</code> rows with status <code>"transcribed"</code>.
+          RSS feed from 39 archaeology YouTube channels &rarr; filter by min 5 min duration &rarr; download transcript via <code>youtube-transcript-api</code> (with proxy fallback) &rarr; trim first 2 min (intros). Creates <code>NewsVideo</code> rows with status <code>"transcribed"</code>.
         </div>
       </div>
     </div>
@@ -1148,7 +1148,7 @@ ESCALATION_SCHEMA:
 <h2><span class="num">6</span> RAG Agent &mdash; How Lyra Whiskerbyte Works</h2>
 
 <p style="font-size: 12px; color: var(--dim); margin-bottom: 8px;">
-  Interactive AI agent that answers questions about 40,000+ archaeological sites and recent YouTube news.
+  Interactive AI agent that answers questions about 750,000+ archaeological sites and recent YouTube news.
 </p>
 <p style="font-size: 11px; color: var(--dim); margin-bottom: 20px;">
   Identity: <em style="color: var(--text);">Lyra Whiskerbyte, one of 100 biopunk Ancient Nerds using pre-Flood tech to uncover lost knowledge.</em>
@@ -1892,7 +1892,7 @@ ESCALATION_SCHEMA:
   <div class="file-item">
     <span class="file-path">api/services/lyra_tools.py</span> · <span class="file-path">api/services/lyra_prompts.py</span> · <span class="file-path">api/services/lyra_agent.py</span>
     <span class="badge badge-model">M2.5</span>
-    <span class="file-desc">RAG agent: hybrid search, 8 tools, streaming, LangChain ChatAnthropic.</span>
+    <span class="file-desc">RAG agent: hybrid search, 11 tools, streaming, LangChain ChatAnthropic.</span>
   </div>
   <div class="file-item">
     <span class="file-path">api/services/lyra_embeddings.py</span>
@@ -1960,14 +1960,14 @@ ESCALATION_SCHEMA:
   <div class="node-desc" style="line-height: 1.8;">
     <strong>News pipeline:</strong> 11 automated steps &mdash; fetch, retry, summarize, match, post, verify, rescore, dedup, screenshot, backfill, identify.<br>
     <strong>AI stack:</strong> 9 MiniMax M2.5 call sites with structured outputs (via prefill), extended thinking, prompt caching.<br>
-    <strong>RAG agent:</strong> Hybrid dense+BM25+rerank retrieval, 8 tools, streaming responses, map highlighting.<br>
+    <strong>RAG agent:</strong> Hybrid dense+BM25+rerank retrieval, 11 tools, streaming responses, map highlighting.<br>
     <strong>Embedding:</strong> Voyage-4/4-large (1024-dim) + BM25 sparse + rerank-2.5-lite. Qdrant vector DB.<br>
-    <strong>Data:</strong> 40K+ sites, 35 YouTube channels, Seshat empire data, Wikidata/Wikipedia enrichment.
+    <strong>Data:</strong> 750K+ sites, 39 YouTube channels, Seshat empire data, Wikidata/Wikipedia enrichment.
   </div>
 </div>
 
 <div style="color: var(--dim); font-size: 11px; margin-top: 48px; text-align: center;">
-  Lyra Pipeline Architecture &mdash; Ancient Nerds Map &mdash; Feb 2026
+  Lyra Pipeline Architecture &mdash; Ancient Nerds Map &mdash; Mar 2026
 </div>
 
 </div>
