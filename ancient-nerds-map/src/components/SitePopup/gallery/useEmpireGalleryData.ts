@@ -146,6 +146,8 @@ export function useEmpireGalleryData({
   return {
     activeGalleryTab, setActiveGalleryTab,
     isGalleryExpanded, setIsGalleryExpanded,
+    sketchfabCategoryFilter: false,
+    setSketchfabCategoryFilter: () => {},
     photoItems, videoItems, mapItems, sketchfabItems, artifactItems, artworkItems, bookItems, paperItems, mythItems,
     currentItems,
     isLoadingImages: wikiLoading || tiered.tier1Loading,
