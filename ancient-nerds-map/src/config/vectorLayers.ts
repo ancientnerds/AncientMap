@@ -66,6 +66,15 @@ export const LAYER_CONFIG = {
     label: 'Tectonic Plates',
     custom: true,
     hasLOD: false
+  },
+  romanRoads: {
+    file: 'roman_roads',
+    category: 'historical',
+    color: 0xDAA520,  // Goldenrod - Roman gold
+    radius: 1.002,
+    label: 'Roman Roads',
+    custom: true,
+    hasLOD: false
   }
 } as const
 
@@ -79,6 +88,7 @@ export interface VectorLayerVisibility {
   coralReefs: boolean
   glaciers: boolean
   plateBoundaries: boolean
+  romanRoads: boolean
 }
 
 /**

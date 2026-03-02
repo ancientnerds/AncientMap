@@ -253,17 +253,125 @@ SOURCE_CONFIG = {
         "license": "Various",
         "attribution": "Rock Art Database",
     },
-    # Inscriptions & Texts
-    "inscriptions_edh": {
-        "name": "EDH Inscriptions",
-        "description": "Latin inscriptions database",
-        "color": "#5dade2",  # Light blue (inscriptions)
+    # Vici.org Roman sites
+    "vici_org": {
+        "name": "Vici.org",
+        "description": "Roman archaeological sites across Europe",
+        "color": "#B8860B",  # Goldenrod (Roman)
+        "icon": "roman",
+        "category": "Europe",
+        "file_pattern": "vici_org.json",
+        "format": "geojson",
+        "license": "CC BY-SA 3.0",
+        "attribution": "Vici.org",
+    },
+    # Inscriptions (replaces EDH)
+    "list_inscriptions": {
+        "name": "LIST Latin Inscriptions",
+        "description": "Latin inscriptions from the ancient world",
+        "color": "#DAA520",  # Goldenrod
         "icon": "inscription",
         "category": "Inscriptions",
-        "file_pattern": "inscriptions_edh.json",
-        "format": "edh",
-        "license": "CC BY-SA 3.0",
-        "attribution": "Epigraphic Database Heidelberg",
+        "file_pattern": "list_inscriptions.geojson",
+        "format": "geojson",
+        "license": "CC BY 4.0",
+        "attribution": "LIST - Linking Inscriptions to the Scientific Tradition",
+    },
+    # Radiocarbon Paleolithic
+    "radiocarbon_paleo": {
+        "name": "Radiocarbon Paleolithic Europe",
+        "description": "Paleolithic radiocarbon-dated sites in Europe",
+        "color": "#8B4513",  # Sienna
+        "icon": "archaeology",
+        "category": "Europe",
+        "file_pattern": "radiocarbon_paleo.json",
+        "format": "json_sites",
+        "license": "CC BY 4.0",
+        "attribution": "ROCEEH ROAD Database",
+    },
+    # Portable Antiquities Scheme
+    "pas_finds": {
+        "name": "Portable Antiquities Scheme",
+        "description": "Archaeological finds from England and Wales",
+        "color": "#CD853F",  # Peru
+        "icon": "find",
+        "category": "Europe",
+        "file_pattern": "pas_finds.json",
+        "format": "json_sites",
+        "license": "CC BY-SA 4.0",
+        "attribution": "Portable Antiquities Scheme / British Museum",
+    },
+    # Canmore Scotland
+    "canmore_scotland": {
+        "name": "Canmore Scotland",
+        "description": "Archaeological sites of Scotland",
+        "color": "#4169E1",  # Royal blue
+        "icon": "site",
+        "category": "Europe",
+        "file_pattern": "canmore_scotland.json",
+        "format": "geojson",
+        "license": "Open Government Licence",
+        "attribution": "Historic Environment Scotland",
+    },
+    # Mycenaean Atlas
+    "mycenaean_atlas": {
+        "name": "Mycenaean Atlas Project",
+        "description": "Bronze Age Aegean archaeological sites",
+        "color": "#FFD700",  # Gold
+        "icon": "site",
+        "category": "Europe",
+        "file_pattern": "mycenaean_atlas.csv",
+        "format": "csv",
+        "license": "CC BY 4.0",
+        "attribution": "Mycenaean Atlas Project / Robert Consoli",
+    },
+    # Coflein Wales
+    "coflein_wales": {
+        "name": "Coflein Wales",
+        "description": "Archaeological sites of Wales",
+        "color": "#228B22",  # Forest green
+        "icon": "site",
+        "category": "Europe",
+        "file_pattern": "coflein_wales.json",
+        "format": "geojson",
+        "license": "Open Government Licence",
+        "attribution": "Royal Commission on Ancient Monuments of Wales",
+    },
+    # Luwian Studies
+    "luwian_atlas": {
+        "name": "Luwian Studies Site Atlas",
+        "description": "Bronze Age Anatolia archaeological sites",
+        "color": "#DC143C",  # Crimson
+        "icon": "site",
+        "category": "Middle East",
+        "file_pattern": "luwian_atlas.csv",
+        "format": "csv",
+        "license": "CC BY 4.0",
+        "attribution": "Luwian Studies Foundation",
+    },
+    # Pre-Columbian Amazon
+    "peru_amazon": {
+        "name": "Pre-Columbian Amazon Sites",
+        "description": "Pre-Columbian earthworks in the Amazon",
+        "color": "#32CD32",  # Lime green
+        "icon": "site",
+        "category": "Americas",
+        "file_pattern": "peru_amazon_raw.csv",
+        "format": "csv",
+        "license": "CC BY 4.0",
+        "attribution": "de Souza et al. 2018 / Nature Communications",
+    },
+    # Xinjiang Archaeological Sites
+    "xinjiang_sites": {
+        "name": "Xinjiang Archaeological Sites",
+        "description": "Paleolithic to Bronze Age sites in Xinjiang, China",
+        "color": "#FF8C00",  # Dark orange
+        "icon": "site",
+        "category": "Asia",
+        "file_pattern": "xinjiang_sites.csv",
+        "format": "csv",
+        "license": "CC BY 4.0",
+        "attribution": "Li et al. / Scientific Data",
     },
     # Maritime & Shipwrecks
     "shipwrecks_oxrep": {
@@ -1598,71 +1706,6 @@ class UnifiedLoader:
                     "denomination_uri": find.get("denomination_uri"),
                     "material_uri": find.get("material_uri"),
                     "mint_uri": find.get("mint_uri"),
-                },
-            }
-
-    def _parse_edh(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
-        """Parse Epigraphic Database Heidelberg inscriptions."""
-        # Period cutoff: include ancient + pre-Columbian (up to 1500 AD)
-        PERIOD_CUTOFF = 1500
-
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-
-        inscriptions = data.get("inscriptions", [])
-
-        for insc in inscriptions:
-            lat = insc.get("lat")
-            lon = insc.get("lon")
-
-            if lat is None or lon is None:
-                continue
-
-            try:
-                lat = float(lat)
-                lon = float(lon)
-            except (ValueError, TypeError):
-                continue
-
-            if not (-90 <= lat <= 90 and -180 <= lon <= 180):
-                continue
-
-            # Filter by period: only include inscriptions dated <= 1500 AD
-            date_end = parse_year(insc.get("date_end"))
-            if date_end is not None and date_end > PERIOD_CUTOFF:
-                continue  # Skip post-ancient inscriptions
-
-            name = (
-                insc.get("ancient_place")
-                or insc.get("modern_place")
-                or f"Inscription {insc.get('edh_id', '')}"
-            )
-            record_id = insc.get("edh_id", insc.get("id", ""))
-
-            yield {
-                "source_id": source_id,
-                "source_record_id": record_id,
-                "name": name[:500],
-                "name_normalized": normalize_name(name)[:500],
-                "lat": lat,
-                "lon": lon,
-                "site_type": "inscription",
-                "period_start": parse_year(insc.get("date_start")),
-                "period_end": parse_year(insc.get("date_end")),
-                "country": insc.get("country", "")[:100] if insc.get("country") else None,
-                "description": f"Type: {insc.get('inscription_type', '')}; Material: {insc.get('material', '')}; Find spot: {insc.get('find_spot', '')}"[
-                    :2000
-                ],
-                "source_url": insc.get(
-                    "source_url", f"https://edh.ub.uni-heidelberg.de/edh/inschrift/{record_id}"
-                ),
-                "raw_data": {
-                    "edh_id": record_id,
-                    "inscription_type": insc.get("inscription_type"),
-                    "material": insc.get("material"),
-                    "object_type": insc.get("object_type"),
-                    "province": insc.get("province"),
-                    "pleiades_id": insc.get("pleiades_id"),
                 },
             }
 

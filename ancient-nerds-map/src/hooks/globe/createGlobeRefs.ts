@@ -86,7 +86,8 @@ export function useGlobeRefs(): GlobeRefs {
     lakes: [],
     glaciers: [],
     coralReefs: [],
-    plateBoundaries: []
+    plateBoundaries: [],
+    romanRoads: []
   })
   const backLineLayers = useRef<Record<VectorLayerKey, THREE.Line[]>>({
     coastlines: [],
@@ -95,7 +96,8 @@ export function useGlobeRefs(): GlobeRefs {
     lakes: [],
     glaciers: [],
     coralReefs: [],
-    plateBoundaries: []
+    plateBoundaries: [],
+    romanRoads: []
   })
   const backLayersLoaded = useRef<Record<string, boolean>>({})
   const loading = useRef<Record<string, boolean>>({})
@@ -233,7 +235,8 @@ export function useGlobeRefs(): GlobeRefs {
     lakes: false,
     glaciers: false,
     coralReefs: false,
-    plateBoundaries: false
+    plateBoundaries: false,
+    romanRoads: false
   })
   const detailLevel = useRef<DetailLevel>('medium')
   const dotSize = useRef<number>(6)

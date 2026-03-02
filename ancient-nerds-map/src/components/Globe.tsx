@@ -232,7 +232,8 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     lakes: false,
     coralReefs: false,
     glaciers: false,
-    plateBoundaries: false
+    plateBoundaries: false,
+    romanRoads: false
   })
   const [tileLayers, setTileLayers] = useState<{ satellite: boolean; streets: boolean }>({
     satellite: false,
