@@ -282,12 +282,11 @@ class OpenContextIngester(BaseIngester):
             precision_reason="open_context",
             source_url=uri if uri.startswith("http") else f"https://opencontext.org{uri}",
             raw_data={
+                **properties,
                 "uri": uri,
                 "label": label,
                 "item_category": item_category,
-                "project": project,
-                "context": context[:200] if context else "",
-                "thumbnail": thumbnail,  # Image URL for unified_loader
+                "thumbnail": thumbnail,
             },
         )
 

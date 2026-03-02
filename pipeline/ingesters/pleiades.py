@@ -195,18 +195,17 @@ class PleiadesIngester(BaseIngester):
             # Likely placeholder - skip
             return None
 
-        # Parse alternative names
-        names_str = row.get("names", "").strip()
-        alt_names = [n.strip() for n in names_str.split(",") if n.strip() and n.strip() != title]
+        # Alt names not available in Pleiades CSV dump
+        alt_names = []
 
         # Parse time periods
-        periods_str = row.get("timePeriods", "").strip()
+        periods_str = row.get("timePeriodsKeys", "").strip()
         periods = [p.strip().lower() for p in periods_str.split(",") if p.strip()]
 
         period_start, period_end, period_name = self._parse_periods(periods)
 
         # Parse place types
-        types_str = row.get("placeTypes", "").strip()
+        types_str = row.get("featureTypes", "").strip()
         types = [t.strip().lower() for t in types_str.split(",") if t.strip()]
         site_type = self._map_site_type(types)
 
@@ -228,18 +227,7 @@ class PleiadesIngester(BaseIngester):
             precision_meters=100,  # Pleiades coordinates are generally good
             precision_reason="representative_point",
             source_url=source_url,
-            raw_data={
-                "id": pleiades_id,
-                "title": title,
-                "description": row.get("description", ""),
-                "placeTypes": types_str,
-                "timePeriods": periods_str,
-                "names": names_str,
-                "creators": row.get("creators", ""),
-                "contributors": row.get("contributors", ""),
-                "created": row.get("created", ""),
-                "modified": row.get("modified", ""),
-            },
+            raw_data=dict(row),
         )
 
     def _parse_periods(self, periods: list[str]) -> tuple:

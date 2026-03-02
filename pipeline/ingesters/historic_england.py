@@ -241,8 +241,12 @@ class HistoricEnglandIngester(BaseIngester):
         # Field names vary between layers, try common ones
         list_entry = properties.get("ListEntry", properties.get("OBJECTID", ""))
         name = properties.get("Name", properties.get("NAME", ""))
-        monument_type = properties.get("MonumentType", properties.get("Type", ""))
-        description = properties.get("Description", "")
+        name_raw = properties.get("Name", properties.get("NAME", ""))
+        if ":" in name_raw:
+            monument_type = name_raw.split(":")[0].strip()
+        else:
+            monument_type = ""
+        description = name_raw
 
         if not name:
             name = f"Historic site {list_entry}"
@@ -269,11 +273,7 @@ class HistoricEnglandIngester(BaseIngester):
             precision_meters=50,
             precision_reason="historic_england",
             source_url=source_url,
-            raw_data={
-                "list_entry": list_entry,
-                "name": name,
-                "monument_type": monument_type,
-            },
+            raw_data=properties,
         )
 
     def _map_type(self, monument_type: str) -> str:

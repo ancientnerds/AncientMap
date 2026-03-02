@@ -127,12 +127,9 @@ class UNESCOIngester(BaseIngester):
             return None
 
         # Get other fields
-        country = properties.get("states_name_en", properties.get("states", ""))
         description = properties.get(
             "short_description_en", properties.get("short_description", "")
         )
-        date_inscribed = str(properties.get("date_inscribed", ""))
-        region = properties.get("region_en", properties.get("region", ""))
         criteria = properties.get("criteria_txt", "")
 
         # Determine site type based on criteria
@@ -155,15 +152,7 @@ class UNESCOIngester(BaseIngester):
             precision_meters=1000,  # UNESCO coordinates are approximate centroids
             precision_reason="centroid",
             source_url=source_url,
-            raw_data={
-                "id": unesco_id,
-                "name": name,
-                "country": country,
-                "region": region,
-                "category": category,
-                "criteria": criteria,
-                "date_inscribed": date_inscribed,
-            },
+            raw_data=properties,
         )
 
     def _determine_site_type(self, criteria: str, category: str) -> str:
