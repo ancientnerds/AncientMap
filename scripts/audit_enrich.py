@@ -43,6 +43,7 @@ Usage:
 import argparse
 import contextlib
 import json
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -71,6 +72,53 @@ DEFAULT_API_URL = "https://ancientnerds.com"
 
 # Re-audit sites older than 90 days
 AUDIT_FRESHNESS_DAYS = 90
+
+
+# =============================================================================
+# Helpers: Source-aware enrichment (match reference URLs → source_records)
+# =============================================================================
+
+
+def _parse_source_from_url(url: str) -> tuple[str, str] | None:
+    """Match a reference URL to a (source_database_id, source_record_id) pair."""
+    if "whc.unesco.org" in url:
+        m = re.search(r"/list/(\d+)", url)
+        if m:
+            return ("unesco", m.group(1))
+    elif "pleiades.stoa.org" in url:
+        m = re.search(r"/places/(\d+)", url)
+        if m:
+            return ("pleiades", m.group(1))
+    elif "historicengland.org.uk" in url:
+        m = re.search(r"list-entry/(\d+)", url)
+        if m:
+            return ("historic_england", m.group(1))
+    return None
+
+
+def _compose_source_excerpt(source_db_id: str, raw_data: dict, original_desc: str | None) -> str | None:
+    """Build citable text from source_records raw_data."""
+    parts = []
+    if source_db_id == "pleiades":
+        if raw_data.get("description"):
+            parts.append(raw_data["description"])
+        if raw_data.get("placeTypes"):
+            parts.append(f"Place types: {raw_data['placeTypes']}")
+        if raw_data.get("timePeriods"):
+            parts.append(f"Time periods: {raw_data['timePeriods']}")
+    elif source_db_id == "unesco":
+        if original_desc:
+            parts.append(original_desc)
+        for key in ("criteria", "date_inscribed", "category", "region"):
+            if raw_data.get(key):
+                parts.append(f"{key.replace('_', ' ').title()}: {raw_data[key]}")
+    elif source_db_id == "historic_england":
+        if original_desc:
+            parts.append(original_desc)
+        if raw_data.get("monument_type"):
+            parts.append(f"Monument type: {raw_data['monument_type']}")
+    text = ". ".join(parts)
+    return text[:2000] if text else None
 
 
 # =============================================================================
@@ -1974,6 +2022,52 @@ def prepare_cited_description_batches(batch_size: int = 10, limit: int | None = 
         """)
         ).fetchall()
 
+        # Pre-fetch source_records content for known reference link URLs
+        url_to_source: dict[str, tuple[str, str]] = {}
+        for ref in ref_rows:
+            url = ref._mapping.get("content_url") or ""
+            parsed = _parse_source_from_url(url)
+            if parsed:
+                url_to_source[url] = parsed
+
+        source_record_data: list = []
+        if url_to_source:
+            pairs = list(set(url_to_source.values()))
+            source_record_data = conn.execute(
+                text("""
+                SELECT
+                    sr.source_database_id,
+                    sr.source_record_id,
+                    sr.raw_data,
+                    us2.description AS original_description
+                FROM source_records sr
+                LEFT JOIN unified_sites us2
+                    ON us2.source_id = sr.source_database_id
+                    AND us2.source_record_id = sr.source_record_id
+                WHERE (sr.source_database_id, sr.source_record_id) IN :pairs
+                """),
+                {"pairs": tuple(pairs)},
+            ).fetchall()
+
+    # Build pre-fetched excerpts lookup: {url: excerpt_text}
+    pre_fetched: dict[str, str] = {}
+    if url_to_source and source_record_data:
+        record_lookup: dict[tuple[str, str], tuple[dict, str | None]] = {}
+        for sr in source_record_data:
+            m = sr._mapping
+            key = (m["source_database_id"], m["source_record_id"])
+            record_lookup[key] = (m["raw_data"] or {}, m["original_description"])
+
+        for url, (src_db_id, src_rec_id) in url_to_source.items():
+            rec = record_lookup.get((src_db_id, src_rec_id))
+            if rec:
+                excerpt = _compose_source_excerpt(src_db_id, rec[0], rec[1])
+                if excerpt:
+                    pre_fetched[url] = excerpt
+
+        if pre_fetched:
+            print(f"  Pre-fetched {len(pre_fetched)} source excerpts from DB (skipping web fetch)", flush=True)
+
     # Group reference links by site_id
     ref_links_by_site: dict[str, list[dict]] = {}
     for ref in ref_rows:
@@ -2006,6 +2100,13 @@ def prepare_cited_description_batches(batch_size: int = 10, limit: int | None = 
         if claims_entry.get("inception") is not None:
             enrichment["inception"] = claims_entry["inception"]
 
+        # Collect pre-fetched excerpts for this site's reference links
+        source_excerpts = {}
+        for ref in ref_links_by_site.get(site_id, []):
+            url = ref.get("content_url", "")
+            if url in pre_fetched:
+                source_excerpts[url] = pre_fetched[url]
+
         site_entry = {
             "site_id": site_id,
             "name": name,
@@ -2019,6 +2120,7 @@ def prepare_cited_description_batches(batch_size: int = 10, limit: int | None = 
             "enrichment": enrichment,
             "wiki_extract": wiki_entry.get("extract", ""),
             "reference_links": ref_links_by_site.get(site_id, []),
+            "source_excerpts": source_excerpts,
         }
         sites.append(site_entry)
 
@@ -2052,10 +2154,13 @@ def prepare_cited_description_batches(batch_size: int = 10, limit: int | None = 
 
     sites_with_refs = sum(1 for s in sites if s["reference_links"])
     sites_without_refs = len(sites) - sites_with_refs
+    total_excerpts = sum(len(s.get("source_excerpts", {})) for s in sites)
+    sites_with_excerpts = sum(1 for s in sites if s.get("source_excerpts"))
 
     print(f"[CITED-DESC] Prepared {len(batches)} batches ({len(sites)} sites)", flush=True)
     print(f"  Sites with reference links: {sites_with_refs}", flush=True)
     print(f"  Sites without reference links (Wikipedia-only): {sites_without_refs}", flush=True)
+    print(f"  Sites with DB source excerpts: {sites_with_excerpts} ({total_excerpts} URLs pre-fetched)", flush=True)
     print(f"  Batch files: {CITED_DESC_DIR}/batch_NNN_input.json", flush=True)
     print(f"  Manifest: {manifest_path}", flush=True)
     print(f"\n  Next steps:", flush=True)

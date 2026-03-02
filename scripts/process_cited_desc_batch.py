@@ -251,14 +251,17 @@ async def process_site(fetch_client: httpx.AsyncClient, llm_client: httpx.AsyncC
     current_desc = site.get("current_description") or ""
     ref_links = site.get("reference_links") or []
 
-    # Parallel-fetch top 5 ref URLs, keep best 3
+    # Pre-populate excerpts from DB content (no web fetch needed)
+    source_excerpts = site.get("source_excerpts") or {}
+    excerpts = dict(source_excerpts)
+
+    # Only fetch URLs we don't already have content for
     urls_to_fetch = []
     for ref in ref_links[:5]:
         url = ref.get("content_url") or ref.get("url") or ""
-        if url:
+        if url and url not in excerpts:
             urls_to_fetch.append(url)
 
-    excerpts = {}
     fetch_errors = []
     if urls_to_fetch:
         results = await asyncio.gather(*[fetch_url(fetch_client, u) for u in urls_to_fetch])
