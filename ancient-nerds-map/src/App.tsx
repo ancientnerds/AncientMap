@@ -75,6 +75,7 @@ interface SourceInfo {
   count: number
   primary?: boolean
   priority: number
+  category?: string
 }
 
 interface SourceMeta {
@@ -84,6 +85,7 @@ interface SourceMeta {
   pri?: boolean   // is_primary from DB
   p?: number      // priority from DB (lower = higher)
   on?: boolean    // enabled_by_default
+  cat?: string    // category from DB
 }
 
 // Check for standalone popup mode (opened via ?site= URL)
@@ -739,6 +741,7 @@ function AppContent() {
             pri: source.isPrimary,
             p: source.priority ?? 999,
             on: source.enabledByDefault,
+            cat: source.category,
           }
         }
         setSourcesMeta(sourcesMetaMap)
@@ -867,6 +870,7 @@ function AppContent() {
         count: meta.cnt,
         primary: meta.pri,
         priority: meta.p ?? 999,
+        category: meta.cat,
       })
     }
 

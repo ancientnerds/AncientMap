@@ -6749,6 +6749,20 @@ body.hud-hidden .empire-borders-window {
   white-space: nowrap;
 }
 
+/* Source Group (category grouping) */
+.source-group {
+  margin-top: 2px;
+}
+
+.source-group-label {
+  font-size: 9px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 6px 8px 2px;
+  opacity: 0.7;
+}
+
 /* Load All Sources Button (in divider) */
 .load-all-sources-btn {
   padding: 2px 8px;

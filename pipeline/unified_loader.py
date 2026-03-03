@@ -122,7 +122,7 @@ SOURCE_CONFIG = {
         "description": "Gazetteer of ancient places",
         "color": "#e74c3c",  # Red
         "icon": "landmark",
-        "category": "Ancient World",
+        "category": "Archaeological Databases",
         "file_pattern": "pleiades-places.csv",
         "format": "csv",
         "license": "CC BY 3.0",
@@ -133,7 +133,7 @@ SOURCE_CONFIG = {
         "description": "Digital Atlas of the Roman Empire",
         "color": "#6c5ce7",  # Violet-blue (Roman purple)
         "icon": "empire",
-        "category": "Ancient World",
+        "category": "Archaeological Databases",
         "file_pattern": "dare.json",
         "format": "geojson",
         "license": "CC BY-SA 3.0",
@@ -144,7 +144,7 @@ SOURCE_CONFIG = {
         "description": "Ancient texts linked to places",
         "color": "#00bcd4",  # Cyan (different from teal coastlines)
         "icon": "scroll",
-        "category": "Ancient World",
+        "category": "Archaeological Databases",
         "file_pattern": "topostext.json",
         "format": "json_places",
         "license": "CC BY-NC-SA 4.0",
@@ -156,7 +156,7 @@ SOURCE_CONFIG = {
         "description": "World Heritage cultural sites",
         "color": "#ffd700",  # Gold/Yellow (UNESCO)
         "icon": "globe",
-        "category": "Global",
+        "category": "Archaeological Databases",
         "file_pattern": "unesco-whs.json",
         "format": "geojson",
         "license": "Public Domain",
@@ -167,7 +167,7 @@ SOURCE_CONFIG = {
         "description": "Archaeological sites from Wikidata",
         "color": "#9966ff",  # Purple (no greens - coastlines are teal)
         "icon": "database",
-        "category": "Global",
+        "category": "Archaeological Databases",
         "file_pattern": "wikidata.json",
         "format": "wikidata",
         "license": "CC0",
@@ -178,7 +178,7 @@ SOURCE_CONFIG = {
         "description": "Archaeological features from GeoNames gazetteer",
         "color": "#607d8b",  # Blue-gray
         "icon": "map-pin",
-        "category": "Global",
+        "category": "Archaeological Databases",
         "file_pattern": "geonames.txt",
         "format": "geonames_tsv",
         "license": "CC BY 4.0",
@@ -190,7 +190,7 @@ SOURCE_CONFIG = {
         "description": "Historic sites from OpenStreetMap",
         "color": "#ff9800",  # Orange (no greens - coastlines are teal)
         "icon": "map",
-        "category": "Global",
+        "category": "Archaeological Databases",
         "file_pattern": "osm_historic.json",
         "format": "osm",
         "license": "ODbL",
@@ -201,7 +201,7 @@ SOURCE_CONFIG = {
         "description": "Scheduled monuments of England",
         "color": "#c0392b",  # Dark red
         "icon": "castle",
-        "category": "Europe",
+        "category": "Regional Surveys",
         "file_pattern": "historic_england.json",
         "format": "geojson",
         "license": "Open Government Licence",
@@ -212,7 +212,7 @@ SOURCE_CONFIG = {
         "description": "Archaeological sites of Ireland",
         "color": "#ff6699",  # Pink (no greens - coastlines are teal)
         "icon": "celtic",
-        "category": "Europe",
+        "category": "Regional Surveys",
         "file_pattern": "ireland_nms.json",
         "format": "geojson",
         "license": "Open Data",
@@ -223,7 +223,7 @@ SOURCE_CONFIG = {
         "description": "Archaeological objects database",
         "color": "#8e44ad",  # Dark purple
         "icon": "amphora",
-        "category": "Europe",
+        "category": "Regional Surveys",
         "file_pattern": "arachne.json",
         "format": "arachne",
         "license": "CC BY-NC-SA 3.0",
@@ -235,7 +235,7 @@ SOURCE_CONFIG = {
         "description": "Megalithic and ancient sites",
         "color": "#9966cc",  # Amethyst Purple (stone)
         "icon": "stone",
-        "category": "Europe",
+        "category": "Regional Surveys",
         "file_pattern": "megalithic_portal.json",
         "format": "json_sites",
         "license": "Various",
@@ -246,7 +246,7 @@ SOURCE_CONFIG = {
         "description": "Rock art and petroglyphs",
         "color": "#e67e22",  # Dark orange
         "icon": "paint",
-        "category": "Global",
+        "category": "Regional Surveys",
         "file_pattern": "rock_art.json",
         "format": "json_sites",
         "license": "Various",
@@ -258,7 +258,7 @@ SOURCE_CONFIG = {
         "description": "Roman archaeological sites across Europe",
         "color": "#B8860B",  # Goldenrod (Roman)
         "icon": "roman",
-        "category": "Europe",
+        "category": "Regional Surveys",
         "file_pattern": "vici_org.json",
         "format": "geojson",
         "license": "CC BY-SA 3.0",
@@ -270,7 +270,7 @@ SOURCE_CONFIG = {
         "description": "Latin inscriptions from the ancient world",
         "color": "#DAA520",  # Goldenrod
         "icon": "inscription",
-        "category": "Inscriptions",
+        "category": "Inscriptions & Coins",
         "file_pattern": "list_inscriptions.geojson",
         "format": "geojson",
         "license": "CC BY 4.0",
@@ -282,7 +282,7 @@ SOURCE_CONFIG = {
         "description": "Paleolithic radiocarbon-dated sites in Europe",
         "color": "#8B4513",  # Sienna
         "icon": "archaeology",
-        "category": "Europe",
+        "category": "Regional Surveys",
         "file_pattern": "radiocarbon_paleo.json",
         "format": "json_sites",
         "license": "CC BY 4.0",
@@ -294,7 +294,7 @@ SOURCE_CONFIG = {
         "description": "Archaeological sites of Scotland",
         "color": "#4169E1",  # Royal blue
         "icon": "site",
-        "category": "Europe",
+        "category": "Regional Surveys",
         "file_pattern": "canmore_scotland.json",
         "format": "geojson",
         "license": "Open Government Licence",
@@ -306,7 +306,7 @@ SOURCE_CONFIG = {
         "description": "Bronze Age Aegean archaeological sites",
         "color": "#FFD700",  # Gold
         "icon": "site",
-        "category": "Europe",
+        "category": "Regional Surveys",
         "file_pattern": "mycenaean_atlas.csv",
         "format": "csv",
         "license": "CC BY 4.0",
@@ -318,7 +318,7 @@ SOURCE_CONFIG = {
         "description": "Archaeological sites of Wales",
         "color": "#228B22",  # Forest green
         "icon": "site",
-        "category": "Europe",
+        "category": "Regional Surveys",
         "file_pattern": "coflein_wales.json",
         "format": "geojson",
         "license": "Open Government Licence",
@@ -330,7 +330,7 @@ SOURCE_CONFIG = {
         "description": "Bronze Age Anatolia archaeological sites",
         "color": "#DC143C",  # Crimson
         "icon": "site",
-        "category": "Middle East",
+        "category": "Regional Surveys",
         "file_pattern": "luwian_atlas.csv",
         "format": "csv",
         "license": "CC BY 4.0",
@@ -342,7 +342,7 @@ SOURCE_CONFIG = {
         "description": "Pre-Columbian earthworks in the Amazon",
         "color": "#32CD32",  # Lime green
         "icon": "site",
-        "category": "Americas",
+        "category": "Regional Surveys",
         "file_pattern": "peru_amazon_raw.rds",
         "format": "rds",
         "license": "CC BY 4.0",
@@ -366,7 +366,7 @@ SOURCE_CONFIG = {
         "description": "Ancient coin mints and finds",
         "color": "#d4af37",  # Gold
         "icon": "coin",
-        "category": "Numismatics",
+        "category": "Inscriptions & Coins",
         "file_pattern": "coins_nomisma.json",
         "format": "nomisma",
         "license": "CC BY 4.0",
@@ -378,7 +378,7 @@ SOURCE_CONFIG = {
         "description": "Holocene volcanic eruptions",
         "color": "#ff0000",  # Bright Red (volcanic)
         "icon": "volcano",
-        "category": "Environmental",
+        "category": "Natural Events",
         "file_pattern": "volcanic_holvol.json",
         "format": "json_sites",
         "license": "CC BY 4.0",
@@ -389,7 +389,7 @@ SOURCE_CONFIG = {
         "description": "Confirmed meteorite impact craters",
         "color": "#FF6B35",  # Orange-red (impact/explosion)
         "icon": "crater",
-        "category": "Geological",
+        "category": "Natural Events",
         "file_pattern": "earth_impacts.geojson",
         "format": "geojson_impacts",
         "license": "Public Domain",
@@ -402,7 +402,7 @@ SOURCE_CONFIG = {
         "description": "Significant earthquakes with impact data",
         "color": "#FF6347",  # Tomato red
         "icon": "shake",
-        "category": "Geological",
+        "category": "Natural Events",
         "file_pattern": "ncei_earthquakes.json",
         "format": "json_sites",
         "license": "Public Domain",
@@ -413,7 +413,7 @@ SOURCE_CONFIG = {
         "description": "Tsunami source events",
         "color": "#1E90FF",  # Dodger blue (water)
         "icon": "wave",
-        "category": "Geological",
+        "category": "Natural Events",
         "file_pattern": "ncei_tsunamis.json",
         "format": "json_sites",
         "license": "Public Domain",
@@ -424,7 +424,7 @@ SOURCE_CONFIG = {
         "description": "Tsunami observation points",
         "color": "#4169E1",  # Royal blue
         "icon": "wave",
-        "category": "Geological",
+        "category": "Natural Events",
         "file_pattern": "ncei_tsunami_observations.json",
         "format": "json_sites",
         "license": "Public Domain",
@@ -435,7 +435,7 @@ SOURCE_CONFIG = {
         "description": "Volcanic eruptions with impact data",
         "color": "#FF4500",  # Orange red
         "icon": "volcano",
-        "category": "Geological",
+        "category": "Natural Events",
         "file_pattern": "ncei_volcanoes.json",
         "format": "json_sites",
         "license": "Public Domain",
@@ -448,7 +448,7 @@ SOURCE_CONFIG = {
         "description": "Endangered archaeology MENA region",
         "color": "#d35400",  # Dark orange
         "icon": "pyramid",
-        "category": "Middle East",
+        "category": "Archaeological Databases",
         "file_pattern": "eamena.json",
         "format": "eamena",  # Custom parser for nested geometry
         "license": "CC BY 4.0",
@@ -460,7 +460,7 @@ SOURCE_CONFIG = {
         "description": "Open archaeological data",
         "color": "#2980b9",  # Strong blue
         "icon": "dig",
-        "category": "Global",
+        "category": "Archaeological Databases",
         "file_pattern": "open_context.json",
         "format": "json_sites",
         "license": "CC BY 4.0",
@@ -1716,13 +1716,15 @@ class UnifiedLoader:
                 },
             }
 
-    # Archaeological feature codes to filter GeoNames (matches ingester)
+    # GeoNames feature codes — ancient/archaeological only
+    # Removed: CH (churches 260k), CMTY (cemeteries 155k), FRST (fortresses 91k),
+    # MSTY (monasteries 42k), BDG (bridges 41k), SHRN (shrines 28k),
+    # MSQE (mosques 10k), SQR (squares 5k), STDM (stadiums 3k),
+    # CVNT, ABB, CTHDRL, OBPT — all medieval/modern bulk
     GEONAMES_ARCHAEOLOGICAL_CODES: set[str] = {
-        "ANS", "RUIN", "RUINS", "CSTL", "MNMT", "TMPL", "PYR", "PYRS",
-        "AMTH", "HSTS", "PAL", "TOWR", "FRT", "FRST", "WALL", "GRVE",
-        "CMTY", "TMB", "AQDC", "BDG", "CH", "MSQE", "SHRN", "CVNT",
-        "MSTY", "ABB", "CTHDRL", "SQR", "THTR", "STDM", "BTHS", "CAVE",
-        "CMPL", "OBPT",
+        "ANS", "RUIN", "RUINS", "HSTS", "TMPL", "PYR", "PYRS", "AMTH",
+        "CSTL", "FRT", "PAL", "TOWR", "WALL", "THTR", "BTHS", "AQDC",
+        "CAVE", "TMB", "GRVE", "MNMT", "CMPL",
     }
 
     def _parse_geonames_tsv(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
@@ -1762,6 +1764,10 @@ class UnifiedLoader:
                 # Map GeoNames feature codes to site types
                 site_type = self._map_geonames_type(feature_class, feature_code)
 
+                # Filter out modern types (same filter as Wikidata/OSM)
+                if site_type and site_type.lower() in EXCLUDED_MODERN_TYPES:
+                    continue
+
                 yield {
                     "source_id": source_id,
                     "source_record_id": record_id,
@@ -1785,21 +1791,27 @@ class UnifiedLoader:
         # L = parks, area; A = country, state; R = road, railroad; U = undersea; V = forest, heath
 
         code_map = {
-            "HSTS": "historic_site",
+            "ANS": "ancient_site",
             "RUIN": "ruin",
-            "CSTL": "castle",
-            "FRT": "fort",
-            "MNMT": "monument",
-            "CH": "church",
-            "MSTY": "monastery",
+            "RUINS": "ruin",
+            "HSTS": "historic_site",
             "TMPL": "temple",
             "PYR": "pyramid",
-            "TOWR": "tower",
-            "BLDG": "building",
+            "PYRS": "pyramid",
+            "AMTH": "amphitheater",
+            "CSTL": "castle",
+            "FRT": "fort",
             "PAL": "palace",
-            "ANS": "ancient_site",
+            "TOWR": "tower",
+            "WALL": "wall",
+            "THTR": "theater",
+            "BTHS": "baths",
+            "AQDC": "aqueduct",
             "CAVE": "cave",
-            "CMTY": "cemetery",
+            "TMB": "tomb",
+            "GRVE": "grave",
+            "MNMT": "monument",
+            "CMPL": "complex",
         }
 
         if feature_code in code_map:

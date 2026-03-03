@@ -480,6 +480,40 @@ def _run_migrations(engine) -> None:
         """)
         )
 
+        # Update source categories (grouped for filter panel)
+        conn.execute(
+            text("""
+            UPDATE source_meta SET category = 'Archaeological Databases'
+            WHERE id IN ('pleiades','dare','topostext','unesco','wikidata','geonames',
+                         'osm_historic','open_context','eamena')
+              AND category != 'Archaeological Databases'
+        """)
+        )
+        conn.execute(
+            text("""
+            UPDATE source_meta SET category = 'Regional Surveys'
+            WHERE id IN ('canmore_scotland','coflein_wales','historic_england','ireland_nms',
+                         'megalithic_portal','mycenaean_atlas','luwian_atlas','radiocarbon_paleo',
+                         'arachne','vici_org','rock_art','peru_amazon')
+              AND category != 'Regional Surveys'
+        """)
+        )
+        conn.execute(
+            text("""
+            UPDATE source_meta SET category = 'Inscriptions & Coins'
+            WHERE id IN ('inscriptions_edh','list_inscriptions','coins_nomisma')
+              AND category != 'Inscriptions & Coins'
+        """)
+        )
+        conn.execute(
+            text("""
+            UPDATE source_meta SET category = 'Natural Events'
+            WHERE id IN ('volcanic_holvol','earth_impacts','ncei_earthquakes','ncei_tsunamis',
+                         'ncei_tsunami_obs','ncei_volcanoes')
+              AND category != 'Natural Events'
+        """)
+        )
+
         # Deduplicate lyra contributions: merge rows with same lower(name)
         # into the one with highest mention_count, delete the rest.
         conn.execute(

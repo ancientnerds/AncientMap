@@ -18,6 +18,7 @@ interface SourceInfo {
   count: number
   primary?: boolean
   priority: number
+  category?: string
 }
 
 interface SearchResult {
@@ -1033,7 +1034,7 @@ function FilterPanel({
                   )
                 })}
 
-                {/* Divider between primary and secondary */}
+                {/* Divider between primary and secondary with Load All */}
                 {primarySources.length > 0 && secondarySources.length > 0 && (() => {
                   const unloadedSources = secondarySources.filter(s => !loadedSourceIds.has(s.id) && !loadingSources?.has(s.id))
                   const hasUnloadedSources = unloadedSources.length > 0
@@ -1056,60 +1057,84 @@ function FilterPanel({
                   )
                 })()}
 
-                {/* Secondary Sources - always show, with load state */}
-                {secondarySources.map(source => {
-                  const isActive = selectedSources.includes(source.id)
-                  const isSourceLoading = loadingSources?.has(source.id)
-                  const isSourceLoaded = loadedSourceIds.has(source.id)
-                  const needsLoading = !isSourceLoaded && !isSourceLoading
-                  // Offline unavailable: in offline mode and source not cached
-                  const isOfflineUnavailable = isOffline && !cachedSourceIds.has(source.id)
+                {/* Secondary Sources - grouped by category */}
+                {(() => {
+                  const CATEGORY_ORDER = [
+                    'Archaeological Databases',
+                    'Regional Surveys',
+                    'Inscriptions & Coins',
+                    'Maritime',
+                    'Natural Events',
+                  ]
 
-                  // Only block if loading OR (offline unavailable AND not currently active)
-                  // This allows unchecking active sources even when offline
-                  const shouldDisable = isSourceLoading || (isOfflineUnavailable && !isActive)
+                  // Group by category
+                  const grouped: Record<string, SourceInfo[]> = {}
+                  for (const source of secondarySources) {
+                    const cat = source.category || 'Other'
+                    if (!grouped[cat]) grouped[cat] = []
+                    grouped[cat].push(source)
+                  }
 
-                  return (
-                    <button
-                      key={source.id}
-                      className={`source-legend-item ${isActive ? 'active' : 'inactive'} ${isSourceLoading ? 'loading' : ''} ${needsLoading ? 'not-loaded' : ''} ${isOfflineUnavailable ? 'offline-unavailable' : ''}`}
-                      onClick={() => {
-                        if (isSourceLoading) return
-                        // Always allow unchecking, only block checking when unavailable
-                        if (isActive || !isOfflineUnavailable) {
-                          toggleSource(source.id)
-                        }
-                      }}
-                      title={
-                        isOfflineUnavailable && !isActive ? `${source.name}: Not available offline. Open Download Manager or go online.` :
-                        isSourceLoading ? `${source.name}: Loading...` :
-                        needsLoading ? `Click to load ${source.name} (${source.count.toLocaleString()} sites)` :
-                        `${source.name}: ${source.count.toLocaleString()} sites`
-                      }
-                      disabled={shouldDisable}
-                    >
-                      <span className="source-legend-dot" style={{ background: isActive ? source.color : '#444' }} />
-                      <span className="source-legend-name">{source.name}</span>
-                      {isSourceLoading ? (
-                        <span className="source-legend-loading">
-                          <span className="loading-dots">
-                            <span>.</span><span>.</span><span>.</span>
-                          </span>
-                        </span>
-                      ) : needsLoading ? (
-                        <span className="source-legend-load-icon" title="Click to load">
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                            <polyline points="7 10 12 15 17 10" />
-                            <line x1="12" y1="15" x2="12" y2="3" />
-                          </svg>
-                        </span>
-                      ) : (
-                        <span className="source-legend-count">{source.count.toLocaleString()}</span>
-                      )}
-                    </button>
-                  )
-                })}
+                  // Render in defined order, then any remaining
+                  const orderedCategories = [
+                    ...CATEGORY_ORDER.filter(c => grouped[c]),
+                    ...Object.keys(grouped).filter(c => !CATEGORY_ORDER.includes(c)),
+                  ]
+
+                  return orderedCategories.map(category => (
+                    <div key={category} className="source-group">
+                      <div className="source-group-label">{category}</div>
+                      {grouped[category].map(source => {
+                        const isActive = selectedSources.includes(source.id)
+                        const isSourceLoading = loadingSources?.has(source.id)
+                        const isSourceLoaded = loadedSourceIds.has(source.id)
+                        const needsLoading = !isSourceLoaded && !isSourceLoading
+                        const isOfflineUnavailable = isOffline && !cachedSourceIds.has(source.id)
+                        const shouldDisable = isSourceLoading || (isOfflineUnavailable && !isActive)
+
+                        return (
+                          <button
+                            key={source.id}
+                            className={`source-legend-item ${isActive ? 'active' : 'inactive'} ${isSourceLoading ? 'loading' : ''} ${needsLoading ? 'not-loaded' : ''} ${isOfflineUnavailable ? 'offline-unavailable' : ''}`}
+                            onClick={() => {
+                              if (isSourceLoading) return
+                              if (isActive || !isOfflineUnavailable) {
+                                toggleSource(source.id)
+                              }
+                            }}
+                            title={
+                              isOfflineUnavailable && !isActive ? `${source.name}: Not available offline. Open Download Manager or go online.` :
+                              isSourceLoading ? `${source.name}: Loading...` :
+                              needsLoading ? `Click to load ${source.name} (${source.count.toLocaleString()} sites)` :
+                              `${source.name}: ${source.count.toLocaleString()} sites`
+                            }
+                            disabled={shouldDisable}
+                          >
+                            <span className="source-legend-dot" style={{ background: isActive ? source.color : '#444' }} />
+                            <span className="source-legend-name">{source.name}</span>
+                            {isSourceLoading ? (
+                              <span className="source-legend-loading">
+                                <span className="loading-dots">
+                                  <span>.</span><span>.</span><span>.</span>
+                                </span>
+                              </span>
+                            ) : needsLoading ? (
+                              <span className="source-legend-load-icon" title="Click to load">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                  <polyline points="7 10 12 15 17 10" />
+                                  <line x1="12" y1="15" x2="12" y2="3" />
+                                </svg>
+                              </span>
+                            ) : (
+                              <span className="source-legend-count">{source.count.toLocaleString()}</span>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  ))
+                })()}
               </div>
             </div>
           )
