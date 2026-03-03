@@ -123,7 +123,9 @@ def cli(debug):
 @click.option("--skip-fetch", is_flag=True, help="Use existing raw data instead of downloading")
 @click.option("--batch-size", type=int, default=1000, help="Batch size for database commits")
 @click.option("--verify-first", is_flag=True, help="Run smoke test before full ingestion")
-@click.option("--workers", type=int, default=8, help="Max parallel workers for verify (default: 8)")
+@click.option(
+    "--workers", type=int, default=8, help="Max parallel workers for fetch/verify (default: 8)"
+)
 def ingest(source: str, skip_fetch: bool, batch_size: int, verify_first: bool, workers: int):
     """
     Ingest data from a source.
@@ -159,30 +161,71 @@ def ingest(source: str, skip_fetch: bool, batch_size: int, verify_first: bool, w
 
     results = []
 
-    for src in sources:
-        console.print(f"\n[bold]Processing: {src}[/bold]")
+    if workers > 1 and len(sources) > 1 and not skip_fetch:
+        # PHASE 1: Parallel fetch (download only)
+        console.print(
+            f"[bold]Phase 1: Downloading {len(sources)} sources ({workers} workers)...[/bold]\n"
+        )
+        fetch_results: dict[str, str | None] = {}  # src -> error or None
+        print_lock = threading.Lock()
+        completed_count = 0
+        total = len(sources)
 
-        ingester_class = INGESTERS[src]
-
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console,
-        ) as progress:
-            task = progress.add_task(f"Ingesting {src}...", total=None)
-
+        def fetch_one(src: str) -> tuple[str, str | None]:
+            nonlocal completed_count
+            ingester_class = INGESTERS[src]
+            error = None
             try:
                 with ingester_class() as ingester:
-                    result = ingester.run(skip_fetch=skip_fetch, batch_size=batch_size)
-                    results.append(result)
-
-                    if result.success:
-                        progress.update(task, description=f"[green]✓ {src} complete[/green]")
+                    if not ingester.available:
+                        error = ingester.unavailable_reason or "unavailable"
                     else:
-                        progress.update(task, description=f"[red]✗ {src} failed[/red]")
-
+                        ingester.fetch()
             except Exception as e:
-                console.print(f"[red]Error ingesting {src}: {e}[/red]")
+                logger.exception(f"Error fetching {src}")
+                error = str(e)
+
+            with print_lock:
+                completed_count += 1
+                tag = "[green]OK[/green]" if error is None else f"[red]FAIL: {error}[/red]"
+                console.print(f"  [{completed_count}/{total}] {src} {tag}")
+
+            return src, error
+
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {executor.submit(fetch_one, src): src for src in sources}
+            for future in as_completed(futures):
+                src, error = future.result()
+                fetch_results[src] = error
+
+        fetch_failed = {s: e for s, e in fetch_results.items() if e is not None}
+        if fetch_failed:
+            console.print(f"\n[yellow]{len(fetch_failed)} source(s) failed to download[/yellow]")
+
+        # PHASE 2: Sequential ingest (parse + DB write) with skip_fetch=True
+        console.print(f"\n[bold]Phase 2: Ingesting {len(sources)} sources (sequential)...[/bold]\n")
+        for src in sources:
+            if fetch_results.get(src) is not None:
+                console.print(f"  [yellow]Skipping {src} (fetch failed)[/yellow]")
+                results.append(
+                    IngesterResult(
+                        source_id=src,
+                        success=False,
+                        errors=[f"Fetch failed: {fetch_results[src]}"],
+                    )
+                )
+                continue
+
+            console.print(f"  Processing: {src}...")
+            ingester_class = INGESTERS[src]
+            try:
+                with ingester_class() as ingester:
+                    result = ingester.run(skip_fetch=True, batch_size=batch_size)
+                    results.append(result)
+                    tag = "[green]OK[/green]" if result.success else "[red]FAIL[/red]"
+                    console.print(f"  {src} {tag}")
+            except Exception as e:
+                console.print(f"  [red]{src} CRASH: {e}[/red]")
                 logger.exception(f"Error ingesting {src}")
                 results.append(
                     IngesterResult(
@@ -191,6 +234,42 @@ def ingest(source: str, skip_fetch: bool, batch_size: int, verify_first: bool, w
                         errors=[f"CRASH: {e}"],
                     )
                 )
+    else:
+        # Sequential mode (single source, --skip-fetch, or --workers 1)
+        for src in sources:
+            console.print(f"\n[bold]Processing: {src}[/bold]")
+            ingester_class = INGESTERS[src]
+
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+            ) as progress:
+                task = progress.add_task(f"Ingesting {src}...", total=None)
+                try:
+                    with ingester_class() as ingester:
+                        result = ingester.run(skip_fetch=skip_fetch, batch_size=batch_size)
+                        results.append(result)
+                        if result.success:
+                            progress.update(
+                                task,
+                                description=f"[green]✓ {src} complete[/green]",
+                            )
+                        else:
+                            progress.update(
+                                task,
+                                description=f"[red]✗ {src} failed[/red]",
+                            )
+                except Exception as e:
+                    console.print(f"[red]Error ingesting {src}: {e}[/red]")
+                    logger.exception(f"Error ingesting {src}")
+                    results.append(
+                        IngesterResult(
+                            source_id=src,
+                            success=False,
+                            errors=[f"CRASH: {e}"],
+                        )
+                    )
 
     # Print summary
     console.print("\n[bold]Ingestion Summary[/bold]")
