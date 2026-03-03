@@ -147,6 +147,10 @@ jobs:
             BEFORE=$(git rev-parse HEAD)
             echo "==> Preserving snapshots..."
             cp -r public/data/snapshots /tmp/snapshots_backup 2>/dev/null || true
+            echo "==> Freeing disk space..."
+            docker image prune -f 2>/dev/null || true
+            docker builder prune -af 2>/dev/null || true
+            git lfs prune 2>/dev/null || true
             echo "==> Discarding local changes..."
             git checkout -- .
             echo "==> Pulling latest..."
@@ -241,10 +245,6 @@ jobs:
             echo "==> Generating static sitemap..."
             curl -sf http://localhost:8000/api/sitemap/sitemap.xml > ancient-nerds-map/dist/sitemap.xml
             echo "    Sitemap written to dist/sitemap.xml"
-
-            echo "==> Pruning unused Docker resources..."
-            docker image prune -f 2>/dev/null || true
-            docker builder prune -af 2>/dev/null || true
 
             echo "==> Restarting log streaming..."
             [ -f scripts/follow_logs.sh ] && chmod +x scripts/follow_logs.sh
