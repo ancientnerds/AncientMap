@@ -153,6 +153,7 @@ jobs:
             git lfs prune 2>/dev/null || true
             echo "==> Discarding local changes..."
             git checkout -- .
+            git clean -fd ancient-nerds-map/public/data/ public/data/ 2>/dev/null || true
             echo "==> Pulling latest..."
             git pull origin main
             git lfs pull
