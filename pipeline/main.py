@@ -105,8 +105,6 @@ INGESTERS = {
     "boundaries_seshat": SeshatIngester,
     # Americas
     "peru_amazon": PeruAmazonIngester,
-    # Asia
-    "xinjiang_sites": XinjiangSitesIngester,
     # NCEI Hazards
     "ncei_earthquakes": NCEIEarthquakesIngester,
     "ncei_tsunamis": NCEITsunamisIngester,

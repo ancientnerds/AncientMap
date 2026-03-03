@@ -44,7 +44,6 @@ from pipeline.ingesters.unesco import UNESCOIngester
 from pipeline.ingesters.vici_org import ViciOrgIngester
 from pipeline.ingesters.volcanic_holvol import HolVolIngester
 from pipeline.ingesters.wikidata import WikidataIngester
-from pipeline.ingesters.xinjiang_sites import XinjiangSitesIngester
 
 __all__ = [
     # Base classes
@@ -90,8 +89,6 @@ __all__ = [
     "SeshatIngester",
     # Americas
     "PeruAmazonIngester",
-    # Asia
-    "XinjiangSitesIngester",
     # NCEI Hazards
     "NCEIEarthquakesIngester",
     "NCEITsunamisIngester",

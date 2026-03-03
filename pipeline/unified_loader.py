@@ -370,18 +370,6 @@ SOURCE_CONFIG = {
         "license": "CC BY 4.0",
         "attribution": "de Souza et al. 2018 / Nature Communications",
     },
-    # Xinjiang Archaeological Sites
-    "xinjiang_sites": {
-        "name": "Xinjiang Archaeological Sites",
-        "description": "Paleolithic to Bronze Age sites in Xinjiang, China",
-        "color": "#FF8C00",  # Dark orange
-        "icon": "site",
-        "category": "Asia",
-        "file_pattern": "xinjiang_sites.csv",
-        "format": "csv",
-        "license": "CC BY 4.0",
-        "attribution": "Li et al. / Scientific Data",
-    },
     # Maritime & Shipwrecks
     "shipwrecks_oxrep": {
         "name": "OXREP Shipwrecks",
