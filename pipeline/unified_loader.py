@@ -336,18 +336,18 @@ SOURCE_CONFIG = {
         "license": "CC BY 4.0",
         "attribution": "Luwian Studies Foundation",
     },
-    # Pre-Columbian Amazon — DISABLED: raw file is .rds (R binary), can't parse without pyreadr
-    # "peru_amazon": {
-    #     "name": "Pre-Columbian Amazon Sites",
-    #     "description": "Pre-Columbian earthworks in the Amazon",
-    #     "color": "#32CD32",
-    #     "icon": "site",
-    #     "category": "Americas",
-    #     "file_pattern": "peru_amazon_raw.rds",
-    #     "format": "rds",
-    #     "license": "CC BY 4.0",
-    #     "attribution": "de Souza et al. 2018 / Nature Communications",
-    # },
+    # Pre-Columbian Amazon — Peripato et al. 2023 (Science)
+    "peru_amazon": {
+        "name": "Pre-Columbian Amazon Sites",
+        "description": "Pre-Columbian earthworks in the Amazon",
+        "color": "#32CD32",  # Lime green
+        "icon": "site",
+        "category": "Americas",
+        "file_pattern": "peru_amazon_raw.rds",
+        "format": "rds",
+        "license": "CC BY 4.0",
+        "attribution": "Peripato et al. 2023 / Science",
+    },
     # Maritime & Shipwrecks
     "shipwrecks_oxrep": {
         "name": "OXREP Shipwrecks",
@@ -1814,6 +1814,69 @@ class UnifiedLoader:
         }
 
         return class_map.get(feature_class, "place")
+
+    def _parse_rds(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
+        """Parse R .rds binary format using pyreadr."""
+        import pyreadr
+
+        result = pyreadr.read_r(str(path))
+        df = list(result.values())[0]
+        logger.info(f"{source_id}: Loaded {len(df)} rows from RDS, columns: {list(df.columns)}")
+
+        # Database name labels for peru_amazon
+        db_labels = {
+            "Amazon Arch": "AmazonArch",
+            "PAST": "PAST",
+            "CNSA": "CNSA",
+            "INRAP & DAC": "INRAP/DAC",
+            "TREES/INPE": "TREES/INPE",
+        }
+
+        for index, row in df.iterrows():
+            lat = row.get("Latitude", row.get("latitude", row.get("lat")))
+            lon = row.get("Longitude", row.get("longitude", row.get("lon")))
+
+            if lat is None or lon is None:
+                continue
+
+            try:
+                lat = float(lat)
+                lon = float(lon)
+            except (ValueError, TypeError):
+                continue
+
+            if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+                continue
+
+            database = str(row.get("Database", "")).strip()
+            db_label = database
+            if db_label.startswith("Multiple:"):
+                inner = db_label.replace("Multiple:", "").strip().strip("()")
+                first_source = inner.split("|")[0].strip()
+                db_label = db_labels.get(first_source, first_source)
+            else:
+                db_label = db_labels.get(db_label, db_label)
+
+            name = f"Earthwork {index} ({db_label})"
+            record_id = hashlib.md5(
+                f"{source_id}:{lat}:{lon}:{database}".encode()
+            ).hexdigest()[:12]
+
+            yield {
+                "source_id": source_id,
+                "source_record_id": record_id,
+                "name": name[:500],
+                "name_normalized": normalize_name(name)[:500],
+                "lat": lat,
+                "lon": lon,
+                "site_type": "monument",
+                "period_start": -1000,
+                "period_end": 1500,
+                "period_name": "Pre-Columbian",
+                "country": "Brazil",  # Most earthworks are in Brazilian Amazon
+                "description": f"Pre-Columbian earthwork. Source database: {database}",
+                "source_url": "https://doi.org/10.1126/science.ade2541",
+            }
 
     def _extract_thumbnail(self, site: dict) -> str | None:
         """
