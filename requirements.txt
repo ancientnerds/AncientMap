@@ -44,7 +44,6 @@ anyascii>=0.3.2             # Unicode to ASCII transliteration (ISC license - co
 # HTTP & NETWORKING
 # =============================================================================
 httpx>=0.26.0               # Modern HTTP client (async support)
-curl_cffi>=0.7.0            # HTTP with browser TLS impersonation (bypasses Cloudflare)
 aiohttp>=3.9.0              # Async HTTP
 tenacity>=8.2.0             # Retry logic with backoff
 aiofiles>=23.2.0            # Async file operations

@@ -50,7 +50,6 @@ from pipeline.ingesters import (
     OpenContextIngester,
     OSMHistoricIngester,
     OXREPShipwrecksIngester,
-    PASFindsIngester,
     PeruAmazonIngester,
     PleiadesIngester,
     RadiocarbonPaleoIngester,
@@ -86,7 +85,6 @@ INGESTERS = {
     "coflein_wales": CofleinWalesIngester,
     "mycenaean_atlas": MycenaeanAtlasIngester,
     "radiocarbon_paleo": RadiocarbonPaleoIngester,
-    "pas_finds": PASFindsIngester,
     # Epigraphy / Numismatics / Maritime
     "list_inscriptions": LISTInscriptionsIngester,
     "coins_nomisma": NomismaIngester,

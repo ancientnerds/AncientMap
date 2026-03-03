@@ -32,7 +32,6 @@ from pipeline.ingesters.ncei_tsunamis import NCEITsunamisIngester
 from pipeline.ingesters.ncei_volcanoes import NCEIVolcanoesIngester
 from pipeline.ingesters.open_context import OpenContextIngester
 from pipeline.ingesters.osm_historic import OSMHistoricIngester
-from pipeline.ingesters.pas_finds import PASFindsIngester
 from pipeline.ingesters.peru_amazon import PeruAmazonIngester
 from pipeline.ingesters.pleiades import PleiadesIngester
 from pipeline.ingesters.radiocarbon_paleo import RadiocarbonPaleoIngester
@@ -67,7 +66,6 @@ __all__ = [
     "CofleinWalesIngester",
     "MycenaeanAtlasIngester",
     "RadiocarbonPaleoIngester",
-    "PASFindsIngester",
     # Middle East / Africa
     "EAMENAIngester",
     "LuwianAtlasIngester",

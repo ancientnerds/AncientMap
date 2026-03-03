@@ -287,18 +287,6 @@ SOURCE_CONFIG = {
         "license": "CC BY 4.0",
         "attribution": "ROCEEH ROAD Database",
     },
-    # Portable Antiquities Scheme
-    "pas_finds": {
-        "name": "Portable Antiquities Scheme",
-        "description": "Archaeological finds from England and Wales",
-        "color": "#CD853F",  # Peru
-        "icon": "find",
-        "category": "Europe",
-        "file_pattern": "pas_finds.json",
-        "format": "json_sites",
-        "license": "CC BY-SA 4.0",
-        "attribution": "Portable Antiquities Scheme / British Museum",
-    },
     # Canmore Scotland
     "canmore_scotland": {
         "name": "Canmore Scotland",
