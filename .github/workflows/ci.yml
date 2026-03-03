@@ -244,8 +244,11 @@ jobs:
             done
 
             echo "==> Generating static sitemap..."
-            curl -sf http://localhost:8000/api/sitemap/sitemap.xml > ancient-nerds-map/dist/sitemap.xml
-            echo "    Sitemap written to dist/sitemap.xml"
+            if curl -sf --max-time 30 http://localhost:8000/api/sitemap/sitemap.xml > ancient-nerds-map/dist/sitemap.xml; then
+              echo "    Sitemap written to dist/sitemap.xml"
+            else
+              echo "    WARNING: Sitemap generation failed (non-fatal)"
+            fi
 
             echo "==> Restarting log streaming..."
             [ -f scripts/follow_logs.sh ] && chmod +x scripts/follow_logs.sh
