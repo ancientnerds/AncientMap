@@ -4,3 +4,4 @@ public/data/sites/details/*.json filter=lfs diff=lfs merge=lfs -text
 ancient-nerds-map/public/data/sites/index.json filter=lfs diff=lfs merge=lfs -text
 pipeline/data/wikidata_labels.json filter=lfs diff=lfs merge=lfs -text
 ancient-nerds-map/public/landing/video/*.mp4 filter=lfs diff=lfs merge=lfs -text
+*.json.gz filter=lfs diff=lfs merge=lfs -text

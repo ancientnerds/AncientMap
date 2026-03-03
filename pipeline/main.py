@@ -241,7 +241,7 @@ def ingest(source: str, skip_fetch: bool, batch_size: int, verify_first: bool, w
             ingester_class = INGESTERS[src]
 
             with Progress(
-                SpinnerColumn(),
+                SpinnerColumn("line"),
                 TextColumn("[progress.description]{task.description}"),
                 console=console,
             ) as progress:
@@ -253,12 +253,12 @@ def ingest(source: str, skip_fetch: bool, batch_size: int, verify_first: bool, w
                         if result.success:
                             progress.update(
                                 task,
-                                description=f"[green]✓ {src} complete[/green]",
+                                description=f"[green]{src} complete[/green]",
                             )
                         else:
                             progress.update(
                                 task,
-                                description=f"[red]✗ {src} failed[/red]",
+                                description=f"[red]{src} failed[/red]",
                             )
                 except Exception as e:
                     console.print(f"[red]Error ingesting {src}: {e}[/red]")
@@ -310,16 +310,16 @@ def ingest(source: str, skip_fetch: bool, batch_size: int, verify_first: bool, w
 
     # Detailed error report
     if problem_sources:
-        console.print(f"\n[bold red]⚠ {len(problem_sources)} source(s) need attention:[/bold red]")
+        console.print(f"\n[bold red]{len(problem_sources)} source(s) need attention:[/bold red]")
         for result in problem_sources:
             label = "[red]FAILED[/red]" if not result.success else "[yellow]EMPTY[/yellow]"
             console.print(f"\n  {label} [bold]{result.source_id}[/bold]")
             if result.errors:
                 for err in result.errors[:5]:
-                    console.print(f"    → {err}")
+                    console.print(f"    - {err}")
             elif result.records_saved == 0:
                 console.print(
-                    f"    → Fetched {result.records_fetched}, parsed {result.records_parsed}, saved 0"
+                    f"    - Fetched {result.records_fetched}, parsed {result.records_parsed}, saved 0"
                 )
         console.print()
         console.print("[dim]Retry individually:[/dim]")
