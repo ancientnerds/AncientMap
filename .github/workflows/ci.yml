@@ -229,14 +229,14 @@ jobs:
               docker compose up -d --remove-orphans
             fi
             echo "==> Waiting for API health..."
-            for i in $(seq 1 12); do
+            for i in $(seq 1 24); do
               sleep 5
               if curl -sf http://localhost:8000/; then
                 echo " API healthy after $((i * 5))s"
                 break
               fi
-              if [ "$i" = "12" ]; then
-                echo "ERROR: Health check failed after 60s!"
+              if [ "$i" = "24" ]; then
+                echo "ERROR: Health check failed after 120s!"
                 docker compose logs api --tail=30
                 exit 1
               fi
