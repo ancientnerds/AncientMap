@@ -1,12 +1,13 @@
 """
-Global Rock Art Database ingester.
+Global Rock Art Sites — curated dataset.
 
-Aggregates rock art data from multiple sources including
-the Bradshaw Foundation and regional databases.
+A hand-curated list of ~50 major rock art sites worldwide
+(cave paintings, petroglyphs, pictographs). Site names and
+coordinates are factual public-knowledge data compiled from
+UNESCO World Heritage listings, academic publications, and
+encyclopedic sources.
 
-Data source: https://rockartdatabase.com/
-License: Various (depends on source)
-API Key: Not required
+License: Original curation (CC BY-SA 4.0, same as Ancient Nerds)
 """
 
 import json

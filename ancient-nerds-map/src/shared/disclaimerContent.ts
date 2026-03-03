@@ -49,7 +49,7 @@ export function getDisclaimerHTML(buildHash?: string, buildTime?: string): strin
       <div class="license-group">
         <h4>Creative Commons Attribution-ShareAlike (CC BY-SA)</h4>
         <ul>
-          <li><strong>CC BY-SA 4.0:</strong> <a href="https://ancientnerds.com" target="_blank" rel="noopener noreferrer">Ancient Nerds (Original)</a>, <a href="https://www.helladic.info/" target="_blank" rel="noopener noreferrer">Mycenaean Atlas</a>, <a href="https://www.roceeh.uni-tuebingen.de/roadweb/" target="_blank" rel="noopener noreferrer">ROCEEH ROAD</a></li>
+          <li><strong>CC BY-SA 4.0:</strong> <a href="https://ancientnerds.com" target="_blank" rel="noopener noreferrer">Ancient Nerds (Original)</a> (includes curated Rock Art sites), <a href="https://www.helladic.info/" target="_blank" rel="noopener noreferrer">Mycenaean Atlas</a>, <a href="https://www.roceeh.uni-tuebingen.de/roadweb/" target="_blank" rel="noopener noreferrer">ROCEEH ROAD</a></li>
           <li><strong>CC BY-SA 3.0:</strong> <a href="https://imperium.ahlfeldt.se/" target="_blank" rel="noopener noreferrer">DARE</a>, <a href="https://vici.org/" target="_blank" rel="noopener noreferrer">Vici.org</a></li>
         </ul>
       </div>
