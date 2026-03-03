@@ -25,7 +25,7 @@ from api.services.rate_limiter import RateLimiter, get_client_ip
 from pipeline.database import DiscordUser, get_db
 from pipeline.normalizers.site_type import normalize_site_type
 
-_heavy_limiter = RateLimiter(max_requests=10, window_seconds=60, namespace="heavy_sites")
+_heavy_limiter = RateLimiter(max_requests=50, window_seconds=60, namespace="heavy_sites")
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

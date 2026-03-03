@@ -11,6 +11,7 @@ Usage:
 """
 
 import csv
+import hashlib
 import html
 import json
 import re
@@ -178,8 +179,8 @@ SOURCE_CONFIG = {
         "color": "#607d8b",  # Blue-gray
         "icon": "map-pin",
         "category": "Global",
-        "file_pattern": "geonames.json",
-        "format": "json_sites",
+        "file_pattern": "geonames.txt",
+        "format": "geonames_tsv",
         "license": "CC BY 4.0",
         "attribution": "GeoNames",
     },
@@ -335,18 +336,18 @@ SOURCE_CONFIG = {
         "license": "CC BY 4.0",
         "attribution": "Luwian Studies Foundation",
     },
-    # Pre-Columbian Amazon
-    "peru_amazon": {
-        "name": "Pre-Columbian Amazon Sites",
-        "description": "Pre-Columbian earthworks in the Amazon",
-        "color": "#32CD32",  # Lime green
-        "icon": "site",
-        "category": "Americas",
-        "file_pattern": "peru_amazon_raw.csv",
-        "format": "csv",
-        "license": "CC BY 4.0",
-        "attribution": "de Souza et al. 2018 / Nature Communications",
-    },
+    # Pre-Columbian Amazon — DISABLED: raw file is .rds (R binary), can't parse without pyreadr
+    # "peru_amazon": {
+    #     "name": "Pre-Columbian Amazon Sites",
+    #     "description": "Pre-Columbian earthworks in the Amazon",
+    #     "color": "#32CD32",
+    #     "icon": "site",
+    #     "category": "Americas",
+    #     "file_pattern": "peru_amazon_raw.rds",
+    #     "format": "rds",
+    #     "license": "CC BY 4.0",
+    #     "attribution": "de Souza et al. 2018 / Nature Communications",
+    # },
     # Maritime & Shipwrecks
     "shipwrecks_oxrep": {
         "name": "OXREP Shipwrecks",
@@ -861,59 +862,86 @@ class UnifiedLoader:
     # ===== PARSERS FOR EACH FORMAT =====
 
     def _parse_csv(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
-        """Parse Pleiades CSV format."""
-        # Period cutoff: include ancient + pre-Columbian (up to 1500 AD)
+        """Parse CSV format with auto-detected column mapping."""
         PERIOD_CUTOFF = 1500
+
+        LAT_COLS = ["reprLat", "latitude", "lat", "y"]
+        LON_COLS = ["reprLong", "longitude", "lon", "lng", "x"]
+        NAME_COLS = ["title", "name", "site_name", "sitename", "label"]
+        ID_COLS = ["id", "uid", "place_key", "record_id", "site_id"]
 
         with open(path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
+            headers = reader.fieldnames or []
+
+            lat_col = next((c for c in LAT_COLS if c in headers), None)
+            lon_col = next((c for c in LON_COLS if c in headers), None)
+            name_col = next((c for c in NAME_COLS if c in headers), None)
+            id_col = next((c for c in ID_COLS if c in headers), None)
+
+            if not lat_col or not lon_col:
+                logger.warning(f"{source_id}: No lat/lon columns found in {headers}")
+                return
+
             for row in reader:
-                lat = parse_year(row.get("reprLat"))  # Actually float, not year
-                lon = parse_year(row.get("reprLong"))
-
-                if lat is None or lon is None:
-                    continue
-
                 try:
-                    lat = float(row.get("reprLat", 0))
-                    lon = float(row.get("reprLong", 0))
+                    lat = float(row.get(lat_col, ""))
+                    lon = float(row.get(lon_col, ""))
                 except (ValueError, TypeError):
                     continue
 
                 if not (-90 <= lat <= 90 and -180 <= lon <= 180):
                     continue
 
-                name = row.get("title", "").strip()
+                name = row.get(name_col, "").strip() if name_col else ""
                 if not name:
                     continue
 
+                record_id = row.get(id_col, "") if id_col else ""
+                if not record_id:
+                    record_id = hashlib.md5(
+                        f"{source_id}:{name}:{lat}:{lon}".encode()
+                    ).hexdigest()[:12]
+
                 # Filter by period: only include sites ending <= 1500 AD
-                max_date = parse_year(row.get("maxDate"))
+                max_date = parse_year(
+                    row.get("maxDate", row.get("period_end", row.get("date_end")))
+                )
                 if max_date is not None and max_date > PERIOD_CUTOFF:
-                    continue  # Skip medieval/modern sites
+                    continue
+
+                period_start = parse_year(
+                    row.get("minDate", row.get("period_start", row.get("date_start")))
+                )
+
+                # Build source_url from row or source-specific pattern
+                source_url = row.get("full_url", row.get("url", row.get("source_url", "")))
+                if source_id == "pleiades" and row.get("path"):
+                    source_url = f"https://pleiades.stoa.org{row['path']}"
 
                 yield {
                     "source_id": source_id,
-                    "source_record_id": row.get("id", row.get("uid", "")),
+                    "source_record_id": str(record_id),
                     "name": name[:500],
                     "name_normalized": normalize_name(name)[:500],
                     "lat": lat,
                     "lon": lon,
-                    "site_type": self._normalize_type(row.get("featureTypes", "")),
-                    "period_start": parse_year(row.get("minDate")),
-                    "period_end": parse_year(row.get("maxDate")),
-                    "period_name": row.get("timePeriods", "")[:100]
-                    if row.get("timePeriods")
-                    else None,
-                    "description": row.get("description", "")[:2000]
-                    if row.get("description")
-                    else None,
-                    "source_url": f"https://pleiades.stoa.org{row.get('path', '')}",
-                    "raw_data": {
-                        "tags": row.get("tags"),
-                        "featureTypes": row.get("featureTypes"),
-                        "creators": row.get("creators"),
-                    },
+                    "site_type": self._normalize_type(
+                        row.get("featureTypes", row.get("site_type", row.get("type", "")))
+                    ),
+                    "period_start": period_start,
+                    "period_end": max_date,
+                    "period_name": (
+                        row.get("timePeriods", row.get("period_name", ""))[:100] or None
+                    ),
+                    "country": (
+                        row.get("province", row.get("region", row.get("country", "")))[:100]
+                        or None
+                    ),
+                    "description": (
+                        row.get("description", "")[:2000] or None
+                    ),
+                    "source_url": source_url[:500] if source_url else None,
                 }
 
     def _parse_geojson(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
@@ -1358,6 +1386,7 @@ class UnifiedLoader:
             "features",
             "results",
             "objects",
+            "data",
             "inscriptions",
             "models",
             "boundaries",
@@ -1383,8 +1412,8 @@ class UnifiedLoader:
                 # Merge properties but keep geometry at top level
                 site = {**props, "geometry": site.get("geometry")}
 
-            lat = site.get("lat", site.get("latitude"))
-            lon = site.get("lon", site.get("lng", site.get("longitude")))
+            lat = site.get("lat", site.get("latitude", site.get("localityY")))
+            lon = site.get("lon", site.get("lng", site.get("longitude", site.get("localityX"))))
 
             # Try geometry
             if lat is None or lon is None:
@@ -1417,6 +1446,7 @@ class UnifiedLoader:
                 or site.get("volcano_name")
                 or site.get("site_name")
                 or site.get("location_name")
+                or site.get("localityName")
                 or ""
             )
             if not name:
@@ -1436,12 +1466,17 @@ class UnifiedLoader:
                     continue  # Skip modern eruptions
 
             record_id = (
-                site.get("id") or site.get("_id") or site.get("uid") or str(uuid.uuid4())[:8]
+                site.get("id")
+                or site.get("_id")
+                or site.get("uid")
+                or hashlib.md5(f"{source_id}:{name}:{lat}:{lon}".encode()).hexdigest()[:12]
             )
             record_id = str(record_id)
 
             # Determine site_type - special handling for NCEI sources that don't have type in records
-            raw_type = site.get("type", site.get("site_type", site.get("category", "")))
+            raw_type = site.get(
+                "type", site.get("site_type", site.get("category", site.get("localityType", "")))
+            )
             if not raw_type:
                 # Derive type from source_id for NCEI sources
                 ncei_type_map = {
@@ -1681,8 +1716,17 @@ class UnifiedLoader:
                 },
             }
 
+    # Archaeological feature codes to filter GeoNames (matches ingester)
+    GEONAMES_ARCHAEOLOGICAL_CODES: set[str] = {
+        "ANS", "RUIN", "RUINS", "CSTL", "MNMT", "TMPL", "PYR", "PYRS",
+        "AMTH", "HSTS", "PAL", "TOWR", "FRT", "FRST", "WALL", "GRVE",
+        "CMTY", "TMB", "AQDC", "BDG", "CH", "MSQE", "SHRN", "CVNT",
+        "MSTY", "ABB", "CTHDRL", "SQR", "THTR", "STDM", "BTHS", "CAVE",
+        "CMPL", "OBPT",
+    }
+
     def _parse_geonames_tsv(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
-        """Parse GeoNames TSV format."""
+        """Parse GeoNames TSV format, filtering for archaeological feature codes."""
         # GeoNames columns: geonameid, name, asciiname, alternatenames, latitude, longitude,
         # feature class, feature code, country code, cc2, admin1, admin2, admin3, admin4,
         # population, elevation, dem, timezone, modification date
@@ -1691,6 +1735,10 @@ class UnifiedLoader:
             for line in f:
                 parts = line.strip().split("\t")
                 if len(parts) < 8:
+                    continue
+
+                feature_code = parts[7] if len(parts) > 7 else ""
+                if feature_code not in self.GEONAMES_ARCHAEOLOGICAL_CODES:
                     continue
 
                 try:

@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from api.cache import cache_get, cache_set
+from api.cache import cache_delete_pattern, cache_get, cache_set
 from pipeline.database import get_db
 
 logger = logging.getLogger(__name__)
@@ -161,6 +161,13 @@ async def get_sources(db: Session = Depends(get_db)):
         return response
 
     raise HTTPException(status_code=500, detail="No source data available")
+
+
+@router.post("/clear-cache")
+async def clear_sources_cache():
+    """Clear the sources cache so fresh data is served."""
+    count = cache_delete_pattern("api:sources:*")
+    return {"cleared": count}
 
 
 @router.get("/{source_id}")
