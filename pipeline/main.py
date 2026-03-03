@@ -154,6 +154,8 @@ def ingest(source: str, skip_fetch: bool, batch_size: int, verify_first: bool, w
             f"\n[green]Verification passed for {len(sources)} source(s). "
             f"Starting full ingestion...[/green]\n"
         )
+        # Verify already downloaded raw data — don't re-fetch
+        skip_fetch = True
 
     results = []
 
