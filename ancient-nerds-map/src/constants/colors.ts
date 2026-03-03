@@ -29,7 +29,6 @@ export const SOURCE_COLORS: Record<string, string> = {
 
   // Specialized databases
   open_context: '#00bcd4',   // Cyan
-  megalithic_portal: '#795548', // Brown
   eamena: '#ff5722',         // Deep Orange
 
   // Content sources

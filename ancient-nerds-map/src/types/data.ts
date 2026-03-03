@@ -255,7 +255,6 @@ export const DEFAULT_SOURCE_COLORS: Record<string, string> = {
   historic_england: '#c0392b', // Dark red - England
   ireland_nms: '#ff6699',      // Pink - Ireland
   arachne: '#8e44ad',          // Dark purple - Arachne
-  megalithic_portal: '#9966cc', // Amethyst - megaliths
 
   // Specialized
   rock_art: '#e67e22',         // Orange - rock art

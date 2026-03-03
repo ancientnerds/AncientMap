@@ -230,17 +230,6 @@ SOURCE_CONFIG = {
         "attribution": "DAI & CoDArchLab",
     },
     # Priority 4: Specialized databases
-    "megalithic_portal": {
-        "name": "Megalithic Portal",
-        "description": "Megalithic and ancient sites",
-        "color": "#9966cc",  # Amethyst Purple (stone)
-        "icon": "stone",
-        "category": "Regional Surveys",
-        "file_pattern": "megalithic_portal.json",
-        "format": "megalithic_portal",
-        "license": "Various",
-        "attribution": "Megalithic Portal",
-    },
     "rock_art": {
         "name": "Rock Art",
         "description": "Rock art and petroglyphs",
@@ -899,9 +888,9 @@ class UnifiedLoader:
 
                 record_id = row.get(id_col, "") if id_col else ""
                 if not record_id:
-                    record_id = hashlib.md5(
-                        f"{source_id}:{name}:{lat}:{lon}".encode()
-                    ).hexdigest()[:12]
+                    record_id = hashlib.md5(f"{source_id}:{name}:{lat}:{lon}".encode()).hexdigest()[
+                        :12
+                    ]
 
                 # Filter by period: only include sites ending <= 1500 AD
                 max_date = parse_year(
@@ -935,12 +924,9 @@ class UnifiedLoader:
                         row.get("timePeriods", row.get("period_name", ""))[:100] or None
                     ),
                     "country": (
-                        row.get("province", row.get("region", row.get("country", "")))[:100]
-                        or None
+                        row.get("province", row.get("region", row.get("country", "")))[:100] or None
                     ),
-                    "description": (
-                        row.get("description", "")[:2000] or None
-                    ),
+                    "description": (row.get("description", "")[:2000] or None),
                     "source_url": source_url[:500] if source_url else None,
                 }
 
@@ -1006,7 +992,9 @@ class UnifiedLoader:
                 name = props.get("place", props.get("province", "Unknown inscription"))
                 record_id = str(props.get("LIST-ID", ""))
                 site_type = "inscription"
-                source_url = f"https://www.inscriptions.info/inscription/{record_id}" if record_id else ""
+                source_url = (
+                    f"https://www.inscriptions.info/inscription/{record_id}" if record_id else ""
+                )
             else:
                 name = props.get("name", props.get("title", "Unknown"))
                 record_id = str(props.get("id", props.get("OBJECTID", "")))
@@ -1513,62 +1501,6 @@ class UnifiedLoader:
                 },
             }
 
-    def _parse_megalithic_portal(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
-        """Parse Megalithic Portal JSON — extract type, URL, region from HTML description."""
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-
-        for site in data.get("sites", []):
-            lat = site.get("lat")
-            lon = site.get("lon")
-            if lat is None or lon is None:
-                continue
-            try:
-                lat = float(lat)
-                lon = float(lon)
-            except (ValueError, TypeError):
-                continue
-            if not (-90 <= lat <= 90 and -180 <= lon <= 180):
-                continue
-
-            name = site.get("name", "")
-            if not name:
-                continue
-
-            desc_html = site.get("description", "")
-            record_id = str(site.get("id", ""))
-
-            # Extract structured fields from HTML description
-            type_match = re.search(r"<b>Type:</b>\s*(.+?)\s*<b>", desc_html)
-            region_match = re.search(r"<b>County/Region:</b>\s*(.+?)\s*(?:<br|<b>)", desc_html)
-            url_match = re.search(
-                r'href="(https?://www\.megalithic\.co\.uk/article\.php\?sid=\d+)"', desc_html
-            )
-
-            site_type = strip_html(type_match.group(1)).strip() if type_match else ""
-            region = strip_html(region_match.group(1)).strip() if region_match else ""
-            source_url = url_match.group(1) if url_match else f"https://www.megalithic.co.uk/article.php?sid={record_id}"
-
-            # Build clean description from the HTML (strip tags, get text after type/region line)
-            clean_desc = strip_html(desc_html)
-
-            yield {
-                "source_id": source_id,
-                "source_record_id": record_id,
-                "name": name[:500],
-                "name_normalized": normalize_name(name)[:500],
-                "lat": lat,
-                "lon": lon,
-                "site_type": site_type,
-                "country": region[:100] if region else None,
-                "description": clean_desc[:2000] if clean_desc else None,
-                "source_url": source_url[:500] if source_url else None,
-                "raw_data": {
-                    "megalithic_type": site_type,
-                    "region": region,
-                },
-            }
-
     def _parse_arachne(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
         """Parse Arachne results."""
         with open(path, encoding="utf-8") as f:
@@ -1778,9 +1710,27 @@ class UnifiedLoader:
     # MSQE (mosques 10k), SQR (squares 5k), STDM (stadiums 3k),
     # CVNT, ABB, CTHDRL, OBPT — all medieval/modern bulk
     GEONAMES_ARCHAEOLOGICAL_CODES: set[str] = {
-        "ANS", "RUIN", "RUINS", "HSTS", "TMPL", "PYR", "PYRS", "AMTH",
-        "CSTL", "FRT", "PAL", "TOWR", "WALL", "THTR", "BTHS", "AQDC",
-        "CAVE", "TMB", "GRVE", "MNMT", "CMPL",
+        "ANS",
+        "RUIN",
+        "RUINS",
+        "HSTS",
+        "TMPL",
+        "PYR",
+        "PYRS",
+        "AMTH",
+        "CSTL",
+        "FRT",
+        "PAL",
+        "TOWR",
+        "WALL",
+        "THTR",
+        "BTHS",
+        "AQDC",
+        "CAVE",
+        "TMB",
+        "GRVE",
+        "MNMT",
+        "CMPL",
     }
 
     def _parse_geonames_tsv(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
@@ -1926,9 +1876,7 @@ class UnifiedLoader:
                 db_label = db_labels.get(db_label, db_label)
 
             name = f"Earthwork {index} ({db_label})"
-            record_id = hashlib.md5(
-                f"{source_id}:{lat}:{lon}:{database}".encode()
-            ).hexdigest()[:12]
+            record_id = hashlib.md5(f"{source_id}:{lat}:{lon}:{database}".encode()).hexdigest()[:12]
 
             yield {
                 "source_id": source_id,

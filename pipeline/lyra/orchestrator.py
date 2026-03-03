@@ -493,7 +493,7 @@ def _run_migrations(engine) -> None:
             text("""
             UPDATE source_meta SET category = 'Regional Surveys'
             WHERE id IN ('canmore_scotland','coflein_wales','historic_england','ireland_nms',
-                         'megalithic_portal','mycenaean_atlas','luwian_atlas','radiocarbon_paleo',
+                         'mycenaean_atlas','luwian_atlas','radiocarbon_paleo',
                          'arachne','vici_org','rock_art','peru_amazon')
               AND category != 'Regional Surveys'
         """)
@@ -513,6 +513,16 @@ def _run_migrations(engine) -> None:
               AND category != 'Natural Events'
         """)
         )
+
+        # Remove megalithic_portal (ToS prohibits redistribution)
+        conn.execute(
+            text("""
+            UPDATE news_items SET site_id = NULL
+            WHERE site_id IN (SELECT id FROM unified_sites WHERE source_id = 'megalithic_portal')
+        """)
+        )
+        conn.execute(text("DELETE FROM unified_sites WHERE source_id = 'megalithic_portal'"))
+        conn.execute(text("DELETE FROM source_meta WHERE id = 'megalithic_portal'"))
 
         # Deduplicate lyra contributions: merge rows with same lower(name)
         # into the one with highest mention_count, delete the rest.

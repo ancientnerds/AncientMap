@@ -40,7 +40,6 @@ DEFAULT_SOURCE_COLORS = {
     "historic_england": "#c0392b",  # Dark red - England
     "ireland_nms": "#ff6699",  # Pink - Ireland (NO GREEN)
     "arachne": "#8e44ad",  # Dark purple - Arachne
-    "megalithic_portal": "#9966cc",  # Amethyst Purple - megaliths
     # Specialized
     "rock_art": "#e67e22",  # Orange - rock art
     "inscriptions_edh": "#5dade2",  # Light blue - inscriptions

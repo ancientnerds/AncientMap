@@ -153,17 +153,6 @@ SOURCE_CONFIG: dict[str, SourceConfigType] = {
         "attribution": "DAI & CoDArchLab",
     },
     # Priority 4: Specialized databases
-    "megalithic_portal": {
-        "name": "Megalithic Portal",
-        "description": "Megalithic and ancient sites",
-        "color": "#9966cc",  # Amethyst Purple
-        "icon": "stone",
-        "category": "Europe",
-        "file_pattern": "megalithic_portal.json",
-        "format": "json_sites",
-        "license": "Various",
-        "attribution": "Megalithic Portal",
-    },
     "rock_art": {
         "name": "Rock Art",
         "description": "Rock art and petroglyphs",
