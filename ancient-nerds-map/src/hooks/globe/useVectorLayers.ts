@@ -52,8 +52,7 @@ const DEFAULT_VISIBILITY: VectorLayerVisibility = {
   lakes: false,
   plateBoundaries: false,
   glaciers: false,
-  coralReefs: false,
-  romanRoads: false
+  coralReefs: false
 }
 
 export function useVectorLayers(options: UseVectorLayersOptions) {
