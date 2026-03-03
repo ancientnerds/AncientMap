@@ -22,7 +22,6 @@ from pipeline.ingesters.historic_england import HistoricEnglandIngester
 from pipeline.ingesters.ireland_nms import IrelandNMSIngester
 from pipeline.ingesters.list_inscriptions import LISTInscriptionsIngester
 from pipeline.ingesters.luwian_atlas import LuwianAtlasIngester
-
 from pipeline.ingesters.met_museum import MetMuseumIngester
 from pipeline.ingesters.models_sketchfab import SketchfabIngester
 from pipeline.ingesters.mycenaean_atlas import MycenaeanAtlasIngester
