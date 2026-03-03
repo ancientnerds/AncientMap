@@ -125,9 +125,13 @@ class ViciOrgIngester(BaseIngester):
         features = data.get("features", [])
         logger.info(f"Processing {len(features):,} features")
 
+        seen_ids: set[str] = set()
         for feature in features:
             site = self._parse_feature(feature)
             if site:
+                if site.source_id in seen_ids:
+                    continue
+                seen_ids.add(site.source_id)
                 yield site
 
     def _parse_feature(self, feature: dict[str, Any]) -> ParsedSite | None:

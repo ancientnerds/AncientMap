@@ -103,8 +103,8 @@ class LISTInscriptionsIngester(BaseIngester):
         Returns:
             ParsedSite or None if invalid/filtered out.
         """
-        geometry = feature.get("geometry", {})
-        properties = feature.get("properties", {})
+        geometry = feature.get("geometry") or {}
+        properties = feature.get("properties") or {}
 
         # Only Point geometries
         if geometry.get("type") != "Point":
