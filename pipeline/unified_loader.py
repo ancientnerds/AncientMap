@@ -958,6 +958,27 @@ class UnifiedLoader:
                 record_id = props.get("ENTITY_ID", props.get("SMRS", ""))
                 site_type = self._normalize_type(props.get("MONUMENT_CLASS", ""))
                 source_url = props.get("WEBSITE_LINK", "")
+            elif source_id == "canmore_scotland":
+                name = props.get("NMRSNAME", "")
+                record_id = str(props.get("CANMOREID", ""))
+                site_type = self._normalize_type(props.get("SITETYPE", ""))
+                source_url = f"https://canmore.org.uk/site/{record_id}" if record_id else ""
+            elif source_id == "coflein_wales":
+                name = props.get("name", "")
+                record_id = str(feature.get("id", ""))
+                site_type = self._normalize_type(props.get("site_type", ""))
+                source_url = ""
+            elif source_id == "vici_org":
+                name = props.get("title", "")
+                record_id = str(feature.get("id", ""))
+                site_type = self._normalize_type(str(props.get("kind", "")))
+                vici_url = props.get("url", "")
+                source_url = f"https://vfreitag.de{vici_url}" if vici_url else ""
+            elif source_id == "list_inscriptions":
+                name = props.get("place", props.get("province", "Unknown inscription"))
+                record_id = str(props.get("LIST-ID", ""))
+                site_type = "inscription"
+                source_url = f"https://www.inscriptions.info/inscription/{record_id}" if record_id else ""
             else:
                 name = props.get("name", props.get("title", "Unknown"))
                 record_id = str(props.get("id", props.get("OBJECTID", "")))

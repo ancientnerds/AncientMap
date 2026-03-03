@@ -48,7 +48,7 @@ engine = create_engine(
     pool_recycle=1800,  # Recycle connections every 30 minutes
     connect_args={
         "connect_timeout": 10,  # Connection timeout in seconds
-        "options": "-c statement_timeout=30000",  # 30s query timeout
+        "options": "-c statement_timeout=300000",  # 5min query timeout
     },
 )
 
