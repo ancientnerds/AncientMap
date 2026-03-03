@@ -101,9 +101,9 @@ def passes_date_cutoff(record: dict) -> bool:
 
 # Source configurations with metadata and parsing info
 SOURCE_CONFIG = {
-    # Priority 0: PRIMARY SOURCE - Ancient Nerds Original (manually curated)
+    # Priority 0: PRIMARY SOURCE - Ancient Nerds Originals (manually curated)
     "ancient_nerds": {
-        "name": "Ancient Nerds (Original)",
+        "name": "ANCIENT NERDS Originals",
         "description": "Manually researched and curated archaeological sites",
         "color": "#FFD700",  # Gold - primary source
         "icon": "star",
