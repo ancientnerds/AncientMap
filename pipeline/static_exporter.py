@@ -152,6 +152,7 @@ class StaticExporter:
                     sm.attribution,
                     COALESCE(sm.record_count, 0) as record_count
                 FROM source_meta sm
+                WHERE sm.enabled = true
                 ORDER BY sm.priority, sm.name
             """)
             )
