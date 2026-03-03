@@ -237,7 +237,7 @@ SOURCE_CONFIG = {
         "icon": "stone",
         "category": "Regional Surveys",
         "file_pattern": "megalithic_portal.json",
-        "format": "json_sites",
+        "format": "megalithic_portal",
         "license": "Various",
         "attribution": "Megalithic Portal",
     },
@@ -1510,6 +1510,62 @@ class UnifiedLoader:
                 "thumbnail_url": self._extract_thumbnail(site),
                 "raw_data": {
                     k: v for k, v in site.items() if k not in ("name", "lat", "lon", "description")
+                },
+            }
+
+    def _parse_megalithic_portal(self, path: Path, source_id: str, config: dict) -> Iterator[dict]:
+        """Parse Megalithic Portal JSON — extract type, URL, region from HTML description."""
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+
+        for site in data.get("sites", []):
+            lat = site.get("lat")
+            lon = site.get("lon")
+            if lat is None or lon is None:
+                continue
+            try:
+                lat = float(lat)
+                lon = float(lon)
+            except (ValueError, TypeError):
+                continue
+            if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+                continue
+
+            name = site.get("name", "")
+            if not name:
+                continue
+
+            desc_html = site.get("description", "")
+            record_id = str(site.get("id", ""))
+
+            # Extract structured fields from HTML description
+            type_match = re.search(r"<b>Type:</b>\s*(.+?)\s*<b>", desc_html)
+            region_match = re.search(r"<b>County/Region:</b>\s*(.+?)\s*(?:<br|<b>)", desc_html)
+            url_match = re.search(
+                r'href="(https?://www\.megalithic\.co\.uk/article\.php\?sid=\d+)"', desc_html
+            )
+
+            site_type = strip_html(type_match.group(1)).strip() if type_match else ""
+            region = strip_html(region_match.group(1)).strip() if region_match else ""
+            source_url = url_match.group(1) if url_match else f"https://www.megalithic.co.uk/article.php?sid={record_id}"
+
+            # Build clean description from the HTML (strip tags, get text after type/region line)
+            clean_desc = strip_html(desc_html)
+
+            yield {
+                "source_id": source_id,
+                "source_record_id": record_id,
+                "name": name[:500],
+                "name_normalized": normalize_name(name)[:500],
+                "lat": lat,
+                "lon": lon,
+                "site_type": site_type,
+                "country": region[:100] if region else None,
+                "description": clean_desc[:2000] if clean_desc else None,
+                "source_url": source_url[:500] if source_url else None,
+                "raw_data": {
+                    "megalithic_type": site_type,
+                    "region": region,
                 },
             }
 
