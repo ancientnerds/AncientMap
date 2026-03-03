@@ -5,7 +5,7 @@ The Mycenaean Atlas Project (by Robert Consoli) is a comprehensive
 georeferenced database of ~5,600 Bronze Age Aegean archaeological sites.
 
 Data source: https://www.helladic.info/
-License: Academic / Research use
+License: CC BY-SA 4.0
 API Key: Not required
 
 The original domain mycenaean-atlas.org is dead (DNS failure).

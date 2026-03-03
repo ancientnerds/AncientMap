@@ -5,7 +5,7 @@ EAMENA documents over 338,000 archaeological sites across the Middle East
 and North Africa. It uses the Arches platform for data management.
 
 Data source: https://database.eamena.org/
-License: CC-BY-SA 4.0
+License: CC BY 4.0
 API Key: Required for bulk access (apply through EAMENA)
 """
 

@@ -240,17 +240,6 @@ SOURCE_CONFIG = {
         "license": "Various",
         "attribution": "Megalithic Portal",
     },
-    "sacred_sites": {
-        "name": "Sacred Sites",
-        "description": "Sacred and spiritual sites worldwide",
-        "color": "#ff69b4",  # Hot Pink (sacred)
-        "icon": "star",
-        "category": "Global",
-        "file_pattern": "sacred_sites.json",
-        "format": "json_sites",
-        "license": "Various",
-        "attribution": "Sacred Sites Project",
-    },
     "rock_art": {
         "name": "Rock Art",
         "description": "Rock art and petroglyphs",

@@ -258,7 +258,6 @@ export const DEFAULT_SOURCE_COLORS: Record<string, string> = {
   megalithic_portal: '#9966cc', // Amethyst - megaliths
 
   // Specialized
-  sacred_sites: '#ff69b4',     // Hot Pink - sacred sites
   rock_art: '#e67e22',         // Orange - rock art
   inscriptions_edh: '#5dade2', // Light blue - inscriptions
   coins_nomisma: '#d4af37',    // Gold - coins

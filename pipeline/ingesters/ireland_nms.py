@@ -5,7 +5,7 @@ The National Monuments Service maintains the Sites and Monuments Record (SMR)
 and Record of Monuments and Places (RMP) for Ireland.
 
 Data source: https://maps.archaeology.ie/
-License: Open Government License Ireland
+License: CC BY 4.0
 API Key: Not required
 """
 

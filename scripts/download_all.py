@@ -49,7 +49,6 @@ SOURCES = {
     "pleiades": {"enabled": True, "priority": 1, "est": "38K", "module": "pipeline.ingesters.pleiades", "class": "PleiadesIngester"},
     "unesco": {"enabled": True, "priority": 1, "est": "1.2K", "module": "pipeline.ingesters.unesco", "class": "UNESCOIngester"},
     "geonames": {"enabled": True, "priority": 1, "est": "50K", "module": "pipeline.ingesters.geonames", "class": "GeoNamesIngester"},
-    "sacred_sites": {"enabled": True, "priority": 1, "est": "80+", "module": "pipeline.ingesters.sacred_sites", "class": "SacredSitesIngester"},
     "rock_art": {"enabled": True, "priority": 1, "est": "50+", "module": "pipeline.ingesters.rock_art", "class": "RockArtIngester"},
 
     # Priority 2: Regional databases with good APIs

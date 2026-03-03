@@ -55,13 +55,11 @@ from pipeline.ingesters import (
     PleiadesIngester,
     RadiocarbonPaleoIngester,
     RockArtIngester,
-    SacredSitesIngester,
     SeshatIngester,
     ToposTextIngester,
     UNESCOIngester,
     ViciOrgIngester,
     WikidataIngester,
-    XinjiangSitesIngester,
 )
 from pipeline.ingesters.base import IngesterResult, VerifyResult
 
@@ -96,8 +94,7 @@ INGESTERS = {
     # Middle East / Africa
     "eamena": EAMENAIngester,
     "luwian_atlas": LuwianAtlasIngester,
-    # Sacred & Rock Art
-    "sacred_sites": SacredSitesIngester,
+    # Rock Art
     "rock_art": RockArtIngester,
     # Geological / Volcanic
     "earth_impacts": EarthImpactsIngester,

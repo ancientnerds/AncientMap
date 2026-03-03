@@ -6,7 +6,7 @@ localities across Africa and Eurasia (3 Ma - 20 ka BP).
 
 Data source: https://www.roceeh.uni-tuebingen.de/roadweb/
 Data endpoint: askROAD getLocalities.php (POST, returns JSON)
-License: Academic use (CC BY-NC 4.0)
+License: CC BY-SA 4.0
 API Key: Not required
 """
 

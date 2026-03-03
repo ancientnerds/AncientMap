@@ -179,6 +179,10 @@ class BaseIngester(ABC):
     source_id: str = None  # e.g., "pleiades"
     source_name: str = None  # e.g., "Pleiades"
 
+    # Whether this ingester is available (set to False for license/ToS issues)
+    available: bool = True
+    unavailable_reason: str = None  # Reason why ingester is unavailable
+
     def __init__(self, session=None, progress_callback=None):
         """
         Initialize the ingester.
@@ -286,6 +290,15 @@ class BaseIngester(ABC):
         Returns:
             VerifyResult with pass/fail and diagnostics
         """
+        if not self.available:
+            reason = self.unavailable_reason or "Ingester marked as unavailable"
+            logger.warning(f"Skipping verify for {self.source_id}: {reason}")
+            return VerifyResult(
+                source_id=self.source_id,
+                success=False,
+                error=reason,
+            )
+
         start = time.monotonic()
         result = VerifyResult(source_id=self.source_id, success=False)
 
@@ -439,6 +452,17 @@ class BaseIngester(ABC):
         Returns:
             IngesterResult with statistics
         """
+        if not self.available:
+            reason = self.unavailable_reason or "Ingester marked as unavailable"
+            logger.warning(f"Skipping {self.source_id}: {reason}")
+            return IngesterResult(
+                source_id=self.source_id,
+                success=False,
+                errors=[reason],
+                started_at=datetime.now(UTC),
+                completed_at=datetime.now(UTC),
+            )
+
         batch_size = batch_size or settings.pipeline.batch_size
         result = IngesterResult(
             source_id=self.source_id,

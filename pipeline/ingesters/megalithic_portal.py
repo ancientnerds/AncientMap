@@ -5,7 +5,7 @@ The Megalithic Portal is the world's largest database of prehistoric
 and ancient sites, with 25,000+ megalithic monuments worldwide.
 
 Data source: https://www.megalithic.co.uk/
-License: Free KMZ download (membership for CSV)
+License: Personal use only (ToS prohibits redistribution without permission)
 API Key: Not required for KMZ
 """
 
@@ -35,6 +35,12 @@ class MegalithicPortalIngester(BaseIngester):
 
     source_id = "megalithic_portal"
     source_name = "Megalithic Portal"
+
+    available = False
+    unavailable_reason = (
+        "Megalithic Portal ToS restricts KMZ downloads to personal use only. "
+        "Awaiting written permission for redistribution."
+    )
 
     # KMZ download URL (public, no auth required)
     KMZ_URL = "http://www.megalithic.co.uk/downloads/megalithic_earth.kmz"

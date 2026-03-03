@@ -37,7 +37,6 @@ export const SOURCE_COLORS: Record<string, string> = {
   coins_nomisma: '#ffc107',  // Amber
   shipwrecks_oxrep: '#03a9f4', // Light Blue
   volcanic_holvol: '#f44336', // Red
-  sacred_sites: '#4caf50',   // Green
   rock_art: '#ff9800',       // Orange
   boundaries_seshat: '#9c27b0', // Purple
   models_sketchfab: '#00bcd4', // Cyan

@@ -85,7 +85,6 @@ _SOURCE_COLORS = {
     "ireland_nms": "#ff6699",
     "arachne": "#8e44ad",
     "megalithic_portal": "#9966cc",
-    "sacred_sites": "#ff69b4",
     "rock_art": "#e67e22",
     "inscriptions_edh": "#5dade2",
     "coins_nomisma": "#d4af37",

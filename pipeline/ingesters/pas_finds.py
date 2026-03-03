@@ -5,7 +5,7 @@ The PAS records over 1.4 million archaeological finds made by the public
 in England and Wales. It is run by the British Museum.
 
 Data source: https://finds.org.uk/database/search/results/format/json
-License: CC-BY-SA 4.0
+License: CC BY (attribution required)
 API Key: Not required
 
 Note: finds.org.uk uses Cloudflare which blocks Python HTTP libraries (httpx,

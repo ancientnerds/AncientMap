@@ -20,6 +20,16 @@ export function getDisclaimerHTML(buildHash?: string, buildTime?: string): strin
   return `
 <h2>Disclaimer &amp; Legal</h2>
 
+<div class="disclaimer-preamble">
+  <p>ANCIENT NERDS exists because of the extraordinary work of communities and researchers
+  who have spent decades documenting the world&rsquo;s ancient sites &mdash; often voluntarily,
+  often without recognition.</p>
+  <p>We are not here to replace any of them. ANCIENT NERDS is the entry point &mdash;
+  the databases listed below are where the real depth lives. Every dot on our map
+  links back to its source, because we want you to find <em>them</em>.</p>
+  <p><strong>We stand on the shoulders of giants.</strong></p>
+</div>
+
 <details class="disclaimer-section" open>
   <summary class="disclaimer-section-header">
     <span>Data Sources &amp; Attribution</span>
@@ -31,39 +41,44 @@ export function getDisclaimerHTML(buildHash?: string, buildTime?: string): strin
       <div class="license-group">
         <h4>Creative Commons Attribution (CC BY)</h4>
         <ul>
-          <li><strong>CC BY 4.0:</strong> <a href="https://oxrep.classics.ox.ac.uk/databases/shipwrecks_database/" target="_blank" rel="noopener noreferrer">OXREP Shipwrecks</a>, <a href="https://volcano.si.edu/" target="_blank" rel="noopener noreferrer">HolVol Volcanic</a>, <a href="https://eamena.org/" target="_blank" rel="noopener noreferrer">EAMENA</a>, <a href="https://opencontext.org/" target="_blank" rel="noopener noreferrer">Open Context</a>, <a href="http://nomisma.org/" target="_blank" rel="noopener noreferrer">Nomisma Coins</a>, <a href="https://www.geonames.org/" target="_blank" rel="noopener noreferrer">GeoNames</a></li>
-          <li><strong>CC BY 3.0:</strong> <a href="https://pleiades.stoa.org/" target="_blank" rel="noopener noreferrer">Pleiades</a></li>
+          <li><strong>CC BY 4.0:</strong> <a href="https://eamena.org/" target="_blank" rel="noopener noreferrer">EAMENA</a>, <a href="https://opencontext.org/" target="_blank" rel="noopener noreferrer">Open Context</a>, <a href="https://www.geonames.org/" target="_blank" rel="noopener noreferrer">GeoNames</a>, <a href="https://volcano.si.edu/" target="_blank" rel="noopener noreferrer">HolVol Volcanic</a>, <a href="https://zenodo.org/records/10473706" target="_blank" rel="noopener noreferrer">LIST Latin Inscriptions</a>, <a href="https://zenodo.org/records/17128262" target="_blank" rel="noopener noreferrer">Luwian Studies Atlas</a>, <a href="https://www.archaeology.ie/" target="_blank" rel="noopener noreferrer">Ireland NMS</a>, <a href="https://github.com/Vperipato/ade2541" target="_blank" rel="noopener noreferrer">Pre-Columbian Amazon</a> (Peripato et al. 2023)</li>
+          <li><strong>CC BY 3.0:</strong> <a href="https://pleiades.stoa.org/" target="_blank" rel="noopener noreferrer">Pleiades</a>, <a href="http://nomisma.org/" target="_blank" rel="noopener noreferrer">Nomisma Coins</a></li>
+          <li><strong>CC BY:</strong> <a href="https://finds.org.uk/" target="_blank" rel="noopener noreferrer">Portable Antiquities Scheme</a>, <a href="https://github.com/Seshat-Global-History-Databank/cliopatria" target="_blank" rel="noopener noreferrer">Cliopatria Dataset</a> (empire boundaries, Nature Scientific Data)</li>
         </ul>
       </div>
       <div class="license-group">
-        <h4>Creative Commons Attribution-ShareAlike</h4>
+        <h4>Creative Commons Attribution-ShareAlike (CC BY-SA)</h4>
         <ul>
-          <li><strong>CC BY-SA 4.0:</strong> <a href="https://ancientnerds.com" target="_blank" rel="noopener noreferrer">Ancient Nerds (Original)</a>, <a href="https://www.europeana.eu/" target="_blank" rel="noopener noreferrer">Europeana</a></li>
-          <li><strong>CC BY-SA 3.0:</strong> <a href="https://imperium.ahlfeldt.se/" target="_blank" rel="noopener noreferrer">DARE</a>, <a href="https://edh.ub.uni-heidelberg.de/" target="_blank" rel="noopener noreferrer">EDH Inscriptions</a></li>
-        </ul>
-      </div>
-      <div class="license-group">
-        <h4>Creative Commons Attribution</h4>
-        <ul>
-          <li><strong>CC BY:</strong> <a href="https://github.com/Seshat-Global-History-Databank/cliopatria" target="_blank" rel="noopener noreferrer">Cliopatria Dataset</a> (empire boundary GeoJSON data, peer-reviewed publication in Nature Scientific Data)</li>
+          <li><strong>CC BY-SA 4.0:</strong> <a href="https://ancientnerds.com" target="_blank" rel="noopener noreferrer">Ancient Nerds (Original)</a>, <a href="https://www.helladic.info/" target="_blank" rel="noopener noreferrer">Mycenaean Atlas</a>, <a href="https://www.roceeh.uni-tuebingen.de/roadweb/" target="_blank" rel="noopener noreferrer">ROCEEH ROAD</a></li>
+          <li><strong>CC BY-SA 3.0:</strong> <a href="https://imperium.ahlfeldt.se/" target="_blank" rel="noopener noreferrer">DARE</a>, <a href="https://vici.org/" target="_blank" rel="noopener noreferrer">Vici.org</a></li>
         </ul>
       </div>
       <div class="license-group">
         <h4>Creative Commons NonCommercial</h4>
         <ul>
           <li><strong>CC BY-NC-SA 4.0:</strong> <a href="https://topostext.org/" target="_blank" rel="noopener noreferrer">ToposText</a>, <a href="https://seshat-db.com/" target="_blank" rel="noopener noreferrer">Seshat Global History Databank</a> (historical polity data &amp; social complexity variables)</li>
-          <li><strong>CC BY-NC-SA 3.0:</strong> <a href="https://arachne.dainst.org/" target="_blank" rel="noopener noreferrer">Arachne</a>, <a href="https://www.davidrumsey.com/" target="_blank" rel="noopener noreferrer">David Rumsey Maps</a></li>
+          <li><strong>CC BY-NC-SA 3.0:</strong> <a href="https://www.davidrumsey.com/" target="_blank" rel="noopener noreferrer">David Rumsey Maps</a></li>
         </ul>
       </div>
       <div class="license-group">
-        <h4>Public Domain &amp; Open Data</h4>
+        <h4>Public Domain &amp; Open Government Data</h4>
         <ul>
-          <li><strong>CC0 / Public Domain:</strong> <a href="https://www.wikidata.org/" target="_blank" rel="noopener noreferrer">Wikidata</a>, <a href="https://whc.unesco.org/" target="_blank" rel="noopener noreferrer">UNESCO World Heritage</a>, <a href="http://www.passc.net/EarthImpactDatabase/" target="_blank" rel="noopener noreferrer">Earth Impact Database</a>, <a href="https://www.ncei.noaa.gov/maps/hazards/" target="_blank" rel="noopener noreferrer">NCEI Natural Hazards</a>, <a href="https://www.si.edu/openaccess" target="_blank" rel="noopener noreferrer">Smithsonian Open Access</a> (museum artifacts &amp; library books), <a href="https://openlibrary.org/" target="_blank" rel="noopener noreferrer">Open Library</a> (book covers)</li>
-          <li><strong>CC BY-SA 3.0:</strong> <a href="https://en.wikipedia.org/" target="_blank" rel="noopener noreferrer">Wikipedia</a> (empire descriptions via REST API)</li>
-          <li><strong>Various licenses:</strong> <a href="https://commons.wikimedia.org/" target="_blank" rel="noopener noreferrer">Wikimedia Commons</a> (empire &amp; site images - individual image licenses displayed in lightbox)</li>
+          <li><strong>CC0 / Public Domain:</strong> <a href="https://www.wikidata.org/" target="_blank" rel="noopener noreferrer">Wikidata</a>, <a href="https://www.metmuseum.org/" target="_blank" rel="noopener noreferrer">Metropolitan Museum of Art</a>, <a href="https://www.si.edu/openaccess" target="_blank" rel="noopener noreferrer">Smithsonian Open Access</a>, <a href="https://openlibrary.org/" target="_blank" rel="noopener noreferrer">Open Library</a> (book covers)</li>
+          <li><strong>US Government Public Domain:</strong> <a href="https://www.ncei.noaa.gov/maps/hazards/" target="_blank" rel="noopener noreferrer">NCEI Natural Hazards</a> (earthquakes, tsunamis, volcanoes)</li>
+          <li><strong>Open Government Licence:</strong> <a href="https://historicengland.org.uk/" target="_blank" rel="noopener noreferrer">Historic England</a>, <a href="https://canmore.org.uk/" target="_blank" rel="noopener noreferrer">Canmore Scotland</a>, <a href="https://coflein.gov.uk/" target="_blank" rel="noopener noreferrer">Coflein Wales</a></li>
           <li><strong>ODbL:</strong> <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener noreferrer">OpenStreetMap Historic</a></li>
-          <li><strong>Open Government Licence:</strong> <a href="https://historicengland.org.uk/" target="_blank" rel="noopener noreferrer">Historic England</a></li>
-          <li><strong>Open Data:</strong> <a href="https://www.archaeology.ie/" target="_blank" rel="noopener noreferrer">Ireland National Monuments Service</a></li>
+          <li><strong>CC0 (metadata):</strong> <a href="https://www.europeana.eu/" target="_blank" rel="noopener noreferrer">Europeana</a> (item licenses vary)</li>
+        </ul>
+      </div>
+      <div class="license-group">
+        <h4>UNESCO World Heritage</h4>
+        <p>World Heritage Site locations and names are factual data used with attribution. Copyright &copy; 1992&ndash;2026 <a href="https://whc.unesco.org/" target="_blank" rel="noopener noreferrer">UNESCO/World Heritage Centre</a>. All rights reserved. Each site links back to its UNESCO page.</p>
+      </div>
+      <div class="license-group">
+        <h4>Academic &amp; Research Use</h4>
+        <ul>
+          <li><a href="https://oxrep.classics.ox.ac.uk/databases/shipwrecks_database/" target="_blank" rel="noopener noreferrer">OXREP Shipwrecks</a> (cite Strauss 2013)</li>
+          <li><a href="http://www.passc.net/EarthImpactDatabase/" target="_blank" rel="noopener noreferrer">Earth Impact Database</a> (non-commercial research &amp; education)</li>
         </ul>
       </div>
       <div class="license-group">
@@ -71,9 +86,10 @@ export function getDisclaimerHTML(buildHash?: string, buildTime?: string): strin
         <p>Archaeological site images are sourced from <a href="https://commons.wikimedia.org/" target="_blank" rel="noopener noreferrer">Wikipedia and Wikimedia Commons</a> under their respective Creative Commons licenses (CC BY-SA 4.0, CC BY 4.0, CC0, Public Domain). Individual image attribution &mdash; including photographer, license, and source &mdash; is displayed when viewing each image. All images link back to their original Wikimedia Commons page.</p>
       </div>
       <div class="license-group">
-        <h4>Various / Mixed Licensing</h4>
+        <h4>Wikipedia &amp; Wikimedia</h4>
         <ul>
-          <li><a href="https://www.megalithic.co.uk/" target="_blank" rel="noopener noreferrer">Megalithic Portal</a>, <a href="https://sacredsites.com/" target="_blank" rel="noopener noreferrer">Sacred Sites</a>, <a href="https://rockartdatabase.com/" target="_blank" rel="noopener noreferrer">Rock Art Database</a></li>
+          <li><strong>CC BY-SA 3.0:</strong> <a href="https://en.wikipedia.org/" target="_blank" rel="noopener noreferrer">Wikipedia</a> (empire descriptions via REST API)</li>
+          <li><strong>Various licenses:</strong> <a href="https://commons.wikimedia.org/" target="_blank" rel="noopener noreferrer">Wikimedia Commons</a> (empire &amp; site images &mdash; individual licenses displayed in lightbox)</li>
         </ul>
       </div>
       <div class="license-group">
@@ -197,7 +213,7 @@ export function getDisclaimerHTML(buildHash?: string, buildTime?: string): strin
     <ul>
       <li>Data displayed on this platform is subject to the <strong>original source licenses</strong> listed above.</li>
       <li>Many sources require <strong>attribution</strong> when reusing their data.</li>
-      <li>Some sources have <strong>non-commercial restrictions</strong>: Seshat, ToposText, CyArk, MorphoSource, Arachne, David Rumsey Maps.</li>
+      <li>Some sources have <strong>non-commercial restrictions</strong>: Seshat, ToposText, CyArk, MorphoSource, David Rumsey Maps, Earth Impact Database.</li>
       <li>When in doubt, consult the original source&rsquo;s licensing terms.</li>
     </ul>
     <h4>Platform License</h4>

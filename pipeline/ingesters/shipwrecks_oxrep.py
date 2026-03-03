@@ -6,7 +6,7 @@ shipwrecks with cargo, dating, and location information.
 
 Data source: https://oxrep.classics.ox.ac.uk/databases/shipwrecks_database/
 Direct download: https://oxrep.web.ox.ac.uk/sitefiles/oxrep-shipwrecks-database-2.1-march-2017.xlsx
-License: Academic (cite Strauss 2013)
+License: Academic use (cite Strauss 2013; no formal CC license)
 API Key: Not required
 """
 

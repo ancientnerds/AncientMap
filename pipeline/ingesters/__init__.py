@@ -37,7 +37,6 @@ from pipeline.ingesters.peru_amazon import PeruAmazonIngester
 from pipeline.ingesters.pleiades import PleiadesIngester
 from pipeline.ingesters.radiocarbon_paleo import RadiocarbonPaleoIngester
 from pipeline.ingesters.rock_art import RockArtIngester
-from pipeline.ingesters.sacred_sites import SacredSitesIngester
 from pipeline.ingesters.shipwrecks_oxrep import OXREPShipwrecksIngester
 from pipeline.ingesters.topostext import ToposTextIngester
 from pipeline.ingesters.unesco import UNESCOIngester
@@ -74,8 +73,7 @@ __all__ = [
     "LuwianAtlasIngester",
     # Inscriptions
     "LISTInscriptionsIngester",
-    # Sacred & Rock Art
-    "SacredSitesIngester",
+    # Rock Art
     "RockArtIngester",
     # Specialized
     "OSMHistoricIngester",

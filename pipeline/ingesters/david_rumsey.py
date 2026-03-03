@@ -5,7 +5,7 @@ The David Rumsey Collection contains 150,000+ historical maps,
 with 60,000+ georeferenced. Now housed at Stanford University.
 
 Data source: https://www.davidrumsey.com/
-License: CC-BY-NC (non-commercial use)
+License: CC BY-NC-SA 3.0 (non-commercial, share-alike)
 API Key: Not required
 """
 

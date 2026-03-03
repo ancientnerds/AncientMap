@@ -5,7 +5,7 @@ Contains ~200 confirmed impact craters on Earth from the
 Planetary and Space Science Centre (PASSC) Earth Impact Database.
 
 Data source: http://www.passc.net/EarthImpactDatabase/
-License: Public data for research
+License: Non-commercial research and education only
 """
 
 import json

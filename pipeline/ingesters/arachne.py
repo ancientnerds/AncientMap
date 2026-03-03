@@ -6,7 +6,7 @@ Arachne is the central object database of the German Archaeological Institute
 It contains millions of objects, images, and archaeological site data.
 
 Data source: https://arachne.dainst.org/
-License: CC-BY
+License: CC BY-NC-ND 3.0 DE (NonCommercial-NoDerivatives)
 API Key: Not required
 """
 
@@ -34,6 +34,13 @@ class ArachneIngester(BaseIngester):
 
     source_id = "arachne"
     source_name = "Arachne (iDAI)"
+
+    available = False
+    unavailable_reason = (
+        "Arachne uses CC BY-NC-ND 3.0 DE license. The NoDerivatives clause "
+        "may prohibit transforming records into our unified schema. "
+        "Awaiting permission from German Archaeological Institute (DAI)."
+    )
 
     # API endpoints
     API_BASE = "https://arachne.dainst.org"

@@ -4,7 +4,7 @@ UNESCO World Heritage Sites ingester.
 Fetches cultural and mixed World Heritage Sites from UNESCO's data feeds.
 
 Data source: https://data.unesco.org/
-License: Open with attribution
+License: UNESCO syndication terms (factual data with attribution; copyright UNESCO/WHC)
 """
 
 import json
