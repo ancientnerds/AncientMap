@@ -231,7 +231,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   const {
     routesPanelOpen, setRoutesPanelOpen,
     routesPanelHeight, setRoutesPanelHeight,
-    visibleRoutes, setVisibleRoutes,
+    visibleRoutes, setVisibleRoutes, visibleRoutesRef,
     loadingRoutes, setLoadingRoutes,
     expandedRouteGroups, setExpandedRouteGroups,
   } = routesHook
@@ -252,6 +252,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   const [mapLayersMinimized, setMapLayersMinimized] = useState(false)
   const routeLineObjectsRef = useRef<Record<string, THREE.Line[]>>({})
   const routeGeoJSONCacheRef = useRef<Record<string, any>>({})
+  const routeAbortControllersRef = useRef<Record<string, AbortController>>({})
   const coastlinesWereActive = refs.coastlinesWereActive
   const empireLabelPositionDebounceRef = refs.empireLabelPositionDebounce
 
@@ -1682,6 +1683,13 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     if (!sceneRef.current) return
     if (routeLineObjectsRef.current[routeId]) return // Already loaded
 
+    // Cancel any in-flight load for this route
+    if (routeAbortControllersRef.current[routeId]) {
+      routeAbortControllersRef.current[routeId].abort()
+    }
+    const abortController = new AbortController()
+    routeAbortControllersRef.current[routeId] = abortController
+
     setLoadingRoutes(prev => {
       const next = new Set(prev)
       next.add(routeId)
@@ -1699,9 +1707,11 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       let data = routeGeoJSONCacheRef.current[cacheKey]
       if (!data) {
         const response = await offlineFetch(fileUrl)
+        if (abortController.signal.aborted) return
         data = await response.json()
         routeGeoJSONCacheRef.current[cacheKey] = data
       }
+      if (abortController.signal.aborted) return
 
       // Filter features
       const features: any[] = isAWMC
@@ -1789,8 +1799,11 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
 
       console.log(`[Routes] Loaded ${routeId} (${features.length} features)`)
     } catch (err) {
-      console.error(`[Routes] Failed to load ${routeId}:`, err)
+      if (!abortController.signal.aborted) {
+        console.error(`[Routes] Failed to load ${routeId}:`, err)
+      }
     } finally {
+      delete routeAbortControllersRef.current[routeId]
       setLoadingRoutes(prev => {
         const next = new Set(prev)
         next.delete(routeId)
@@ -1800,6 +1813,12 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   }, [latLngTo3DRef])
 
   const unloadRoute = useCallback((routeId: string) => {
+    // Cancel any in-flight load
+    if (routeAbortControllersRef.current[routeId]) {
+      routeAbortControllersRef.current[routeId].abort()
+      delete routeAbortControllersRef.current[routeId]
+    }
+
     const lines = routeLineObjectsRef.current[routeId]
     if (!lines) return
 
@@ -1807,6 +1826,8 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       line.parent?.remove(line)
       line.geometry.dispose()
       if (line.material instanceof THREE.Material) {
+        // Remove from shaderMaterials to stop per-frame uniform updates on disposed material
+        shaderMaterialsRef.current = shaderMaterialsRef.current.filter(m => m !== line.material)
         line.material.dispose()
       }
     }
@@ -1814,17 +1835,15 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   }, [])
 
   const toggleRoute = useCallback((routeId: string) => {
+    const isVisible = visibleRoutesRef.current.has(routeId)
     setVisibleRoutes(prev => {
       const next = new Set(prev)
-      if (next.has(routeId)) {
-        next.delete(routeId)
-        unloadRoute(routeId)
-      } else {
-        next.add(routeId)
-        loadRoute(routeId)
-      }
+      if (isVisible) next.delete(routeId)
+      else next.add(routeId)
       return next
     })
+    if (isVisible) unloadRoute(routeId)
+    else loadRoute(routeId)
   }, [loadRoute, unloadRoute])
 
   // Per-empire timeline visibility logic, stored in a ref so it can be called from both
