@@ -371,12 +371,15 @@ LIMIT 5000
         with open(raw_data_path, encoding="utf-8") as f:
             data = json.load(f)
 
+        seen_ids = set()
+
         # Parse mints as sites
         mints = data.get("mints", [])
         logger.info(f"Processing {len(mints)} mints")
         for mint in mints:
             site = self._mint_to_site(mint)
-            if site:
+            if site and site.source_id not in seen_ids:
+                seen_ids.add(site.source_id)
                 yield site
 
         # Parse hoards as sites
@@ -384,7 +387,8 @@ LIMIT 5000
         logger.info(f"Processing {len(hoards)} hoards")
         for hoard in hoards:
             site = self._hoard_to_site(hoard)
-            if site:
+            if site and site.source_id not in seen_ids:
+                seen_ids.add(site.source_id)
                 yield site
 
         # Parse finds as sites
@@ -392,7 +396,8 @@ LIMIT 5000
         logger.info(f"Processing {len(finds)} finds")
         for find in finds:
             site = self._find_to_site(find)
-            if site:
+            if site and site.source_id not in seen_ids:
+                seen_ids.add(site.source_id)
                 yield site
 
     def _mint_to_site(self, mint: dict) -> ParsedSite | None:

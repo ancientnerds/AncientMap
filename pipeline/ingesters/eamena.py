@@ -243,6 +243,9 @@ class EAMENAIngester(BaseIngester):
                 continue
 
             try:
+                # EAMENA stores geometry as Python dict literal (single quotes)
+                # Convert to valid JSON before parsing
+                geom_str = geom_str.replace("'", '"')
                 geom_data = json.loads(geom_str)
 
                 if isinstance(geom_data, dict) and "features" in geom_data:

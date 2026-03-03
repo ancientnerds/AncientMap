@@ -250,6 +250,7 @@ class ArachneIngester(BaseIngester):
         title = result.get("title", "")
         if not title:
             return None
+        title = title[:500]
 
         # Get coordinates from places
         places = result.get("places", [])
@@ -262,8 +263,9 @@ class ArachneIngester(BaseIngester):
 
         for place in places:
             if isinstance(place, dict):
-                place_lat = place.get("lat")
-                place_lon = place.get("lon")
+                loc = place.get("location", {})
+                place_lat = loc.get("lat") if loc else None
+                place_lon = loc.get("lon") if loc else None
                 if place_lat and place_lon:
                     try:
                         lat = float(place_lat)

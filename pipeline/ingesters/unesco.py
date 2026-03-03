@@ -94,7 +94,9 @@ class UNESCOIngester(BaseIngester):
             ParsedSite or None if not relevant
         """
         properties = feature.get("properties", {})
-        geometry = feature.get("geometry", {})
+        geometry = feature.get("geometry")
+        if not geometry:
+            return None
 
         # Get category first - skip Natural sites
         category = properties.get("category", "")

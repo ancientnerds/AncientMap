@@ -278,9 +278,11 @@ class MegalithicPortalIngester(BaseIngester):
         sites = data.get("sites", [])
         logger.info(f"Processing {len(sites):,} sites")
 
+        seen_ids = set()
         for site in sites:
             parsed = self._parse_site(site)
-            if parsed:
+            if parsed and parsed.source_id not in seen_ids:
+                seen_ids.add(parsed.source_id)
                 yield parsed
 
     def _parse_site(self, site: dict[str, Any]) -> ParsedSite | None:

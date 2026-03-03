@@ -136,8 +136,15 @@ class ToposTextIngester(BaseIngester):
 
     def _parse_place(self, place: dict) -> ParsedSite | None:
         """Parse a single ToposText place."""
-        # Get ID
+        # Get ID - data uses "ToposText" (URL), "Pleiades", "Wikidata" as keys
         place_id = place.get("id") or place.get("pleiades_id") or place.get("topostext_id")
+        if not place_id:
+            # Extract ID from ToposText URL (e.g. "https://topostext.org/place/257326PThe")
+            topostext_url = place.get("ToposText", "")
+            if topostext_url and "/place/" in topostext_url:
+                place_id = topostext_url.split("/place/")[-1]
+            else:
+                place_id = place.get("Pleiades") or place.get("Wikidata")
         if not place_id:
             return None
 
