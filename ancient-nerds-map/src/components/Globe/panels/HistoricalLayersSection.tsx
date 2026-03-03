@@ -22,6 +22,10 @@ interface HistoricalLayersSectionProps {
   hasVisibleEmpires: boolean
   onEmpireBordersToggle: () => void
 
+  // Historical Routes toggle
+  hasVisibleRoutes: boolean
+  onHistoricalRoutesToggle: () => void
+
   // Mapbox mode (disables 3D layers)
   showMapbox: boolean
 }
@@ -39,6 +43,8 @@ export function HistoricalLayersSection({
   empireBordersWindowOpen: _empireBordersWindowOpen,
   hasVisibleEmpires,
   onEmpireBordersToggle,
+  hasVisibleRoutes,
+  onHistoricalRoutesToggle,
   showMapbox
 }: HistoricalLayersSectionProps) {
   return (
@@ -169,6 +175,17 @@ export function HistoricalLayersSection({
           style={{ backgroundColor: '#FF7777' }}
         />
         <span className="layer-label">Empire Borders</span>
+      </label>
+
+      {/* Historical Routes toggle */}
+      <label className="layer-toggle">
+        <input
+          type="checkbox"
+          checked={hasVisibleRoutes}
+          onChange={onHistoricalRoutesToggle}
+        />
+        <span className="layer-color-indicator" style={{ backgroundColor: '#DAA520' }} />
+        <span className="layer-label">Historical Routes</span>
       </label>
     </div>
   )

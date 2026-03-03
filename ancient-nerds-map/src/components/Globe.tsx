@@ -5,16 +5,18 @@ import { FilterMode } from '../App'
 import { offlineFetch, OfflineFetch } from '../services/OfflineFetch'
 import { useOffline } from '../contexts/OfflineContext'
 import { EMPIRES } from '../config/empireData'
+import { AWMC_ROADS_CONFIG, getRouteById } from '../config/routeData'
 import { LAYER_CONFIG, getLayerUrl, type VectorLayerKey, type VectorLayerVisibility } from '../config/vectorLayers'
 import { fadeLabelIn, fadeLabelOut } from '../utils/LabelRenderer'
 import { createProximityCircle, createCenterMarker, disposeGroup, disposeSprite } from '../utils/proximityHelpers'
 import { CoordinateDisplay, ScaleBar, ContributePickerHint, HardwareWarning, TooltipOverlay, MapboxOfflineWarning } from './Globe/overlays'
-import { ZoomControls, SocialLinks, OptionsPanel, MapLayersPanel, HistoricalLayersSection, EmpireBordersPanel } from './Globe/panels'
+import { ZoomControls, SocialLinks, OptionsPanel, MapLayersPanel, HistoricalLayersSection, EmpireBordersPanel, HistoricalRoutesPanel } from './Globe/panels'
 import { ScreenshotControls } from './Globe/controls'
-import { useUIState, useLabelVisibility, usePaleoshoreline, useEmpireBorders, useMapboxSync, useGlobeRefs, useGlobeZoom, useSiteTooltips, useHighlightedSites, useFlyToAnimation, useSatelliteMode, useContributePicker, useScreenshot, useRotationControl, useFullscreen, useCursorMode, useStarsVisibility, useTextureLoading, useLayersReady, useTooltipHandlers } from '../hooks/globe'
+import { useUIState, useLabelVisibility, usePaleoshoreline, useEmpireBorders, useHistoricalRoutes, useMapboxSync, useGlobeRefs, useGlobeZoom, useSiteTooltips, useHighlightedSites, useFlyToAnimation, useSatelliteMode, useContributePicker, useScreenshot, useRotationControl, useFullscreen, useCursorMode, useStarsVisibility, useTextureLoading, useLayersReady, useTooltipHandlers } from '../hooks/globe'
 import { useConnectorStatus } from '../hooks/useConnectorStatus'
 import ConnectorStatusModal from './ConnectorStatusModal'
 import { isDemoMode, registerGlobeDemoApi } from '../utils/demoApi'
+import { createFrontLineMaterial } from '../shaders/globe'
 import { calculateSiteTooltipPosition } from './Globe/rendering/highlightedSitesRenderer'
 import {
   loadEmpireBorders as loadEmpireBordersImpl,
@@ -225,6 +227,15 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     empireLoadedYearsRef
   } = empires
 
+  const routesHook = useHistoricalRoutes()
+  const {
+    routesPanelOpen, setRoutesPanelOpen,
+    routesPanelHeight, setRoutesPanelHeight,
+    visibleRoutes, setVisibleRoutes,
+    loadingRoutes, setLoadingRoutes,
+    expandedRouteGroups, setExpandedRouteGroups,
+  } = routesHook
+
   const [vectorLayers, setVectorLayers] = useState<VectorLayerVisibility>({
     coastlines: true,
     countryBorders: true,
@@ -239,6 +250,8 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     streets: false
   })
   const [mapLayersMinimized, setMapLayersMinimized] = useState(false)
+  const routeLineObjectsRef = useRef<Record<string, THREE.Line[]>>({})
+  const routeGeoJSONCacheRef = useRef<Record<string, any>>({})
   const coastlinesWereActive = refs.coastlinesWereActive
   const empireLabelPositionDebounceRef = refs.empireLabelPositionDebounce
 
@@ -1663,6 +1676,157 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     })
   }
 
+  // --- Historical Routes: load + toggle ---
+
+  const loadRoute = useCallback(async (routeId: string) => {
+    if (!sceneRef.current) return
+    if (routeLineObjectsRef.current[routeId]) return // Already loaded
+
+    setLoadingRoutes(prev => {
+      const next = new Set(prev)
+      next.add(routeId)
+      return next
+    })
+
+    const isAWMC = routeId === AWMC_ROADS_CONFIG.id
+    const fileUrl = isAWMC
+      ? AWMC_ROADS_CONFIG.file
+      : '/data/layers/trade_routes.geojson'
+    const cacheKey = fileUrl
+
+    try {
+      // Fetch GeoJSON (cache per file)
+      let data = routeGeoJSONCacheRef.current[cacheKey]
+      if (!data) {
+        const response = await offlineFetch(fileUrl)
+        data = await response.json()
+        routeGeoJSONCacheRef.current[cacheKey] = data
+      }
+
+      // Filter features
+      const features: any[] = isAWMC
+        ? (data.features || [])
+        : (data.features || []).filter((f: any) => f.properties?.name === routeId)
+
+      if (features.length === 0) {
+        console.warn(`[Routes] No features found for route: ${routeId}`)
+        setLoadingRoutes(prev => {
+          const next = new Set(prev)
+          next.delete(routeId)
+          return next
+        })
+        return
+      }
+
+      // Determine color
+      const routeConfig = getRouteById(routeId)
+      const color = isAWMC ? AWMC_ROADS_CONFIG.color : (routeConfig?.color ?? 0xDAA520)
+      const radius = 1.002
+
+      // Create material
+      const material = createFrontLineMaterial(color, 0)
+      shaderMaterialsRef.current.push(material)
+      if (sceneRef.current) {
+        material.uniforms.uCameraPos.value.copy(sceneRef.current.camera.position)
+      }
+
+      // Build merged geometry (same pattern as loadFrontLayer in vectorRenderer.ts)
+      const allPositions: number[] = []
+      for (const feature of features) {
+        const geometryType = feature.geometry.type
+        let coordSets: number[][][] = []
+
+        if (geometryType === 'LineString') {
+          coordSets = [feature.geometry.coordinates]
+        } else if (geometryType === 'MultiLineString') {
+          coordSets = feature.geometry.coordinates
+        } else if (geometryType === 'Polygon') {
+          coordSets = feature.geometry.coordinates
+        } else if (geometryType === 'MultiPolygon') {
+          coordSets = feature.geometry.coordinates.flat()
+        }
+
+        for (const coords of coordSets) {
+          if (coords.length > 1) {
+            for (const coord of coords) {
+              const point = latLngTo3DRef(coord[1], coord[0], radius)
+              allPositions.push(point.x, point.y, point.z)
+            }
+            // NaN line break between features
+            allPositions.push(NaN, NaN, NaN)
+          }
+        }
+      }
+
+      // Remove trailing NaN
+      while (allPositions.length >= 3 && isNaN(allPositions[allPositions.length - 1])) {
+        allPositions.pop()
+        allPositions.pop()
+        allPositions.pop()
+      }
+
+      if (allPositions.length === 0) {
+        setLoadingRoutes(prev => {
+          const next = new Set(prev)
+          next.delete(routeId)
+          return next
+        })
+        return
+      }
+
+      const geometry = new THREE.BufferGeometry()
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(allPositions, 3))
+      geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), radius + 0.01)
+
+      const line = new THREE.Line(geometry, material)
+      line.renderOrder = 10
+      sceneRef.current.globe.add(line)
+
+      routeLineObjectsRef.current[routeId] = [line]
+
+      // Fade in
+      fadeManagerRef.current.fadeTo(`route-${routeId}`, [material], 1, { duration: 400 })
+
+      console.log(`[Routes] Loaded ${routeId} (${features.length} features)`)
+    } catch (err) {
+      console.error(`[Routes] Failed to load ${routeId}:`, err)
+    } finally {
+      setLoadingRoutes(prev => {
+        const next = new Set(prev)
+        next.delete(routeId)
+        return next
+      })
+    }
+  }, [latLngTo3DRef])
+
+  const unloadRoute = useCallback((routeId: string) => {
+    const lines = routeLineObjectsRef.current[routeId]
+    if (!lines) return
+
+    for (const line of lines) {
+      line.parent?.remove(line)
+      line.geometry.dispose()
+      if (line.material instanceof THREE.Material) {
+        line.material.dispose()
+      }
+    }
+    delete routeLineObjectsRef.current[routeId]
+  }, [])
+
+  const toggleRoute = useCallback((routeId: string) => {
+    setVisibleRoutes(prev => {
+      const next = new Set(prev)
+      if (next.has(routeId)) {
+        next.delete(routeId)
+        unloadRoute(routeId)
+      } else {
+        next.add(routeId)
+        loadRoute(routeId)
+      }
+      return next
+    })
+  }, [loadRoute, unloadRoute])
+
   // Per-empire timeline visibility logic, stored in a ref so it can be called from both
   // handleGlobalTimelineVisibility (slider drag) and loadEmpireBorders (async completion).
   // Using a ref avoids useCallback dependency issues — always reads latest state via refs.
@@ -2229,9 +2393,29 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
           empireBordersWindowOpen={empireBordersWindowOpen}
           hasVisibleEmpires={visibleEmpires.size > 0}
           onEmpireBordersToggle={() => setEmpireBordersWindowOpen(prev => !prev)}
+          hasVisibleRoutes={visibleRoutes.size > 0}
+          onHistoricalRoutesToggle={() => setRoutesPanelOpen(prev => !prev)}
           showMapbox={showMapbox}
         />
       </MapLayersPanel>
+
+      {/* Historical Routes Window */}
+      <HistoricalRoutesPanel
+        isOpen={routesPanelOpen}
+        onClose={() => setRoutesPanelOpen(false)}
+        height={routesPanelHeight}
+        onHeightChange={setRoutesPanelHeight}
+        visibleRoutes={visibleRoutes}
+        onToggleRoute={toggleRoute}
+        loadingRoutes={loadingRoutes}
+        expandedGroups={expandedRouteGroups}
+        onToggleGroup={(group) => setExpandedRouteGroups(prev => {
+          const next = new Set(prev)
+          if (next.has(group)) next.delete(group)
+          else next.add(group)
+          return next
+        })}
+      />
 
       {/* Empire Borders Window */}
       <EmpireBordersPanel
