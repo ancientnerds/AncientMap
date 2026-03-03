@@ -2,9 +2,9 @@
 LIST Latin Inscriptions ingester.
 
 Downloads the LIST (Linked Inscriptions Search Tool) dataset containing
-~512K Latin inscriptions with geographic coordinates from across the Roman world.
+~525K Latin inscriptions with geographic coordinates from across the Roman world.
 
-Data source: https://zenodo.org/records/8117658
+Data source: https://zenodo.org/records/10473706
 License: CC-BY 4.0
 API Key: Not required
 """
@@ -13,29 +13,32 @@ import json
 from collections.abc import Iterator
 from pathlib import Path
 
+import httpx
 from loguru import logger
 
 from pipeline.ingesters.base import BaseIngester, ParsedSite
-from pipeline.utils.http import download_file
+from pipeline.utils.http import DEFAULT_HEADERS
 
 
 class LISTInscriptionsIngester(BaseIngester):
     """
     Ingester for LIST Latin Inscriptions.
 
-    LIST contains ~512K Latin inscriptions from the Roman world,
-    sourced from the Epigraphic Database Heidelberg and other corpora.
+    LIST contains ~525K Latin inscriptions from the Roman world,
+    sourced from the Epigraphic Database Heidelberg and EDCS.
     Downloaded as a GeoJSON FeatureCollection from Zenodo.
     """
 
     source_id = "list_inscriptions"
     source_name = "LIST Latin Inscriptions"
 
-    DOWNLOAD_URL = "https://zenodo.org/records/8117658/files/LIST_Open_Full.geojson?download=1"
+    DOWNLOAD_URL = "https://zenodo.org/records/10473706/files/LIST_v1-2.geojson?download=1"
 
     def fetch(self) -> Path:
         """
         Download the LIST GeoJSON from Zenodo.
+
+        Uses streaming download because the file is ~1.2 GB.
 
         Returns:
             Path to the downloaded GeoJSON file.
@@ -43,12 +46,31 @@ class LISTInscriptionsIngester(BaseIngester):
         dest_path = self.raw_data_dir / "list_inscriptions.geojson"
 
         logger.info(f"Downloading LIST inscriptions from {self.DOWNLOAD_URL}...")
-        self.report_progress(0, None, "downloading GeoJSON from Zenodo...")
+        self.report_progress(0, None, "downloading ~1.2 GB GeoJSON from Zenodo...")
 
-        path = download_file(url=self.DOWNLOAD_URL, dest_path=dest_path, force=True)
+        # Stream the download -- too large for in-memory fetch_with_retry
+        with httpx.Client(
+            timeout=httpx.Timeout(connect=30, read=120, write=30, pool=30),
+            follow_redirects=True,
+        ) as client:
+            with client.stream("GET", self.DOWNLOAD_URL, headers=DEFAULT_HEADERS) as resp:
+                resp.raise_for_status()
+                total = int(resp.headers.get("content-length", 0))
+                downloaded = 0
+                with open(dest_path, "wb") as f:
+                    for chunk in resp.iter_bytes(chunk_size=8 * 1024 * 1024):
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total:
+                            pct = int(downloaded * 100 / total)
+                            self.report_progress(
+                                pct,
+                                100,
+                                f"downloaded {downloaded // (1024 * 1024)} MB / {total // (1024 * 1024)} MB",
+                            )
 
-        logger.info(f"Downloaded LIST inscriptions to {path}")
-        return path
+        logger.info(f"Downloaded LIST inscriptions to {dest_path} ({downloaded:,} bytes)")
+        return dest_path
 
     def parse(self, raw_data_path: Path) -> Iterator[ParsedSite]:
         """
@@ -100,15 +122,19 @@ class LISTInscriptionsIngester(BaseIngester):
         if lat == 0 and lon == 0:
             return None
 
-        # Source ID
-        list_id = str(properties.get("list_id", "")) or str(idx)
+        # Source ID: v1-2 uses "LIST-ID" (integer), with separate "EDH-ID" and "EDCS-ID"
+        list_id = str(properties.get("LIST-ID", "")) or str(idx)
 
         # Name: prefer ancient findspot, then modern, then fallback
-        name = (
-            properties.get("findspot_ancient")
-            or properties.get("findspot_modern")
-            or f"Inscription {list_id}"
-        )
+        # v1-2 uses "NULL" string instead of null for missing values
+        ancient = properties.get("findspot_ancient_clean")
+        modern = properties.get("findspot_modern_clean")
+        if ancient and ancient != "NULL":
+            name = ancient
+        elif modern and modern != "NULL":
+            name = modern
+        else:
+            name = f"Inscription {list_id}"
 
         # Period parsing
         period_start = self._parse_year(properties.get("not_before"))
@@ -118,10 +144,14 @@ class LISTInscriptionsIngester(BaseIngester):
         if period_end is not None and period_end > 1500:
             return None
 
-        # Source URL: link to EDCS if list_id starts with "HD"
+        # Source URL: link to EDH if available, else EDCS
+        edh_id = properties.get("EDH-ID")
+        edcs_id = properties.get("EDCS-ID")
         source_url = None
-        if list_id.startswith("HD"):
-            source_url = f"https://db.edcs.eu/epigr/epi.php?s_hd_nr={list_id}"
+        if edh_id:
+            source_url = f"https://edh.ub.uni-heidelberg.de/edh/inschrift/{edh_id}"
+        elif edcs_id:
+            source_url = f"http://db.edcs.eu/epigr/epi_ergebnis.php?s_text={edcs_id}"
 
         # Description
         description = self._build_description(properties)
@@ -158,17 +188,17 @@ class LISTInscriptionsIngester(BaseIngester):
 
     def _build_description(self, properties: dict) -> str | None:
         """Build a description string from available properties."""
-        text = properties.get("text_cleaned", "")
-        inscription_type = properties.get("type_of_inscription", "")
-        material = properties.get("material", "")
-        province = properties.get("province", "")
+        text = properties.get("clean_text_conservative", "")
+        inscription_type = properties.get("type_of_inscription_clean", "")
+        material = properties.get("material_clean", "")
+        province = properties.get("province_label_clean") or properties.get("province", "")
 
         parts = []
-        if inscription_type:
+        if inscription_type and inscription_type != "NULL":
             parts.append(f"Type: {inscription_type}")
-        if material:
+        if material and material != "NULL":
             parts.append(f"Material: {material}")
-        if province:
+        if province and province != "NULL":
             parts.append(f"Province: {province}")
         if text:
             # Truncate inscription text to keep description reasonable

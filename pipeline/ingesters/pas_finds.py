@@ -7,6 +7,10 @@ in England and Wales. It is run by the British Museum.
 Data source: https://finds.org.uk/database/search/results/format/json
 License: CC-BY-SA 4.0
 API Key: Not required
+
+Note: finds.org.uk uses Cloudflare which blocks Python HTTP libraries (httpx,
+requests) via TLS fingerprinting. We use curl_cffi with Chrome impersonation
+to bypass this. Standard User-Agent spoofing alone is not sufficient.
 """
 
 import json
@@ -16,10 +20,10 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 
+from curl_cffi import requests as cffi_requests
 from loguru import logger
 
 from pipeline.ingesters.base import BaseIngester, ParsedSite, atomic_write_json
-from pipeline.utils.http import RateLimitError, fetch_with_retry
 
 PAGE_SIZE = 100
 REQUEST_DELAY = 0.5  # Be polite to the API
@@ -52,8 +56,8 @@ class PASFindsIngester(BaseIngester):
     The PAS REST API returns JSON with pagination support.
     Each broadperiod is queried separately to keep result sets manageable.
 
-    Rate limiting: 0.5s between requests. The API does not require auth
-    but we should be respectful given the volume (~14K pages per period).
+    Rate limiting: 0.5s between requests. The API does not require auth.
+    Uses curl_cffi with Chrome impersonation to bypass Cloudflare TLS fingerprinting.
     """
 
     source_id = "pas_finds"
@@ -104,6 +108,9 @@ class PASFindsIngester(BaseIngester):
         """
         Fetch all pages for a single broadperiod.
 
+        Uses curl_cffi with Chrome impersonation because finds.org.uk
+        uses Cloudflare which blocks Python HTTP clients via TLS fingerprinting.
+
         Args:
             period: PAS broadperiod name (e.g. "ROMAN")
 
@@ -120,13 +127,22 @@ class PASFindsIngester(BaseIngester):
         while True:
             params = {"page": page, "show": PAGE_SIZE}
 
-            try:
-                response = fetch_with_retry(url, params=params)
-                data = response.json()
-            except RateLimitError:
+            response = cffi_requests.get(
+                url,
+                params=params,
+                impersonate="chrome",
+                timeout=30,
+            )
+
+            if response.status_code == 429:
                 logger.warning("Rate limited. Waiting 60 seconds...")
                 time.sleep(60)
                 continue
+
+            if response.status_code >= 400:
+                raise RuntimeError(f"HTTP {response.status_code} for {url}: {response.text[:200]}")
+
+            data = response.json()
 
             # Get total on first page
             if total_results is None:

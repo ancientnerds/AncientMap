@@ -1,12 +1,15 @@
 """
 Xinjiang Paleolithic-Bronze Age archaeological sites ingester.
 
-Li et al. "A dataset of archaeological sites in Xinjiang, China"
-published in Scientific Data.
+Li et al. "Spatial distribution data of cultural sites from the
+Paleolithic to Bronze Age in Xinjiang, China" (2022), Scientific Data.
+DOI: 10.1038/s41597-022-01306-5
 
-Data source: https://zenodo.org/records/7830895
+Data source: National Tibetan Plateau Data Center (TPDC)
+  https://data.tpdc.ac.cn/en/data/bb49a6da-bfd4-4355-9d0c-988eef793ee1/
+  DOI: 10.11888/HumanNat.tpdc.271910
 License: CC-BY 4.0
-API Key: Not required
+Status: UNAVAILABLE - TPDC requires registration/login to download data files
 """
 
 import csv
@@ -15,8 +18,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from pipeline.ingesters.base import BaseIngester, ParsedSite, atomic_write_bytes
-from pipeline.utils.http import fetch_with_retry
+from pipeline.ingesters.base import BaseIngester, ParsedSite
 
 # Period name -> (start_year, end_year)
 PERIOD_DATES: dict[str, tuple[int, int]] = {
@@ -106,29 +108,30 @@ class XinjiangSitesIngester(BaseIngester):
     source_id = "xinjiang_sites"
     source_name = "Xinjiang Archaeological Sites"
 
-    DOWNLOAD_URL = (
-        "https://zenodo.org/records/7830895/files/Xinjiang_archaeological_sites.csv?download=1"
+    available = False
+    unavailable_reason = (
+        "Dataset hosted on National Tibetan Plateau Data Center (TPDC) which requires "
+        "registration and login to download. "
+        "See https://data.tpdc.ac.cn/en/data/bb49a6da-bfd4-4355-9d0c-988eef793ee1/"
     )
 
     def fetch(self) -> Path:
         """
-        Download the Xinjiang sites CSV from Zenodo.
+        Download the Xinjiang sites CSV.
 
         Returns:
             Path to the downloaded CSV file
+
+        Raises:
+            RuntimeError: Always - TPDC requires registration to download
         """
-        dest_path = self.raw_data_dir / "xinjiang_sites.csv"
-
-        logger.info("Fetching Xinjiang sites CSV from Zenodo...")
-        self.report_progress(0, None, "downloading CSV...")
-
-        response = fetch_with_retry(self.DOWNLOAD_URL, timeout=60)
-
-        atomic_write_bytes(dest_path, response.content)
-
-        size_kb = len(response.content) / 1024
-        logger.info(f"Saved Xinjiang sites CSV ({size_kb:.0f} KB) to {dest_path}")
-        return dest_path
+        raise RuntimeError(
+            "Xinjiang sites dataset requires TPDC registration to download. "
+            "The original Zenodo URL (record 7830895) was incorrect - that record "
+            "is an unrelated Belgian lichens paper. The actual dataset is at "
+            "https://data.tpdc.ac.cn/en/data/bb49a6da-bfd4-4355-9d0c-988eef793ee1/ "
+            "(DOI: 10.11888/HumanNat.tpdc.271910) which requires login."
+        )
 
     def parse(self, raw_data_path: Path) -> Iterator[ParsedSite]:
         """
@@ -222,7 +225,7 @@ class XinjiangSitesIngester(BaseIngester):
             period_start=period_start,
             period_end=period_end,
             period_name=period_name,
-            source_url=("https://zenodo.org/records/7830895"),
+            source_url="https://data.tpdc.ac.cn/en/data/bb49a6da-bfd4-4355-9d0c-988eef793ee1/",
             raw_data=dict(row),
         )
 

@@ -2,15 +2,19 @@
 Canmore (Historic Environment Scotland) ingester.
 
 Canmore is Scotland's national record of the historic environment,
-containing ~125K archaeological and historical sites.
+containing ~320K archaeological and historical sites.
 
 Data source: https://canmore.org.uk/
-WFS: https://maps.hes.scot/geoserver/hes/ows
+ArcGIS REST: https://inspire.hes.scot/arcgis/rest/services/CANMORE/Canmore_Points/MapServer
 License: Open Government Licence (OGL)
 API Key: Not required
+
+Note: The old WFS at maps.hes.scot is dead (DNS failure).
+HES migrated to ArcGIS at inspire.hes.scot.
 """
 
 import json
+import re
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -32,7 +36,7 @@ PERIOD_DATES = {
     "MEDIEVAL": (1100, 1500),
 }
 
-# Canmore SITE_TYPE -> our normalized site_type
+# Canmore SITETYPE -> our normalized site_type
 TYPE_MAPPING = {
     "castle": "fortress",
     "church": "church",
@@ -69,7 +73,13 @@ TYPE_MAPPING = {
     "farmstead": "settlement",
     "township": "settlement",
     "settlement": "settlement",
+    "burnt mound": "settlement",
+    "occupation site": "settlement",
+    "enclosure": "settlement",
 }
+
+# Regex to extract period from SITETYPE strings like "FORT (IRON AGE)"
+_PERIOD_RE = re.compile(r"\(([^)]+)\)")
 
 
 class CanmoreScotlandIngester(BaseIngester):
@@ -77,59 +87,92 @@ class CanmoreScotlandIngester(BaseIngester):
     Ingester for Canmore (Historic Environment Scotland).
 
     Downloads Scottish archaeological and historical site records
-    via the HES Spatial Hub WFS endpoint (GeoJSON output).
+    via the HES ArcGIS REST API (GeoJSON output).
     """
 
     source_id = "canmore_scotland"
     source_name = "Canmore Scotland"
 
-    WFS_URL = "https://maps.hes.scot/geoserver/hes/ows"
-    PAGE_SIZE = 5000
+    # ArcGIS REST query endpoint for the Terrestrial layer (layer 0)
+    ARCGIS_QUERY_URL = (
+        "https://inspire.hes.scot/arcgis/rest/services/CANMORE/Canmore_Points/MapServer/0/query"
+    )
+    # Server max is 1000 per request
+    PAGE_SIZE = 1000
+
+    # Fields to request from the API
+    OUT_FIELDS = (
+        "CANMOREID,SITENUMBER,NMRSNAME,ALTNAME,BROADCLASS,"
+        "SITETYPE,COUNTY,COUNCIL,ARCHAEOLOG,FORM,ACCURACY,URL"
+    )
 
     def fetch(self) -> Path:
         """
-        Fetch all Canmore sites via WFS pagination.
+        Fetch all Canmore sites via ArcGIS REST API using FID-range pagination.
+
+        The server does not support standard result pagination, so we query
+        by FID ranges (FID >= X AND FID < X + PAGE_SIZE).
 
         Returns:
             Path to saved GeoJSON file.
         """
         dest_path = self.raw_data_dir / "canmore_scotland.json"
 
+        # First, get the total count and ID range
+        count_response = fetch_with_retry(
+            self.ARCGIS_QUERY_URL,
+            params={"where": "1=1", "returnCountOnly": "true", "f": "json"},
+            timeout=30,
+        )
+        total_count = count_response.json().get("count", 0)
+        logger.info(f"Canmore reports {total_count:,} features in Terrestrial layer")
+
+        # Get all object IDs to know the range
+        ids_response = fetch_with_retry(
+            self.ARCGIS_QUERY_URL,
+            params={"where": "1=1", "returnIdsOnly": "true", "f": "json"},
+            timeout=60,
+        )
+        all_ids = ids_response.json().get("objectIds", [])
+        if not all_ids:
+            logger.error("No object IDs returned from Canmore API")
+            atomic_write_json(dest_path, {"type": "FeatureCollection", "features": []})
+            return dest_path
+
+        min_id = min(all_ids)
+        max_id = max(all_ids)
+        logger.info(f"FID range: {min_id} to {max_id}")
+
         all_features = []
-        offset = 0
+        fid_start = min_id
 
-        logger.info("Fetching Canmore Scotland data via WFS...")
+        logger.info("Fetching Canmore Scotland data via ArcGIS REST API...")
 
-        while True:
+        while fid_start <= max_id:
+            fid_end = fid_start + self.PAGE_SIZE
+            where = f"FID >= {fid_start} AND FID < {fid_end}"
+
             params = {
-                "service": "WFS",
-                "version": "2.0.0",
-                "request": "GetFeature",
-                "typeName": "hes:canmore_sites",
-                "outputFormat": "application/json",
-                "count": self.PAGE_SIZE,
-                "startIndex": offset,
+                "where": where,
+                "outFields": self.OUT_FIELDS,
+                "outSR": "4326",
+                "f": "geojson",
             }
 
-            response = fetch_with_retry(self.WFS_URL, params=params, timeout=120)
+            response = fetch_with_retry(self.ARCGIS_QUERY_URL, params=params, timeout=120)
             data = response.json()
 
             features = data.get("features", [])
-            if not features:
-                logger.info("No more features, stopping pagination")
-                break
-
             all_features.extend(features)
-            logger.info(
-                f"Fetched {len(all_features):,} sites "
-                f"(page at offset {offset}, got {len(features)})"
-            )
-            self.report_progress(len(all_features), None, f"{len(all_features):,} sites")
 
-            if len(features) < self.PAGE_SIZE:
-                break
+            if len(all_features) % 10000 < self.PAGE_SIZE:
+                logger.info(
+                    f"Fetched {len(all_features):,} sites "
+                    f"(FID {fid_start}-{fid_end - 1}, got {len(features)})"
+                )
+                self.report_progress(len(all_features), total_count, f"{len(all_features):,} sites")
 
-            offset += self.PAGE_SIZE
+            fid_start = fid_end
 
         logger.info(f"Total features fetched: {len(all_features):,}")
 
@@ -139,7 +182,7 @@ class CanmoreScotlandIngester(BaseIngester):
             "metadata": {
                 "source": "Canmore (Historic Environment Scotland)",
                 "source_url": "https://canmore.org.uk/",
-                "wfs_url": self.WFS_URL,
+                "api_url": self.ARCGIS_QUERY_URL,
                 "fetched_at": datetime.now(UTC).isoformat(),
                 "total_features": len(all_features),
                 "license": "Open Government Licence (OGL)",
@@ -172,43 +215,53 @@ class CanmoreScotlandIngester(BaseIngester):
                 yield site
 
     def _parse_feature(self, feature: dict[str, Any]) -> ParsedSite | None:
-        """Parse a single GeoJSON feature from Canmore WFS."""
+        """Parse a single GeoJSON feature from the ArcGIS REST API."""
         geometry = feature.get("geometry", {})
         properties = feature.get("properties", {})
 
-        # Get coordinates (GeoJSON = [lon, lat])
-        if not geometry or geometry.get("type") != "Point":
+        if not geometry:
             return None
 
+        # Handle both Point and MultiPoint geometries
+        geom_type = geometry.get("type", "")
         coords = geometry.get("coordinates", [])
-        if len(coords) < 2:
-            return None
 
-        lon, lat = coords[0], coords[1]
+        if geom_type == "MultiPoint":
+            # Take the first point from MultiPoint
+            if not coords or len(coords[0]) < 2:
+                return None
+            lon, lat = coords[0][0], coords[0][1]
+        elif geom_type == "Point":
+            if len(coords) < 2:
+                return None
+            lon, lat = coords[0], coords[1]
+        else:
+            return None
 
         if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
             return None
         if lat == 0 and lon == 0:
             return None
 
-        # Extract fields
-        site_id = str(properties.get("SITEID", ""))
-        name = properties.get("SITE_NAME", "")
+        # Extract fields (new ArcGIS field names)
+        site_id = str(properties.get("CANMOREID", ""))
+        name = (properties.get("NMRSNAME") or "").strip()
 
         if not site_id or not name:
             return None
 
-        # Map site type
-        raw_type = properties.get("SITE_TYPE", "")
+        # Map site type from SITETYPE (e.g. "FORT (IRON AGE)")
+        raw_type = properties.get("SITETYPE", "") or ""
         site_type = self._map_type(raw_type)
 
-        # Map period
-        raw_period = properties.get("PERIOD", "")
-        period_name = raw_period if raw_period else None
-        period_start, period_end = self._map_period(raw_period)
+        # Extract period from SITETYPE parentheses
+        period_name = self._extract_period(raw_type)
+        period_start, period_end = self._map_period(period_name or "")
 
-        # Source URL
-        source_url = f"https://canmore.org.uk/site/{site_id}"
+        # Source URL — use the one from the API if available
+        source_url = (properties.get("URL") or "").strip()
+        if not source_url:
+            source_url = f"https://canmore.org.uk/site/{site_id}"
 
         return ParsedSite(
             source_id=site_id,
@@ -220,13 +273,40 @@ class CanmoreScotlandIngester(BaseIngester):
             period_end=period_end,
             period_name=period_name,
             precision_meters=50,
-            precision_reason="canmore_wfs",
+            precision_reason="canmore_arcgis",
             source_url=source_url,
             raw_data=properties,
         )
 
+    def _extract_period(self, raw_type: str) -> str | None:
+        """
+        Extract period from SITETYPE strings.
+
+        The ArcGIS API embeds period info in parentheses within SITETYPE,
+        e.g. "FORT (IRON AGE)", "BURIAL GROUND (MEDIEVAL)", "BURNT MOUND (PREHISTORIC)".
+        Multiple types may be comma-separated; we take the first recognized period.
+        """
+        if not raw_type:
+            return None
+
+        matches = _PERIOD_RE.findall(raw_type.upper())
+        for match in matches:
+            # Skip non-period parenthetical content
+            cleaned = match.strip()
+            if cleaned in ("POSSIBLE", "PROBABLE", "S", "PERIOD UNASSIGNED"):
+                continue
+            # Check if it matches a known period
+            for period_key in PERIOD_DATES:
+                if period_key in cleaned:
+                    return cleaned
+            # Also return century-based periods like "19TH CENTURY"
+            if "CENTURY" in cleaned:
+                return cleaned
+
+        return None
+
     def _map_type(self, raw_type: str) -> str:
-        """Map Canmore SITE_TYPE to normalized site type."""
+        """Map Canmore SITETYPE to normalized site type."""
         if not raw_type:
             return "other"
 

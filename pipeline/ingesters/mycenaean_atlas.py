@@ -4,13 +4,22 @@ Mycenaean Atlas Project ingester.
 The Mycenaean Atlas Project (by Robert Consoli) is a comprehensive
 georeferenced database of ~5,600 Bronze Age Aegean archaeological sites.
 
-Data source: http://www.mycenaean-atlas.org/
+Data source: https://www.helladic.info/
 License: Academic / Research use
 API Key: Not required
+
+The original domain mycenaean-atlas.org is dead (DNS failure).
+The project moved to helladic.info which serves data via PHP-rendered
+HTML tables. This ingester scrapes the gazetteer pages by region and
+combines them into a local CSV.
 """
 
 import csv
+import io
+import re
+import time
 from collections.abc import Iterator
+from html import unescape
 from pathlib import Path
 
 from loguru import logger
@@ -18,7 +27,93 @@ from loguru import logger
 from pipeline.ingesters.base import BaseIngester, ParsedSite, atomic_write_bytes
 from pipeline.utils.http import fetch_with_retry
 
-# Site type mapping from Mycenaean Atlas type fields
+# Base URL for the Mycenaean Atlas on helladic.info
+BASE_URL = "https://www.helladic.info"
+
+# All top-level regions available on helladic.info (from the RegionCtrl dropdown).
+# Each tuple is (region_name, zoom_level) matching the dropdown option values.
+REGIONS = [
+    "Achaea",
+    "Achaea Phthiotis",
+    "Aeolian Islands",
+    "Aetolia",
+    "Aetolia-Acharnania",
+    "Ainis",
+    "Anatolia",
+    "Antikythera",
+    "Arcadia",
+    "Argolid",
+    "Attica",
+    "Boeotia",
+    "Calabria",
+    "Corinthia",
+    "Crete",
+    "Cyclades",
+    "Cyprus",
+    "Dodecanese",
+    "Dolopia",
+    "Doris",
+    "Egypt",
+    "Elis",
+    "Epirus",
+    "Euboea",
+    "Eurytania",
+    "Ionian Islands",
+    "Italy",
+    "Kythera",
+    "Laconia",
+    "Levant",
+    "Locris",
+    "Macedonia",
+    "Magnesia",
+    "Malis",
+    "Malta",
+    "Megaris",
+    "Messenia",
+    "NE Aegean",
+    "Pamphylia",
+    "Pelasgiotis",
+    "Perraibia",
+    "Phocis",
+    "Phrygia",
+    "Phthiotis",
+    "Pieria",
+    "Pisidia",
+    "Pontis",
+    "Psara",
+    "Sardinia",
+    "Saronic",
+    "Seleucia",
+    "Sicily",
+    "Spain",
+    "Sporades",
+    "Sudan",
+    "Syria",
+    "Thesprotia",
+    "Thessaly",
+    "Thrace",
+    "Triphylia",
+    "Troezenia",
+]
+
+# Gazetteer endpoint: returns an HTML table with columns
+# Place Key | Site Name | Region | Subregion | Latitude | Longitude | Accuracy (m) | Elevation (m)
+GAZETTEER_URL = f"{BASE_URL}/MAPC/gazetteerList.php"
+
+# CSV column names we produce
+CSV_COLUMNS = [
+    "place_key",
+    "site_name",
+    "region",
+    "subregion",
+    "latitude",
+    "longitude",
+    "accuracy_m",
+    "elevation_m",
+]
+
+# Site type mapping from site name keywords (the gazetteer doesn't include
+# a type column, so we infer from the site name)
 TYPE_MAPPING = {
     "tomb": "tomb",
     "tholos": "tomb",
@@ -50,111 +145,154 @@ TYPE_MAPPING = {
     "harbor": "port",
     "harbour": "port",
     "port": "port",
+    " hab": "settlement",
+    "pottery": "other",
+    "sherds": "other",
+    "wall": "fortress",
+    "well": "other",
+    "lithics": "other",
+    "artifacts": "other",
+    "building": "settlement",
+    "house": "settlement",
+    "cem": "tomb",
 }
 
+# Regex to extract <td> cell contents from an HTML table row
+_TD_RE = re.compile(r"<td[^>]*>(.*?)</td>", re.DOTALL)
+# Regex to strip HTML tags from cell content
+_TAG_RE = re.compile(r"<[^>]+>")
 
-def _map_site_type(raw_type: str) -> str:
-    """Map a Mycenaean Atlas type string to a normalized site type."""
-    if not raw_type:
+
+def _map_site_type(name: str) -> str:
+    """Infer site type from site name keywords."""
+    if not name:
         return "other"
-    type_lower = raw_type.strip().lower()
+    name_lower = name.strip().lower()
     for key, value in TYPE_MAPPING.items():
-        if key in type_lower:
+        if key in name_lower:
             return value
     return "other"
 
 
-def _detect_columns(fieldnames: list[str]) -> dict[str, str]:
+def _parse_gazetteer_html(html: str) -> list[dict]:
     """
-    Detect which CSV columns correspond to lat, lon, name, type, etc.
+    Parse an HTML gazetteer page into a list of row dicts.
 
-    Returns a dict mapping logical names to actual column names.
+    The gazetteer page contains an HTML table with columns:
+    Place Key | Site Name | Region | Subregion | Latitude | Longitude | Accuracy (m) | Elevation (m)
+
+    Returns:
+        List of dicts with keys matching CSV_COLUMNS.
     """
-    mapping = {}
-    lower_fields = {f.strip().lower(): f for f in fieldnames}
+    rows = []
 
-    # Latitude
-    for candidate in ["latitude", "lat", "y"]:
-        if candidate in lower_fields:
-            mapping["lat"] = lower_fields[candidate]
-            break
+    # Split on <tr> to get table rows
+    tr_parts = html.split("<tr>")
+    for tr in tr_parts[1:]:  # skip before first <tr>
+        cells = _TD_RE.findall(tr)
+        if len(cells) < 8:
+            continue
 
-    # Longitude
-    for candidate in ["longitude", "lon", "lng", "long", "x"]:
-        if candidate in lower_fields:
-            mapping["lon"] = lower_fields[candidate]
-            break
+        # Strip HTML tags from each cell and decode entities
+        clean = []
+        for cell in cells[:8]:
+            text = _TAG_RE.sub("", cell).strip()
+            text = unescape(text)
+            clean.append(text)
 
-    # Name
-    for candidate in ["name", "site_name", "sitename", "site", "placename"]:
-        if candidate in lower_fields:
-            mapping["name"] = lower_fields[candidate]
-            break
+        place_key, site_name, region, subregion, lat, lon, accuracy, elevation = clean
 
-    # ID
-    for candidate in ["id", "site_id", "siteid", "gid", "fid"]:
-        if candidate in lower_fields:
-            mapping["id"] = lower_fields[candidate]
-            break
+        if not place_key or not lat or not lon:
+            continue
 
-    # Type
-    for candidate in ["type", "site_type", "sitetype", "category", "feature"]:
-        if candidate in lower_fields:
-            mapping["type"] = lower_fields[candidate]
-            break
+        rows.append(
+            {
+                "place_key": place_key,
+                "site_name": site_name.strip(),
+                "region": region.strip(),
+                "subregion": subregion.strip(),
+                "latitude": lat,
+                "longitude": lon,
+                "accuracy_m": accuracy,
+                "elevation_m": elevation,
+            }
+        )
 
-    # Period
-    for candidate in ["period", "date", "dating", "chronology", "phase"]:
-        if candidate in lower_fields:
-            mapping["period"] = lower_fields[candidate]
-            break
-
-    # Description / notes
-    for candidate in ["description", "notes", "remarks", "comment"]:
-        if candidate in lower_fields:
-            mapping["description"] = lower_fields[candidate]
-            break
-
-    return mapping
+    return rows
 
 
 class MycenaeanAtlasIngester(BaseIngester):
     """
-    Ingester for the Mycenaean Atlas Project.
+    Ingester for the Mycenaean Atlas Project (helladic.info).
 
     Contains ~5,600 Bronze Age Aegean sites including settlements,
     tombs, sanctuaries, and fortifications from the Mycenaean,
     Minoan, and related cultures.
+
+    Data is scraped from the gazetteer pages at helladic.info since
+    the original mycenaean-atlas.org CSV download endpoint is dead.
     """
 
     source_id = "mycenaean_atlas"
     source_name = "Mycenaean Atlas Project"
 
-    # Data URL - Mycenaean Atlas Project dataset
-    DOWNLOAD_URL = "http://www.mycenaean-atlas.org/downloads/map_sites.csv"
-
     def fetch(self) -> Path:
         """
-        Fetch CSV data from the Mycenaean Atlas Project.
+        Fetch site data from helladic.info gazetteer pages.
+
+        Iterates over all regions, scrapes the HTML table from each
+        gazetteer page, and combines into a single CSV file.
 
         Returns:
-            Path to the downloaded CSV file.
+            Path to the generated CSV file.
         """
         dest_path = self.raw_data_dir / "mycenaean_atlas.csv"
 
-        logger.info("Fetching Mycenaean Atlas data...")
-        self.report_progress(0, None, "downloading CSV...")
+        logger.info("Fetching Mycenaean Atlas data from helladic.info...")
+        self.report_progress(0, len(REGIONS), "starting region scrape...")
 
-        response = fetch_with_retry(
-            self.DOWNLOAD_URL,
-            headers={"Accept": "text/csv, */*"},
-            timeout=60,
-        )
+        all_rows = []
+        seen_keys = set()
 
-        atomic_write_bytes(dest_path, response.content)
+        for i, region in enumerate(REGIONS):
+            logger.info(f"Fetching region {i + 1}/{len(REGIONS)}: {region}")
+            self.report_progress(i, len(REGIONS), f"fetching {region}...")
 
-        size_kb = len(response.content) / 1024
+            response = fetch_with_retry(
+                GAZETTEER_URL,
+                params={"Kase": "1", "Region": region, "Subregion": ""},
+                headers={"Accept": "text/html, */*"},
+                timeout=60,
+            )
+
+            rows = _parse_gazetteer_html(response.text)
+            new_count = 0
+            for row in rows:
+                if row["place_key"] not in seen_keys:
+                    seen_keys.add(row["place_key"])
+                    all_rows.append(row)
+                    new_count += 1
+
+            logger.info(f"  {region}: {len(rows)} rows, {new_count} new (deduped)")
+
+            # Be polite: small delay between requests
+            if i < len(REGIONS) - 1:
+                time.sleep(0.5)
+
+        logger.info(f"Total unique sites: {len(all_rows)}")
+
+        # Write combined CSV
+        buf = io.StringIO()
+        writer = csv.DictWriter(buf, fieldnames=CSV_COLUMNS)
+        writer.writeheader()
+        writer.writerows(all_rows)
+        csv_bytes = buf.getvalue().encode("utf-8")
+
+        atomic_write_bytes(dest_path, csv_bytes)
+
+        size_kb = len(csv_bytes) / 1024
         logger.info(f"Saved {size_kb:.1f} KB to {dest_path}")
+        self.report_progress(len(REGIONS), len(REGIONS), f"{len(all_rows)} sites saved")
         return dest_path
 
     def parse(self, raw_data_path: Path) -> Iterator[ParsedSite]:
@@ -176,21 +314,11 @@ class MycenaeanAtlasIngester(BaseIngester):
                 logger.error("CSV file has no header row")
                 return
 
-            columns = _detect_columns(fieldnames)
             logger.info(f"CSV columns: {fieldnames}")
-            logger.info(f"Column mapping: {columns}")
-
-            if "lat" not in columns or "lon" not in columns:
-                logger.error(f"Cannot find lat/lon columns in: {fieldnames}")
-                return
-
-            if "name" not in columns:
-                logger.error(f"Cannot find name column in: {fieldnames}")
-                return
 
             count = 0
             for i, row in enumerate(reader):
-                site = self._parse_row(row, i, columns)
+                site = self._parse_row(row, i)
                 if site:
                     count += 1
                     yield site
@@ -200,21 +328,19 @@ class MycenaeanAtlasIngester(BaseIngester):
 
             logger.info(f"Parsed {count} valid sites from {i + 1} rows")
 
-    def _parse_row(self, row: dict, index: int, columns: dict[str, str]) -> ParsedSite | None:
+    def _parse_row(self, row: dict, index: int) -> ParsedSite | None:
         """
         Parse a single CSV row into a ParsedSite.
 
         Args:
-            row: CSV row as a dict.
+            row: CSV row dict with CSV_COLUMNS keys.
             index: Row index (0-based).
-            columns: Column name mapping from _detect_columns.
 
         Returns:
             ParsedSite or None if the row is invalid.
         """
-        # Extract and validate coordinates
-        lat_str = row.get(columns["lat"], "").strip()
-        lon_str = row.get(columns["lon"], "").strip()
+        lat_str = row.get("latitude", "").strip()
+        lon_str = row.get("longitude", "").strip()
 
         if not lat_str or not lon_str:
             return None
@@ -222,127 +348,52 @@ class MycenaeanAtlasIngester(BaseIngester):
         lat = float(lat_str)
         lon = float(lon_str)
 
-        # Basic geographic sanity for Aegean region
         if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
             return None
 
-        # Name
-        name = row.get(columns["name"], "").strip()
+        name = row.get("site_name", "").strip()
         if not name:
             return None
 
-        # Source ID
-        if "id" in columns:
-            site_id = row.get(columns["id"], "").strip()
-        else:
-            site_id = ""
+        site_id = row.get("place_key", "").strip()
         if not site_id:
             site_id = str(index)
 
-        # Site type
-        raw_type = ""
-        if "type" in columns:
-            raw_type = row.get(columns["type"], "").strip()
-        site_type = _map_site_type(raw_type)
+        # Infer site type from name
+        site_type = _map_site_type(name)
 
-        # Period
-        raw_period = ""
-        if "period" in columns:
-            raw_period = row.get(columns["period"], "").strip()
-        period_name = raw_period if raw_period else "Mycenaean"
-        period_start, period_end = self._parse_period(raw_period)
+        # All sites are Bronze Age Aegean; default to Mycenaean period
+        period_name = "Mycenaean"
+        period_start, period_end = -1600, -1100
 
-        # Description
-        description = None
-        if "description" in columns:
-            description = row.get(columns["description"], "").strip()
-            if description:
-                description = description[:500]
+        # Accuracy from the gazetteer (0 means precise, others in meters)
+        accuracy_str = row.get("accuracy_m", "").strip()
+        precision_meters = 100  # default
+        if accuracy_str:
+            try:
+                acc = int(accuracy_str)
+                precision_meters = max(acc, 1) if acc > 0 else 10
+            except ValueError:
+                pass
 
-        # Source URL
-        source_url = f"http://www.mycenaean-atlas.org/atlas/site/{site_id}"
+        # Build source URL pointing to the site's report page on helladic.info
+        source_url = f"{BASE_URL}/MAPC/pkey_report_wparam.php?place={site_id}"
 
         return ParsedSite(
             source_id=str(site_id),
             name=name,
             lat=lat,
             lon=lon,
-            description=description,
+            description=None,
             site_type=site_type,
             period_start=period_start,
             period_end=period_end,
             period_name=period_name,
-            precision_meters=100,
+            precision_meters=precision_meters,
             precision_reason="mycenaean_atlas",
             source_url=source_url,
             raw_data=dict(row),
         )
-
-    def _parse_period(self, period_str: str) -> tuple[int, int]:
-        """
-        Parse a period string into start/end years.
-
-        Known Aegean Bronze Age periods:
-        - Early Bronze Age (EBA): ~3000-2000 BCE
-        - Middle Bronze Age (MBA): ~2000-1600 BCE
-        - Late Bronze Age (LBA): ~1600-1100 BCE
-        - Early Helladic (EH): ~3000-2000 BCE
-        - Middle Helladic (MH): ~2000-1600 BCE
-        - Late Helladic (LH): ~1600-1050 BCE
-        - Early Minoan (EM): ~3000-2000 BCE
-        - Middle Minoan (MM): ~2000-1600 BCE
-        - Late Minoan (LM): ~1600-1100 BCE
-
-        Args:
-            period_str: Raw period string from the CSV.
-
-        Returns:
-            Tuple of (period_start, period_end) as negative years for BCE.
-        """
-        if not period_str:
-            return -1600, -1100
-
-        p = period_str.strip().upper()
-
-        # Early Bronze Age / Early Helladic / Early Minoan
-        if any(
-            tag in p
-            for tag in ["EBA", "EH", "EM", "EARLY BRONZE", "EARLY HELLADIC", "EARLY MINOAN"]
-        ):
-            return -3000, -2000
-
-        # Middle Bronze Age / Middle Helladic / Middle Minoan
-        if any(
-            tag in p
-            for tag in ["MBA", "MH", "MM", "MIDDLE BRONZE", "MIDDLE HELLADIC", "MIDDLE MINOAN"]
-        ):
-            return -2000, -1600
-
-        # Late Bronze Age / Late Helladic / Late Minoan (most Mycenaean)
-        if any(
-            tag in p
-            for tag in [
-                "LBA",
-                "LH",
-                "LM",
-                "LATE BRONZE",
-                "LATE HELLADIC",
-                "LATE MINOAN",
-                "MYCENAEAN",
-            ]
-        ):
-            return -1600, -1100
-
-        # Neolithic
-        if "NEOLITHIC" in p:
-            return -7000, -3000
-
-        # Iron Age
-        if "IRON" in p:
-            return -1100, -600
-
-        # Default: Late Bronze Age (core Mycenaean period)
-        return -1600, -1100
 
 
 def ingest_mycenaean_atlas(session=None, skip_fetch: bool = False) -> dict:

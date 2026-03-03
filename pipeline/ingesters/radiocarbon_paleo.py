@@ -1,11 +1,12 @@
 """
 ROCEEH ROAD Radiocarbon Paleolithic Europe ingester.
 
-The ROCEEH Out of Africa Database (ROAD) contains ~14,300 Paleolithic
-localities across Europe with radiocarbon dating information.
+The ROCEEH Out of Africa Database (ROAD) contains ~2,200 Paleolithic
+localities across Africa and Eurasia (3 Ma - 20 ka BP).
 
 Data source: https://www.roceeh.uni-tuebingen.de/roadweb/
-License: Academic use
+Data endpoint: askROAD getLocalities.php (POST, returns JSON)
+License: Academic use (CC BY-NC 4.0)
 API Key: Not required
 """
 
@@ -14,6 +15,7 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from loguru import logger
 
@@ -25,56 +27,62 @@ class RadiocarbonPaleoIngester(BaseIngester):
     """
     Ingester for ROCEEH ROAD Radiocarbon Paleolithic Europe database.
 
-    ROAD contains ~14,300 Paleolithic localities in Europe with
-    radiocarbon dates, site types, and cultural attributions.
+    ROAD contains ~2,200 Paleolithic localities across Africa and Eurasia
+    with site types and geographic attributions.
     """
 
     source_id = "radiocarbon_paleo"
     source_name = "Radiocarbon Paleolithic Europe"
 
-    # Bulk JSON endpoint for all localities
-    BULK_URL = "https://www.roceeh.uni-tuebingen.de/roadweb/tcpdf/data/road_localities.json"
+    # askROAD getLocalities endpoint - returns all localities as JSON via POST
+    # Verified working 2026-03-03
+    BULK_URL = "https://www.roceeh.uni-tuebingen.de/askROAD/getLocalities.php"
 
-    # Web interface base URL for linking to individual localities
+    # Summary Data Sheet URL for linking to individual localities
     LOCALITY_URL = (
-        "https://www.roceeh.uni-tuebingen.de/roadweb/"
-        "smarty_road_simple_locality.php?locality={locality_id}"
+        "https://www.roceeh.uni-tuebingen.de/roadweb/sdsPDF.php?localityName={locality_name}"
     )
 
     def fetch(self) -> Path:
         """
-        Fetch all localities from ROCEEH ROAD bulk JSON endpoint.
+        Fetch all localities from ROCEEH ROAD askROAD endpoint.
+
+        Uses the askROAD getLocalities.php POST endpoint with empty
+        filter parameters to retrieve all localities.
 
         Returns:
             Path to saved JSON file
         """
         dest_path = self.raw_data_dir / "radiocarbon_paleo.json"
 
-        logger.info("Fetching ROCEEH ROAD bulk locality data...")
-        self.report_progress(0, None, "fetching bulk JSON...")
+        logger.info("Fetching ROCEEH ROAD locality data via askROAD...")
+        self.report_progress(0, None, "fetching localities via askROAD POST...")
 
-        response = fetch_with_retry(self.BULK_URL, timeout=120)
+        response = fetch_with_retry(
+            self.BULK_URL,
+            method="POST",
+            data={
+                "localityTypeRawValue": "",
+                "countryRawValue": "",
+                "continentRawValue": "",
+                "subcontinentRawValue": "",
+                "showParams": "{}",
+            },
+            timeout=120,
+        )
         data = response.json()
 
-        # Determine record count based on data structure
-        if isinstance(data, list):
-            record_count = len(data)
-        elif isinstance(data, dict):
-            # Could be wrapped in a key like "localities", "data", "features"
-            for key in ("localities", "data", "features", "results"):
-                if key in data and isinstance(data[key], list):
-                    record_count = len(data[key])
-                    break
-            else:
-                record_count = len(data)
-        else:
-            record_count = 0
+        if not data.get("success"):
+            raise RuntimeError(f"ROCEEH ROAD API returned success=false: {data}")
+
+        localities = data.get("localities", [])
+        record_count = len(localities)
 
         logger.info(f"Fetched {record_count:,} locality records from ROCEEH ROAD")
         self.report_progress(record_count, record_count, f"{record_count:,} records")
 
         output = {
-            "data": data,
+            "data": localities,
             "metadata": {
                 "source": "ROCEEH ROAD",
                 "source_url": "https://www.roceeh.uni-tuebingen.de/roadweb/",
@@ -99,20 +107,8 @@ class RadiocarbonPaleoIngester(BaseIngester):
         with open(raw_data_path, encoding="utf-8") as f:
             wrapper = json.load(f)
 
-        data = wrapper.get("data", wrapper)
-
-        # Extract the list of localities from the data
-        if isinstance(data, list):
-            localities = data
-        elif isinstance(data, dict):
-            for key in ("localities", "data", "features", "results"):
-                if key in data and isinstance(data[key], list):
-                    localities = data[key]
-                    break
-            else:
-                # If dict has no recognized list key, treat values as records
-                localities = list(data.values()) if data else []
-        else:
+        localities = wrapper.get("data", [])
+        if not isinstance(localities, list):
             localities = []
 
         logger.info(f"Processing {len(localities):,} localities")
@@ -124,19 +120,19 @@ class RadiocarbonPaleoIngester(BaseIngester):
 
     def _parse_locality(self, record: dict[str, Any]) -> ParsedSite | None:
         """
-        Parse a single ROAD locality record.
+        Parse a single ROAD locality record from askROAD getLocalities.php.
+
+        Record fields: localityName, country, continent, subcontinent,
+        localityType, localityX (longitude), localityY (latitude).
 
         Args:
-            record: Raw locality dict from ROAD JSON
+            record: Raw locality dict from askROAD JSON
 
         Returns:
             ParsedSite or None if record lacks valid coordinates
         """
-        # Extract coordinates - try common field name patterns
-        lat = _to_float(record.get("lat") or record.get("latitude") or record.get("y"))
-        lon = _to_float(
-            record.get("lng") or record.get("lon") or record.get("longitude") or record.get("x")
-        )
+        lat = _to_float(record.get("localityY"))
+        lon = _to_float(record.get("localityX"))
 
         if lat is None or lon is None:
             return None
@@ -145,62 +141,36 @@ class RadiocarbonPaleoIngester(BaseIngester):
         if lat == 0.0 and lon == 0.0:
             return None
 
-        # Extract ID
-        locality_id = str(record.get("id") or record.get("locality_id") or record.get("ID") or "")
-        if not locality_id:
+        name = record.get("localityName")
+        if not name:
             return None
 
-        # Extract name
-        name = (
-            record.get("name")
-            or record.get("site_name")
-            or record.get("locality")
-            or record.get("SITE")
-            or f"ROAD-{locality_id}"
-        )
-
-        # Period information
-        period_name = (
-            record.get("period") or record.get("culture") or record.get("industry") or "Paleolithic"
-        )
-
-        # Radiocarbon age to calendar years (approximate)
-        period_start = _c14_to_year(
-            record.get("age_max") or record.get("date_max") or record.get("from")
-        )
-        period_end = _c14_to_year(
-            record.get("age_min") or record.get("date_min") or record.get("to")
-        )
-
-        # Ensure correct ordering (start should be older = more negative)
-        if period_start is not None and period_end is not None:
-            if period_start > period_end:
-                period_start, period_end = period_end, period_start
-
-        # Description from available fields
+        # Build description from available fields
         desc_parts = []
         if record.get("country"):
             desc_parts.append(f"Country: {record['country']}")
-        if record.get("culture") or record.get("industry"):
-            culture = record.get("culture") or record.get("industry")
-            desc_parts.append(f"Culture: {culture}")
-        if record.get("site_type") or record.get("type"):
-            desc_parts.append(f"Type: {record.get('site_type') or record.get('type')}")
+        if record.get("continent"):
+            desc_parts.append(f"Continent: {record['continent']}")
+        if record.get("subcontinent"):
+            desc_parts.append(f"Region: {record['subcontinent']}")
+        if record.get("localityType"):
+            desc_parts.append(f"Type: {record['localityType']}")
 
         description = "; ".join(desc_parts) if desc_parts else None
 
-        source_url = self.LOCALITY_URL.format(locality_id=locality_id)
+        # URL-encode the locality name for the SDS PDF link
+        source_url = self.LOCALITY_URL.format(locality_name=quote(name))
 
         return ParsedSite(
-            source_id=locality_id,
+            source_id=name,
             name=name,
             lat=lat,
             lon=lon,
             description=description[:500] if description else None,
             site_type="other",
-            period_start=period_start,
-            period_end=period_end,
-            period_name=period_name,
+            period_start=None,
+            period_end=None,
+            period_name="Paleolithic",
             precision_meters=500,
             precision_reason="roceeh_road_locality",
             source_url=source_url,
@@ -223,25 +193,6 @@ def _to_float(value: Any) -> float | None:
         except ValueError:
             return None
     return None
-
-
-def _c14_to_year(value: Any) -> int | None:
-    """
-    Convert a radiocarbon age value to a calendar year (negative = BCE).
-
-    Radiocarbon ages are given as years Before Present (BP, where present = 1950).
-    For Paleolithic timescales, uncalibrated C14 years are a rough approximation.
-
-    A value of 30000 BP becomes -28050 (i.e., 28050 BCE).
-    """
-    num = _to_float(value)
-    if num is None:
-        return None
-    # If the value is large and positive, treat as years BP
-    if num > 1950:
-        return int(1950 - num)
-    # If already a calendar year (could be negative for BCE)
-    return int(num)
 
 
 def ingest_radiocarbon_paleo(session=None, skip_fetch: bool = False) -> dict:

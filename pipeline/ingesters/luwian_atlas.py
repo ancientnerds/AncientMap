@@ -4,7 +4,7 @@ Luwian Studies Site Atlas ingester.
 483 Bronze Age archaeological sites in Anatolia (modern Turkey),
 compiled by the Luwian Studies Foundation.
 
-Data source: https://zenodo.org/records/4117791
+Data source: https://zenodo.org/records/17128262
 License: CC-BY-4.0
 API Key: Not required
 """
@@ -31,22 +31,16 @@ class LuwianAtlasIngester(BaseIngester):
     source_id = "luwian_atlas"
     source_name = "Luwian Studies Site Atlas"
 
-    DOWNLOAD_URL = "https://zenodo.org/records/4117791/files/LuwianStudies_SiteAtlas.csv?download=1"
+    DOWNLOAD_URL = "https://zenodo.org/records/17128262/files/sites.csv?download=1"
 
-    # Map site type keywords to normalized types
-    TYPE_MAPPING = {
-        "settlement": "settlement",
-        "tell": "settlement",
-        "höyük": "settlement",
-        "hoyuk": "settlement",
-        "hüyük": "settlement",
-        "fortress": "fortress",
-        "castle": "fortress",
-        "citadel": "fortress",
-        "sanctuary": "sanctuary",
-        "temple": "sanctuary",
-        "tomb": "tomb",
-        "cemetery": "tomb",
+    # Map site_type_id (from categories.csv) to normalized types
+    # 1=Bronze Age inscription, 2=Regional center, 3=Settlement, 4=Excavation, 5=Cemetery
+    TYPE_ID_MAPPING = {
+        "1": "monument",
+        "2": "settlement",
+        "3": "settlement",
+        "4": "other",
+        "5": "tomb",
     }
 
     def fetch(self) -> Path:
@@ -105,8 +99,8 @@ class LuwianAtlasIngester(BaseIngester):
             ParsedSite or None if the row is invalid.
         """
         # Extract coordinates
-        lat_str = self._find_column(row, ["Latitude", "Lat", "lat", "Y"])
-        lon_str = self._find_column(row, ["Longitude", "Lon", "lon", "Long", "X"])
+        lat_str = self._find_column(row, ["latitude", "Latitude", "Lat", "lat"])
+        lon_str = self._find_column(row, ["longitude", "Longitude", "Lon", "lon"])
 
         if not lat_str or not lon_str:
             return None
@@ -121,29 +115,34 @@ class LuwianAtlasIngester(BaseIngester):
             return None
 
         # Name
-        name = self._find_column(row, ["Site", "Name", "site_name"])
+        name = self._find_column(row, ["name", "Name", "Site", "site_name"])
         if not name or not name.strip():
             return None
         name = name.strip()
 
-        # Source ID: use ID column if present, otherwise row index
-        record_id = self._find_column(row, ["ID", "id", "Id"])
+        # Source ID: use id column if present, otherwise row index
+        record_id = self._find_column(row, ["id", "ID", "Id"])
         source_id = record_id.strip() if record_id else str(idx)
 
-        # Site type
-        raw_type = self._find_column(row, ["Type", "type", "SiteType"])
-        site_type = self._map_type(raw_type)
+        # Site type: numeric site_type_id mapped via TYPE_ID_MAPPING
+        type_id = self._find_column(row, ["site_type_id", "SiteType", "Type"])
+        site_type = self.TYPE_ID_MAPPING.get(type_id.strip(), "other") if type_id else "other"
 
-        # Description from Province and Notes
-        province = self._find_column(row, ["Province", "province", "Region", "region"])
-        notes = self._find_column(row, ["Notes", "notes", "Description", "description"])
+        # Description from Province and District
+        province = self._find_column(row, ["province", "Province", "Region"])
+        district = self._find_column(row, ["district", "District"])
 
         desc_parts = []
         if province and province.strip():
             desc_parts.append(f"Province: {province.strip()}")
-        if notes and notes.strip():
-            desc_parts.append(notes.strip())
+        if district and district.strip():
+            desc_parts.append(f"District: {district.strip()}")
         description = "; ".join(desc_parts) if desc_parts else None
+
+        # Source URL from full_url column
+        source_url = self._find_column(row, ["full_url", "url"])
+        if source_url:
+            source_url = source_url.strip() or None
 
         return ParsedSite(
             source_id=source_id,
@@ -154,7 +153,7 @@ class LuwianAtlasIngester(BaseIngester):
             period_name="Bronze Age",
             period_start=-3000,
             period_end=-1200,
-            source_url=None,
+            source_url=source_url,
             description=description,
             raw_data=dict(row),
         )
@@ -176,26 +175,6 @@ class LuwianAtlasIngester(BaseIngester):
             if value is not None:
                 return value
         return None
-
-    def _map_type(self, raw_type: str | None) -> str:
-        """
-        Map a raw site type string to a normalized type.
-
-        Args:
-            raw_type: Raw type string from the CSV.
-
-        Returns:
-            Normalized site type string.
-        """
-        if not raw_type:
-            return "other"
-
-        type_lower = raw_type.lower().strip()
-        for keyword, normalized in self.TYPE_MAPPING.items():
-            if keyword in type_lower:
-                return normalized
-
-        return "other"
 
 
 def ingest_luwian_atlas(session=None, skip_fetch: bool = False) -> dict:

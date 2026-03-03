@@ -1,11 +1,12 @@
 """
 Coflein (Royal Commission on Ancient Monuments of Wales) ingester.
 
-Downloads ~110K archaeological sites from the RCAHMW National Monuments Record
+Downloads ~113K archaeological sites from the RCAHMW National Monuments Record
 via the DataMapWales WFS (Web Feature Service).
 
 Data source: https://coflein.gov.uk/
 WFS endpoint: https://datamap.gov.wales/geoserver/wfs
+WFS layer: geonode:rcahmw_nmrw_terrestrialsites_rcahmw_bng
 License: OGL (Open Government Licence)
 API Key: Not required
 """
@@ -26,7 +27,7 @@ class CofleinWalesIngester(BaseIngester):
     """
     Ingester for Coflein / RCAHMW National Monuments Record.
 
-    Contains ~110K archaeological and historic sites across Wales.
+    Contains ~113K archaeological and historic sites across Wales.
     Uses DataMapWales WFS with GeoJSON output, paginated in batches.
     """
 
@@ -34,10 +35,10 @@ class CofleinWalesIngester(BaseIngester):
     source_name = "Coflein Wales"
 
     WFS_URL = "https://datamap.gov.wales/geoserver/wfs"
-    TYPE_NAME = "inspire-nrw:Arcwilio_RCAHMW_NMR_Records"
+    TYPE_NAME = "geonode:rcahmw_nmrw_terrestrialsites_rcahmw_bng"
     PAGE_SIZE = 5000
 
-    # Map TYPE/FORM values (lowercased) to our site_type
+    # Map site_type values (lowercased) to our site_type taxonomy
     TYPE_MAPPING = {
         "castle": "fortress",
         "fort": "fortress",
@@ -83,6 +84,7 @@ class CofleinWalesIngester(BaseIngester):
                 "request": "GetFeature",
                 "typeName": self.TYPE_NAME,
                 "outputFormat": "application/json",
+                "srsName": "EPSG:4326",
                 "count": self.PAGE_SIZE,
                 "startIndex": offset,
             }
@@ -136,9 +138,13 @@ class CofleinWalesIngester(BaseIngester):
         features = data.get("features", [])
         logger.info(f"Processing {len(features):,} features")
 
+        seen_nprns: set[str] = set()
         for feature in features:
             site = self._parse_feature(feature)
             if site:
+                if site.source_id in seen_nprns:
+                    continue
+                seen_nprns.add(site.source_id)
                 yield site
 
     def _parse_feature(self, feature: dict[str, Any]) -> ParsedSite | None:
@@ -151,8 +157,12 @@ class CofleinWalesIngester(BaseIngester):
         Returns:
             ParsedSite or None if invalid
         """
-        geometry = feature.get("geometry", {})
+        geometry = feature.get("geometry")
         properties = feature.get("properties", {})
+
+        # Some features have null geometry (no coordinates)
+        if not geometry:
+            return None
 
         # Extract coordinates
         coords = geometry.get("coordinates", [])
@@ -168,32 +178,32 @@ class CofleinWalesIngester(BaseIngester):
             return None
 
         # NPRN is the unique identifier
-        nprn = str(properties.get("NPRN", ""))
+        nprn = str(properties.get("nprn", ""))
         if not nprn:
             return None
 
-        name = properties.get("NAME", "")
+        name = properties.get("name", "")
         if not name:
             return None
 
-        # Map site type from TYPE and FORM fields
+        # Map site type from site_type field
         site_type = self._map_type(properties)
 
         # Period
-        period_raw = properties.get("PERIOD")
+        period_raw = properties.get("period")
         period_name = period_raw if period_raw else None
         period_start, period_end = self._parse_period(period_raw)
 
         # Build description
         desc_parts = []
-        if properties.get("TYPE"):
-            desc_parts.append(f"Type: {properties['TYPE']}")
-        if properties.get("FORM"):
-            desc_parts.append(f"Form: {properties['FORM']}")
+        if properties.get("site_type"):
+            desc_parts.append(f"Type: {properties['site_type']}")
+        if properties.get("evidence"):
+            desc_parts.append(f"Evidence: {properties['evidence']}")
         if period_raw:
             desc_parts.append(f"Period: {period_raw}")
-        if properties.get("COMMUNITY"):
-            desc_parts.append(f"Community: {properties['COMMUNITY']}")
+        if properties.get("community"):
+            desc_parts.append(f"Community: {properties['community']}")
 
         description = "; ".join(desc_parts) if desc_parts else None
 
@@ -215,19 +225,18 @@ class CofleinWalesIngester(BaseIngester):
 
     def _map_type(self, properties: dict[str, Any]) -> str:
         """
-        Map TYPE and FORM fields to our site_type taxonomy.
+        Map site_type field to our site_type taxonomy.
 
-        Checks TYPE first, then FORM. Case-insensitive matching.
+        Case-insensitive matching against semicolon-separated values.
         """
-        for field_name in ("TYPE", "FORM"):
-            value = properties.get(field_name, "")
-            if not value:
-                continue
+        value = properties.get("site_type", "")
+        if not value:
+            return "other"
 
-            value_lower = value.lower()
-            for key, mapped_type in self.TYPE_MAPPING.items():
-                if key in value_lower:
-                    return mapped_type
+        value_lower = value.lower()
+        for key, mapped_type in self.TYPE_MAPPING.items():
+            if key in value_lower:
+                return mapped_type
 
         return "other"
 
