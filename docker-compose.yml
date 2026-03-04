@@ -161,7 +161,6 @@ services:
     volumes:
       - ./data/raw:/app/data/raw
       - ./public/data:/app/public/data
-      - ./ancient-nerds-map/public/data:/app/ancient-nerds-map/public/data
     depends_on:
       db:
         condition: service_healthy

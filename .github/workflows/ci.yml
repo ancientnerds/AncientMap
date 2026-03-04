@@ -199,6 +199,14 @@ jobs:
               fi
             fi
 
+            # Ensure frontend data dir is a symlink to public/data (no duplication)
+            if [ ! -L ancient-nerds-map/public/data ]; then
+              echo "==> Setting up frontend data symlink..."
+              rm -rf ancient-nerds-map/public/data
+              mkdir -p ancient-nerds-map/public
+              ln -s ../../public/data ancient-nerds-map/public/data
+            fi
+
             # Rebuild frontend if files changed OR dist is missing key assets
             if echo "$CHANGED" | grep -q "^ancient-nerds-map/" || [ ! -f ancient-nerds-map/dist/an-logo.svg ]; then
               echo "==> Building frontend..."

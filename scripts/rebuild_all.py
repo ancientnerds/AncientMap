@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Full pipeline rebuild: Download → Ingest → Export → Copy to frontend.
+Full pipeline rebuild: Download → Ingest → Export.
 
 Single command to rebuild everything from scratch:
     python scripts/rebuild_all.py
@@ -10,6 +10,9 @@ Options:
     --skip-ingest     Skip DB ingestion (use existing DB data)
     --skip-export     Skip static export
     --force-download  Re-download even if data is fresh
+
+Note: The frontend reads from public/data/ directly (symlinked on VPS).
+      No copy step needed — the static exporter writes to public/data/.
 """
 
 import subprocess
@@ -19,15 +22,13 @@ from pathlib import Path
 
 # Ensure we're in the project root
 PROJECT_ROOT = Path(__file__).parent.parent
-FRONTEND_DATA = PROJECT_ROOT / "ancient-nerds-map" / "public" / "data"
-EXPORT_DATA = PROJECT_ROOT / "public" / "data"
 
 
 def run(cmd: list[str], description: str) -> bool:
     """Run a command, stream output, return success."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  {description}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
     start = time.time()
     result = subprocess.run(cmd, cwd=PROJECT_ROOT)
     elapsed = time.time() - start
@@ -39,32 +40,9 @@ def run(cmd: list[str], description: str) -> bool:
     return result.returncode == 0
 
 
-def copy_to_frontend():
-    """Copy exported data to frontend public dir."""
-    import shutil
-    if not EXPORT_DATA.exists():
-        print("  ERROR: No exported data found at public/data/")
-        return False
-
-    print(f"\n{'='*60}")
-    print(f"  Step 4: Copy to frontend")
-    print(f"{'='*60}\n")
-
-    # Copy each subdirectory and file
-    count = 0
-    for item in EXPORT_DATA.iterdir():
-        dest = FRONTEND_DATA / item.name
-        if item.is_dir():
-            shutil.copytree(item, dest, dirs_exist_ok=True)
-        else:
-            shutil.copy2(item, dest)
-        count += 1
-    print(f"  Copied {count} items to {FRONTEND_DATA}")
-    return True
-
-
 def main():
     import argparse
+
     parser = argparse.ArgumentParser(description="Full pipeline rebuild")
     parser.add_argument("--skip-download", action="store_true", help="Skip downloading raw data")
     parser.add_argument("--skip-ingest", action="store_true", help="Skip DB ingestion")
@@ -108,17 +86,11 @@ def main():
             print("\n  ERROR: Export failed.")
             return 1
 
-    # Step 4: Copy to frontend
-    if not args.skip_export:
-        steps_total += 1
-        if copy_to_frontend():
-            steps_ok += 1
-
     elapsed = time.time() - start
     mins, secs = divmod(int(elapsed), 60)
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  DONE: {steps_ok}/{steps_total} steps OK ({mins}m {secs}s)")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     return 0 if steps_ok == steps_total else 1
 
