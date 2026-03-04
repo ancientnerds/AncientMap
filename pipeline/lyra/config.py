@@ -161,12 +161,12 @@ def get_max_tokens() -> int:
     return _get_settings().max_tokens
 
 
-def _is_native_anthropic(settings: "LyraSettings") -> bool:
+def _is_native_anthropic(settings: LyraSettings) -> bool:
     """Check if we're using the native Anthropic API (vs a compatible provider)."""
     return not settings.anthropic_base_url or "anthropic.com" in settings.anthropic_base_url
 
 
-def get_anthropic_client(settings: "LyraSettings") -> anthropic.Anthropic | None:
+def get_anthropic_client(settings: LyraSettings) -> anthropic.Anthropic | None:
     """Return a module-level cached Anthropic client for connection reuse.
 
     Returns None when llm_backend is not anthropic-based (caller passes it but it's unused).
