@@ -315,14 +315,15 @@ async def lifespan(app: FastAPI):
             WHERE id = :id
               AND NOT jsonb_exists(COALESCE(raw_data, cast('{}' as jsonb)), 'description_citations')
         """)
-        for _sid, _dc in _citation_seed.items():
-            with engine.begin() as conn:
-                conn.execute(_text("SET statement_timeout = '120s'"))
-                conn.execute(_cite_sql, {"id": _sid, "dc": _json.dumps(_dc)})
+        # Run DDL migrations first (fast), then data fixes
         for _sql in _api_migrations:
             with engine.begin() as conn:
-                conn.execute(_text("SET statement_timeout = '120s'"))
+                conn.execute(_text("SET statement_timeout = '30s'"))
                 conn.execute(_text(_sql))
+        for _sid, _dc in _citation_seed.items():
+            with engine.begin() as conn:
+                conn.execute(_text("SET statement_timeout = '30s'"))
+                conn.execute(_cite_sql, {"id": _sid, "dc": _json.dumps(_dc)})
         logger.info(
             "[STARTUP] Database tables verified (includes discord_users, credit_grants, token_usage_logs)"
         )
@@ -458,51 +459,57 @@ async def lifespan(app: FastAPI):
 
     get_redis_client()  # Initialize Redis connection
 
-    # Pre-warm cache with default sites query (so first user gets instant response)
-    try:
-        cache_key = "sites:all:all:all:all:0:50000"
-        if not cache_get(cache_key):
-            logger.info("[STARTUP] Pre-warming sites cache...")
-            start = time.time()
+    # Pre-warm cache in background so the health endpoint responds immediately
+    import asyncio
 
-            from sqlalchemy import text
+    async def _warm_cache():
+        await asyncio.sleep(2)  # Let the server finish binding
+        try:
+            cache_key = "sites:all:all:all:all:0:50000"
+            if not cache_get(cache_key):
+                logger.info("[STARTUP] Pre-warming sites cache...")
+                start = time.time()
 
-            from pipeline.database import get_session
+                from sqlalchemy import text
 
-            with get_session() as session:
-                query = text("""
-                    SELECT id::text, name, lat, lon, source_id, site_type,
-                           period_start, thumbnail_url, country
-                    FROM unified_sites
-                    LIMIT 50000
-                """)
-                result = session.execute(query)
-                sites = []
-                for row in result:
-                    site = {
-                        "id": row.id,
-                        "n": row.name,
-                        "la": row.lat,
-                        "lo": row.lon,
-                        "s": row.source_id,
-                        "t": row.site_type,
-                        "p": row.period_start,
-                    }
-                    if row.thumbnail_url:
-                        site["i"] = row.thumbnail_url
-                    if row.country:
-                        site["c"] = row.country
-                    sites.append(site)
+                from pipeline.database import get_session
 
-                response = {"count": len(sites), "sites": sites}
-                cache_set(cache_key, response, ttl=1800)  # 30 minutes
-                logger.info(
-                    f"[STARTUP] Pre-warmed cache with {len(sites)} sites in {(time.time() - start) * 1000:.0f}ms"
-                )
-        else:
-            logger.info("[STARTUP] Sites cache already warm")
-    except Exception as e:
-        logger.warning(f"[STARTUP] Failed to pre-warm cache: {e}")
+                with get_session() as session:
+                    query = text("""
+                        SELECT id::text, name, lat, lon, source_id, site_type,
+                               period_start, thumbnail_url, country
+                        FROM unified_sites
+                        LIMIT 50000
+                    """)
+                    result = session.execute(query)
+                    sites = []
+                    for row in result:
+                        site = {
+                            "id": row.id,
+                            "n": row.name,
+                            "la": row.lat,
+                            "lo": row.lon,
+                            "s": row.source_id,
+                            "t": row.site_type,
+                            "p": row.period_start,
+                        }
+                        if row.thumbnail_url:
+                            site["i"] = row.thumbnail_url
+                        if row.country:
+                            site["c"] = row.country
+                        sites.append(site)
+
+                    response = {"count": len(sites), "sites": sites}
+                    cache_set(cache_key, response, ttl=1800)  # 30 minutes
+                    logger.info(
+                        f"[STARTUP] Pre-warmed cache with {len(sites)} sites in {(time.time() - start) * 1000:.0f}ms"
+                    )
+            else:
+                logger.info("[STARTUP] Sites cache already warm")
+        except Exception as e:
+            logger.warning(f"[STARTUP] Failed to pre-warm cache: {e}")
+
+    asyncio.create_task(_warm_cache())
 
     yield
     # Shutdown
