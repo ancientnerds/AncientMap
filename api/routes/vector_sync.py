@@ -138,7 +138,6 @@ async def vector_sync_status():
     try:
         meta_path = (
             Path(__file__).resolve().parents[2]
-            / "ancient-nerds-map"
             / "public"
             / "data"
             / "historical"
@@ -185,12 +184,17 @@ async def vector_sync_status():
         local_count = qdrant_counts.get(f"{name}_local", 0)
         entry: dict = {
             "pg_count": pg,
+            # Flat fields for frontend (voyage as primary)
+            "qdrant_count": voyage_count,
+            # Per-backend detail
             "voyage": {"qdrant_count": voyage_count},
             "local": {"qdrant_count": local_count},
         }
         if name in _no_delta:
             entry["note"] = "Qdrant count is chunks, PG count is source rows — delta not comparable"
+            entry["delta"] = None
         else:
+            entry["delta"] = pg - voyage_count
             entry["voyage"]["delta"] = pg - voyage_count
             entry["local"]["delta"] = pg - local_count
         collections_status[name] = entry

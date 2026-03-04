@@ -371,6 +371,9 @@ export default function LyraChatModal({
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const lastUserMsgRef = useRef<string>('')
   const [showScrollFab, setShowScrollFab] = useState(false)
+  const [lyraBackend, setLyraBackend] = useState<'minimax' | 'local'>(() =>
+    (localStorage.getItem('lyra_backend') as 'minimax' | 'local') || 'minimax'
+  )
   const userScrolledUpRef = useRef(false)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
 
@@ -726,6 +729,7 @@ export default function LyraChatModal({
       context_id: contextId,
       context_year: contextYear,
       history,
+      backend: lyraBackend,
     }
 
     const controller = new AbortController()
@@ -899,7 +903,7 @@ export default function LyraChatModal({
       setIsStreaming(false)
       abortRef.current = null
     }
-  }, [input, authToken, userCredits, isUnlimited, messages, contextType, contextId, contextYear, onHighlightSites, clearAuth, conversationId])
+  }, [input, authToken, userCredits, isUnlimited, messages, contextType, contextId, contextYear, onHighlightSites, clearAuth, conversationId, lyraBackend])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -1359,6 +1363,20 @@ export default function LyraChatModal({
 
             {/* Input area */}
             <div className="lyra-chat-input-area">
+              <div className="lyra-model-selector">
+                <button
+                  className={`lyra-model-btn ${lyraBackend === 'minimax' ? 'active' : ''}`}
+                  onClick={() => { setLyraBackend('minimax'); localStorage.setItem('lyra_backend', 'minimax') }}
+                  disabled={isStreaming}
+                  title="MiniMax M2.5 (cloud)"
+                >MiniMax</button>
+                <button
+                  className={`lyra-model-btn ${lyraBackend === 'local' ? 'active' : ''}`}
+                  onClick={() => { setLyraBackend('local'); localStorage.setItem('lyra_backend', 'local') }}
+                  disabled={isStreaming}
+                  title="Qwen3 8B (self-hosted)"
+                >Qwen</button>
+              </div>
               <div className="lyra-chat-input-row">
                 <textarea
                   ref={inputRef}

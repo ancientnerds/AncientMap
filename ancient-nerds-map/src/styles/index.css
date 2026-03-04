@@ -16024,6 +16024,31 @@ body.news-feed-open .empire-borders-window {
   background: var(--crt-700);
 }
 
+/* Model selector toggle */
+.lyra-model-selector {
+  display: flex;
+  gap: 2px;
+  padding: 6px 12px 0;
+}
+.lyra-model-btn {
+  font-size: 10px;
+  font-family: var(--font-body);
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border: 1px solid var(--border-crt);
+  background: transparent;
+  color: var(--crt-600);
+  cursor: pointer;
+  border-radius: 3px;
+}
+.lyra-model-btn:hover:not(:disabled) { color: var(--accent-primary); }
+.lyra-model-btn.active {
+  background: var(--crt-900);
+  color: var(--accent-primary);
+  border-color: var(--crt-700);
+}
+.lyra-model-btn:disabled { opacity: 0.4; cursor: default; }
+
 /* Stop button */
 .lyra-chat-stop-btn {
   color: var(--status-error-bright);
