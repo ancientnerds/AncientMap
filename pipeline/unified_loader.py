@@ -741,6 +741,12 @@ class UnifiedLoader:
             return 0
 
         # Delete existing records for this source
+        # Disable statement timeout for large deletes and clear parent_site_id FKs first
+        session.execute(text("SET LOCAL statement_timeout = 0"))
+        session.execute(
+            text("UPDATE unified_sites SET parent_site_id = NULL WHERE source_id = :sid AND parent_site_id IS NOT NULL"),
+            {"sid": source_id}
+        )
         session.execute(
             text("DELETE FROM unified_sites WHERE source_id = :sid"), {"sid": source_id}
         )
