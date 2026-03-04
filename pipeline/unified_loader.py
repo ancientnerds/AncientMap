@@ -618,6 +618,23 @@ class UnifiedLoader:
         sources_to_load = [source_filter] if source_filter else list(SOURCE_CONFIG.keys())
 
         with get_session() as session:
+            # Ensure news_items FK is CASCADE (required for source reloads)
+            session.execute(text("""
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1 FROM pg_constraint
+                        WHERE conname = 'news_items_site_id_fkey'
+                        AND confdeltype != 'c'
+                    ) THEN
+                        ALTER TABLE news_items DROP CONSTRAINT news_items_site_id_fkey;
+                        ALTER TABLE news_items ADD CONSTRAINT news_items_site_id_fkey
+                            FOREIGN KEY (site_id) REFERENCES unified_sites(id) ON DELETE CASCADE;
+                    END IF;
+                END $$;
+            """))
+            session.commit()
+
             # Initialize source metadata
             self._init_source_meta(session)
 
