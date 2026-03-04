@@ -1,7 +1,7 @@
 """
 Lyra Embeddings & Reranker Factory.
 
-Both backends are always available simultaneously (per-request routing):
+Both backends are always available simultaneously (per-request routing via backend param):
 
 1. "voyage" (default) — Voyage AI paid API:
    - Indexing: voyage-4-large (best quality, 1024-dim) with input_type="document"
