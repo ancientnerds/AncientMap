@@ -137,11 +137,7 @@ async def vector_sync_status():
     boundary_count = 0
     try:
         meta_path = (
-            Path(__file__).resolve().parents[2]
-            / "public"
-            / "data"
-            / "historical"
-            / "metadata.json"
+            Path(__file__).resolve().parents[2] / "public" / "data" / "historical" / "metadata.json"
         )
         meta = json.loads(meta_path.read_text())
         empire_count = meta.get("totalEmpires", 0)
