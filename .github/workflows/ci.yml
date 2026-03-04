@@ -206,12 +206,14 @@ jobs:
             # Rebuild frontend if files changed OR dist is missing key assets
             if echo "$CHANGED" | grep -q "^ancient-nerds-map/" || [ ! -f ancient-nerds-map/dist/an-logo.svg ]; then
               echo "==> Building frontend..."
-              rm -rf ancient-nerds-map/dist ancient-nerds-map/dist-bak-* ancient-nerds-map/dist-old ancient-nerds-map/node_modules-bak-* 2>/dev/null || true
-              # node_modules may have root-owned files from a previous build; rename if rm fails
-              rm -rf ancient-nerds-map/node_modules 2>/dev/null || {
-                echo "    node_modules has stale permissions, moving aside..."
-                mv ancient-nerds-map/node_modules "ancient-nerds-map/node_modules-bak-$(date +%s)" 2>/dev/null || true
-              }
+              # dist/ and node_modules may have root-owned files; rename if rm fails
+              for stale_dir in dist node_modules; do
+                rm -rf "ancient-nerds-map/$stale_dir" 2>/dev/null || {
+                  echo "    $stale_dir has stale permissions, moving aside..."
+                  mv "ancient-nerds-map/$stale_dir" "ancient-nerds-map/${stale_dir}-bak-$(date +%s)" 2>/dev/null || true
+                }
+              done
+              rm -rf ancient-nerds-map/dist-bak-* ancient-nerds-map/node_modules-bak-* 2>/dev/null || true
               (cd ancient-nerds-map && npm ci && npm run build)
               if [ ! -f ancient-nerds-map/dist/index.html ] || [ ! -f ancient-nerds-map/dist/an-logo.svg ]; then
                 echo "ERROR: Frontend build failed — dist/index.html or dist/an-logo.svg missing!"
