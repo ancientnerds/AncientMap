@@ -6,6 +6,13 @@ the tweet the LLM wrote. Items scored 1 (not archaeology) have their
 post_text set to NULL, removing them from the feed.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import anthropic
+
 import json
 import logging
 from pathlib import Path

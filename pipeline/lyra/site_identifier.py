@@ -6,6 +6,13 @@ enriches with Wikipedia data, scores completeness, and promotes
 high-scoring sites to unified_sites.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import anthropic
+
 import hashlib
 import json
 import logging

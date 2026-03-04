@@ -1,5 +1,12 @@
 """Fact verification for generated posts using an LLM."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import anthropic
+
 import json
 import logging
 from datetime import UTC, datetime

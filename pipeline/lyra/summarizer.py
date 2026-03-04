@@ -1,5 +1,12 @@
 """LLM summarization of video transcripts -> news items."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import anthropic
+
 import json
 import logging
 from datetime import UTC, datetime, timedelta
@@ -8,7 +15,13 @@ from pathlib import Path
 from sqlalchemy import func
 
 from pipeline.database import NewsItem, NewsVideo, get_session
-from pipeline.lyra.config import LyraAPIError, LyraSettings, call_api, get_anthropic_client, parse_prefilled_json
+from pipeline.lyra.config import (
+    LyraAPIError,
+    LyraSettings,
+    call_api,
+    get_anthropic_client,
+    parse_prefilled_json,
+)
 from pipeline.lyra.transcript_fetcher import extract_transcript_segment, parse_timestamp_to_seconds
 
 logger = logging.getLogger(__name__)

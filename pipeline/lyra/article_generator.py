@@ -1,5 +1,12 @@
 """Weekly article generation from NewsItem topics — magazine-quality digest."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import anthropic
+
 import json
 import logging
 from datetime import UTC, datetime, timedelta
@@ -12,7 +19,13 @@ from pipeline.database import (
     NewsVideo,
     get_session,
 )
-from pipeline.lyra.config import LyraAPIError, LyraSettings, call_api, get_anthropic_client, parse_prefilled_json
+from pipeline.lyra.config import (
+    LyraAPIError,
+    LyraSettings,
+    call_api,
+    get_anthropic_client,
+    parse_prefilled_json,
+)
 
 logger = logging.getLogger(__name__)
 

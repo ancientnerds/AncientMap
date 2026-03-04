@@ -7,6 +7,13 @@ Multi-step research protocol for sites not found via DB fuzzy search:
 4. MiniMax gap-fill (fill missing fields from AI knowledge)
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import anthropic
+
 import json
 import logging
 import re
