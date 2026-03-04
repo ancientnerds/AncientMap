@@ -15,10 +15,12 @@ COPY requirements-pipeline.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements-pipeline.txt
 
-# Copy application code
+# Copy code only — data dirs are mounted as volumes
 COPY pipeline/ ./pipeline/
 COPY scripts/ ./scripts/
-COPY public/ ./public/
+
+# Create empty data dirs (mount points)
+RUN mkdir -p /app/data/raw /app/public/data /app/ancient-nerds-map/public/data
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
