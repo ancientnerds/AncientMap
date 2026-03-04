@@ -374,6 +374,11 @@ export default function LyraChatModal({
   const [lyraBackend, setLyraBackend] = useState<'minimax' | 'local'>(() =>
     (localStorage.getItem('lyra_backend') as 'minimax' | 'local') || 'minimax'
   )
+  // Queue state for local backend
+  const [queuePosition, setQueuePosition] = useState<number | null>(null)
+  const [queueLength, setQueueLength] = useState(0)
+  const [burstRemaining, setBurstRemaining] = useState<number | null>(null)
+  const [estimatedWait, setEstimatedWait] = useState(0)
   const userScrolledUpRef = useRef(false)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
 
@@ -551,6 +556,17 @@ export default function LyraChatModal({
       .catch(() => {})
   }, [authToken])
 
+  // Fetch queue/burst status for local backend
+  useEffect(() => {
+    if (!authToken || lyraBackend !== 'local') { setBurstRemaining(null); return }
+    fetch(`${config.api.baseUrl}/lyra/queue-status`, {
+      headers: { 'Authorization': `Bearer ${authToken}` },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.burst_remaining !== undefined) setBurstRemaining(data.burst_remaining) })
+      .catch(() => {})
+  }, [authToken, lyraBackend])
+
   // Debounced site search
   useEffect(() => {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
@@ -676,8 +692,8 @@ export default function LyraChatModal({
     if (!messageText) return
     if (!authToken) return
 
-    // Check credits (unlimited users bypass)
-    if (!isUnlimited && userCredits !== null && userCredits <= 0) {
+    // Check credits (unlimited users bypass; local backend is free)
+    if (lyraBackend !== 'local' && !isUnlimited && userCredits !== null && userCredits <= 0) {
       setError(<>No credits remaining. Visit your <a href="/account.html" style={{ color: '#ff6b6b', textDecoration: 'underline' }}>Account page</a> for details.</>)
       return
     }
@@ -753,6 +769,13 @@ export default function LyraChatModal({
           throw new Error('Session expired. Please re-authenticate.')
         }
         const err = await response.json().catch(() => ({ detail: 'Request failed' }))
+        // Queue-specific errors: update burst counter
+        if (response.status === 429 && lyraBackend === 'local') {
+          setBurstRemaining(0)
+          throw new Error(err.detail || 'Burst limit reached. Please wait.')
+        }
+        if (response.status === 409) throw new Error(err.detail || 'You already have a request queued.')
+        if (response.status === 503) throw new Error(err.detail || 'Queue is full. Try again later.')
         throw new Error(err.detail || `HTTP ${response.status}`)
       }
 
@@ -782,7 +805,24 @@ export default function LyraChatModal({
               // Use data.type from JSON payload (always present, immune to chunk splitting)
               const type = data.type || eventType || ''
 
-              if (type === 'thinking' && data.content) {
+              if (type === 'queue_info') {
+                setQueuePosition(data.position ?? 0)
+                setQueueLength(data.queue_length ?? 0)
+                if (data.burst_remaining !== undefined) setBurstRemaining(data.burst_remaining)
+                continue
+              } else if (type === 'queue_position') {
+                if (data.position === -1) {
+                  // GPU acquired — transition to normal streaming
+                  setQueuePosition(null)
+                  setQueueLength(0)
+                  setEstimatedWait(0)
+                } else {
+                  setQueuePosition(data.position)
+                  setQueueLength(data.queue_length ?? 0)
+                  setEstimatedWait(data.estimated_wait_seconds ?? 0)
+                }
+                continue
+              } else if (type === 'thinking' && data.content) {
                 setMessages(prev => prev.map(m =>
                   m.id === assistantId
                     ? { ...m, thinking: (m.thinking || '') + data.content }
@@ -908,6 +948,18 @@ export default function LyraChatModal({
     } finally {
       setIsStreaming(false)
       abortRef.current = null
+      setQueuePosition(null)
+      setQueueLength(0)
+      setEstimatedWait(0)
+      // Refresh burst counter after local request completes
+      if (lyraBackend === 'local' && authToken) {
+        fetch(`${config.api.baseUrl}/lyra/queue-status`, {
+          headers: { 'Authorization': `Bearer ${authToken}` },
+        })
+          .then(r => r.ok ? r.json() : null)
+          .then(data => { if (data?.burst_remaining !== undefined) setBurstRemaining(data.burst_remaining) })
+          .catch(() => {})
+      }
     }
   }, [input, authToken, userCredits, isUnlimited, messages, contextType, contextId, contextYear, onHighlightSites, clearAuth, conversationId, lyraBackend])
 
@@ -1155,8 +1207,24 @@ export default function LyraChatModal({
                             </div>
                           </div>
                         )}
+                        {/* Queue position — waiting in GPU queue */}
+                        {msg.role === 'assistant' && msg.isStreaming && queuePosition !== null && !msg.content && !msg.thinking && (
+                          <div className="lyra-chat-msg lyra-chat-msg-assistant">
+                            <img src="/lyra.gif" alt="Lyra" className="lyra-chat-msg-avatar" />
+                            <div className="lyra-queue-status">
+                              {queuePosition === 0 ? (
+                                <p className="lyra-queue-next">You're next! Starting inference...</p>
+                              ) : (
+                                <p>Position in queue: <strong>#{queuePosition}</strong> of {queueLength}</p>
+                              )}
+                              {estimatedWait > 0 && (
+                                <p className="lyra-queue-eta">~{Math.ceil(estimatedWait / 60)} min wait</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
                         {/* Typing dots — waiting for first token */}
-                        {msg.role === 'assistant' && msg.isStreaming && !msg.content && !msg.thinking && (
+                        {msg.role === 'assistant' && msg.isStreaming && queuePosition === null && !msg.content && !msg.thinking && (
                           <div className="lyra-chat-msg lyra-chat-msg-assistant">
                             <img src="/lyra.gif" alt="Lyra" className="lyra-chat-msg-avatar" />
                             <div className="lyra-chat-typing-dots" role="status" aria-label="Lyra is typing">
@@ -1392,8 +1460,8 @@ export default function LyraChatModal({
                   className={`lyra-model-btn ${lyraBackend === 'local' ? 'active' : ''}`}
                   onClick={() => { setLyraBackend('local'); localStorage.setItem('lyra_backend', 'local') }}
                   disabled={isStreaming}
-                  title="Qwen3 8B (self-hosted)"
-                >Qwen</button>
+                  title="Qwen3 8B (self-hosted, free)"
+                >Qwen{lyraBackend === 'local' && burstRemaining !== null ? ` (${burstRemaining} left)` : ''}</button>
               </div>
               <div className="lyra-chat-input-row">
                 <textarea

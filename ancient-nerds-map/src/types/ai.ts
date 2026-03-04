@@ -82,7 +82,7 @@ export interface LyraChatRequest {
 /**
  * Server-Sent Event types for streaming.
  */
-export type SSEEventType = 'token' | 'status' | 'sites' | 'news' | 'done' | 'error' | 'achievements' | 'pipeline'
+export type SSEEventType = 'token' | 'status' | 'sites' | 'news' | 'done' | 'error' | 'achievements' | 'pipeline' | 'queue_info' | 'queue_position'
 
 export interface SSETokenEvent {
   type: 'token'
@@ -135,7 +135,22 @@ export interface SSEAchievementsEvent {
   }>
 }
 
-export type SSEEvent = SSETokenEvent | SSEStatusEvent | SSESitesEvent | SSENewsEvent | SSEDoneEvent | SSEErrorEvent | SSEAchievementsEvent
+export interface SSEQueueInfoEvent {
+  type: 'queue_info'
+  position: number
+  queue_length: number
+  burst_remaining: number
+  burst_window_minutes: number
+}
+
+export interface SSEQueuePositionEvent {
+  type: 'queue_position'
+  position: number       // -1 means "processing now"
+  queue_length: number
+  estimated_wait_seconds: number
+}
+
+export type SSEEvent = SSETokenEvent | SSEStatusEvent | SSESitesEvent | SSENewsEvent | SSEDoneEvent | SSEErrorEvent | SSEAchievementsEvent | SSEQueueInfoEvent | SSEQueuePositionEvent
 
 /**
  * Summary of a saved conversation for the history panel.
