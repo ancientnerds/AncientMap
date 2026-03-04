@@ -55,6 +55,7 @@ export interface LyraMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
+  thinking?: string
   statusLines?: string[]
   sites?: SiteHighlight[]
   news?: NewsHighlight[]

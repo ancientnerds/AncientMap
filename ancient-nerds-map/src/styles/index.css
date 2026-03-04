@@ -15973,6 +15973,37 @@ body.news-feed-open .empire-borders-window {
   background: linear-gradient(90deg, transparent, var(--accent-glow-03), transparent);
 }
 
+/* Model thinking/reasoning block */
+.lyra-thinking-block {
+  max-width: 85%;
+  background: var(--surface-crt);
+  border: 1px solid var(--border-crt);
+  border-left: 3px solid var(--crt-700);
+  border-radius: 4px;
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  color: var(--crt-500);
+  margin-bottom: 4px;
+}
+.lyra-thinking-summary {
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 0.65rem;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--crt-600);
+  user-select: none;
+}
+.lyra-thinking-summary:hover { color: var(--accent-primary); }
+.lyra-thinking-content {
+  padding: 4px 10px 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
 /* Typing dots — green */
 .lyra-chat-typing-dots {
   background: var(--surface-crt);

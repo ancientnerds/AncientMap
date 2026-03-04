@@ -383,6 +383,7 @@ def _get_llm(backend: str = "minimax"):
             api_key=OLLAMA_LLM_API_KEY or "unused",
             streaming=True,
             max_tokens=4096,
+            timeout=300,
         )
         logger.info(f"Initialized LLM: local/{OLLAMA_LLM_MODEL} at {OLLAMA_LLM_BASE_URL}")
     else:
@@ -744,14 +745,29 @@ async def run_agent_stream(
                     um = chunk.usage_metadata
                     total_input_tokens += um.get("input_tokens", 0) or 0
                     total_output_tokens += um.get("output_tokens", 0) or 0
+
+                # Thinking/reasoning content (Qwen3 via OpenAI: reasoning_content,
+                # MiniMax/Anthropic: thinking blocks in content list)
+                if hasattr(chunk, "additional_kwargs") and chunk.additional_kwargs:
+                    rc = chunk.additional_kwargs.get("reasoning_content", "")
+                    if rc:
+                        yield {"type": "thinking", "content": rc}
+
                 if chunk.content:
                     text_content = chunk.content if isinstance(chunk.content, str) else ""
+                    thinking_content = ""
                     if isinstance(chunk.content, list):
                         for block in chunk.content:
-                            if isinstance(block, dict) and block.get("type") == "text":
+                            if isinstance(block, dict) and block.get("type") == "thinking":
+                                thinking_content += block.get("thinking", "") or block.get(
+                                    "text", ""
+                                )
+                            elif isinstance(block, dict) and block.get("type") == "text":
                                 text_content += block.get("text", "")
                             elif isinstance(block, str):
                                 text_content += block
+                    if thinking_content:
+                        yield {"type": "thinking", "content": thinking_content}
                     if text_content:
                         collected_content += text_content
                         yield {"type": "token", "content": text_content}

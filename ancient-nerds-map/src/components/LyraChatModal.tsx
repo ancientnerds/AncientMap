@@ -782,7 +782,13 @@ export default function LyraChatModal({
               // Use data.type from JSON payload (always present, immune to chunk splitting)
               const type = data.type || eventType || ''
 
-              if (type === 'token' && data.content) {
+              if (type === 'thinking' && data.content) {
+                setMessages(prev => prev.map(m =>
+                  m.id === assistantId
+                    ? { ...m, thinking: (m.thinking || '') + data.content }
+                    : m
+                ))
+              } else if (type === 'token' && data.content) {
                 setMessages(prev => prev.map(m =>
                   m.id === assistantId
                     ? { ...m, content: m.content + data.content }
@@ -1150,12 +1156,24 @@ export default function LyraChatModal({
                           </div>
                         )}
                         {/* Typing dots — waiting for first token */}
-                        {msg.role === 'assistant' && msg.isStreaming && !msg.content && (
+                        {msg.role === 'assistant' && msg.isStreaming && !msg.content && !msg.thinking && (
                           <div className="lyra-chat-msg lyra-chat-msg-assistant">
                             <img src="/lyra.gif" alt="Lyra" className="lyra-chat-msg-avatar" />
                             <div className="lyra-chat-typing-dots" role="status" aria-label="Lyra is typing">
                               <span /><span /><span />
                             </div>
+                          </div>
+                        )}
+                        {/* Model thinking/reasoning (collapsible) */}
+                        {msg.role === 'assistant' && msg.thinking && (
+                          <div className="lyra-chat-msg lyra-chat-msg-assistant">
+                            <img src="/lyra.gif" alt="Lyra" className="lyra-chat-msg-avatar" />
+                            <details className="lyra-thinking-block" open={msg.isStreaming && !msg.content}>
+                              <summary className="lyra-thinking-summary">
+                                {msg.isStreaming && !msg.content ? 'Thinking...' : 'Thought process'}
+                              </summary>
+                              <div className="lyra-thinking-content">{msg.thinking}</div>
+                            </details>
                           </div>
                         )}
                         {/* Main message bubble */}
