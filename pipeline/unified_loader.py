@@ -618,20 +618,36 @@ class UnifiedLoader:
         sources_to_load = [source_filter] if source_filter else list(SOURCE_CONFIG.keys())
 
         with get_session() as session:
-            # Ensure news_items FK is CASCADE (required for source reloads)
+            # Ensure ALL foreign keys pointing at unified_sites use CASCADE
+            # (required for source reloads that DELETE + re-INSERT)
             session.execute(
                 text("""
                 DO $$
+                DECLARE
+                    r RECORD;
+                    col_names TEXT;
                 BEGIN
-                    IF EXISTS (
-                        SELECT 1 FROM pg_constraint
-                        WHERE conname = 'news_items_site_id_fkey'
-                        AND confdeltype != 'c'
-                    ) THEN
-                        ALTER TABLE news_items DROP CONSTRAINT news_items_site_id_fkey;
-                        ALTER TABLE news_items ADD CONSTRAINT news_items_site_id_fkey
-                            FOREIGN KEY (site_id) REFERENCES unified_sites(id) ON DELETE CASCADE;
-                    END IF;
+                    FOR r IN
+                        SELECT con.conname, con.conrelid::regclass AS table_name
+                        FROM pg_constraint con
+                        WHERE con.contype = 'f'
+                          AND con.confrelid = 'unified_sites'::regclass
+                          AND con.confdeltype != 'c'
+                    LOOP
+                        SELECT string_agg(a.attname, ', ' ORDER BY u.ord)
+                        INTO col_names
+                        FROM pg_constraint c2
+                        JOIN LATERAL unnest(c2.conkey) WITH ORDINALITY AS u(attnum, ord) ON true
+                        JOIN pg_attribute a ON a.attrelid = c2.conrelid AND a.attnum = u.attnum
+                        WHERE c2.conname = r.conname;
+
+                        EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', r.table_name, r.conname);
+                        EXECUTE format(
+                            'ALTER TABLE %s ADD CONSTRAINT %I FOREIGN KEY (%s) REFERENCES unified_sites(id) ON DELETE CASCADE',
+                            r.table_name, r.conname, col_names
+                        );
+                        RAISE NOTICE 'Fixed FK % on % to CASCADE', r.conname, r.table_name;
+                    END LOOP;
                 END $$;
             """)
             )
