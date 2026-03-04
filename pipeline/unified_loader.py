@@ -600,6 +600,7 @@ class UnifiedLoader:
         self.raw_dir = Path("data/raw")
         self.stats = {}
         self.skip_backup = skip_backup
+        self._truncated = False
 
     def load_all(
         self, source_filter: str | None = None, batch_size: int = 5000, skip_loaded: bool = False
@@ -674,6 +675,14 @@ class UnifiedLoader:
 
             # Initialize source metadata
             self._init_source_meta(session)
+
+            # When loading ALL sources: TRUNCATE upfront (instant vs slow per-source DELETE)
+            if not source_filter and not skip_loaded:
+                logger.info("TRUNCATE unified_sites (full reload)...")
+                session.execute(text("TRUNCATE unified_sites CASCADE"))
+                session.commit()
+                self._truncated = True
+                logger.info("TRUNCATE done")
 
             # Get existing record counts if skip_loaded is enabled
             existing_counts = {}
@@ -794,19 +803,21 @@ class UnifiedLoader:
             logger.warning(f"No parser for format: {format_type}")
             return 0
 
-        # Delete existing records for this source
-        logger.info(f"Deleting existing {source_id} records...")
-        session.execute(text("SET LOCAL statement_timeout = 0"))
-        session.execute(
-            text(
-                "UPDATE unified_sites SET parent_site_id = NULL WHERE source_id = :sid AND parent_site_id IS NOT NULL"
-            ),
-            {"sid": source_id},
-        )
-        session.execute(
-            text("DELETE FROM unified_sites WHERE source_id = :sid"), {"sid": source_id}
-        )
-        logger.info(f"Deleted existing {source_id} records")
+        # Delete existing records for this source (skipped if full-reload TRUNCATE already ran)
+        if not self._truncated:
+            logger.info(f"Deleting existing {source_id} records...")
+            session.execute(text("SET LOCAL statement_timeout = 0"))
+            session.execute(
+                text(
+                    "UPDATE unified_sites SET parent_site_id = NULL WHERE source_id = :sid AND parent_site_id IS NOT NULL"
+                ),
+                {"sid": source_id},
+            )
+            session.execute(
+                text("DELETE FROM unified_sites WHERE source_id = :sid"),
+                {"sid": source_id},
+            )
+            logger.info(f"Deleted existing {source_id} records")
 
         # Load records in batches
         batch = []
