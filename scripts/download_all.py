@@ -246,7 +246,7 @@ def print_final_status():
 def get_default_parallel():
     """Get default parallel workers (cpu_count - 2, minimum 1)."""
     cpu_count = os.cpu_count() or 1
-    return max(4, cpu_count - 2)
+    return max(8, cpu_count - 2)
 
 
 def main():
