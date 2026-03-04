@@ -199,6 +199,20 @@ jobs:
               fi
             fi
 
+            # Copy static assets (layers, historical, basemaps, etc.) to public/data/
+            # where nginx serves them. These are git-tracked in ancient-nerds-map/public/data/
+            echo "==> Syncing static data assets..."
+            for dir in layers historical basemaps sea-levels; do
+              if [ -d "ancient-nerds-map/public/data/$dir" ]; then
+                cp -rn "ancient-nerds-map/public/data/$dir" "public/data/" 2>/dev/null || true
+              fi
+            done
+            for f in labels.json card_descriptions.json; do
+              if [ -f "ancient-nerds-map/public/data/$f" ]; then
+                cp -n "ancient-nerds-map/public/data/$f" "public/data/" 2>/dev/null || true
+              fi
+            done
+
             # Remove data from frontend public dir — nginx serves /data/ directly
             # (prevents Vite from copying 1.3GB+ into dist/)
             rm -rf ancient-nerds-map/public/data 2>/dev/null || true
