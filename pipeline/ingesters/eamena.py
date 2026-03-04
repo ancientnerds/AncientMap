@@ -127,8 +127,7 @@ class EAMENAIngester(BaseIngester):
             )
             data = response.json()
         except Exception as e:
-            logger.error(f"Error fetching resources list: {e}")
-            return dest_path
+            raise RuntimeError(f"EAMENA API unreachable: {e}") from e
 
         resource_uris = data.get("ldp:contains", [])
         logger.info(f"Found {len(resource_uris):,} resource URIs")

@@ -14,35 +14,35 @@ from pathlib import Path
 
 from loguru import logger
 
-from pipeline.ingesters.base import BaseIngester, ParsedSite
+from pipeline.ingesters.base import BaseIngester, ParsedSite, atomic_write_json
+from pipeline.utils.http import fetch_with_retry
 
 
 class EarthImpactsIngester(BaseIngester):
     """
     Ingester for Earth Impact Craters database.
 
-    Uses pre-downloaded GeoJSON from PASSC Earth Impact Database.
+    Downloads GeoJSON from community mirror of PASSC Earth Impact Database.
+    Original source: http://www.passc.net/EarthImpactDatabase/
     """
 
     source_id = "earth_impacts"
     source_name = "Earth Impact Craters"
 
+    # Community-maintained GeoJSON mirror of PASSC data
+    GEOJSON_URL = "https://raw.githubusercontent.com/cjwinchester/earth-impact-data/main/earth-impact-craters.geojson"
+
     def fetch(self) -> Path:
-        """
-        Return path to existing GeoJSON file.
-        Data is pre-downloaded from PASSC.
-        """
-        # Look for existing geojson
-        geojson_path = Path("data/raw/earth_impacts/earth_impacts.geojson")
+        """Download Earth Impact Craters GeoJSON."""
+        dest_path = self.raw_data_dir / "earth_impacts.geojson"
 
-        if not geojson_path.exists():
-            raise FileNotFoundError(
-                f"Earth impacts GeoJSON not found at {geojson_path}. "
-                "Please download from http://www.passc.net/EarthImpactDatabase/"
-            )
+        logger.info("Downloading Earth Impact Craters GeoJSON...")
+        response = fetch_with_retry(self.GEOJSON_URL, timeout=30)
+        data = response.json()
 
-        logger.info(f"Using existing earth impacts data: {geojson_path}")
-        return geojson_path
+        atomic_write_json(dest_path, data)
+        logger.info(f"Saved {len(data.get('features', []))} impact craters to {dest_path}")
+        return dest_path
 
     def parse(self, raw_data_path: Path) -> Iterator[ParsedSite]:
         """Parse Earth Impact Craters GeoJSON into ParsedSite objects."""
