@@ -199,13 +199,9 @@ jobs:
               fi
             fi
 
-            # Ensure frontend data dir is a symlink to public/data (no duplication)
-            if [ ! -L ancient-nerds-map/public/data ]; then
-              echo "==> Setting up frontend data symlink..."
-              rm -rf ancient-nerds-map/public/data
-              mkdir -p ancient-nerds-map/public
-              ln -s ../../public/data ancient-nerds-map/public/data
-            fi
+            # Remove data from frontend public dir — nginx serves /data/ directly
+            # (prevents Vite from copying 1.3GB+ into dist/)
+            rm -rf ancient-nerds-map/public/data 2>/dev/null || true
 
             # Rebuild frontend if files changed OR dist is missing key assets
             if echo "$CHANGED" | grep -q "^ancient-nerds-map/" || [ ! -f ancient-nerds-map/dist/an-logo.svg ]; then

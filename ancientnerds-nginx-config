@@ -68,6 +68,14 @@ server {
         proxy_buffers 4 32k;
     }
 
+    # Static data files (sites, sources, etc.) — served directly from public/data/
+    # NOT inside dist/ to avoid doubling 1.3GB+ of exported JSON
+    location /data/ {
+        alias /var/www/ancientnerds/public/data/;
+        add_header Cache-Control "public, max-age=3600";
+        gzip_static on;
+    }
+
     # Wiki images — served by API container (files are inside Docker)
     location /data/images/wiki/ {
         proxy_pass http://127.0.0.1:8000/data/images/wiki/;
