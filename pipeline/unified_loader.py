@@ -618,8 +618,26 @@ class UnifiedLoader:
         sources_to_load = [source_filter] if source_filter else list(SOURCE_CONFIG.keys())
 
         with get_session() as session:
-            # Ensure ALL foreign keys pointing at unified_sites use CASCADE
+            # Step 1: Kill any stuck queries on unified_sites from previous runs
+            logger.info("Terminating any stuck queries on unified_sites...")
+            result = session.execute(
+                text("""
+                SELECT pg_terminate_backend(pid)
+                FROM pg_stat_activity
+                WHERE pid != pg_backend_pid()
+                  AND state != 'idle'
+                  AND query ~* 'unified_sites'
+                  AND query_start < now() - interval '10 seconds'
+            """)
+            )
+            killed = result.rowcount
+            if killed:
+                logger.info(f"Terminated {killed} stuck queries")
+            session.commit()
+
+            # Step 2: Ensure ALL foreign keys pointing at unified_sites use CASCADE
             # (required for source reloads that DELETE + re-INSERT)
+            logger.info("Checking FK constraints on unified_sites...")
             session.execute(
                 text("""
                 DO $$
@@ -652,6 +670,7 @@ class UnifiedLoader:
             """)
             )
             session.commit()
+            logger.info("FK constraints OK")
 
             # Initialize source metadata
             self._init_source_meta(session)
@@ -776,7 +795,7 @@ class UnifiedLoader:
             return 0
 
         # Delete existing records for this source
-        # Disable statement timeout for large deletes and clear parent_site_id FKs first
+        logger.info(f"Deleting existing {source_id} records...")
         session.execute(text("SET LOCAL statement_timeout = 0"))
         session.execute(
             text(
@@ -787,6 +806,7 @@ class UnifiedLoader:
         session.execute(
             text("DELETE FROM unified_sites WHERE source_id = :sid"), {"sid": source_id}
         )
+        logger.info(f"Deleted existing {source_id} records")
 
         # Load records in batches
         batch = []
