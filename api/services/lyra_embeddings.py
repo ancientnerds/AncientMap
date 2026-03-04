@@ -150,7 +150,9 @@ class LocalReranker:
 _embeddings: dict[tuple[str, str], VoyageEmbeddings | OllamaEmbeddings] = {}
 
 
-def get_embeddings(usage: str = "query", backend: str | None = None) -> VoyageEmbeddings | OllamaEmbeddings:
+def get_embeddings(
+    usage: str = "query", backend: str | None = None
+) -> VoyageEmbeddings | OllamaEmbeddings:
     """Get embedding model for the given backend.
 
     Args:
@@ -170,7 +172,9 @@ def get_embeddings(usage: str = "query", backend: str | None = None) -> VoyageEm
         model = EMBED_MODEL_INDEX if usage == "index" else EMBED_MODEL_QUERY
         input_type = "document" if usage == "index" else "query"
         instance = VoyageEmbeddings(model=model, input_type=input_type)
-        logger.info(f"Initialized VoyageAI embeddings: {model} (usage={usage}, input_type={input_type})")
+        logger.info(
+            f"Initialized VoyageAI embeddings: {model} (usage={usage}, input_type={input_type})"
+        )
 
     _embeddings[key] = instance
     return instance

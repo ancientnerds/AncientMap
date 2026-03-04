@@ -40,6 +40,7 @@ class NormalizedResponse:
     model: str = ""
     usage: dict = field(default_factory=dict)
 
+
 VALID_CATEGORIES = {
     "excavation",
     "artifact",
@@ -272,7 +273,9 @@ def _call_openai_api(
         if messages and messages[0]["role"] == "system":
             messages[0]["content"] += f"\n\nStart your response with: {prefill}"
         else:
-            messages.insert(0, {"role": "system", "content": f"Start your response with: {prefill}"})
+            messages.insert(
+                0, {"role": "system", "content": f"Start your response with: {prefill}"}
+            )
 
     # Override model and cap max_tokens
     model = settings.ollama_model
@@ -307,7 +310,9 @@ def _normalize_openai_response(response) -> NormalizedResponse:
         model=response.model or "",
         usage={
             "input_tokens": getattr(response.usage, "prompt_tokens", 0) if response.usage else 0,
-            "output_tokens": getattr(response.usage, "completion_tokens", 0) if response.usage else 0,
+            "output_tokens": getattr(response.usage, "completion_tokens", 0)
+            if response.usage
+            else 0,
         },
     )
 

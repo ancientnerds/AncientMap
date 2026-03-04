@@ -247,7 +247,12 @@ async def vector_reindex(
 
     asyncio.create_task(_run_reindex_sequence(cmds))
 
-    return {"status": "started", "collection": body.collection or "all", "rebuild": body.rebuild, "backends": backends}
+    return {
+        "status": "started",
+        "collection": body.collection or "all",
+        "rebuild": body.rebuild,
+        "backends": backends,
+    }
 
 
 async def _run_reindex_sequence(cmds: list[list[str]]):

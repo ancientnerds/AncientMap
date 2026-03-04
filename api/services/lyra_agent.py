@@ -1020,7 +1020,9 @@ async def run_agent_stream(
         "type": "done",
         "metadata": {
             "backend": backend,
-            "model": f"{LLM_PROVIDER}/{LLM_MODEL}" if backend != "local" else f"ollama/{OLLAMA_LLM_MODEL}",
+            "model": f"{LLM_PROVIDER}/{LLM_MODEL}"
+            if backend != "local"
+            else f"ollama/{OLLAMA_LLM_MODEL}",
             "tool_calls": tool_calls_made,
             "sites_found": len(all_sites),
             "avg_relevance": round(avg_relevance, 3) if avg_relevance is not None else None,
