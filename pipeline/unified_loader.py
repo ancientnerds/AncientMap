@@ -636,8 +636,8 @@ class UnifiedLoader:
                 logger.info(f"Terminated {killed} stuck queries")
             session.commit()
 
-            # Step 2: Ensure ALL foreign keys pointing at unified_sites use CASCADE
-            # (required for source reloads that DELETE + re-INSERT)
+            # Step 2: Ensure all FKs pointing at unified_sites use SET NULL
+            # (so TRUNCATE/DELETE of sites doesn't wipe news_items, contributions, etc.)
             logger.info("Checking FK constraints on unified_sites...")
             session.execute(
                 text("""
@@ -651,7 +651,7 @@ class UnifiedLoader:
                         FROM pg_constraint con
                         WHERE con.contype = 'f'
                           AND con.confrelid = 'unified_sites'::regclass
-                          AND con.confdeltype != 'c'
+                          AND con.confdeltype != 'n'
                     LOOP
                         SELECT string_agg(a.attname, ', ' ORDER BY u.ord)
                         INTO col_names
@@ -662,10 +662,10 @@ class UnifiedLoader:
 
                         EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', r.table_name, r.conname);
                         EXECUTE format(
-                            'ALTER TABLE %s ADD CONSTRAINT %I FOREIGN KEY (%s) REFERENCES unified_sites(id) ON DELETE CASCADE',
+                            'ALTER TABLE %s ADD CONSTRAINT %I FOREIGN KEY (%s) REFERENCES unified_sites(id) ON DELETE SET NULL',
                             r.table_name, r.conname, col_names
                         );
-                        RAISE NOTICE 'Fixed FK % on % to CASCADE', r.conname, r.table_name;
+                        RAISE NOTICE 'Fixed FK % on % to SET NULL', r.conname, r.table_name;
                     END LOOP;
                 END $$;
             """)

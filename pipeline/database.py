@@ -845,7 +845,7 @@ class UserContribution(Base):
     last_facts_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     enrichment_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     promoted_site_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("unified_sites.id", ondelete="CASCADE"), nullable=True
+        UUID(as_uuid=True), ForeignKey("unified_sites.id", ondelete="SET NULL"), nullable=True
     )
 
     # Timestamps
@@ -931,7 +931,7 @@ class NewsItem(Base):
     # Link to archaeological site on the globe
     site_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("unified_sites.id", ondelete="CASCADE"),
+        ForeignKey("unified_sites.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
