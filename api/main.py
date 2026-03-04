@@ -102,7 +102,7 @@ async def lifespan(app: FastAPI):
             # Ensure db_snapshots has source_id column (added after initial table creation)
             "ALTER TABLE db_snapshots ADD COLUMN IF NOT EXISTS source_id VARCHAR(50)",
             # Strip orphaned [N] citation markers from sites lacking citation metadata
-            "UPDATE unified_sites SET description = regexp_replace(description, '\\s*\\[\\d+\\]', '', 'g') WHERE description ~ '\\[\\d+\\]' AND NOT (raw_data ? 'description_citations')",
+            "UPDATE unified_sites SET description = regexp_replace(description, '\\s*\\[\\d+\\]', '', 'g') WHERE description ~ '\\[\\d+\\]' AND NOT jsonb_exists(COALESCE(raw_data, '{}'), 'description_citations')",
         ]
 
         # Populate description_citations for 10 enriched sites (one-time prod data fix).
@@ -313,7 +313,7 @@ async def lifespan(app: FastAPI):
                 cast(:dc as jsonb)
             )
             WHERE id = :id
-              AND NOT (COALESCE(raw_data, cast('{}' as jsonb)) ? 'description_citations')
+              AND NOT jsonb_exists(COALESCE(raw_data, cast('{}' as jsonb)), 'description_citations')
         """)
         for _sid, _dc in _citation_seed.items():
             with engine.begin() as conn:
