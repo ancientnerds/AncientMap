@@ -1201,10 +1201,10 @@ class SiteLike(Base):
         ForeignKey("discord_users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    site_id: Mapped[uuid.UUID] = mapped_column(
+    site_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("unified_sites.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("unified_sites.id", ondelete="SET NULL"),
+        nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
@@ -1229,10 +1229,10 @@ class SiteBookmark(Base):
         ForeignKey("discord_users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    site_id: Mapped[uuid.UUID] = mapped_column(
+    site_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("unified_sites.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("unified_sites.id", ondelete="SET NULL"),
+        nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 

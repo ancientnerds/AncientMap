@@ -676,13 +676,28 @@ class UnifiedLoader:
             # Initialize source metadata
             self._init_source_meta(session)
 
-            # When loading ALL sources: TRUNCATE upfront (instant vs slow per-source DELETE)
+            # When loading ALL sources: bulk-delete ingestable sources only
+            # NEVER touch: ancient_nerds, community, lyra, news, articles, transcriptions
+            PROTECTED_SOURCES = {"ancient_nerds", "community", "lyra"}
             if not source_filter and not skip_loaded:
-                logger.info("TRUNCATE unified_sites (full reload)...")
-                session.execute(text("TRUNCATE unified_sites CASCADE"))
+                ingestable = [s for s in SOURCE_CONFIG if s not in PROTECTED_SOURCES]
+                logger.info(
+                    f"Deleting {len(ingestable)} ingestable sources (protecting {PROTECTED_SOURCES})..."
+                )
+                session.execute(text("SET LOCAL statement_timeout = 0"))
+                session.execute(
+                    text(
+                        "UPDATE unified_sites SET parent_site_id = NULL WHERE source_id = ANY(:sids) AND parent_site_id IS NOT NULL"
+                    ),
+                    {"sids": ingestable},
+                )
+                session.execute(
+                    text("DELETE FROM unified_sites WHERE source_id = ANY(:sids)"),
+                    {"sids": ingestable},
+                )
                 session.commit()
                 self._truncated = True
-                logger.info("TRUNCATE done")
+                logger.info("Bulk delete done")
 
             # Get existing record counts if skip_loaded is enabled
             existing_counts = {}
