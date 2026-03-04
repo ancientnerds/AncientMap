@@ -207,6 +207,11 @@ jobs:
             if echo "$CHANGED" | grep -q "^ancient-nerds-map/" || [ ! -f ancient-nerds-map/dist/an-logo.svg ]; then
               echo "==> Building frontend..."
               rm -rf ancient-nerds-map/dist ancient-nerds-map/dist-bak-* ancient-nerds-map/dist-old ancient-nerds-map/node_modules-bak-* 2>/dev/null || true
+              # node_modules may have root-owned files from a previous build; rename if rm fails
+              rm -rf ancient-nerds-map/node_modules 2>/dev/null || {
+                echo "    node_modules has stale permissions, moving aside..."
+                mv ancient-nerds-map/node_modules "ancient-nerds-map/node_modules-bak-$(date +%s)" 2>/dev/null || true
+              }
               (cd ancient-nerds-map && npm ci && npm run build)
               if [ ! -f ancient-nerds-map/dist/index.html ] || [ ! -f ancient-nerds-map/dist/an-logo.svg ]; then
                 echo "ERROR: Frontend build failed — dist/index.html or dist/an-logo.svg missing!"
