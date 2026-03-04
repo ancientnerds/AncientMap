@@ -145,6 +145,30 @@ services:
         condition: service_healthy
 
   # ==========================================================================
+  # Pipeline: Download + Ingest + Export (run on demand)
+  # Usage: docker compose run --rm pipeline
+  # ==========================================================================
+  pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile.pipeline
+    container_name: ancient_nerds_pipeline
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      POSTGRES_HOST: db
+    volumes:
+      - ./data/raw:/app/data/raw
+      - ./public/data:/app/public/data
+      - ./ancient-nerds-map/public/data:/app/ancient-nerds-map/public/data
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles:
+      - pipeline
+
+  # ==========================================================================
   # pgAdmin for database management (optional, for development)
   # ==========================================================================
   pgadmin:
