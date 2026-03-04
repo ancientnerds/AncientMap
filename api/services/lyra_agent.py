@@ -359,9 +359,10 @@ async def _extract_news_filters(query: str) -> dict:
 
 _llms: dict[str, object] = {}
 
-# Ollama LLM settings for the local backend
-OLLAMA_LLM_MODEL = os.getenv("LYRA_OLLAMA_LLM_MODEL", "qwen3:8b")
+# Local LLM settings (OpenAI-compatible endpoint on VPS2)
+OLLAMA_LLM_MODEL = os.getenv("LYRA_OLLAMA_MODEL", "qwen3:8b")
 OLLAMA_LLM_BASE_URL = os.getenv("LYRA_OLLAMA_BASE_URL", "")
+OLLAMA_LLM_API_KEY = os.getenv("LYRA_OLLAMA_API_KEY", "")
 
 
 def _get_llm(backend: str = "minimax"):
@@ -374,14 +375,16 @@ def _get_llm(backend: str = "minimax"):
         return _llms[backend]
 
     if backend == "local":
-        from langchain_ollama import ChatOllama
+        from langchain_openai import ChatOpenAI
 
-        llm = ChatOllama(
+        llm = ChatOpenAI(
             model=OLLAMA_LLM_MODEL,
-            base_url=OLLAMA_LLM_BASE_URL or "http://localhost:11434",
+            base_url=OLLAMA_LLM_BASE_URL,
+            api_key=OLLAMA_LLM_API_KEY or "unused",
             streaming=True,
+            max_tokens=4096,
         )
-        logger.info(f"Initialized LLM: ollama/{OLLAMA_LLM_MODEL}")
+        logger.info(f"Initialized LLM: local/{OLLAMA_LLM_MODEL} at {OLLAMA_LLM_BASE_URL}")
     else:
         # Default: MiniMax via Anthropic-compatible proxy
         from langchain_anthropic import ChatAnthropic
