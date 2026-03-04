@@ -318,11 +318,11 @@ async def lifespan(app: FastAPI):
         # Run DDL migrations first (fast), then data fixes
         for _sql in _api_migrations:
             with engine.begin() as conn:
-                conn.execute(_text("SET statement_timeout = '30s'"))
+                conn.execute(_text("SET statement_timeout = '120s'"))
                 conn.execute(_text(_sql))
         for _sid, _dc in _citation_seed.items():
             with engine.begin() as conn:
-                conn.execute(_text("SET statement_timeout = '30s'"))
+                conn.execute(_text("SET statement_timeout = '120s'"))
                 conn.execute(_cite_sql, {"id": _sid, "dc": _json.dumps(_dc)})
         logger.info(
             "[STARTUP] Database tables verified (includes discord_users, credit_grants, token_usage_logs)"
