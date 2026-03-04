@@ -155,7 +155,11 @@ jobs:
             git checkout -- .
             git clean -fd ancient-nerds-map/public/data/ public/data/ 2>/dev/null || true
             echo "==> Pulling latest..."
-            git pull origin main
+            git -c core.logAllRefUpdates=false pull origin main || {
+              echo "    Pull failed, trying permission fix..."
+              find .git/logs -not -writable -delete 2>/dev/null || true
+              git pull origin main
+            }
             git lfs pull
             echo "==> Restoring snapshots..."
             mkdir -p public/data/snapshots
