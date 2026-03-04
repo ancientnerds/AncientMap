@@ -1,11 +1,43 @@
-import { defineConfig } from 'vite'
-import { resolve } from 'path'
+import { defineConfig, type Plugin } from 'vite'
+import { resolve, extname } from 'path'
 import { execSync } from 'child_process'
+import { createReadStream, existsSync, statSync } from 'fs'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 const commitHash = execSync('git rev-parse --short HEAD').toString().trim()
 const buildTime = new Date().toISOString()
+
+// Dev only: serve /data/ from repo-root public/data/ (production uses nginx alias)
+function servePublicData(): Plugin {
+  const dataRoot = resolve(__dirname, '..', 'public', 'data')
+  const mimeTypes: Record<string, string> = {
+    '.json': 'application/json',
+    '.geojson': 'application/geo+json',
+    '.webp': 'image/webp',
+    '.jpg': 'image/jpeg',
+    '.png': 'image/png',
+    '.svg': 'image/svg+xml',
+    '.gz': 'application/gzip',
+  }
+  return {
+    name: 'serve-public-data',
+    configureServer(server) {
+      server.middlewares.use('/data', (req, res, next) => {
+        if (!req.url) return next()
+        const clean = decodeURIComponent(req.url.split('?')[0])
+        const filePath = resolve(dataRoot, clean.startsWith('/') ? clean.slice(1) : clean)
+        if (!filePath.startsWith(dataRoot)) return next()
+        try {
+          if (!existsSync(filePath) || !statSync(filePath).isFile()) return next()
+        } catch { return next() }
+        res.setHeader('Content-Type', mimeTypes[extname(filePath)] || 'application/octet-stream')
+        res.setHeader('Access-Control-Allow-Origin', '*')
+        createReadStream(filePath).pipe(res)
+      })
+    },
+  }
+}
 
 // Post-build: make landing page CSS non-render-blocking (critical CSS is inlined in <style>)
 function asyncLandingCss() {
@@ -70,6 +102,7 @@ export default defineConfig({
     }
   },
   plugins: [
+    servePublicData(),
     react(),
     VitePWA({
       registerType: 'autoUpdate',

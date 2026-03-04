@@ -11,7 +11,7 @@ from pathlib import Path
 from shapely.geometry import Point, shape
 
 # Historical boundaries data directory
-HISTORICAL_DIR = Path("ancient-nerds-map/public/data/historical")
+HISTORICAL_DIR = Path("public/data/historical")
 
 
 def _load_empire_metadata(empire_dir: Path) -> dict | None:

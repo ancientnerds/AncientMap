@@ -47,7 +47,7 @@ from loguru import logger
 # =============================================================================
 
 # Output directory
-OUTPUT_DIR = Path("ancient-nerds-map/public/data/historical")
+OUTPUT_DIR = Path("public/data/historical")
 
 # Cliopatria data paths
 CLIOPATRIA_ZIP_URL = (

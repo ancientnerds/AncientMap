@@ -60,7 +60,7 @@ MIN_LINE_LENGTH = {
 }
 
 # Output directory
-OUTPUT_DIR = Path("ancient-nerds-map/public/data/sea-levels")
+OUTPUT_DIR = Path("public/data/sea-levels")
 
 # GEBCO data path and download URL
 GEBCO_PATH = Path("data/raw/GEBCO_2024.nc")
