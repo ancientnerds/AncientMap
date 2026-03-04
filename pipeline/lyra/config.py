@@ -1,13 +1,44 @@
 """Configuration for the Lyra news pipeline."""
 
+from __future__ import annotations
+
 import json
 import logging
 import time
+from dataclasses import dataclass, field
 
 import anthropic
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Unified error type — callers catch this instead of SDK-specific errors
+# ---------------------------------------------------------------------------
+class LyraAPIError(Exception):
+    """Wraps both Anthropic and OpenAI SDK errors for uniform caller handling."""
+
+    pass
+
+
+# ---------------------------------------------------------------------------
+# Normalized response — matches Anthropic's response shape for caller compat
+# ---------------------------------------------------------------------------
+@dataclass
+class TextBlock:
+    type: str = "text"
+    text: str = ""
+
+
+@dataclass
+class NormalizedResponse:
+    """Mimics anthropic.types.Message so callers work unchanged."""
+
+    content: list[TextBlock] = field(default_factory=list)
+    stop_reason: str = "end_turn"
+    model: str = ""
+    usage: dict = field(default_factory=dict)
 
 VALID_CATEGORIES = {
     "excavation",
@@ -98,6 +129,14 @@ class LyraSettings(BaseSettings):
     # YouTube Data API key (for video metadata — no cookies/OAuth needed)
     youtube_api_key: str = ""
 
+    # LLM backend: "minimax" (default, Anthropic-compatible) or "ollama" (OpenAI-compatible)
+    llm_backend: str = "minimax"
+
+    # Ollama endpoint (OpenAI-compatible API, used when llm_backend="ollama")
+    ollama_base_url: str = ""
+    ollama_api_key: str = ""
+    ollama_model: str = "qwen3:8b"
+
 
 _cached_client: anthropic.Anthropic | None = None
 _cached_client_key: str = ""
@@ -127,8 +166,14 @@ def _is_native_anthropic(settings: "LyraSettings") -> bool:
     return not settings.anthropic_base_url or "anthropic.com" in settings.anthropic_base_url
 
 
-def get_anthropic_client(settings: "LyraSettings") -> anthropic.Anthropic:
-    """Return a module-level cached Anthropic client for connection reuse."""
+def get_anthropic_client(settings: "LyraSettings") -> anthropic.Anthropic | None:
+    """Return a module-level cached Anthropic client for connection reuse.
+
+    Returns None when llm_backend is not anthropic-based (caller passes it but it's unused).
+    """
+    if settings.llm_backend == "ollama":
+        return None
+
     global _cached_client, _cached_client_key
     cache_key = f"{settings.anthropic_api_key}:{settings.anthropic_base_url}"
     if _cached_client is None or _cached_client_key != cache_key:
@@ -142,6 +187,129 @@ def get_anthropic_client(settings: "LyraSettings") -> anthropic.Anthropic:
         _cached_client = anthropic.Anthropic(**kwargs)
         _cached_client_key = cache_key
     return _cached_client
+
+
+# ---------------------------------------------------------------------------
+# OpenAI backend (Ollama with OpenAI-compatible API)
+# ---------------------------------------------------------------------------
+_cached_openai_client = None
+_cached_openai_key: str = ""
+
+
+def get_openai_client(settings: LyraSettings):
+    """Return a cached OpenAI client for the Ollama backend."""
+    global _cached_openai_client, _cached_openai_key
+
+    from openai import OpenAI
+
+    cache_key = f"{settings.ollama_api_key}:{settings.ollama_base_url}"
+    if _cached_openai_client is None or _cached_openai_key != cache_key:
+        _cached_openai_client = OpenAI(
+            base_url=settings.ollama_base_url,
+            api_key=settings.ollama_api_key,
+            timeout=300.0,
+            max_retries=3,
+        )
+        _cached_openai_key = cache_key
+    return _cached_openai_client
+
+
+def _call_openai_api(
+    settings: LyraSettings,
+    *,
+    prefill: str | None = None,
+    **kwargs,
+) -> NormalizedResponse:
+    """Translate Anthropic-style kwargs to OpenAI format and call the Ollama backend."""
+    client = get_openai_client(settings)
+
+    # Build OpenAI messages from Anthropic format
+    messages: list[dict] = []
+
+    # System blocks → single system message (strip cache_control)
+    system_blocks = kwargs.pop("system", None)
+    if system_blocks:
+        if isinstance(system_blocks, str):
+            messages.append({"role": "system", "content": system_blocks})
+        elif isinstance(system_blocks, list):
+            system_text = "\n\n".join(
+                b["text"] if isinstance(b, dict) else str(b) for b in system_blocks
+            )
+            messages.append({"role": "system", "content": system_text})
+
+    # User/assistant messages
+    for msg in kwargs.pop("messages", []):
+        messages.append({"role": msg["role"], "content": msg["content"]})
+
+    # Drop unsupported Anthropic params
+    kwargs.pop("thinking", None)
+    kwargs.pop("tool_choice", None)
+    kwargs.pop("tools", None)
+
+    # Handle output_config → response_format
+    output_config = kwargs.pop("output_config", None)
+    response_format = None
+    if output_config:
+        schema = output_config.get("format", {}).get("schema")
+        if schema:
+            response_format = {
+                "type": "json_schema",
+                "json_schema": {"name": "response", "strict": True, "schema": schema},
+            }
+
+    # Handle prefill
+    if prefill == "{" and not response_format:
+        # Use json_object mode + system instruction for JSON prefills
+        response_format = {"type": "json_object"}
+        # Add instruction if not already present
+        if messages and messages[0]["role"] == "system":
+            if "json" not in messages[0]["content"].lower():
+                messages[0]["content"] += "\n\nRespond with valid JSON only."
+        else:
+            messages.insert(0, {"role": "system", "content": "Respond with valid JSON only."})
+    elif prefill and prefill != "{":
+        # Non-JSON prefill (like "Q") — add as system instruction
+        if messages and messages[0]["role"] == "system":
+            messages[0]["content"] += f"\n\nStart your response with: {prefill}"
+        else:
+            messages.insert(0, {"role": "system", "content": f"Start your response with: {prefill}"})
+
+    # Override model and cap max_tokens
+    model = settings.ollama_model
+    max_tokens = min(kwargs.pop("max_tokens", 4096), 4096)
+    kwargs.pop("model", None)
+    kwargs.pop("temperature", None)  # Let Ollama use default
+
+    create_kwargs: dict = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+    }
+    if response_format:
+        create_kwargs["response_format"] = response_format
+
+    response = client.chat.completions.create(**create_kwargs)
+    return _normalize_openai_response(response)
+
+
+def _normalize_openai_response(response) -> NormalizedResponse:
+    """Wrap OpenAI ChatCompletion into NormalizedResponse matching Anthropic shape."""
+    choice = response.choices[0] if response.choices else None
+    text = choice.message.content or "" if choice else ""
+
+    # Map OpenAI finish_reason to Anthropic stop_reason
+    finish = choice.finish_reason if choice else "stop"
+    stop_reason = "max_tokens" if finish == "length" else "end_turn"
+
+    return NormalizedResponse(
+        content=[TextBlock(text=text)],
+        stop_reason=stop_reason,
+        model=response.model or "",
+        usage={
+            "input_tokens": getattr(response.usage, "prompt_tokens", 0) if response.usage else 0,
+            "output_tokens": getattr(response.usage, "completion_tokens", 0) if response.usage else 0,
+        },
+    )
 
 
 def parse_json_response(text: str) -> dict:
@@ -223,31 +391,55 @@ def _tool_use_to_text_block(response: anthropic.types.Message) -> anthropic.type
 
 
 def call_api(
+    client: anthropic.Anthropic | None,
+    *,
+    prefill: str | None = None,
+    **kwargs,
+) -> anthropic.types.Message | NormalizedResponse:
+    """Throttled wrapper around the configured LLM backend.
+
+    Dispatches to Anthropic/MiniMax or OpenAI/Ollama based on settings.llm_backend.
+    Both paths catch their SDK errors and raise LyraAPIError.
+
+    Anthropic/MiniMax path:
+    - Enforces a minimum gap between calls to stay under rate limits.
+    - Auto-reads rate limit headers and adjusts the gap.
+    - Clamps temperature (MiniMax rejects 0.0).
+    - Converts output_config to tool calling for non-native providers.
+    - Retries once on truncated or malformed JSON.
+
+    OpenAI/Ollama path:
+    - Translates Anthropic kwargs to OpenAI format.
+    - Returns NormalizedResponse matching Anthropic's shape.
+    """
+    settings = _get_settings()
+
+    # --- OpenAI/Ollama backend ---
+    if settings.llm_backend == "ollama":
+        try:
+            return _call_openai_api(settings, prefill=prefill, **kwargs)
+        except Exception as e:
+            # Catch openai.APIError and any other SDK errors
+            raise LyraAPIError(f"OpenAI/Ollama API error: {e}") from e
+
+    # --- Anthropic/MiniMax backend (existing path) ---
+    if client is None:
+        raise LyraAPIError("Anthropic client is None but llm_backend is not 'ollama'")
+
+    try:
+        return _call_anthropic_api(client, settings, prefill=prefill, **kwargs)
+    except anthropic.APIError as e:
+        raise LyraAPIError(f"Anthropic API error: {e}") from e
+
+
+def _call_anthropic_api(
     client: anthropic.Anthropic,
+    settings: LyraSettings,
     *,
     prefill: str | None = None,
     **kwargs,
 ) -> anthropic.types.Message:
-    """Throttled wrapper around client.messages.create().
-
-    Enforces a minimum gap between calls to stay under rate limits.
-    Auto-reads `anthropic-ratelimit-requests-limit` from response headers
-    and adjusts the gap for the actual tier (Tier 1 = 50, Tier 2 = 1000, etc.).
-    The SDK's built-in retry (max_retries=5) handles transient 429/500/529.
-
-    When using a non-Anthropic base_url (e.g. MiniMax), automatically:
-    - Clamps temperature to settings.temperature_min (MiniMax rejects 0.0)
-    - Converts output_config to tool calling (forces valid JSON without
-      native json_schema support). Falls back to prefill + retry when
-      thinking is enabled (MiniMax only supports tool_choice="auto" with
-      thinking, which can't force tool use).
-    - Retries once on truncated or malformed JSON for the prefill path
-
-    If prefill is set, appends an assistant message so the model continues
-    from inside the expected format (e.g. prefill="{" for JSON responses).
-    """
-    # Load settings for compatibility guards
-    settings = _get_settings()
+    """Anthropic/MiniMax backend — all existing logic extracted from old call_api()."""
     native = _is_native_anthropic(settings)
 
     # Guard 1: Clamp temperature (MiniMax rejects temperature=0.0)
@@ -263,7 +455,6 @@ def call_api(
 
         if output_config and not has_thinking:
             # Convert output_config → tool calling for guaranteed JSON.
-            # Extract the JSON schema from output_config and wrap it as a tool.
             schema = output_config.get("format", {}).get("schema", {})
             if schema:
                 kwargs["tools"] = [
@@ -274,12 +465,10 @@ def call_api(
                     }
                 ]
                 kwargs["tool_choice"] = {"type": "any"}
-                # Suppress prefill — incompatible with tool calling and not needed
                 prefill = None
                 used_tool_calling = True
 
-        # Guard 3: Enforce min max_tokens (MiniMax thinks by default, eating
-        # the token budget; calls under settings.max_tokens risk truncation)
+        # Guard 3: Enforce min max_tokens (MiniMax thinks by default)
         if "max_tokens" in kwargs and not has_thinking:
             kwargs["max_tokens"] = max(settings.max_tokens, kwargs["max_tokens"])
 
@@ -295,12 +484,11 @@ def call_api(
     if used_tool_calling:
         return _tool_use_to_text_block(response)
 
-    # Prefill path: validate JSON on non-native providers (no json_schema enforcement)
+    # Prefill path: validate JSON on non-native providers
     if not native and prefill == "{":
         text = next((b.text for b in response.content if hasattr(b, "text")), None)
 
         if response.stop_reason == "max_tokens" and text:
-            # Response was truncated — retry with 2x token budget
             orig_max = kwargs.get("max_tokens", 4096)
             kwargs["max_tokens"] = orig_max * 2
             logger.warning(
@@ -309,7 +497,6 @@ def call_api(
             )
             response = _throttled_create(client, **kwargs)
         elif text:
-            # Got a complete response — verify it's valid JSON
             try:
                 parse_prefilled_json(text)
             except (json.JSONDecodeError, ValueError):

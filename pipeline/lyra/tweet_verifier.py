@@ -5,10 +5,9 @@ import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
-import anthropic
-
 from pipeline.database import NewsItem, NewsVideo, get_session
 from pipeline.lyra.config import (
+    LyraAPIError,
     LyraSettings,
     _get_settings,
     call_api,
@@ -110,7 +109,7 @@ def verify_single_post(
             },
             prefill="{",
         )
-    except anthropic.APIError as e:
+    except LyraAPIError as e:
         logger.warning(f"Verification API error for item {item.id}: {e}")
         return None
 

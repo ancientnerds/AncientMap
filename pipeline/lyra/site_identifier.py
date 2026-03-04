@@ -14,7 +14,6 @@ import urllib.parse
 import uuid
 from pathlib import Path
 
-import anthropic
 from sqlalchemy import case, func, text
 from sqlalchemy.orm import Session
 
@@ -28,6 +27,7 @@ from pipeline.database import (
     get_session,
 )
 from pipeline.lyra.config import (
+    LyraAPIError,
     LyraSettings,
     _get_settings,
     call_api,
@@ -628,7 +628,7 @@ def _call_ai(
 
     try:
         response = call_api(client, prefill="{", **create_kwargs)
-    except anthropic.APIError as e:
+    except LyraAPIError as e:
         logger.error(f"LLM API error: {e}")
         return None
 
@@ -933,7 +933,7 @@ def _pick_wikidata_entity(
             messages=[{"role": "user", "content": prompt}],
             prefill="Q",
         )
-    except anthropic.APIError as e:
+    except LyraAPIError as e:
         logger.warning(f"LLM tiebreaker API error for {site_name}: {e}")
         return None
 
@@ -941,7 +941,10 @@ def _pick_wikidata_entity(
         logger.warning(f"  [{site_name}] LLM tiebreaker returned empty response")
         return None
 
-    reply = ("Q" + response.content[0].text).strip()
+    raw_text = response.content[0].text.strip()
+    # Anthropic prefill returns continuation after "Q", OpenAI returns full "Q12345".
+    # Regex search handles both: prepend "Q" only if text doesn't already start with Q+digit.
+    reply = raw_text if re.match(r"Q\d", raw_text) else ("Q" + raw_text)
     # Extract QID from reply (e.g. "Q115679382" or "A) Q115679382")
     qid_match = re.search(r"Q\d+", reply)
     if qid_match:
@@ -1268,7 +1271,7 @@ def _escalate_to_sonnet(
             },
             prefill="{",
         )
-    except anthropic.APIError as e:
+    except LyraAPIError as e:
         logger.error(f"Review model escalation API error: {e}")
         return None
 

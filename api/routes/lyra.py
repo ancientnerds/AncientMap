@@ -76,6 +76,11 @@ class LyraChatRequest(BaseModel):
     history: list[_HistoryMessage] | None = Field(
         default=None, max_length=50, description="Conversation history [{role, content}]"
     )
+    backend: str = Field(
+        default="minimax",
+        pattern=r"^(minimax|local)$",
+        description="AI backend: minimax (paid) or local (self-hosted)",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -118,6 +123,7 @@ async def lyra_chat(request: LyraChatRequest, req: Request):
                 context_type=request.context_type,
                 context_id=request.context_id,
                 context_year=request.context_year,
+                backend=request.backend,
             )
 
         if db_user.credits <= 0:
@@ -144,6 +150,7 @@ async def lyra_chat(request: LyraChatRequest, req: Request):
         context_type=request.context_type,
         context_id=request.context_id,
         context_year=request.context_year,
+        backend=request.backend,
     )
 
 
@@ -154,6 +161,7 @@ def _stream_response(
     context_type: str,
     context_id: str | None,
     context_year: int | None,
+    backend: str = "minimax",
 ) -> StreamingResponse:
     """Create an SSE streaming response from the Lyra agent (no credits tracking)."""
 
@@ -169,6 +177,7 @@ def _stream_response(
                 context_type=context_type,
                 context_id=context_id,
                 context_year=context_year,
+                backend=backend,
             ):
                 if time.monotonic() > deadline:
                     yield f"event: error\ndata: {json.dumps({'type': 'error', 'error': 'Response time limit reached'})}\n\n"
@@ -200,6 +209,7 @@ def _stream_response_with_credits(
     context_type: str,
     context_id: str | None,
     context_year: int | None,
+    backend: str = "minimax",
 ) -> StreamingResponse:
     """Create an SSE streaming response with atomic credit reconciliation on completion.
 
@@ -220,6 +230,7 @@ def _stream_response_with_credits(
                 context_type=context_type,
                 context_id=context_id,
                 context_year=context_year,
+                backend=backend,
             ):
                 if time.monotonic() > deadline:
                     yield f"event: error\ndata: {json.dumps({'type': 'error', 'error': 'Response time limit reached'})}\n\n"

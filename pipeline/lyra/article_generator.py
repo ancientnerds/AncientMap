@@ -5,8 +5,6 @@ import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import anthropic
-
 from pipeline.database import (
     NewsArticle,
     NewsChannel,
@@ -14,7 +12,7 @@ from pipeline.database import (
     NewsVideo,
     get_session,
 )
-from pipeline.lyra.config import LyraSettings, call_api, get_anthropic_client, parse_prefilled_json
+from pipeline.lyra.config import LyraAPIError, LyraSettings, call_api, get_anthropic_client, parse_prefilled_json
 
 logger = logging.getLogger(__name__)
 
@@ -289,7 +287,7 @@ def _write_section(
             ],
             messages=[{"role": "user", "content": prompt}],
         )
-    except anthropic.APIError as e:
+    except LyraAPIError as e:
         logger.warning(f"Article section API error: {e}")
         return ""
     text = next((b.text for b in response.content if hasattr(b, "text")), "")
@@ -334,7 +332,7 @@ def _verify_article(
             messages=[{"role": "user", "content": prompt}],
             prefill="[CHANGES]\n",
         )
-    except anthropic.APIError as e:
+    except LyraAPIError as e:
         logger.warning(f"Article verification API error: {e}")
         return full_body
     text = next((b.text for b in response.content if hasattr(b, "text")), "")
@@ -410,7 +408,7 @@ def _generate_headline_tldr(
             output_config={"format": {"type": "json_schema", "schema": HEADLINE_SCHEMA}},
             prefill="{",
         )
-    except anthropic.APIError as e:
+    except LyraAPIError as e:
         logger.warning(f"Headline generation API error: {e}")
         return "Weekly Archaeological Digest", ""
     text = next((b.text for b in response.content if hasattr(b, "text")), "")

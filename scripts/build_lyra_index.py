@@ -22,6 +22,8 @@ Usage:
   python scripts/build_lyra_index.py --collection articles
   python scripts/build_lyra_index.py --collection empires
   python scripts/build_lyra_index.py --rebuild  # wipe and rebuild
+  python scripts/build_lyra_index.py --backend local  # Ollama 768-dim, *_local collections
+  python scripts/build_lyra_index.py --backend voyage  # Voyage 1024-dim (default)
 """
 
 import argparse
@@ -62,8 +64,8 @@ QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
 BATCH_SIZE = 100
 
-# Fixed vector size for voyage-4-large / voyage-4 shared embedding space
-VECTOR_SIZE = 1024
+# Vector sizes per backend (set by --backend flag, not env var)
+VECTOR_SIZES = {"voyage": 1024, "local": 768}
 
 
 def get_qdrant() -> QdrantClient:
@@ -128,9 +130,9 @@ def get_existing_hashes(client: QdrantClient, collection: str) -> dict[str, str]
     return existing
 
 
-def index_sites(client: QdrantClient, embeddings, sparse_model, rebuild: bool = False):
+def index_sites(client: QdrantClient, embeddings, sparse_model, rebuild: bool = False, *, vector_size: int = 1024, suffix: str = ""):
     """Index archaeological sites into Qdrant with dense + BM25 vectors."""
-    collection = "sites"
+    collection = f"sites{suffix}"
 
     if rebuild:
         try:
@@ -138,7 +140,7 @@ def index_sites(client: QdrantClient, embeddings, sparse_model, rebuild: bool = 
         except Exception:
             pass
 
-    ensure_collection(client, collection, VECTOR_SIZE)
+    ensure_collection(client, collection, vector_size)
     create_payload_indexes(client, collection, ["country", "period_name", "site_type"])
 
     existing_hashes = {} if rebuild else get_existing_hashes(client, collection)
@@ -250,9 +252,9 @@ def index_sites(client: QdrantClient, embeddings, sparse_model, rebuild: bool = 
     logger.info(f"Done indexing {total_indexed} sites")
 
 
-def index_news(client: QdrantClient, embeddings, sparse_model, rebuild: bool = False):
+def index_news(client: QdrantClient, embeddings, sparse_model, rebuild: bool = False, *, vector_size: int = 1024, suffix: str = ""):
     """Index news items into Qdrant with dense + BM25 vectors."""
-    collection = "news"
+    collection = f"news{suffix}"
 
     if rebuild:
         try:
@@ -260,7 +262,7 @@ def index_news(client: QdrantClient, embeddings, sparse_model, rebuild: bool = F
         except Exception:
             pass
 
-    ensure_collection(client, collection, VECTOR_SIZE)
+    ensure_collection(client, collection, vector_size)
     create_payload_indexes(client, collection, ["channel", "category"])
 
     existing_hashes = {} if rebuild else get_existing_hashes(client, collection)
@@ -440,9 +442,9 @@ def _chunk_transcript(transcript_text: str, chunk_size: int = 2000, overlap: int
     return chunks
 
 
-def index_transcripts(client: QdrantClient, embeddings, sparse_model, rebuild: bool = False):
+def index_transcripts(client: QdrantClient, embeddings, sparse_model, rebuild: bool = False, *, vector_size: int = 1024, suffix: str = ""):
     """Index video transcript chunks into Qdrant for semantic search."""
-    collection = "transcripts"
+    collection = f"transcripts{suffix}"
 
     if rebuild:
         try:
@@ -450,7 +452,7 @@ def index_transcripts(client: QdrantClient, embeddings, sparse_model, rebuild: b
         except Exception:
             pass
 
-    ensure_collection(client, collection, VECTOR_SIZE)
+    ensure_collection(client, collection, vector_size)
     create_payload_indexes(client, collection, ["channel", "video_id"])
 
     existing_hashes = {} if rebuild else get_existing_hashes(client, collection)
@@ -594,9 +596,9 @@ def _chunk_article(content: str, chunk_size: int = 2000, overlap: int = 400) -> 
     return chunks
 
 
-def index_articles(client: QdrantClient, embeddings, sparse_model, rebuild: bool = False):
+def index_articles(client: QdrantClient, embeddings, sparse_model, rebuild: bool = False, *, vector_size: int = 1024, suffix: str = ""):
     """Index weekly digest articles into Qdrant for semantic search."""
-    collection = "articles"
+    collection = f"articles{suffix}"
 
     if rebuild:
         try:
@@ -604,7 +606,7 @@ def index_articles(client: QdrantClient, embeddings, sparse_model, rebuild: bool
         except Exception:
             pass
 
-    ensure_collection(client, collection, VECTOR_SIZE)
+    ensure_collection(client, collection, vector_size)
     create_payload_indexes(client, collection, ["article_id"])
 
     existing_hashes = {} if rebuild else get_existing_hashes(client, collection)
@@ -786,9 +788,9 @@ def _build_empire_text(polity_id: str, p: dict) -> str:
     return " | ".join(parts)
 
 
-def index_empires(client: QdrantClient, embeddings, sparse_model, *, rebuild: bool = False):
+def index_empires(client: QdrantClient, embeddings, sparse_model, *, rebuild: bool = False, vector_size: int = 1024, suffix: str = ""):
     """Index Seshat polities into the 'empires' collection."""
-    collection = "empires"
+    collection = f"empires{suffix}"
 
     # Load polities JSON
     candidates = [
@@ -815,7 +817,7 @@ def index_empires(client: QdrantClient, embeddings, sparse_model, *, rebuild: bo
         except Exception:
             pass
 
-    ensure_collection(client, collection, VECTOR_SIZE)
+    ensure_collection(client, collection, vector_size)
     create_payload_indexes(client, collection, ["polity_id", "region"])
     existing_hashes = get_existing_hashes(client, collection)
 
@@ -902,30 +904,37 @@ def main():
     parser = argparse.ArgumentParser(description="Build Lyra vector index")
     parser.add_argument("--collection", choices=["sites", "news", "transcripts", "articles", "empires"], help="Only index this collection")
     parser.add_argument("--rebuild", action="store_true", help="Wipe and rebuild from scratch")
+    parser.add_argument("--backend", choices=["voyage", "local"], default="voyage", help="Embedding backend: voyage (1024-dim) or local (Ollama, 768-dim)")
     args = parser.parse_args()
 
+    backend = args.backend
+    vector_size = VECTOR_SIZES[backend]
+    suffix = "_local" if backend == "local" else ""
+
+    logger.info(f"Backend: {backend} | vector_size: {vector_size} | collection suffix: '{suffix}'")
+
     client = get_qdrant()
-    # Use voyage-4-large for indexing (best quality)
-    embeddings = get_embeddings(usage="index")
-    # BM25 sparse model for hybrid search
+    embeddings = get_embeddings(usage="index", backend=backend)
     sparse_model = get_sparse_model()
 
+    kwargs = {"rebuild": args.rebuild, "vector_size": vector_size, "suffix": suffix}
+
     if args.collection is None or args.collection == "sites":
-        index_sites(client, embeddings, sparse_model, rebuild=args.rebuild)
+        index_sites(client, embeddings, sparse_model, **kwargs)
 
     if args.collection is None or args.collection == "news":
-        index_news(client, embeddings, sparse_model, rebuild=args.rebuild)
+        index_news(client, embeddings, sparse_model, **kwargs)
 
     if args.collection is None or args.collection == "transcripts":
-        index_transcripts(client, embeddings, sparse_model, rebuild=args.rebuild)
+        index_transcripts(client, embeddings, sparse_model, **kwargs)
 
     if args.collection is None or args.collection == "articles":
-        index_articles(client, embeddings, sparse_model, rebuild=args.rebuild)
+        index_articles(client, embeddings, sparse_model, **kwargs)
 
     if args.collection is None or args.collection == "empires":
-        index_empires(client, embeddings, sparse_model, rebuild=args.rebuild)
+        index_empires(client, embeddings, sparse_model, **kwargs)
 
-    logger.info("All done!")
+    logger.info(f"All done! (backend={backend})")
 
 
 if __name__ == "__main__":

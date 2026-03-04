@@ -10,12 +10,11 @@ import json
 import logging
 from pathlib import Path
 
-import anthropic
-
 from pipeline.database import NewsItem, NewsVideo, get_session
 from pipeline.lyra.config import (
     VALID_CATEGORIES,
     VALID_SPECULATIVE_TAGS,
+    LyraAPIError,
     LyraSettings,
     call_api,
     get_anthropic_client,
@@ -196,7 +195,7 @@ def _rescore_item(
             },
             prefill="{",
         )
-    except anthropic.APIError as e:
+    except LyraAPIError as e:
         logger.warning(f"Rescore API error for item {item.id}: {e}")
         return None
 

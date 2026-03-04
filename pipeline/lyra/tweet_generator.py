@@ -5,10 +5,8 @@ import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
-import anthropic
-
 from pipeline.database import NewsItem, NewsVideo, get_session
-from pipeline.lyra.config import LyraSettings, call_api, get_anthropic_client, parse_prefilled_json
+from pipeline.lyra.config import LyraAPIError, LyraSettings, call_api, get_anthropic_client, parse_prefilled_json
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +125,7 @@ def generate_posts_for_video(
             },
             prefill="{",
         )
-    except anthropic.APIError as e:
+    except LyraAPIError as e:
         logger.error(f"Post generation API error for {video.id}: {e}")
         return 0
 

@@ -357,16 +357,33 @@ async def _extract_news_filters(query: str) -> dict:
 # LLM initialization
 # ---------------------------------------------------------------------------
 
-_llm = None
+_llms: dict[str, object] = {}
+
+# Ollama LLM settings for the local backend
+OLLAMA_LLM_MODEL = os.getenv("LYRA_OLLAMA_LLM_MODEL", "qwen3:8b")
+OLLAMA_LLM_BASE_URL = os.getenv("LYRA_OLLAMA_BASE_URL", "")
 
 
-def _get_llm():
-    """Get the configured LLM (singleton)."""
-    global _llm
-    if _llm is not None:
-        return _llm
+def _get_llm(backend: str = "minimax"):
+    """Get the LLM for the given backend (singleton per backend).
 
-    if LLM_PROVIDER == "anthropic":
+    backend="minimax" → ChatAnthropic via MiniMax proxy (default)
+    backend="local"   → ChatOllama with Qwen3:8b
+    """
+    if backend in _llms:
+        return _llms[backend]
+
+    if backend == "local":
+        from langchain_ollama import ChatOllama
+
+        llm = ChatOllama(
+            model=OLLAMA_LLM_MODEL,
+            base_url=OLLAMA_LLM_BASE_URL or "http://localhost:11434",
+            streaming=True,
+        )
+        logger.info(f"Initialized LLM: ollama/{OLLAMA_LLM_MODEL}")
+    else:
+        # Default: MiniMax via Anthropic-compatible proxy
         from langchain_anthropic import ChatAnthropic
 
         api_key = os.getenv("LYRA_ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
@@ -382,20 +399,11 @@ def _get_llm():
             kwargs["stream_usage"] = True
         if base_url:
             kwargs["anthropic_api_url"] = base_url
-        _llm = ChatAnthropic(**kwargs)
-    elif LLM_PROVIDER == "ollama":
-        from langchain_ollama import ChatOllama
+        llm = ChatAnthropic(**kwargs)
+        logger.info(f"Initialized LLM: {LLM_PROVIDER}/{LLM_MODEL}")
 
-        _llm = ChatOllama(model=LLM_MODEL, streaming=True)
-    elif LLM_PROVIDER == "openai":
-        from langchain_openai import ChatOpenAI
-
-        _llm = ChatOpenAI(model=LLM_MODEL, max_tokens=get_max_tokens(), streaming=True)
-    else:
-        raise ValueError(f"Unknown LYRA_LLM_PROVIDER: {LLM_PROVIDER}")
-
-    logger.info(f"Initialized LLM: {LLM_PROVIDER}/{LLM_MODEL}")
-    return _llm
+    _llms[backend] = llm
+    return llm
 
 
 # ---------------------------------------------------------------------------
@@ -468,9 +476,14 @@ async def run_agent_stream(
     context_type: str = "global",
     context_id: str | None = None,
     context_year: int | None = None,
+    backend: str = "minimax",
 ) -> AsyncIterator[dict]:
     """
     Run the Lyra agent and stream results.
+
+    Args:
+        backend: "minimax" (paid, MiniMax LLM + Voyage embeddings) or
+                 "local" (self-hosted, Qwen3 LLM + Ollama embeddings).
 
     Yields dicts with:
       {"type": "token", "content": "..."}
@@ -478,7 +491,12 @@ async def run_agent_stream(
       {"type": "done", "metadata": {...}}
       {"type": "error", "error": "..."}
     """
-    llm = _get_llm()
+    import api.services.lyra_tools as lyra_tools
+
+    # Set the module-level backend so _hybrid_search uses the right collections/embeddings
+    lyra_tools._current_backend = "local" if backend == "local" else "voyage"
+
+    llm = _get_llm(backend=backend)
     llm_with_tools = llm.bind_tools(TOOLS)
 
     # Auto-retrieve: run hybrid search BEFORE the LLM sees the message
@@ -1001,7 +1019,8 @@ async def run_agent_stream(
     yield {
         "type": "done",
         "metadata": {
-            "model": f"{LLM_PROVIDER}/{LLM_MODEL}",
+            "backend": backend,
+            "model": f"{LLM_PROVIDER}/{LLM_MODEL}" if backend != "local" else f"ollama/{OLLAMA_LLM_MODEL}",
             "tool_calls": tool_calls_made,
             "sites_found": len(all_sites),
             "avg_relevance": round(avg_relevance, 3) if avg_relevance is not None else None,

@@ -13,9 +13,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import anthropic
-
-from pipeline.lyra.config import LyraSettings, call_api, parse_prefilled_json
+from pipeline.lyra.config import LyraAPIError, LyraSettings, call_api, parse_prefilled_json
 from pipeline.utils.http import fetch_with_retry
 from pipeline.utils.text import normalize_transliteration
 
@@ -192,7 +190,7 @@ def _pre_research(
             thinking={"type": "enabled", "budget_tokens": settings.max_tokens - 1024},
             prefill="{",
         )
-    except anthropic.APIError as e:
+    except LyraAPIError as e:
         logger.warning(f"  [{name}] Pre-research API error: {e}")
         return None
 
@@ -525,7 +523,7 @@ def _select_best_candidate(
             output_config={"format": {"type": "json_schema", "schema": RESEARCH_SYNTHESIS_SCHEMA}},
             prefill="{",
         )
-    except anthropic.APIError as e:
+    except LyraAPIError as e:
         logger.warning(f"  [{name}] Research synthesis API error: {e}")
         return None
 

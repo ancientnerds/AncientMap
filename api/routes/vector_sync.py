@@ -93,6 +93,7 @@ class ReindexRequest(BaseModel):
         None  # "sites" | "news" | "transcripts" | "articles" | "empires" | None (all)
     )
     rebuild: bool = False
+    backend: str | None = None  # "voyage" | "local" | None (both)
 
 
 # ─── GET /status ─────────────────────────────────────────────────────────────
@@ -112,42 +113,22 @@ async def vector_sync_status():
         ).scalar()
         pg_articles = session.execute(text("SELECT COUNT(*) FROM news_articles")).scalar()
 
-    # Qdrant counts
+    # Qdrant counts — both voyage and local collection sets
     qdrant_available = True
-    qdrant_sites = 0
-    qdrant_news = 0
-    qdrant_transcripts = 0
-    qdrant_articles = 0
-    qdrant_empires = 0
+    qdrant_counts: dict[str, int] = {}
+    _COLLECTION_NAMES = ["sites", "news", "transcripts", "articles", "empires"]
     try:
         from api.services.lyra_embeddings import get_qdrant_client
 
         client = get_qdrant_client()
-        try:
-            info = client.get_collection("sites")
-            qdrant_sites = info.points_count
-        except Exception:
-            pass
-        try:
-            info = client.get_collection("news")
-            qdrant_news = info.points_count
-        except Exception:
-            pass
-        try:
-            info = client.get_collection("transcripts")
-            qdrant_transcripts = info.points_count
-        except Exception:
-            pass
-        try:
-            info = client.get_collection("articles")
-            qdrant_articles = info.points_count
-        except Exception:
-            pass
-        try:
-            info = client.get_collection("empires")
-            qdrant_empires = info.points_count
-        except Exception:
-            pass
+        for name in _COLLECTION_NAMES:
+            for suffix in ("", "_local"):
+                coll = f"{name}{suffix}"
+                try:
+                    info = client.get_collection(coll)
+                    qdrant_counts[coll] = info.points_count
+                except Exception:
+                    qdrant_counts[coll] = 0
     except Exception:
         qdrant_available = False
 
@@ -187,37 +168,36 @@ async def vector_sync_status():
     except Exception:
         pass
 
+    # Build collection status for both backends
+    _pg_counts = {
+        "sites": pg_sites,
+        "news": pg_news,
+        "transcripts": pg_transcripts,
+        "articles": pg_articles,
+        "empires": seshat_polity_count,
+    }
+    _no_delta = {"transcripts", "articles"}  # chunk counts aren't comparable to PG counts
+
+    collections_status = {}
+    for name in _COLLECTION_NAMES:
+        pg = _pg_counts[name]
+        voyage_count = qdrant_counts.get(name, 0)
+        local_count = qdrant_counts.get(f"{name}_local", 0)
+        entry: dict = {
+            "pg_count": pg,
+            "voyage": {"qdrant_count": voyage_count},
+            "local": {"qdrant_count": local_count},
+        }
+        if name in _no_delta:
+            entry["note"] = "Qdrant count is chunks, PG count is source rows — delta not comparable"
+        else:
+            entry["voyage"]["delta"] = pg - voyage_count
+            entry["local"]["delta"] = pg - local_count
+        collections_status[name] = entry
+
     return {
         "qdrant_available": qdrant_available,
-        "collections": {
-            "sites": {
-                "pg_count": pg_sites,
-                "qdrant_count": qdrant_sites,
-                "delta": pg_sites - qdrant_sites,
-            },
-            "news": {
-                "pg_count": pg_news,
-                "qdrant_count": qdrant_news,
-                "delta": pg_news - qdrant_news,
-            },
-            "transcripts": {
-                "pg_count": pg_transcripts,
-                "qdrant_count": qdrant_transcripts,
-                "delta": None,
-                "note": "Qdrant count is chunks, PG count is videos — delta not comparable",
-            },
-            "articles": {
-                "pg_count": pg_articles,
-                "qdrant_count": qdrant_articles,
-                "delta": None,
-                "note": "Qdrant count is chunks, PG count is articles — delta not comparable",
-            },
-            "empires": {
-                "pg_count": seshat_polity_count,
-                "qdrant_count": qdrant_empires,
-                "delta": seshat_polity_count - qdrant_empires,
-            },
-        },
+        "collections": collections_status,
         "empires": {
             "empire_count": empire_count,
             "boundary_count": boundary_count,
@@ -250,41 +230,52 @@ async def vector_reindex(
     if _reindex_state["running"]:
         raise HTTPException(status_code=409, detail="Reindex already running")
 
-    # Build CLI args
-    cmd = [sys.executable, "scripts/build_lyra_index.py"]
-    if body.collection:
-        cmd += ["--collection", body.collection]
-    if body.rebuild:
-        cmd.append("--rebuild")
+    # Build CLI args — run one or both backends
+    backends = [body.backend] if body.backend else ["voyage", "local"]
+    cmds = []
+    for be in backends:
+        cmd = [sys.executable, "scripts/build_lyra_index.py", "--backend", be]
+        if body.collection:
+            cmd += ["--collection", body.collection]
+        if body.rebuild:
+            cmd.append("--rebuild")
+        cmds.append(cmd)
 
     _reindex_state["running"] = True
     _reindex_state["started_at"] = datetime.now(UTC).isoformat()
     _reindex_state["collection"] = body.collection or "all"
 
-    asyncio.create_task(_run_reindex(cmd))
+    asyncio.create_task(_run_reindex_sequence(cmds))
 
-    return {"status": "started", "collection": body.collection or "all", "rebuild": body.rebuild}
+    return {"status": "started", "collection": body.collection or "all", "rebuild": body.rebuild, "backends": backends}
 
 
-async def _run_reindex(cmd: list[str]):
-    """Run build_lyra_index.py as a subprocess and update state when done."""
+async def _run_reindex_sequence(cmds: list[list[str]]):
+    """Run one or more build_lyra_index.py invocations sequentially."""
     collection = _reindex_state["collection"] or "all"
     start = time.monotonic()
+    results = []
     try:
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await proc.communicate()
+        for cmd in cmds:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await proc.communicate()
+            if proc.returncode != 0:
+                output = (stderr or stdout or b"").decode(errors="replace")[-500:]
+                results.append(f"failed (exit {proc.returncode}): {output}")
+            else:
+                results.append("success")
+
         duration = time.monotonic() - start
         _reindex_state["last_duration_seconds"] = round(duration)
         _reindex_state["last_completed_at"] = datetime.now(UTC).isoformat()
-        if proc.returncode != 0:
-            output = (stderr or stdout or b"").decode(errors="replace")[-500:]
-            _reindex_state["last_result"] = f"failed (exit {proc.returncode}): {output}"
-        else:
+        if all(r == "success" for r in results):
             _reindex_state["last_result"] = "success"
+        else:
+            _reindex_state["last_result"] = "; ".join(results)
     except Exception as exc:
         _reindex_state["last_completed_at"] = datetime.now(UTC).isoformat()
         _reindex_state["last_duration_seconds"] = round(time.monotonic() - start)
@@ -322,12 +313,15 @@ async def schedule_nightly_reindex():
                 logger.info("[VECTOR-SYNC] Nightly reindex skipped — already running")
                 continue
 
-            logger.info("[VECTOR-SYNC] Starting nightly auto-reindex")
-            cmd = [sys.executable, "scripts/build_lyra_index.py"]
+            logger.info("[VECTOR-SYNC] Starting nightly auto-reindex (both backends)")
+            cmds = [
+                [sys.executable, "scripts/build_lyra_index.py", "--backend", "voyage"],
+                [sys.executable, "scripts/build_lyra_index.py", "--backend", "local"],
+            ]
             _reindex_state["running"] = True
             _reindex_state["started_at"] = datetime.now(UTC).isoformat()
             _reindex_state["collection"] = "all"
-            await _run_reindex(cmd)
+            await _run_reindex_sequence(cmds)
         except asyncio.CancelledError:
             raise
         except Exception as e:

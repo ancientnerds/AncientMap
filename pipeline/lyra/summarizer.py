@@ -5,11 +5,10 @@ import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import anthropic
 from sqlalchemy import func
 
 from pipeline.database import NewsItem, NewsVideo, get_session
-from pipeline.lyra.config import LyraSettings, call_api, get_anthropic_client, parse_prefilled_json
+from pipeline.lyra.config import LyraAPIError, LyraSettings, call_api, get_anthropic_client, parse_prefilled_json
 from pipeline.lyra.transcript_fetcher import extract_transcript_segment, parse_timestamp_to_seconds
 
 logger = logging.getLogger(__name__)
@@ -156,7 +155,7 @@ def _check_relevance(
             },
             prefill="{",
         )
-    except anthropic.APIError as e:
+    except LyraAPIError as e:
         logger.error(f"Relevance gate API error for {video.id}: {e}")
         return None
 
@@ -294,7 +293,7 @@ def summarize_video(
             },
             prefill="{",
         )
-    except anthropic.APIError as e:
+    except LyraAPIError as e:
         logger.error(f"LLM API error for {video.id}: {e}")
         return False
 

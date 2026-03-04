@@ -24,6 +24,11 @@ logger = logging.getLogger(__name__)
 LLM_PROVIDER = os.getenv("LYRA_LLM_PROVIDER", "anthropic")
 LLM_MODEL = os.getenv("LYRA_LLM_MODEL", "MiniMax-M2.5")
 
+# Per-request backend: set by lyra_agent.chat() before each request.
+# "voyage" (default) uses Voyage embeddings + original collections.
+# "local" uses Ollama embeddings + *_local collections.
+_current_backend: str = "voyage"
+
 # ---------------------------------------------------------------------------
 # Seshat polity data (loaded once from bundled JSON)
 # ---------------------------------------------------------------------------
@@ -389,9 +394,10 @@ def _hybrid_search(
     site_type: str | None = None,
     channel: str | None = None,
 ) -> tuple[list[dict], int]:
-    """Run hybrid dense+BM25 search with RRF fusion and Voyage reranking.
+    """Run hybrid dense+BM25 search with RRF fusion and reranking.
 
-    Returns tuple of (list of payload dicts with relevance scores, voyage tokens used).
+    Reads _current_backend to determine which collection set and embedding backend to use.
+    Returns tuple of (list of payload dicts with relevance scores, embed tokens used).
     Used by both _auto_retrieve() and the vector_search tool.
     """
     from qdrant_client import models
@@ -404,11 +410,15 @@ def _hybrid_search(
         get_sparse_model,
     )
 
+    backend = _current_backend
+    # Append _local suffix for local backend collections
+    qdrant_collection = f"{collection}_local" if backend == "local" else collection
+
     voyage_tokens = 0
     client = get_qdrant_client()
 
     # Step 1: Embed query \u2014 dense (voyage-4) + sparse (BM25)
-    embeddings = get_embeddings(usage="query")
+    embeddings = get_embeddings(usage="query", backend=backend)
     dense_vec = embeddings.embed_query(query)
     voyage_tokens += embeddings.last_total_tokens
     sparse_vecs = list(get_sparse_model().embed([query]))
@@ -439,7 +449,7 @@ def _hybrid_search(
 
     # Step 3: Hybrid query \u2014 prefetch dense + BM25, fuse with RRF
     results = client.query_points(
-        collection_name=collection,
+        collection_name=qdrant_collection,
         prefetch=[
             models.Prefetch(query=dense_vec, using="dense", limit=20, filter=query_filter),
             models.Prefetch(query=sparse_vec, using="bm25", limit=20, filter=query_filter),
@@ -454,7 +464,7 @@ def _hybrid_search(
 
     # Step 4: Rerank with voyage rerank-2.5-lite \u2192 top K
     # Per Voyage docs: prepend instructions to the query for rerank-2.5-lite
-    reranker = get_reranker()
+    reranker = get_reranker(backend=backend)
     docs = [_format_payload_for_rerank(hit.payload) for hit in scored_points]
     instruction = _RERANK_INSTRUCTIONS.get(collection, "")
     rerank_query = f"{instruction}\n{query}" if instruction else query
