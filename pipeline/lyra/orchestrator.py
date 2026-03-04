@@ -285,6 +285,10 @@ def run_pipeline(
 def _run_migrations(engine) -> None:
     """Run all database migrations (schema + data) for the Lyra pipeline."""
     with engine.connect() as conn:
+        # Prevent ALTER TABLE from blocking reads on busy tables.
+        # If a lock can't be acquired in 5s, the statement fails fast
+        # instead of queuing and blocking all API SELECTs.
+        conn.execute(text("SET lock_timeout = '5s'"))
         conn.execute(
             text(
                 "ALTER TABLE news_items ADD COLUMN IF NOT EXISTS site_match_tried BOOLEAN DEFAULT FALSE"
@@ -1439,7 +1443,10 @@ def main() -> None:
     from pipeline.database import create_all_tables, engine
 
     create_all_tables()
-    _run_migrations(engine)
+    try:
+        _run_migrations(engine)
+    except Exception as mig_err:
+        logger.warning(f"[STARTUP] Migrations skipped (lock contention): {mig_err}")
 
     # Seed channels
     from pipeline.lyra.channels import seed_channels
