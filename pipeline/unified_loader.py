@@ -619,7 +619,8 @@ class UnifiedLoader:
 
         with get_session() as session:
             # Ensure news_items FK is CASCADE (required for source reloads)
-            session.execute(text("""
+            session.execute(
+                text("""
                 DO $$
                 BEGIN
                     IF EXISTS (
@@ -632,7 +633,8 @@ class UnifiedLoader:
                             FOREIGN KEY (site_id) REFERENCES unified_sites(id) ON DELETE CASCADE;
                     END IF;
                 END $$;
-            """))
+            """)
+            )
             session.commit()
 
             # Initialize source metadata
@@ -761,8 +763,10 @@ class UnifiedLoader:
         # Disable statement timeout for large deletes and clear parent_site_id FKs first
         session.execute(text("SET LOCAL statement_timeout = 0"))
         session.execute(
-            text("UPDATE unified_sites SET parent_site_id = NULL WHERE source_id = :sid AND parent_site_id IS NOT NULL"),
-            {"sid": source_id}
+            text(
+                "UPDATE unified_sites SET parent_site_id = NULL WHERE source_id = :sid AND parent_site_id IS NOT NULL"
+            ),
+            {"sid": source_id},
         )
         session.execute(
             text("DELETE FROM unified_sites WHERE source_id = :sid"), {"sid": source_id}
