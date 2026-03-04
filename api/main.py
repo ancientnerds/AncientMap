@@ -328,9 +328,13 @@ async def lifespan(app: FastAPI):
             except Exception as _mig_err:
                 logger.warning(f"[STARTUP] Migration skipped (lock contention): {_mig_err}")
         for _sid, _dc in _citation_seed.items():
-            with engine.begin() as conn:
-                conn.execute(_text("SET statement_timeout = '30s'"))
-                conn.execute(_cite_sql, {"id": _sid, "dc": _json.dumps(_dc)})
+            try:
+                with engine.begin() as conn:
+                    conn.execute(_text("SET lock_timeout = '5s'"))
+                    conn.execute(_text("SET statement_timeout = '30s'"))
+                    conn.execute(_cite_sql, {"id": _sid, "dc": _json.dumps(_dc)})
+            except Exception as _seed_err:
+                logger.warning(f"[STARTUP] Citation seed skipped (lock contention): {_seed_err}")
         logger.info(
             "[STARTUP] Database tables verified (includes discord_users, credit_grants, token_usage_logs)"
         )
