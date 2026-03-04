@@ -65,33 +65,30 @@ SOURCES = {
     # Priority 4: OSM Historic (parallel download, ~500K sites)
     "osm_historic": {"enabled": True, "priority": 4, "est": "577K", "module": "pipeline.ingesters.osm_historic", "class": "OSMHistoricIngester"},
 
-    # Priority 5: Historical Maps
-    "david_rumsey": {"enabled": True, "priority": 5, "est": "200+", "module": "pipeline.ingesters.david_rumsey", "class": "DavidRumseyIngester"},
+    # Priority 5: Shipwrecks & Coins
+    "shipwrecks_oxrep": {"enabled": True, "priority": 5, "est": "1.8K", "module": "pipeline.ingesters.shipwrecks_oxrep", "class": "OXREPShipwrecksIngester"},
+    "coins_nomisma": {"enabled": True, "priority": 5, "est": "50K+", "module": "pipeline.ingesters.coins_nomisma", "class": "NomismaIngester"},
 
-    # Priority 6: Shipwrecks (Maritime Archaeology)
-    "shipwrecks_oxrep": {"enabled": True, "priority": 6, "est": "1.8K", "module": "pipeline.ingesters.shipwrecks_oxrep", "class": "OXREPShipwrecksIngester"},
+    # Priority 6: UK & Regional heritage
+    "vici_org": {"enabled": True, "priority": 6, "est": "95K", "module": "pipeline.ingesters.vici_org", "class": "ViciOrgIngester"},
+    "canmore_scotland": {"enabled": True, "priority": 6, "est": "312K", "module": "pipeline.ingesters.canmore_scotland", "class": "CanmoreScotlandIngester"},
+    "coflein_wales": {"enabled": True, "priority": 6, "est": "25K", "module": "pipeline.ingesters.coflein_wales", "class": "CofleinWalesIngester"},
+    "mycenaean_atlas": {"enabled": True, "priority": 6, "est": "5.6K", "module": "pipeline.ingesters.mycenaean_atlas", "class": "MycenaeanAtlasIngester"},
+    "luwian_atlas": {"enabled": True, "priority": 6, "est": "500", "module": "pipeline.ingesters.luwian_atlas", "class": "LuwianAtlasIngester"},
+    "peru_amazon": {"enabled": True, "priority": 6, "est": "1K", "module": "pipeline.ingesters.peru_amazon", "class": "PeruAmazonIngester"},
 
-    # Priority 7: Numismatics (Coins)
-    "coins_nomisma": {"enabled": True, "priority": 7, "est": "50K+", "module": "pipeline.ingesters.coins_nomisma", "class": "NomismaIngester"},
+    # Priority 7: Inscriptions & Texts
+    "list_inscriptions": {"enabled": True, "priority": 7, "est": "507K", "module": "pipeline.ingesters.list_inscriptions", "class": "LISTInscriptionsIngester"},
+    "topostext": {"enabled": True, "priority": 7, "est": "21K+", "module": "pipeline.ingesters.topostext", "class": "ToposTextIngester"},
 
-    # Priority 8: Inscriptions (Epigraphic Data)
-    "inscriptions_edh": {"enabled": True, "priority": 8, "est": "82K", "module": "pipeline.ingesters.inscriptions_edh", "class": "EDHInscriptionsIngester"},
-
-    # Priority 9: Environmental Data
-    "volcanic_holvol": {"enabled": True, "priority": 9, "est": "850+", "module": "pipeline.ingesters.volcanic_holvol", "class": "HolVolIngester"},
-
-    # Priority 10: 3D Models
-    "models_sketchfab": {"enabled": True, "priority": 10, "est": "50K+", "module": "pipeline.ingesters.models_sketchfab", "class": "SketchfabIngester"},
-
-    # Priority 11: Historical Boundaries
-    "boundaries_seshat": {"enabled": True, "priority": 11, "est": "500+", "module": "pipeline.ingesters.boundaries_seshat", "class": "SeshatIngester"},
-
-    # Priority 12: Museum Collections & Artworks
-    "met_museum": {"enabled": False, "priority": 12, "est": "50K+", "module": "pipeline.ingesters.met_museum", "class": "MetMuseumIngester", "reason": "API has bot protection"},
-    "europeana": {"enabled": True, "priority": 12, "est": "100K+", "module": "pipeline.ingesters.europeana", "class": "EuropeanaIngester"},
-
-    # Priority 13: Ancient Texts
-    "topostext": {"enabled": True, "priority": 13, "est": "21K+", "module": "pipeline.ingesters.topostext", "class": "ToposTextIngester"},
+    # Priority 8: Environmental & Geological
+    "volcanic_holvol": {"enabled": True, "priority": 8, "est": "850+", "module": "pipeline.ingesters.volcanic_holvol", "class": "HolVolIngester"},
+    "earth_impacts": {"enabled": True, "priority": 8, "est": "190", "module": "pipeline.ingesters.earth_impacts", "class": "EarthImpactsIngester"},
+    "ncei_earthquakes": {"enabled": True, "priority": 8, "est": "150", "module": "pipeline.ingesters.ncei_earthquakes", "class": "NCEIEarthquakesIngester"},
+    "ncei_tsunamis": {"enabled": True, "priority": 8, "est": "53", "module": "pipeline.ingesters.ncei_tsunamis", "class": "NCEITsunamisIngester"},
+    "ncei_tsunami_obs": {"enabled": True, "priority": 8, "est": "19", "module": "pipeline.ingesters.ncei_tsunami_observations", "class": "NCEITsunamiObservationsIngester"},
+    "ncei_volcanoes": {"enabled": True, "priority": 8, "est": "42", "module": "pipeline.ingesters.ncei_volcanoes", "class": "NCEIVolcanoesIngester"},
+    "radiocarbon_paleo": {"enabled": True, "priority": 8, "est": "2.2K", "module": "pipeline.ingesters.radiocarbon_paleo", "class": "RadiocarbonPaleoIngester"},
 }
 
 FRESHNESS_DAYS = 7

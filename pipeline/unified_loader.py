@@ -456,28 +456,6 @@ SOURCE_CONFIG = {
         "attribution": "Open Context",
     },
     # Museum Collections (content sources - may have limited geo data)
-    "europeana": {
-        "name": "Europeana",
-        "description": "European cultural heritage",
-        "color": "#0a72cc",  # Europeana blue
-        "icon": "museum",
-        "category": "Museums",
-        "file_pattern": "europeana.json",
-        "format": "json_sites",
-        "license": "CC BY-SA 4.0",
-        "attribution": "Europeana",
-    },
-    "met_museum": {
-        "name": "Metropolitan Museum",
-        "description": "Ancient art from the Met's collection",
-        "color": "#e4002b",  # Met red
-        "icon": "museum",
-        "category": "Museums",
-        "file_pattern": "met_museum.json",
-        "format": "json_sites",
-        "license": "CC0",
-        "attribution": "The Metropolitan Museum of Art",
-    },
     # Historical Maps (content source - bbox, not points)
 }
 
@@ -1585,8 +1563,13 @@ class UnifiedLoader:
 
                 if geom_str:
                     try:
-                        # Parse the stringified GeoJSON
-                        geom_data = json.loads(geom_str)
+                        # Parse stringified GeoJSON — data uses Python dict syntax (single quotes)
+                        try:
+                            geom_data = json.loads(geom_str)
+                        except (ValueError, json.JSONDecodeError):
+                            import ast
+
+                            geom_data = ast.literal_eval(geom_str)
                         features = geom_data.get("features", [])
                         if features:
                             geometry = features[0].get("geometry", {})
