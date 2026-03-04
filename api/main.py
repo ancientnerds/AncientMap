@@ -315,14 +315,21 @@ async def lifespan(app: FastAPI):
             WHERE id = :id
               AND NOT jsonb_exists(COALESCE(raw_data, cast('{}' as jsonb)), 'description_citations')
         """)
-        # Run DDL migrations first (fast), then data fixes
+        # Run DDL migrations first (fast), then data fixes.
+        # Use lock_timeout=5s so ALTER TABLE fails fast on lock contention
+        # (e.g. Lyra orchestrator holding locks on unified_sites) instead of
+        # blocking for minutes and racing the health check.
         for _sql in _api_migrations:
-            with engine.begin() as conn:
-                conn.execute(_text("SET statement_timeout = '120s'"))
-                conn.execute(_text(_sql))
+            try:
+                with engine.begin() as conn:
+                    conn.execute(_text("SET lock_timeout = '5s'"))
+                    conn.execute(_text("SET statement_timeout = '30s'"))
+                    conn.execute(_text(_sql))
+            except Exception as _mig_err:
+                logger.warning(f"[STARTUP] Migration skipped (lock contention): {_mig_err}")
         for _sid, _dc in _citation_seed.items():
             with engine.begin() as conn:
-                conn.execute(_text("SET statement_timeout = '120s'"))
+                conn.execute(_text("SET statement_timeout = '30s'"))
                 conn.execute(_cite_sql, {"id": _sid, "dc": _json.dumps(_dc)})
         logger.info(
             "[STARTUP] Database tables verified (includes discord_users, credit_grants, token_usage_logs)"
