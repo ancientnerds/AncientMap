@@ -165,6 +165,7 @@ def get_embeddings(
     if key in _embeddings:
         return _embeddings[key]
 
+    instance: VoyageEmbeddings | OllamaEmbeddings
     if backend == "local":
         instance = OllamaEmbeddings(model=OLLAMA_EMBED_MODEL)
         logger.info(f"Initialized Ollama embeddings: {OLLAMA_EMBED_MODEL} (usage={usage})")
