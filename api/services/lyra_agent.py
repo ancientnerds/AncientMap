@@ -29,7 +29,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 
 from api.services.lyra_backends import get_backend
-from api.services.lyra_prompts import LYRA_SYSTEM_PROMPT, _build_context_prompt
+from api.services.lyra_prompts import LYRA_SYSTEM_PROMPT, LYRA_TRIVIAL_PROMPT, _build_context_prompt
 from api.services.lyra_router import (
     RequestContext,
     get_classification_reason,
@@ -400,14 +400,19 @@ def _build_messages(
     context_id: str | None,
     context_year: int | None,
     retrieved_context: str = "",
+    model_tier: str = "heavy",
 ) -> list[BaseMessage]:
     """Build the message list for the LLM."""
-    # Empire context goes AFTER retrieved context so it takes precedence over noisy results
-    context_prompt = _build_context_prompt(context_type, context_id, context_year)
-    if context_type == "empire":
-        system_text = LYRA_SYSTEM_PROMPT + retrieved_context + context_prompt
+    # Trivial tier uses a minimal prompt (no tool docs, no formatting rules)
+    if model_tier == "trivial":
+        system_text = LYRA_TRIVIAL_PROMPT
     else:
-        system_text = LYRA_SYSTEM_PROMPT + context_prompt + retrieved_context
+        # Empire context goes AFTER retrieved context so it takes precedence over noisy results
+        context_prompt = _build_context_prompt(context_type, context_id, context_year)
+        if context_type == "empire":
+            system_text = LYRA_SYSTEM_PROMPT + retrieved_context + context_prompt
+        else:
+            system_text = LYRA_SYSTEM_PROMPT + context_prompt + retrieved_context
     messages: list[BaseMessage] = [SystemMessage(content=system_text)]
 
     # Add conversation history (validated: role whitelist + content length cap)
@@ -728,7 +733,14 @@ async def run_agent_stream(
 
     _t_ctx = time.monotonic()
     messages = _build_messages(
-        message, images, history, context_type, context_id, context_year, retrieved_context
+        message,
+        images,
+        history,
+        context_type,
+        context_id,
+        context_year,
+        retrieved_context,
+        model_tier=ctx.model_tier,
     )
     yield {
         "type": "pipeline",
