@@ -56,7 +56,9 @@ def _get_user_id(req: Request) -> str:
     if user:
         return user.discord_id
     forwarded = req.headers.get("x-forwarded-for", "")
-    return forwarded.split(",")[0].strip() if forwarded else req.client.host if req.client else "anon"
+    return (
+        forwarded.split(",")[0].strip() if forwarded else req.client.host if req.client else "anon"
+    )
 
 
 def _estimate_minutes(effort: str, queue_position: int) -> int:
@@ -243,12 +245,18 @@ async def stream_research(request_id: str, req: Request):
 
     # If already completed, return a single done event
     if row.status in ("completed", "failed", "cancelled"):
+
         async def _done_gen():
             yield f"event: done\ndata: {json.dumps({'type': 'done', 'status': row.status})}\n\n"
+
         return StreamingResponse(
             _done_gen(),
             media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
         )
 
     async def _stream_gen():
@@ -269,7 +277,7 @@ async def stream_research(request_id: str, req: Request):
                 idle_count = 0
 
                 # Check if we've reached a terminal event
-                if any(e.get("type") in ("done", "error") for e in events[cursor - 1:]):
+                if any(e.get("type") in ("done", "error") for e in events[cursor - 1 :]):
                     return
             else:
                 idle_count += 1
@@ -281,7 +289,11 @@ async def stream_research(request_id: str, req: Request):
     return StreamingResponse(
         _stream_gen(),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 
@@ -306,7 +318,9 @@ async def cancel_research(request_id: str, req: Request):
         if row.user_id != user_id:
             raise HTTPException(status_code=403, detail="Not your request")
         if row.status != "queued":
-            raise HTTPException(status_code=409, detail=f"Cannot cancel request in '{row.status}' state")
+            raise HTTPException(
+                status_code=409, detail=f"Cannot cancel request in '{row.status}' state"
+            )
 
         session.execute(
             text("UPDATE research_requests SET status = 'cancelled' WHERE id = :id"),
