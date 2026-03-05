@@ -101,6 +101,13 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS best_wiki_url VARCHAR(500)",
             # Ensure db_snapshots has source_id column (added after initial table creation)
             "ALTER TABLE db_snapshots ADD COLUMN IF NOT EXISTS source_id VARCHAR(50)",
+            # Ensure site_content_links unique constraint exists (needed for ON CONFLICT upsert)
+            """DO $$ BEGIN
+                ALTER TABLE site_content_links
+                    ADD CONSTRAINT uq_content_link
+                    UNIQUE (site_id, content_source, content_id);
+            EXCEPTION WHEN duplicate_object THEN NULL;
+            END $$""",
             # Strip orphaned [N] citation markers from sites lacking citation metadata
             "UPDATE unified_sites SET description = regexp_replace(description, '\\s*\\[\\d+\\]', '', 'g') WHERE description ~ '\\[\\d+\\]' AND NOT jsonb_exists(COALESCE(raw_data, '{}'), 'description_citations')",
         ]

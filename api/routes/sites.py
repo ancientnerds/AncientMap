@@ -9,6 +9,7 @@ Supports:
 - Static JSON fallback when database is empty
 """
 
+import hashlib
 import json
 import logging
 import random
@@ -1559,7 +1560,10 @@ async def batch_upload_sites(
                 quality = link.get("quality", "medium")
                 base_score = 0.9 if quality == "high" else 0.7
                 relevance = round(base_score - (idx * 0.05), 2)
-                content_id = f"{domain}:{hash(url) & 0xFFFFFFFF:08x}"
+                url_hash = hashlib.md5(
+                    url.encode(), usedforsecurity=False
+                ).hexdigest()[:8]
+                content_id = f"{domain}:{url_hash}"
                 meta = {
                     "domain": domain,
                     "link_type": link.get("link_type", "article"),
@@ -1575,7 +1579,7 @@ async def batch_upload_sites(
                              'web_discovery', :cid, :title,
                              :url, :score,
                              CAST(:meta AS jsonb))
-                        ON CONFLICT (site_id, content_source, content_id)
+                        ON CONFLICT ON CONSTRAINT uq_content_link
                         DO UPDATE SET
                             title = EXCLUDED.title,
                             content_url = EXCLUDED.content_url,
