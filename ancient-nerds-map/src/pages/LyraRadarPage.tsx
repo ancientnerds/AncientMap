@@ -375,7 +375,7 @@ function RadarCard({ item, onViewSite, onPromote }: { item: RadarItem; onViewSit
               rel="noopener noreferrer"
               className="lyra-wiki-link"
             >
-              <img src="https://www.google.com/s2/favicons?domain=wikipedia.org&sz=32" alt="" className="lyra-link-favicon" />
+              <img src="https://www.google.com/s2/favicons?domain=wikipedia.org&sz=32" alt="" className="lyra-link-favicon" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
               Wikipedia
             </a>
           )}
@@ -386,7 +386,7 @@ function RadarCard({ item, onViewSite, onPromote }: { item: RadarItem; onViewSit
               rel="noopener noreferrer"
               className="lyra-wiki-link lyra-wikidata-link"
             >
-              <img src="https://www.google.com/s2/favicons?domain=wikidata.org&sz=32" alt="" className="lyra-link-favicon" />
+              <img src="https://www.google.com/s2/favicons?domain=wikidata.org&sz=32" alt="" className="lyra-link-favicon" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
               Wikidata
             </a>
           )}
@@ -397,7 +397,7 @@ function RadarCard({ item, onViewSite, onPromote }: { item: RadarItem; onViewSit
               rel="noopener noreferrer"
               className="lyra-wiki-link lyra-wikidata-link"
             >
-              <img src="https://www.google.com/s2/favicons?domain=commons.wikimedia.org&sz=32" alt="" className="lyra-link-favicon" />
+              <img src="https://www.google.com/s2/favicons?domain=commons.wikimedia.org&sz=32" alt="" className="lyra-link-favicon" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
               Commons
             </a>
           )}

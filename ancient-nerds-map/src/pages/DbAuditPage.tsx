@@ -1892,6 +1892,7 @@ export default function DbAuditPage() {
                                 height="16"
                                 className="db-link-favicon"
                                 loading="lazy"
+                                onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
                               />
                             </a>
                           ))}

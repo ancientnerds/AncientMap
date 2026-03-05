@@ -190,6 +190,7 @@ export function DescriptionSection({
                 width="20"
                 height="20"
                 loading="lazy"
+                onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
               />
             </a>
           )
@@ -212,6 +213,7 @@ export function DescriptionSection({
               height="16"
               className="ref-link-favicon"
               loading="lazy"
+              onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
             />
             <span className="ref-link-label">{shortDomain(ref.domain)}</span>
           </a>

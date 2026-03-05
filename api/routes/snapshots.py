@@ -69,10 +69,13 @@ def clear_pins_cache():
 @router.get("/")
 async def get_snapshots():
     """Return the snapshot manifest listing all available dated versions."""
-    if not MANIFEST_PATH.exists():
+    try:
+        if not MANIFEST_PATH.exists():
+            return {"snapshots": []}
+        with open(MANIFEST_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
         return {"snapshots": []}
-    with open(MANIFEST_PATH, encoding="utf-8") as f:
-        return json.load(f)
 
 
 def _resolve_date(date_key: str) -> str:
