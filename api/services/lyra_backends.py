@@ -99,11 +99,13 @@ class OllamaBackend:
         base_url: str,
         api_key: str,
         max_tokens: int = 4096,
+        num_ctx: int | None = None,
     ):
         self.model = model
         self.base_url = base_url
         self.api_key = api_key
         self.max_tokens = max_tokens
+        self.num_ctx = num_ctx
         self._client: Any = None
 
     def _get_client(self) -> Any:
@@ -132,6 +134,8 @@ class OllamaBackend:
             "max_tokens": self.max_tokens,
             "stream": True,
         }
+        if self.num_ctx:
+            kwargs["extra_body"] = {"num_ctx": self.num_ctx}
         if openai_tools:
             kwargs["tools"] = openai_tools
             kwargs["tool_choice"] = "auto"
@@ -277,11 +281,13 @@ def get_backend(model_name: str, backend_type: str) -> LLMBackend:
     key = f"{backend_type}:{model_name}"
     if key not in _backends:
         if backend_type == "local":
+            num_ctx = int(os.getenv("LYRA_OLLAMA_NUM_CTX", "2048"))
             _backends[key] = OllamaBackend(
                 model=model_name,
                 base_url=os.getenv("LYRA_OLLAMA_BASE_URL", ""),
                 api_key=os.getenv("LYRA_OLLAMA_API_KEY", ""),
                 max_tokens=4096,
+                num_ctx=num_ctx,
             )
             logger.info(f"Created OllamaBackend for {model_name}")
         else:
