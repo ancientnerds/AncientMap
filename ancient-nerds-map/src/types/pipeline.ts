@@ -35,6 +35,7 @@ export interface PipelineNodeDef {
 }
 
 export const PIPELINE_STAGES: PipelineNodeDef[] = [
+  { id: 'pipeline_init', label: 'Pipeline Init', sublabel: 'Model & config' },
   { id: 'auto_retrieve', label: 'Auto-Retrieve', sublabel: 'Qdrant hybrid search', parallelGroup: 'phase1' },
   { id: 'filter_extraction', label: 'Filter Extraction', sublabel: 'LLM-structured filters', parallelGroup: 'phase1' },
   { id: 'news_augmentation', label: 'News Augmentation', sublabel: 'SQL + deduplication' },

@@ -494,6 +494,21 @@ async def run_agent_stream(
         f"context_type={context_type}, context_id={context_id}"
     )
 
+    # Emit pipeline init so the frontend knows model/config from the start
+    yield {
+        "type": "pipeline",
+        "stage": "pipeline_init",
+        "status": "done",
+        "duration_ms": 0,
+        "meta": {
+            "model": ctx.model_name,
+            "tier": ctx.model_tier,
+            "backend": ctx.backend_type,
+            "embedding": "Voyage-4" if ctx.embedding_backend == "voyage" else "nomic-embed-text",
+            "reranker": "rerank-2.5-lite" if ctx.embedding_backend == "voyage" else "FlashRank",
+        },
+    }
+
     if message and len(message.strip()) > 2 and context_type != "empire":
         # Auto-retrieve sites + news from Qdrant (isolated so Qdrant failures don't kill the response)
         # Skipped for empire context — empire questions use get_empire_data tool (Seshat data), not Qdrant/news
