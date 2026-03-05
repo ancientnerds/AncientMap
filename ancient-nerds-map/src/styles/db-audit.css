@@ -1423,6 +1423,18 @@
   border-color: #d97706;
 }
 
+.db-btn-replace {
+  background: #b91c1c;
+  color: #fff;
+  border-color: #b91c1c;
+  font-weight: 500;
+}
+
+.db-btn-replace:hover:not(:disabled) {
+  background: #991b1b;
+  border-color: #991b1b;
+}
+
 /* Upload progress overlay */
 .db-upload-progress {
   display: flex;

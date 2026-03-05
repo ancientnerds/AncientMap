@@ -1631,6 +1631,246 @@ async def batch_upload_sites(
     return result
 
 
+class ReplaceSourceRequest(BaseModel):
+    """Request body for replace-source (snapshot + wipe + insert)."""
+
+    sites: list[ParsedSitePayload]
+    target_source: str
+
+
+@router.post("/replace-source")
+async def replace_source(
+    body: ReplaceSourceRequest,
+    user: DiscordUser = Depends(require_founder),
+    db: Session = Depends(get_db),
+):
+    """Replace all sites for a source: snapshot current state, delete, insert fresh."""
+    import uuid as _uuid
+
+    from api.services.snapshots import create_snapshot
+    from pipeline.utils.text import normalize_name
+
+    edited_by = user.username
+    target_source = body.target_source
+    sites = body.sites
+
+    if not sites:
+        raise HTTPException(status_code=400, detail="No sites provided")
+
+    # 1. Snapshot ALL existing sites for this source
+    existing_ids = [
+        r.id
+        for r in db.execute(
+            text(
+                "SELECT id::text AS id FROM unified_sites"
+                " WHERE source_id = :src"
+            ),
+            {"src": target_source},
+        ).fetchall()
+    ]
+
+    snapshot_id = None
+    if existing_ids:
+        snapshot_id = create_snapshot(
+            db,
+            site_ids=existing_ids,
+            created_by=edited_by,
+            description=(
+                f"Before replace-source {target_source}"
+                f" ({len(existing_ids)} old → {len(sites)} new)"
+            ),
+            snapshot_type="upload",
+            source_id=target_source,
+        )
+
+    # 2. Delete old site_content_links for this source's sites
+    if existing_ids:
+        db.execute(
+            text(
+                "DELETE FROM site_content_links"
+                " WHERE site_id IN ("
+                "   SELECT id FROM unified_sites WHERE source_id = :src"
+                " )"
+            ),
+            {"src": target_source},
+        )
+        # Delete card_stats
+        db.execute(
+            text(
+                "DELETE FROM card_stats"
+                " WHERE site_id IN ("
+                "   SELECT id FROM unified_sites WHERE source_id = :src"
+                " )"
+            ),
+            {"src": target_source},
+        )
+        # Delete the sites themselves
+        db.execute(
+            text(
+                "DELETE FROM unified_sites WHERE source_id = :src"
+            ),
+            {"src": target_source},
+        )
+
+    # 3. Insert all sites fresh
+    insert_params = []
+    card_params = []
+    for site in sites:
+        site_id = site.existing_id or str(_uuid.uuid4())
+        period_start = site.period_start
+        if period_start is None and site.period_name:
+            period_start = _period_to_year(site.period_name)
+        site_type = (
+            normalize_site_type(site.site_type) if site.site_type else None
+        )
+        name_norm = normalize_name(site.name) if site.name else site.name
+        record_id = f"upload-{site_id[:8]}"
+
+        insert_params.append({
+            "id": site_id,
+            "source_id": target_source,
+            "source_record_id": record_id,
+            "name": site.name,
+            "name_normalized": name_norm,
+            "lat": site.lat,
+            "lon": site.lon,
+            "site_type": site_type,
+            "period_name": site.period_name,
+            "period_start": period_start,
+            "country": site.country,
+            "description": site.description,
+            "source_url": site.source_url,
+            "thumbnail_url": site.thumbnail_url,
+            "edited_by": edited_by,
+        })
+
+        if site.card_description or site.confidence_score is not None:
+            card_params.append({
+                "site_id": site_id,
+                "card_description": site.card_description,
+                "confidence_score": site.confidence_score,
+            })
+
+    # Batch INSERT sites
+    if insert_params:
+        db.execute(
+            text("""
+                INSERT INTO unified_sites (
+                    id, source_id, source_record_id, name, name_normalized,
+                    lat, lon, geom, site_type, period_name, period_start,
+                    country, description, source_url, thumbnail_url,
+                    edited_by, created_at
+                ) VALUES (
+                    CAST(:id AS uuid), :source_id, :source_record_id,
+                    :name, :name_normalized,
+                    :lat, :lon, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326),
+                    :site_type, :period_name, :period_start,
+                    :country, :description, :source_url, :thumbnail_url,
+                    :edited_by, NOW()
+                )
+            """),
+            insert_params,
+        )
+
+    # Batch INSERT card_stats
+    if card_params:
+        db.execute(
+            text("""
+                INSERT INTO card_stats (
+                    site_id, card_description, confidence_score,
+                    antiquity, fortification, cultural_influence,
+                    mystery, legacy, total_power,
+                    rarity_score, rarity_tier, category_group
+                ) VALUES (
+                    CAST(:site_id AS uuid), :card_description,
+                    :confidence_score,
+                    0, 0, 0, 0, 0, 0, 0, 0, 'unknown'
+                )
+            """),
+            card_params,
+        )
+
+    # 4. Write enrichment data (citations + ref links)
+    citations_written = 0
+    reflinks_written = 0
+    for site in sites:
+        site_id = site.existing_id or next(
+            (p["id"] for p in insert_params if p["name"] == site.name),
+            None,
+        )
+        if not site_id:
+            continue
+
+        if site.description_citations:
+            db.execute(
+                text("""
+                    UPDATE unified_sites
+                    SET raw_data = COALESCE(raw_data, '{}'::jsonb)
+                        || jsonb_build_object(
+                            'description_citations', :cit::jsonb
+                        )
+                    WHERE id::text = :sid
+                """),
+                {
+                    "sid": site_id,
+                    "cit": json.dumps(site.description_citations),
+                },
+            )
+            citations_written += 1
+
+        if site.reference_links:
+            for idx, link in enumerate(site.reference_links[:5]):
+                url = link.get("url", "")
+                domain = link.get("domain", "")
+                if not url:
+                    continue
+                url_hash = hashlib.md5(
+                    url.encode(), usedforsecurity=False,
+                ).hexdigest()[:8]
+                quality = link.get("quality", "medium")
+                base_score = 0.9 if quality == "high" else 0.7
+                relevance = round(base_score - (idx * 0.05), 2)
+                db.execute(
+                    text("""
+                        INSERT INTO site_content_links
+                            (site_id, content_type, content_source,
+                             content_id, title, content_url,
+                             relevance_score, link_metadata)
+                        VALUES
+                            (CAST(:sid AS uuid), 'reference',
+                             'web_discovery', :cid, :title,
+                             :url, :score,
+                             CAST(:meta AS jsonb))
+                    """),
+                    {
+                        "sid": site_id,
+                        "cid": f"{domain}:{url_hash}",
+                        "title": (link.get("title") or "")[:500],
+                        "url": url,
+                        "score": relevance,
+                        "meta": json.dumps({
+                            "domain": domain,
+                            "link_type": link.get("link_type", "article"),
+                        }),
+                    },
+                )
+            reflinks_written += 1
+
+    db.commit()
+    cache_delete_pattern("sites:*")
+
+    global _static_sites_cache
+    _static_sites_cache = None
+
+    return {
+        "snapshot_id": snapshot_id,
+        "deleted": len(existing_ids),
+        "inserted": len(insert_params),
+        "citations_written": citations_written,
+        "reflinks_written": reflinks_written,
+    }
+
+
 # =============================================================================
 # Delete Site Endpoint
 # =============================================================================
