@@ -16,6 +16,7 @@ import logging
 import os
 import time
 from collections.abc import AsyncIterator
+from typing import Any
 
 from langchain_core.messages import (
     AIMessage,
@@ -805,7 +806,7 @@ async def run_agent_stream(
         # Execute tool calls
         # Add the AI message with tool calls to conversation
         # Parse args safely — malformed JSON from the LLM proxy must not crash the stream
-        parsed_tool_calls = []
+        parsed_tool_calls: list[dict[str, Any]] = []
         for tc in tool_calls:
             if not tc.get("id") or not tc.get("name"):
                 continue
@@ -832,11 +833,11 @@ async def run_agent_stream(
 
             _t_tool = time.monotonic()
             try:
-                args = tc["args"]
+                tool_args: dict[str, Any] = tc["args"] if isinstance(tc["args"], dict) else {}
 
                 # Summarize args for the pipeline panel (strip verbose fields)
-                _args_summary = {}
-                for k, v in args.items():
+                _args_summary: dict = {}
+                for k, v in tool_args.items():
                     if isinstance(v, str) and len(v) > 80:
                         _args_summary[k] = v[:77] + "..."
                     else:
@@ -849,7 +850,7 @@ async def run_agent_stream(
                     "duration_ms": None,
                     "meta": {"tool": str(tc["name"]), "args": _args_summary},
                 }
-                result = tool_fn.invoke(args)
+                result = tool_fn.invoke(tool_args)
                 tool_calls_made += 1
 
                 # Extract site data for map highlighting
