@@ -509,13 +509,23 @@ async def run_agent_stream(
         },
     }
 
-    if message and len(message.strip()) > 2 and context_type != "empire":
-        # Auto-retrieve sites + news from Qdrant (isolated so Qdrant failures don't kill the response)
-        # Skipped for empire context — empire questions use get_empire_data tool (Seshat data), not Qdrant/news
+    # Skip retrieval entirely for fast-tier queries (greetings, meta questions) —
+    # no point in searching Qdrant for "hi" or "who are you"
+    skip_retrieval = (
+        ctx.model_tier == "fast"
+        or context_type == "empire"
+        or not message
+        or len(message.strip()) <= 2
+    )
+
+    if not skip_retrieval:
         auto_site_results: list[dict] = []
         auto_news_results: list[dict] = []
 
         # Q1: Run auto-retrieval (Qdrant) and filter extraction (LLM) in parallel — zero data dependency
+        # Filter extraction uses MiniMax LLM — skip it for local backend to avoid costs
+        use_filter_extraction = ctx.backend_type != "local"
+
         yield {
             "type": "pipeline",
             "stage": "auto_retrieve",
@@ -523,20 +533,25 @@ async def run_agent_stream(
             "duration_ms": None,
             "meta": None,
         }
-        yield {
-            "type": "pipeline",
-            "stage": "filter_extraction",
-            "status": "start",
-            "duration_ms": None,
-            "meta": None,
-        }
+        if use_filter_extraction:
+            yield {
+                "type": "pipeline",
+                "stage": "filter_extraction",
+                "status": "start",
+                "duration_ms": None,
+                "meta": None,
+            }
         _t_phase1 = time.monotonic()
 
         auto_task = asyncio.to_thread(_auto_retrieve, message, context_type)
-        filter_task = _extract_news_filters(message)
-        auto_result_or_exc, filters_or_exc = await asyncio.gather(
-            auto_task, filter_task, return_exceptions=True
-        )
+        if use_filter_extraction:
+            filter_task = _extract_news_filters(message)
+            auto_result_or_exc, filters_or_exc = await asyncio.gather(
+                auto_task, filter_task, return_exceptions=True
+            )
+        else:
+            auto_result_or_exc = await auto_task
+            filters_or_exc = {}  # No filter extraction for local backend
         _phase1_ms = int((time.monotonic() - _t_phase1) * 1000)
 
         news_filters: dict = {}
@@ -566,23 +581,32 @@ async def run_agent_stream(
                 },
             }
 
-        if isinstance(filters_or_exc, BaseException):
-            logger.warning(f"News filter extraction failed: {filters_or_exc}")
-            yield {
-                "type": "pipeline",
-                "stage": "filter_extraction",
-                "status": "error",
-                "duration_ms": _phase1_ms,
-                "meta": {"error": str(filters_or_exc)[:120]},
-            }
+        if use_filter_extraction:
+            if isinstance(filters_or_exc, BaseException):
+                logger.warning(f"News filter extraction failed: {filters_or_exc}")
+                yield {
+                    "type": "pipeline",
+                    "stage": "filter_extraction",
+                    "status": "error",
+                    "duration_ms": _phase1_ms,
+                    "meta": {"error": str(filters_or_exc)[:120]},
+                }
+            else:
+                news_filters = filters_or_exc
+                yield {
+                    "type": "pipeline",
+                    "stage": "filter_extraction",
+                    "status": "done",
+                    "duration_ms": _phase1_ms,
+                    "meta": {"filters": news_filters},
+                }
         else:
-            news_filters = filters_or_exc
             yield {
                 "type": "pipeline",
                 "stage": "filter_extraction",
-                "status": "done",
-                "duration_ms": _phase1_ms,
-                "meta": {"filters": news_filters},
+                "status": "skip",
+                "duration_ms": None,
+                "meta": {"reason": "local backend"},
             }
 
         # Extract sites from auto-retrieved results for map highlighting
@@ -622,6 +646,13 @@ async def run_agent_stream(
             )
 
         # Fetch related news: site-specific first, then broader filters
+        yield {
+            "type": "pipeline",
+            "stage": "news_augmentation",
+            "status": "start",
+            "duration_ms": None,
+            "meta": None,
+        }
         _t_news = time.monotonic()
         site_ids = [s["id"] for s in all_sites if s.get("id")]
         site_names = [s["name"] for s in all_sites if s.get("name")]
@@ -669,7 +700,7 @@ async def run_agent_stream(
                 news_lines.append(line)
             retrieved_context += "\n\n### Related News\n" + "\n".join(news_lines) + "\n"
     else:
-        # Empire context or empty message — skip retrieval phases
+        # Fast tier, empire context, or empty message — skip retrieval phases
         yield {
             "type": "pipeline",
             "stage": "auto_retrieve",
@@ -680,6 +711,13 @@ async def run_agent_stream(
         yield {
             "type": "pipeline",
             "stage": "filter_extraction",
+            "status": "skip",
+            "duration_ms": None,
+            "meta": None,
+        }
+        yield {
+            "type": "pipeline",
+            "stage": "news_augmentation",
             "status": "skip",
             "duration_ms": None,
             "meta": None,
@@ -780,9 +818,9 @@ async def run_agent_stream(
         ai_msg = AIMessage(content=collected_content, tool_calls=parsed_tool_calls)
         messages.append(ai_msg)
 
-        # Execute each tool and add results
+        # Execute each tool using already-parsed args
         tool_map = {t.name: t for t in TOOLS}
-        for tc in tool_calls:
+        for tc in parsed_tool_calls:
             if not tc.get("name") or not tc.get("id"):
                 continue
             tool_fn = tool_map.get(str(tc["name"]))
@@ -794,7 +832,7 @@ async def run_agent_stream(
 
             _t_tool = time.monotonic()
             try:
-                args = json.loads(str(tc["args"])) if tc["args"] else {}
+                args = tc["args"]
 
                 # Summarize args for the pipeline panel (strip verbose fields)
                 _args_summary = {}

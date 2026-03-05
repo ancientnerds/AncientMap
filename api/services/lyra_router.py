@@ -107,7 +107,7 @@ _GREETING_PATTERNS = [
 _SIMPLE_PATTERNS = [
     re.compile(r"^(who are you|what are you|what can you do)\b", re.IGNORECASE),
     re.compile(r"^(help|thanks|thank you|ok|okay|yes|no|bye|goodbye)\b", re.IGNORECASE),
-    re.compile(r"^(what'?s? up|how are you|nice to meet you)\b", re.IGNORECASE),
+    re.compile(r"^(what[\u2018\u2019']?s? up|how are you|nice to meet you)\b", re.IGNORECASE),
     re.compile(r"^(test|ping|are you there|you there)\b", re.IGNORECASE),
 ]
 
@@ -119,25 +119,24 @@ def _classify_query(message: str) -> str:
     """
     msg = message.strip()
 
-    # Very short messages are simple
+    # Check greeting patterns first (before length check)
+    for pattern in _GREETING_PATTERNS:
+        if pattern.search(msg):
+            return "fast"
+
+    # Check simple meta patterns (e.g. "what's up", "how are you")
+    for pattern in _SIMPLE_PATTERNS:
+        if pattern.search(msg):
+            return "fast"
+
+    # Very short messages are simple (unless they contain query keywords)
     if len(msg) < 12:
-        # Check if it's a short but complex query (e.g. "sites in Crete")
         if any(
             kw in msg.lower()
             for kw in ("site", "find", "search", "show", "where", "what", "tell", "list")
         ):
             return "heavy"
         return "fast"
-
-    # Check greeting patterns
-    for pattern in _GREETING_PATTERNS:
-        if pattern.search(msg):
-            return "fast"
-
-    # Check simple meta patterns
-    for pattern in _SIMPLE_PATTERNS:
-        if pattern.search(msg):
-            return "fast"
 
     # Default: capable model for archaeology queries
     return "heavy"

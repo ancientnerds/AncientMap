@@ -226,12 +226,13 @@ export default function PipelinePanel({ trace, isLive, onClose }: PipelinePanelP
     : 'idle'
 
   // Augmentation section overall status
+  const augNodes = [newsAugment, ctxAssembly, preEmit].filter(Boolean) as PipelineNodeInstance[]
   const augStatus: PipelineNodeStatus =
-    [newsAugment, ctxAssembly, preEmit].some(n => n?.status === 'active') ? 'active'
-    : [newsAugment, ctxAssembly, preEmit].some(n => n?.status === 'error') ? 'error'
-    : [newsAugment, ctxAssembly, preEmit].every(n => n?.status === 'done') ? 'done'
-    : [newsAugment, ctxAssembly, preEmit].every(n => n?.status === 'skip') ? 'skip'
-    : newsAugment || ctxAssembly || preEmit ? 'active' : 'idle'
+    augNodes.some(n => n.status === 'active') ? 'active'
+    : augNodes.some(n => n.status === 'error') ? 'error'
+    : augNodes.length > 0 && augNodes.every(n => n.status === 'done' || n.status === 'skip') ? 'done'
+    : augNodes.length > 0 ? 'active'
+    : 'idle'
 
   // Generation section overall status
   const genStatus: PipelineNodeStatus =
