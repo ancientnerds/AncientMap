@@ -127,8 +127,10 @@ class OllamaBackend:
             "think": enable_thinking,
             "stream": True,
         }
+        options: dict = {"num_predict": self.max_tokens}
         if self.num_ctx:
-            body["options"] = {"num_ctx": self.num_ctx}
+            options["num_ctx"] = self.num_ctx
+        body["options"] = options
         if openai_tools:
             body["tools"] = openai_tools
 
@@ -287,7 +289,7 @@ def get_backend(model_name: str, backend_type: str) -> LLMBackend:
                 model=model_name,
                 base_url=os.getenv("LYRA_OLLAMA_BASE_URL", ""),
                 api_key=os.getenv("LYRA_OLLAMA_API_KEY", ""),
-                max_tokens=4096,
+                max_tokens=1024,
                 num_ctx=num_ctx,
             )
             logger.info(f"Created OllamaBackend for {model_name}")

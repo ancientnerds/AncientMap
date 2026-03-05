@@ -1560,9 +1560,7 @@ async def batch_upload_sites(
                 quality = link.get("quality", "medium")
                 base_score = 0.9 if quality == "high" else 0.7
                 relevance = round(base_score - (idx * 0.05), 2)
-                url_hash = hashlib.md5(
-                    url.encode(), usedforsecurity=False
-                ).hexdigest()[:8]
+                url_hash = hashlib.md5(url.encode(), usedforsecurity=False).hexdigest()[:8]
                 content_id = f"{domain}:{url_hash}"
                 meta = {
                     "domain": domain,
