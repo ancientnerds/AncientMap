@@ -1525,6 +1525,7 @@ async def batch_upload_sites(
     # Write description_citations into raw_data and reference_links into site_content_links
     citations_written = 0
     reflinks_written = 0
+    reflinks_errors = 0
     for site in sites:
         site_id = site.existing_id or next(
             (p["id"] for p in insert_params if p["name"] == site.name), None
@@ -1560,39 +1561,51 @@ async def batch_upload_sites(
                 quality = link.get("quality", "medium")
                 base_score = 0.9 if quality == "high" else 0.7
                 relevance = round(base_score - (idx * 0.05), 2)
-                url_hash = hashlib.md5(url.encode(), usedforsecurity=False).hexdigest()[:8]
+                url_hash = hashlib.md5(
+                    url.encode(), usedforsecurity=False,
+                ).hexdigest()[:8]
                 content_id = f"{domain}:{url_hash}"
                 meta = {
                     "domain": domain,
                     "link_type": link.get("link_type", "article"),
                 }
-                db.execute(
-                    text("""
-                        INSERT INTO site_content_links
-                            (site_id, content_type, content_source,
-                             content_id, title, content_url,
-                             relevance_score, link_metadata)
-                        VALUES
-                            (CAST(:sid AS uuid), 'reference',
-                             'web_discovery', :cid, :title,
-                             :url, :score,
-                             CAST(:meta AS jsonb))
-                        ON CONFLICT ON CONSTRAINT uq_content_link
-                        DO UPDATE SET
-                            title = EXCLUDED.title,
-                            content_url = EXCLUDED.content_url,
-                            relevance_score = EXCLUDED.relevance_score,
-                            link_metadata = EXCLUDED.link_metadata
-                    """),
-                    {
-                        "sid": site_id,
-                        "cid": content_id,
-                        "title": (link.get("title") or "")[:500],
-                        "url": url,
-                        "score": relevance,
-                        "meta": json.dumps(meta),
-                    },
-                )
+                try:
+                    nested = db.begin_nested()
+                    db.execute(
+                        text("""
+                            INSERT INTO site_content_links
+                                (site_id, content_type, content_source,
+                                 content_id, title, content_url,
+                                 relevance_score, link_metadata)
+                            VALUES
+                                (CAST(:sid AS uuid), 'reference',
+                                 'web_discovery', :cid, :title,
+                                 :url, :score,
+                                 CAST(:meta AS jsonb))
+                            ON CONFLICT (site_id, content_source, content_id)
+                            DO UPDATE SET
+                                title = EXCLUDED.title,
+                                content_url = EXCLUDED.content_url,
+                                relevance_score = EXCLUDED.relevance_score,
+                                link_metadata = EXCLUDED.link_metadata
+                        """),
+                        {
+                            "sid": site_id,
+                            "cid": content_id,
+                            "title": (link.get("title") or "")[:500],
+                            "url": url,
+                            "score": relevance,
+                            "meta": json.dumps(meta),
+                        },
+                    )
+                    nested.commit()
+                except Exception as e:
+                    nested.rollback()
+                    logger.warning(
+                        "Ref link insert failed for %s: %s", site.name, e,
+                    )
+                    reflinks_errors += 1
+                    break
             reflinks_written += 1
 
     inserted = len(insert_params)
@@ -1610,6 +1623,7 @@ async def batch_upload_sites(
         "updated": updated,
         "citations_written": citations_written,
         "reflinks_written": reflinks_written,
+        "reflinks_errors": reflinks_errors,
         "errors": errors,
     }
     if snapshot_error:
