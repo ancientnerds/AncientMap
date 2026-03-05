@@ -378,6 +378,7 @@ export default function LyraChatModal({
   const [queuePosition, setQueuePosition] = useState<number | null>(null)
   const [queueLength, setQueueLength] = useState(0)
   const [estimatedWait, setEstimatedWait] = useState(0)
+  const [lyraStatus, setLyraStatus] = useState<string | null>(null)
   const userScrolledUpRef = useRef(false)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
 
@@ -714,6 +715,7 @@ export default function LyraChatModal({
     }
     setMessages(prev => [...prev, assistantMsg])
     setIsStreaming(true)
+    setLyraStatus(null)
 
     // Auto-open pipeline panel on new query (respects user preference)
     if (localStorage.getItem('lyra_pipeline_open') !== 'false') {
@@ -809,12 +811,14 @@ export default function LyraChatModal({
                 }
                 continue
               } else if (type === 'thinking' && data.content) {
+                setLyraStatus('Thinking...')
                 setMessages(prev => prev.map(m =>
                   m.id === assistantId
                     ? { ...m, thinking: (m.thinking || '') + data.content }
                     : m
                 ))
               } else if (type === 'token' && data.content) {
+                setLyraStatus(null)
                 setMessages(prev => prev.map(m =>
                   m.id === assistantId
                     ? { ...m, content: m.content + data.content }
@@ -885,6 +889,43 @@ export default function LyraChatModal({
               } else if (type === 'achievements' && data.achievements) {
                 notifyAchievements(data.achievements)
               } else if (type === 'pipeline' && data.stage) {
+                // Update narration status based on pipeline stage
+                if (data.stage === 'pipeline_init' && data.status === 'done') {
+                  setLyraStatus('Waking up...')
+                } else if (data.status === 'start') {
+                  const stageMessages: Record<string, string> = {
+                    auto_retrieve: 'Digging through the archives...',
+                    filter_extraction: 'Analyzing your question...',
+                    news_augmentation: 'Checking recent discoveries...',
+                    context_assembly: 'Piecing it all together...',
+                    llm_round: 'Crafting a response...',
+                  }
+                  if (stageMessages[data.stage]) setLyraStatus(stageMessages[data.stage])
+                }
+                if (data.stage === 'auto_retrieve' && data.status === 'done' && data.meta) {
+                  const sc = data.meta.sites_count ?? 0
+                  const nc = data.meta.news_count ?? 0
+                  if (sc || nc) {
+                    const parts: string[] = []
+                    if (sc) parts.push(`${sc} site${sc > 1 ? 's' : ''}`)
+                    if (nc) parts.push(`${nc} article${nc > 1 ? 's' : ''}`)
+                    setLyraStatus(`Found ${parts.join(' and ')}`)
+                  }
+                } else if (data.stage === 'tool_call' && data.status === 'start' && data.meta) {
+                  const toolName = data.meta.tool as string | undefined
+                  const toolArgs = data.meta.args as Record<string, unknown> | undefined
+                  const query = toolArgs?.query as string | undefined
+                  if (toolName === 'vector_search' && query) {
+                    setLyraStatus(`Searching for "${query}"...`)
+                  } else if (toolName) {
+                    setLyraStatus(`Running ${toolName}...`)
+                  }
+                } else if (data.stage === 'tool_call' && data.status === 'done' && data.meta) {
+                  const n = data.meta.result_len
+                  if (typeof n === 'number') {
+                    setLyraStatus(`Got ${n} result${n !== 1 ? 's' : ''}, analyzing...`)
+                  }
+                }
                 const pEvent: PipelineEvent = { stage: data.stage, status: data.status, duration_ms: data.duration_ms ?? null, meta: data.meta ?? null }
                 setMessages(prev => prev.map(m => {
                   if (m.id !== assistantId) return m
@@ -937,6 +978,7 @@ export default function LyraChatModal({
       setQueuePosition(null)
       setQueueLength(0)
       setEstimatedWait(0)
+      setLyraStatus(null)
     }
   }, [input, authToken, userCredits, isUnlimited, messages, contextType, contextId, contextYear, onHighlightSites, clearAuth, conversationId, lyraBackend])
 
@@ -1205,12 +1247,22 @@ export default function LyraChatModal({
                             </div>
                           </div>
                         )}
-                        {/* Typing dots — waiting for first token */}
-                        {msg.role === 'assistant' && msg.isStreaming && queuePosition === null && !msg.content && !msg.thinking && (
+                        {/* Typing dots — before any tokens arrive */}
+                        {msg.role === 'assistant' && msg.isStreaming && queuePosition === null && !msg.content && !msg.thinking && !lyraStatus && (
                           <div className="lyra-chat-msg lyra-chat-msg-assistant">
                             <img src="/lyra.gif" alt="Lyra" className="lyra-chat-msg-avatar" />
                             <div className="lyra-chat-typing-dots" role="status" aria-label="Lyra is typing">
                               <span /><span /><span />
+                            </div>
+                          </div>
+                        )}
+                        {/* Status narration — pipeline progress messages */}
+                        {msg.role === 'assistant' && msg.isStreaming && !msg.content && lyraStatus && (
+                          <div className="lyra-chat-msg lyra-chat-msg-assistant">
+                            <img src="/lyra.gif" alt="Lyra" className="lyra-chat-msg-avatar" />
+                            <div className="lyra-chat-status-narration" role="status">
+                              <span className="lyra-status-dot" />
+                              <span>{lyraStatus}</span>
                             </div>
                           </div>
                         )}

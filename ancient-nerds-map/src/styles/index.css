@@ -15015,6 +15015,26 @@ body.news-feed-open .empire-borders-window {
   40% { opacity: 1; transform: scale(1.2); }
 }
 
+/* Status narration — pipeline progress messages */
+.lyra-chat-status-narration {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 16px;
+  background: var(--surface-sunken); border: 1px solid var(--border-accent);
+  border-radius: 12px; border-top-left-radius: 2px; width: fit-content;
+  color: var(--text-secondary); font-size: 0.85rem; font-style: italic;
+  max-width: 320px;
+}
+.lyra-status-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--brand-primary);
+  animation: lyra-status-pulse 1.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+@keyframes lyra-status-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
 /* Copy message button */
 .lyra-chat-copy-btn {
   position: absolute;
@@ -16178,6 +16198,16 @@ body.news-feed-open .empire-borders-window {
 .lyra-chat-typing-dots span {
   background: var(--accent-primary);
 }
+.lyra-chat-status-narration {
+  background: var(--surface-crt);
+  border-color: var(--border-crt);
+  border-radius: 4px;
+  border-top-left-radius: 0;
+  color: var(--accent-primary);
+}
+.lyra-chat-status-narration .lyra-status-dot {
+  background: var(--accent-primary);
+}
 
 /* Streaming cursor — green instead of red */
 .lyra-chat-msg-text.streaming > :last-child::after,
@@ -16494,6 +16524,7 @@ body.news-feed-open .empire-borders-window {
 @media (prefers-reduced-motion: reduce) {
   .lyra-chat-msg,
   .lyra-chat-typing-dots span,
+  .lyra-status-dot,
   .lyra-chat-msg-text.streaming > :last-child,
   .lyra-chat-msg-text.streaming > :last-child::after,
   .lyra-typing-glow,

@@ -13,9 +13,12 @@ import time
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
+import os
+
 import httpx
 
-OLLAMA_URL = "http://127.0.0.1:11434"
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434")
+OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "")
 MODEL = "qwen3.5:2b"
 
 # System prompt (shortened version of Lyra's)
@@ -155,11 +158,16 @@ def run_test(test: dict) -> dict:
     prompt_tokens = 0
     completion_tokens = 0
 
+    headers = {}
+    if OLLAMA_API_KEY:
+        headers["Authorization"] = f"Bearer {OLLAMA_API_KEY}"
+
     try:
         with httpx.stream(
             "POST",
             f"{OLLAMA_URL}/api/chat",
             json=body,
+            headers=headers,
             timeout=120.0,
         ) as resp:
             for line in resp.iter_lines():
