@@ -24,10 +24,19 @@ logger = logging.getLogger(__name__)
 LLM_PROVIDER = os.getenv("LYRA_LLM_PROVIDER", "anthropic")
 LLM_MODEL = os.getenv("LYRA_LLM_MODEL", "MiniMax-M2.5")
 
-# Per-request backend: set by lyra_agent.chat() before each request.
+# Per-request backend: set via contextvars by lyra_agent before each request.
 # "voyage" (default) uses Voyage embeddings + original collections.
 # "local" uses Ollama embeddings + *_local collections.
-_current_backend: str = "voyage"
+
+
+def _get_embedding_backend() -> str:
+    """Get the embedding backend for the current request from contextvars."""
+    try:
+        from api.services.lyra_router import get_request_context
+
+        return get_request_context().embedding_backend
+    except LookupError:
+        return "voyage"  # Default for non-chat contexts (e.g., indexing)
 
 # ---------------------------------------------------------------------------
 # Seshat polity data (loaded once from bundled JSON)
@@ -396,7 +405,7 @@ def _hybrid_search(
 ) -> tuple[list[dict], int]:
     """Run hybrid dense+BM25 search with RRF fusion and reranking.
 
-    Reads _current_backend to determine which collection set and embedding backend to use.
+    Uses contextvars to determine which collection set and embedding backend to use.
     Returns tuple of (list of payload dicts with relevance scores, embed tokens used).
     Used by both _auto_retrieve() and the vector_search tool.
     """
@@ -410,7 +419,7 @@ def _hybrid_search(
         get_sparse_model,
     )
 
-    backend = _current_backend
+    backend = _get_embedding_backend()
     # Append _local suffix for local backend collections
     qdrant_collection = f"{collection}_local" if backend == "local" else collection
 

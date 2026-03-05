@@ -1,13 +1,13 @@
 """
-Lyra RAG Agent — LangChain agent with tool calling.
+Lyra RAG Agent — unified streaming pipeline with multi-model routing.
 
 Lyra Whiskerbyte is an archaeological agent who monitors YouTube channels,
 extracts transcripts, and can chat about any of the 750K+ sites in the database.
 
-Swappable LLM via env vars:
-  LYRA_LLM_PROVIDER=anthropic  → ChatAnthropic (default)
-  LYRA_LLM_PROVIDER=ollama     → ChatOllama
-  LYRA_LLM_PROVIDER=openai     → ChatOpenAI
+Three model tiers:
+  - premium (MiniMax M2.5) — paid, credit-based, highest quality
+  - heavy (Qwen3.5 4B) — local, complex queries, tool calling, thinking
+  - fast (Qwen3.5 0.8B) — local, greetings, simple meta questions
 """
 
 import asyncio
@@ -19,7 +19,6 @@ from collections.abc import AsyncIterator
 
 from langchain_core.messages import (
     AIMessage,
-    AIMessageChunk,
     BaseMessage,
     HumanMessage,
     SystemMessage,
@@ -28,10 +27,15 @@ from langchain_core.messages import (
 from pydantic import BaseModel
 from sqlalchemy import text
 
+from api.services.lyra_backends import get_backend
 from api.services.lyra_prompts import LYRA_SYSTEM_PROMPT, _build_context_prompt
+from api.services.lyra_router import (
+    RequestContext,
+    route_request,
+    set_request_context,
+)
 from api.services.lyra_tools import (
     LLM_MODEL,
-    LLM_PROVIDER,
     TOOLS,
     _hybrid_search,
 )
@@ -354,60 +358,33 @@ async def _extract_news_filters(query: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# LLM initialization
+# Tool call accumulation helper (shared by all backends)
 # ---------------------------------------------------------------------------
 
-_llms: dict[str, object] = {}
 
-# Local LLM settings (OpenAI-compatible endpoint on VPS2)
-OLLAMA_LLM_MODEL = os.getenv("LYRA_OLLAMA_MODEL", "qwen3:8b")
-OLLAMA_LLM_BASE_URL = os.getenv("LYRA_OLLAMA_BASE_URL", "")
-OLLAMA_LLM_API_KEY = os.getenv("LYRA_OLLAMA_API_KEY", "")
+def _accumulate_tool_call(
+    tool_calls: list[dict[str, str | int | None]], ev: dict
+) -> None:
+    """Accumulate a tool_call_chunk event into the tool_calls list.
 
-
-def _get_llm(backend: str = "minimax"):
-    """Get the LLM for the given backend (singleton per backend).
-
-    backend="minimax" → ChatAnthropic via MiniMax proxy (default)
-    backend="local"   → ChatOllama with Qwen3:8b
+    Merges argument strings for the same index, creates new entries for new indices.
     """
-    if backend in _llms:
-        return _llms[backend]
-
-    if backend == "local":
-        from langchain_openai import ChatOpenAI
-
-        llm = ChatOpenAI(
-            model=OLLAMA_LLM_MODEL,
-            base_url=OLLAMA_LLM_BASE_URL,
-            api_key=OLLAMA_LLM_API_KEY or "unused",
-            streaming=True,
-            max_tokens=4096,
-            timeout=300,
-        )
-        logger.info(f"Initialized LLM: local/{OLLAMA_LLM_MODEL} at {OLLAMA_LLM_BASE_URL}")
+    existing = None
+    for existing_tc in tool_calls:
+        if existing_tc.get("index") == ev.get("index"):
+            existing = existing_tc
+            break
+    if existing:
+        existing["args"] = str(existing.get("args") or "") + str(ev.get("args") or "")
     else:
-        # Default: MiniMax via Anthropic-compatible proxy
-        from langchain_anthropic import ChatAnthropic
-
-        api_key = os.getenv("LYRA_ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
-        base_url = os.getenv("LYRA_ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
-        is_native = not base_url or "anthropic.com" in base_url
-        kwargs: dict = {
-            "model": LLM_MODEL,
-            "max_tokens": get_max_tokens(),
-            "streaming": True,
-            "api_key": api_key,
-        }
-        if is_native:
-            kwargs["stream_usage"] = True
-        if base_url:
-            kwargs["anthropic_api_url"] = base_url
-        llm = ChatAnthropic(**kwargs)
-        logger.info(f"Initialized LLM: {LLM_PROVIDER}/{LLM_MODEL}")
-
-    _llms[backend] = llm
-    return llm
+        tool_calls.append(
+            {
+                "index": ev.get("index"),
+                "id": ev.get("id"),
+                "name": ev.get("name"),
+                "args": ev.get("args") or "",
+            }
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -480,14 +457,13 @@ async def run_agent_stream(
     context_type: str = "global",
     context_id: str | None = None,
     context_year: int | None = None,
-    backend: str = "minimax",
+    ctx: RequestContext | None = None,
 ) -> AsyncIterator[dict]:
     """
     Run the Lyra agent and stream results.
 
     Args:
-        backend: "minimax" (paid, MiniMax LLM + Voyage embeddings) or
-                 "local" (self-hosted, Qwen3 LLM + Ollama embeddings).
+        ctx: RequestContext from route_request(). If None, defaults to MiniMax premium.
 
     Yields dicts with:
       {"type": "token", "content": "..."}
@@ -495,13 +471,15 @@ async def run_agent_stream(
       {"type": "done", "metadata": {...}}
       {"type": "error", "error": "..."}
     """
-    import api.services.lyra_tools as lyra_tools
+    # Build context if not provided (backwards compat)
+    if ctx is None:
+        ctx = route_request("minimax", message)
 
-    # Set the module-level backend so _hybrid_search uses the right collections/embeddings
-    lyra_tools._current_backend = "local" if backend == "local" else "voyage"
+    # Set contextvars for the pipeline (so _hybrid_search uses the right backend)
+    set_request_context(ctx)
 
-    llm = _get_llm(backend=backend)
-    llm_with_tools = llm.bind_tools(TOOLS)
+    # Get the unified backend
+    backend_impl = get_backend(ctx.model_name, ctx.backend_type)
 
     # Auto-retrieve: run hybrid search BEFORE the LLM sees the message
     # Skip for image-only queries (no meaningful text to search)
@@ -514,7 +492,8 @@ async def run_agent_stream(
     total_output_tokens = 0
     total_voyage_tokens = 0
     logger.info(
-        f"Lyra chat: context_type={context_type}, context_id={context_id}, context_year={context_year}"
+        f"Lyra chat: model={ctx.model_name}, tier={ctx.model_tier}, "
+        f"context_type={context_type}, context_id={context_id}"
     )
 
     if message and len(message.strip()) > 2 and context_type != "empire":
@@ -734,65 +713,23 @@ async def run_agent_stream(
         }
         _t_round = time.monotonic()
         _round_tokens_before = total_input_tokens + total_output_tokens
-        # Stream the LLM response
+        # Stream the LLM response — unified path for all backends
         collected_content = ""
         tool_calls: list[dict[str, str | int | None]] = []
 
-        async for chunk in llm_with_tools.astream(messages):
-            if isinstance(chunk, AIMessageChunk):
-                # Track token usage from chunks (Anthropic sends on final chunk)
-                if hasattr(chunk, "usage_metadata") and chunk.usage_metadata:
-                    um = chunk.usage_metadata
-                    total_input_tokens += um.get("input_tokens", 0) or 0
-                    total_output_tokens += um.get("output_tokens", 0) or 0
-
-                # Thinking/reasoning content (Qwen3 via OpenAI: reasoning_content,
-                # MiniMax/Anthropic: thinking blocks in content list)
-                if hasattr(chunk, "additional_kwargs") and chunk.additional_kwargs:
-                    rc = chunk.additional_kwargs.get("reasoning_content", "")
-                    if rc:
-                        yield {"type": "thinking", "content": rc}
-
-                if chunk.content:
-                    text_content = chunk.content if isinstance(chunk.content, str) else ""
-                    thinking_content = ""
-                    if isinstance(chunk.content, list):
-                        for block in chunk.content:
-                            if isinstance(block, dict) and block.get("type") == "thinking":
-                                thinking_content += block.get("thinking", "") or block.get(
-                                    "text", ""
-                                )
-                            elif isinstance(block, dict) and block.get("type") == "text":
-                                text_content += block.get("text", "")
-                            elif isinstance(block, str):
-                                text_content += block
-                    if thinking_content:
-                        yield {"type": "thinking", "content": thinking_content}
-                    if text_content:
-                        collected_content += text_content
-                        yield {"type": "token", "content": text_content}
-
-                if chunk.tool_call_chunks:
-                    for tcc in chunk.tool_call_chunks:
-                        # Find or create the tool call entry
-                        existing = None
-                        for existing_tc in tool_calls:
-                            if existing_tc.get("index") == tcc.get("index"):
-                                existing = existing_tc
-                                break
-                        if existing:
-                            existing["args"] = str(existing.get("args") or "") + str(
-                                tcc.get("args") or ""
-                            )
-                        else:
-                            tool_calls.append(
-                                {
-                                    "index": tcc.get("index"),
-                                    "id": tcc.get("id"),
-                                    "name": tcc.get("name"),
-                                    "args": tcc.get("args") or "",
-                                }
-                            )
+        async for ev in backend_impl.stream(
+            messages, TOOLS if ctx.supports_tools else []
+        ):
+            if ev["type"] == "reasoning":
+                yield {"type": "thinking", "content": ev["text"]}
+            elif ev["type"] == "content":
+                collected_content += ev["text"]
+                yield {"type": "token", "content": ev["text"]}
+            elif ev["type"] == "tool_call_chunk":
+                _accumulate_tool_call(tool_calls, ev)
+            elif ev["type"] == "usage":
+                total_input_tokens += ev["input"]
+                total_output_tokens += ev["output"]
 
         # If no tool calls, we're done
         if not tool_calls:
@@ -1038,10 +975,8 @@ async def run_agent_stream(
     yield {
         "type": "done",
         "metadata": {
-            "backend": backend,
-            "model": f"{LLM_PROVIDER}/{LLM_MODEL}"
-            if backend != "local"
-            else f"ollama/{OLLAMA_LLM_MODEL}",
+            "backend": ctx.backend_type,
+            "model": f"{ctx.model_tier}/{ctx.model_name}",
             "tool_calls": tool_calls_made,
             "sites_found": len(all_sites),
             "avg_relevance": round(avg_relevance, 3) if avg_relevance is not None else None,

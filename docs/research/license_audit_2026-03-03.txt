@@ -1,0 +1,509 @@
+================================================================================
+LICENSE AUDIT REPORT - AncientMap Data Sources
+Audit Date: 2026-03-03
+Auditor: Research Analyst (Claude)
+================================================================================
+
+EXECUTIVE SUMMARY
+-----------------
+Audited 34 data sources. Found:
+  - 16 CORRECT licenses
+  -  9 WRONG licenses (need correction in code)
+  -  5 UNCLEAR / needs clarification
+  -  4 PROBLEMATIC sources (potential legal risk)
+
+CRITICAL ISSUES requiring immediate attention:
+  1. Sacred Sites: We are scraping a copyrighted site that explicitly forbids it
+  2. Megalithic Portal: Terms forbid reproduction in other websites
+  3. UNESCO: Requires prior written authorization for republication
+  4. Arachne: Actually CC BY-NC-ND 3.0 DE (NoDerivatives!) - we may be violating
+  5. EAMENA: CC BY 4.0 but tiered access - bulk scraping may violate terms
+
+================================================================================
+
+DETAILED FINDINGS (sorted by severity)
+================================================================================
+
+------------------------------------------------------------------------
+CATEGORY A: PROBLEMATIC - POTENTIAL LEGAL VIOLATIONS
+------------------------------------------------------------------------
+
+1. SACRED SITES
+   Our claim: "Educational use (scraping with attribution)"
+   ACTUAL: All Rights Reserved - explicit prohibition on scraping
+   VERDICT: >>> WRONG - MAJOR VIOLATION <<<
+
+   Details: Their Terms of Use (sacredsites.com/terms_of_use.html) explicitly
+   prohibit "data mining, robots, or similar data gathering and extraction
+   tools." The site cannot be "reproduced, duplicated, copied, sold, resold,
+   visited, or otherwise exploited" without prior written consent. No part
+   may be "reproduced or stored in any other website."
+
+   ACTION REQUIRED: Remove this source or obtain written permission.
+   Risk level: HIGH
+
+2. MEGALITHIC PORTAL
+   Our claim: "Free KMZ download" / "Various"
+   ACTUAL: Restrictive copyright - personal use only
+   VERDICT: >>> WRONG - POTENTIAL VIOLATION <<<
+
+   Details: Terms state "no part of this site may be reproduced or stored
+   in any other website or included in any public or private electronic
+   retrieval system." Data downloads are for personal use only. Republishing
+   in our database likely violates terms. The free KMZ download does not
+   grant redistribution rights.
+
+   ACTION REQUIRED: Contact megalithic.co.uk for redistribution permission,
+   or remove this source.
+   Risk level: HIGH
+
+3. UNESCO WORLD HERITAGE
+   Our claim: "Open with attribution" / "Public Domain"
+   ACTUAL: Restricted - requires prior written authorization
+   VERDICT: >>> WRONG <<<
+
+   Details: UNESCO WHC explicitly states: "Any republication, online or in
+   any other form, of any UNESCO/WHC data requires prior written
+   authorization." Cannot sell, license, or assign use of materials.
+   Syndication feeds are available for "personal, non-commercial use,
+   without fee" but each use must include specific copyright notice and
+   link back. Our configs.py incorrectly labels this "Public Domain."
+
+   ACTION REQUIRED: Either obtain written permission from UNESCO, or
+   ensure we only use syndication feeds with proper attribution notice
+   "Copyright (c) 1992-2026 UNESCO/World Heritage Centre. All rights
+   reserved." Update license field from "Public Domain" to
+   "UNESCO Syndication Terms (non-commercial, with permission)".
+   Risk level: MEDIUM-HIGH
+
+4. ARACHNE (iDAI.objects)
+   Our claim: "CC-BY" (ingester) / "CC BY-NC-SA 3.0" (configs.py)
+   ACTUAL: CC BY-NC-ND 3.0 DE (per re3data registry)
+   VERDICT: >>> WRONG (both versions!) <<<
+
+   Details: The re3data registry (authoritative source for research data
+   repositories) lists Arachne as CC BY-NC-ND 3.0 DE. This is the German
+   law version with THREE restrictions:
+     - NC: Non-commercial only
+     - ND: No derivatives (we cannot transform/adapt the data)
+     - DE: German law applies
+
+   The ND restriction is the most problematic: if we're transforming Arachne
+   records into our unified format, that may constitute a derivative work.
+   The ingester header says "CC-BY" (far too permissive) and configs.py says
+   "CC BY-NC-SA 3.0" (wrong type - SA not ND).
+
+   ACTION REQUIRED: Update to "CC BY-NC-ND 3.0 DE". Assess whether our
+   data transformation violates the NoDerivatives clause. Consider contacting
+   DAI for clarification on whether database integration counts as a
+   derivative work.
+   Risk level: MEDIUM-HIGH
+
+------------------------------------------------------------------------
+CATEGORY B: WRONG LICENSE - NEEDS CORRECTION (lower risk)
+------------------------------------------------------------------------
+
+5. SESHAT BOUNDARIES (Equinox Data)
+   Our claim: CC BY-NC-SA 4.0
+   ACTUAL: CC BY-NC-SA 4.0
+   VERDICT: CORRECT for the Equinox data (Zenodo 6642229)
+
+   NOTE: Our process_cliopatria.py says "CC BY license" for Cliopatria,
+   and that IS correct - the newer Cliopatria dataset (Zenodo 14714684,
+   Nature Scientific Data 2025) is CC BY 4.0. These are TWO DIFFERENT
+   datasets. The boundaries_seshat ingester uses the older Equinox data
+   which IS CC BY-NC-SA 4.0. Both are correct in their respective files.
+
+   RESTRICTION: NC means we cannot use Equinox data commercially.
+   SA means derivatives must use same license.
+
+6. IRELAND NMS
+   Our claim: "Open Data" (configs.py) / "Open Government License Ireland" (ingester)
+   ACTUAL: Creative Commons Attribution 4.0 International (CC BY 4.0)
+   VERDICT: >>> WRONG <<<
+
+   Details: Ireland does NOT use the UK OGL. The NMS data on data.gov.ie is
+   explicitly licensed as CC BY 4.0, attributed to "National Monuments
+   Service, Government of Ireland."
+
+   ACTION REQUIRED: Update to "CC BY 4.0" in both configs.py and ingester.
+   Risk level: LOW (CC BY 4.0 is more permissive than OGL, so we're fine)
+
+7. PAS FINDS
+   Our claim: CC-BY-SA 4.0
+   ACTUAL: CC-BY (likely version 2.0 based on footer text)
+   VERDICT: >>> WRONG <<<
+
+   Details: The PAS website footer shows "CC-BY The British Museum."
+   Multiple references indicate CC BY 2.0. Our code claims CC-BY-SA 4.0,
+   which is actually MORE restrictive than the real license (adding SA
+   and using version 4.0). The real license is more permissive.
+
+   ACTION REQUIRED: Update to "CC BY" (current evidence points to 2.0
+   but version is not consistently documented). No SA requirement.
+   Risk level: LOW (our claim was more restrictive, not less)
+
+8. NOMISMA COINS
+   Our claim: "Open (varies)" (ingester) / "CC BY 4.0" (configs.py)
+   ACTUAL: Nomisma.org concepts are CC BY 3.0; partner data varies
+   VERDICT: >>> PARTIALLY WRONG <<<
+
+   Details: Nomisma.org states "content in Nomisma.org is licensed under a
+   Creative Commons Attribution 3.0 License" for their own concepts. Partner
+   contributions have separate rights statements. The ingester correctly says
+   "varies" but configs.py claims "CC BY 4.0" which is wrong version.
+
+   ACTION REQUIRED: Update configs.py to "CC BY 3.0 (Nomisma concepts);
+   varies by partner dataset".
+   Risk level: LOW
+
+9. DAVID RUMSEY MAPS
+   Our claim: CC-BY-NC (ingester) / CC BY-NC-SA 3.0 (configs.py)
+   ACTUAL: CC BY-NC-SA 3.0
+   VERDICT: >>> INGESTER WRONG, configs.py CORRECT <<<
+
+   Details: David Rumsey Map Collection is CC BY-NC-SA 3.0 Unported.
+   The ingester header omits the SA (ShareAlike) requirement. Attribution
+   must credit "David Rumsey Map Collection, David Rumsey Map Center,
+   Stanford Libraries."
+
+   ACTION REQUIRED: Fix ingester header to include SA. Note: maps
+   published after 1929 may still be under copyright.
+   RESTRICTION: NC = non-commercial only. SA = share-alike.
+   Risk level: LOW
+
+10. TOPOSTEXT
+    Our claim: CC BY-NC-SA 4.0
+    ACTUAL: Unclear - site footer says "Copyrights (c) 2019 All Rights
+    Reserved" but earlier sources reference CC BY 3.0 (via Pleiades
+    integration), and the API documentation says "Linked Open Data Files
+    for use with appropriate attribution to ToposText."
+    VERDICT: >>> UNCLEAR / LIKELY WRONG <<<
+
+    Details: The website itself has "All Rights Reserved" in its footer,
+    but various external references (Pleiades blog, AWOL) describe it as
+    CC BY 3.0. The API provides "Linked Open Data" with attribution
+    requirement. There is no evidence of NC-SA restrictions. Our claim
+    of CC BY-NC-SA 4.0 appears to be fabricated.
+
+    ACTION REQUIRED: Contact Brady Kiesling (creator) for clarification.
+    Best current evidence suggests CC BY 3.0, not CC BY-NC-SA 4.0.
+    Risk level: MEDIUM
+
+11. OXREP SHIPWRECKS
+    Our claim: "CC BY 4.0" (configs.py) / "Academic (cite Strauss 2013)" (ingester)
+    ACTUAL: No explicit license found; download available as Excel
+    VERDICT: >>> WRONG (configs.py) <<<
+
+    Details: The OXREP website provides no explicit license. The database
+    is downloadable as an Excel spreadsheet with a citation requirement
+    (Strauss, Wilson, Flohr 2017). No CC BY 4.0 claim is substantiated.
+    The ingester is more honest ("Academic - cite Strauss 2013").
+
+    ACTION REQUIRED: Change configs.py from "CC BY 4.0" to "Academic use
+    with citation required". Add proper citation.
+    Risk level: LOW-MEDIUM
+
+12. EAMENA
+    Our claim: "CC-BY-SA 4.0" (ingester) / "Open Access" (config.py) / "CC BY 4.0" (configs.py)
+    ACTUAL: CC BY 4.0 (per their Open Access Policy)
+    VERDICT: >>> INGESTER WRONG <<<
+
+    Details: EAMENA's Open Access Policy clearly states CC BY 4.0
+    (not CC BY-SA 4.0). However, access is tiered - public/guest access
+    is limited. Bulk data access requires registration. The principle is
+    "As Open as possible, as closed as necessary" with location data
+    restricted to prevent looting.
+
+    ACTION REQUIRED: Fix ingester from "CC-BY-SA 4.0" to "CC BY 4.0".
+    Ensure we have proper registration for data access.
+    Risk level: LOW
+
+13. EARTH IMPACT DATABASE
+    Our claim: "Public data for research" (ingester) / "Public Domain" (configs.py)
+    ACTUAL: Non-commercial research and educational use with attribution
+    VERDICT: >>> configs.py WRONG <<<
+
+    Details: The PASSC Earth Impact Database restricts usage to
+    "non-commercial research and educational applications" with mandatory
+    attribution. Commercial use of images requires fee. This is NOT public
+    domain.
+
+    ACTION REQUIRED: Change from "Public Domain" to "Non-commercial
+    research and educational use". Add attribution requirement.
+    Risk level: LOW (we are educational/non-commercial)
+
+14. MYCENAEAN ATLAS
+    Our claim: "Academic / Research use"
+    ACTUAL: CC BY-SA 4.0
+    VERDICT: >>> WRONG (actually more permissive than we claim) <<<
+
+    Details: The helladic.info info page states CC BY-SA 4.0, the same
+    license as Wikipedia. This allows commercial use with attribution
+    and share-alike. Our claim of "Academic / Research use" undersells
+    the actual permissions.
+
+    ACTION REQUIRED: Update to "CC BY-SA 4.0".
+    Risk level: NONE (actual license is more permissive)
+
+15. ROCEEH ROAD (Radiocarbon Paleo)
+    Our claim: "Academic use (CC BY-NC 4.0)"
+    ACTUAL: CC BY-SA 4.0 (per re3data registry)
+    VERDICT: >>> LIKELY WRONG <<<
+
+    Details: The re3data.org registry lists the ROCEEH ROAD database under
+    CC BY-SA 4.0. The PLoS ONE paper about ROAD is CC BY (not NC). However,
+    a user agreement PDF exists that may have additional terms. Our claim of
+    CC BY-NC 4.0 is not substantiated by available evidence.
+
+    ACTION REQUIRED: Verify against the ROAD user agreement PDF. Update
+    license field based on findings. Current evidence suggests CC BY-SA 4.0.
+    Risk level: LOW
+
+------------------------------------------------------------------------
+CATEGORY C: CORRECT LICENSES
+------------------------------------------------------------------------
+
+16. PLEIADES
+    Our claim: CC BY 3.0
+    ACTUAL: CC BY 3.0
+    VERDICT: CORRECT
+    Source: https://pleiades.stoa.org/ - explicitly states CC BY 3.0
+
+17. DARE (Digital Atlas of the Roman Empire)
+    Our claim: CC BY-SA 3.0
+    ACTUAL: CC BY-SA 3.0
+    VERDICT: CORRECT
+    Source: imperium.ahlfeldt.se
+    RESTRICTION: SA = share-alike required
+
+18. CANMORE SCOTLAND
+    Our claim: OGL (Open Government Licence)
+    ACTUAL: OGL
+    VERDICT: CORRECT
+    Source: HES data downloads, spatialdata.gov.scot
+    NOTE: Attribution required: "Contains Historic Environment Scotland
+    and Ordnance Survey data (c) Historic Environment Scotland and
+    (c) Crown copyright and database right"
+
+19. COFLEIN WALES (RCAHMW)
+    Our claim: OGL
+    ACTUAL: OGL v3.0
+    VERDICT: CORRECT
+    Source: DataMapWales, RCAHMW announcement
+    NOTE: Attribution to NMRW/RCAHMW required
+
+20. GEONAMES
+    Our claim: CC BY 4.0
+    ACTUAL: CC BY 4.0
+    VERDICT: CORRECT
+    Source: geonames.org/about.html
+
+21. HISTORIC ENGLAND
+    Our claim: OGL v3.0
+    ACTUAL: OGL v3.0
+    VERDICT: CORRECT
+    Source: historicengland.org.uk Open Data Hub terms
+
+22. LIST LATIN INSCRIPTIONS
+    Our claim: CC BY 4.0
+    ACTUAL: CC BY 4.0
+    VERDICT: CORRECT
+    Source: Zenodo record 10473706
+
+23. LUWIAN ATLAS
+    Our claim: CC BY 4.0
+    ACTUAL: CC BY 4.0
+    VERDICT: CORRECT
+    Source: Zenodo record 17128262
+
+24. MET MUSEUM
+    Our claim: CC0
+    ACTUAL: CC0
+    VERDICT: CORRECT
+    Source: metmuseum.org Open Access initiative
+    NOTE: Applies to public domain works only. Non-PD works have
+    restrictions. The API feed specifically serves CC0 data.
+
+25. NCEI (all 4: Earthquakes, Tsunamis, Tsunami Obs, Volcanoes)
+    Our claim: Public Domain (US Government)
+    ACTUAL: Public Domain (US Government works)
+    VERDICT: CORRECT
+    Source: NOAA data policy. US government works are in public domain.
+    NCEI encourages CC0 for their holdings.
+
+26. OPEN CONTEXT
+    Our claim: "CC-BY, CC0 (varies)" (config.py) / "CC BY 4.0" (configs.py)
+    ACTUAL: CC BY or CC0 (varies by project)
+    VERDICT: CORRECT (config.py); configs.py slightly simplified
+    Source: opencontext.org/about/uses
+    NOTE: Each project may use different CC license. All use CC licenses.
+
+27. OSM HISTORIC
+    Our claim: ODbL
+    ACTUAL: ODbL (Open Database License) 1.0
+    VERDICT: CORRECT
+    Source: openstreetmap.org/copyright
+    RESTRICTION: Share-alike required. Attribution: "(c) OpenStreetMap
+    contributors" with link to openstreetmap.org/copyright
+
+28. PERU AMAZON (Peripato 2023)
+    Our claim: CC BY 4.0
+    ACTUAL: "Other (Open)" per Zenodo metadata
+    VERDICT: >>> UNCLEAR <<<
+
+    The Zenodo record lists license as "Other (Open)" with no further
+    description. The Science paper itself is under AAAS copyright. Our
+    claim of CC BY 4.0 is not directly confirmed by Zenodo metadata.
+    However, "Other (Open)" suggests permissive terms. The GitHub repo
+    may have a LICENSE file that clarifies.
+    Risk level: LOW
+
+29. VICI.ORG
+    Our claim: CC BY-SA 3.0
+    ACTUAL: CC BY-SA 3.0
+    VERDICT: CORRECT
+    Source: vici.org via Datahub listing
+    RESTRICTION: SA = share-alike. Commercial use allowed with attribution.
+
+30. HOLVOL VOLCANIC
+    Our claim: CC BY 4.0
+    ACTUAL: CC BY 4.0
+    VERDICT: CORRECT
+    Source: PANGAEA record 928646
+
+31. WIKIDATA
+    Our claim: CC0
+    ACTUAL: CC0
+    VERDICT: CORRECT
+    Source: wikidata.org/wiki/Wikidata:Licensing
+
+32. EUROPEANA
+    Our claim: "Varies" (configs.py says CC BY-SA 4.0)
+    ACTUAL: Metadata is CC0; individual item rights vary widely
+    VERDICT: >>> PARTIALLY WRONG <<<
+
+    Details: Europeana metadata is CC0. Individual items carry their own
+    rights statements (CC0, CC BY, CC BY-SA, CC BY-NC, Rights Reserved,
+    etc.). Our configs.py says "CC BY-SA 4.0" which is wrong for the
+    metadata and only correct for some items.
+
+    ACTION REQUIRED: Update configs.py to "CC0 (metadata); varies by
+    item (CC0/CC BY/CC BY-SA/CC BY-NC/Rights Reserved)"
+    Risk level: LOW
+
+------------------------------------------------------------------------
+CATEGORY D: UNCLEAR - NEEDS FURTHER INVESTIGATION
+------------------------------------------------------------------------
+
+33. ROCK ART
+    Our claim: "Various"
+    ACTUAL: Unknown - rockartdatabase.com has no visible license page
+    VERDICT: UNCLEAR
+
+    Details: The Global Rock Art Database (PERAHU, Griffith University)
+    does not publish clear license terms. "Various" is honest but
+    insufficient. We should determine what data we actually use and
+    whether it's permissively licensed.
+
+    ACTION REQUIRED: Research the specific data we ingest. Contact
+    the project for clarification.
+
+34. EDH INSCRIPTIONS (not in your list but in our configs.py)
+    Our claim: CC BY-SA 3.0 (configs.py) / CC BY-SA 4.0 (ingester)
+    ACTUAL: Needs verification - two conflicting claims in our own code
+    ACTION REQUIRED: Verify against edh.ub.uni-heidelberg.de
+
+================================================================================
+
+SUMMARY OF REQUIRED CHANGES
+================================================================================
+
+IMMEDIATE ACTION (potential violations):
+  [ ] Sacred Sites: REMOVE source or obtain written permission
+  [ ] Megalithic Portal: REMOVE or obtain redistribution permission
+  [ ] UNESCO: Obtain written permission or restrict to syndication feeds
+  [ ] Arachne: Update to CC BY-NC-ND 3.0 DE; assess ND impact
+
+LICENSE CORRECTIONS (update code):
+  [ ] Ireland NMS: "Open Data" -> "CC BY 4.0"
+  [ ] PAS Finds: "CC-BY-SA 4.0" -> "CC BY" (likely 2.0)
+  [ ] Nomisma (configs.py): "CC BY 4.0" -> "CC BY 3.0 (varies by partner)"
+  [ ] David Rumsey (ingester): "CC-BY-NC" -> "CC BY-NC-SA 3.0"
+  [ ] ToposText: "CC BY-NC-SA 4.0" -> Verify; likely "CC BY 3.0"
+  [ ] OXREP (configs.py): "CC BY 4.0" -> "Academic (citation required)"
+  [ ] EAMENA (ingester): "CC-BY-SA 4.0" -> "CC BY 4.0"
+  [ ] Earth Impacts (configs.py): "Public Domain" -> "Non-commercial research"
+  [ ] Mycenaean Atlas: "Academic / Research use" -> "CC BY-SA 4.0"
+  [ ] ROCEEH ROAD: "CC BY-NC 4.0" -> Verify; likely "CC BY-SA 4.0"
+  [ ] Europeana (configs.py): "CC BY-SA 4.0" -> "CC0 (metadata); varies"
+  [ ] Arachne (ingester): "CC-BY" -> "CC BY-NC-ND 3.0 DE"
+  [ ] Arachne (configs.py): "CC BY-NC-SA 3.0" -> "CC BY-NC-ND 3.0 DE"
+
+NEEDS INVESTIGATION:
+  [ ] Peru Amazon: Verify license from GitHub repo LICENSE file
+  [ ] Rock Art: Determine actual source and license
+  [ ] EDH: Resolve internal version conflict (3.0 vs 4.0)
+  [ ] ToposText: Contact Brady Kiesling for definitive answer
+
+================================================================================
+
+NON-COMMERCIAL (NC) RESTRICTION ANALYSIS
+================================================================================
+
+Sources with NC restrictions that affect us:
+  1. Arachne (CC BY-NC-ND 3.0 DE)
+  2. Seshat Equinox (CC BY-NC-SA 4.0)
+  3. David Rumsey Maps (CC BY-NC-SA 3.0)
+  4. ToposText (if NC applies - unclear)
+  5. Earth Impact Database (non-commercial research)
+
+Question: Is AncientMap "commercial"?
+  - If the site is free, educational, non-profit: NC sources are fine
+  - If there are ads, paywalls, paid features: NC sources are problematic
+  - Recommendation: Document the non-commercial nature of the project
+    explicitly (e.g., in Terms of Service) to strengthen NC defense
+
+================================================================================
+
+SHARE-ALIKE (SA) IMPLICATIONS
+================================================================================
+
+Sources with SA requirements:
+  1. DARE (CC BY-SA 3.0)
+  2. Vici.org (CC BY-SA 3.0)
+  3. OSM (ODbL - similar to SA)
+  4. Seshat Equinox (CC BY-NC-SA 4.0)
+  5. David Rumsey (CC BY-NC-SA 3.0)
+  6. Mycenaean Atlas (CC BY-SA 4.0)
+  7. ROCEEH ROAD (CC BY-SA 4.0, if confirmed)
+
+SA means: If we create derivative works from these sources, the
+derivatives must be shared under the same or compatible license.
+For a mixed-source database, this can create "license pollution"
+where SA from one source infects the entire combined work.
+
+Mitigation: Keep SA-licensed data clearly separable from other data.
+Display source attribution per-record, not just globally.
+
+================================================================================
+
+ATTRIBUTION REQUIREMENTS SUMMARY
+================================================================================
+
+Every source requires attribution. Key specific formats:
+
+- Historic England: "Contains data (c) Historic England. Licensed under OGL v3.0"
+- Canmore: "Contains Historic Environment Scotland and Ordnance Survey data
+  (c) Historic Environment Scotland and (c) Crown copyright and database right"
+- OSM: "(c) OpenStreetMap contributors" + link to openstreetmap.org/copyright
+- UNESCO: "Copyright (c) 1992-2026 UNESCO/World Heritage Centre"
+- David Rumsey: "David Rumsey Map Collection, David Rumsey Map Center,
+  Stanford Libraries"
+- Ireland NMS: "National Monuments Service, Government of Ireland"
+- Pleiades: "(c) Ancient World Mapping Center and ISAW"
+- OXREP: "Strauss, Wilson, Flohr (2017). OxREP Shipwrecks Database v2.1"
+
+================================================================================
+END OF REPORT
+================================================================================

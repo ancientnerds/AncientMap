@@ -25,8 +25,9 @@ from api.services.lyra_queue import (
     BURST_WINDOW_SECONDS,
     MAX_QUEUE_SIZE,
     QUEUE_TIMEOUT_SECONDS,
-    lyra_queue,
+    tiered_queue,
 )
+from api.services.lyra_router import RequestContext, route_request
 from api.services.rate_limiter import RateLimiter, get_client_ip
 from pipeline.database import DiscordUser as DBUser
 from pipeline.database import get_session as get_db_session
@@ -114,23 +115,26 @@ async def lyra_chat(request: LyraChatRequest, req: Request):
 
     user = get_current_user(req)
 
+    # Route request to the appropriate model tier
+    ctx = route_request(request.backend, request.message)
+
     # --- Local backend: free, fair-queued ---
-    if request.backend == "local":
-        return _handle_local_backend(request, user)
+    if ctx.backend_type == "local":
+        return _handle_local_backend(request, user, ctx)
 
     # --- MiniMax backend: paid, credit-based (existing flow) ---
-    return _handle_minimax_backend(request, user)
+    return _handle_minimax_backend(request, user, ctx)
 
 
 @router.get("/queue-status")
 async def queue_status(req: Request):
     """Queue status. If authenticated, includes per-user burst info."""
-    status = lyra_queue.get_status()
+    status = tiered_queue.get_combined_status()
 
-    # Optionally include per-user burst info
+    # Optionally include per-user burst info (shared across tiers)
     try:
         user = get_current_user(req)
-        remaining, wait = lyra_queue.get_burst_remaining(user.id)
+        remaining, wait = tiered_queue.burst.get_remaining(user.id)
         status["burst_remaining"] = remaining
         status["burst_wait_seconds"] = round(wait, 1)
         status["burst_limit"] = BURST_LIMIT
@@ -146,10 +150,14 @@ async def queue_status(req: Request):
 # ---------------------------------------------------------------------------
 
 
-def _handle_local_backend(request: LyraChatRequest, user) -> StreamingResponse:
+def _handle_local_backend(
+    request: LyraChatRequest, user, ctx: RequestContext
+) -> StreamingResponse:
     """Validate burst/queue limits and return a queued SSE stream."""
-    # 1. Burst check
-    remaining, wait = lyra_queue.get_burst_remaining(user.id)
+    queue = tiered_queue.get_queue(ctx.model_tier)
+
+    # 1. Burst check (shared across all tiers)
+    remaining, wait = tiered_queue.burst.get_remaining(user.id)
     if remaining <= 0:
         wait_min = ceil(wait / 60)
         raise HTTPException(
@@ -159,25 +167,27 @@ def _handle_local_backend(request: LyraChatRequest, user) -> StreamingResponse:
         )
 
     # 2. Duplicate check
-    if lyra_queue.has_active_request(user.id):
+    if queue.has_active_request(user.id):
         raise HTTPException(
             status_code=409,
             detail="You already have a request in the queue.",
         )
 
     # 3. Queue capacity check
-    if lyra_queue.get_queue_length() >= MAX_QUEUE_SIZE:
+    if queue.get_queue_length() >= MAX_QUEUE_SIZE:
         raise HTTPException(
             status_code=503,
             detail="Queue is full. Please try again later.",
         )
 
-    # 4. Enqueue and stream
-    entry = lyra_queue.enqueue(user.id)
+    # 4. Record burst (shared tracker) and enqueue
+    tiered_queue.burst.record(user.id)
+    entry = queue.enqueue(user.id)
     history = [h.model_dump() for h in request.history] if request.history else None
 
     return _stream_response_queued(
         entry=entry,
+        queue=queue,
         user_id=user.id,
         message=request.message,
         images=[img.model_dump() for img in request.images] if request.images else None,
@@ -185,11 +195,13 @@ def _handle_local_backend(request: LyraChatRequest, user) -> StreamingResponse:
         context_type=request.context_type,
         context_id=request.context_id,
         context_year=request.context_year,
+        ctx=ctx,
     )
 
 
 def _stream_response_queued(
     entry,
+    queue,
     user_id: uuid.UUID,
     message: str,
     images: list[dict] | None,
@@ -197,6 +209,7 @@ def _stream_response_queued(
     context_type: str,
     context_id: str | None,
     context_year: int | None,
+    ctx: RequestContext | None = None,
 ) -> StreamingResponse:
     """Three-phase SSE: queue wait → acquire inference slot → inference."""
 
@@ -204,9 +217,9 @@ def _stream_response_queued(
         slot_acquired = False
         try:
             # --- Phase 1: Queue wait with position updates ---
-            remaining, _ = lyra_queue.get_burst_remaining(user_id)
-            pos = lyra_queue.get_queue_position(entry.request_id)
-            q_len = lyra_queue.get_queue_length()
+            remaining, _ = tiered_queue.burst.get_remaining(user_id)
+            pos = queue.get_queue_position(entry.request_id)
+            q_len = queue.get_queue_length()
 
             yield _sse(
                 "queue_info",
@@ -232,8 +245,8 @@ def _stream_response_queued(
                 except TimeoutError:
                     # Check overall queue timeout
                     if time.monotonic() - queue_start > QUEUE_TIMEOUT_SECONDS:
-                        lyra_queue.cancel(entry.request_id)
-                        lyra_queue._refund_burst(user_id)
+                        queue.cancel(entry.request_id)
+                        tiered_queue.burst.refund(user_id)
                         yield _sse(
                             "error",
                             {
@@ -243,10 +256,10 @@ def _stream_response_queued(
                         )
                         return
                     # Emit position update
-                    pos = lyra_queue.get_queue_position(entry.request_id)
+                    pos = queue.get_queue_position(entry.request_id)
                     if pos is None:
                         break  # Entry was removed (shouldn't happen, but be safe)
-                    q_len = lyra_queue.get_queue_length()
+                    q_len = queue.get_queue_length()
                     est_wait = pos * 90  # ~90s per request ahead of us
                     yield _sse(
                         "queue_position",
@@ -259,17 +272,17 @@ def _stream_response_queued(
                     )
 
             # --- Phase 2: Acquire inference slot ---
-            await lyra_queue.acquire()
+            await queue.acquire()
             slot_acquired = True
             # Remove from queue now that we own the slot
-            lyra_queue.remove_entry(entry.request_id)
+            queue.remove_entry(entry.request_id)
 
             yield _sse(
                 "queue_position",
                 {
                     "type": "queue_position",
                     "position": -1,
-                    "queue_length": lyra_queue.get_queue_length(),
+                    "queue_length": queue.get_queue_length(),
                     "estimated_wait_seconds": 0,
                 },
             )
@@ -285,7 +298,7 @@ def _stream_response_queued(
                 context_type=context_type,
                 context_id=context_id,
                 context_year=context_year,
-                backend="local",
+                ctx=ctx,
             ):
                 if time.monotonic() > deadline:
                     yield _sse("error", {"type": "error", "error": "Response time limit reached"})
@@ -297,16 +310,16 @@ def _stream_response_queued(
             logger.error(f"Lyra queued stream error: {e}", exc_info=True)
             if not slot_acquired:
                 # Failed before inference — refund burst
-                lyra_queue.cancel(entry.request_id)
-                lyra_queue._refund_burst(user_id)
+                queue.cancel(entry.request_id)
+                tiered_queue.burst.refund(user_id)
             yield _sse("error", {"type": "error", "error": "An internal error occurred"})
 
         finally:
             if slot_acquired:
-                lyra_queue.release()
+                queue.release()
             else:
                 # Clean up queue entry if we never got the slot
-                lyra_queue.cancel(entry.request_id)
+                queue.cancel(entry.request_id)
 
     return StreamingResponse(
         generate(),
@@ -328,7 +341,9 @@ def _sse(event: str, data: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _handle_minimax_backend(request: LyraChatRequest, user) -> StreamingResponse:
+def _handle_minimax_backend(
+    request: LyraChatRequest, user, ctx: RequestContext
+) -> StreamingResponse:
     """Original credit-based flow for MiniMax."""
     with get_db_session() as session:
         db_user = session.query(DBUser).filter(DBUser.id == user.id).with_for_update().first()
@@ -344,7 +359,7 @@ def _handle_minimax_backend(request: LyraChatRequest, user) -> StreamingResponse
                 context_type=request.context_type,
                 context_id=request.context_id,
                 context_year=request.context_year,
-                backend=request.backend,
+                ctx=ctx,
             )
 
         if db_user.credits <= 0:
@@ -371,7 +386,7 @@ def _handle_minimax_backend(request: LyraChatRequest, user) -> StreamingResponse
         context_type=request.context_type,
         context_id=request.context_id,
         context_year=request.context_year,
-        backend=request.backend,
+        ctx=ctx,
     )
 
 
@@ -382,7 +397,7 @@ def _stream_response(
     context_type: str,
     context_id: str | None,
     context_year: int | None,
-    backend: str = "minimax",
+    ctx: RequestContext | None = None,
 ) -> StreamingResponse:
     """Create an SSE streaming response from the Lyra agent (no credits tracking)."""
 
@@ -398,7 +413,7 @@ def _stream_response(
                 context_type=context_type,
                 context_id=context_id,
                 context_year=context_year,
-                backend=backend,
+                ctx=ctx,
             ):
                 if time.monotonic() > deadline:
                     yield f"event: error\ndata: {json.dumps({'type': 'error', 'error': 'Response time limit reached'})}\n\n"
@@ -430,7 +445,7 @@ def _stream_response_with_credits(
     context_type: str,
     context_id: str | None,
     context_year: int | None,
-    backend: str = "minimax",
+    ctx: RequestContext | None = None,
 ) -> StreamingResponse:
     """Create an SSE streaming response with atomic credit reconciliation on completion.
 
@@ -451,7 +466,7 @@ def _stream_response_with_credits(
                 context_type=context_type,
                 context_id=context_id,
                 context_year=context_year,
-                backend=backend,
+                ctx=ctx,
             ):
                 if time.monotonic() > deadline:
                     yield f"event: error\ndata: {json.dumps({'type': 'error', 'error': 'Response time limit reached'})}\n\n"

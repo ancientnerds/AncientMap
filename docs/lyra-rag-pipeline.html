@@ -1249,12 +1249,13 @@ ESCALATION_SCHEMA:
     <div class="stage-content">
       <div class="node node-llm">
         <div class="node-title">
-          MiniMax M2.5 Agent Loop
-          <span class="badge badge-model">M2.5</span>
+          Multi-Model Agent Loop
+          <span class="badge badge-model">M2.5 / Qwen3.5</span>
         </div>
         <div class="node-desc">
           Streams tokens as <code>{"type": "token", "content": "..."}</code>. Up to 5 tool-call rounds.<br>
-          LangChain <code>ChatAnthropic</code> (Anthropic-compatible API) with streaming + usage tracking.
+          <strong>ModelRouter</strong> selects tier: <em>Premium</em> (MiniMax M2.5), <em>Heavy</em> (Qwen3.5 4B), or <em>Fast</em> (Qwen3.5 0.8B).<br>
+          Unified <code>LLMBackend.stream()</code> &mdash; one code path for all backends.
         </div>
       </div>
 

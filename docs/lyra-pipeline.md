@@ -499,3 +499,42 @@ flowchart LR
 | `search_empires` | empires | Hybrid search on Seshat polity data |
 
 Auto-retrieve runs before the LLM on every query, searching sites (top 5) + news (top 3). The remaining collections (transcripts, articles, empires) are available via tool calls.
+
+---
+
+## Lyra Chat — Multi-Model Architecture
+
+The Lyra chat agent uses a tiered model architecture for the local (self-hosted) backend:
+
+### Model Tiers
+
+| Tier | Model | Use Case | Thinking | Tools |
+|------|-------|----------|----------|-------|
+| **Premium** | MiniMax M2.5 | Paid users (credit-based) | Yes | Yes |
+| **Heavy** | Qwen3.5 4B | Complex archaeology queries | Yes | Yes |
+| **Fast** | Qwen3.5 0.8B | Greetings, simple questions | No | Yes |
+
+### Routing
+
+A zero-latency keyword heuristic router (`lyra_router.py`) classifies each incoming message:
+- **Fast tier**: Greetings, very short messages (<12 chars), meta questions ("who are you", "help")
+- **Heavy tier**: Everything else (default — archaeology queries, tool-calling scenarios)
+- **Premium**: MiniMax backend selected by user toggle
+
+### Queue Architecture
+
+Two independent semaphore(1) queues allow 2 concurrent local inferences:
+- `fast` queue → Qwen3.5 0.8B (1 slot)
+- `heavy` queue → Qwen3.5 4B (1 slot)
+
+A fast-tier request never blocks a heavy-tier request and vice versa.
+
+### Unified Backend Abstraction
+
+All backends implement the same `LLMBackend.stream()` protocol, yielding 4 event types:
+- `reasoning` — thinking/reasoning tokens
+- `content` — visible response tokens
+- `tool_call_chunk` — streaming tool call arguments
+- `usage` — token counts
+
+This replaces the previous dual-path streaming logic (separate code for OpenAI SDK vs LangChain).
