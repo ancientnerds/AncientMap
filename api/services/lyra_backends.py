@@ -93,7 +93,7 @@ def _langchain_messages_to_openai(messages: list) -> list[dict]:
 
 
 class OllamaBackend:
-    """Wraps raw openai.AsyncOpenAI for Ollama, preserving the `reasoning` field."""
+    """Uses Ollama native /api/chat for proper think=true/false support."""
 
     def __init__(
         self,
@@ -108,108 +108,23 @@ class OllamaBackend:
         self.api_key = api_key
         self.max_tokens = max_tokens
         self.num_ctx = num_ctx
-        self._client: Any = None
-
-    def _get_client(self) -> Any:
-        if self._client is None:
-            from openai import AsyncOpenAI
-
-            self._client = AsyncOpenAI(
-                base_url=self.base_url,
-                api_key=self.api_key or "unused",
-                timeout=300.0,
-            )
-        return self._client
 
     async def stream(
         self, messages: list[BaseMessage], tools: list, enable_thinking: bool = True
     ) -> AsyncIterator[dict]:
-        """Stream from Ollama, preserving reasoning tokens.
-
-        Args:
-            enable_thinking: If False, uses Ollama's native API with think=false
-                to skip chain-of-thought reasoning (faster responses, fewer tokens).
+        """Stream from Ollama via native API (properly handles think param).
 
         Yields StreamEvent dicts.
         """
-        if not enable_thinking:
-            async for ev in self._stream_nothink(messages, tools):
-                yield ev
-            return
-
-        async for ev in self._stream_openai(messages, tools):
-            yield ev
-
-    async def _stream_openai(self, messages: list[BaseMessage], tools: list) -> AsyncIterator[dict]:
-        """Stream via OpenAI SDK — supports reasoning tokens and tool calls."""
-        client = self._get_client()
-        openai_messages = _langchain_messages_to_openai(messages)
-        openai_tools = _langchain_tools_to_openai(tools) if tools else []
-
-        kwargs: dict = {
-            "model": self.model,
-            "messages": openai_messages,
-            "max_tokens": self.max_tokens,
-            "stream": True,
-        }
-        if self.num_ctx:
-            kwargs["extra_body"] = {"num_ctx": self.num_ctx}
-        if openai_tools:
-            kwargs["tools"] = openai_tools
-            kwargs["tool_choice"] = "auto"
-
-        response = await client.chat.completions.create(**kwargs)
-
-        async for chunk in response:
-            choice = chunk.choices[0] if chunk.choices else None
-            if not choice:
-                continue
-            delta = choice.delta
-
-            # Reasoning tokens (Ollama/Qwen3 specific field)
-            reasoning = getattr(delta, "reasoning", None) or ""
-            if not reasoning and hasattr(delta, "model_extra") and delta.model_extra:
-                reasoning = delta.model_extra.get("reasoning", "")
-            if reasoning:
-                yield {"type": "reasoning", "text": reasoning}
-
-            # Content tokens
-            if delta.content:
-                yield {"type": "content", "text": delta.content}
-
-            # Tool call chunks
-            if delta.tool_calls:
-                for tc in delta.tool_calls:
-                    yield {
-                        "type": "tool_call_chunk",
-                        "index": tc.index,
-                        "id": tc.id,
-                        "name": tc.function.name if tc.function else None,
-                        "args": tc.function.arguments if tc.function else "",
-                    }
-
-            # Usage (final chunk)
-            if chunk.usage:
-                yield {
-                    "type": "usage",
-                    "input": chunk.usage.prompt_tokens or 0,
-                    "output": chunk.usage.completion_tokens or 0,
-                }
-
-    async def _stream_nothink(
-        self, messages: list[BaseMessage], tools: list
-    ) -> AsyncIterator[dict]:
-        """Stream via Ollama native API with think=false (OpenAI SDK ignores this param)."""
         import httpx
 
         openai_messages = _langchain_messages_to_openai(messages)
         openai_tools = _langchain_tools_to_openai(tools) if tools else []
 
-        # Ollama native /api/chat uses slightly different field names
         body: dict = {
             "model": self.model,
             "messages": openai_messages,
-            "think": False,
+            "think": enable_thinking,
             "stream": True,
         }
         if self.num_ctx:
@@ -225,16 +140,18 @@ class OllamaBackend:
         if self.api_key and self.api_key != "unused":
             headers["Authorization"] = f"Bearer {self.api_key}"
 
-        async with httpx.AsyncClient(timeout=300.0) as http:
+        async with httpx.AsyncClient(timeout=600.0) as http:
             async with http.stream("POST", native_url, json=body, headers=headers) as resp:
                 resp.raise_for_status()
                 async for line in resp.aiter_lines():
                     if not line:
                         continue
-                    import json
-
                     data = json.loads(line)
                     msg = data.get("message", {})
+
+                    # Thinking tokens (only when think=true)
+                    if msg.get("thinking"):
+                        yield {"type": "reasoning", "text": msg["thinking"]}
 
                     # Content tokens
                     if msg.get("content"):
