@@ -1644,7 +1644,14 @@ async def replace_source(
     user: DiscordUser = Depends(require_founder),
     db: Session = Depends(get_db),
 ):
-    """Replace all sites for a source: snapshot current state, delete, insert fresh."""
+    """Replace all sites for a source: snapshot current state, delete, insert fresh.
+
+    Safety guarantees:
+    - Snapshot is committed FIRST in its own transaction. If it fails, nothing is deleted.
+    - Delete + insert happen in a second transaction. If insert fails, delete is rolled back.
+    - Protected sources (community, lyra) cannot be replaced.
+    - Verifies snapshot row count matches existing site count before proceeding.
+    """
     import uuid as _uuid
 
     from api.services.snapshots import create_snapshot
@@ -1657,7 +1664,15 @@ async def replace_source(
     if not sites:
         raise HTTPException(status_code=400, detail="No sites provided")
 
-    # 1. Snapshot ALL existing sites for this source
+    # Guard: never wipe protected sources
+    protected = {"community", "lyra", "ancient_nerds_community"}
+    if target_source in protected:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Source '{target_source}' is protected and cannot be replaced",
+        )
+
+    # ── PHASE 1: Snapshot (committed independently) ──────────────────
     existing_ids = [
         r.id
         for r in db.execute(
@@ -1671,192 +1686,252 @@ async def replace_source(
 
     snapshot_id = None
     if existing_ids:
-        snapshot_id = create_snapshot(
-            db,
-            site_ids=existing_ids,
-            created_by=edited_by,
-            description=(
-                f"Before replace-source {target_source}"
-                f" ({len(existing_ids)} old → {len(sites)} new)"
-            ),
-            snapshot_type="upload",
-            source_id=target_source,
-        )
+        # Create snapshot and commit it immediately so it persists
+        # even if the subsequent delete/insert fails
+        try:
+            snapshot_id = create_snapshot(
+                db,
+                site_ids=existing_ids,
+                created_by=edited_by,
+                description=(
+                    f"Before replace-source {target_source}"
+                    f" ({len(existing_ids)} old → {len(sites)} new)"
+                ),
+                snapshot_type="upload",
+                source_id=target_source,
+            )
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Snapshot creation failed: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Snapshot creation failed — database NOT modified: {e}",
+            ) from None
 
-    # 2. Delete old site_content_links for this source's sites
-    if existing_ids:
-        db.execute(
+        # Verify snapshot was actually persisted with correct row count
+        verify = db.execute(
             text(
-                "DELETE FROM site_content_links"
-                " WHERE site_id IN ("
-                "   SELECT id FROM unified_sites WHERE source_id = :src"
-                " )"
+                "SELECT row_count FROM db_snapshots"
+                " WHERE id::text = :sid"
             ),
-            {"src": target_source},
-        )
-        # Delete card_stats
-        db.execute(
-            text(
-                "DELETE FROM card_stats"
-                " WHERE site_id IN ("
-                "   SELECT id FROM unified_sites WHERE source_id = :src"
-                " )"
-            ),
-            {"src": target_source},
-        )
-        # Delete the sites themselves
-        db.execute(
-            text(
-                "DELETE FROM unified_sites WHERE source_id = :src"
-            ),
-            {"src": target_source},
-        )
+            {"sid": snapshot_id},
+        ).fetchone()
+        if not verify or verify.row_count != len(existing_ids):
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    f"Snapshot verification failed — expected {len(existing_ids)}"
+                    f" rows, got {verify.row_count if verify else 0}."
+                    " Database NOT modified."
+                ),
+            )
 
-    # 3. Insert all sites fresh
-    insert_params = []
-    card_params = []
-    for site in sites:
-        site_id = site.existing_id or str(_uuid.uuid4())
-        period_start = site.period_start
-        if period_start is None and site.period_name:
-            period_start = _period_to_year(site.period_name)
-        site_type = (
-            normalize_site_type(site.site_type) if site.site_type else None
-        )
-        name_norm = normalize_name(site.name) if site.name else site.name
-        record_id = f"upload-{site_id[:8]}"
+    # ── PHASE 2: Delete + Insert (single transaction) ────────────────
+    # If anything in this phase fails, the entire thing rolls back
+    # and the snapshot from phase 1 remains for manual recovery.
+    try:
+        if existing_ids:
+            # Delete related data first (FK constraints)
+            db.execute(
+                text(
+                    "DELETE FROM site_content_links"
+                    " WHERE site_id IN ("
+                    "   SELECT id FROM unified_sites"
+                    "   WHERE source_id = :src"
+                    " )"
+                ),
+                {"src": target_source},
+            )
+            db.execute(
+                text(
+                    "DELETE FROM card_stats"
+                    " WHERE site_id IN ("
+                    "   SELECT id FROM unified_sites"
+                    "   WHERE source_id = :src"
+                    " )"
+                ),
+                {"src": target_source},
+            )
+            deleted = db.execute(
+                text(
+                    "DELETE FROM unified_sites"
+                    " WHERE source_id = :src"
+                ),
+                {"src": target_source},
+            ).rowcount
 
-        insert_params.append({
-            "id": site_id,
-            "source_id": target_source,
-            "source_record_id": record_id,
-            "name": site.name,
-            "name_normalized": name_norm,
-            "lat": site.lat,
-            "lon": site.lon,
-            "site_type": site_type,
-            "period_name": site.period_name,
-            "period_start": period_start,
-            "country": site.country,
-            "description": site.description,
-            "source_url": site.source_url,
-            "thumbnail_url": site.thumbnail_url,
-            "edited_by": edited_by,
-        })
+            if deleted != len(existing_ids):
+                logger.warning(
+                    "Delete count mismatch: expected %d, got %d",
+                    len(existing_ids), deleted,
+                )
 
-        if site.card_description or site.confidence_score is not None:
-            card_params.append({
-                "site_id": site_id,
-                "card_description": site.card_description,
-                "confidence_score": site.confidence_score,
+        # Build insert params
+        insert_params = []
+        card_params = []
+        for site in sites:
+            site_id = site.existing_id or str(_uuid.uuid4())
+            period_start = site.period_start
+            if period_start is None and site.period_name:
+                period_start = _period_to_year(site.period_name)
+            site_type = (
+                normalize_site_type(site.site_type)
+                if site.site_type else None
+            )
+            name_norm = (
+                normalize_name(site.name) if site.name else site.name
+            )
+            record_id = f"upload-{site_id[:8]}"
+
+            insert_params.append({
+                "id": site_id,
+                "source_id": target_source,
+                "source_record_id": record_id,
+                "name": site.name,
+                "name_normalized": name_norm,
+                "lat": site.lat,
+                "lon": site.lon,
+                "site_type": site_type,
+                "period_name": site.period_name,
+                "period_start": period_start,
+                "country": site.country,
+                "description": site.description,
+                "source_url": site.source_url,
+                "thumbnail_url": site.thumbnail_url,
+                "edited_by": edited_by,
             })
 
-    # Batch INSERT sites
-    if insert_params:
-        db.execute(
-            text("""
-                INSERT INTO unified_sites (
-                    id, source_id, source_record_id, name, name_normalized,
-                    lat, lon, geom, site_type, period_name, period_start,
-                    country, description, source_url, thumbnail_url,
-                    edited_by, created_at
-                ) VALUES (
-                    CAST(:id AS uuid), :source_id, :source_record_id,
-                    :name, :name_normalized,
-                    :lat, :lon, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326),
-                    :site_type, :period_name, :period_start,
-                    :country, :description, :source_url, :thumbnail_url,
-                    :edited_by, NOW()
-                )
-            """),
-            insert_params,
-        )
+            if site.card_description or site.confidence_score is not None:
+                card_params.append({
+                    "site_id": site_id,
+                    "card_description": site.card_description,
+                    "confidence_score": site.confidence_score,
+                })
 
-    # Batch INSERT card_stats
-    if card_params:
-        db.execute(
-            text("""
-                INSERT INTO card_stats (
-                    site_id, card_description, confidence_score,
-                    antiquity, fortification, cultural_influence,
-                    mystery, legacy, total_power,
-                    rarity_score, rarity_tier, category_group
-                ) VALUES (
-                    CAST(:site_id AS uuid), :card_description,
-                    :confidence_score,
-                    0, 0, 0, 0, 0, 0, 0, 0, 'unknown'
-                )
-            """),
-            card_params,
-        )
-
-    # 4. Write enrichment data (citations + ref links)
-    citations_written = 0
-    reflinks_written = 0
-    for site in sites:
-        site_id = site.existing_id or next(
-            (p["id"] for p in insert_params if p["name"] == site.name),
-            None,
-        )
-        if not site_id:
-            continue
-
-        if site.description_citations:
+        # Batch INSERT sites
+        if insert_params:
             db.execute(
                 text("""
-                    UPDATE unified_sites
-                    SET raw_data = COALESCE(raw_data, '{}'::jsonb)
-                        || jsonb_build_object(
-                            'description_citations', :cit::jsonb
-                        )
-                    WHERE id::text = :sid
+                    INSERT INTO unified_sites (
+                        id, source_id, source_record_id,
+                        name, name_normalized,
+                        lat, lon, geom,
+                        site_type, period_name, period_start,
+                        country, description, source_url,
+                        thumbnail_url, edited_by, created_at
+                    ) VALUES (
+                        CAST(:id AS uuid), :source_id,
+                        :source_record_id, :name, :name_normalized,
+                        :lat, :lon,
+                        ST_SetSRID(ST_MakePoint(:lon, :lat), 4326),
+                        :site_type, :period_name, :period_start,
+                        :country, :description, :source_url,
+                        :thumbnail_url, :edited_by, NOW()
+                    )
                 """),
-                {
-                    "sid": site_id,
-                    "cit": json.dumps(site.description_citations),
-                },
+                insert_params,
             )
-            citations_written += 1
 
-        if site.reference_links:
-            for idx, link in enumerate(site.reference_links[:5]):
-                url = link.get("url", "")
-                domain = link.get("domain", "")
-                if not url:
-                    continue
-                url_hash = hashlib.md5(
-                    url.encode(), usedforsecurity=False,
-                ).hexdigest()[:8]
-                quality = link.get("quality", "medium")
-                base_score = 0.9 if quality == "high" else 0.7
-                relevance = round(base_score - (idx * 0.05), 2)
+        # Batch INSERT card_stats
+        if card_params:
+            db.execute(
+                text("""
+                    INSERT INTO card_stats (
+                        site_id, card_description, confidence_score,
+                        antiquity, fortification, cultural_influence,
+                        mystery, legacy, total_power,
+                        rarity_score, rarity_tier, category_group
+                    ) VALUES (
+                        CAST(:site_id AS uuid), :card_description,
+                        :confidence_score,
+                        0, 0, 0, 0, 0, 0, 0, 0, 'unknown'
+                    )
+                """),
+                card_params,
+            )
+
+        # Write enrichment data (citations + ref links)
+        citations_written = 0
+        reflinks_written = 0
+        for site in sites:
+            site_id = site.existing_id or next(
+                (p["id"] for p in insert_params if p["name"] == site.name),
+                None,
+            )
+            if not site_id:
+                continue
+
+            if site.description_citations:
                 db.execute(
                     text("""
-                        INSERT INTO site_content_links
-                            (site_id, content_type, content_source,
-                             content_id, title, content_url,
-                             relevance_score, link_metadata)
-                        VALUES
-                            (CAST(:sid AS uuid), 'reference',
-                             'web_discovery', :cid, :title,
-                             :url, :score,
-                             CAST(:meta AS jsonb))
+                        UPDATE unified_sites
+                        SET raw_data = COALESCE(raw_data, '{}'::jsonb)
+                            || jsonb_build_object(
+                                'description_citations', :cit::jsonb
+                            )
+                        WHERE id::text = :sid
                     """),
                     {
                         "sid": site_id,
-                        "cid": f"{domain}:{url_hash}",
-                        "title": (link.get("title") or "")[:500],
-                        "url": url,
-                        "score": relevance,
-                        "meta": json.dumps({
-                            "domain": domain,
-                            "link_type": link.get("link_type", "article"),
-                        }),
+                        "cit": json.dumps(site.description_citations),
                     },
                 )
-            reflinks_written += 1
+                citations_written += 1
 
-    db.commit()
+            if site.reference_links:
+                for idx, link in enumerate(site.reference_links[:5]):
+                    url = link.get("url", "")
+                    domain = link.get("domain", "")
+                    if not url:
+                        continue
+                    url_hash = hashlib.md5(
+                        url.encode(), usedforsecurity=False,
+                    ).hexdigest()[:8]
+                    quality = link.get("quality", "medium")
+                    base_score = 0.9 if quality == "high" else 0.7
+                    relevance = round(base_score - (idx * 0.05), 2)
+                    db.execute(
+                        text("""
+                            INSERT INTO site_content_links
+                                (site_id, content_type, content_source,
+                                 content_id, title, content_url,
+                                 relevance_score, link_metadata)
+                            VALUES
+                                (CAST(:sid AS uuid), 'reference',
+                                 'web_discovery', :cid, :title,
+                                 :url, :score,
+                                 CAST(:meta AS jsonb))
+                        """),
+                        {
+                            "sid": site_id,
+                            "cid": f"{domain}:{url_hash}",
+                            "title": (link.get("title") or "")[:500],
+                            "url": url,
+                            "score": relevance,
+                            "meta": json.dumps({
+                                "domain": domain,
+                                "link_type": link.get("link_type", "article"),
+                            }),
+                        },
+                    )
+                reflinks_written += 1
+
+        db.commit()
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Replace-source failed after snapshot: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"Replace failed — all changes rolled back."
+                f" Snapshot {snapshot_id} preserved for recovery."
+                f" Error: {e}"
+            ),
+        ) from None
+
     cache_delete_pattern("sites:*")
 
     global _static_sites_cache
