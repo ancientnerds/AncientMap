@@ -152,6 +152,10 @@ class LyraQueue:
     def get_queue_length(self) -> int:
         return sum(1 for e in self._queue if not e.cancelled)
 
+    def get_active_user_ids(self) -> set[uuid.UUID]:
+        """Return user IDs with non-cancelled entries in the queue."""
+        return {e.user_id for e in self._queue if not e.cancelled}
+
     def get_status(self) -> dict:
         """Public status snapshot for the /queue-status endpoint."""
         return {
@@ -193,6 +197,13 @@ class TieredQueue:
     def get_queue(self, tier: str) -> LyraQueue:
         """Get the queue for a model tier ("fast" or "heavy")."""
         return self._queues.get(tier, self._queues["heavy"])
+
+    def has_other_users(self, user_id: uuid.UUID) -> bool:
+        """True if any other user has queued requests across any tier."""
+        for q in self._queues.values():
+            if q.get_active_user_ids() - {user_id}:
+                return True
+        return False
 
     def get_combined_status(self) -> dict:
         """Combined status for the /queue-status endpoint."""

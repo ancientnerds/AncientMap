@@ -154,15 +154,16 @@ def _handle_local_backend(request: LyraChatRequest, user, ctx: RequestContext) -
     """Validate burst/queue limits and return a queued SSE stream."""
     queue = tiered_queue.get_queue(ctx.model_tier)
 
-    # 1. Burst check (shared across all tiers)
-    remaining, wait = tiered_queue.burst.get_remaining(user.id)
-    if remaining <= 0:
-        wait_min = ceil(wait / 60)
-        raise HTTPException(
-            status_code=429,
-            detail=f"Burst limit reached. Try again in ~{wait_min} minute{'s' if wait_min != 1 else ''}.",
-            headers={"Retry-After": str(int(wait))},
-        )
+    # 1. Burst check — only enforce when other users are active
+    if tiered_queue.has_other_users(user.id):
+        remaining, wait = tiered_queue.burst.get_remaining(user.id)
+        if remaining <= 0:
+            wait_min = ceil(wait / 60)
+            raise HTTPException(
+                status_code=429,
+                detail=f"Burst limit reached. Try again in ~{wait_min} minute{'s' if wait_min != 1 else ''}.",
+                headers={"Retry-After": str(int(wait))},
+            )
 
     # 2. Duplicate check
     if queue.has_active_request(user.id):
