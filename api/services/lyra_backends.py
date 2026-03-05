@@ -285,7 +285,7 @@ def get_backend(model_name: str, backend_type: str) -> LLMBackend:
             )
             logger.info(f"Created OllamaBackend for {model_name}")
         else:
-            api_key = os.getenv("LYRA_ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
+            api_key = os.getenv("LYRA_ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY", "")
             base_url = os.getenv("LYRA_ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
             from pipeline.lyra.config import get_max_tokens
 
