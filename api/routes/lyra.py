@@ -40,7 +40,6 @@ _chat_limiter = RateLimiter(max_requests=15, window_seconds=60, namespace="lyra_
 # Configuration
 # ---------------------------------------------------------------------------
 
-SSE_MAX_DURATION = 300  # Max SSE stream duration in seconds (5 minutes)
 
 # Anti-exploit: cap conversation history for low-credit users to bound max request cost
 LOW_CREDIT_THRESHOLD = 20  # credits below which history is truncated
@@ -252,7 +251,6 @@ def _stream_response_queued(
             )
 
             # --- Phase 3: Inference ---
-            deadline = time.monotonic() + SSE_MAX_DURATION
             from api.services.lyra_agent import run_agent_stream
 
             async for chunk in run_agent_stream(
@@ -264,9 +262,6 @@ def _stream_response_queued(
                 context_year=context_year,
                 ctx=ctx,
             ):
-                if time.monotonic() > deadline:
-                    yield _sse("error", {"type": "error", "error": "Response time limit reached"})
-                    return
                 event_type = chunk.get("type", "token")
                 yield f"event: {event_type}\ndata: {json.dumps(chunk)}\n\n"
 
@@ -364,7 +359,6 @@ def _stream_response(
     """Create an SSE streaming response from the Lyra agent (no credits tracking)."""
 
     async def generate():
-        deadline = time.monotonic() + SSE_MAX_DURATION
         try:
             from api.services.lyra_agent import run_agent_stream
 
@@ -377,9 +371,6 @@ def _stream_response(
                 context_year=context_year,
                 ctx=ctx,
             ):
-                if time.monotonic() > deadline:
-                    yield f"event: error\ndata: {json.dumps({'type': 'error', 'error': 'Response time limit reached'})}\n\n"
-                    return
                 event_type = chunk.get("type", "token")
                 yield f"event: {event_type}\ndata: {json.dumps(chunk)}\n\n"
 
@@ -416,7 +407,6 @@ def _stream_response_with_credits(
     """
 
     async def generate():
-        deadline = time.monotonic() + SSE_MAX_DURATION
         done_fired = False
         try:
             from api.services.lyra_agent import run_agent_stream
@@ -430,10 +420,6 @@ def _stream_response_with_credits(
                 context_year=context_year,
                 ctx=ctx,
             ):
-                if time.monotonic() > deadline:
-                    yield f"event: error\ndata: {json.dumps({'type': 'error', 'error': 'Response time limit reached'})}\n\n"
-                    return
-
                 event_type = chunk.get("type", "token")
 
                 # Intercept "done" event to reconcile credits and log usage

@@ -516,7 +516,7 @@ export default function LyraChatModal({
     if (!userScrolledUpRef.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [messages.length, lastMsg?.content.length])
+  }, [messages.length, lastMsg?.content.length, lastMsg?.thinking?.length])
 
   // Track scroll position for FAB visibility
   useEffect(() => {
@@ -970,7 +970,14 @@ export default function LyraChatModal({
       } else {
         const errMsg = (e as Error).message || 'An error occurred'
         setError(errMsg)
-        setMessages(prev => prev.filter(m => m.id !== assistantId))
+        // Keep the message if it has content/thinking, otherwise remove it
+        setMessages(prev => {
+          const msg = prev.find(m => m.id === assistantId)
+          if (msg && (msg.content || msg.thinking)) {
+            return prev.map(m => m.id === assistantId ? { ...m, isStreaming: false } : m)
+          }
+          return prev.filter(m => m.id !== assistantId)
+        })
       }
     } finally {
       setIsStreaming(false)
