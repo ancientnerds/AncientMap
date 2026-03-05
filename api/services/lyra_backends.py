@@ -221,8 +221,12 @@ class OllamaBackend:
         # e.g. "http://host:11435/v1" -> "http://host:11435/api/chat"
         native_url = self.base_url.replace("/v1", "").rstrip("/") + "/api/chat"
 
+        headers = {}
+        if self.api_key and self.api_key != "unused":
+            headers["Authorization"] = f"Bearer {self.api_key}"
+
         async with httpx.AsyncClient(timeout=300.0) as http:
-            async with http.stream("POST", native_url, json=body) as resp:
+            async with http.stream("POST", native_url, json=body, headers=headers) as resp:
                 resp.raise_for_status()
                 async for line in resp.aiter_lines():
                     if not line:
