@@ -1849,7 +1849,7 @@ async def replace_source(
         citations_written = 0
         reflinks_written = 0
         for site in sites:
-            site_id = site.existing_id or next(
+            site_id: str | None = site.existing_id or next(
                 (p["id"] for p in insert_params if p["name"] == site.name),
                 None,
             )
