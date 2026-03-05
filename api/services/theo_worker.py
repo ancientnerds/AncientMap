@@ -49,7 +49,7 @@ async def _process_request(request_id: str, question: str, effort: str) -> None:
         model_tier="heavy",
         model_name=THEO_MODEL,
         embedding_backend="local",
-        supports_thinking=effort_cfg["thinking"],
+        supports_thinking=bool(effort_cfg["thinking"]),
         supports_tools=True,
     )
 
