@@ -1185,6 +1185,11 @@ export default function LyraChatModal({
             <div className="lyra-chat-body">
               {/* Left: chat messages */}
               <div className="lyra-chat-main">
+                {lyraBackend === 'local' && (
+                  <div className="lyra-local-banner">
+                    You're using our self-hosted AI — it's completely free but slower than the cloud model. Please be patient, responses may take a moment.
+                  </div>
+                )}
                 <div className="lyra-chat-messages" ref={messagesContainerRef} role="log" aria-live="polite">
                   {messages.length === 0 ? (
                     <LyraWelcome
@@ -1460,7 +1465,7 @@ export default function LyraChatModal({
                   className={`lyra-model-btn ${lyraBackend === 'local' ? 'active' : ''}`}
                   onClick={() => { setLyraBackend('local'); localStorage.setItem('lyra_backend', 'local') }}
                   disabled={isStreaming}
-                  title="Qwen3 8B (self-hosted, free)"
+                  title="Qwen3.5 (self-hosted, free)"
                 >Qwen{lyraBackend === 'local' && burstRemaining !== null ? ` (${burstRemaining} left)` : ''}</button>
               </div>
               <div className="lyra-chat-input-row">

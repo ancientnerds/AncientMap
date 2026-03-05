@@ -16080,6 +16080,17 @@ body.news-feed-open .empire-borders-window {
 }
 .lyra-model-btn:disabled { opacity: 0.4; cursor: default; }
 
+/* Local backend info banner */
+.lyra-local-banner {
+  padding: 8px 14px;
+  margin: 0 2px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--crt-500);
+  background: var(--crt-950);
+  border-bottom: 1px solid var(--border-crt);
+}
+
 /* Queue status display */
 .lyra-queue-status {
   display: flex;
