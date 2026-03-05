@@ -308,6 +308,8 @@ export default function SitePopup({
   // Raw metadata for source-specific fields
   const [rawData, setRawData] = useState<Record<string, unknown> | null>(null)
   const [rawDataLoading, setRawDataLoading] = useState(false)
+  // Reference links fetched from API (live from DB)
+  const [apiReferenceLinks, setApiReferenceLinks] = useState<{ url: string; title: string; domain: string; kind: string }[] | undefined>(undefined)
 
   // Track if tooltip was pinned by clicking minimized bar
   const tooltipPinnedRef = useRef(false)
@@ -361,11 +363,15 @@ export default function SitePopup({
   useEffect(() => {
     if (isEmpireMode) return
     setRawDataLoading(true)
+    setApiReferenceLinks(undefined)
     fetch(`${config.api.baseUrl}/sites/${displaySite.id}`)
       .then(res => res.ok ? res.json() : null)
       .then(data => {
         if (data?.rawData) {
           setRawData(data.rawData)
+        }
+        if (data?.referenceLinks) {
+          setApiReferenceLinks(data.referenceLinks)
         }
       })
       .catch(err => {
@@ -717,7 +723,7 @@ export default function SitePopup({
                 isFounder={isFounder}
                 bestWikiUrl={displaySite.bestWikiUrl}
                 sourceLanguage={displaySite.sourceLanguage}
-                referenceLinks={displaySite.referenceLinks}
+                referenceLinks={apiReferenceLinks || displaySite.referenceLinks}
                 descriptionCitations={displaySite.descriptionCitations}
               />
             )}

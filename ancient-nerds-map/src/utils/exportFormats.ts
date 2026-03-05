@@ -18,6 +18,8 @@ export interface ParsedSite {
   thumbnail_url?: string
   card_description?: string
   confidence_score?: number
+  description_citations?: { n: number; url: string; title: string; domain: string }[]
+  reference_links?: { url: string; title: string; domain: string; link_type: string; quality: string }[]
   _status?: 'insert' | 'update' | 'error'
   _error?: string
   _matchedId?: string  // ID of existing site if this is an update
@@ -258,6 +260,12 @@ export function parseGeoJSON(text: string): ParsedSite[] {
       raw.lon = coords[0]
       raw.lat = coords[1]
     }
-    return mapRow(raw as Record<string, string>)
+    const site = mapRow(raw as Record<string, string>)
+    if (site) {
+      // Pass through complex fields that mapRow doesn't handle
+      if (Array.isArray(props.description_citations)) site.description_citations = props.description_citations as ParsedSite['description_citations']
+      if (Array.isArray(props.reference_links)) site.reference_links = props.reference_links as ParsedSite['reference_links']
+    }
+    return site
   }).filter(Boolean) as ParsedSite[]
 }

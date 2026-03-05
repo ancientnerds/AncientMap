@@ -1454,6 +1454,7 @@ def package_for_upload(source_ids: list[str], candidate_site_ids: set[str] | Non
                         us.name, us.lat, us.lon,
                         us.site_type, us.period_name, us.period_start,
                         us.country, us.description, us.source_url, us.thumbnail_url,
+                        us.raw_data,
                         cs.confidence_score,
                         cs.card_description
                     FROM unified_sites us
@@ -1465,30 +1466,85 @@ def package_for_upload(source_ids: list[str], candidate_site_ids: set[str] | Non
                 params,
             ).fetchall()
 
+            # Batch-load reference links for all sites in this source
+            site_ids = [r.site_id for r in rows]
+            ref_links_by_site: dict[str, list[dict]] = {}
+            if site_ids:
+                # Query in chunks to avoid param limit
+                chunk_size = 500
+                for chunk_start in range(0, len(site_ids), chunk_size):
+                    chunk = site_ids[chunk_start:chunk_start + chunk_size]
+                    placeholders = ", ".join(
+                        f":rl_{chunk_start + j}" for j in range(len(chunk))
+                    )
+                    rl_params = {
+                        f"rl_{chunk_start + j}": sid
+                        for j, sid in enumerate(chunk)
+                    }
+                    rl_rows = conn.execute(
+                        text(f"""
+                            SELECT
+                                site_id::text AS site_id,
+                                content_url, title, link_metadata
+                            FROM site_content_links
+                            WHERE site_id::text IN ({placeholders})
+                              AND content_type = 'reference'
+                              AND content_url IS NOT NULL
+                            ORDER BY relevance_score DESC
+                        """),
+                        rl_params,
+                    ).fetchall()
+                    for rl in rl_rows:
+                        ref_links_by_site.setdefault(rl.site_id, [])
+                        if len(ref_links_by_site[rl.site_id]) < 5:
+                            meta = rl.link_metadata or {}
+                            ref_links_by_site[rl.site_id].append({
+                                "url": rl.content_url,
+                                "title": (rl.title or "")[:200],
+                                "domain": meta.get("domain", ""),
+                                "link_type": meta.get("link_type", "article"),
+                                "quality": meta.get("quality", ""),
+                            })
+
             features = []
             for row in rows:
                 if row.lat is None or row.lon is None:
                     continue
+                props: dict = {
+                    "id": row.site_id,
+                    "name": row.name,
+                    "source_id": source_id,
+                    "site_type": row.site_type,
+                    "period_start": row.period_start,
+                    "period_name": row.period_name,
+                    "country": row.country,
+                    "description": row.description,
+                    "source_url": row.source_url,
+                    "thumbnail_url": row.thumbnail_url,
+                    "confidence_score": row.confidence_score,
+                    "card_description": row.card_description,
+                }
+
+                # Add description_citations from raw_data JSONB
+                raw = row.raw_data or {}
+                if isinstance(raw, str):
+                    raw = json.loads(raw)
+                citations = raw.get("description_citations")
+                if citations:
+                    props["description_citations"] = citations
+
+                # Add reference_links from site_content_links
+                refs = ref_links_by_site.get(row.site_id)
+                if refs:
+                    props["reference_links"] = refs
+
                 feature = {
                     "type": "Feature",
                     "geometry": {
                         "type": "Point",
                         "coordinates": [row.lon, row.lat],
                     },
-                    "properties": {
-                        "id": row.site_id,
-                        "name": row.name,
-                        "source_id": source_id,
-                        "site_type": row.site_type,
-                        "period_start": row.period_start,
-                        "period_name": row.period_name,
-                        "country": row.country,
-                        "description": row.description,
-                        "source_url": row.source_url,
-                        "thumbnail_url": row.thumbnail_url,
-                        "confidence_score": row.confidence_score,
-                        "card_description": row.card_description,
-                    },
+                    "properties": props,
                 }
                 features.append(feature)
 

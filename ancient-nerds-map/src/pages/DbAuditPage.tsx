@@ -968,6 +968,11 @@ export default function DbAuditPage() {
               if (norm(parsedVal) !== norm(existingVal)) changed.push(field)
             }
           }
+          // Enrichment arrays: if present in upload, always treat as changed
+          // (we can't compare — compact AuditSite doesn't carry these)
+          if (p.description_citations?.length) changed.push('description_citations')
+          if (p.reference_links?.length) changed.push('reference_links')
+
           p._currentData = currentData as ParsedSite['_currentData']
           p._changedFields = changed
         } else if (!p._status) {
@@ -1015,6 +1020,8 @@ export default function DbAuditPage() {
           thumbnail_url: p.thumbnail_url || null,
           card_description: p.card_description || null,
           confidence_score: p.confidence_score ?? null,
+          description_citations: p.description_citations || null,
+          reference_links: p.reference_links || null,
           existing_id: p._matchedId || null,
         }))
 
@@ -1721,7 +1728,7 @@ export default function DbAuditPage() {
               <th className="db-th" onClick={() => handleSort('country')}>Country{sortArrow('country')}</th>
               <th className="db-th db-th-nosort" title="Game card description (200 chars)">Card</th>
               <th className="db-th db-th-nosort" title="Full Wikipedia description">Desc</th>
-              <th className="db-th db-th-nosort" title="Source URL (Wikipedia, etc.)">URL</th>
+              <th className="db-th db-th-nosort" title="Source URL + reference links">Links</th>
               <th className="db-th db-th-nosort db-th-hero" title="Hero image status">H</th>
               <th className="db-th db-th-nosort db-th-img" title="Click to expand all images" onClick={() => { setAllImgsExpanded(p => !p); setExpandedImgs(new Set()) }}>IMG</th>
               <th className="db-th db-th-nosort" title="Last edited by (user or initial import)">User</th>
@@ -1860,17 +1867,37 @@ export default function DbAuditPage() {
                     ) : <span className="db-missing">&mdash;</span>}
                   </td>
 
-                  {/* URL */}
+                  {/* Links — source URL favicon + reference link favicons */}
                   <td className="db-td db-td-url">
-                    {site.u ? (
-                      <a href={site.u} target="_blank" rel="noopener noreferrer" className="db-link-icon" title={site.u}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                          <polyline points="15 3 21 3 21 9" />
-                          <line x1="10" y1="14" x2="21" y2="3" />
-                        </svg>
-                      </a>
-                    ) : <span className="db-missing">&mdash;</span>}
+                    {(() => {
+                      const links: { url: string; domain: string; title: string }[] = []
+                      if (site.u) {
+                        try { links.push({ url: site.u, domain: new URL(site.u).hostname, title: site.u }) } catch { /* bad url */ }
+                      }
+                      if (site.rf) {
+                        for (const r of site.rf) {
+                          if (r.u && !links.some(l => l.domain === r.d)) {
+                            links.push({ url: r.u, domain: r.d, title: r.t || r.d })
+                          }
+                        }
+                      }
+                      return links.length > 0 ? (
+                        <div className="db-links-row">
+                          {links.map((l, i) => (
+                            <a key={i} href={l.url} target="_blank" rel="noopener noreferrer" title={l.title}>
+                              <img
+                                src={`https://www.google.com/s2/favicons?domain=${l.domain}&sz=16`}
+                                alt={l.domain}
+                                width="16"
+                                height="16"
+                                className="db-link-favicon"
+                                loading="lazy"
+                              />
+                            </a>
+                          ))}
+                        </div>
+                      ) : <span className="db-missing">&mdash;</span>
+                    })()}
                   </td>
 
                   {/* Hero status */}
@@ -2189,9 +2216,31 @@ export default function DbAuditPage() {
                           {p._status === 'update' && p._changedFields && p._currentData && (
                             <div className="db-diff-fields">
                               {(uploadFieldFilter && uploadFieldFilter !== '_new' ? p._changedFields.filter(f => f === uploadFieldFilter) : p._changedFields).map(field => {
+                                const label = field.replace(/_/g, ' ')
+                                // Enrichment arrays: show count badge instead of stringified JSON
+                                if (field === 'description_citations') {
+                                  const count = p.description_citations?.length ?? 0
+                                  return (
+                                    <div key={field} className="db-diff-row">
+                                      <span className="db-diff-field">{label}</span>
+                                      <span className="db-diff-new">{count} citation{count !== 1 ? 's' : ''}</span>
+                                    </div>
+                                  )
+                                }
+                                if (field === 'reference_links') {
+                                  const refs = p.reference_links ?? []
+                                  return (
+                                    <div key={field} className="db-diff-row">
+                                      <span className="db-diff-field">{label}</span>
+                                      <span className="db-diff-new">
+                                        {refs.length} link{refs.length !== 1 ? 's' : ''}
+                                        {refs.length > 0 && <span style={{ opacity: 0.6, marginLeft: 6 }}>({refs.map(r => r.domain).join(', ')})</span>}
+                                      </span>
+                                    </div>
+                                  )
+                                }
                                 const oldVal = String((p._currentData as Record<string, unknown>)?.[field] ?? '')
                                 const newVal = String((p as unknown as Record<string, unknown>)[field] ?? '')
-                                const label = field.replace(/_/g, ' ')
                                 return (
                                   <div key={field} className="db-diff-row">
                                     <span className="db-diff-field">{label}</span>

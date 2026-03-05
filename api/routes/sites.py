@@ -1045,6 +1045,31 @@ async def get_site_detail(
         if "description_citations" in rd:
             resp["descriptionCitations"] = rd["description_citations"]
         resp["rawData"] = rd
+
+    # Reference links from site_content_links (web-discovered sources)
+    ref_rows = db.execute(
+        text("""
+            SELECT content_url, title, link_metadata
+            FROM site_content_links
+            WHERE site_id::text = :site_id
+              AND content_type = 'reference'
+              AND content_url IS NOT NULL
+            ORDER BY relevance_score DESC
+            LIMIT 5
+        """),
+        {"site_id": row.id},
+    ).fetchall()
+    if ref_rows:
+        resp["referenceLinks"] = [
+            {
+                "url": r.content_url,
+                "title": (r.title or "")[:200],
+                "domain": (r.link_metadata or {}).get("domain", ""),
+                "kind": (r.link_metadata or {}).get("link_type", "article"),
+            }
+            for r in ref_rows
+        ]
+
     return resp
 
 
@@ -1315,6 +1340,8 @@ class ParsedSitePayload(BaseModel):
     thumbnail_url: str | None = Field(default=None, max_length=2000)
     card_description: str | None = Field(default=None, max_length=300)
     confidence_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    description_citations: list[dict] | None = None
+    reference_links: list[dict] | None = None
     existing_id: str | None = Field(default=None, max_length=100)  # If updating an existing site
 
 
@@ -1494,6 +1521,78 @@ async def batch_upload_sites(
             card_stats_params,
         )
 
+    # Write description_citations into raw_data and reference_links into site_content_links
+    citations_written = 0
+    reflinks_written = 0
+    for site in sites:
+        site_id = site.existing_id or next(
+            (p["id"] for p in insert_params if p["name"] == site.name), None
+        )
+        if not site_id:
+            continue
+
+        # description_citations → raw_data->description_citations
+        if site.description_citations:
+            db.execute(
+                text("""
+                    UPDATE unified_sites
+                    SET raw_data = COALESCE(raw_data, '{}'::jsonb)
+                        || jsonb_build_object(
+                            'description_citations', :citations::jsonb
+                        )
+                    WHERE id::text = :site_id
+                """),
+                {
+                    "site_id": site_id,
+                    "citations": json.dumps(site.description_citations),
+                },
+            )
+            citations_written += 1
+
+        # reference_links → site_content_links
+        if site.reference_links:
+            for idx, link in enumerate(site.reference_links[:5]):
+                url = link.get("url", "")
+                domain = link.get("domain", "")
+                if not url:
+                    continue
+                quality = link.get("quality", "medium")
+                base_score = 0.9 if quality == "high" else 0.7
+                relevance = round(base_score - (idx * 0.05), 2)
+                content_id = f"{domain}:{hash(url) & 0xFFFFFFFF:08x}"
+                meta = {
+                    "domain": domain,
+                    "link_type": link.get("link_type", "article"),
+                }
+                db.execute(
+                    text("""
+                        INSERT INTO site_content_links
+                            (site_id, content_type, content_source,
+                             content_id, title, content_url,
+                             relevance_score, link_metadata)
+                        VALUES
+                            (CAST(:sid AS uuid), 'reference',
+                             'web_discovery', :cid, :title,
+                             :url, :score,
+                             CAST(:meta AS jsonb))
+                        ON CONFLICT (site_id, content_source, content_id)
+                        DO UPDATE SET
+                            title = EXCLUDED.title,
+                            content_url = EXCLUDED.content_url,
+                            relevance_score = EXCLUDED.relevance_score,
+                            link_metadata = EXCLUDED.link_metadata
+                    """),
+                    {
+                        "sid": site_id,
+                        "cid": content_id,
+                        "title": (link.get("title") or "")[:500],
+                        "url": url,
+                        "score": relevance,
+                        "meta": json.dumps(meta),
+                    },
+                )
+            reflinks_written += 1
+
     inserted = len(insert_params)
     updated = len(update_params)
 
@@ -1507,6 +1606,8 @@ async def batch_upload_sites(
         "snapshot_id": snapshot_id,
         "inserted": inserted,
         "updated": updated,
+        "citations_written": citations_written,
+        "reflinks_written": reflinks_written,
         "errors": errors,
     }
     if snapshot_error:
@@ -1578,3 +1679,79 @@ async def mark_sites_audited(
         "source_id": body.source_id,
         "marked": result.rowcount,
     }
+
+
+# =============================================================================
+# Reference Links Import
+# =============================================================================
+
+
+@router.post("/reference-links/import")
+async def import_reference_links(
+    request: Request,
+    user: DiscordUser = Depends(require_founder),
+    db: Session = Depends(get_db),
+):
+    """
+    Bulk import reference links into site_content_links (founders only).
+
+    Accepts JSON array of {site_id, content_type, content_source, content_id,
+    title, content_url, relevance_score, link_metadata, thumbnail_url}.
+    Dedupes by (site_id, content_source, content_id) on conflict.
+    """
+    body = await request.json()
+    if not isinstance(body, list):
+        raise HTTPException(status_code=400, detail="Expected JSON array")
+
+    inserted = 0
+    skipped = 0
+    for link in body:
+        site_id = link.get("site_id")
+        content_url = link.get("content_url")
+        if not site_id or not content_url:
+            skipped += 1
+            continue
+
+        metadata = link.get("link_metadata", {})
+        if isinstance(metadata, str):
+            metadata = json.loads(metadata)
+
+        try:
+            db.execute(
+                text("""
+                    INSERT INTO site_content_links
+                        (site_id, content_type, content_source, content_id,
+                         title, content_url, relevance_score,
+                         link_metadata, thumbnail_url)
+                    VALUES
+                        (CAST(:site_id AS uuid), :content_type,
+                         :content_source, :content_id,
+                         :title, :content_url, :relevance_score,
+                         CAST(:metadata AS jsonb), :thumbnail_url)
+                    ON CONFLICT (site_id, content_source, content_id)
+                    DO UPDATE SET
+                        title = EXCLUDED.title,
+                        content_url = EXCLUDED.content_url,
+                        relevance_score = EXCLUDED.relevance_score,
+                        link_metadata = EXCLUDED.link_metadata
+                """),
+                {
+                    "site_id": site_id,
+                    "content_type": link.get("content_type", "reference"),
+                    "content_source": link.get("content_source", "web_discovery"),
+                    "content_id": link.get("content_id", ""),
+                    "title": (link.get("title") or "")[:500],
+                    "content_url": content_url,
+                    "relevance_score": link.get("relevance_score"),
+                    "metadata": json.dumps(metadata),
+                    "thumbnail_url": link.get("thumbnail_url"),
+                },
+            )
+            inserted += 1
+        except Exception as e:
+            logger.warning(f"Failed to insert ref link for {site_id}: {e}")
+            skipped += 1
+            db.rollback()
+
+    db.commit()
+    return {"inserted": inserted, "skipped": skipped}

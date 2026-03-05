@@ -709,10 +709,31 @@
   max-width: 300px;
 }
 
-/* URL column */
+/* Links column */
 .db-td-url {
   text-align: center;
-  width: 40px;
+  width: auto;
+  min-width: 40px;
+}
+
+.db-links-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  justify-content: center;
+  flex-wrap: nowrap;
+}
+
+.db-link-favicon {
+  display: block;
+  border-radius: 2px;
+  opacity: 0.75;
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.db-link-favicon:hover {
+  opacity: 1;
+  transform: scale(1.25);
 }
 
 .db-link-icon {

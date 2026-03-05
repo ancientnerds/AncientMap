@@ -18,6 +18,7 @@ export interface ApiSiteDetail {
   bestWikiUrl?: string
   sourceLanguage?: string
   descriptionCitations?: { n: number; url: string; title: string; domain: string }[]
+  referenceLinks?: { url: string; title: string; domain: string; kind: string }[]
 }
 
 // Convert API detail response to SiteData - SINGLE SOURCE OF TRUTH
@@ -46,5 +47,6 @@ export function apiDetailToSiteData(detail: ApiSiteDetail): SiteData {
     bestWikiUrl: detail.bestWikiUrl,
     sourceLanguage: detail.sourceLanguage,
     descriptionCitations: detail.descriptionCitations,
+    referenceLinks: detail.referenceLinks,
   }
 }
