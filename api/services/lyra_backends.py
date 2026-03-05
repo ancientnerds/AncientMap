@@ -12,7 +12,7 @@ import json
 import logging
 import os
 from collections.abc import AsyncIterator
-from typing import Protocol
+from typing import Any, Protocol
 
 from langchain_core.messages import (
     AIMessage,
@@ -104,9 +104,9 @@ class OllamaBackend:
         self.base_url = base_url
         self.api_key = api_key
         self.max_tokens = max_tokens
-        self._client = None
+        self._client: Any = None
 
-    def _get_client(self):
+    def _get_client(self) -> Any:
         if self._client is None:
             from openai import AsyncOpenAI
 
@@ -285,7 +285,7 @@ def get_backend(model_name: str, backend_type: str) -> LLMBackend:
             )
             logger.info(f"Created OllamaBackend for {model_name}")
         else:
-            api_key = os.getenv("LYRA_ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY", "")
+            api_key = os.getenv("LYRA_ANTHROPIC_API_KEY", "") or os.getenv("ANTHROPIC_API_KEY", "")
             base_url = os.getenv("LYRA_ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
             from pipeline.lyra.config import get_max_tokens
 
