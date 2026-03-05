@@ -1562,7 +1562,8 @@ async def batch_upload_sites(
                 base_score = 0.9 if quality == "high" else 0.7
                 relevance = round(base_score - (idx * 0.05), 2)
                 url_hash = hashlib.md5(
-                    url.encode(), usedforsecurity=False,
+                    url.encode(),
+                    usedforsecurity=False,
                 ).hexdigest()[:8]
                 content_id = f"{domain}:{url_hash}"
                 meta = {
@@ -1602,7 +1603,9 @@ async def batch_upload_sites(
                 except Exception as e:
                     nested.rollback()
                     logger.warning(
-                        "Ref link insert failed for %s: %s", site.name, e,
+                        "Ref link insert failed for %s: %s",
+                        site.name,
+                        e,
                     )
                     reflinks_errors += 1
                     break
@@ -1676,10 +1679,7 @@ async def replace_source(
     existing_ids = [
         r.id
         for r in db.execute(
-            text(
-                "SELECT id::text AS id FROM unified_sites"
-                " WHERE source_id = :src"
-            ),
+            text("SELECT id::text AS id FROM unified_sites WHERE source_id = :src"),
             {"src": target_source},
         ).fetchall()
     ]
@@ -1711,10 +1711,7 @@ async def replace_source(
 
         # Verify snapshot was actually persisted with correct row count
         verify = db.execute(
-            text(
-                "SELECT row_count FROM db_snapshots"
-                " WHERE id::text = :sid"
-            ),
+            text("SELECT row_count FROM db_snapshots WHERE id::text = :sid"),
             {"sid": snapshot_id},
         ).fetchone()
         if not verify or verify.row_count != len(existing_ids):
@@ -1754,17 +1751,15 @@ async def replace_source(
                 {"src": target_source},
             )
             deleted = db.execute(
-                text(
-                    "DELETE FROM unified_sites"
-                    " WHERE source_id = :src"
-                ),
+                text("DELETE FROM unified_sites WHERE source_id = :src"),
                 {"src": target_source},
             ).rowcount
 
             if deleted != len(existing_ids):
                 logger.warning(
                     "Delete count mismatch: expected %d, got %d",
-                    len(existing_ids), deleted,
+                    len(existing_ids),
+                    deleted,
                 )
 
         # Build insert params
@@ -1775,39 +1770,38 @@ async def replace_source(
             period_start = site.period_start
             if period_start is None and site.period_name:
                 period_start = _period_to_year(site.period_name)
-            site_type = (
-                normalize_site_type(site.site_type)
-                if site.site_type else None
-            )
-            name_norm = (
-                normalize_name(site.name) if site.name else site.name
-            )
+            site_type = normalize_site_type(site.site_type) if site.site_type else None
+            name_norm = normalize_name(site.name) if site.name else site.name
             record_id = f"upload-{site_id[:8]}"
 
-            insert_params.append({
-                "id": site_id,
-                "source_id": target_source,
-                "source_record_id": record_id,
-                "name": site.name,
-                "name_normalized": name_norm,
-                "lat": site.lat,
-                "lon": site.lon,
-                "site_type": site_type,
-                "period_name": site.period_name,
-                "period_start": period_start,
-                "country": site.country,
-                "description": site.description,
-                "source_url": site.source_url,
-                "thumbnail_url": site.thumbnail_url,
-                "edited_by": edited_by,
-            })
+            insert_params.append(
+                {
+                    "id": site_id,
+                    "source_id": target_source,
+                    "source_record_id": record_id,
+                    "name": site.name,
+                    "name_normalized": name_norm,
+                    "lat": site.lat,
+                    "lon": site.lon,
+                    "site_type": site_type,
+                    "period_name": site.period_name,
+                    "period_start": period_start,
+                    "country": site.country,
+                    "description": site.description,
+                    "source_url": site.source_url,
+                    "thumbnail_url": site.thumbnail_url,
+                    "edited_by": edited_by,
+                }
+            )
 
             if site.card_description or site.confidence_score is not None:
-                card_params.append({
-                    "site_id": site_id,
-                    "card_description": site.card_description,
-                    "confidence_score": site.confidence_score,
-                })
+                card_params.append(
+                    {
+                        "site_id": site_id,
+                        "card_description": site.card_description,
+                        "confidence_score": site.confidence_score,
+                    }
+                )
 
         # Batch INSERT sites
         if insert_params:
@@ -1886,7 +1880,8 @@ async def replace_source(
                     if not url:
                         continue
                     url_hash = hashlib.md5(
-                        url.encode(), usedforsecurity=False,
+                        url.encode(),
+                        usedforsecurity=False,
                     ).hexdigest()[:8]
                     quality = link.get("quality", "medium")
                     base_score = 0.9 if quality == "high" else 0.7
@@ -1909,10 +1904,12 @@ async def replace_source(
                             "title": (link.get("title") or "")[:500],
                             "url": url,
                             "score": relevance,
-                            "meta": json.dumps({
-                                "domain": domain,
-                                "link_type": link.get("link_type", "article"),
-                            }),
+                            "meta": json.dumps(
+                                {
+                                    "domain": domain,
+                                    "link_type": link.get("link_type", "article"),
+                                }
+                            ),
                         },
                     )
                 reflinks_written += 1
