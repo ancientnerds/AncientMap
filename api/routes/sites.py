@@ -5,7 +5,7 @@ Supports:
 - Viewport filtering (bounding box)
 - H3 clustering for zoom levels
 - Source/type/period filtering
-- Site updates (admin)
+- Site updates, batch upload, and replace-source (admin)
 - Static JSON fallback when database is empty
 """
 
