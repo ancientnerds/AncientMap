@@ -1108,7 +1108,10 @@ export default function DbAuditPage() {
     }
   }, [token, uploadParsed, uploadTarget, uploadMarkAudited, uploadCreateSnapshot, refreshDbSnapshots, refreshFileSnapshots, showToast])
 
-  // Replace source — snapshot + wipe + insert fresh (single request per endpoint)
+  // Replace source — snapshot + wipe + chunked insert
+  // Chunk 1: replace-source (snapshot + wipe + insert first batch)
+  // Chunks 2+: batch-upload with create_snapshot=false (append to now-empty source)
+  const REPLACE_CHUNK = 200
   const commitReplace = useCallback(async () => {
     if (!token || uploadParsed.length === 0) return
     const validSites = uploadParsed.filter(p => p._status !== 'error')
@@ -1116,7 +1119,7 @@ export default function DbAuditPage() {
     if (!confirm(`Replace entire "${uploadTarget}" database?\n\nThis will:\n1. Snapshot current state (rollback-safe)\n2. Delete all existing ${uploadTarget} sites\n3. Insert ${count} sites fresh from the file\n\nIf anything fails, the snapshot is preserved and the database is NOT modified.\n\nContinue?`)) return
     setUploading(true)
     try {
-      const allSites = validSites.map(p => ({
+      const mapSite = (p: ParsedSite) => ({
         name: p.name, lat: p.lat, lon: p.lon,
         site_type: p.site_type || null,
         period_name: p.period_name || null,
@@ -1129,34 +1132,59 @@ export default function DbAuditPage() {
         confidence_score: p.confidence_score ?? null,
         description_citations: p.description_citations || null,
         reference_links: p.reference_links || null,
-        existing_id: p._matchedId || null,
-      }))
-
-      setUploadProgress({
-        sent: 0,
-        total: allSites.length,
-        phase: 'Creating snapshot + replacing database...',
+        existing_id: null,  // Always null — we're inserting fresh after wipe
       })
 
-      const res = await fetch(`${config.api.baseUrl}/sites/replace-source`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({
-          sites: allSites,
-          target_source: uploadTarget,
-        }),
-      })
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.detail || `HTTP ${res.status}`)
+      // Split into chunks
+      const chunks: ParsedSite[][] = []
+      for (let i = 0; i < validSites.length; i += REPLACE_CHUNK) {
+        chunks.push(validSites.slice(i, i + REPLACE_CHUNK))
       }
-      const result = await res.json()
+
+      let totalInserted = 0
+      let totalDeleted = 0
+      let totalCitations = 0
+      let totalReflinks = 0
+
+      for (let ci = 0; ci < chunks.length; ci++) {
+        const sent = ci * REPLACE_CHUNK
+        const isFirst = ci === 0
+        setUploadProgress({
+          sent,
+          total: count,
+          phase: isFirst
+            ? `Snapshot + wipe + insert batch 1/${chunks.length}...`
+            : `Inserting batch ${ci + 1}/${chunks.length}...`,
+        })
+
+        const sitesPayload = chunks[ci].map(mapSite)
+
+        const endpoint = isFirst ? 'replace-source' : 'batch-upload'
+        const payload = isFirst
+          ? { sites: sitesPayload, target_source: uploadTarget }
+          : { sites: sitesPayload, target_source: uploadTarget, create_snapshot: false }
+
+        const res = await fetch(`${config.api.baseUrl}/sites/${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify(payload),
+        })
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data.detail || `HTTP ${res.status} on batch ${ci + 1}`)
+        }
+        const result = await res.json()
+        totalInserted += result.inserted || 0
+        totalDeleted += result.deleted || 0
+        totalCitations += result.citations_written || 0
+        totalReflinks += result.reflinks_written || 0
+      }
 
       // Mark audited if checked
       let auditedCount = 0
       if (uploadMarkAudited) {
-        setUploadProgress({ sent: allSites.length, total: allSites.length, phase: 'Marking sites as audited...' })
+        setUploadProgress({ sent: count, total: count, phase: 'Marking sites as audited...' })
         const auditRes = await fetch(`${config.api.baseUrl}/sites/mark-audited`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -1175,9 +1203,9 @@ export default function DbAuditPage() {
       refreshDbSnapshots()
       refreshFileSnapshots()
       showToast(
-        `Replace complete: ${result.deleted} deleted, ${result.inserted} inserted` +
-        (result.citations_written ? `, ${result.citations_written} citations` : '') +
-        (result.reflinks_written ? `, ${result.reflinks_written} ref links` : '') +
+        `Replace complete: ${totalDeleted} deleted, ${totalInserted} inserted` +
+        (totalCitations ? `, ${totalCitations} citations` : '') +
+        (totalReflinks ? `, ${totalReflinks} ref links` : '') +
         (auditedCount > 0 ? ` — ${auditedCount} marked audited` : '')
       )
       setPendingEdits(new Map())
