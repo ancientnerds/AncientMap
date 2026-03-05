@@ -53,6 +53,7 @@ from api.routes import (
     snapshots,
     sources,
     streetview,
+    theo,
     vector_sync,
     wiki_images,
 )
@@ -455,6 +456,17 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"[STARTUP] Contribution migration failed (non-fatal): {e}")
 
+    # Start Theo research worker
+    try:
+        import asyncio as _asyncio
+
+        from api.services.theo_worker import start_worker as _start_theo
+
+        _asyncio.create_task(_start_theo())
+        logger.info("[STARTUP] Theo research worker task created")
+    except Exception as e:
+        logger.warning(f"[STARTUP] Theo worker startup failed (non-fatal): {e}")
+
     # Start Discord bot (if token is configured)
     try:
         bot_token = os.environ.get("DISCORD_BOT_TOKEN", "")
@@ -592,6 +604,7 @@ app.include_router(wiki_images.router, prefix="/api/wiki-images", tags=["wiki-im
 app.include_router(patreon.router, prefix="/api/patreon", tags=["patreon"])
 app.include_router(interactions.router, prefix="/api/interactions", tags=["interactions"])
 app.include_router(cardgame_router, prefix="/api/cards", tags=["cards"])
+app.include_router(theo.router, prefix="/api/theo", tags=["theo"])
 
 # Serve wiki images as static files
 _wiki_images_dir = Path("public/data/images/wiki")

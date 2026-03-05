@@ -1266,6 +1266,50 @@ class VectorSyncState(Base):
 # =============================================================================
 
 
+# =============================================================================
+# Theo Research Requests
+# =============================================================================
+
+
+class ResearchRequest(Base):
+    """Async research request processed by Theodore Furcade."""
+
+    __tablename__ = "research_requests"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    user_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    effort: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="queued")
+    result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pipeline_trace: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    sites_found: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    tools_used: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    total_tokens: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (
+        Index("idx_research_requests_user_created", "user_id", "created_at"),
+        Index("idx_research_requests_status", "status"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<ResearchRequest {self.id} ({self.status})>"
+
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+
 def create_all_tables():
     """Create all database tables."""
     Base.metadata.create_all(bind=engine)

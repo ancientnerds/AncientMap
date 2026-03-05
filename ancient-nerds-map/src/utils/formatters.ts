@@ -7,6 +7,13 @@ export function formatDuration(minutes: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
+export function formatDurationMs(ms: number): string {
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
+  const min = Math.floor(ms / 60000)
+  const sec = Math.round((ms % 60000) / 1000)
+  return `${min}m ${sec}s`
+}
+
 export function formatCoord(coord: number, isLat: boolean): string {
   const abs = Math.abs(coord)
   const dir = isLat ? (coord >= 0 ? 'N' : 'S') : (coord >= 0 ? 'E' : 'W')

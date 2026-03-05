@@ -1,0 +1,575 @@
+/* ═══════════════════════════════════════════════════════════════
+   THEODORE FURCADE — Research Lab
+   Warm amber research terminal against CRT dark base.
+   Bear: methodical, heavy, patient. Lab: structured, dense.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* — Theo-specific tokens (layered on global design system) — */
+.theo-page {
+  --theo-amber: #d4912a;
+  --theo-amber-bright: #f5b742;
+  --theo-amber-dim: #8a5e1a;
+  --theo-amber-glow-10: rgba(212, 145, 42, 0.10);
+  --theo-amber-glow-15: rgba(212, 145, 42, 0.15);
+  --theo-amber-glow-20: rgba(212, 145, 42, 0.20);
+  --theo-amber-glow-30: rgba(212, 145, 42, 0.30);
+  --theo-surface: rgba(20, 14, 5, 0.5);
+  --theo-border: rgba(212, 145, 42, 0.18);
+  --theo-border-hover: rgba(212, 145, 42, 0.35);
+}
+
+.theo-page {
+  min-height: 100vh;
+  background: var(--surface-page);
+  overflow-y: auto;
+  padding-bottom: 60px;
+}
+
+/* — Hero / Intro Section — */
+.theo-hero {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 20px 0;
+  text-align: center;
+}
+
+.theo-avatar-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.theo-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 2px solid var(--theo-amber);
+  box-shadow: 0 0 16px var(--theo-amber-glow-30);
+  object-fit: cover;
+  background: var(--theo-surface);
+}
+
+.theo-avatar-placeholder {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 2px solid var(--theo-amber);
+  box-shadow: 0 0 16px var(--theo-amber-glow-30);
+  background: var(--theo-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.theo-title {
+  font-family: var(--font-heading);
+  font-size: 14px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--theo-amber);
+  margin: 0;
+}
+
+.theo-subtitle {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+  margin-top: 2px;
+}
+
+.theo-quote {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-style: italic;
+  font-size: 15px;
+  color: var(--theo-amber-bright);
+  opacity: 0.7;
+  margin: 14px 0 0;
+}
+
+/* — Submit Form — */
+.theo-form {
+  max-width: 720px;
+  margin: 24px auto 0;
+  padding: 0 20px;
+}
+
+.theo-input-wrap {
+  position: relative;
+  border: 1px solid var(--theo-border);
+  border-radius: 6px;
+  background: var(--theo-surface);
+  transition: border-color 0.2s;
+}
+
+.theo-input-wrap:focus-within {
+  border-color: var(--theo-amber);
+  box-shadow: 0 0 12px var(--theo-amber-glow-15);
+}
+
+.theo-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 13px;
+  padding: 14px 16px;
+  resize: vertical;
+  min-height: 56px;
+  max-height: 180px;
+}
+
+.theo-input::placeholder {
+  color: var(--text-dimmed);
+}
+
+/* — Effort Buttons — */
+.theo-effort-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.theo-effort-label {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-right: 4px;
+}
+
+.theo-effort-btn {
+  padding: 5px 14px;
+  border-radius: 4px;
+  border: 1px solid var(--border-default);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.theo-effort-btn:hover {
+  border-color: var(--theo-border-hover);
+  color: var(--text-primary);
+}
+
+.theo-effort-btn.active {
+  border-color: var(--theo-amber);
+  background: var(--theo-amber-glow-15);
+  color: var(--theo-amber-bright);
+  box-shadow: 0 0 8px var(--theo-amber-glow-10);
+}
+
+.theo-effort-time {
+  font-size: 10px;
+  color: var(--text-dimmed);
+  margin-left: auto;
+}
+
+/* — Submit Button — */
+.theo-submit-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.theo-submit-btn {
+  padding: 8px 24px;
+  border: 1px solid var(--theo-amber);
+  border-radius: 4px;
+  background: var(--theo-amber-glow-15);
+  color: var(--theo-amber-bright);
+  font-family: var(--font-heading);
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.theo-submit-btn:hover:not(:disabled) {
+  background: var(--theo-amber-glow-30);
+  box-shadow: 0 0 16px var(--theo-amber-glow-20);
+}
+
+.theo-submit-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* — Queue / Results List — */
+.theo-list {
+  max-width: 720px;
+  margin: 32px auto 0;
+  padding: 0 20px;
+}
+
+.theo-list-header {
+  font-family: var(--font-heading);
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dimmed);
+  margin-bottom: 12px;
+  padding-left: 2px;
+}
+
+.theo-card {
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  background: var(--surface-raised);
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  transition: border-color 0.2s;
+}
+
+.theo-card:hover {
+  border-color: var(--theo-border-hover);
+}
+
+.theo-card-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.theo-card-question {
+  font-size: 13px;
+  color: var(--text-primary);
+  flex: 1;
+  min-width: 200px;
+  line-height: 1.4;
+}
+
+.theo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  font-family: var(--font-body);
+  white-space: nowrap;
+}
+
+.theo-badge-effort {
+  border: 1px solid var(--theo-border);
+  color: var(--theo-amber);
+  text-transform: uppercase;
+}
+
+.theo-badge-status {
+  font-weight: 600;
+}
+
+.theo-badge-queued {
+  border: 1px solid rgba(100, 100, 100, 0.3);
+  color: var(--text-muted);
+}
+
+.theo-badge-running {
+  border: 1px solid var(--theo-border);
+  color: var(--theo-amber-bright);
+  animation: theo-pulse 2s ease-in-out infinite;
+}
+
+.theo-badge-completed {
+  border: 1px solid rgba(0, 204, 102, 0.2);
+  color: var(--accent-primary);
+}
+
+.theo-badge-failed {
+  border: 1px solid rgba(255, 68, 68, 0.2);
+  color: var(--status-error-soft);
+}
+
+@keyframes theo-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.theo-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 10px;
+  color: var(--text-dimmed);
+}
+
+.theo-card-meta span {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.theo-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.theo-btn-view {
+  padding: 5px 14px;
+  border: 1px solid var(--theo-amber);
+  border-radius: 3px;
+  background: var(--theo-amber-glow-10);
+  color: var(--theo-amber-bright);
+  font-family: var(--font-body);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.theo-btn-view:hover {
+  background: var(--theo-amber-glow-20);
+}
+
+.theo-btn-cancel {
+  padding: 5px 14px;
+  border: 1px solid rgba(255, 68, 68, 0.2);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--status-error-soft);
+  font-family: var(--font-body);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.theo-btn-cancel:hover {
+  background: rgba(255, 68, 68, 0.08);
+}
+
+.theo-btn-retry {
+  padding: 5px 14px;
+  border: 1px solid var(--theo-border);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--theo-amber);
+  font-family: var(--font-body);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.theo-btn-retry:hover {
+  background: var(--theo-amber-glow-10);
+}
+
+.theo-empty {
+  text-align: center;
+  color: var(--text-dimmed);
+  font-size: 12px;
+  padding: 40px 20px;
+  border: 1px dashed var(--border-default);
+  border-radius: 6px;
+}
+
+/* — Report Overlay — */
+.theo-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: var(--surface-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: theo-fade-in 0.2s ease;
+}
+
+@keyframes theo-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.theo-overlay-inner {
+  width: 100%;
+  max-width: 800px;
+  max-height: 90vh;
+  background: var(--surface-deep);
+  border: 1px solid var(--theo-border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 0 40px var(--theo-amber-glow-10);
+}
+
+.theo-report-header {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border-default);
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.theo-report-header-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.theo-report-question {
+  font-size: 15px;
+  color: var(--text-primary);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.theo-report-meta-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.theo-report-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  font-size: 18px;
+  line-height: 1;
+  transition: color 0.15s;
+  flex-shrink: 0;
+}
+
+.theo-report-close:hover {
+  color: var(--text-primary);
+}
+
+.theo-report-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-body);
+}
+
+.theo-report-body h1,
+.theo-report-body h2,
+.theo-report-body h3 {
+  color: var(--theo-amber-bright);
+  font-family: var(--font-heading);
+  letter-spacing: 1px;
+  margin: 20px 0 8px;
+}
+
+.theo-report-body h1 { font-size: 15px; }
+.theo-report-body h2 { font-size: 13px; }
+.theo-report-body h3 { font-size: 12px; }
+.theo-report-body h1:first-child,
+.theo-report-body h2:first-child { margin-top: 0; }
+
+.theo-report-body p { margin: 8px 0; }
+
+.theo-report-body ul, .theo-report-body ol {
+  padding-left: 20px;
+  margin: 8px 0;
+}
+
+.theo-report-body li { margin: 4px 0; }
+
+.theo-report-body a {
+  color: var(--text-link);
+  text-decoration: none;
+}
+
+.theo-report-body a:hover {
+  text-decoration: underline;
+}
+
+.theo-report-body strong {
+  color: var(--text-primary);
+}
+
+.theo-report-body code {
+  background: var(--surface-raised);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.theo-report-body blockquote {
+  border-left: 3px solid var(--theo-amber-dim);
+  padding-left: 14px;
+  color: var(--text-muted);
+  margin: 12px 0;
+}
+
+/* — Pipeline Trace (collapsible) — */
+.theo-trace-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border-top: 1px solid var(--border-default);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-dimmed);
+  cursor: pointer;
+  background: none;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-body);
+  transition: color 0.15s;
+  flex-shrink: 0;
+}
+
+.theo-trace-toggle:hover {
+  color: var(--text-muted);
+}
+
+.theo-trace-body {
+  padding: 0 20px 14px;
+  font-size: 10px;
+  color: var(--text-dimmed);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.theo-trace-entry {
+  padding: 3px 0;
+  display: flex;
+  gap: 8px;
+}
+
+.theo-trace-stage {
+  color: var(--theo-amber);
+  min-width: 120px;
+}
+
+.theo-trace-dur {
+  color: var(--text-muted);
+}
+
+/* — Responsive — */
+@media (max-width: 600px) {
+  .theo-hero { padding: 20px 16px 0; }
+  .theo-form { padding: 0 16px; }
+  .theo-list { padding: 0 16px; }
+  .theo-overlay { padding: 10px; }
+  .theo-overlay-inner { max-height: 95vh; border-radius: 6px; }
+  .theo-effort-row { gap: 6px; }
+  .theo-card-top { flex-direction: column; align-items: flex-start; gap: 6px; }
+}

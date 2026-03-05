@@ -89,6 +89,7 @@ export default defineConfig({
         api: resolve(__dirname, 'api.html'),
         cards: resolve(__dirname, 'cards.html'),
         game: resolve(__dirname, 'game.html'),
+        theo: resolve(__dirname, 'theo.html'),
       },
     },
   },
