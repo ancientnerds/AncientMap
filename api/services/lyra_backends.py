@@ -140,9 +140,7 @@ class OllamaBackend:
         async for ev in self._stream_openai(messages, tools):
             yield ev
 
-    async def _stream_openai(
-        self, messages: list[BaseMessage], tools: list
-    ) -> AsyncIterator[dict]:
+    async def _stream_openai(self, messages: list[BaseMessage], tools: list) -> AsyncIterator[dict]:
         """Stream via OpenAI SDK — supports reasoning tokens and tool calls."""
         client = self._get_client()
         openai_messages = _langchain_messages_to_openai(messages)
