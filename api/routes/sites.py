@@ -1849,11 +1849,11 @@ async def replace_source(
         citations_written = 0
         reflinks_written = 0
         for site in sites:
-            site_id: str | None = site.existing_id or next(
+            enrich_id = site.existing_id or next(
                 (p["id"] for p in insert_params if p["name"] == site.name),
                 None,
             )
-            if not site_id:
+            if not enrich_id:
                 continue
 
             if site.description_citations:
@@ -1867,7 +1867,7 @@ async def replace_source(
                         WHERE id::text = :sid
                     """),
                     {
-                        "sid": site_id,
+                        "sid": enrich_id,
                         "cit": json.dumps(site.description_citations),
                     },
                 )
@@ -1899,7 +1899,7 @@ async def replace_source(
                                  CAST(:meta AS jsonb))
                         """),
                         {
-                            "sid": site_id,
+                            "sid": enrich_id,
                             "cid": f"{domain}:{url_hash}",
                             "title": (link.get("title") or "")[:500],
                             "url": url,
