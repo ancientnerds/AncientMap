@@ -4,8 +4,8 @@ Lyra Chat API Routes.
 Endpoints:
 - POST /lyra/chat         — Discord OAuth login required
                             minimax: credits deducted
-                            local: free, fair queue (3 burst / 10 min)
-- GET  /lyra/queue-status — Queue length, inference status, per-user burst info
+                            local: free, FIFO queued
+- GET  /lyra/queue-status — Queue length, inference status
 """
 
 import asyncio
@@ -21,11 +21,9 @@ from pydantic import BaseModel, Field
 
 from api.services.jwt_auth import get_current_user
 from api.services.lyra_queue import (
-    BURST_LIMIT,
-    BURST_WINDOW_SECONDS,
     MAX_QUEUE_SIZE,
     QUEUE_TIMEOUT_SECONDS,
-    tiered_queue,
+    lyra_queue,
 )
 from api.services.lyra_router import RequestContext, route_request
 from api.services.rate_limiter import RateLimiter, get_client_ip
@@ -106,7 +104,7 @@ async def lyra_chat(request: LyraChatRequest, req: Request):
     Chat with Lyra. Requires Discord login.
 
     - minimax backend: credits deducted per token usage
-    - local backend: free, fair-queued (3 burst / 10 min window)
+    - local backend: free, FIFO queued
 
     Returns SSE stream with token, sites, done events.
     """
@@ -128,21 +126,8 @@ async def lyra_chat(request: LyraChatRequest, req: Request):
 
 @router.get("/queue-status")
 async def queue_status(req: Request):
-    """Queue status. If authenticated, includes per-user burst info."""
-    status = tiered_queue.get_combined_status()
-
-    # Optionally include per-user burst info (shared across tiers)
-    try:
-        user = get_current_user(req)
-        remaining, wait = tiered_queue.burst.get_remaining(user.id)
-        status["burst_remaining"] = remaining
-        status["burst_wait_seconds"] = round(wait, 1)
-        status["burst_limit"] = BURST_LIMIT
-        status["burst_window_minutes"] = BURST_WINDOW_SECONDS // 60
-    except Exception:
-        pass  # No auth or invalid token — just return basic status
-
-    return JSONResponse(status)
+    """Queue status."""
+    return JSONResponse(lyra_queue.get_status())
 
 
 # ---------------------------------------------------------------------------
@@ -151,42 +136,27 @@ async def queue_status(req: Request):
 
 
 def _handle_local_backend(request: LyraChatRequest, user, ctx: RequestContext) -> StreamingResponse:
-    """Validate burst/queue limits and return a queued SSE stream."""
-    queue = tiered_queue.get_queue(ctx.model_tier)
-
-    # 1. Burst check — only enforce when other users are active
-    if tiered_queue.has_other_users(user.id):
-        remaining, wait = tiered_queue.burst.get_remaining(user.id)
-        if remaining <= 0:
-            wait_min = ceil(wait / 60)
-            raise HTTPException(
-                status_code=429,
-                detail=f"Burst limit reached. Try again in ~{wait_min} minute{'s' if wait_min != 1 else ''}.",
-                headers={"Retry-After": str(int(wait))},
-            )
-
-    # 2. Duplicate check
-    if queue.has_active_request(user.id):
+    """Validate queue limits and return a queued SSE stream."""
+    # 1. Duplicate check
+    if lyra_queue.has_active_request(user.id):
         raise HTTPException(
             status_code=409,
             detail="You already have a request in the queue.",
         )
 
-    # 3. Queue capacity check
-    if queue.get_queue_length() >= MAX_QUEUE_SIZE:
+    # 2. Queue capacity check
+    if lyra_queue.get_queue_length() >= MAX_QUEUE_SIZE:
         raise HTTPException(
             status_code=503,
             detail="Queue is full. Please try again later.",
         )
 
-    # 4. Record burst (shared tracker) and enqueue
-    tiered_queue.burst.record(user.id)
-    entry = queue.enqueue(user.id)
+    # 3. Enqueue
+    entry = lyra_queue.enqueue(user.id)
     history = [h.model_dump() for h in request.history] if request.history else None
 
     return _stream_response_queued(
         entry=entry,
-        queue=queue,
         user_id=user.id,
         message=request.message,
         images=[img.model_dump() for img in request.images] if request.images else None,
@@ -200,7 +170,6 @@ def _handle_local_backend(request: LyraChatRequest, user, ctx: RequestContext) -
 
 def _stream_response_queued(
     entry,
-    queue,
     user_id: uuid.UUID,
     message: str,
     images: list[dict] | None,
@@ -216,9 +185,8 @@ def _stream_response_queued(
         slot_acquired = False
         try:
             # --- Phase 1: Queue wait with position updates ---
-            remaining, _ = tiered_queue.burst.get_remaining(user_id)
-            pos = queue.get_queue_position(entry.request_id)
-            q_len = queue.get_queue_length()
+            pos = lyra_queue.get_queue_position(entry.request_id)
+            q_len = lyra_queue.get_queue_length()
 
             yield _sse(
                 "queue_info",
@@ -226,8 +194,6 @@ def _stream_response_queued(
                     "type": "queue_info",
                     "position": pos if pos is not None else 0,
                     "queue_length": q_len,
-                    "burst_remaining": remaining,
-                    "burst_window_minutes": BURST_WINDOW_SECONDS // 60,
                 },
             )
 
@@ -244,8 +210,7 @@ def _stream_response_queued(
                 except TimeoutError:
                     # Check overall queue timeout
                     if time.monotonic() - queue_start > QUEUE_TIMEOUT_SECONDS:
-                        queue.cancel(entry.request_id)
-                        tiered_queue.burst.refund(user_id)
+                        lyra_queue.cancel(entry.request_id)
                         yield _sse(
                             "error",
                             {
@@ -255,10 +220,10 @@ def _stream_response_queued(
                         )
                         return
                     # Emit position update
-                    pos = queue.get_queue_position(entry.request_id)
+                    pos = lyra_queue.get_queue_position(entry.request_id)
                     if pos is None:
                         break  # Entry was removed (shouldn't happen, but be safe)
-                    q_len = queue.get_queue_length()
+                    q_len = lyra_queue.get_queue_length()
                     est_wait = pos * 90  # ~90s per request ahead of us
                     yield _sse(
                         "queue_position",
@@ -271,17 +236,17 @@ def _stream_response_queued(
                     )
 
             # --- Phase 2: Acquire inference slot ---
-            await queue.acquire()
+            await lyra_queue.acquire()
             slot_acquired = True
             # Remove from queue now that we own the slot
-            queue.remove_entry(entry.request_id)
+            lyra_queue.remove_entry(entry.request_id)
 
             yield _sse(
                 "queue_position",
                 {
                     "type": "queue_position",
                     "position": -1,
-                    "queue_length": queue.get_queue_length(),
+                    "queue_length": lyra_queue.get_queue_length(),
                     "estimated_wait_seconds": 0,
                 },
             )
@@ -308,17 +273,15 @@ def _stream_response_queued(
         except Exception as e:
             logger.error(f"Lyra queued stream error: {e}", exc_info=True)
             if not slot_acquired:
-                # Failed before inference — refund burst
-                queue.cancel(entry.request_id)
-                tiered_queue.burst.refund(user_id)
+                lyra_queue.cancel(entry.request_id)
             yield _sse("error", {"type": "error", "error": "An internal error occurred"})
 
         finally:
             if slot_acquired:
-                queue.release()
+                lyra_queue.release()
             else:
                 # Clean up queue entry if we never got the slot
-                queue.cancel(entry.request_id)
+                lyra_queue.cancel(entry.request_id)
 
     return StreamingResponse(
         generate(),

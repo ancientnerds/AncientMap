@@ -186,7 +186,7 @@ export default function PipelinePanel({ trace, isLive, onClose }: PipelinePanelP
   const initNode = nodes.find(n => n.stageId === 'pipeline_init')
   const modelInfo = initNode?.meta as {
     model?: string; tier?: string; backend?: string
-    embedding?: string; reranker?: string
+    embedding?: string; reranker?: string; classification?: string
   } | null
 
   // Stage nodes
@@ -300,6 +300,11 @@ export default function PipelinePanel({ trace, isLive, onClose }: PipelinePanelP
             <span className="lp-model-sep">{'\u00b7'}</span>
             <span>rerank: {modelInfo.reranker}</span>
           </div>
+          {modelInfo.classification && (
+            <div className="lp-model-row lp-model-sub lp-classification">
+              <span>{modelInfo.classification}</span>
+            </div>
+          )}
         </div>
       )}
 

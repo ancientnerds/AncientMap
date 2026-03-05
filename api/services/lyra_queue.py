@@ -1,12 +1,8 @@
 """
-Fair queue for the local (Qwen) backend.
+Fair FIFO queue for the local (Qwen) backend.
 
-Two independent queues — fast (0.8B) and heavy (4B) — each with 1 slot,
-allowing 2 concurrent local inferences on separate models.
-
-Per-user burst limit: 3 messages per 10-minute sliding window, shared across
-all tiers via a single BurstTracker.  FIFO queue with real-time position
-feedback via SSE.
+Single queue with configurable parallel inference slots. FIFO ordering
+with real-time position feedback via SSE.
 
 Module-level singleton — works because uvicorn runs 1 worker.
 """
@@ -21,8 +17,6 @@ from dataclasses import dataclass, field
 # Tunable constants
 # ---------------------------------------------------------------------------
 
-BURST_LIMIT = 3
-BURST_WINDOW_SECONDS = 600  # 10 minutes
 QUEUE_TIMEOUT_SECONDS = 300  # 5 minutes
 MAX_QUEUE_SIZE = 20
 PARALLEL_SLOTS = 2  # ollama OLLAMA_NUM_PARALLEL
@@ -43,50 +37,7 @@ class QueueEntry:
 
 
 # ---------------------------------------------------------------------------
-# BurstTracker — shared across all tier queues
-# ---------------------------------------------------------------------------
-
-
-class BurstTracker:
-    """Sliding-window burst limiter shared across all model tiers.
-
-    A user can send at most BURST_LIMIT messages in BURST_WINDOW_SECONDS,
-    regardless of which tier (fast/heavy) they target.
-    """
-
-    def __init__(self) -> None:
-        self._history: dict[uuid.UUID, list[float]] = {}
-
-    def _prune(self, user_id: uuid.UUID) -> list[float]:
-        now = time.monotonic()
-        history = self._history.get(user_id, [])
-        pruned = [t for t in history if now - t < BURST_WINDOW_SECONDS]
-        self._history[user_id] = pruned
-        return pruned
-
-    def get_remaining(self, user_id: uuid.UUID) -> tuple[int, float]:
-        """Return (remaining_messages, seconds_until_oldest_expires)."""
-        history = self._prune(user_id)
-        remaining = max(0, BURST_LIMIT - len(history))
-        if remaining > 0 or not history:
-            return remaining, 0.0
-        oldest = min(history)
-        wait = max(0.0, BURST_WINDOW_SECONDS - (time.monotonic() - oldest))
-        return remaining, wait
-
-    def record(self, user_id: uuid.UUID) -> None:
-        self._prune(user_id)
-        self._history.setdefault(user_id, []).append(time.monotonic())
-
-    def refund(self, user_id: uuid.UUID) -> None:
-        """Remove the most recent burst timestamp (request failed before inference)."""
-        history = self._history.get(user_id, [])
-        if history:
-            history.pop()
-
-
-# ---------------------------------------------------------------------------
-# LyraQueue — per-tier FIFO + semaphore (no burst tracking)
+# LyraQueue — single FIFO + semaphore
 # ---------------------------------------------------------------------------
 
 
@@ -152,10 +103,6 @@ class LyraQueue:
     def get_queue_length(self) -> int:
         return sum(1 for e in self._queue if not e.cancelled)
 
-    def get_active_user_ids(self) -> set[uuid.UUID]:
-        """Return user IDs with non-cancelled entries in the queue."""
-        return {e.user_id for e in self._queue if not e.cancelled}
-
     def get_status(self) -> dict:
         """Public status snapshot for the /queue-status endpoint."""
         return {
@@ -174,51 +121,5 @@ class LyraQueue:
         self._queue = deque(e for e in self._queue if e.request_id != request_id)
 
 
-# ---------------------------------------------------------------------------
-# Tiered queue — two independent queues for fast (0.8B) and heavy (4B)
-# ---------------------------------------------------------------------------
-
-
-class TieredQueue:
-    """Two independent queues — fast (0.8B) and heavy (4B).
-
-    Each queue has 1 inference slot, allowing 2 concurrent local inferences.
-    Burst tracking is shared across tiers via a single BurstTracker — a user
-    can send at most BURST_LIMIT messages total, not per-tier.
-    """
-
-    def __init__(self) -> None:
-        self._queues: dict[str, LyraQueue] = {
-            "fast": LyraQueue(parallel_slots=1),
-            "heavy": LyraQueue(parallel_slots=1),
-        }
-        self.burst = BurstTracker()
-
-    def get_queue(self, tier: str) -> LyraQueue:
-        """Get the queue for a model tier ("fast" or "heavy")."""
-        return self._queues.get(tier, self._queues["heavy"])
-
-    def has_other_users(self, user_id: uuid.UUID) -> bool:
-        """True if any other user has queued requests across any tier."""
-        for q in self._queues.values():
-            if q.get_active_user_ids() - {user_id}:
-                return True
-        return False
-
-    def get_combined_status(self) -> dict:
-        """Combined status for the /queue-status endpoint."""
-        fast = self._queues["fast"].get_status()
-        heavy = self._queues["heavy"].get_status()
-        return {
-            "queue_length": fast["queue_length"] + heavy["queue_length"],
-            "active": fast["active"] + heavy["active"],
-            "slots": fast["slots"] + heavy["slots"],
-            "tiers": {
-                "fast": fast,
-                "heavy": heavy,
-            },
-        }
-
-
 # Module-level singleton
-tiered_queue = TieredQueue()
+lyra_queue = LyraQueue()

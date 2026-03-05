@@ -377,7 +377,6 @@ export default function LyraChatModal({
   // Queue state for local backend
   const [queuePosition, setQueuePosition] = useState<number | null>(null)
   const [queueLength, setQueueLength] = useState(0)
-  const [burstRemaining, setBurstRemaining] = useState<number | null>(null)
   const [estimatedWait, setEstimatedWait] = useState(0)
   const userScrolledUpRef = useRef(false)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -556,16 +555,6 @@ export default function LyraChatModal({
       .catch(() => {})
   }, [authToken])
 
-  // Fetch queue/burst status for local backend
-  useEffect(() => {
-    if (!authToken || lyraBackend !== 'local') { setBurstRemaining(null); return }
-    fetch(`${config.api.baseUrl}/lyra/queue-status`, {
-      headers: { 'Authorization': `Bearer ${authToken}` },
-    })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data?.burst_remaining !== undefined) setBurstRemaining(data.burst_remaining) })
-      .catch(() => {})
-  }, [authToken, lyraBackend])
 
   // Debounced site search
   useEffect(() => {
@@ -769,10 +758,8 @@ export default function LyraChatModal({
           throw new Error('Session expired. Please re-authenticate.')
         }
         const err = await response.json().catch(() => ({ detail: 'Request failed' }))
-        // Queue-specific errors: update burst counter
-        if (response.status === 429 && lyraBackend === 'local') {
-          setBurstRemaining(0)
-          throw new Error(err.detail || 'Burst limit reached. Please wait.')
+        if (response.status === 429) {
+          throw new Error(err.detail || 'Rate limited. Please wait.')
         }
         if (response.status === 409) throw new Error(err.detail || 'You already have a request queued.')
         if (response.status === 503) throw new Error(err.detail || 'Queue is full. Try again later.')
@@ -808,7 +795,6 @@ export default function LyraChatModal({
               if (type === 'queue_info') {
                 setQueuePosition(data.position ?? 0)
                 setQueueLength(data.queue_length ?? 0)
-                if (data.burst_remaining !== undefined) setBurstRemaining(data.burst_remaining)
                 continue
               } else if (type === 'queue_position') {
                 if (data.position === -1) {
@@ -951,15 +937,6 @@ export default function LyraChatModal({
       setQueuePosition(null)
       setQueueLength(0)
       setEstimatedWait(0)
-      // Refresh burst counter after local request completes
-      if (lyraBackend === 'local' && authToken) {
-        fetch(`${config.api.baseUrl}/lyra/queue-status`, {
-          headers: { 'Authorization': `Bearer ${authToken}` },
-        })
-          .then(r => r.ok ? r.json() : null)
-          .then(data => { if (data?.burst_remaining !== undefined) setBurstRemaining(data.burst_remaining) })
-          .catch(() => {})
-      }
     }
   }, [input, authToken, userCredits, isUnlimited, messages, contextType, contextId, contextYear, onHighlightSites, clearAuth, conversationId, lyraBackend])
 
@@ -1466,7 +1443,7 @@ export default function LyraChatModal({
                   onClick={() => { setLyraBackend('local'); localStorage.setItem('lyra_backend', 'local') }}
                   disabled={isStreaming}
                   title="Qwen3.5 (self-hosted, free)"
-                >Qwen{lyraBackend === 'local' && burstRemaining !== null ? ` (${burstRemaining} left)` : ''}</button>
+                >Qwen</button>
               </div>
               <div className="lyra-chat-input-row">
                 <textarea

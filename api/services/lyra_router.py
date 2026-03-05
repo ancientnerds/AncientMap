@@ -3,8 +3,8 @@ Lyra model router — keyword heuristic routing + per-request context.
 
 Routes incoming requests to the appropriate model tier:
   - "premium" (MiniMax) — credit-based, highest quality
-  - "heavy" (Qwen3.5 4B) — complex queries, tool calling, thinking
-  - "fast" (Qwen3.5 0.8B) — greetings, simple meta questions
+  - "heavy" (Qwen3.5 2B, think=on) — complex queries, thinking + tools + retrieval
+  - "trivial" (Qwen3.5 2B, think=off) — greetings, meta, reactions; no tools, no retrieval
 """
 
 import os
@@ -16,8 +16,7 @@ from dataclasses import dataclass
 # Model configuration from env
 # ---------------------------------------------------------------------------
 
-HEAVY_MODEL = os.getenv("LYRA_OLLAMA_MODEL_HEAVY", "qwen3.5:4b")
-FAST_MODEL = os.getenv("LYRA_OLLAMA_MODEL_FAST", "qwen3.5:0.8b")
+LOCAL_MODEL = os.getenv("LYRA_OLLAMA_MODEL", "qwen3.5:2b")
 
 
 # ---------------------------------------------------------------------------
@@ -30,11 +29,11 @@ class RequestContext:
     """Immutable per-request context. Passed through the pipeline."""
 
     backend_type: str  # "minimax" | "local"
-    model_tier: str  # "fast" | "heavy" | "premium"
-    model_name: str  # "qwen3.5:0.8b" | "qwen3.5:4b" | "MiniMax-M2.5"
+    model_tier: str  # "trivial" | "heavy" | "premium"
+    model_name: str  # "qwen3.5:2b" | "MiniMax-M2.5"
     embedding_backend: str  # "voyage" | "local"
-    supports_thinking: bool  # True for 4B+, False for 0.8B
-    supports_tools: bool  # True for all
+    supports_thinking: bool  # True for heavy, False for trivial
+    supports_tools: bool  # True for heavy, False for trivial
 
 
 _request_ctx: ContextVar[RequestContext] = ContextVar("lyra_request_ctx")
@@ -75,20 +74,20 @@ def route_request(backend: str, message: str) -> RequestContext:
         )
 
     tier = _classify_query(message)
-    if tier == "fast":
+    if tier == "trivial":
         return RequestContext(
             backend_type="local",
-            model_tier="fast",
-            model_name=FAST_MODEL,
+            model_tier="trivial",
+            model_name=LOCAL_MODEL,
             embedding_backend="local",
             supports_thinking=False,
-            supports_tools=True,
+            supports_tools=False,
         )
     else:
         return RequestContext(
             backend_type="local",
             model_tier="heavy",
-            model_name=HEAVY_MODEL,
+            model_name=LOCAL_MODEL,
             embedding_backend="local",
             supports_thinking=True,
             supports_tools=True,
@@ -115,28 +114,38 @@ _SIMPLE_PATTERNS = [
 def _classify_query(message: str) -> str:
     """Keyword heuristic — zero latency.
 
-    Returns "fast" for simple queries, "heavy" for everything else.
+    Returns "trivial" for greetings/meta/reactions (think=off, no tools),
+    "heavy" for everything else (think=on, tools + retrieval).
     """
     msg = message.strip()
 
-    # Check greeting patterns first (before length check)
+    # Greetings → trivial
     for pattern in _GREETING_PATTERNS:
         if pattern.search(msg):
-            return "fast"
+            return "trivial"
 
-    # Check simple meta patterns (e.g. "what's up", "how are you")
+    # Simple meta → trivial
     for pattern in _SIMPLE_PATTERNS:
         if pattern.search(msg):
-            return "fast"
+            return "trivial"
 
-    # Very short messages are simple (unless they contain query keywords)
+    # Very short messages without query keywords → trivial
     if len(msg) < 12:
         if any(
             kw in msg.lower()
             for kw in ("site", "find", "search", "show", "where", "what", "tell", "list")
         ):
             return "heavy"
-        return "fast"
+        return "trivial"
 
-    # Default: capable model for archaeology queries
+    # Everything else → heavy (thinking + tools + retrieval)
     return "heavy"
+
+
+def get_classification_reason(ctx: RequestContext) -> str:
+    """Human-readable explanation of why a tier was chosen (shown in pipeline UI)."""
+    if ctx.model_tier == "trivial":
+        return "Greeting/meta \u2192 think=off, no tools"
+    if ctx.model_tier == "heavy":
+        return "Query \u2192 think=on, tools + retrieval"
+    return "Premium cloud model"

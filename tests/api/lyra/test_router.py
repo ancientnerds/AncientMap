@@ -23,7 +23,7 @@ from api.services.lyra_router import (
 class TestClassifyQuery:
     """Test the zero-latency keyword heuristic classifier."""
 
-    # -- Greetings → fast --
+    # -- Greetings → trivial --
 
     @pytest.mark.parametrize(
         "msg",
@@ -45,10 +45,10 @@ class TestClassifyQuery:
             "good day",
         ],
     )
-    def test_greetings_route_to_fast(self, msg: str):
-        assert _classify_query(msg) == "fast"
+    def test_greetings_route_to_trivial(self, msg: str):
+        assert _classify_query(msg) == "trivial"
 
-    # -- Simple meta questions → fast --
+    # -- Simple meta questions → trivial --
 
     @pytest.mark.parametrize(
         "msg",
@@ -73,16 +73,16 @@ class TestClassifyQuery:
             "are you there",
         ],
     )
-    def test_simple_meta_questions_route_to_fast(self, msg: str):
-        assert _classify_query(msg) == "fast"
+    def test_simple_meta_questions_route_to_trivial(self, msg: str):
+        assert _classify_query(msg) == "trivial"
 
-    # -- Short non-query messages → fast --
+    # -- Short non-query messages → trivial --
 
     @pytest.mark.parametrize("msg", ["wow", "cool", "nice", "lol", "hmm", "k"])
-    def test_short_non_query_messages_fast(self, msg: str):
-        assert _classify_query(msg) == "fast"
+    def test_short_non_query_messages_trivial(self, msg: str):
+        assert _classify_query(msg) == "trivial"
 
-    # -- Short but complex queries → heavy --
+    # -- Short query keywords → heavy --
 
     @pytest.mark.parametrize(
         "msg",
@@ -96,7 +96,7 @@ class TestClassifyQuery:
             "list sites",
         ],
     )
-    def test_short_complex_queries_route_to_heavy(self, msg: str):
+    def test_short_query_keywords_route_to_heavy(self, msg: str):
         assert _classify_query(msg) == "heavy"
 
     # -- Archaeology queries → heavy --
@@ -119,22 +119,20 @@ class TestClassifyQuery:
     # -- Edge cases --
 
     def test_empty_string(self):
-        assert _classify_query("") == "fast"
+        assert _classify_query("") == "trivial"
 
     def test_whitespace_only(self):
-        assert _classify_query("   ") == "fast"
+        assert _classify_query("   ") == "trivial"
 
     def test_greeting_with_question(self):
-        # "hello" at the start triggers greeting pattern
-        assert _classify_query("hello there") == "fast"
+        assert _classify_query("hello there") == "trivial"
 
     def test_long_greeting(self):
-        # Greeting pattern should still match even with extra words
-        assert _classify_query("hey Lyra, how are you doing today?") == "fast"
+        assert _classify_query("hey Lyra, how are you doing today?") == "trivial"
 
     def test_12_char_boundary(self):
-        # < 12 chars without keywords → fast
-        assert _classify_query("interesting") == "fast"  # 11 chars
+        # < 12 chars without keywords → trivial
+        assert _classify_query("interesting") == "trivial"  # 11 chars
         # >= 12 chars without pattern match → heavy
         assert _classify_query("very curious") == "heavy"  # 12 chars
 
@@ -155,15 +153,15 @@ class TestRouteRequest:
         assert ctx.supports_thinking is True
         assert ctx.supports_tools is True
 
-    def test_local_greeting_returns_fast_context(self):
+    def test_local_greeting_returns_trivial_context(self):
         ctx = route_request("local", "hi there")
         assert ctx.backend_type == "local"
-        assert ctx.model_tier == "fast"
+        assert ctx.model_tier == "trivial"
         assert ctx.embedding_backend == "local"
         assert ctx.supports_thinking is False
-        assert ctx.supports_tools is True
+        assert ctx.supports_tools is False
 
-    def test_local_complex_returns_heavy_context(self):
+    def test_local_query_returns_heavy_context(self):
         ctx = route_request("local", "What sites are in Turkey?")
         assert ctx.backend_type == "local"
         assert ctx.model_tier == "heavy"
@@ -171,23 +169,28 @@ class TestRouteRequest:
         assert ctx.supports_thinking is True
         assert ctx.supports_tools is True
 
+    def test_trivial_and_heavy_use_same_model(self):
+        trivial = route_request("local", "hello")
+        heavy = route_request("local", "What sites are on Crete?")
+        assert trivial.model_name == heavy.model_name
+
     def test_request_context_is_frozen(self):
         ctx = route_request("minimax", "hello")
         with pytest.raises(AttributeError):
-            ctx.model_tier = "fast"  # type: ignore[misc]
+            ctx.model_tier = "heavy"  # type: ignore[misc]
 
-    def test_model_names_from_env(self, monkeypatch):
-        monkeypatch.setenv("LYRA_OLLAMA_MODEL_HEAVY", "test-heavy:7b")
-        monkeypatch.setenv("LYRA_OLLAMA_MODEL_FAST", "test-fast:1b")
-        # Need to reimport to pick up env change
+    def test_model_name_from_env(self, monkeypatch):
+        monkeypatch.setenv("LYRA_OLLAMA_MODEL", "test-model:3b")
         import importlib
 
         import api.services.lyra_router as router_mod
 
         importlib.reload(router_mod)
         ctx = router_mod.route_request("local", "What is Pompeii?")
-        assert ctx.model_name == "test-heavy:7b"
+        assert ctx.model_name == "test-model:3b"
+        assert ctx.model_tier == "heavy"
         ctx2 = router_mod.route_request("local", "hi")
-        assert ctx2.model_name == "test-fast:1b"
+        assert ctx2.model_name == "test-model:3b"
+        assert ctx2.model_tier == "trivial"
         # Restore
         importlib.reload(router_mod)

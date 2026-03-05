@@ -139,8 +139,6 @@ export interface SSEQueueInfoEvent {
   type: 'queue_info'
   position: number
   queue_length: number
-  burst_remaining: number
-  burst_window_minutes: number
 }
 
 export interface SSEQueuePositionEvent {

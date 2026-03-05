@@ -1,75 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Tests for Lyra fair queue system — burst tracking, FIFO, tiered queues."""
+"""Tests for Lyra FIFO queue system."""
 
 import asyncio
-import time
 import uuid
 
 import pytest
 
-from api.services.lyra_queue import (
-    BURST_LIMIT,
-    BURST_WINDOW_SECONDS,
-    BurstTracker,
-    LyraQueue,
-    QueueEntry,
-    TieredQueue,
-)
-
-# ---------------------------------------------------------------------------
-# BurstTracker
-# ---------------------------------------------------------------------------
-
-
-class TestBurstTracker:
-    def setup_method(self):
-        self.tracker = BurstTracker()
-        self.user = uuid.uuid4()
-
-    def test_fresh_user_has_full_remaining(self):
-        remaining, wait = self.tracker.get_remaining(self.user)
-        assert remaining == BURST_LIMIT
-        assert wait == 0.0
-
-    def test_record_decrements_remaining(self):
-        self.tracker.record(self.user)
-        remaining, _ = self.tracker.get_remaining(self.user)
-        assert remaining == BURST_LIMIT - 1
-
-    def test_burst_limit_reached(self):
-        for _ in range(BURST_LIMIT):
-            self.tracker.record(self.user)
-        remaining, wait = self.tracker.get_remaining(self.user)
-        assert remaining == 0
-        assert wait > 0
-
-    def test_refund_restores_one_slot(self):
-        for _ in range(BURST_LIMIT):
-            self.tracker.record(self.user)
-        self.tracker.refund(self.user)
-        remaining, _ = self.tracker.get_remaining(self.user)
-        assert remaining == 1
-
-    def test_different_users_independent(self):
-        user2 = uuid.uuid4()
-        for _ in range(BURST_LIMIT):
-            self.tracker.record(self.user)
-        remaining, _ = self.tracker.get_remaining(user2)
-        assert remaining == BURST_LIMIT
-
-    def test_refund_on_empty_history_is_safe(self):
-        self.tracker.refund(self.user)  # Should not raise
-
-    def test_wait_time_is_bounded(self):
-        for _ in range(BURST_LIMIT):
-            self.tracker.record(self.user)
-        _, wait = self.tracker.get_remaining(self.user)
-        assert wait <= BURST_WINDOW_SECONDS
-
-
-# ---------------------------------------------------------------------------
-# LyraQueue
-# ---------------------------------------------------------------------------
+from api.services.lyra_queue import LyraQueue
 
 
 class TestLyraQueue:
@@ -116,12 +53,6 @@ class TestLyraQueue:
         self.queue.remove_entry(entry.request_id)
         assert self.queue.get_queue_length() == 0
 
-    def test_get_active_user_ids(self):
-        u1, u2 = uuid.uuid4(), uuid.uuid4()
-        self.queue.enqueue(u1)
-        self.queue.enqueue(u2)
-        assert self.queue.get_active_user_ids() == {u1, u2}
-
     def test_get_status(self):
         status = self.queue.get_status()
         assert "queue_length" in status
@@ -130,7 +61,6 @@ class TestLyraQueue:
 
     @pytest.mark.asyncio
     async def test_acquire_release(self):
-        # First acquire should succeed immediately
         await self.queue.acquire()
         assert self.queue._active_count == 1
         self.queue.release()
@@ -160,57 +90,7 @@ class TestLyraQueue:
         e1 = self.queue.enqueue(uuid.uuid4())
         e2 = self.queue.enqueue(uuid.uuid4())
         self.queue.cancel(e1.request_id)
-        # After cancel, e2's position should be 0
         assert self.queue.get_queue_position(e2.request_id) == 0
 
     def test_position_none_for_unknown_id(self):
         assert self.queue.get_queue_position("nonexistent") is None
-
-
-# ---------------------------------------------------------------------------
-# TieredQueue
-# ---------------------------------------------------------------------------
-
-
-class TestTieredQueue:
-    def setup_method(self):
-        self.tq = TieredQueue()
-
-    def test_separate_queues_for_tiers(self):
-        fast_q = self.tq.get_queue("fast")
-        heavy_q = self.tq.get_queue("heavy")
-        assert fast_q is not heavy_q
-
-    def test_unknown_tier_defaults_to_heavy(self):
-        q = self.tq.get_queue("unknown")
-        assert q is self.tq.get_queue("heavy")
-
-    def test_has_other_users(self):
-        u1, u2 = uuid.uuid4(), uuid.uuid4()
-        self.tq.get_queue("fast").enqueue(u1)
-        assert self.tq.has_other_users(u2)
-        assert not self.tq.has_other_users(u1)
-
-    def test_has_other_users_cross_tier(self):
-        u1, u2 = uuid.uuid4(), uuid.uuid4()
-        self.tq.get_queue("fast").enqueue(u1)
-        self.tq.get_queue("heavy").enqueue(u2)
-        # Both users see the other
-        assert self.tq.has_other_users(u1)
-        assert self.tq.has_other_users(u2)
-
-    def test_shared_burst_tracker(self):
-        u1 = uuid.uuid4()
-        # Record across tiers shares the same burst tracker
-        self.tq.burst.record(u1)
-        self.tq.burst.record(u1)
-        self.tq.burst.record(u1)
-        remaining, _ = self.tq.burst.get_remaining(u1)
-        assert remaining == 0
-
-    def test_combined_status(self):
-        status = self.tq.get_combined_status()
-        assert "queue_length" in status
-        assert "tiers" in status
-        assert "fast" in status["tiers"]
-        assert "heavy" in status["tiers"]

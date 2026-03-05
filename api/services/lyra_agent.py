@@ -4,10 +4,10 @@ Lyra RAG Agent — unified streaming pipeline with multi-model routing.
 Lyra Whiskerbyte is an archaeological agent who monitors YouTube channels,
 extracts transcripts, and can chat about any of the 750K+ sites in the database.
 
-Three model tiers:
+Three model tiers (single local model, two modes):
   - premium (MiniMax M2.5) — paid, credit-based, highest quality
-  - heavy (Qwen3.5 4B) — local, complex queries, tool calling, thinking
-  - fast (Qwen3.5 0.8B) — local, greetings, simple meta questions
+  - heavy (Qwen3.5 2B, think=on) — queries, thinking + tools + retrieval
+  - trivial (Qwen3.5 2B, think=off) — greetings/meta/reactions, no tools
 """
 
 import asyncio
@@ -32,6 +32,7 @@ from api.services.lyra_backends import get_backend
 from api.services.lyra_prompts import LYRA_SYSTEM_PROMPT, _build_context_prompt
 from api.services.lyra_router import (
     RequestContext,
+    get_classification_reason,
     route_request,
     set_request_context,
 )
@@ -507,13 +508,14 @@ async def run_agent_stream(
             "backend": ctx.backend_type,
             "embedding": "Voyage-4" if ctx.embedding_backend == "voyage" else "nomic-embed-text",
             "reranker": "rerank-2.5-lite" if ctx.embedding_backend == "voyage" else "FlashRank",
+            "classification": get_classification_reason(ctx),
         },
     }
 
-    # Skip retrieval entirely for fast-tier queries (greetings, meta questions) —
+    # Skip retrieval for trivial queries (greetings, meta, reactions) —
     # no point in searching Qdrant for "hi" or "who are you"
     skip_retrieval = (
-        ctx.model_tier == "fast"
+        ctx.model_tier == "trivial"
         or context_type == "empire"
         or not message
         or len(message.strip()) <= 2
@@ -769,7 +771,11 @@ async def run_agent_stream(
         collected_content = ""
         tool_calls: list[dict[str, str | int | None]] = []
 
-        async for ev in backend_impl.stream(messages, TOOLS if ctx.supports_tools else []):
+        async for ev in backend_impl.stream(
+            messages,
+            TOOLS if ctx.supports_tools else [],
+            enable_thinking=ctx.supports_thinking,
+        ):
             if ev["type"] == "reasoning":
                 yield {"type": "thinking", "content": ev["text"]}
             elif ev["type"] == "content":

@@ -34,7 +34,9 @@ logger = logging.getLogger(__name__)
 class LLMBackend(Protocol):
     """All backends normalize output to StreamEvent dicts."""
 
-    def stream(self, messages: list[BaseMessage], tools: list) -> AsyncIterator[dict]: ...
+    def stream(
+        self, messages: list[BaseMessage], tools: list, enable_thinking: bool = True
+    ) -> AsyncIterator[dict]: ...
 
 
 # ---------------------------------------------------------------------------
@@ -119,11 +121,29 @@ class OllamaBackend:
             )
         return self._client
 
-    async def stream(self, messages: list[BaseMessage], tools: list) -> AsyncIterator[dict]:
-        """Stream from Ollama via raw openai SDK, preserving reasoning tokens.
+    async def stream(
+        self, messages: list[BaseMessage], tools: list, enable_thinking: bool = True
+    ) -> AsyncIterator[dict]:
+        """Stream from Ollama, preserving reasoning tokens.
+
+        Args:
+            enable_thinking: If False, uses Ollama's native API with think=false
+                to skip chain-of-thought reasoning (faster responses, fewer tokens).
 
         Yields StreamEvent dicts.
         """
+        if not enable_thinking:
+            async for ev in self._stream_nothink(messages, tools):
+                yield ev
+            return
+
+        async for ev in self._stream_openai(messages, tools):
+            yield ev
+
+    async def _stream_openai(
+        self, messages: list[BaseMessage], tools: list
+    ) -> AsyncIterator[dict]:
+        """Stream via OpenAI SDK — supports reasoning tokens and tool calls."""
         client = self._get_client()
         openai_messages = _langchain_messages_to_openai(messages)
         openai_tools = _langchain_tools_to_openai(tools) if tools else []
@@ -178,6 +198,66 @@ class OllamaBackend:
                     "output": chunk.usage.completion_tokens or 0,
                 }
 
+    async def _stream_nothink(
+        self, messages: list[BaseMessage], tools: list
+    ) -> AsyncIterator[dict]:
+        """Stream via Ollama native API with think=false (OpenAI SDK ignores this param)."""
+        import httpx
+
+        openai_messages = _langchain_messages_to_openai(messages)
+        openai_tools = _langchain_tools_to_openai(tools) if tools else []
+
+        # Ollama native /api/chat uses slightly different field names
+        body: dict = {
+            "model": self.model,
+            "messages": openai_messages,
+            "think": False,
+            "stream": True,
+        }
+        if self.num_ctx:
+            body["options"] = {"num_ctx": self.num_ctx}
+        if openai_tools:
+            body["tools"] = openai_tools
+
+        # Derive native API URL from the OpenAI-compat base_url
+        # e.g. "http://host:11435/v1" -> "http://host:11435/api/chat"
+        native_url = self.base_url.replace("/v1", "").rstrip("/") + "/api/chat"
+
+        async with httpx.AsyncClient(timeout=300.0) as http:
+            async with http.stream("POST", native_url, json=body) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line:
+                        continue
+                    import json
+
+                    data = json.loads(line)
+                    msg = data.get("message", {})
+
+                    # Content tokens
+                    if msg.get("content"):
+                        yield {"type": "content", "text": msg["content"]}
+
+                    # Tool calls (complete, not chunked in native API)
+                    if msg.get("tool_calls"):
+                        for i, tc in enumerate(msg["tool_calls"]):
+                            fn = tc.get("function", {})
+                            yield {
+                                "type": "tool_call_chunk",
+                                "index": i,
+                                "id": f"call_{i}",
+                                "name": fn.get("name"),
+                                "args": json.dumps(fn.get("arguments", {})),
+                            }
+
+                    # Usage (on done=true)
+                    if data.get("done"):
+                        yield {
+                            "type": "usage",
+                            "input": data.get("prompt_eval_count", 0),
+                            "output": data.get("eval_count", 0),
+                        }
+
 
 # ---------------------------------------------------------------------------
 # AnthropicBackend — LangChain ChatAnthropic (for MiniMax / native Anthropic)
@@ -218,7 +298,9 @@ class AnthropicBackend:
             self._llm = ChatAnthropic(**kwargs)
         return self._llm
 
-    async def stream(self, messages: list[BaseMessage], tools: list) -> AsyncIterator[dict]:
+    async def stream(
+        self, messages: list[BaseMessage], tools: list, enable_thinking: bool = True
+    ) -> AsyncIterator[dict]:
         """Stream from MiniMax/Anthropic via LangChain, yielding StreamEvent dicts."""
         llm = self._get_llm()
         llm_with_tools = llm.bind_tools(tools) if tools else llm
@@ -281,7 +363,7 @@ def get_backend(model_name: str, backend_type: str) -> LLMBackend:
     key = f"{backend_type}:{model_name}"
     if key not in _backends:
         if backend_type == "local":
-            num_ctx = int(os.getenv("LYRA_OLLAMA_NUM_CTX", "2048"))
+            num_ctx = int(os.getenv("LYRA_OLLAMA_NUM_CTX", "4096"))
             _backends[key] = OllamaBackend(
                 model=model_name,
                 base_url=os.getenv("LYRA_OLLAMA_BASE_URL", ""),
