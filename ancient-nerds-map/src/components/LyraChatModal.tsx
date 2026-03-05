@@ -1006,7 +1006,7 @@ export default function LyraChatModal({
 
   const header = isPage ? (
     <PageHeader
-      speechBubble="I can search 750K+ sites, find news, and answer archaeology questions!"
+      speechBubble="I can search 1M+ sites, find news, and answer archaeology questions!"
       onAvatarClick={() => setShowDossier(true)}
       currentPage="lyra"
       rightSection={
@@ -1073,7 +1073,7 @@ export default function LyraChatModal({
           <div className="lyra-chat-header-name">Lyra Whiskerbyte</div>
           {messages.length === 0 ? (
             <div className="lyra-chat-speech-bubble">
-              I can search 750K+ sites, find news, and answer archaeology questions!
+              I can search 1M+ sites, find news, and answer archaeology questions!
             </div>
           ) : (
             <div className="lyra-chat-header-status">Archaeological Agent</div>

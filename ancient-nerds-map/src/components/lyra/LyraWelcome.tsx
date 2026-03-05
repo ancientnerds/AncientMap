@@ -62,7 +62,7 @@ export default function LyraWelcome({ mode, contextType, onPromptClick, disabled
         </div>
         {isPage && (
           <div className="lyra-welcome-stats">
-            <span>750,000+ sites</span>
+            <span>1,000,000+ sites</span>
             <span className="lyra-welcome-stats-sep">&middot;</span>
             <span>46 empires</span>
             <span className="lyra-welcome-stats-sep">&middot;</span>

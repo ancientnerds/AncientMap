@@ -208,7 +208,7 @@ export default function SearchPage() {
   return (
     <div className="search-page">
       <div className="search-top-sticky">
-        <PageHeader currentPage="search" speechBubble="Search 750K+ archaeological sites instantly — click any card to see details or view it on the globe">
+        <PageHeader currentPage="search" speechBubble="Search 1M+ archaeological sites instantly — click any card to see details or view it on the globe">
           <span className="page-header-title">Search</span>
         </PageHeader>
         <div className="search-bar-wrap">

@@ -465,7 +465,7 @@ export default function ApiDocsPage() {
         </div>
 
         <p className="api-intro-text">
-          Read-only access to 750K+ archaeological sites, data sources, news, and statistics.
+          Read-only access to 1M+ archaeological sites, data sources, news, and statistics.
           All responses are JSON. Rate limit headers included in every response.
         </p>
 
