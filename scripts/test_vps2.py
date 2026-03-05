@@ -214,9 +214,15 @@ def test_reranker(rerank_url: str, embed_key: str) -> bool:
         return False
 
 
-def _chat_request(base_url: str, api_key: str, model: str, prompt: str,
-                  max_tokens: int = 200, stream: bool = False,
-                  tools: list | None = None) -> dict:
+def _chat_request(
+    base_url: str,
+    api_key: str,
+    model: str,
+    prompt: str,
+    max_tokens: int = 200,
+    stream: bool = False,
+    tools: list | None = None,
+) -> dict:
     """Send a chat completion request and return the response dict."""
     payload = {
         "model": model,
@@ -268,7 +274,9 @@ def test_chat_heavy(base_url: str, api_key: str, model: str) -> bool:
     try:
         t0 = time.perf_counter()
         data = _chat_request(
-            base_url, api_key, model,
+            base_url,
+            api_key,
+            model,
             "Compare the Minoan and Mycenaean civilizations — what distinguished them?",
             max_tokens=500,
         )
@@ -387,9 +395,12 @@ def test_tool_calling(base_url: str, api_key: str, model: str) -> bool:
     try:
         t0 = time.perf_counter()
         data = _chat_request(
-            base_url, api_key, model,
+            base_url,
+            api_key,
+            model,
             "Find me archaeological sites related to the Minoans in Greece.",
-            max_tokens=500, tools=tools,
+            max_tokens=500,
+            tools=tools,
         )
         elapsed = time.perf_counter() - t0
         msg = data["choices"][0]["message"]
@@ -418,12 +429,20 @@ def test_concurrent(base_url: str, api_key: str, fast_model: str, heavy_model: s
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
             fast_future = pool.submit(
-                _chat_request, base_url, api_key, fast_model,
-                "Say hello in 10 words.", 50,
+                _chat_request,
+                base_url,
+                api_key,
+                fast_model,
+                "Say hello in 10 words.",
+                50,
             )
             heavy_future = pool.submit(
-                _chat_request, base_url, api_key, heavy_model,
-                "Name three Bronze Age civilizations.", 200,
+                _chat_request,
+                base_url,
+                api_key,
+                heavy_model,
+                "Name three Bronze Age civilizations.",
+                200,
             )
             fast_data = fast_future.result(timeout=120)
             heavy_data = heavy_future.result(timeout=300)

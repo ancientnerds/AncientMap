@@ -150,9 +150,7 @@ async def queue_status(req: Request):
 # ---------------------------------------------------------------------------
 
 
-def _handle_local_backend(
-    request: LyraChatRequest, user, ctx: RequestContext
-) -> StreamingResponse:
+def _handle_local_backend(request: LyraChatRequest, user, ctx: RequestContext) -> StreamingResponse:
     """Validate burst/queue limits and return a queued SSE stream."""
     queue = tiered_queue.get_queue(ctx.model_tier)
 

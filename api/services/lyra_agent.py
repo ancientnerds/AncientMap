@@ -362,9 +362,7 @@ async def _extract_news_filters(query: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _accumulate_tool_call(
-    tool_calls: list[dict[str, str | int | None]], ev: dict
-) -> None:
+def _accumulate_tool_call(tool_calls: list[dict[str, str | int | None]], ev: dict) -> None:
     """Accumulate a tool_call_chunk event into the tool_calls list.
 
     Merges argument strings for the same index, creates new entries for new indices.
@@ -717,9 +715,7 @@ async def run_agent_stream(
         collected_content = ""
         tool_calls: list[dict[str, str | int | None]] = []
 
-        async for ev in backend_impl.stream(
-            messages, TOOLS if ctx.supports_tools else []
-        ):
+        async for ev in backend_impl.stream(messages, TOOLS if ctx.supports_tools else []):
             if ev["type"] == "reasoning":
                 yield {"type": "thinking", "content": ev["text"]}
             elif ev["type"] == "content":

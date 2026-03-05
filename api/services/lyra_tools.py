@@ -38,6 +38,7 @@ def _get_embedding_backend() -> str:
     except LookupError:
         return "voyage"  # Default for non-chat contexts (e.g., indexing)
 
+
 # ---------------------------------------------------------------------------
 # Seshat polity data (loaded once from bundled JSON)
 # ---------------------------------------------------------------------------
