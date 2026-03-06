@@ -1540,7 +1540,7 @@ async def batch_upload_sites(
                     UPDATE unified_sites
                     SET raw_data = COALESCE(raw_data, '{}'::jsonb)
                         || jsonb_build_object(
-                            'description_citations', :citations::jsonb
+                            'description_citations', CAST(:citations AS jsonb)
                         )
                     WHERE id::text = :site_id
                 """),
@@ -1888,7 +1888,7 @@ async def replace_source(
                         UPDATE unified_sites
                         SET raw_data = COALESCE(raw_data, '{}'::jsonb)
                             || jsonb_build_object(
-                                'description_citations', :cit::jsonb
+                                'description_citations', CAST(:cit AS jsonb)
                             )
                         WHERE id::text = :sid
                     """),
