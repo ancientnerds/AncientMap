@@ -299,7 +299,7 @@ def get_backend(
         if backend_type == "local":
             ctx = num_ctx or int(os.getenv("LYRA_OLLAMA_NUM_CTX", "4096"))
             mt = max_tokens or 1024
-            url = base_url or os.getenv("LYRA_OLLAMA_BASE_URL", "")
+            url: str = base_url or os.getenv("LYRA_OLLAMA_BASE_URL", "")
             _backends[key] = OllamaBackend(
                 model=model_name,
                 base_url=url,
