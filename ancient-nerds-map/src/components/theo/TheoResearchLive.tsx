@@ -291,6 +291,9 @@ export default function TheoResearchLive({ requestId, question, onClose }: TheoR
                       <span className="theo-trace-dur">
                         {node.duration_ms != null ? `${node.duration_ms}ms` : node.status === 'active' ? '...' : ''}
                       </span>
+                      {node.status === 'error' && node.meta?.error && (
+                        <div className="theo-trace-error">{node.meta.error as string}</div>
+                      )}
                     </div>
                   ))}
                 </div>

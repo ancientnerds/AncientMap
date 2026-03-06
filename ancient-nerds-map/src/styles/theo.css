@@ -567,6 +567,12 @@
 .theo-trace-dur {
   color: var(--text-muted);
 }
+.theo-trace-error {
+  color: #e74c3c;
+  font-size: 11px;
+  margin-top: 2px;
+  word-break: break-word;
+}
 
 /* — Live Research Progress — */
 .theo-live-counters {

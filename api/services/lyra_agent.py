@@ -925,7 +925,18 @@ async def run_agent_stream(
 
             _t_tool = time.monotonic()
             try:
-                tool_args: dict[str, Any] = tc["args"] if isinstance(tc["args"], dict) else {}
+                raw_args = tc["args"]
+                if isinstance(raw_args, dict):
+                    tool_args: dict[str, Any] = raw_args
+                elif isinstance(raw_args, str):
+                    # Args might be a JSON string (double-serialized from backend)
+                    try:
+                        parsed = json.loads(raw_args)
+                        tool_args = parsed if isinstance(parsed, dict) else {}
+                    except (json.JSONDecodeError, ValueError):
+                        tool_args = {}
+                else:
+                    tool_args = {}
 
                 # Summarize args for the pipeline panel (strip verbose fields)
                 _args_summary: dict = {}
@@ -1046,10 +1057,11 @@ async def run_agent_stream(
                 }
 
             except Exception as e:
-                logger.error(f"Tool {tc['name']} failed: {e}")
+                err_msg = str(e)[:500]
+                logger.error(f"Tool {tc['name']} failed: {err_msg} | args={tc['args']!r}")
                 messages.append(
                     ToolMessage(
-                        content="Tool encountered an error. Try a different approach.",
+                        content=f"Tool error: {err_msg[:200]}. Try a different approach.",
                         tool_call_id=str(tc["id"]),
                     )
                 )
@@ -1058,7 +1070,7 @@ async def run_agent_stream(
                     "stage": "tool_call",
                     "status": "error",
                     "duration_ms": int((time.monotonic() - _t_tool) * 1000),
-                    "meta": {"tool": str(tc["name"]), "error": str(e)[:120]},
+                    "meta": {"tool": str(tc["name"]), "error": err_msg[:200]},
                 }
 
         _round_tokens = total_input_tokens + total_output_tokens - _round_tokens_before

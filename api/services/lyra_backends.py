@@ -199,12 +199,19 @@ class OllamaBackend:
                     if msg.get("tool_calls"):
                         for i, tc in enumerate(msg["tool_calls"]):
                             fn = tc.get("function", {})
+                            raw_args = fn.get("arguments", {})
+                            # arguments may be a dict or an already-serialized string
+                            args_str = (
+                                json.dumps(raw_args)
+                                if isinstance(raw_args, dict)
+                                else str(raw_args)
+                            )
                             yield {
                                 "type": "tool_call_chunk",
                                 "index": i,
                                 "id": f"call_{i}",
                                 "name": fn.get("name"),
-                                "args": json.dumps(fn.get("arguments", {})),
+                                "args": args_str,
                             }
 
                     # Usage (on done=true)
