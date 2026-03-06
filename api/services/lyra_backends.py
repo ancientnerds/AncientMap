@@ -87,6 +87,38 @@ def _langchain_messages_to_openai(messages: list) -> list[dict]:
     return result
 
 
+def _langchain_messages_to_ollama_native(messages: list) -> list[dict]:
+    """Convert LangChain message objects to Ollama native /api/chat format.
+
+    Differs from OpenAI format: no id/type in tool_calls, arguments is an
+    object (not a JSON string), and tool responses omit tool_call_id.
+    """
+    result = []
+    for m in messages:
+        if isinstance(m, SystemMessage):
+            result.append({"role": "system", "content": m.content})
+        elif isinstance(m, HumanMessage):
+            result.append({"role": "user", "content": m.content})
+        elif isinstance(m, AIMessage):
+            msg: dict = {"role": "assistant", "content": m.content or ""}
+            if m.tool_calls:
+                msg["tool_calls"] = [
+                    {
+                        "function": {
+                            "name": tc["name"],
+                            "arguments": tc["args"]
+                            if isinstance(tc["args"], dict)
+                            else json.loads(tc["args"]),
+                        },
+                    }
+                    for tc in m.tool_calls
+                ]
+            result.append(msg)
+        elif isinstance(m, ToolMessage):
+            result.append({"role": "tool", "content": m.content})
+    return result
+
+
 # ---------------------------------------------------------------------------
 # OllamaBackend — raw openai.AsyncOpenAI (preserves reasoning field)
 # ---------------------------------------------------------------------------
@@ -118,7 +150,7 @@ class OllamaBackend:
         """
         import httpx
 
-        openai_messages = _langchain_messages_to_openai(messages)
+        openai_messages = _langchain_messages_to_ollama_native(messages)
         openai_tools = _langchain_tools_to_openai(tools) if tools else []
 
         body: dict = {
