@@ -7,15 +7,14 @@ services:
       - ./entrypoint.sh:/entrypoint.sh:ro
     entrypoint: ["/bin/bash", "/entrypoint.sh"]
     environment:
-      - OLLAMA_MODEL_HEAVY=${OLLAMA_MODEL_HEAVY:-qwen3.5:4b}
-      - OLLAMA_MODEL_FAST=${OLLAMA_MODEL_FAST:-qwen3.5:0.8b}
+      - OLLAMA_MODEL_HEAVY=${OLLAMA_MODEL_HEAVY:-qwen3.5:9b}
       - OLLAMA_HOST=0.0.0.0:11434
-      - OLLAMA_NUM_PARALLEL=2
-      - OLLAMA_MAX_LOADED_MODELS=3
+      - OLLAMA_NUM_PARALLEL=1
+      - OLLAMA_MAX_LOADED_MODELS=1
     deploy:
       resources:
         limits:
-          memory: 10G
+          memory: 12G
     restart: unless-stopped
 
   reranker:

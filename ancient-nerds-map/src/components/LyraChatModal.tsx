@@ -371,13 +371,6 @@ export default function LyraChatModal({
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const lastUserMsgRef = useRef<string>('')
   const [showScrollFab, setShowScrollFab] = useState(false)
-  const [lyraBackend, setLyraBackend] = useState<'minimax' | 'local'>(() =>
-    (localStorage.getItem('lyra_backend') as 'minimax' | 'local') || 'minimax'
-  )
-  // Queue state for local backend
-  const [queuePosition, setQueuePosition] = useState<number | null>(null)
-  const [queueLength, setQueueLength] = useState(0)
-  const [estimatedWait, setEstimatedWait] = useState(0)
   const [lyraStatus, setLyraStatus] = useState<string | null>(null)
   const userScrolledUpRef = useRef(false)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -682,8 +675,8 @@ export default function LyraChatModal({
     if (!messageText) return
     if (!authToken) return
 
-    // Check credits (unlimited users bypass; local backend is free)
-    if (lyraBackend !== 'local' && !isUnlimited && userCredits !== null && userCredits <= 0) {
+    // Check credits (unlimited users bypass)
+    if (!isUnlimited && userCredits !== null && userCredits <= 0) {
       setError(<>No credits remaining. Visit your <a href="/account.html" style={{ color: '#ff6b6b', textDecoration: 'underline' }}>Account page</a> for details.</>)
       return
     }
@@ -736,7 +729,7 @@ export default function LyraChatModal({
       context_id: contextId,
       context_year: contextYear,
       history,
-      backend: lyraBackend,
+      backend: 'minimax',
     }
 
     const controller = new AbortController()
@@ -794,23 +787,7 @@ export default function LyraChatModal({
               // Use data.type from JSON payload (always present, immune to chunk splitting)
               const type = data.type || eventType || ''
 
-              if (type === 'queue_info') {
-                setQueuePosition(data.position ?? 0)
-                setQueueLength(data.queue_length ?? 0)
-                continue
-              } else if (type === 'queue_position') {
-                if (data.position === -1) {
-                  // GPU acquired — transition to normal streaming
-                  setQueuePosition(null)
-                  setQueueLength(0)
-                  setEstimatedWait(0)
-                } else {
-                  setQueuePosition(data.position)
-                  setQueueLength(data.queue_length ?? 0)
-                  setEstimatedWait(data.estimated_wait_seconds ?? 0)
-                }
-                continue
-              } else if (type === 'thinking' && data.content) {
+              if (type === 'thinking' && data.content) {
                 setLyraStatus('Thinking...')
                 setMessages(prev => prev.map(m =>
                   m.id === assistantId
@@ -982,12 +959,9 @@ export default function LyraChatModal({
     } finally {
       setIsStreaming(false)
       abortRef.current = null
-      setQueuePosition(null)
-      setQueueLength(0)
-      setEstimatedWait(0)
       setLyraStatus(null)
     }
-  }, [input, authToken, userCredits, isUnlimited, messages, contextType, contextId, contextYear, onHighlightSites, clearAuth, conversationId, lyraBackend])
+  }, [input, authToken, userCredits, isUnlimited, messages, contextType, contextId, contextYear, onHighlightSites, clearAuth, conversationId])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -1211,11 +1185,6 @@ export default function LyraChatModal({
             <div className="lyra-chat-body">
               {/* Left: chat messages */}
               <div className="lyra-chat-main">
-                {lyraBackend === 'local' && (
-                  <div className="lyra-local-banner">
-                    You're using our self-hosted AI — it's completely free but slower than the cloud model. Please be patient, responses may take a moment.
-                  </div>
-                )}
                 <div className="lyra-chat-messages" ref={messagesContainerRef} role="log" aria-live="polite">
                   {messages.length === 0 ? (
                     <LyraWelcome
@@ -1238,24 +1207,8 @@ export default function LyraChatModal({
                             </div>
                           </div>
                         )}
-                        {/* Queue position — waiting in GPU queue */}
-                        {msg.role === 'assistant' && msg.isStreaming && queuePosition !== null && !msg.content && !msg.thinking && (
-                          <div className="lyra-chat-msg lyra-chat-msg-assistant">
-                            <img src="/lyra.gif" alt="Lyra" className="lyra-chat-msg-avatar" />
-                            <div className="lyra-queue-status">
-                              {queuePosition === 0 ? (
-                                <p className="lyra-queue-next">You're next! Starting inference...</p>
-                              ) : (
-                                <p>Position in queue: <strong>#{queuePosition}</strong> of {queueLength}</p>
-                              )}
-                              {estimatedWait > 0 && (
-                                <p className="lyra-queue-eta">~{Math.ceil(estimatedWait / 60)} min wait</p>
-                              )}
-                            </div>
-                          </div>
-                        )}
                         {/* Typing dots — before any tokens arrive */}
-                        {msg.role === 'assistant' && msg.isStreaming && queuePosition === null && !msg.content && !msg.thinking && !lyraStatus && (
+                        {msg.role === 'assistant' && msg.isStreaming && !msg.content && !msg.thinking && !lyraStatus && (
                           <div className="lyra-chat-msg lyra-chat-msg-assistant">
                             <img src="/lyra.gif" alt="Lyra" className="lyra-chat-msg-avatar" />
                             <div className="lyra-chat-typing-dots" role="status" aria-label="Lyra is typing">
@@ -1490,20 +1443,6 @@ export default function LyraChatModal({
 
             {/* Input area */}
             <div className="lyra-chat-input-area">
-              <div className="lyra-model-selector">
-                <button
-                  className={`lyra-model-btn ${lyraBackend === 'minimax' ? 'active' : ''}`}
-                  onClick={() => { setLyraBackend('minimax'); localStorage.setItem('lyra_backend', 'minimax') }}
-                  disabled={isStreaming}
-                  title="MiniMax M2.5 (cloud)"
-                >MiniMax</button>
-                <button
-                  className={`lyra-model-btn ${lyraBackend === 'local' ? 'active' : ''}`}
-                  onClick={() => { setLyraBackend('local'); localStorage.setItem('lyra_backend', 'local') }}
-                  disabled={isStreaming}
-                  title="Qwen3.5 (self-hosted, free)"
-                >Qwen</button>
-              </div>
               <div className="lyra-chat-input-row">
                 <textarea
                   ref={inputRef}
