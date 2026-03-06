@@ -19,6 +19,7 @@ from api.services.theo_config import (
     THEO_MAX_TOKENS,
     THEO_MODEL,
     THEO_NUM_CTX,
+    THEO_OLLAMA_BASE_URL,
     THEO_PARALLEL_SLOTS,
 )
 from api.services.theo_prompts import THEO_SYSTEM_PROMPT
@@ -83,6 +84,7 @@ async def _process_request(request_id: str, question: str, effort: str) -> None:
             system_prompt=THEO_SYSTEM_PROMPT,
             num_ctx=THEO_NUM_CTX,
             max_tokens=THEO_MAX_TOKENS,
+            base_url=THEO_OLLAMA_BASE_URL or None,
         ):
             event_type = event.get("type", "")
 

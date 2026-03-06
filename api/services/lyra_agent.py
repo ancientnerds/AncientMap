@@ -526,6 +526,7 @@ async def run_agent_stream(
     system_prompt: str | None = None,
     num_ctx: int | None = None,
     max_tokens: int | None = None,
+    base_url: str | None = None,
 ) -> AsyncIterator[dict]:
     """
     Run the Lyra agent and stream results.
@@ -548,7 +549,11 @@ async def run_agent_stream(
 
     # Get the unified backend
     backend_impl = get_backend(
-        ctx.model_name, ctx.backend_type, num_ctx=num_ctx, max_tokens=max_tokens
+        ctx.model_name,
+        ctx.backend_type,
+        num_ctx=num_ctx,
+        max_tokens=max_tokens,
+        base_url=base_url,
     )
 
     # Auto-retrieve: run hybrid search BEFORE the LLM sees the message

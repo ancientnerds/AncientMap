@@ -283,6 +283,7 @@ def get_backend(
     backend_type: str,
     num_ctx: int | None = None,
     max_tokens: int | None = None,
+    base_url: str | None = None,
 ) -> LLMBackend:
     """Get or create a backend instance for the given model.
 
@@ -291,20 +292,22 @@ def get_backend(
         backend_type: "local" for OllamaBackend, "minimax" for AnthropicBackend.
         num_ctx: Override context window size (local only). Defaults to LYRA_OLLAMA_NUM_CTX env.
         max_tokens: Override max output tokens (local only). Defaults to 1024.
+        base_url: Override base URL (local only). Bypasses LYRA_OLLAMA_BASE_URL.
     """
-    key = f"{backend_type}:{model_name}:{num_ctx}:{max_tokens}"
+    key = f"{backend_type}:{model_name}:{num_ctx}:{max_tokens}:{base_url}"
     if key not in _backends:
         if backend_type == "local":
             ctx = num_ctx or int(os.getenv("LYRA_OLLAMA_NUM_CTX", "4096"))
             mt = max_tokens or 1024
+            url = base_url or os.getenv("LYRA_OLLAMA_BASE_URL", "")
             _backends[key] = OllamaBackend(
                 model=model_name,
-                base_url=os.getenv("LYRA_OLLAMA_BASE_URL", ""),
-                api_key=os.getenv("LYRA_OLLAMA_API_KEY", ""),
+                base_url=url,
+                api_key=os.getenv("LYRA_OLLAMA_API_KEY", "") if not base_url else "",
                 max_tokens=mt,
                 num_ctx=ctx,
             )
-            logger.info(f"Created OllamaBackend for {model_name}")
+            logger.info(f"Created OllamaBackend for {model_name} at {url}")
         else:
             api_key = os.getenv("LYRA_ANTHROPIC_API_KEY", "") or os.getenv("ANTHROPIC_API_KEY", "")
             base_url = os.getenv("LYRA_ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
