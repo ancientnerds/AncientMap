@@ -2419,9 +2419,6 @@ export default function DbAuditPage() {
                 <button className={`db-btn ${uploadCreateSnapshot ? 'db-btn-commit' : 'db-btn-warn'}`} onClick={commitUpload} disabled={uploading || uploadParsed.filter(p => p._status !== 'error').length === 0} title={uploadCreateSnapshot ? 'Creates a snapshot of current state, then applies all changes' : 'No snapshot — changes cannot be rolled back!'}>
                   {uploading ? 'Applying...' : uploadCreateSnapshot ? 'Snapshot & Apply' : 'Apply Without Snapshot'}
                 </button>
-                <button className="db-btn db-btn-replace" onClick={commitReplace} disabled={uploading || uploadParsed.filter(p => p._status !== 'error').length === 0} title="Snapshot current state, delete all sites for this source, then insert everything fresh from the file">
-                  {uploading ? 'Replacing...' : 'Replace Database'}
-                </button>
               </div>
             </div>
           </div>
