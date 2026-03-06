@@ -130,6 +130,10 @@ class OllamaBackend:
         options: dict = {"num_predict": self.max_tokens}
         if self.num_ctx:
             options["num_ctx"] = self.num_ctx
+        # Qwen3.5 recommended: lower temperature/top_p when thinking is off
+        if not enable_thinking:
+            options["temperature"] = 0.7
+            options["top_p"] = 0.8
         body["options"] = options
         if openai_tools:
             body["tools"] = openai_tools
@@ -274,23 +278,31 @@ class AnthropicBackend:
 _backends: dict[str, LLMBackend] = {}
 
 
-def get_backend(model_name: str, backend_type: str) -> LLMBackend:
+def get_backend(
+    model_name: str,
+    backend_type: str,
+    num_ctx: int | None = None,
+    max_tokens: int | None = None,
+) -> LLMBackend:
     """Get or create a backend instance for the given model.
 
     Args:
         model_name: The model to use (e.g. "qwen3.5:4b", "MiniMax-M2.5").
         backend_type: "local" for OllamaBackend, "minimax" for AnthropicBackend.
+        num_ctx: Override context window size (local only). Defaults to LYRA_OLLAMA_NUM_CTX env.
+        max_tokens: Override max output tokens (local only). Defaults to 1024.
     """
-    key = f"{backend_type}:{model_name}"
+    key = f"{backend_type}:{model_name}:{num_ctx}:{max_tokens}"
     if key not in _backends:
         if backend_type == "local":
-            num_ctx = int(os.getenv("LYRA_OLLAMA_NUM_CTX", "4096"))
+            ctx = num_ctx or int(os.getenv("LYRA_OLLAMA_NUM_CTX", "4096"))
+            mt = max_tokens or 1024
             _backends[key] = OllamaBackend(
                 model=model_name,
                 base_url=os.getenv("LYRA_OLLAMA_BASE_URL", ""),
                 api_key=os.getenv("LYRA_OLLAMA_API_KEY", ""),
-                max_tokens=1024,
-                num_ctx=num_ctx,
+                max_tokens=mt,
+                num_ctx=ctx,
             )
             logger.info(f"Created OllamaBackend for {model_name}")
         else:

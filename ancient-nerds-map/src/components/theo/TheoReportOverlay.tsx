@@ -92,7 +92,7 @@ export default function TheoReportOverlay({
       <div className="theo-overlay-inner" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="theo-report-header">
-          <div className="theo-avatar-placeholder" style={{ width: 40, height: 40, fontSize: 20 }}>
+          <div className="theo-avatar-placeholder" style={{ width: 48, height: 48, fontSize: 24 }}>
             🐻
           </div>
           <div className="theo-report-header-text">
@@ -122,7 +122,7 @@ export default function TheoReportOverlay({
         </div>
 
         {/* Report Body */}
-        <div className="theo-report-body">
+        <div className="theo-report-body theo-md-body">
           <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
             {result.report}
           </ReactMarkdown>

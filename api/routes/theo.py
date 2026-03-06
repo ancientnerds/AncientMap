@@ -50,6 +50,14 @@ class ResearchSubmitResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+def _validate_uuid(request_id: str) -> None:
+    """Validate that request_id is a valid UUID. Raises 404 if not."""
+    try:
+        uuid.UUID(request_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Research request not found")
+
+
 def _get_user_id(req: Request) -> str:
     """Get user identifier — Discord ID if logged in, IP otherwise."""
     user = get_optional_user(req)
@@ -181,6 +189,7 @@ async def list_research(req: Request):
 @router.get("/research/{request_id}")
 async def get_research(request_id: str, req: Request):
     """Get a single research request including the full report."""
+    _validate_uuid(request_id)
     user_id = _get_user_id(req)
 
     with get_session() as session:
@@ -229,6 +238,7 @@ async def get_research(request_id: str, req: Request):
 @router.get("/research/{request_id}/stream")
 async def stream_research(request_id: str, req: Request):
     """SSE stream for live progress updates while a request is processing."""
+    _validate_uuid(request_id)
     user_id = _get_user_id(req)
 
     # Verify ownership
@@ -305,6 +315,7 @@ async def stream_research(request_id: str, req: Request):
 @router.delete("/research/{request_id}")
 async def cancel_research(request_id: str, req: Request):
     """Cancel a queued research request. Cannot cancel running requests."""
+    _validate_uuid(request_id)
     user_id = _get_user_id(req)
 
     with get_session() as session:

@@ -16,7 +16,9 @@ from sqlalchemy import text
 from api.services.theo_config import (
     EFFORT_CONFIG,
     RESULT_TTL_HOURS,
+    THEO_MAX_TOKENS,
     THEO_MODEL,
+    THEO_NUM_CTX,
     THEO_PARALLEL_SLOTS,
 )
 from api.services.theo_prompts import THEO_SYSTEM_PROMPT
@@ -74,15 +76,13 @@ async def _process_request(request_id: str, question: str, effort: str) -> None:
 
         _live_events[request_id].append({"type": "status", "content": "Research started"})
 
-        # Use a custom system prompt by prepending it as the first message
-        # run_agent_stream accepts a history parameter — inject Theo's system prompt there
-        theo_history = [{"role": "system", "content": THEO_SYSTEM_PROMPT}]
-
         async for event in run_agent_stream(
             message=question,
-            history=theo_history,
             context_type="global",
             ctx=ctx,
+            system_prompt=THEO_SYSTEM_PROMPT,
+            num_ctx=THEO_NUM_CTX,
+            max_tokens=THEO_MAX_TOKENS,
         ):
             event_type = event.get("type", "")
 
@@ -231,6 +231,19 @@ async def start_worker() -> None:
     """Start the Theo worker background tasks."""
     global _shutdown
     _shutdown = False
+
+    # Recover orphaned requests left in 'running' state from a previous crash
+    try:
+        with get_session() as session:
+            result = session.execute(
+                text("UPDATE research_requests SET status = 'queued' WHERE status = 'running'")
+            )
+            session.commit()
+            if result.rowcount:
+                logger.info(f"[THEO] Recovered {result.rowcount} orphaned running request(s)")
+    except Exception as e:
+        logger.warning(f"[THEO] Recovery check failed: {e}")
+
     asyncio.create_task(_poll_loop())
     asyncio.create_task(cleanup_expired())
     logger.info("[THEO] Background worker tasks created")

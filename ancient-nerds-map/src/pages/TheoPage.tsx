@@ -53,6 +53,9 @@ export default function TheoPage() {
   const [viewingId, setViewingId] = useState<string | null>(null)
   const [viewingData, setViewingData] = useState<FullResearch | null>(null)
   const [notifGranted, setNotifGranted] = useState(false)
+  const [liveOverlayId, setLiveOverlayId] = useState<string | null>(null)
+  const [liveOverlayQuestion, setLiveOverlayQuestion] = useState('')
+  const [liveOverlayClosed, setLiveOverlayClosed] = useState<Set<string>>(new Set())
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const prevStatusRef = useRef<Map<string, string>>(new Map())
@@ -172,6 +175,35 @@ export default function TheoPage() {
     setViewingData(null)
   }, [])
 
+  // Auto-open live overlay when research is running
+  useEffect(() => {
+    const running = items.find(i => i.status === 'running' && !liveOverlayClosed.has(i.id))
+    if (running && liveOverlayId !== running.id) {
+      setLiveOverlayId(running.id)
+      setLiveOverlayQuestion(running.question)
+    } else if (!running && liveOverlayId && !items.find(i => i.id === liveOverlayId && i.status === 'running')) {
+      // Research finished — keep overlay open so user can see final result
+    }
+  }, [items, liveOverlayClosed, liveOverlayId])
+
+  const handleCloseLive = useCallback(() => {
+    if (liveOverlayId) {
+      setLiveOverlayClosed(prev => new Set(prev).add(liveOverlayId))
+    }
+    setLiveOverlayId(null)
+    setLiveOverlayQuestion('')
+  }, [liveOverlayId])
+
+  const handleWatchLive = useCallback((item: ResearchItem) => {
+    setLiveOverlayClosed(prev => {
+      const next = new Set(prev)
+      next.delete(item.id)
+      return next
+    })
+    setLiveOverlayId(item.id)
+    setLiveOverlayQuestion(item.question)
+  }, [])
+
   // Key handler for textarea submit
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -261,9 +293,14 @@ export default function TheoPage() {
                 </span>
               </div>
               {item.status === 'running' && (
-                <Suspense fallback={<div className="theo-live-status">Connecting...</div>}>
-                  <TheoResearchLive requestId={item.id} />
-                </Suspense>
+                <div className="theo-card-actions">
+                  <button className="theo-btn-view" onClick={() => handleWatchLive(item)}>
+                    Watch Live
+                  </button>
+                  <button className="theo-btn-cancel" onClick={() => handleCancel(item.id)}>
+                    Cancel
+                  </button>
+                </div>
               )}
               {item.status === 'queued' && (
                 <div className="theo-card-actions">
@@ -340,6 +377,17 @@ export default function TheoPage() {
             sitesFound={viewingData.sites_found}
             toolsUsed={viewingData.tools_used}
             onClose={handleCloseReport}
+          />
+        </Suspense>
+      )}
+
+      {/* Live Research Overlay */}
+      {liveOverlayId && (
+        <Suspense fallback={null}>
+          <TheoResearchLive
+            requestId={liveOverlayId}
+            question={liveOverlayQuestion}
+            onClose={handleCloseLive}
           />
         </Suspense>
       )}

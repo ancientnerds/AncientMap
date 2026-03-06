@@ -1,9 +1,11 @@
 /**
- * TheoResearchLive — Live progress view for a running research request.
- * Connects to SSE stream and shows pipeline stages, thinking, and streaming text.
+ * TheoResearchLive — Full-screen overlay for live research streaming.
+ * Connects to SSE stream and renders markdown in real-time with throttled updates.
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { config } from '../../config'
 import type { PipelineEvent, PipelineNodeInstance } from '../../types/pipeline'
 import { applyPipelineEvent } from '../../types/pipeline'
@@ -11,19 +13,26 @@ import { formatDurationMs } from '../../utils/formatters'
 
 interface TheoResearchLiveProps {
   requestId: string
+  question: string
+  onClose: () => void
 }
 
-export default function TheoResearchLive({ requestId }: TheoResearchLiveProps) {
+export default function TheoResearchLive({ requestId, question, onClose }: TheoResearchLiveProps) {
   const [nodes, setNodes] = useState<PipelineNodeInstance[]>([])
-  const [thinkingText, setThinkingText] = useState('')
-  const [reportText, setReportText] = useState('')
+  const [displayText, setDisplayText] = useState('')
+  const [displayThinking, setDisplayThinking] = useState('')
   const [statusMsg, setStatusMsg] = useState('')
   const [sitesFound, setSitesFound] = useState(0)
   const [toolsUsed, setToolsUsed] = useState(0)
   const [elapsedMs, setElapsedMs] = useState(0)
   const [done, setDone] = useState(false)
+  const [showThinking, setShowThinking] = useState(true)
+  const [showTrace, setShowTrace] = useState(false)
+
+  const reportTextRef = useRef('')
+  const thinkingRef = useRef('')
   const startRef = useRef(performance.now())
-  const textRef = useRef<HTMLDivElement>(null)
+  const bodyRef = useRef<HTMLDivElement>(null)
 
   // Elapsed timer
   useEffect(() => {
@@ -34,16 +43,26 @@ export default function TheoResearchLive({ requestId }: TheoResearchLiveProps) {
     return () => clearInterval(iv)
   }, [done])
 
-  // Auto-scroll report text
+  // Throttled display sync — max 5 renders/sec
   useEffect(() => {
-    if (textRef.current) {
-      textRef.current.scrollTop = textRef.current.scrollHeight
-    }
-  }, [reportText, thinkingText])
+    if (done) return
+    const iv = setInterval(() => {
+      setDisplayText(reportTextRef.current)
+      setDisplayThinking(thinkingRef.current)
+    }, 200)
+    return () => clearInterval(iv)
+  }, [done])
+
+  // Auto-scroll body (only if near bottom)
+  useEffect(() => {
+    const el = bodyRef.current
+    if (!el) return
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100
+    if (nearBottom) el.scrollTop = el.scrollHeight
+  }, [displayText])
 
   // SSE connection
   useEffect(() => {
-    // EventSource doesn't support custom headers, so fall back to fetch-based SSE
     const controller = new AbortController()
     const token = localStorage.getItem('an_auth_token')
 
@@ -73,7 +92,9 @@ export default function TheoResearchLive({ requestId }: TheoResearchLiveProps) {
 
           let currentEventType = ''
           for (const line of lines) {
-            if (line.startsWith('event: ')) {
+            if (line === '') {
+              currentEventType = ''
+            } else if (line.startsWith('event: ')) {
               currentEventType = line.slice(7).trim()
             } else if (line.startsWith('data: ')) {
               try {
@@ -105,17 +126,16 @@ export default function TheoResearchLive({ requestId }: TheoResearchLiveProps) {
         }
         setNodes(prev => applyPipelineEvent(prev, pEvent))
 
-        // Track tool calls
         if (pEvent.stage === 'tool_call' && pEvent.status === 'done') {
           setToolsUsed(prev => prev + 1)
         }
         break
       }
       case 'token':
-        setReportText(prev => prev + (data.content as string || ''))
+        reportTextRef.current += (data.content as string || '')
         break
       case 'thinking':
-        setThinkingText(prev => prev + (data.content as string || ''))
+        thinkingRef.current += (data.content as string || '')
         break
       case 'status':
         setStatusMsg(data.content as string || '')
@@ -128,83 +148,157 @@ export default function TheoResearchLive({ requestId }: TheoResearchLiveProps) {
       case 'done':
       case 'error':
       case 'timeout':
+        // Final sync to ensure complete text
+        setDisplayText(reportTextRef.current)
+        setDisplayThinking(thinkingRef.current)
         setDone(true)
         break
     }
   }, [])
 
-  // Count active/done stages for the progress indicator
+  const mdComponents = useMemo(() => ({
+    a: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
+      if (href?.startsWith('site:')) {
+        const siteId = href.slice(5)
+        return (
+          <a
+            {...props}
+            href={`/site.html?id=${siteId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: 'var(--accent-secondary)' }}
+          >
+            {children}
+          </a>
+        )
+      }
+      if (href?.startsWith('lyra-video:') || href?.startsWith('youtube:')) {
+        const videoId = href.includes(':') ? href.split(':')[1] : href
+        return (
+          <a
+            {...props}
+            href={`https://youtube.com/watch?v=${videoId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {children}
+          </a>
+        )
+      }
+      return <a {...props} href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+    },
+  }), [])
+
+  const urlTransform = useCallback((url: string) => {
+    const colonIndex = url.indexOf(':')
+    if (colonIndex === -1) return url
+    const protocol = url.trim().slice(0, colonIndex)
+    if (['http', 'https', 'mailto', 'lyra-video', 'lyra-site', 'lyra-coord', 'site', 'youtube'].includes(protocol.toLowerCase())) return url
+    return ''
+  }, [])
+
   const doneNodes = nodes.filter(n => n.status === 'done')
   const activeNode = nodes.find(n => n.status === 'active')
 
-  return (
-    <div className="theo-live">
-      {/* Counters bar */}
-      <div className="theo-live-counters">
-        <span className="theo-live-counter">
-          <span className="theo-live-dot" />
-          {formatDurationMs(elapsedMs)}
-        </span>
-        {doneNodes.length > 0 && (
-          <span className="theo-live-counter">{doneNodes.length} stages</span>
-        )}
-        {toolsUsed > 0 && (
-          <span className="theo-live-counter">{toolsUsed} tools</span>
-        )}
-        {sitesFound > 0 && (
-          <span className="theo-live-counter">{sitesFound} sites</span>
-        )}
-      </div>
+  const handleBackdropClick = useCallback((e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) onClose()
+  }, [onClose])
 
-      {/* Pipeline stages */}
-      {nodes.length > 0 && (
-        <div className="theo-live-pipeline">
-          {nodes.map(node => (
-            <div key={node.instanceId} className={`theo-live-stage theo-live-st-${node.status}`}>
-              <span className="theo-live-stage-icon">
-                {node.status === 'active' ? '◉' :
-                 node.status === 'done' ? '✓' :
-                 node.status === 'error' ? '✗' : '○'}
+  return (
+    <div className="theo-overlay" onClick={handleBackdropClick}>
+      <div className="theo-overlay-inner" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="theo-live-header">
+          <div className="theo-avatar-placeholder" style={{ width: 40, height: 40, fontSize: 20, flexShrink: 0 }}>
+            🐻
+          </div>
+          <div className="theo-live-header-text">
+            <div className="theo-live-question">{question}</div>
+            <div className="theo-live-counters" style={{ marginTop: 6 }}>
+              <span className="theo-live-counter">
+                <span className="theo-live-dot" />
+                {formatDurationMs(elapsedMs)}
               </span>
-              <span className="theo-live-stage-name">
-                {node.meta?.tool as string || node.stageId.replace(/_/g, ' ')}
-              </span>
-              {node.duration_ms != null && (
-                <span className="theo-live-stage-dur">{node.duration_ms}ms</span>
+              {doneNodes.length > 0 && (
+                <span className="theo-live-counter">{doneNodes.length} stages</span>
+              )}
+              {toolsUsed > 0 && (
+                <span className="theo-live-counter">{toolsUsed} tools</span>
+              )}
+              {sitesFound > 0 && (
+                <span className="theo-live-counter">{sitesFound} sites</span>
               )}
             </div>
-          ))}
-        </div>
-      )}
-
-      {/* Status message */}
-      {statusMsg && !reportText && (
-        <div className="theo-live-status">{statusMsg}</div>
-      )}
-
-      {/* Active stage indicator */}
-      {activeNode && !reportText && !thinkingText && (
-        <div className="theo-live-status">
-          {activeNode.meta?.tool as string || activeNode.stageId.replace(/_/g, ' ')}...
-        </div>
-      )}
-
-      {/* Thinking block */}
-      {thinkingText && (
-        <div className="theo-live-thinking">
-          <div className="theo-live-thinking-label">Thinking</div>
-          <div className="theo-live-thinking-text" ref={!reportText ? textRef : undefined}>
-            {thinkingText}
           </div>
+          <button className="theo-live-close" onClick={onClose} aria-label="Close live view">
+            ✕
+          </button>
         </div>
-      )}
 
-      {/* Streaming report text */}
-      {reportText && (
-        <div className="theo-live-report" ref={textRef}>
-          {reportText}
+        {/* Body — scrollable markdown area */}
+        <div className="theo-live-body theo-md-body" ref={bodyRef}>
+          {displayText ? (
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents} urlTransform={urlTransform}>
+              {displayText}
+            </ReactMarkdown>
+          ) : statusMsg ? (
+            <div className="theo-live-status">{statusMsg}</div>
+          ) : activeNode ? (
+            <div className="theo-live-status">
+              {activeNode.meta?.tool as string || activeNode.stageId.replace(/_/g, ' ')}...
+            </div>
+          ) : (
+            <div className="theo-live-status">Connecting to research stream...</div>
+          )}
         </div>
-      )}
+
+        {/* Footer — collapsible thinking + pipeline trace */}
+        <div className="theo-live-footer">
+          {/* Thinking section */}
+          {displayThinking && (
+            <div className="theo-live-thinking" style={{ border: 'none', borderRadius: 0 }}>
+              <div
+                className="theo-live-thinking-label"
+                onClick={() => setShowThinking(!showThinking)}
+              >
+                {showThinking ? '▾' : '▸'} Thinking
+              </div>
+              {showThinking && (
+                <div className="theo-live-thinking-text">{displayThinking}</div>
+              )}
+            </div>
+          )}
+
+          {/* Pipeline trace */}
+          {nodes.length > 0 && (
+            <>
+              <button
+                className="theo-trace-toggle"
+                onClick={() => setShowTrace(!showTrace)}
+              >
+                {showTrace ? '▾' : '▸'} Pipeline trace ({doneNodes.length} stages)
+              </button>
+              {showTrace && (
+                <div className="theo-trace-body">
+                  {nodes.map(node => (
+                    <div key={node.instanceId} className="theo-trace-entry">
+                      <span className="theo-trace-stage">
+                        {node.status === 'active' ? '◉ ' :
+                         node.status === 'done' ? '✓ ' :
+                         node.status === 'error' ? '✗ ' : '○ '}
+                        {node.meta?.tool as string || node.stageId.replace(/_/g, ' ')}
+                      </span>
+                      <span className="theo-trace-dur">
+                        {node.duration_ms != null ? `${node.duration_ms}ms` : node.status === 'active' ? '...' : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

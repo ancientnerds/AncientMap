@@ -48,6 +48,61 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Heartbeat wrapper for slow backend streams
+# ---------------------------------------------------------------------------
+
+
+async def _stream_with_heartbeat(
+    backend_impl: Any,
+    messages: list[BaseMessage],
+    tools: list,
+    enable_thinking: bool,
+    interval: float = 10.0,
+) -> AsyncIterator[dict]:
+    """Wrap backend.stream() with periodic heartbeat events.
+
+    During prompt evaluation, Ollama sends nothing for minutes. This wrapper
+    emits {"type": "heartbeat", "elapsed_s": N} events so downstream SSE
+    connections stay alive and the user sees the model is working.
+    """
+    queue: asyncio.Queue[dict | None] = asyncio.Queue()
+    start = time.monotonic()
+    error: BaseException | None = None
+
+    async def _produce() -> None:
+        nonlocal error
+        try:
+            async for ev in backend_impl.stream(messages, tools, enable_thinking):
+                await queue.put(ev)
+        except BaseException as e:
+            error = e
+        finally:
+            await queue.put(None)  # sentinel
+
+    task = asyncio.create_task(_produce())
+    try:
+        while True:
+            try:
+                ev = await asyncio.wait_for(queue.get(), timeout=interval)
+            except TimeoutError:
+                elapsed = int(time.monotonic() - start)
+                yield {"type": "heartbeat", "elapsed_s": elapsed}
+                continue
+            if ev is None:
+                if error is not None:
+                    raise error
+                break
+            yield ev
+    finally:
+        if not task.done():
+            task.cancel()
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
+
+
+# ---------------------------------------------------------------------------
 # Auto-retrieval
 # ---------------------------------------------------------------------------
 
@@ -401,10 +456,13 @@ def _build_messages(
     context_year: int | None,
     retrieved_context: str = "",
     model_tier: str = "heavy",
+    system_prompt: str | None = None,
 ) -> list[BaseMessage]:
     """Build the message list for the LLM."""
-    # Trivial tier uses a minimal prompt (no tool docs, no formatting rules)
-    if model_tier == "trivial":
+    if system_prompt:
+        # Custom system prompt (e.g. Theo) — append retrieved context
+        system_text = system_prompt + "\n\n" + retrieved_context if retrieved_context else system_prompt
+    elif model_tier == "trivial":
         system_text = LYRA_TRIVIAL_PROMPT
     else:
         # Empire context goes AFTER retrieved context so it takes precedence over noisy results
@@ -463,6 +521,9 @@ async def run_agent_stream(
     context_id: str | None = None,
     context_year: int | None = None,
     ctx: RequestContext | None = None,
+    system_prompt: str | None = None,
+    num_ctx: int | None = None,
+    max_tokens: int | None = None,
 ) -> AsyncIterator[dict]:
     """
     Run the Lyra agent and stream results.
@@ -484,7 +545,7 @@ async def run_agent_stream(
     set_request_context(ctx)
 
     # Get the unified backend
-    backend_impl = get_backend(ctx.model_name, ctx.backend_type)
+    backend_impl = get_backend(ctx.model_name, ctx.backend_type, num_ctx=num_ctx, max_tokens=max_tokens)
 
     # Auto-retrieve: run hybrid search BEFORE the LLM sees the message
     # Skip for image-only queries (no meaningful text to search)
@@ -741,6 +802,7 @@ async def run_agent_stream(
         context_year,
         retrieved_context,
         model_tier=ctx.model_tier,
+        system_prompt=system_prompt,
     )
     yield {
         "type": "pipeline",
@@ -783,12 +845,15 @@ async def run_agent_stream(
         collected_content = ""
         tool_calls: list[dict[str, str | int | None]] = []
 
-        async for ev in backend_impl.stream(
+        async for ev in _stream_with_heartbeat(
+            backend_impl,
             messages,
             TOOLS if ctx.supports_tools else [],
             enable_thinking=ctx.supports_thinking,
         ):
-            if ev["type"] == "reasoning":
+            if ev["type"] == "heartbeat":
+                yield {"type": "status", "content": f"Processing input ({ev['elapsed_s']}s)..."}
+            elif ev["type"] == "reasoning":
                 yield {"type": "thinking", "content": ev["text"]}
             elif ev["type"] == "content":
                 collected_content += ev["text"]

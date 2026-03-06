@@ -42,8 +42,8 @@
 }
 
 .theo-avatar {
-  width: 56px;
-  height: 56px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
   border: 2px solid var(--theo-amber);
   box-shadow: 0 0 16px var(--theo-amber-glow-30);
@@ -52,8 +52,8 @@
 }
 
 .theo-avatar-placeholder {
-  width: 56px;
-  height: 56px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
   border: 2px solid var(--theo-amber);
   box-shadow: 0 0 16px var(--theo-amber-glow-30);
@@ -61,13 +61,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
+  font-size: 36px;
   line-height: 1;
 }
 
 .theo-title {
   font-family: var(--font-heading);
-  font-size: 14px;
+  font-size: 22px;
   letter-spacing: 3px;
   text-transform: uppercase;
   color: var(--theo-amber);
@@ -75,7 +75,7 @@
 }
 
 .theo-subtitle {
-  font-size: 11px;
+  font-size: 14px;
   color: var(--text-muted);
   letter-spacing: 1px;
   margin-top: 2px;
@@ -84,7 +84,7 @@
 .theo-quote {
   font-family: 'Cormorant Garamond', Georgia, serif;
   font-style: italic;
-  font-size: 15px;
+  font-size: 18px;
   color: var(--theo-amber-bright);
   opacity: 0.7;
   margin: 14px 0 0;
@@ -117,8 +117,8 @@
   outline: none;
   color: var(--text-primary);
   font-family: var(--font-body);
-  font-size: 13px;
-  padding: 14px 16px;
+  font-size: 16px;
+  padding: 16px 18px;
   resize: vertical;
   min-height: 56px;
   max-height: 180px;
@@ -138,7 +138,7 @@
 }
 
 .theo-effort-label {
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 1.5px;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -146,13 +146,13 @@
 }
 
 .theo-effort-btn {
-  padding: 5px 14px;
+  padding: 7px 16px;
   border-radius: 4px;
   border: 1px solid var(--border-default);
   background: var(--surface-raised);
   color: var(--text-secondary);
   font-family: var(--font-body);
-  font-size: 11px;
+  font-size: 14px;
   cursor: pointer;
   transition: all 0.15s;
   white-space: nowrap;
@@ -171,7 +171,7 @@
 }
 
 .theo-effort-time {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text-dimmed);
   margin-left: auto;
 }
@@ -184,13 +184,13 @@
 }
 
 .theo-submit-btn {
-  padding: 8px 24px;
+  padding: 10px 28px;
   border: 1px solid var(--theo-amber);
   border-radius: 4px;
   background: var(--theo-amber-glow-15);
   color: var(--theo-amber-bright);
   font-family: var(--font-heading);
-  font-size: 11px;
+  font-size: 13px;
   letter-spacing: 2px;
   text-transform: uppercase;
   cursor: pointer;
@@ -216,7 +216,7 @@
 
 .theo-list-header {
   font-family: var(--font-heading);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 2px;
   text-transform: uppercase;
   color: var(--text-dimmed);
@@ -228,7 +228,7 @@
   border: 1px solid var(--border-default);
   border-radius: 6px;
   background: var(--surface-raised);
-  padding: 14px 16px;
+  padding: 16px 18px;
   margin-bottom: 10px;
   transition: border-color 0.2s;
 }
@@ -245,7 +245,7 @@
 }
 
 .theo-card-question {
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text-primary);
   flex: 1;
   min-width: 200px;
@@ -256,9 +256,9 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: 3px;
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.5px;
   font-family: var(--font-body);
   white-space: nowrap;
@@ -305,7 +305,7 @@
   align-items: center;
   gap: 12px;
   margin-top: 8px;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text-dimmed);
 }
 
@@ -322,13 +322,13 @@
 }
 
 .theo-btn-view {
-  padding: 5px 14px;
+  padding: 7px 16px;
   border: 1px solid var(--theo-amber);
   border-radius: 3px;
   background: var(--theo-amber-glow-10);
   color: var(--theo-amber-bright);
   font-family: var(--font-body);
-  font-size: 11px;
+  font-size: 13px;
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -338,13 +338,13 @@
 }
 
 .theo-btn-cancel {
-  padding: 5px 14px;
+  padding: 7px 16px;
   border: 1px solid rgba(255, 68, 68, 0.2);
   border-radius: 3px;
   background: transparent;
   color: var(--status-error-soft);
   font-family: var(--font-body);
-  font-size: 11px;
+  font-size: 13px;
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -354,13 +354,13 @@
 }
 
 .theo-btn-retry {
-  padding: 5px 14px;
+  padding: 7px 16px;
   border: 1px solid var(--theo-border);
   border-radius: 3px;
   background: transparent;
   color: var(--theo-amber);
   font-family: var(--font-body);
-  font-size: 11px;
+  font-size: 13px;
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -372,7 +372,7 @@
 .theo-empty {
   text-align: center;
   color: var(--text-dimmed);
-  font-size: 12px;
+  font-size: 14px;
   padding: 40px 20px;
   border: 1px dashed var(--border-default);
   border-radius: 6px;
@@ -424,7 +424,7 @@
 }
 
 .theo-report-question {
-  font-size: 15px;
+  font-size: 18px;
   color: var(--text-primary);
   font-weight: 500;
   line-height: 1.4;
@@ -442,8 +442,8 @@
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 4px;
-  font-size: 18px;
+  padding: 8px;
+  font-size: 22px;
   line-height: 1;
   transition: color 0.15s;
   flex-shrink: 0;
@@ -453,64 +453,69 @@
   color: var(--text-primary);
 }
 
-.theo-report-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px;
-  font-size: 13px;
+/* — Shared Markdown Body (used by report + live overlay) — */
+.theo-md-body {
+  font-size: 16px;
   line-height: 1.7;
   color: var(--text-body);
 }
 
-.theo-report-body h1,
-.theo-report-body h2,
-.theo-report-body h3 {
+.theo-md-body h1,
+.theo-md-body h2,
+.theo-md-body h3 {
   color: var(--theo-amber-bright);
   font-family: var(--font-heading);
   letter-spacing: 1px;
   margin: 20px 0 8px;
 }
 
-.theo-report-body h1 { font-size: 15px; }
-.theo-report-body h2 { font-size: 13px; }
-.theo-report-body h3 { font-size: 12px; }
-.theo-report-body h1:first-child,
-.theo-report-body h2:first-child { margin-top: 0; }
+.theo-md-body h1 { font-size: 22px; }
+.theo-md-body h2 { font-size: 18px; }
+.theo-md-body h3 { font-size: 16px; }
+.theo-md-body h1:first-child,
+.theo-md-body h2:first-child { margin-top: 0; }
 
-.theo-report-body p { margin: 8px 0; }
+.theo-md-body p { margin: 8px 0; }
 
-.theo-report-body ul, .theo-report-body ol {
+.theo-md-body ul, .theo-md-body ol {
   padding-left: 20px;
   margin: 8px 0;
 }
 
-.theo-report-body li { margin: 4px 0; }
+.theo-md-body li { margin: 4px 0; }
 
-.theo-report-body a {
+.theo-md-body a {
   color: var(--text-link);
   text-decoration: none;
 }
 
-.theo-report-body a:hover {
+.theo-md-body a:hover {
   text-decoration: underline;
 }
 
-.theo-report-body strong {
+.theo-md-body strong {
   color: var(--text-primary);
 }
 
-.theo-report-body code {
+.theo-md-body code {
   background: var(--surface-raised);
   padding: 1px 5px;
   border-radius: 3px;
-  font-size: 12px;
+  font-size: 14px;
 }
 
-.theo-report-body blockquote {
+.theo-md-body blockquote {
   border-left: 3px solid var(--theo-amber-dim);
   padding-left: 14px;
   color: var(--text-muted);
   margin: 12px 0;
+}
+
+/* — Report Body container — */
+.theo-report-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
 }
 
 /* — Pipeline Trace (collapsible) — */
@@ -520,7 +525,7 @@
   gap: 6px;
   padding: 10px 20px;
   border-top: 1px solid var(--border-default);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 1px;
   text-transform: uppercase;
   color: var(--text-dimmed);
@@ -542,7 +547,7 @@
 
 .theo-trace-body {
   padding: 0 20px 14px;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text-dimmed);
   max-height: 200px;
   overflow-y: auto;
@@ -564,19 +569,12 @@
 }
 
 /* — Live Research Progress — */
-.theo-live {
-  margin-top: 12px;
-  border-top: 1px solid var(--border-default);
-  padding-top: 12px;
-}
-
 .theo-live-counters {
   display: flex;
   align-items: center;
   gap: 14px;
-  font-size: 10px;
+  font-size: 13px;
   color: var(--text-muted);
-  margin-bottom: 10px;
 }
 
 .theo-live-counter {
@@ -598,14 +596,13 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px 8px;
-  margin-bottom: 10px;
 }
 
 .theo-live-stage {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 10px;
+  font-size: 12px;
   padding: 2px 6px;
   border-radius: 3px;
   background: var(--surface-raised);
@@ -614,7 +611,7 @@
 }
 
 .theo-live-stage-icon {
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1;
 }
 
@@ -626,7 +623,7 @@
 
 .theo-live-stage-dur {
   color: var(--text-dimmed);
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .theo-live-st-active {
@@ -653,59 +650,129 @@
 }
 
 .theo-live-status {
-  font-size: 11px;
+  font-size: 14px;
   color: var(--text-muted);
   font-style: italic;
-  margin-bottom: 8px;
 }
 
 .theo-live-thinking {
-  margin-bottom: 10px;
   border: 1px solid var(--theo-border);
   border-radius: 4px;
   overflow: hidden;
 }
 
 .theo-live-thinking-label {
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 1px;
   text-transform: uppercase;
   color: var(--theo-amber-dim);
   padding: 4px 10px;
   background: var(--theo-amber-glow-10);
   border-bottom: 1px solid var(--theo-border);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .theo-live-thinking-text {
-  font-size: 11px;
+  font-size: 14px;
   color: var(--text-muted);
   padding: 8px 10px;
-  max-height: 150px;
+  max-height: 200px;
   overflow-y: auto;
   white-space: pre-wrap;
   line-height: 1.5;
 }
 
-.theo-live-report {
-  font-size: 12px;
-  color: var(--text-body);
-  line-height: 1.6;
-  max-height: 300px;
+/* — Live Overlay Header — */
+.theo-live-header {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border-default);
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.theo-live-header-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.theo-live-question {
+  font-size: 18px;
+  color: var(--text-primary);
+  font-weight: 500;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.theo-live-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 8px;
+  font-size: 22px;
+  line-height: 1;
+  transition: color 0.15s;
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.theo-live-close:hover {
+  color: var(--text-primary);
+}
+
+/* — Live Overlay Body — */
+.theo-live-body {
+  flex: 1;
   overflow-y: auto;
-  white-space: pre-wrap;
-  padding: 10px;
-  background: var(--surface-raised);
-  border-radius: 4px;
-  border: 1px solid var(--border-default);
+  padding: 20px;
+}
+
+/* — Live Overlay Footer — */
+.theo-live-footer {
+  border-top: 1px solid var(--border-default);
+  flex-shrink: 0;
+  max-height: 40%;
+  overflow-y: auto;
 }
 
 /* — Responsive — */
 @media (max-width: 600px) {
   .theo-hero { padding: 20px 16px 0; }
+  .theo-hero .theo-avatar-placeholder { width: 56px; height: 56px; font-size: 28px; }
+  .theo-hero .theo-title { font-size: 18px; }
   .theo-form { padding: 0 16px; }
   .theo-list { padding: 0 16px; }
-  .theo-overlay { padding: 10px; }
-  .theo-overlay-inner { max-height: 95vh; border-radius: 6px; }
   .theo-effort-row { gap: 6px; }
   .theo-card-top { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .theo-submit-btn { width: 100%; }
+
+  .theo-overlay { padding: 0; }
+  .theo-overlay-inner {
+    height: 100vh;
+    height: 100dvh;
+    max-height: none;
+    border-radius: 0;
+    border: none;
+  }
+
+  .theo-report-close,
+  .theo-live-close {
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
 }
