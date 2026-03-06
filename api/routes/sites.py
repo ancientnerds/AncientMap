@@ -1526,90 +1526,93 @@ async def batch_upload_sites(
     citations_written = 0
     reflinks_written = 0
     reflinks_errors = 0
+
+    # Batch citations: collect all params, execute once
+    citation_params = []
     for site in sites:
-        site_id = site.existing_id or next(
+        if not site.description_citations:
+            continue
+        sid = site.existing_id or next(
             (p["id"] for p in insert_params if p["name"] == site.name), None
         )
-        if not site_id:
+        if sid:
+            citation_params.append({
+                "site_id": sid,
+                "citations": json.dumps(site.description_citations),
+            })
+    if citation_params:
+        db.execute(
+            text("""
+                UPDATE unified_sites
+                SET raw_data = COALESCE(raw_data, '{}'::jsonb)
+                    || jsonb_build_object(
+                        'description_citations', CAST(:citations AS jsonb)
+                    )
+                WHERE id::text = :site_id
+            """),
+            citation_params,
+        )
+        citations_written = len(citation_params)
+
+    # Batch ref links: collect all params, execute once
+    reflink_params = []
+    for site in sites:
+        if not site.reference_links:
             continue
-
-        # description_citations → raw_data->description_citations
-        if site.description_citations:
-            db.execute(
-                text("""
-                    UPDATE unified_sites
-                    SET raw_data = COALESCE(raw_data, '{}'::jsonb)
-                        || jsonb_build_object(
-                            'description_citations', CAST(:citations AS jsonb)
-                        )
-                    WHERE id::text = :site_id
-                """),
-                {
-                    "site_id": site_id,
-                    "citations": json.dumps(site.description_citations),
-                },
-            )
-            citations_written += 1
-
-        # reference_links → site_content_links
-        if site.reference_links:
-            for idx, link in enumerate(site.reference_links[:5]):
-                url = link.get("url", "")
-                domain = link.get("domain", "")
-                if not url:
-                    continue
-                quality = link.get("quality", "medium")
-                base_score = 0.9 if quality == "high" else 0.7
-                relevance = round(base_score - (idx * 0.05), 2)
-                url_hash = hashlib.md5(
-                    url.encode(),
-                    usedforsecurity=False,
-                ).hexdigest()[:8]
-                content_id = f"{domain}:{url_hash}"
-                meta = {
+        sid = site.existing_id or next(
+            (p["id"] for p in insert_params if p["name"] == site.name), None
+        )
+        if not sid:
+            continue
+        for idx, link in enumerate(site.reference_links[:5]):
+            url = link.get("url", "")
+            domain = link.get("domain", "")
+            if not url:
+                continue
+            quality = link.get("quality", "medium")
+            base_score = 0.9 if quality == "high" else 0.7
+            relevance = round(base_score - (idx * 0.05), 2)
+            url_hash = hashlib.md5(
+                url.encode(),
+                usedforsecurity=False,
+            ).hexdigest()[:8]
+            reflink_params.append({
+                "sid": sid,
+                "cid": f"{domain}:{url_hash}",
+                "title": (link.get("title") or "")[:500],
+                "url": url,
+                "score": relevance,
+                "meta": json.dumps({
                     "domain": domain,
                     "link_type": link.get("link_type", "article"),
-                }
-                try:
-                    nested = db.begin_nested()
-                    db.execute(
-                        text("""
-                            INSERT INTO site_content_links
-                                (site_id, content_type, content_source,
-                                 content_id, title, content_url,
-                                 relevance_score, link_metadata)
-                            VALUES
-                                (CAST(:sid AS uuid), 'reference',
-                                 'web_discovery', :cid, :title,
-                                 :url, :score,
-                                 CAST(:meta AS jsonb))
-                            ON CONFLICT (site_id, content_source, content_id)
-                            DO UPDATE SET
-                                title = EXCLUDED.title,
-                                content_url = EXCLUDED.content_url,
-                                relevance_score = EXCLUDED.relevance_score,
-                                link_metadata = EXCLUDED.link_metadata
-                        """),
-                        {
-                            "sid": site_id,
-                            "cid": content_id,
-                            "title": (link.get("title") or "")[:500],
-                            "url": url,
-                            "score": relevance,
-                            "meta": json.dumps(meta),
-                        },
-                    )
-                    nested.commit()
-                except Exception as e:
-                    nested.rollback()
-                    logger.warning(
-                        "Ref link insert failed for %s: %s",
-                        site.name,
-                        e,
-                    )
-                    reflinks_errors += 1
-                    break
-            reflinks_written += 1
+                }),
+            })
+        reflinks_written += 1
+    if reflink_params:
+        try:
+            db.execute(
+                text("""
+                    INSERT INTO site_content_links
+                        (site_id, content_type, content_source,
+                         content_id, title, content_url,
+                         relevance_score, link_metadata)
+                    VALUES
+                        (CAST(:sid AS uuid), 'reference',
+                         'web_discovery', :cid, :title,
+                         :url, :score,
+                         CAST(:meta AS jsonb))
+                    ON CONFLICT (site_id, content_source, content_id)
+                    DO UPDATE SET
+                        title = EXCLUDED.title,
+                        content_url = EXCLUDED.content_url,
+                        relevance_score = EXCLUDED.relevance_score,
+                        link_metadata = EXCLUDED.link_metadata
+                """),
+                reflink_params,
+            )
+        except Exception as e:
+            logger.warning("Batch ref link insert failed: %s", e)
+            reflinks_errors = len(reflink_params)
 
     inserted = len(insert_params)
     updated = len(update_params)
@@ -1871,74 +1874,88 @@ async def replace_source(
                 card_params,
             )
 
-        # Write enrichment data (citations + ref links)
+        # Write enrichment data (citations + ref links) — batched
         citations_written = 0
         reflinks_written = 0
+
+        # Batch citations
+        citation_params = []
         for site in sites:
+            if not site.description_citations:
+                continue
+            enrich_id = site.existing_id or next(
+                (p["id"] for p in insert_params if p["name"] == site.name),
+                None,
+            )
+            if enrich_id:
+                citation_params.append({
+                    "site_id": enrich_id,
+                    "citations": json.dumps(site.description_citations),
+                })
+        if citation_params:
+            db.execute(
+                text("""
+                    UPDATE unified_sites
+                    SET raw_data = COALESCE(raw_data, '{}'::jsonb)
+                        || jsonb_build_object(
+                            'description_citations', CAST(:citations AS jsonb)
+                        )
+                    WHERE id::text = :site_id
+                """),
+                citation_params,
+            )
+            citations_written = len(citation_params)
+
+        # Batch ref links
+        reflink_params = []
+        for site in sites:
+            if not site.reference_links:
+                continue
             enrich_id = site.existing_id or next(
                 (p["id"] for p in insert_params if p["name"] == site.name),
                 None,
             )
             if not enrich_id:
                 continue
-
-            if site.description_citations:
-                db.execute(
-                    text("""
-                        UPDATE unified_sites
-                        SET raw_data = COALESCE(raw_data, '{}'::jsonb)
-                            || jsonb_build_object(
-                                'description_citations', CAST(:cit AS jsonb)
-                            )
-                        WHERE id::text = :sid
-                    """),
-                    {
-                        "sid": enrich_id,
-                        "cit": json.dumps(site.description_citations),
-                    },
-                )
-                citations_written += 1
-
-            if site.reference_links:
-                for idx, link in enumerate(site.reference_links[:5]):
-                    url = link.get("url", "")
-                    domain = link.get("domain", "")
-                    if not url:
-                        continue
-                    url_hash = hashlib.md5(
-                        url.encode(),
-                        usedforsecurity=False,
-                    ).hexdigest()[:8]
-                    quality = link.get("quality", "medium")
-                    base_score = 0.9 if quality == "high" else 0.7
-                    relevance = round(base_score - (idx * 0.05), 2)
-                    db.execute(
-                        text("""
-                            INSERT INTO site_content_links
-                                (site_id, content_type, content_source,
-                                 content_id, title, content_url,
-                                 relevance_score, link_metadata)
-                            VALUES
-                                (CAST(:sid AS uuid), 'reference',
-                                 'web_discovery', :cid, :title,
-                                 :url, :score,
-                                 CAST(:meta AS jsonb))
-                        """),
-                        {
-                            "sid": enrich_id,
-                            "cid": f"{domain}:{url_hash}",
-                            "title": (link.get("title") or "")[:500],
-                            "url": url,
-                            "score": relevance,
-                            "meta": json.dumps(
-                                {
-                                    "domain": domain,
-                                    "link_type": link.get("link_type", "article"),
-                                }
-                            ),
-                        },
-                    )
-                reflinks_written += 1
+            for idx, link in enumerate(site.reference_links[:5]):
+                url = link.get("url", "")
+                domain = link.get("domain", "")
+                if not url:
+                    continue
+                url_hash = hashlib.md5(
+                    url.encode(),
+                    usedforsecurity=False,
+                ).hexdigest()[:8]
+                quality = link.get("quality", "medium")
+                base_score = 0.9 if quality == "high" else 0.7
+                relevance = round(base_score - (idx * 0.05), 2)
+                reflink_params.append({
+                    "sid": enrich_id,
+                    "cid": f"{domain}:{url_hash}",
+                    "title": (link.get("title") or "")[:500],
+                    "url": url,
+                    "score": relevance,
+                    "meta": json.dumps({
+                        "domain": domain,
+                        "link_type": link.get("link_type", "article"),
+                    }),
+                })
+            reflinks_written += 1
+        if reflink_params:
+            db.execute(
+                text("""
+                    INSERT INTO site_content_links
+                        (site_id, content_type, content_source,
+                         content_id, title, content_url,
+                         relevance_score, link_metadata)
+                    VALUES
+                        (CAST(:sid AS uuid), 'reference',
+                         'web_discovery', :cid, :title,
+                         :url, :score,
+                         CAST(:meta AS jsonb))
+                """),
+                reflink_params,
+            )
 
         db.commit()
     except HTTPException:
