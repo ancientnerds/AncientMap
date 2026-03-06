@@ -7,7 +7,6 @@ Lyra uses MiniMax cloud exclusively. Theo uses local Ollama (configured separate
 from contextvars import ContextVar
 from dataclasses import dataclass
 
-
 # ---------------------------------------------------------------------------
 # Per-request context
 # ---------------------------------------------------------------------------

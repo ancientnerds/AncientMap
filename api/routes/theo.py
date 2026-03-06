@@ -55,7 +55,7 @@ def _validate_uuid(request_id: str) -> None:
     try:
         uuid.UUID(request_id)
     except ValueError:
-        raise HTTPException(status_code=404, detail="Research request not found")
+        raise HTTPException(status_code=404, detail="Research request not found") from None
 
 
 def _get_user_id(req: Request) -> str:
