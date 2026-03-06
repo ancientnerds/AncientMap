@@ -11,6 +11,7 @@ import PageHeader from '../components/layout/PageHeader'
 import '../styles/theo.css'
 
 const TheoReportOverlay = lazy(() => import('../components/theo/TheoReportOverlay'))
+const TheoResearchLive = lazy(() => import('../components/theo/TheoResearchLive'))
 
 const EFFORTS = [
   { key: 'quick', label: 'Quick', time: '~2-5 min' },
@@ -260,10 +261,9 @@ export default function TheoPage() {
                 </span>
               </div>
               {item.status === 'running' && (
-                <div className="theo-card-meta">
-                  {item.sites_found > 0 && <span>{item.sites_found} sites</span>}
-                  {item.tools_used > 0 && <span>{item.tools_used} tools</span>}
-                </div>
+                <Suspense fallback={<div className="theo-live-status">Connecting...</div>}>
+                  <TheoResearchLive requestId={item.id} />
+                </Suspense>
               )}
               {item.status === 'queued' && (
                 <div className="theo-card-actions">

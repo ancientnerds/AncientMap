@@ -563,6 +563,142 @@
   color: var(--text-muted);
 }
 
+/* — Live Research Progress — */
+.theo-live {
+  margin-top: 12px;
+  border-top: 1px solid var(--border-default);
+  padding-top: 12px;
+}
+
+.theo-live-counters {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.theo-live-counter {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.theo-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--theo-amber-bright);
+  animation: theo-pulse 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.theo-live-pipeline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-bottom: 10px;
+}
+
+.theo-live-stage {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  white-space: nowrap;
+}
+
+.theo-live-stage-icon {
+  font-size: 9px;
+  line-height: 1;
+}
+
+.theo-live-stage-name {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.theo-live-stage-dur {
+  color: var(--text-dimmed);
+  font-size: 9px;
+}
+
+.theo-live-st-active {
+  border-color: var(--theo-amber);
+  color: var(--theo-amber-bright);
+}
+
+.theo-live-st-active .theo-live-stage-icon {
+  animation: theo-pulse 1.5s ease-in-out infinite;
+}
+
+.theo-live-st-done {
+  color: var(--accent-primary);
+  border-color: rgba(0, 204, 102, 0.15);
+}
+
+.theo-live-st-error {
+  color: var(--status-error-soft);
+  border-color: rgba(255, 68, 68, 0.15);
+}
+
+.theo-live-st-idle {
+  color: var(--text-dimmed);
+}
+
+.theo-live-status {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-bottom: 8px;
+}
+
+.theo-live-thinking {
+  margin-bottom: 10px;
+  border: 1px solid var(--theo-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.theo-live-thinking-label {
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--theo-amber-dim);
+  padding: 4px 10px;
+  background: var(--theo-amber-glow-10);
+  border-bottom: 1px solid var(--theo-border);
+}
+
+.theo-live-thinking-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 8px 10px;
+  max-height: 150px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.theo-live-report {
+  font-size: 12px;
+  color: var(--text-body);
+  line-height: 1.6;
+  max-height: 300px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  padding: 10px;
+  background: var(--surface-raised);
+  border-radius: 4px;
+  border: 1px solid var(--border-default);
+}
+
 /* — Responsive — */
 @media (max-width: 600px) {
   .theo-hero { padding: 20px 16px 0; }
