@@ -1536,10 +1536,12 @@ async def batch_upload_sites(
             (p["id"] for p in insert_params if p["name"] == site.name), None
         )
         if sid:
-            citation_params.append({
-                "site_id": sid,
-                "citations": json.dumps(site.description_citations),
-            })
+            citation_params.append(
+                {
+                    "site_id": sid,
+                    "citations": json.dumps(site.description_citations),
+                }
+            )
     if citation_params:
         db.execute(
             text("""
@@ -1576,17 +1578,21 @@ async def batch_upload_sites(
                 url.encode(),
                 usedforsecurity=False,
             ).hexdigest()[:8]
-            reflink_params.append({
-                "sid": sid,
-                "cid": f"{domain}:{url_hash}",
-                "title": (link.get("title") or "")[:500],
-                "url": url,
-                "score": relevance,
-                "meta": json.dumps({
-                    "domain": domain,
-                    "link_type": link.get("link_type", "article"),
-                }),
-            })
+            reflink_params.append(
+                {
+                    "sid": sid,
+                    "cid": f"{domain}:{url_hash}",
+                    "title": (link.get("title") or "")[:500],
+                    "url": url,
+                    "score": relevance,
+                    "meta": json.dumps(
+                        {
+                            "domain": domain,
+                            "link_type": link.get("link_type", "article"),
+                        }
+                    ),
+                }
+            )
         reflinks_written += 1
     if reflink_params:
         try:
@@ -1888,10 +1894,12 @@ async def replace_source(
                 None,
             )
             if enrich_id:
-                citation_params.append({
-                    "site_id": enrich_id,
-                    "citations": json.dumps(site.description_citations),
-                })
+                citation_params.append(
+                    {
+                        "site_id": enrich_id,
+                        "citations": json.dumps(site.description_citations),
+                    }
+                )
         if citation_params:
             db.execute(
                 text("""
@@ -1929,17 +1937,21 @@ async def replace_source(
                 quality = link.get("quality", "medium")
                 base_score = 0.9 if quality == "high" else 0.7
                 relevance = round(base_score - (idx * 0.05), 2)
-                reflink_params.append({
-                    "sid": enrich_id,
-                    "cid": f"{domain}:{url_hash}",
-                    "title": (link.get("title") or "")[:500],
-                    "url": url,
-                    "score": relevance,
-                    "meta": json.dumps({
-                        "domain": domain,
-                        "link_type": link.get("link_type", "article"),
-                    }),
-                })
+                reflink_params.append(
+                    {
+                        "sid": enrich_id,
+                        "cid": f"{domain}:{url_hash}",
+                        "title": (link.get("title") or "")[:500],
+                        "url": url,
+                        "score": relevance,
+                        "meta": json.dumps(
+                            {
+                                "domain": domain,
+                                "link_type": link.get("link_type", "article"),
+                            }
+                        ),
+                    }
+                )
             reflinks_written += 1
         if reflink_params:
             db.execute(

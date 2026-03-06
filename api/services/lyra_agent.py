@@ -461,7 +461,9 @@ def _build_messages(
     """Build the message list for the LLM."""
     if system_prompt:
         # Custom system prompt (e.g. Theo) — append retrieved context
-        system_text = system_prompt + "\n\n" + retrieved_context if retrieved_context else system_prompt
+        system_text = (
+            system_prompt + "\n\n" + retrieved_context if retrieved_context else system_prompt
+        )
     elif model_tier == "trivial":
         system_text = LYRA_TRIVIAL_PROMPT
     else:
@@ -545,7 +547,9 @@ async def run_agent_stream(
     set_request_context(ctx)
 
     # Get the unified backend
-    backend_impl = get_backend(ctx.model_name, ctx.backend_type, num_ctx=num_ctx, max_tokens=max_tokens)
+    backend_impl = get_backend(
+        ctx.model_name, ctx.backend_type, num_ctx=num_ctx, max_tokens=max_tokens
+    )
 
     # Auto-retrieve: run hybrid search BEFORE the LLM sees the message
     # Skip for image-only queries (no meaningful text to search)
