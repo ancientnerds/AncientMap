@@ -1728,28 +1728,54 @@ async def replace_source(
     # If anything in this phase fails, the entire thing rolls back
     # and the snapshot from phase 1 remains for manual recovery.
     try:
+        # Extend timeout — bulk delete with FK checks is slow
+        db.execute(text("SET LOCAL statement_timeout = '300s'"))
+
         if existing_ids:
-            # Delete related data first (FK constraints)
+            src_filter = "SELECT id FROM unified_sites WHERE source_id = :src"
+            # CASCADE tables: delete explicitly to avoid slow cascades
+            for tbl in (
+                "site_content_links",
+                "card_stats",
+                "unified_site_names",
+                "wiki_images",
+            ):
+                db.execute(
+                    text(
+                        f"DELETE FROM {tbl}"  # noqa: S608
+                        f" WHERE site_id IN ({src_filter})"
+                    ),
+                    {"src": target_source},
+                )
+            # SET NULL tables: null out FK references
             db.execute(
                 text(
-                    "DELETE FROM site_content_links"
-                    " WHERE site_id IN ("
-                    "   SELECT id FROM unified_sites"
-                    "   WHERE source_id = :src"
-                    " )"
+                    "UPDATE unified_sites SET parent_site_id = NULL"
+                    f" WHERE parent_site_id IN ({src_filter})"
                 ),
                 {"src": target_source},
             )
+            for tbl in (
+                "news_items",
+                "site_likes",
+                "site_bookmarks",
+            ):
+                db.execute(
+                    text(
+                        f"UPDATE {tbl} SET site_id = NULL"  # noqa: S608
+                        f" WHERE site_id IN ({src_filter})"
+                    ),
+                    {"src": target_source},
+                )
+            # user_contributions uses promoted_site_id, not site_id
             db.execute(
                 text(
-                    "DELETE FROM card_stats"
-                    " WHERE site_id IN ("
-                    "   SELECT id FROM unified_sites"
-                    "   WHERE source_id = :src"
-                    " )"
+                    "UPDATE user_contributions SET promoted_site_id = NULL"
+                    f" WHERE promoted_site_id IN ({src_filter})"
                 ),
                 {"src": target_source},
             )
+            # Now delete the sites themselves — no FK checks needed
             deleted = db.execute(
                 text("DELETE FROM unified_sites WHERE source_id = :src"),
                 {"src": target_source},
