@@ -809,6 +809,8 @@ export default function SitePopup({
             bookCount={galleryHook.bookItems.length}
             paperCount={galleryHook.paperItems.length}
             mythCount={galleryHook.mythItems.length}
+            webcamCount={galleryHook.webcamItems.length}
+            isLoadingWebcams={galleryHook.isLoadingWebcams}
             isLoadingImages={galleryHook.isLoadingImages}
             isLoadingVideos={galleryHook.isLoadingVideos}
             isLoadingMaps={galleryHook.isLoadingMaps}

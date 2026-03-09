@@ -4,6 +4,7 @@ import type { GalleryTab, UnifiedGalleryItem } from '../types'
 import { contentService, type ContentTier } from '../../../services/connectors'
 import { fetchSiteImages } from '../../../services/imageService'
 import { useTieredFetch } from './useTieredFetch'
+import { useWebcamData } from './useWebcamData'
 import { dedupePhotos, selectCurrentItems } from './galleryUtils'
 import type { GalleryHookReturn, SketchfabModelCompat } from './galleryTypes'
 
@@ -71,6 +72,8 @@ export function useGalleryData({
 
   const tiered = useTieredFetch(fetchFn, `${title}-${lat}-${lng}-${sketchfabCategoryFilter}`, !isOffline)
 
+  const { webcamItems, isLoadingWebcams } = useWebcamData({ lat, lng, isOffline })
+
   // Merge Wikipedia images with backend photos (deduped)
   const wikiItems: UnifiedGalleryItem[] = useMemo(() =>
     wikiImages.map((img, i) => ({
@@ -98,7 +101,7 @@ export function useGalleryData({
   const paperItems = tiered.grouped.papers
   const mythItems = tiered.grouped.myths
 
-  const allItems = { ...tiered.grouped, photos: photoItems }
+  const allItems = { ...tiered.grouped, photos: photoItems, webcams: webcamItems }
   const currentItems = selectCurrentItems(activeGalleryTab, allItems)
 
   // Legacy compat: ModelViewer needs this shape
@@ -122,7 +125,7 @@ export function useGalleryData({
     activeGalleryTab, setActiveGalleryTab,
     isGalleryExpanded, setIsGalleryExpanded,
     sketchfabCategoryFilter, setSketchfabCategoryFilter,
-    photoItems, videoItems, mapItems, sketchfabItems, artifactItems, artworkItems, bookItems, paperItems, mythItems,
+    photoItems, videoItems, mapItems, sketchfabItems, artifactItems, artworkItems, bookItems, paperItems, mythItems, webcamItems,
     currentItems,
     isLoadingImages: isLoadingWikiImages || tiered.tier1Loading,
     isLoadingVideos: tiered.tier2Loading,
@@ -131,6 +134,7 @@ export function useGalleryData({
     isLoadingArtifacts: tiered.tier4Loading,
     isLoadingBooks: tiered.tier4Loading,
     isLoadingPapers: tiered.tier4Loading,
+    isLoadingWebcams,
     isLoading: tiered.isLoading,
     heroImage: heroImage ? {
       thumb: heroImage.thumb,
