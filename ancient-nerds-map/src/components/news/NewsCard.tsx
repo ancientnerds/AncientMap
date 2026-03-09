@@ -184,7 +184,7 @@ function NewsCard({
                   <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
                   <circle cx="12" cy="10" r="3" />
                 </svg>
-                {loading ? 'Loading...' : (displaySiteName || 'Show on Map')}
+                <span className="site-name-text">{loading ? 'Loading...' : (displaySiteName || 'Show on Map')}</span>
               </button>
             ) : (
               <span className="lyra-news-site-name">
@@ -192,7 +192,7 @@ function NewsCard({
                   <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
                   <circle cx="12" cy="10" r="3" />
                 </svg>
-                {displaySiteName}
+                <span className="site-name-text">{displaySiteName}</span>
               </span>
             )}
           </div>
@@ -206,7 +206,7 @@ function NewsCard({
             <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
             <circle cx="12" cy="10" r="3" />
           </svg>
-          <span className="news-feed-site-unmatched-name">{siteNameExtracted}</span>
+          <span className="news-feed-site-unmatched-name site-name-text">{siteNameExtracted}</span>
         </div>
       )}
 
