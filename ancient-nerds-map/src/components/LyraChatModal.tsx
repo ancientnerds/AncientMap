@@ -934,7 +934,7 @@ export default function LyraChatModal({
       setLyraStatus(null)
       setTimeout(() => inputRef.current?.focus(), 50)
     }
-  }, [input, authToken, userCredits, isUnlimited, messages, contextType, contextId, contextYear, onHighlightSites, clearAuth, conversationId])
+  }, [input, isStreaming, authToken, userCredits, isUnlimited, messages, contextType, contextId, contextYear, onHighlightSites, clearAuth, conversationId])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
