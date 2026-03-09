@@ -39,6 +39,7 @@ export function selectCurrentItems(
     case 'books': return items.books
     case 'papers': return items.papers
     case 'myths': return items.myths
+    case 'webcams': return items.webcams
     default: return []
   }
 }
