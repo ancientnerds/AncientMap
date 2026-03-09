@@ -1,4 +1,5 @@
 import { GalleryGrid } from './GalleryGrid'
+import { WebcamGallery } from './WebcamGallery'
 import { SourceFavicon } from './galleryUtils'
 import LazyImage from '../../LazyImage'
 import type { GalleryContentProps } from '../types'
@@ -26,6 +27,11 @@ export function GalleryContent({
   sketchfabCategoryFilter,
   onSketchfabCategoryFilterChange,
 }: GalleryContentProps) {
+
+  // Webcams tab - custom rendering with WebcamGallery
+  if (activeTab === 'webcams') {
+    return <WebcamGallery items={items} isLoading={isLoading} isOffline={isOffline} />
+  }
 
   // Videos tab - grid with play overlay on each thumbnail
   if (activeTab === 'videos') {

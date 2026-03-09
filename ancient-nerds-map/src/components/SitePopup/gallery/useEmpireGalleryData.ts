@@ -149,6 +149,8 @@ export function useEmpireGalleryData({
     sketchfabCategoryFilter: false,
     setSketchfabCategoryFilter: () => {},
     photoItems, videoItems, mapItems, sketchfabItems, artifactItems, artworkItems, bookItems, paperItems, mythItems,
+    webcamItems: [],
+
     currentItems,
     isLoadingImages: wikiLoading || tiered.tier1Loading,
     isLoadingVideos: tiered.tier1Loading,
@@ -157,6 +159,7 @@ export function useEmpireGalleryData({
     isLoadingArtifacts: tiered.tier3Loading,
     isLoadingBooks: tiered.tier4Loading,
     isLoadingPapers: tiered.tier4Loading,
+    isLoadingWebcams: false,
     isLoading,
     heroImage, heroImageSrc,
     sketchfabModels,
