@@ -12,6 +12,9 @@ When the name looks like nonsense English words but the facts describe a real si
 
 IMPORTANT: If you can figure out which real site the garbled name refers to, set is_site to TRUE and site_name to the correct name. Do NOT return is_site=false just because the extracted name is garbled — the whole point is to decode garbled names.
 
+Example: Input name "Bees Bejisultan Huyek" → correct output:
+{"is_site": true, "site_name": "Beycesultan", "confidence": "high", "reasoning": "Garbled caption of Beycesultan, a Bronze Age site in Turkey"}
+
 Determine whether the extracted name refers to a specific, named archaeological site. If yes, identify it with the correct name.
 
 If NOT a specific archaeological site (e.g. a region like "Egypt", a people like "the Maya", a method like "LIDAR", a person, or a vague reference like "the ruins"), set is_site to false.

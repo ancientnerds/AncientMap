@@ -76,7 +76,7 @@ IDENTIFY_SITE_SCHEMA = {
         "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
         "reasoning": {"type": "string"},
     },
-    "required": ["is_site", "reasoning"],
+    "required": ["is_site", "site_name", "reasoning"],
     "additionalProperties": False,
 }
 
@@ -377,10 +377,22 @@ def _process_single(
 
     # Handle not-a-site
     if not identification.get("is_site", True):
-        contribution.enrichment_status = "not_a_site"
-        _set_enrichment_data(contribution, {"identification": identification})
-        logger.info(f"  [{contribution.name}] Not a site: {identification.get('reasoning', '')}")
-        return True
+        # Guard: if the LLM said not-a-site but still provided a site_name,
+        # it identified the real site but misunderstood the is_site question.
+        # Override to is_site=true and continue processing.
+        if identification.get("site_name"):
+            logger.info(
+                f"  [{contribution.name}] LLM said not-a-site but provided "
+                f"site_name='{identification['site_name']}' — overriding to is_site=true"
+            )
+            identification["is_site"] = True
+        else:
+            contribution.enrichment_status = "not_a_site"
+            _set_enrichment_data(contribution, {"identification": identification})
+            logger.info(
+                f"  [{contribution.name}] Not a site: {identification.get('reasoning', '')}"
+            )
+            return True
 
     corrected_name = identification.get("site_name", "")
     confidence = identification.get("confidence", "unknown")
