@@ -502,12 +502,37 @@ def _process_single(
                 session, alt_name, threshold=settings.pg_trgm_threshold
             )
             if alt_candidates and alt_candidates[0]["similarity"] >= settings.pg_trgm_threshold:
+                best = alt_candidates[0]
+                name_sim = best.get("name_similarity", 1.0)
+                alias_used = best.get("matched_alias", "?")
+                alt_norm = normalize_name(alt_name)
+                is_short = len(alt_norm) < 4
+
+                # Alias mismatch guard (same three-tier logic as primary path)
+                if not is_short and name_sim < 0.3:
+                    logger.info(
+                        f"  [{contribution.name}] Rejecting alt-name alias match: "
+                        f"'{alt_name}' matched alias '{alias_used}' of "
+                        f"'{best['name']}' (name_similarity={name_sim})"
+                    )
+                    continue
+                elif is_short or name_sim < 0.8:
+                    verified = _verify_alias_match(
+                        settings, alt_name, best["name"], alias_used, facts
+                    )
+                    if not verified:
+                        logger.info(
+                            f"  [{contribution.name}] LLM rejected alt-name alias match: "
+                            f"'{alt_name}' ≠ '{best['name']}' "
+                            f"(via '{alias_used}', name_similarity={name_sim})"
+                        )
+                        continue
+
                 logger.info(
                     f"  [{contribution.name}] DB match via alternative name '{alt_name}': "
-                    f"{alt_candidates[0]['name']} (sim={alt_candidates[0]['similarity']})"
+                    f"{best['name']} (sim={best['similarity']}, name_sim={name_sim})"
                 )
                 # Disambiguate if needed
-                best = alt_candidates[0]
                 if (
                     len(alt_candidates) >= 2
                     and alt_candidates[1]["similarity"] >= settings.pg_trgm_threshold
