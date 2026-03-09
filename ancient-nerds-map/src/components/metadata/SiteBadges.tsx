@@ -11,12 +11,7 @@ interface SiteBadgesProps {
   hideExactYear?: boolean
 }
 
-function formatPeriodYear(year: number): string {
-  if (year < 0) return `${Math.abs(year)} BC`
-  return `${year} AD`
-}
-
-export function SiteBadges({ category, period, periodStart, size = 'sm', hideExactYear }: SiteBadgesProps) {
+export function SiteBadges({ category, period, periodStart, size = 'sm' }: SiteBadgesProps) {
   const isGenericType = !category || ['site', 'unknown'].includes(category.toLowerCase())
 
   // Resolve period: prefer canonical bucket, fall back to periodStart, then raw string
@@ -40,9 +35,7 @@ export function SiteBadges({ category, period, periodStart, size = 'sm', hideExa
       {categoryColor && <MetadataBadge label={category!} color={categoryColor} size={size} />}
       {periodColor && (
         <MetadataBadge
-          label={periodStart != null && !hideExactYear
-            ? `${resolvedPeriod!} (${formatPeriodYear(periodStart)})`
-            : resolvedPeriod!}
+          label={resolvedPeriod!}
           color={periodColor}
           size={size}
         />

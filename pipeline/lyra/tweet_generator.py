@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -209,6 +210,9 @@ def generate_posts_for_video(
                     logger.warning(f"No matching item for headline: {headline!r}")
                     continue
 
+            # Strip any hashtags the LLM sneaks in despite the prompt
+            post_text = re.sub(r"#\w+", "", post_text).strip()
+            post_text = re.sub(r"  +", " ", post_text)
             item.post_text = post_text
             if ts_range:
                 item.timestamp_range = ts_range
