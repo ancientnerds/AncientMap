@@ -1523,9 +1523,9 @@ def _run_migrations(engine) -> None:
         # reprocessed, status changes and this no longer matches.
         conn.execute(
             text("""
-            UPDATE user_contributions SET status = 'pending', facts_hash = NULL
+            UPDATE user_contributions SET enrichment_status = 'pending', last_facts_hash = NULL
             WHERE name = 'Bees Bejisultan Huyek'
-              AND status = 'not_a_site'
+              AND enrichment_status = 'not_a_site'
         """)
         )
 
