@@ -576,9 +576,10 @@ def _process_single(
                     all_candidates=alt_candidates,
                     promoted_ids=promoted_ids,
                 )
-                # Wikidata aliases are stored inside _handle_wikidata_match
-                # when the site is promoted (no AI-generated aliases needed here)
-                return result
+                if result:
+                    return result
+                # Match was rejected by verify — try next alt-name or
+                # fall through to Wikidata path below
 
     # If research found a Wikidata candidate with a QID, try the existing
     # Wikidata enrichment path (which fetches coordinates, Wikipedia, etc.)
@@ -1784,9 +1785,9 @@ def _handle_db_match(
     # Post-match verification: use LLM to confirm the match is correct.
     # This replaces brittle mechanical country-name comparison with an LLM
     # that understands geography, alternate names, and context.
-    if site.country and (
-        contribution.country or db_candidate["similarity"] < 0.9 or contribution.corrected_name
-    ):
+    # Always verify when the site has a country — the LLM call is cheap
+    # and a wrong match (e.g. Canusium instead of La Marmotta) is expensive.
+    if site.country:
         correct, reasoning = _verify_db_match(
             settings,
             contribution.name,

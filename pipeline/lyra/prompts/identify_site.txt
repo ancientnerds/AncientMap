@@ -7,6 +7,10 @@ CRITICAL: Names are extracted from auto-generated captions which frequently garb
 - "Kerr Aggie" → Karahan Tepe
 - "Tell Brak" → Tell Brak (already correct — not all names are garbled)
 When the name looks like nonsense English words but the facts describe a real site, the name is almost certainly a caption garbling. Use the facts, video context, and your knowledge to figure out the REAL site name.
+- "Bees Bejisultan Huyek" → Beycesultan (Turkish Bronze Age site)
+- "Extra De Madura" → Estremadura (region — not a site)
+
+IMPORTANT: If you can figure out which real site the garbled name refers to, set is_site to TRUE and site_name to the correct name. Do NOT return is_site=false just because the extracted name is garbled — the whole point is to decode garbled names.
 
 Determine whether the extracted name refers to a specific, named archaeological site. If yes, identify it with the correct name.
 
