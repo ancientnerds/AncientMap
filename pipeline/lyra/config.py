@@ -218,12 +218,13 @@ def _call_openai_api(
     *,
     prefill: str | None = None,
     is_ollama: bool = False,
+    reasoning_effort: str | None = None,
     **kwargs,
 ) -> NormalizedResponse:
-    """Translate Anthropic-style kwargs to OpenAI format and call the backend."""
+    """Translate kwargs to OpenAI format and call the Mercury/Ollama backend."""
     client = _get_ollama_client(settings) if is_ollama else _get_mercury_client(settings)
 
-    # Build OpenAI messages from Anthropic format
+    # Build OpenAI messages from system + user/assistant messages
     messages: list[dict] = []
 
     # System blocks → single system message (strip cache_control)
@@ -241,21 +242,21 @@ def _call_openai_api(
     for msg in kwargs.pop("messages", []):
         messages.append({"role": msg["role"], "content": msg["content"]})
 
-    # Drop unsupported Anthropic params
-    kwargs.pop("thinking", None)
+    # Translate legacy thinking param → reasoning_effort
+    thinking = kwargs.pop("thinking", None)
+    reasoning_effort_from_thinking = None
+    if thinking and isinstance(thinking, dict) and thinking.get("type") == "enabled":
+        reasoning_effort_from_thinking = "high"
+
+    # Drop unsupported params
     kwargs.pop("tool_choice", None)
     kwargs.pop("tools", None)
 
-    # Handle output_config → response_format
-    output_config = kwargs.pop("output_config", None)
-    response_format = None
-    if output_config:
-        schema = output_config.get("format", {}).get("schema")
-        if schema:
-            response_format = {
-                "type": "json_schema",
-                "json_schema": {"name": "response", "strict": True, "schema": schema},
-            }
+    # Merge explicit reasoning_effort with thinking-derived value
+    effective_effort = reasoning_effort or reasoning_effort_from_thinking
+
+    # Handle response_format (native pass-through)
+    response_format = kwargs.pop("response_format", None)
 
     # Handle prefill
     if prefill == "{" and not response_format:
@@ -297,6 +298,8 @@ def _call_openai_api(
         create_kwargs["temperature"] = max(settings.temperature_min, temperature)
     if response_format:
         create_kwargs["response_format"] = response_format
+    if not is_ollama and effective_effort:
+        create_kwargs["reasoning_effort"] = effective_effort
 
     response = client.chat.completions.create(**create_kwargs)
     return _normalize_openai_response(response)
@@ -347,18 +350,28 @@ def parse_prefilled_json(text: str) -> dict:
 def call_api(
     *,
     prefill: str | None = None,
+    reasoning_effort: str | None = None,
     **kwargs,
 ) -> NormalizedResponse:
     """Unified LLM call — dispatches to Mercury (cloud) or Ollama (local).
 
-    Both paths translate Anthropic-style kwargs to OpenAI format,
-    catch SDK errors, and raise LyraAPIError.
+    Args:
+        prefill: Prefix for the response (e.g. "{" for JSON).
+        reasoning_effort: Mercury reasoning level — "instant", "low", "medium", or "high".
+            Also derived from legacy thinking={"type": "enabled"} → "high".
+        **kwargs: model, max_tokens, messages, system, temperature, response_format, etc.
     """
     settings = _get_settings()
 
     is_ollama = settings.llm_backend == "ollama"
     try:
-        return _call_openai_api(settings, prefill=prefill, is_ollama=is_ollama, **kwargs)
+        return _call_openai_api(
+            settings,
+            prefill=prefill,
+            is_ollama=is_ollama,
+            reasoning_effort=reasoning_effort,
+            **kwargs,
+        )
     except Exception as e:
         backend_name = "Ollama" if is_ollama else "Mercury"
         raise LyraAPIError(f"{backend_name} API error: {e}") from e

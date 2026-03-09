@@ -2,11 +2,6 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    import anthropic
-
 import json
 import logging
 from datetime import UTC, datetime
@@ -18,7 +13,6 @@ from pipeline.lyra.config import (
     LyraSettings,
     _get_settings,
     call_api,
-    get_anthropic_client,
     parse_prefilled_json,
 )
 from pipeline.lyra.transcript_fetcher import extract_transcript_segment, parse_timestamp_to_seconds
@@ -59,7 +53,6 @@ def _load_prompt() -> str:
 def verify_single_post(
     item: NewsItem,
     transcript_text: str,
-    client: anthropic.Anthropic,
     model: str,
     system_prompt: str | None = None,
     max_tokens: int | None = None,
@@ -96,25 +89,20 @@ def verify_single_post(
     try:
         _max_tokens = max_tokens if max_tokens is not None else _get_settings().max_tokens
         response = call_api(
-            client,
             model=model,
             max_tokens=_max_tokens,
             temperature=0.0,
-            system=[
-                {
-                    "type": "text",
-                    "text": system_prompt,
-                    "cache_control": {"type": "ephemeral"},
-                }
-            ],
+            reasoning_effort="medium",
+            system=system_prompt,
             messages=[{"role": "user", "content": user_content}],
-            output_config={
-                "format": {
-                    "type": "json_schema",
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "FactVerification",
+                    "strict": True,
                     "schema": VERIFY_SCHEMA,
                 },
             },
-            prefill="{",
         )
     except LyraAPIError as e:
         logger.warning(f"Verification API error for item {item.id}: {e}")
@@ -144,10 +132,8 @@ def verify_video_posts(
     if not video.transcript_text:
         return 0
 
-    if not settings.anthropic_api_key:
+    if not settings.api_key:
         return 0
-
-    client = get_anthropic_client(settings)
     if system_prompt is None:
         system_prompt = _load_prompt()
 
@@ -178,7 +164,6 @@ def verify_video_posts(
             result = verify_single_post(
                 item,
                 video.transcript_text,
-                client,
                 settings.model_verify,
                 system_prompt,
                 max_tokens=settings.max_tokens,

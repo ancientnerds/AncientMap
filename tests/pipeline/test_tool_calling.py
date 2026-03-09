@@ -1,372 +1,361 @@
-"""Tests for the MiniMax tool calling conversion in call_api().
+"""Tests for the OpenAI-based call_api() in config.py.
 
 Verifies that:
-1. Non-native + output_config + no thinking → tools + tool_choice (not prefill)
-2. ToolUseBlock response → TextBlock with serialized JSON (caller-transparent)
-3. Thinking-enabled calls bypass tool calling (keep prefill + retry)
-4. Calls without output_config are unaffected
-5. All downstream parsers (parse_prefilled_json, parse_json_response) work
-   with tool-calling-converted responses
+1. call_api() translates kwargs to OpenAI format
+2. response_format pass-through works
+3. prefill="{" → json_object response_format
+4. Mercury backend uses model/max_tokens from kwargs
+5. Ollama backend caps max_tokens and overrides model
+6. reasoning_effort is passed through (explicit and from thinking)
+7. parse_prefilled_json and parse_json_response work correctly
 """
 
-import json
 from unittest.mock import MagicMock, patch
 
-import anthropic.types
-
 from pipeline.lyra.config import (
-    _tool_use_to_text_block,
+    NormalizedResponse,
+    TextBlock,
     call_api,
+    parse_json_response,
     parse_prefilled_json,
 )
 
-
 # ---------------------------------------------------------------------------
-# Helpers: build realistic Anthropic SDK response objects
+# Helpers
 # ---------------------------------------------------------------------------
 
-def _make_text_response(text: str, stop_reason: str = "end_turn") -> anthropic.types.Message:
-    """Build a Message with a single TextBlock."""
-    return anthropic.types.Message(
-        id="msg_test",
-        type="message",
-        role="assistant",
-        model="MiniMax-M2.5",
-        content=[anthropic.types.TextBlock(type="text", text=text)],
-        stop_reason=stop_reason,
-        usage=anthropic.types.Usage(input_tokens=10, output_tokens=10),
-    )
+
+def _make_openai_response(text: str, finish_reason: str = "stop") -> MagicMock:
+    """Build a mock OpenAI ChatCompletion response."""
+    message = MagicMock()
+    message.content = text
+
+    choice = MagicMock()
+    choice.message = message
+    choice.finish_reason = finish_reason
+
+    usage = MagicMock()
+    usage.prompt_tokens = 10
+    usage.completion_tokens = 20
+
+    response = MagicMock()
+    response.choices = [choice]
+    response.model = "mercury-2"
+    response.usage = usage
+    return response
 
 
-def _make_tool_use_response(tool_input: dict) -> anthropic.types.Message:
-    """Build a Message with a single ToolUseBlock (what MiniMax returns for tool calls)."""
-    return anthropic.types.Message(
-        id="msg_test",
-        type="message",
-        role="assistant",
-        model="MiniMax-M2.5",
-        content=[anthropic.types.ToolUseBlock(
-            type="tool_use",
-            id="toolu_test",
-            name="structured_output",
-            input=tool_input,
-        )],
-        stop_reason="tool_use",
-        usage=anthropic.types.Usage(input_tokens=10, output_tokens=10),
-    )
+def _make_mercury_settings():
+    """Build fake settings for Mercury backend."""
+    settings = MagicMock()
+    settings.llm_backend = "mercury"
+    settings.api_key = "test-key"
+    settings.base_url = "https://api.inceptionlabs.ai/v1"
+    settings.temperature_min = 0.0
+    settings.max_tokens = 32000
+    return settings
 
 
-def _make_thinking_response(thinking_text: str, json_text: str) -> anthropic.types.Message:
-    """Build a Message with ThinkingBlock + TextBlock (extended thinking path)."""
-    return anthropic.types.Message(
-        id="msg_test",
-        type="message",
-        role="assistant",
-        model="MiniMax-M2.5",
-        content=[
-            anthropic.types.ThinkingBlock(type="thinking", thinking=thinking_text, signature="sig"),
-            anthropic.types.TextBlock(type="text", text=json_text),
-        ],
-        stop_reason="end_turn",
-        usage=anthropic.types.Usage(input_tokens=10, output_tokens=50),
-    )
-
-
-# Fake settings: non-native provider (MiniMax)
-FAKE_SETTINGS = MagicMock(
-    anthropic_base_url="https://api.minimax.io/anthropic",
-    temperature_min=0.01,
-)
-
-# Schemas matching the real pipeline ones
-RELEVANCE_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "is_archaeology": {"type": "boolean"},
-        "is_speculative": {"type": "boolean"},
-        "speculative_tags": {"type": "array", "items": {"type": "string"}},
-        "reason": {"type": "string"},
-    },
-    "required": ["is_archaeology", "reason"],
-}
-
-IDENTIFY_SITE_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "is_site": {"type": "boolean"},
-        "site_name": {"type": "string"},
-        "confidence": {"type": "string"},
-        "reasoning": {"type": "string"},
-    },
-    "required": ["is_site", "confidence", "reasoning"],
-}
+def _make_ollama_settings():
+    """Build fake settings for Ollama backend."""
+    settings = MagicMock()
+    settings.llm_backend = "ollama"
+    settings.ollama_api_key = "unused"
+    settings.ollama_base_url = "http://localhost:11434/v1"
+    settings.ollama_model = "qwen3:8b"
+    settings.temperature_min = 0.0
+    settings.max_tokens = 32000
+    return settings
 
 
 # ---------------------------------------------------------------------------
-# Tests: _tool_use_to_text_block helper
+# Tests: call_api() with Mercury backend
 # ---------------------------------------------------------------------------
 
-class TestToolUseToTextBlock:
-    def test_converts_tool_use_to_text(self):
-        tool_input = {"is_archaeology": True, "reason": "Discusses excavation at Pompeii"}
-        response = _make_tool_use_response(tool_input)
-        result = _tool_use_to_text_block(response)
 
-        assert len(result.content) == 1
-        assert result.content[0].type == "text"
-        assert result.stop_reason == "end_turn"
-        assert json.loads(result.content[0].text) == tool_input
-
-    def test_preserves_unicode(self):
-        tool_input = {"site_name": "Göbekli Tepe", "reason": "Anatolian Neolithic"}
-        response = _make_tool_use_response(tool_input)
-        result = _tool_use_to_text_block(response)
-        assert json.loads(result.content[0].text)["site_name"] == "Göbekli Tepe"
-
-    def test_passthrough_when_no_tool_use(self):
-        response = _make_text_response('{"is_archaeology": true}')
-        result = _tool_use_to_text_block(response)
-        assert result is response
-
-    def test_complex_nested_schema(self):
-        tool_input = {
-            "key_topics": [
-                {"headline": "New pyramid found", "timestamp_range": "00:05:00-00:10:00"},
-                {"headline": "Dating results", "timestamp_range": "00:15:00-00:20:00"},
-            ]
-        }
-        response = _make_tool_use_response(tool_input)
-        result = _tool_use_to_text_block(response)
-        parsed = json.loads(result.content[0].text)
-        assert len(parsed["key_topics"]) == 2
-
-    def test_original_response_not_mutated(self):
-        response = _make_tool_use_response({"test": True})
-        result = _tool_use_to_text_block(response)
-        assert response.content[0].type == "tool_use"
-        assert result.content[0].type == "text"
-
-
-# ---------------------------------------------------------------------------
-# Tests: call_api() tool calling conversion
-# ---------------------------------------------------------------------------
-
-class TestCallApiToolCalling:
-    @patch("pipeline.lyra.config._is_native_anthropic", return_value=False)
-    @patch("pipeline.lyra.config._get_settings", return_value=FAKE_SETTINGS)
-    @patch("pipeline.lyra.config._throttled_create")
-    def test_output_config_becomes_tools(self, mock_create, _s, _n):
-        tool_input = {"is_archaeology": True, "reason": "excavation"}
-        mock_create.return_value = _make_tool_use_response(tool_input)
+class TestCallApiMercury:
+    @patch("pipeline.lyra.config._get_mercury_client")
+    @patch("pipeline.lyra.config._get_settings")
+    def test_basic_call(self, mock_settings, mock_client):
+        mock_settings.return_value = _make_mercury_settings()
+        client = MagicMock()
+        client.chat.completions.create.return_value = _make_openai_response('{"test": true}')
+        mock_client.return_value = client
 
         result = call_api(
-            MagicMock(),
-            model="MiniMax-M2.5",
+            model="mercury-2",
             max_tokens=1024,
             messages=[{"role": "user", "content": "test"}],
-            output_config={"format": {"type": "json_schema", "schema": RELEVANCE_SCHEMA}},
+        )
+
+        assert isinstance(result, NormalizedResponse)
+        assert result.content[0].text == '{"test": true}'
+
+    @patch("pipeline.lyra.config._get_mercury_client")
+    @patch("pipeline.lyra.config._get_settings")
+    def test_response_format_passthrough(self, mock_settings, mock_client):
+        mock_settings.return_value = _make_mercury_settings()
+        client = MagicMock()
+        client.chat.completions.create.return_value = _make_openai_response(
+            '{"is_archaeology": true}'
+        )
+        mock_client.return_value = client
+
+        schema = {"type": "object", "properties": {"is_archaeology": {"type": "boolean"}}}
+        call_api(
+            model="mercury-2",
+            max_tokens=1024,
+            messages=[{"role": "user", "content": "test"}],
+            response_format={
+                "type": "json_schema",
+                "json_schema": {"name": "RelevanceCheck", "strict": True, "schema": schema},
+            },
+        )
+
+        sent = client.chat.completions.create.call_args[1]
+        assert sent["response_format"]["type"] == "json_schema"
+        assert sent["response_format"]["json_schema"]["schema"] == schema
+        assert sent["response_format"]["json_schema"]["name"] == "RelevanceCheck"
+
+    @patch("pipeline.lyra.config._get_mercury_client")
+    @patch("pipeline.lyra.config._get_settings")
+    def test_prefill_json_uses_json_object(self, mock_settings, mock_client):
+        mock_settings.return_value = _make_mercury_settings()
+        client = MagicMock()
+        client.chat.completions.create.return_value = _make_openai_response('{"key": "value"}')
+        mock_client.return_value = client
+
+        call_api(
+            model="mercury-2",
+            max_tokens=1024,
+            messages=[{"role": "user", "content": "test"}],
             prefill="{",
         )
 
-        sent = mock_create.call_args[1]
-        assert sent["tools"][0]["name"] == "structured_output"
-        assert sent["tools"][0]["input_schema"] == RELEVANCE_SCHEMA
-        assert sent["tool_choice"] == {"type": "any"}
-        assert "output_config" not in sent
-        # Prefill suppressed
-        assert all(m["role"] != "assistant" for m in sent["messages"])
-        # Response converted
-        assert result.content[0].type == "text"
-        assert json.loads(result.content[0].text)["is_archaeology"] is True
+        sent = client.chat.completions.create.call_args[1]
+        assert sent["response_format"] == {"type": "json_object"}
 
-    @patch("pipeline.lyra.config._is_native_anthropic", return_value=False)
-    @patch("pipeline.lyra.config._get_settings", return_value=FAKE_SETTINGS)
-    @patch("pipeline.lyra.config._throttled_create")
-    def test_thinking_bypasses_tool_calling(self, mock_create, _s, _n):
-        json_text = '{"is_site": true, "confidence": "high", "reasoning": "clear match"}'
-        mock_create.return_value = _make_thinking_response("I think...", json_text)
+    @patch("pipeline.lyra.config._get_mercury_client")
+    @patch("pipeline.lyra.config._get_settings")
+    def test_system_string_passthrough(self, mock_settings, mock_client):
+        mock_settings.return_value = _make_mercury_settings()
+        client = MagicMock()
+        client.chat.completions.create.return_value = _make_openai_response("ok")
+        mock_client.return_value = client
 
-        result = call_api(
-            MagicMock(),
-            model="MiniMax-M2.5",
-            max_tokens=5120,
+        call_api(
+            model="mercury-2",
+            max_tokens=1024,
+            system="You are helpful.",
             messages=[{"role": "user", "content": "test"}],
-            output_config={"format": {"type": "json_schema", "schema": IDENTIFY_SITE_SCHEMA}},
+        )
+
+        sent = client.chat.completions.create.call_args[1]
+        assert sent["messages"][0]["role"] == "system"
+        assert sent["messages"][0]["content"] == "You are helpful."
+
+    @patch("pipeline.lyra.config._get_mercury_client")
+    @patch("pipeline.lyra.config._get_settings")
+    def test_system_blocks_merged(self, mock_settings, mock_client):
+        mock_settings.return_value = _make_mercury_settings()
+        client = MagicMock()
+        client.chat.completions.create.return_value = _make_openai_response("ok")
+        mock_client.return_value = client
+
+        call_api(
+            model="mercury-2",
+            max_tokens=1024,
+            system=[
+                {"type": "text", "text": "You are helpful."},
+                {"type": "text", "text": "Be concise."},
+            ],
+            messages=[{"role": "user", "content": "test"}],
+        )
+
+        sent = client.chat.completions.create.call_args[1]
+        assert sent["messages"][0]["role"] == "system"
+        assert "You are helpful." in sent["messages"][0]["content"]
+        assert "Be concise." in sent["messages"][0]["content"]
+
+    @patch("pipeline.lyra.config._get_mercury_client")
+    @patch("pipeline.lyra.config._get_settings")
+    def test_thinking_translates_to_reasoning_effort_high(self, mock_settings, mock_client):
+        mock_settings.return_value = _make_mercury_settings()
+        client = MagicMock()
+        client.chat.completions.create.return_value = _make_openai_response("ok")
+        mock_client.return_value = client
+
+        call_api(
+            model="mercury-2",
+            max_tokens=1024,
+            messages=[{"role": "user", "content": "test"}],
             thinking={"type": "enabled", "budget_tokens": 4096},
-            prefill="{",
         )
 
-        sent = mock_create.call_args[1]
-        assert "tools" not in sent
-        assert "output_config" not in sent
-        assert sent["messages"][-1] == {"role": "assistant", "content": "{"}
-        assert result.content[0].type == "thinking"
-        assert result.content[1].type == "text"
+        sent = client.chat.completions.create.call_args[1]
+        assert "thinking" not in sent
+        assert sent["reasoning_effort"] == "high"
 
-    @patch("pipeline.lyra.config._is_native_anthropic", return_value=False)
-    @patch("pipeline.lyra.config._get_settings", return_value=FAKE_SETTINGS)
-    @patch("pipeline.lyra.config._throttled_create")
-    def test_no_schema_unchanged(self, mock_create, _s, _n):
-        mock_create.return_value = _make_text_response("Q115679382")
-        call_api(
-            MagicMock(),
-            model="MiniMax-M2.5",
-            max_tokens=32,
-            messages=[{"role": "user", "content": "pick entity"}],
-            prefill="Q",
-        )
-        sent = mock_create.call_args[1]
-        assert "tools" not in sent
-        assert sent["messages"][-1] == {"role": "assistant", "content": "Q"}
+    @patch("pipeline.lyra.config._get_mercury_client")
+    @patch("pipeline.lyra.config._get_settings")
+    def test_explicit_reasoning_effort_passthrough(self, mock_settings, mock_client):
+        mock_settings.return_value = _make_mercury_settings()
+        client = MagicMock()
+        client.chat.completions.create.return_value = _make_openai_response("ok")
+        mock_client.return_value = client
 
-    @patch("pipeline.lyra.config._is_native_anthropic", return_value=False)
-    @patch("pipeline.lyra.config._get_settings", return_value=FAKE_SETTINGS)
-    @patch("pipeline.lyra.config._throttled_create")
-    def test_max_tokens_floor_still_applied(self, mock_create, _s, _n):
-        mock_create.return_value = _make_tool_use_response({"test": True})
         call_api(
-            MagicMock(),
-            model="MiniMax-M2.5",
-            max_tokens=256,
-            messages=[{"role": "user", "content": "test"}],
-            output_config={"format": {"type": "json_schema", "schema": RELEVANCE_SCHEMA}},
-        )
-        assert mock_create.call_args[1]["max_tokens"] == 1024
-
-    @patch("pipeline.lyra.config._is_native_anthropic", return_value=True)
-    @patch("pipeline.lyra.config._get_settings", return_value=FAKE_SETTINGS)
-    @patch("pipeline.lyra.config._throttled_create")
-    def test_native_anthropic_keeps_output_config(self, mock_create, _s, _n):
-        mock_create.return_value = _make_text_response('{"is_archaeology": true}')
-        call_api(
-            MagicMock(),
-            model="claude-sonnet-4-5-20250929",
-            max_tokens=256,
-            messages=[{"role": "user", "content": "test"}],
-            output_config={"format": {"type": "json_schema", "schema": RELEVANCE_SCHEMA}},
-            prefill="{",
-        )
-        sent = mock_create.call_args[1]
-        assert "output_config" in sent
-        assert "tools" not in sent
-
-    @patch("pipeline.lyra.config._is_native_anthropic", return_value=False)
-    @patch("pipeline.lyra.config._get_settings", return_value=FAKE_SETTINGS)
-    @patch("pipeline.lyra.config._throttled_create")
-    def test_empty_schema_falls_through(self, mock_create, _s, _n):
-        mock_create.return_value = _make_text_response('{"test": true}')
-        call_api(
-            MagicMock(),
-            model="MiniMax-M2.5",
+            model="mercury-2",
             max_tokens=1024,
             messages=[{"role": "user", "content": "test"}],
-            output_config={"format": {"type": "json_schema"}},
-            prefill="{",
+            reasoning_effort="low",
         )
-        assert "tools" not in mock_create.call_args[1]
+
+        sent = client.chat.completions.create.call_args[1]
+        assert sent["reasoning_effort"] == "low"
+
+    @patch("pipeline.lyra.config._get_mercury_client")
+    @patch("pipeline.lyra.config._get_settings")
+    def test_explicit_reasoning_effort_overrides_thinking(self, mock_settings, mock_client):
+        mock_settings.return_value = _make_mercury_settings()
+        client = MagicMock()
+        client.chat.completions.create.return_value = _make_openai_response("ok")
+        mock_client.return_value = client
+
+        call_api(
+            model="mercury-2",
+            max_tokens=1024,
+            messages=[{"role": "user", "content": "test"}],
+            thinking={"type": "enabled", "budget_tokens": 4096},
+            reasoning_effort="medium",
+        )
+
+        sent = client.chat.completions.create.call_args[1]
+        assert sent["reasoning_effort"] == "medium"
+
+    @patch("pipeline.lyra.config._get_mercury_client")
+    @patch("pipeline.lyra.config._get_settings")
+    def test_unsupported_params_stripped(self, mock_settings, mock_client):
+        mock_settings.return_value = _make_mercury_settings()
+        client = MagicMock()
+        client.chat.completions.create.return_value = _make_openai_response("ok")
+        mock_client.return_value = client
+
+        call_api(
+            model="mercury-2",
+            max_tokens=1024,
+            messages=[{"role": "user", "content": "test"}],
+            tool_choice={"type": "any"},
+            tools=[{"name": "test"}],
+        )
+
+        sent = client.chat.completions.create.call_args[1]
+        assert "tool_choice" not in sent
+        assert "tools" not in sent
+
+    @patch("pipeline.lyra.config._get_mercury_client")
+    @patch("pipeline.lyra.config._get_settings")
+    def test_temperature_clamped_to_min(self, mock_settings, mock_client):
+        settings = _make_mercury_settings()
+        settings.temperature_min = 0.1
+        mock_settings.return_value = settings
+        client = MagicMock()
+        client.chat.completions.create.return_value = _make_openai_response("ok")
+        mock_client.return_value = client
+
+        call_api(
+            model="mercury-2",
+            max_tokens=1024,
+            temperature=0.0,
+            messages=[{"role": "user", "content": "test"}],
+        )
+
+        sent = client.chat.completions.create.call_args[1]
+        assert sent["temperature"] == 0.1
+
+    @patch("pipeline.lyra.config._get_mercury_client")
+    @patch("pipeline.lyra.config._get_settings")
+    def test_no_reasoning_effort_when_not_specified(self, mock_settings, mock_client):
+        mock_settings.return_value = _make_mercury_settings()
+        client = MagicMock()
+        client.chat.completions.create.return_value = _make_openai_response("ok")
+        mock_client.return_value = client
+
+        call_api(
+            model="mercury-2",
+            max_tokens=1024,
+            messages=[{"role": "user", "content": "test"}],
+        )
+
+        sent = client.chat.completions.create.call_args[1]
+        assert "reasoning_effort" not in sent
 
 
 # ---------------------------------------------------------------------------
-# Tests: caller compatibility (parse_prefilled_json on converted responses)
+# Tests: call_api() with Ollama backend
 # ---------------------------------------------------------------------------
 
-class TestCallerCompatibility:
-    """Verify that all downstream callers can parse tool-calling-converted responses."""
 
-    def test_relevance_gate_pattern(self):
-        """summarizer.py:116 — next(text block) → parse_prefilled_json"""
-        tool_input = {"is_archaeology": True, "is_speculative": False, "reason": "Excavation at Pompeii"}
-        converted = _tool_use_to_text_block(_make_tool_use_response(tool_input))
-        text_block = next((b.text for b in converted.content if hasattr(b, "text")), None)
-        result = parse_prefilled_json(text_block)
-        assert result["is_archaeology"] is True
+class TestCallApiOllama:
+    @patch("pipeline.lyra.config._get_ollama_client")
+    @patch("pipeline.lyra.config._get_settings")
+    def test_ollama_caps_max_tokens(self, mock_settings, mock_client):
+        mock_settings.return_value = _make_ollama_settings()
+        client = MagicMock()
+        client.chat.completions.create.return_value = _make_openai_response("ok")
+        mock_client.return_value = client
 
-    def test_summarize_video_pattern(self):
-        """summarizer.py:248 — parse_prefilled_json → .get("key_topics")"""
-        tool_input = {"key_topics": [{"headline": "New chamber", "timestamp_range": "05:00-10:00"}]}
-        converted = _tool_use_to_text_block(_make_tool_use_response(tool_input))
-        text_block = next((b.text for b in converted.content if hasattr(b, "text")), None)
-        assert len(parse_prefilled_json(text_block).get("key_topics", [])) == 1
+        call_api(
+            model="mercury-2",  # Should be overridden
+            max_tokens=32000,
+            messages=[{"role": "user", "content": "test"}],
+        )
 
-    def test_tweet_generator_pattern(self):
-        """tweet_generator.py:99 — parse_prefilled_json → .get("posts", [])"""
-        tool_input = {"posts": [{"headline": "Post 1"}, {"headline": "Post 2"}]}
-        converted = _tool_use_to_text_block(_make_tool_use_response(tool_input))
-        text_block = next((b.text for b in converted.content if hasattr(b, "text")), None)
-        assert len(parse_prefilled_json(text_block).get("posts", [])) == 2
+        sent = client.chat.completions.create.call_args[1]
+        assert sent["max_tokens"] == 4096  # Capped
+        assert sent["model"] == "qwen3:8b"  # Overridden
 
-    def test_call_ai_wrapper_pattern(self):
-        """site_identifier.py:527 — for block in content → parse_prefilled_json"""
-        tool_input = {"is_site": True, "site_name": "Karahan Tepe", "confidence": "high", "reasoning": "match"}
-        converted = _tool_use_to_text_block(_make_tool_use_response(tool_input))
-        for block in converted.content:
-            if hasattr(block, "text"):
-                result = parse_prefilled_json(block.text)
-                break
-        assert result["site_name"] == "Karahan Tepe"
+    @patch("pipeline.lyra.config._get_ollama_client")
+    @patch("pipeline.lyra.config._get_settings")
+    def test_ollama_skips_reasoning_effort(self, mock_settings, mock_client):
+        mock_settings.return_value = _make_ollama_settings()
+        client = MagicMock()
+        client.chat.completions.create.return_value = _make_openai_response("ok")
+        mock_client.return_value = client
 
-    def test_escalation_for_else_pattern(self):
-        """site_identifier.py:1141 — for-else with break"""
-        tool_input = {"is_site": False, "confidence": "high", "reasoning": "modern city"}
-        converted = _tool_use_to_text_block(_make_tool_use_response(tool_input))
-        result = None
-        for block in converted.content:
-            if hasattr(block, "text") and block.text:
-                result = parse_prefilled_json(block.text)
-                break
-        else:
-            result = None
-        assert result is not None
-        assert result["is_site"] is False
+        call_api(
+            model="mercury-2",
+            max_tokens=1024,
+            messages=[{"role": "user", "content": "test"}],
+            reasoning_effort="high",
+        )
 
-    def test_research_synthesis_pattern(self):
-        """site_researcher.py:511 — for block → parse → match ID"""
-        tool_input = {"source": "wikidata", "id": "Q115679382", "confidence": "high", "reasoning": "match"}
-        converted = _tool_use_to_text_block(_make_tool_use_response(tool_input))
-        for block in converted.content:
-            if hasattr(block, "text") and block.text:
-                result = parse_prefilled_json(block.text)
-                break
-        assert result["id"] == "Q115679382"
-
-    def test_disambiguate_pattern(self):
-        """site_identifier.py:693 — chosen_index extraction"""
-        tool_input = {"chosen_index": 2, "confidence": "high", "reasoning": "location matches"}
-        converted = _tool_use_to_text_block(_make_tool_use_response(tool_input))
-        text_block = next((b.text for b in converted.content if hasattr(b, "text")), None)
-        result = parse_prefilled_json(text_block)
-        assert isinstance(result["chosen_index"], int)
-        assert result["chosen_index"] == 2
+        sent = client.chat.completions.create.call_args[1]
+        assert "reasoning_effort" not in sent
 
 
 # ---------------------------------------------------------------------------
-# Tests: edge cases
+# Tests: parse helpers
 # ---------------------------------------------------------------------------
 
-class TestEdgeCases:
-    def test_empty_dict(self):
-        converted = _tool_use_to_text_block(_make_tool_use_response({}))
-        assert json.loads(converted.content[0].text) == {}
 
-    def test_special_chars_roundtrip(self):
-        tool_input = {"reasoning": 'The site "Göbekli Tepe" has\nnew evidence.'}
-        converted = _tool_use_to_text_block(_make_tool_use_response(tool_input))
-        assert "Göbekli Tepe" in json.loads(converted.content[0].text)["reasoning"]
+class TestParseHelpers:
+    def test_parse_json_response_plain(self):
+        result = parse_json_response('{"key": "value"}')
+        assert result == {"key": "value"}
 
-    def test_numeric_values_roundtrip(self):
-        tool_input = {"chosen_index": 3, "score": 0.95, "count": 0}
-        converted = _tool_use_to_text_block(_make_tool_use_response(tool_input))
-        parsed = json.loads(converted.content[0].text)
-        assert parsed["chosen_index"] == 3
-        assert parsed["score"] == 0.95
+    def test_parse_json_response_fenced(self):
+        result = parse_json_response('```json\n{"key": "value"}\n```')
+        assert result == {"key": "value"}
 
-    def test_null_values_roundtrip(self):
-        tool_input = {"suggested_modification": None, "level": "verified"}
-        converted = _tool_use_to_text_block(_make_tool_use_response(tool_input))
-        assert json.loads(converted.content[0].text)["suggested_modification"] is None
+    def test_parse_prefilled_json_complete(self):
+        result = parse_prefilled_json('{"key": "value"}')
+        assert result == {"key": "value"}
 
-    def test_nested_arrays_roundtrip(self):
-        tool_input = {"topics": [{"facts": ["a", "b"], "sites": [{"name": "X"}]}]}
-        converted = _tool_use_to_text_block(_make_tool_use_response(tool_input))
-        parsed = json.loads(converted.content[0].text)
-        assert parsed["topics"][0]["facts"] == ["a", "b"]
+    def test_parse_prefilled_json_missing_brace(self):
+        result = parse_prefilled_json('"key": "value"}')
+        assert result == {"key": "value"}
+
+    def test_parse_prefilled_json_with_whitespace(self):
+        result = parse_prefilled_json('  \n  {"key": "value"}  \n  ')
+        assert result == {"key": "value"}

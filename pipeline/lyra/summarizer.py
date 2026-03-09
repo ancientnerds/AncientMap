@@ -2,11 +2,6 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    import anthropic
-
 import json
 import logging
 from datetime import UTC, datetime, timedelta
@@ -19,7 +14,6 @@ from pipeline.lyra.config import (
     LyraAPIError,
     LyraSettings,
     call_api,
-    get_anthropic_client,
     parse_prefilled_json,
 )
 from pipeline.lyra.transcript_fetcher import extract_transcript_segment, parse_timestamp_to_seconds
@@ -126,7 +120,6 @@ def _load_relevance_prompt() -> str:
 
 def _check_relevance(
     video: NewsVideo,
-    client: anthropic.Anthropic,
     settings: LyraSettings,
     relevance_prompt: str | None = None,
 ) -> bool | None:
@@ -148,25 +141,20 @@ def _check_relevance(
 
     try:
         response = call_api(
-            client,
             model=settings.model_relevance,
             max_tokens=settings.max_tokens,
             temperature=0.0,
-            system=[
-                {
-                    "type": "text",
-                    "text": system_prompt,
-                    "cache_control": {"type": "ephemeral"},
-                }
-            ],
+            reasoning_effort="instant",
+            system=system_prompt,
             messages=[{"role": "user", "content": user_content}],
-            output_config={
-                "format": {
-                    "type": "json_schema",
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "RelevanceCheck",
+                    "strict": True,
                     "schema": RELEVANCE_SCHEMA,
                 },
             },
-            prefill="{",
         )
     except LyraAPIError as e:
         logger.error(f"Relevance gate API error for {video.id}: {e}")
@@ -243,14 +231,12 @@ def summarize_video(
         logger.warning(f"No transcript for video {video.id}")
         return False
 
-    if not settings.anthropic_api_key:
+    if not settings.api_key:
         logger.error("No LLM API key configured")
         return False
 
-    client = get_anthropic_client(settings)
-
     # Relevance gate: skip non-archaeology videos
-    relevance = _check_relevance(video, client, settings, relevance_prompt)
+    relevance = _check_relevance(video, settings, relevance_prompt)
     if relevance is None:
         logger.warning(f"Relevance gate unavailable for {video.id}, deferring to next cycle")
         return False
@@ -286,25 +272,20 @@ def summarize_video(
 
     try:
         response = call_api(
-            client,
             model=settings.model_summarize,
             max_tokens=settings.max_tokens,
             temperature=0.0,
-            system=[
-                {
-                    "type": "text",
-                    "text": system_prompt,
-                    "cache_control": {"type": "ephemeral"},
-                }
-            ],
+            reasoning_effort="low",
+            system=system_prompt,
             messages=[{"role": "user", "content": user_content}],
-            output_config={
-                "format": {
-                    "type": "json_schema",
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "VideoSummary",
+                    "strict": True,
                     "schema": SUMMARY_SCHEMA,
                 },
             },
-            prefill="{",
         )
     except LyraAPIError as e:
         logger.error(f"LLM API error for {video.id}: {e}")

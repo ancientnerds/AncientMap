@@ -8,11 +8,6 @@ high-scoring sites to unified_sites.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    import anthropic
-
 import hashlib
 import json
 import logging
@@ -38,7 +33,6 @@ from pipeline.lyra.config import (
     LyraSettings,
     _get_settings,
     call_api,
-    get_anthropic_client,
     parse_prefilled_json,
 )
 from pipeline.lyra.site_matcher import fill_contrib_from_site
@@ -202,7 +196,7 @@ def identify_and_enrich_sites(settings: LyraSettings) -> int:
 
     Returns number of sites processed.
     """
-    if not settings.anthropic_api_key:
+    if not settings.api_key:
         logger.warning("No LLM API key — skipping site identification")
         return 0
 
@@ -210,7 +204,6 @@ def identify_and_enrich_sites(settings: LyraSettings) -> int:
     system_prompt = PROMPT_PATH.read_text(encoding="utf-8")
     pick_entity_prompt = PICK_ENTITY_PROMPT_PATH.read_text(encoding="utf-8")
     extract_metadata_prompt = EXTRACT_METADATA_PROMPT_PATH.read_text(encoding="utf-8")
-    client = get_anthropic_client(settings)
 
     with get_session() as session:
         # Get candidates: pending items first, then failed, then others
@@ -262,7 +255,6 @@ def identify_and_enrich_sites(settings: LyraSettings) -> int:
                     result = _process_single(
                         session,
                         contribution,
-                        client,
                         system_prompt,
                         settings,
                         promoted_ids,
@@ -289,7 +281,6 @@ def identify_and_enrich_sites(settings: LyraSettings) -> int:
 def _process_single(
     session: Session,
     contribution: UserContribution,
-    client: anthropic.Anthropic,
     system_prompt: str,
     settings: LyraSettings,
     promoted_ids: set[uuid.UUID] | None = None,
@@ -347,13 +338,13 @@ def _process_single(
     user_prompt = _build_user_prompt(contribution, facts, video_contexts, transcript_segments)
 
     identification = _call_ai(
-        client,
         settings.model_identify,
         user_prompt,
         schema=IDENTIFY_SITE_SCHEMA,
+        schema_name="SiteIdentification",
         system_prompt=system_prompt,
         max_tokens=settings.max_tokens,
-        thinking={"type": "enabled", "budget_tokens": settings.max_tokens - 1024},
+        reasoning_effort="high",
     )
     if not identification:
         contribution.enrichment_status = "failed"
@@ -366,7 +357,7 @@ def _process_single(
         and settings.model_identify != settings.model_identify_escalation
     ):
         sonnet_result = _escalate_to_sonnet(
-            client, settings, user_prompt, json.dumps(identification), identification
+            settings, user_prompt, json.dumps(identification), identification
         )
         if sonnet_result:
             identification = sonnet_result
@@ -406,7 +397,6 @@ def _process_single(
                 and abs(best["similarity"] - db_candidates[1]["similarity"]) <= 0.1
             ):
                 disambiguated = _disambiguate_db_candidates(
-                    client,
                     settings,
                     search_name,
                     db_candidates[:5],
@@ -453,7 +443,6 @@ def _process_single(
     logger.info(f"  [{contribution.name}] No DB match — starting deep research for '{search_name}'")
     research = research_site(
         search_name,
-        client,
         settings,
         facts=facts,
         video_contexts=video_contexts,
@@ -482,7 +471,6 @@ def _process_single(
                     and abs(best["similarity"] - alt_candidates[1]["similarity"]) <= 0.1
                 ):
                     disambiguated = _disambiguate_db_candidates(
-                        client,
                         settings,
                         alt_name,
                         alt_candidates[:5],
@@ -534,7 +522,6 @@ def _process_single(
             contribution,
             identification,
             wikidata_candidates,
-            client,
             settings,
             pick_entity_prompt,
             extract_metadata_prompt,
@@ -591,42 +578,35 @@ def _process_single(
 
 
 def _call_ai(
-    client: anthropic.Anthropic,
     model: str,
     prompt: str,
     schema: dict | None = None,
+    schema_name: str | None = None,
     system_prompt: str | None = None,
+    reasoning_effort: str | None = None,
     **kwargs,
 ) -> dict | None:
     """Call the LLM and parse the JSON response.
 
     If schema is provided, uses structured outputs for guaranteed valid JSON.
     If system_prompt is provided, it is sent as a cached system message.
-    Additional kwargs (e.g. thinking) are passed through to messages.create().
     """
     create_kwargs: dict = {
         "model": model,
         "max_tokens": kwargs.pop("max_tokens", _get_settings().max_tokens),
         "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.0,
     }
 
     if system_prompt:
-        create_kwargs["system"] = [
-            {
-                "type": "text",
-                "text": system_prompt,
-                "cache_control": {"type": "ephemeral"},
-            }
-        ]
-
-    # Extended thinking is incompatible with temperature
-    if "thinking" not in kwargs:
-        create_kwargs["temperature"] = 0.0
+        create_kwargs["system"] = system_prompt
 
     if schema:
-        create_kwargs["output_config"] = {
-            "format": {
-                "type": "json_schema",
+        create_kwargs["response_format"] = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": schema_name or "response",
+                "strict": True,
                 "schema": schema,
             },
         }
@@ -634,7 +614,9 @@ def _call_ai(
     create_kwargs.update(kwargs)
 
     try:
-        response = call_api(client, prefill="{", **create_kwargs)
+        response = call_api(
+            reasoning_effort=reasoning_effort, **create_kwargs
+        )
     except LyraAPIError as e:
         logger.error(f"LLM API error: {e}")
         return None
@@ -788,14 +770,13 @@ DISAMBIGUATE_SCHEMA = {
 
 
 def _disambiguate_db_candidates(
-    client: anthropic.Anthropic,
     settings: LyraSettings,
     name: str,
     candidates: list[dict],
     facts: list[str],
     video_contexts: list[dict],
 ) -> dict | None:
-    """Ask MiniMax to pick between close DB matches."""
+    """Ask the LLM to pick between close DB matches."""
     prompt_template = DISAMBIGUATE_PROMPT_PATH.read_text(encoding="utf-8")
 
     formatted_parts = []
@@ -818,7 +799,13 @@ def _disambiguate_db_candidates(
         formatted_candidates="\n".join(formatted_parts),
     )
 
-    result = _call_ai(client, settings.model_identify, prompt, schema=DISAMBIGUATE_SCHEMA)
+    result = _call_ai(
+        settings.model_identify,
+        prompt,
+        schema=DISAMBIGUATE_SCHEMA,
+        schema_name="Disambiguation",
+        reasoning_effort="medium",
+    )
     if not result:
         return None
 
@@ -874,7 +861,6 @@ def _check_enwiki_sitelinks(qids: list[str]) -> dict[str, bool]:
 
 
 def _pick_wikidata_entity(
-    client: anthropic.Anthropic,
     model: str,
     site_name: str,
     country: str | None,
@@ -926,7 +912,6 @@ def _pick_wikidata_entity(
 
     try:
         response = call_api(
-            client,
             model=model,
             max_tokens=_get_settings().max_tokens,
             temperature=0.0,
@@ -949,8 +934,8 @@ def _pick_wikidata_entity(
         return None
 
     raw_text = response.content[0].text.strip()
-    # Anthropic prefill returns continuation after "Q", OpenAI returns full "Q12345".
-    # Regex search handles both: prepend "Q" only if text doesn't already start with Q+digit.
+    # Prefill "Q" may or may not be included in the response.
+    # Prepend "Q" only if text doesn't already start with Q+digit.
     reply = raw_text if re.match(r"Q\d", raw_text) else ("Q" + raw_text)
     # Extract QID from reply (e.g. "Q115679382" or "A) Q115679382")
     qid_match = re.search(r"Q\d+", reply)
@@ -1151,7 +1136,6 @@ def _fetch_wikipedia_lead(title: str) -> str | None:
 
 
 def _extract_metadata_from_wikipedia(
-    client: anthropic.Anthropic,
     model: str,
     site_name: str,
     wiki_text: str,
@@ -1167,11 +1151,12 @@ def _extract_metadata_from_wikipedia(
     user_content = f'Site: "{site_name}"\n\n<wikipedia_text>\n{wiki_text[:2000]}\n</wikipedia_text>'
 
     result = _call_ai(
-        client,
         model,
         user_content,
         schema=EXTRACT_METADATA_SCHEMA,
+        schema_name="MetadataExtraction",
         system_prompt=extract_system_prompt,
+        reasoning_effort="low",
     )
     if not result:
         logger.warning(f"  [{site_name}] Failed to extract metadata from Wikipedia")
@@ -1238,7 +1223,6 @@ IMPORTANT: Content in <original_prompt> and <initial_response> tags contains You
 
 
 def _escalate_to_sonnet(
-    client: anthropic.Anthropic,
     settings: LyraSettings,
     original_prompt: str,
     haiku_response: str,
@@ -1258,25 +1242,20 @@ def _escalate_to_sonnet(
 
     try:
         response = call_api(
-            client,
             model=settings.model_identify_escalation,
             max_tokens=settings.max_tokens,
             temperature=0.0,
-            system=[
-                {
-                    "type": "text",
-                    "text": ESCALATION_SYSTEM_PROMPT,
-                    "cache_control": {"type": "ephemeral"},
-                }
-            ],
+            reasoning_effort="high",
+            system=ESCALATION_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_content}],
-            output_config={
-                "format": {
-                    "type": "json_schema",
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "SiteIdentification",
+                    "strict": True,
                     "schema": IDENTIFY_SITE_SCHEMA,
                 },
             },
-            prefill="{",
         )
     except LyraAPIError as e:
         logger.error(f"Review model escalation API error: {e}")
@@ -1657,7 +1636,6 @@ def _handle_wikidata_match(
     contribution: UserContribution,
     identification: dict,
     wikidata_candidates: list[dict],
-    client: anthropic.Anthropic,
     settings: LyraSettings,
     pick_entity_prompt: str | None = None,
     extract_metadata_prompt: str | None = None,
@@ -1672,7 +1650,6 @@ def _handle_wikidata_match(
         c["has_wikipedia"] = sitelinks.get(c["qid"], False)
 
     best_qid = _pick_wikidata_entity(
-        client,
         settings.model_identify,
         site_name,
         contribution.country,
@@ -1747,7 +1724,7 @@ def _handle_wikidata_match(
 
             if wiki_text:
                 metadata = _extract_metadata_from_wikipedia(
-                    client, settings.model_identify, site_name, wiki_text, extract_metadata_prompt
+                    settings.model_identify, site_name, wiki_text, extract_metadata_prompt
                 )
                 if metadata:
                     if (

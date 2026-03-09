@@ -12,11 +12,10 @@ import json
 import logging
 import os
 from collections.abc import AsyncIterator
-from typing import Any, Protocol
+from typing import Protocol
 
 from langchain_core.messages import (
     AIMessage,
-    AIMessageChunk,
     BaseMessage,
     HumanMessage,
     SystemMessage,
@@ -181,6 +180,11 @@ class OllamaBackend:
         async with httpx.AsyncClient(timeout=600.0) as http:
             async with http.stream("POST", native_url, json=body, headers=headers) as resp:
                 resp.raise_for_status()
+                # Collect tool calls across streaming lines — Ollama may send
+                # partial tool_calls in one line and complete them in the next.
+                # Later entries for the same index override earlier ones.
+                pending_tools: dict[int, dict] = {}
+
                 async for line in resp.aiter_lines():
                     if not line:
                         continue
@@ -195,12 +199,22 @@ class OllamaBackend:
                     if msg.get("content"):
                         yield {"type": "content", "text": msg["content"]}
 
-                    # Tool calls (complete, not chunked in native API)
+                    # Collect tool calls (may arrive across multiple lines)
                     if msg.get("tool_calls"):
                         for i, tc in enumerate(msg["tool_calls"]):
                             fn = tc.get("function", {})
-                            raw_args = fn.get("arguments", {})
-                            # arguments may be a dict or an already-serialized string
+                            name = fn.get("name")
+                            raw_args = fn.get("arguments")
+                            entry = pending_tools.setdefault(i, {})
+                            if name:
+                                entry["name"] = name
+                            if raw_args:
+                                entry["args"] = raw_args
+
+                    # On done: yield finalized tool calls, then usage
+                    if data.get("done"):
+                        for i, tc_data in sorted(pending_tools.items()):
+                            raw_args = tc_data.get("args", {})
                             args_str = (
                                 json.dumps(raw_args)
                                 if isinstance(raw_args, dict)
@@ -210,12 +224,10 @@ class OllamaBackend:
                                 "type": "tool_call_chunk",
                                 "index": i,
                                 "id": f"call_{i}",
-                                "name": fn.get("name"),
+                                "name": tc_data.get("name"),
                                 "args": args_str,
                             }
-
-                    # Usage (on done=true)
-                    if data.get("done"):
+                        pending_tools.clear()
                         yield {
                             "type": "usage",
                             "input": data.get("prompt_eval_count", 0),
@@ -224,12 +236,12 @@ class OllamaBackend:
 
 
 # ---------------------------------------------------------------------------
-# AnthropicBackend — LangChain ChatAnthropic (for MiniMax / native Anthropic)
+# MercuryBackend — OpenAI-compatible streaming (Mercury 2 by Inception Labs)
 # ---------------------------------------------------------------------------
 
 
-class AnthropicBackend:
-    """Wraps LangChain ChatAnthropic for MiniMax/native Anthropic."""
+class MercuryBackend:
+    """Uses openai.AsyncOpenAI for Mercury 2 cloud streaming."""
 
     def __init__(
         self,
@@ -242,72 +254,88 @@ class AnthropicBackend:
         self.api_key = api_key
         self.base_url = base_url
         self.max_tokens = max_tokens
-        self._llm = None
+        self._client = None
 
-    def _get_llm(self):
-        if self._llm is None:
-            from langchain_anthropic import ChatAnthropic
+    def _get_client(self):
+        if self._client is None:
+            from openai import AsyncOpenAI
 
-            is_native = not self.base_url or "anthropic.com" in self.base_url
-            kwargs: dict = {
-                "model": self.model,
-                "max_tokens": self.max_tokens,
-                "streaming": True,
-                "api_key": self.api_key,
-            }
-            if is_native:
-                kwargs["stream_usage"] = True
-            if self.base_url:
-                kwargs["anthropic_api_url"] = self.base_url
-            self._llm = ChatAnthropic(**kwargs)
-        return self._llm
+            self._client = AsyncOpenAI(
+                base_url=self.base_url,
+                api_key=self.api_key,
+                timeout=120.0,
+                max_retries=5,
+            )
+        return self._client
 
     async def stream(
         self, messages: list[BaseMessage], tools: list, enable_thinking: bool = True
     ) -> AsyncIterator[dict]:
-        """Stream from MiniMax/Anthropic via LangChain, yielding StreamEvent dicts."""
-        llm = self._get_llm()
-        llm_with_tools = llm.bind_tools(tools) if tools else llm
+        """Stream from Mercury via OpenAI SDK, yielding StreamEvent dicts."""
+        client = self._get_client()
 
-        async for chunk in llm_with_tools.astream(messages):
-            if isinstance(chunk, AIMessageChunk):
-                # Token usage from chunks (Anthropic sends on final chunk)
-                if hasattr(chunk, "usage_metadata") and chunk.usage_metadata:
-                    um = chunk.usage_metadata
-                    input_t = um.get("input_tokens", 0) or 0
-                    output_t = um.get("output_tokens", 0) or 0
-                    if input_t or output_t:
-                        yield {"type": "usage", "input": input_t, "output": output_t}
+        openai_messages = _langchain_messages_to_openai(messages)
+        openai_tools = _langchain_tools_to_openai(tools) if tools else None
 
-                # Content: thinking blocks + text blocks
-                if chunk.content:
-                    text_content = chunk.content if isinstance(chunk.content, str) else ""
-                    thinking_content = ""
-                    if isinstance(chunk.content, list):
-                        for block in chunk.content:
-                            if isinstance(block, dict) and block.get("type") == "thinking":
-                                thinking_content += block.get("thinking", "") or block.get(
-                                    "text", ""
-                                )
-                            elif isinstance(block, dict) and block.get("type") == "text":
-                                text_content += block.get("text", "")
-                            elif isinstance(block, str):
-                                text_content += block
-                    if thinking_content:
-                        yield {"type": "reasoning", "text": thinking_content}
-                    if text_content:
-                        yield {"type": "content", "text": text_content}
+        create_kwargs: dict = {
+            "model": self.model,
+            "messages": openai_messages,
+            "max_tokens": self.max_tokens,
+            "stream": True,
+            "stream_options": {"include_usage": True},
+            "reasoning_effort": "medium",
+        }
+        if openai_tools:
+            create_kwargs["tools"] = openai_tools
 
-                # Tool call chunks
-                if chunk.tool_call_chunks:
-                    for tcc in chunk.tool_call_chunks:
-                        yield {
-                            "type": "tool_call_chunk",
-                            "index": tcc.get("index"),
-                            "id": tcc.get("id"),
-                            "name": tcc.get("name"),
-                            "args": tcc.get("args") or "",
-                        }
+        stream = await client.chat.completions.create(**create_kwargs)
+
+        # Accumulate tool call chunks by index
+        tool_calls: dict[int, dict] = {}
+
+        async for chunk in stream:
+            if not chunk.choices and chunk.usage:
+                # Final chunk with usage only (stream_options includes it)
+                yield {
+                    "type": "usage",
+                    "input": chunk.usage.prompt_tokens or 0,
+                    "output": chunk.usage.completion_tokens or 0,
+                }
+                continue
+
+            if not chunk.choices:
+                continue
+
+            delta = chunk.choices[0].delta
+
+            # Content tokens
+            if delta.content:
+                yield {"type": "content", "text": delta.content}
+
+            # Tool call chunks
+            if delta.tool_calls:
+                for tc_chunk in delta.tool_calls:
+                    idx = tc_chunk.index
+                    entry = tool_calls.setdefault(idx, {"id": None, "name": None, "args": ""})
+                    if tc_chunk.id:
+                        entry["id"] = tc_chunk.id
+                    if tc_chunk.function and tc_chunk.function.name:
+                        entry["name"] = tc_chunk.function.name
+                    if tc_chunk.function and tc_chunk.function.arguments:
+                        entry["args"] += tc_chunk.function.arguments
+
+            # On finish: yield finalized tool calls
+            finish = chunk.choices[0].finish_reason
+            if finish == "tool_calls" and tool_calls:
+                for idx, tc_data in sorted(tool_calls.items()):
+                    yield {
+                        "type": "tool_call_chunk",
+                        "index": idx,
+                        "id": tc_data["id"],
+                        "name": tc_data["name"],
+                        "args": tc_data["args"],
+                    }
+                tool_calls.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -327,8 +355,8 @@ def get_backend(
     """Get or create a backend instance for the given model.
 
     Args:
-        model_name: The model to use (e.g. "qwen3.5:4b", "MiniMax-M2.5").
-        backend_type: "local" for OllamaBackend, "minimax" for AnthropicBackend.
+        model_name: The model to use (e.g. "qwen3.5:4b", "mercury-2").
+        backend_type: "local" for OllamaBackend, "mercury" for MercuryBackend.
         num_ctx: Override context window size (local only). Defaults to LYRA_OLLAMA_NUM_CTX env.
         max_tokens: Override max output tokens (local only). Defaults to 1024.
         base_url: Override base URL (local only). Bypasses LYRA_OLLAMA_BASE_URL.
@@ -348,15 +376,21 @@ def get_backend(
             )
             logger.info(f"Created OllamaBackend for {model_name} at {url}")
         else:
-            api_key = os.getenv("LYRA_ANTHROPIC_API_KEY", "") or os.getenv("ANTHROPIC_API_KEY", "")
-            base_url = os.getenv("LYRA_ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
+            api_key = (
+                os.getenv("LYRA_API_KEY", "")
+                or os.getenv("LYRA_ANTHROPIC_API_KEY", "")
+            )
+            mercury_url = (
+                os.getenv("LYRA_BASE_URL", "")
+                or os.getenv("LYRA_ANTHROPIC_BASE_URL", "https://api.inceptionlabs.ai/v1")
+            )
             from pipeline.lyra.config import get_max_tokens
 
-            _backends[key] = AnthropicBackend(
+            _backends[key] = MercuryBackend(
                 model=model_name,
                 api_key=api_key,
-                base_url=base_url,
+                base_url=mercury_url,
                 max_tokens=get_max_tokens(),
             )
-            logger.info(f"Created AnthropicBackend for {model_name}")
+            logger.info(f"Created MercuryBackend for {model_name}")
     return _backends[key]

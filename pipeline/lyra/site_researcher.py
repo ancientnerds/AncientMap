@@ -1,18 +1,12 @@
 """Deep site research agent for Lyra radar.
 
 Multi-step research protocol for sites not found via DB fuzzy search:
-1. MiniMax pre-research (generate search terms + prior knowledge)
+1. Mercury pre-research (generate search terms + prior knowledge)
 2. Multi-source API search (Wikidata, Wikipedia, GeoNames)
-3. MiniMax candidate selection (if ambiguous)
-4. MiniMax gap-fill (fill missing fields from AI knowledge)
+3. Mercury candidate selection (if ambiguous)
 """
 
 from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    import anthropic
 
 import json
 import logging
@@ -97,23 +91,22 @@ class ResearchResult:
 
 def research_site(
     name: str,
-    client: anthropic.Anthropic,
     settings: LyraSettings,
     facts: list[str],
     video_contexts: list[dict],
 ) -> ResearchResult:
     """Multi-step research agent protocol.
 
-    1. MiniMax pre-research (generate search terms + prior knowledge)
+    1. Mercury pre-research (generate search terms + prior knowledge)
     2. Multi-source API search (Wikidata, Wikipedia, GeoNames)
-    3. MiniMax candidate selection (if ambiguous)
+    3. Mercury candidate selection (if ambiguous)
 
     Always returns a ResearchResult (never None).
     """
     result = ResearchResult()
 
-    # Step 1: MiniMax pre-research
-    result.pre_research = _pre_research(name, client, settings, facts, video_contexts)
+    # Step 1: Mercury pre-research
+    result.pre_research = _pre_research(name, settings, facts, video_contexts)
 
     # Build search names: original + AI-generated alternatives
     search_names = [name]
@@ -143,7 +136,6 @@ def research_site(
     if total_candidates > 0:
         result.best_match = _select_best_candidate(
             name,
-            client,
             settings,
             facts,
             result.pre_research,
@@ -163,12 +155,11 @@ def research_site(
 
 def _pre_research(
     name: str,
-    client: anthropic.Anthropic,
     settings: LyraSettings,
     facts: list[str],
     video_contexts: list[dict],
 ) -> dict | None:
-    """Ask MiniMax what it knows about this site."""
+    """Ask Mercury what it knows about this site."""
     prompt_template = (PROMPT_DIR / "pre_research.txt").read_text(encoding="utf-8")
 
     facts_text = "\n".join(f"- {f}" for f in facts[:20]) if facts else "(none)"
@@ -183,18 +174,11 @@ def _pre_research(
 
     try:
         response = call_api(
-            client,
             model=settings.model_identify,
             max_tokens=settings.max_tokens,
+            reasoning_effort="high",
             messages=[{"role": "user", "content": prompt}],
-            system=[
-                {
-                    "type": "text",
-                    "text": PRE_RESEARCH_SYSTEM,
-                    "cache_control": {"type": "ephemeral"},
-                }
-            ],
-            thinking={"type": "enabled", "budget_tokens": settings.max_tokens - 1024},
+            system=PRE_RESEARCH_SYSTEM,
             prefill="{",
         )
     except LyraAPIError as e:
@@ -449,13 +433,12 @@ def _search_wikidata_sparql(name: str) -> list[dict]:
 
 def _select_best_candidate(
     name: str,
-    client: anthropic.Anthropic,
     settings: LyraSettings,
     facts: list[str],
     pre_research: dict | None,
     all_candidates: dict[str, list[dict]],
 ) -> dict | None:
-    """Ask MiniMax to pick the best candidate from multi-source results."""
+    """Ask Mercury to pick the best candidate from multi-source results."""
     # Build formatted candidates string with transliteration similarity
     formatted_parts = []
     candidate_index = {}
@@ -516,19 +499,19 @@ def _select_best_candidate(
 
     try:
         response = call_api(
-            client,
             model=settings.model_identify,
             max_tokens=settings.max_tokens,
+            reasoning_effort="medium",
             messages=[{"role": "user", "content": prompt}],
-            system=[
-                {
-                    "type": "text",
-                    "text": SYNTHESIS_SYSTEM,
-                    "cache_control": {"type": "ephemeral"},
-                }
-            ],
-            output_config={"format": {"type": "json_schema", "schema": RESEARCH_SYNTHESIS_SCHEMA}},
-            prefill="{",
+            system=SYNTHESIS_SYSTEM,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "ResearchSynthesis",
+                    "strict": True,
+                    "schema": RESEARCH_SYNTHESIS_SCHEMA,
+                },
+            },
         )
     except LyraAPIError as e:
         logger.warning(f"  [{name}] Research synthesis API error: {e}")

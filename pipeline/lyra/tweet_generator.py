@@ -10,7 +10,6 @@ from pipeline.lyra.config import (
     LyraAPIError,
     LyraSettings,
     call_api,
-    get_anthropic_client,
     parse_prefilled_json,
 )
 
@@ -58,7 +57,7 @@ def generate_posts_for_video(
     if not video.summary_json:
         return 0
 
-    if not settings.anthropic_api_key:
+    if not settings.api_key:
         logger.error("No LLM API key configured")
         return 0
 
@@ -107,29 +106,22 @@ def generate_posts_for_video(
         f"Source Material:\n{summary_text}"
     )
 
-    client = get_anthropic_client(settings)
-
     try:
         response = call_api(
-            client,
             model=settings.model_post,
             max_tokens=settings.max_tokens,
             temperature=0.3,
-            system=[
-                {
-                    "type": "text",
-                    "text": system_prompt,
-                    "cache_control": {"type": "ephemeral"},
-                }
-            ],
+            reasoning_effort="low",
+            system=system_prompt,
             messages=[{"role": "user", "content": user_content}],
-            output_config={
-                "format": {
-                    "type": "json_schema",
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "NewsPosts",
+                    "strict": True,
                     "schema": POSTS_SCHEMA,
                 },
             },
-            prefill="{",
         )
     except LyraAPIError as e:
         logger.error(f"Post generation API error for {video.id}: {e}")

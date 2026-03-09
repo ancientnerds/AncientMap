@@ -8,11 +8,6 @@ post_text set to NULL, removing them from the feed.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    import anthropic
-
 import json
 import logging
 from pathlib import Path
@@ -24,7 +19,6 @@ from pipeline.lyra.config import (
     LyraAPIError,
     LyraSettings,
     call_api,
-    get_anthropic_client,
     parse_prefilled_json,
 )
 
@@ -60,7 +54,7 @@ def rescore_pending_items(settings: LyraSettings) -> int:
 
     Returns number of items rescored.
     """
-    if not settings.anthropic_api_key:
+    if not settings.api_key:
         logger.error("No LLM API key configured")
         return 0
 
@@ -78,7 +72,6 @@ def rescore_pending_items(settings: LyraSettings) -> int:
     if not videos:
         return 0
 
-    client = get_anthropic_client(settings)
     system_prompt = _load_prompt()
     total_rescored = 0
 
@@ -109,7 +102,7 @@ def rescore_pending_items(settings: LyraSettings) -> int:
             rescored_count = 0
             skipped = 0
             for item in items:
-                result = _rescore_item(item, video, channel_name, client, system_prompt, settings)
+                result = _rescore_item(item, video, channel_name, system_prompt, settings)
                 if result is None:
                     skipped += 1
                     continue
@@ -163,7 +156,6 @@ def _rescore_item(
     item: NewsItem,
     video: NewsVideo,
     channel_name: str,
-    client: anthropic.Anthropic,
     system_prompt: str,
     settings: LyraSettings,
 ) -> dict | None:
@@ -182,25 +174,20 @@ def _rescore_item(
 
     try:
         response = call_api(
-            client,
             model=settings.model_rescore,
             max_tokens=settings.max_tokens,
             temperature=0.0,
-            system=[
-                {
-                    "type": "text",
-                    "text": system_prompt,
-                    "cache_control": {"type": "ephemeral"},
-                }
-            ],
+            reasoning_effort="low",
+            system=system_prompt,
             messages=[{"role": "user", "content": user_content}],
-            output_config={
-                "format": {
-                    "type": "json_schema",
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "SignificanceScore",
+                    "strict": True,
                     "schema": RESCORE_SCHEMA,
                 },
             },
-            prefill="{",
         )
     except LyraAPIError as e:
         logger.warning(f"Rescore API error for item {item.id}: {e}")
