@@ -390,33 +390,76 @@ def _process_single(
 
         best = db_candidates[0]
         if best["similarity"] >= settings.pg_trgm_threshold:
-            # Disambiguate if top 2+ candidates have very close scores
-            if (
-                len(db_candidates) >= 2
-                and db_candidates[1]["similarity"] >= settings.pg_trgm_threshold
-                and abs(best["similarity"] - db_candidates[1]["similarity"]) <= 0.1
-            ):
-                disambiguated = _disambiguate_db_candidates(
+            name_sim = best.get("name_similarity", 1.0)
+            alias_used = best.get("matched_alias", "?")
+
+            # Alias mismatch guard — three tiers:
+            #   >= 0.8  → auto-accept (names match closely)
+            #   <  0.3  → auto-reject (clearly different sites)
+            #   0.3–0.8 → Mercury LLM sanity check (shared words
+            #              like "tepe", "caves", "temple" inflate
+            #              trigram similarity between different sites)
+            # Short names (< 4 chars) always route to LLM — trigram
+            # similarity is unreliable for them (e.g. "Ur" vs "Uruk").
+            search_norm = normalize_name(search_name)
+            is_short = len(search_norm) < 4
+            if not is_short and name_sim < 0.3:
+                logger.info(
+                    f"  [{contribution.name}] Rejecting alias match: "
+                    f"'{search_name}' matched alias '{alias_used}' of "
+                    f"'{best['name']}' (name_similarity={name_sim})"
+                )
+            elif is_short or name_sim < 0.8:
+                verified = _verify_alias_match(
+                    settings, search_name, best["name"], alias_used, facts
+                )
+                if not verified:
+                    logger.info(
+                        f"  [{contribution.name}] LLM rejected alias match: "
+                        f"'{search_name}' ≠ '{best['name']}' "
+                        f"(via '{alias_used}', name_similarity={name_sim})"
+                    )
+                else:
+                    return _handle_db_match(
+                        session,
+                        contribution,
+                        best,
+                        identification,
+                        settings,
+                        facts,
+                        video_contexts,
+                        all_candidates=db_candidates,
+                        promoted_ids=promoted_ids,
+                    )
+            else:
+                # name_similarity >= 0.8 — trusted match
+                # Disambiguate if top 2+ candidates have very close scores
+                if (
+                    len(db_candidates) >= 2
+                    and db_candidates[1]["similarity"] >= settings.pg_trgm_threshold
+                    and abs(best["similarity"] - db_candidates[1]["similarity"]) <= 0.1
+                ):
+                    disambiguated = _disambiguate_db_candidates(
+                        settings,
+                        search_name,
+                        db_candidates[:5],
+                        facts,
+                        video_contexts,
+                    )
+                    if disambiguated:
+                        best = disambiguated
+
+                return _handle_db_match(
+                    session,
+                    contribution,
+                    best,
+                    identification,
                     settings,
-                    search_name,
-                    db_candidates[:5],
                     facts,
                     video_contexts,
+                    all_candidates=db_candidates,
+                    promoted_ids=promoted_ids,
                 )
-                if disambiguated:
-                    best = disambiguated
-
-            return _handle_db_match(
-                session,
-                contribution,
-                best,
-                identification,
-                settings,
-                facts,
-                video_contexts,
-                all_candidates=db_candidates,
-                promoted_ids=promoted_ids,
-            )
 
     # Also try with original name if different
     if corrected_name and corrected_name.lower().strip() != contribution.name.lower().strip():
@@ -711,7 +754,9 @@ def _fetch_db_candidates(
                 text("""
                 SELECT usn.site_id, us.name AS site_name,
                        us.country, us.source_id,
-                       word_similarity(:qname, usn.name_normalized) AS similarity
+                       usn.name_normalized AS matched_alias,
+                       word_similarity(:qname, usn.name_normalized) AS similarity,
+                       word_similarity(:qname, COALESCE(us.name_normalized, lower(us.name))) AS name_similarity
                 FROM unified_site_names usn
                 JOIN unified_sites us ON us.id = usn.site_id
                 WHERE :qname <% usn.name_normalized
@@ -743,12 +788,71 @@ def _fetch_db_candidates(
                 "country": row.country,
                 "source": row.source_id,
                 "similarity": round(row.similarity, 2),
+                "matched_alias": row.matched_alias,
+                "name_similarity": round(row.name_similarity, 2),
             }
         )
         if len(candidates) >= limit:
             break
 
     return candidates
+
+
+ALIAS_CHECK_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "same_site": {"type": "boolean"},
+        "reasoning": {"type": "string"},
+    },
+    "required": ["same_site", "reasoning"],
+    "additionalProperties": False,
+}
+
+
+def _verify_alias_match(
+    settings: LyraSettings,
+    search_name: str,
+    site_name: str,
+    matched_alias: str,
+    facts: list[str],
+) -> bool:
+    """Quick Mercury check: is the alias match correct?
+
+    Called when name_similarity is in the ambiguous zone (0.3–0.8) where
+    shared words (tepe, caves, temple) inflate trigram similarity between
+    genuinely different sites.
+    """
+    facts_text = "\n".join(f"- {f}" for f in facts[:10]) if facts else "(none)"
+    prompt = (
+        f"A news video mentions the archaeological site '{search_name}'.\n"
+        f"Our database matched it via the alias '{matched_alias}' to a site "
+        f"named '{site_name}'.\n\n"
+        f"Known facts about '{search_name}':\n{facts_text}\n\n"
+        f"Is '{search_name}' the SAME archaeological site as '{site_name}'? "
+        f"Consider that sites can have alternate names/spellings, but nearby "
+        f"sites in the same complex are DIFFERENT sites."
+    )
+
+    result = _call_ai(
+        settings.model_identify,
+        prompt,
+        schema=ALIAS_CHECK_SCHEMA,
+        schema_name="AliasCheck",
+        reasoning_effort="low",
+        max_tokens=200,
+    )
+    if not result:
+        # LLM failed — reject the match to be safe
+        logger.warning(f"  [{search_name}] Alias check LLM failed, rejecting match")
+        return False
+
+    same = result.get("same_site", False)
+    reason = result.get("reasoning", "")
+    logger.info(
+        f"  [{search_name}] Alias check: same_site={same} "
+        f"('{search_name}' vs '{site_name}' via '{matched_alias}'): {reason}"
+    )
+    return same
 
 
 DISAMBIGUATE_SCHEMA = {
