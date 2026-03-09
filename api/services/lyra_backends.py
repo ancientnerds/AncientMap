@@ -255,17 +255,22 @@ class MercuryBackend:
         self.base_url = base_url
         self.max_tokens = max_tokens
         self._client = None
+        self._client_key: str = ""
 
     def _get_client(self):
-        if self._client is None:
-            from openai import AsyncOpenAI
+        from openai import AsyncOpenAI
 
+        from pipeline.lyra.config import get_current_api_key
+
+        current_key = get_current_api_key()
+        if self._client is None or self._client_key != current_key:
             self._client = AsyncOpenAI(
                 base_url=self.base_url,
-                api_key=self.api_key,
+                api_key=current_key,
                 timeout=120.0,
                 max_retries=5,
             )
+            self._client_key = current_key
         return self._client
 
     async def stream(
@@ -288,7 +293,18 @@ class MercuryBackend:
         if openai_tools:
             create_kwargs["tools"] = openai_tools
 
-        stream = await client.chat.completions.create(**create_kwargs)
+        try:
+            stream = await client.chat.completions.create(**create_kwargs)
+        except Exception as e:
+            from pipeline.lyra.config import mark_api_key_exhausted
+
+            msg = str(e).lower()
+            if "rate limit" in msg or "429" in msg or "quota" in msg:
+                mark_api_key_exhausted()
+                client = self._get_client()  # Picks up new key
+                stream = await client.chat.completions.create(**create_kwargs)
+            else:
+                raise
 
         # Accumulate tool call chunks by index
         tool_calls: dict[int, dict] = {}
@@ -376,11 +392,12 @@ def get_backend(
             )
             logger.info(f"Created OllamaBackend for {model_name} at {url}")
         else:
-            api_key = os.getenv("LYRA_API_KEY", "") or os.getenv("LYRA_ANTHROPIC_API_KEY", "")
+            from pipeline.lyra.config import get_current_api_key, get_max_tokens
+
+            api_key = get_current_api_key()
             mercury_url = os.getenv("LYRA_BASE_URL", "") or os.getenv(
                 "LYRA_ANTHROPIC_BASE_URL", "https://api.inceptionlabs.ai/v1"
             )
-            from pipeline.lyra.config import get_max_tokens
 
             _backends[key] = MercuryBackend(
                 model=model_name,

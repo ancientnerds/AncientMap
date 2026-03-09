@@ -2152,6 +2152,9 @@ def _promote_to_unified_sites(
             )
         )
 
+    # Flush so the new UnifiedSite + names exist in DB before the UPDATE below
+    session.flush()
+
     # Update all related NewsItems to point to the new site
     name_lower = contribution.name.lower().strip()
     session.query(NewsItem).filter(

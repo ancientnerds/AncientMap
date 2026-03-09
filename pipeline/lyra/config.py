@@ -82,6 +82,7 @@ class LyraSettings(BaseSettings):
 
     # LLM API (OpenAI-compatible — Mercury 2 by Inception Labs)
     api_key: str = ""
+    free_api_keys: str = ""  # Comma-separated free keys (used before main key)
     base_url: str = "https://api.inceptionlabs.ai/v1"
     temperature_min: float = 0.0
     model_summarize: str = "mercury-2"
@@ -169,6 +170,72 @@ def get_max_tokens() -> int:
 
 
 # ---------------------------------------------------------------------------
+# Key pool — rotates through free API keys before using the main (paid) key
+# ---------------------------------------------------------------------------
+
+
+class _KeyPool:
+    """Rotates through free API keys, falling back to the main key when exhausted."""
+
+    def __init__(self):
+        self._free_keys: list[str] = []
+        self._main_key: str = ""
+        self._index: int = 0
+        self._exhausted: set[int] = set()
+        self._initialized: bool = False
+
+    def _init(self, settings: LyraSettings) -> None:
+        if self._initialized:
+            return
+        self._main_key = settings.api_key
+        self._free_keys = [k.strip() for k in settings.free_api_keys.split(",") if k.strip()]
+        self._initialized = True
+        if self._free_keys:
+            logger.info(f"Key pool: {len(self._free_keys)} free keys + 1 main key")
+
+    @property
+    def current_key(self) -> str:
+        for i in range(self._index, len(self._free_keys)):
+            if i not in self._exhausted:
+                return self._free_keys[i]
+        return self._main_key
+
+    @property
+    def using_free_key(self) -> bool:
+        return self.current_key != self._main_key
+
+    def mark_exhausted(self) -> str:
+        """Mark the current free key as exhausted and return the next key."""
+        if self._index < len(self._free_keys):
+            self._exhausted.add(self._index)
+            # Advance past exhausted keys
+            while self._index < len(self._free_keys) and self._index in self._exhausted:
+                self._index += 1
+            remaining = len(self._free_keys) - len(self._exhausted)
+            next_key = self.current_key
+            is_main = next_key == self._main_key
+            logger.info(
+                f"Key rotated: {'main key' if is_main else f'{remaining} free keys remaining'}"
+            )
+            return next_key
+        return self._main_key
+
+
+_key_pool = _KeyPool()
+
+
+def get_current_api_key() -> str:
+    """Return the current API key from the pool (for use by chat backends)."""
+    _key_pool._init(_get_settings())
+    return _key_pool.current_key
+
+
+def mark_api_key_exhausted() -> str:
+    """Mark the current key as exhausted and return the next one."""
+    return _key_pool.mark_exhausted()
+
+
+# ---------------------------------------------------------------------------
 # OpenAI clients (Mercury cloud + Ollama local)
 # ---------------------------------------------------------------------------
 _cached_mercury_client = None
@@ -177,17 +244,17 @@ _cached_ollama_client = None
 _cached_ollama_key: str = ""
 
 
-def _get_mercury_client(settings: LyraSettings):
-    """Return a cached OpenAI client for the Mercury backend."""
+def _get_mercury_client(api_key: str, base_url: str):
+    """Return a cached OpenAI client for the given key + URL."""
     global _cached_mercury_client, _cached_mercury_key
 
     from openai import OpenAI
 
-    cache_key = f"{settings.api_key}:{settings.base_url}"
+    cache_key = f"{api_key}:{base_url}"
     if _cached_mercury_client is None or _cached_mercury_key != cache_key:
         _cached_mercury_client = OpenAI(
-            base_url=settings.base_url,
-            api_key=settings.api_key,
+            base_url=base_url,
+            api_key=api_key,
             timeout=120.0,
             max_retries=5,
         )
@@ -213,6 +280,19 @@ def _get_ollama_client(settings: LyraSettings):
     return _cached_ollama_client
 
 
+def _is_rate_limit_error(exc: Exception) -> bool:
+    """Check if an exception indicates rate limiting or quota exhaustion."""
+    try:
+        from openai import RateLimitError
+
+        if isinstance(exc, RateLimitError):
+            return True
+    except ImportError:
+        pass
+    msg = str(exc).lower()
+    return "rate limit" in msg or "quota" in msg or "429" in msg
+
+
 def _call_openai_api(
     settings: LyraSettings,
     *,
@@ -222,7 +302,11 @@ def _call_openai_api(
     **kwargs,
 ) -> NormalizedResponse:
     """Translate kwargs to OpenAI format and call the Mercury/Ollama backend."""
-    client = _get_ollama_client(settings) if is_ollama else _get_mercury_client(settings)
+    if is_ollama:
+        client = _get_ollama_client(settings)
+    else:
+        _key_pool._init(settings)
+        client = _get_mercury_client(_key_pool.current_key, settings.base_url)
 
     # Build OpenAI messages from system + user/assistant messages
     messages: list[dict] = []
@@ -301,7 +385,16 @@ def _call_openai_api(
     if not is_ollama and effective_effort:
         create_kwargs["reasoning_effort"] = effective_effort
 
-    response = client.chat.completions.create(**create_kwargs)
+    try:
+        response = client.chat.completions.create(**create_kwargs)
+    except Exception as e:
+        # Rotate to next key on rate limit / quota exhaustion (free keys only)
+        if not is_ollama and _key_pool.using_free_key and _is_rate_limit_error(e):
+            next_key = _key_pool.mark_exhausted()
+            client = _get_mercury_client(next_key, settings.base_url)
+            response = client.chat.completions.create(**create_kwargs)
+        else:
+            raise
     return _normalize_openai_response(response)
 
 
