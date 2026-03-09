@@ -122,6 +122,7 @@ export interface GroupedGalleryItems {
   books: UnifiedGalleryItem[]
   papers: UnifiedGalleryItem[]
   myths: UnifiedGalleryItem[]
+  webcams: UnifiedGalleryItem[]
 }
 
 /**
@@ -138,6 +139,7 @@ export function groupByTab(items: ContentItem[]): GroupedGalleryItems {
     books: [],
     papers: [],
     myths: [], // Custom content, not from connectors
+    webcams: [], // Webcam data, not from connectors
   }
 
   for (const item of items) {

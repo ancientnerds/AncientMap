@@ -36,6 +36,7 @@ export interface GalleryHookReturn {
   bookItems: UnifiedGalleryItem[]
   paperItems: UnifiedGalleryItem[]
   mythItems: UnifiedGalleryItem[]
+  webcamItems: UnifiedGalleryItem[]
   currentItems: UnifiedGalleryItem[]
 
   // Loading states (names match GalleryTabs props directly)
@@ -46,6 +47,7 @@ export interface GalleryHookReturn {
   isLoadingArtifacts: boolean
   isLoadingBooks: boolean
   isLoadingPapers: boolean
+  isLoadingWebcams: boolean
   isLoading: boolean
 
   // Hero

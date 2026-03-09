@@ -13,7 +13,7 @@ export interface Artifact {
 }
 
 // Gallery tab options
-export type GalleryTab = 'photos' | 'videos' | 'maps' | '3dmodels' | 'artifacts' | 'artworks' | 'books' | 'papers' | 'myths'
+export type GalleryTab = 'photos' | 'videos' | 'maps' | '3dmodels' | 'artifacts' | 'artworks' | 'books' | 'papers' | 'myths' | 'webcams'
 
 // Unified gallery item type for all tabs
 export interface UnifiedGalleryItem {
@@ -270,6 +270,8 @@ export interface GalleryTabsProps {
   bookCount: number
   paperCount: number
   mythCount: number
+  webcamCount: number
+  isLoadingWebcams?: boolean
   isLoadingImages?: boolean
   isLoadingVideos?: boolean
   isLoadingMaps?: boolean
