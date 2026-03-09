@@ -491,17 +491,8 @@ def _process_single(
                     all_candidates=alt_candidates,
                     promoted_ids=promoted_ids,
                 )
-                # Store research aliases for the matched site
-                if result and contribution.enrichment_data:
-                    db_match = contribution.enrichment_data.get("db_match", {})
-                    matched_site_id = db_match.get("site_id")
-                    if matched_site_id:
-                        _store_research_aliases(
-                            session,
-                            uuid.UUID(matched_site_id),
-                            research,
-                            search_name,
-                        )
+                # Wikidata aliases are stored inside _handle_wikidata_match
+                # when the site is promoted (no AI-generated aliases needed here)
                 return result
 
     # If research found a Wikidata candidate with a QID, try the existing
@@ -562,7 +553,7 @@ def _process_single(
             _store_garble_alias(
                 session, contribution.promoted_site_id, contribution.name, search_name
             )
-            _store_research_aliases(session, contribution.promoted_site_id, research, search_name)
+            # Wikidata aliases stored inside _handle_wikidata_match after promotion
         return result
 
     # If research found a GeoNames or Wikipedia match but no Wikidata QID
@@ -967,8 +958,9 @@ def _enrich_from_wikidata(qid: str) -> dict:
             params={
                 "action": "wbgetentities",
                 "ids": qid,
-                "props": "claims|sitelinks",
+                "props": "claims|sitelinks|labels|aliases",
                 "sitefilter": "enwiki",
+                "languages": "en|es|fr|de|it|pt|la|ar|zh|ja|ko|ru",
                 "format": "json",
             },
         )
@@ -1076,6 +1068,18 @@ def _enrich_from_wikidata(qid: str) -> dict:
         result["wikipedia_title"] = enwiki["title"]
         encoded_title = urllib.parse.quote(enwiki["title"].replace(" ", "_"), safe="/:")
         result["wikipedia_url"] = f"https://en.wikipedia.org/wiki/{encoded_title}"
+
+    # Collect curated labels + aliases from Wikidata (all requested languages)
+    alt_names: set[str] = set()
+    for lang_data in entity.get("labels", {}).values():
+        if lang_data.get("value"):
+            alt_names.add(lang_data["value"])
+    for lang_aliases in entity.get("aliases", {}).values():
+        for alias in lang_aliases:
+            if alias.get("value"):
+                alt_names.add(alias["value"])
+    if alt_names:
+        result["wikidata_names"] = sorted(alt_names)
 
     return result
 
@@ -1460,18 +1464,24 @@ def _check_name_an_match(session: Session, site_name: str) -> UnifiedSite | None
     return None
 
 
-def _store_research_aliases(
+def _store_wikidata_aliases(
     session: Session,
     site_id: uuid.UUID,
-    research,
+    wikidata_names: list[str],
     canonical_name: str,
-) -> None:
-    """Store AI-generated alternative names as site aliases for future matching."""
-    if not research or not research.pre_research:
-        return
-    alt_names = research.pre_research.get("alternative_names", [])
+) -> int:
+    """Store Wikidata-curated labels and aliases for future name matching.
+
+    Uses Wikidata Entity API labels + aliases (all languages) instead of
+    AI-generated names — these are human-curated and reliable.
+
+    Returns the number of new aliases stored.
+    """
+    if not wikidata_names:
+        return 0
     canonical_norm = normalize_name(canonical_name)
-    for alt in alt_names:
+    stored = 0
+    for alt in wikidata_names:
         if not alt or len(alt) < 3:
             continue
         alt_norm = normalize_name(alt)
@@ -1491,10 +1501,13 @@ def _store_research_aliases(
                     site_id=site_id,
                     name=alt,
                     name_normalized=alt_norm,
-                    name_type="research_alias",
+                    name_type="wikidata_alias",
                 )
             )
-            logger.info(f"  Stored research alias: '{alt}' -> site {site_id}")
+            stored += 1
+    if stored:
+        logger.info(f"  Stored {stored} Wikidata aliases for site {site_id}")
+    return stored
 
 
 def _handle_db_match(
@@ -1808,6 +1821,11 @@ def _handle_wikidata_match(
             },
         }
         contribution.score = _compute_score(contribution)
+        # Store Wikidata aliases for the matched AN site too
+        if enrichment.get("wikidata_names"):
+            _store_wikidata_aliases(
+                session, an_match.id, enrichment["wikidata_names"], an_match.name
+            )
         return True
 
     # Country from coordinates (not AI)
@@ -1844,9 +1862,16 @@ def _handle_wikidata_match(
     # Promote if score is high enough and has coordinates
     _maybe_promote(session, contribution, site_name, settings)
 
-    # Store garble alias for the promoted site (if promoted)
+    # Store garble alias + Wikidata aliases for the promoted site (if promoted)
     if contribution.promoted_site_id:
         _store_garble_alias(session, contribution.promoted_site_id, contribution.name, site_name)
+        if enrichment.get("wikidata_names"):
+            _store_wikidata_aliases(
+                session,
+                contribution.promoted_site_id,
+                enrichment["wikidata_names"],
+                site_name,
+            )
 
     return True
 
@@ -1968,10 +1993,10 @@ def _handle_ai_enriched_site(
 
     _maybe_promote(session, contribution, search_name, settings)
 
-    # Store garble alias and research aliases for the promoted site (if promoted)
+    # Store garble alias for the promoted site (if promoted)
+    # No Wikidata aliases here — this path has no Wikidata enrichment
     if contribution.promoted_site_id:
         _store_garble_alias(session, contribution.promoted_site_id, contribution.name, search_name)
-        _store_research_aliases(session, contribution.promoted_site_id, research, search_name)
 
     return True
 
