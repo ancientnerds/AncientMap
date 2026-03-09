@@ -724,7 +724,12 @@ def _fetch_db_candidates(
                 FROM unified_site_names usn
                 JOIN unified_sites us ON us.id = usn.site_id
                 WHERE :qname <% usn.name_normalized
-                ORDER BY usn.name_normalized <->> :qname
+                ORDER BY usn.name_normalized <->> :qname,
+                         CASE us.source_id
+                           WHEN 'ancient_nerds' THEN 0
+                           WHEN 'lyra' THEN 1
+                           ELSE 2
+                         END
                 LIMIT :limit
             """),
                 {"qname": normalized, "limit": limit * 3},

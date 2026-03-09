@@ -337,6 +337,12 @@ function extractCountryFromLocation(location: string): string {
 export function getCountryCode(countryOrLocation: string): string | null {
   if (!countryOrLocation) return null
 
+  // If input is already a 2-letter ISO code, return it directly
+  const upper = countryOrLocation.trim().toUpperCase()
+  if (upper.length === 2 && CODE_TO_CONTINENT[upper]) {
+    return upper
+  }
+
   // Try exact match first (for country name)
   const code = COUNTRY_CODES[countryOrLocation]
   if (code) {
