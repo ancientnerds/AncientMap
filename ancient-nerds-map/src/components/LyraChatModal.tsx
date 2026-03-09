@@ -672,7 +672,7 @@ export default function LyraChatModal({
 
   const sendMessage = useCallback(async (text?: string) => {
     const messageText = text || input.trim()
-    if (!messageText) return
+    if (!messageText || isStreaming) return
     if (!authToken) return
 
     // Check credits (unlimited users bypass)
@@ -932,6 +932,7 @@ export default function LyraChatModal({
       setIsStreaming(false)
       abortRef.current = null
       setLyraStatus(null)
+      setTimeout(() => inputRef.current?.focus(), 50)
     }
   }, [input, authToken, userCredits, isUnlimited, messages, contextType, contextId, contextYear, onHighlightSites, clearAuth, conversationId])
 
@@ -1436,7 +1437,6 @@ export default function LyraChatModal({
                   }}
                   onKeyDown={handleKeyDown}
                   placeholder="Ask Lyra..."
-                  disabled={isStreaming}
                   rows={1}
                 />
                 <button
