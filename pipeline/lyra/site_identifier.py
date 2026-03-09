@@ -614,9 +614,7 @@ def _call_ai(
     create_kwargs.update(kwargs)
 
     try:
-        response = call_api(
-            reasoning_effort=reasoning_effort, **create_kwargs
-        )
+        response = call_api(reasoning_effort=reasoning_effort, **create_kwargs)
     except LyraAPIError as e:
         logger.error(f"LLM API error: {e}")
         return None

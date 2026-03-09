@@ -376,13 +376,9 @@ def get_backend(
             )
             logger.info(f"Created OllamaBackend for {model_name} at {url}")
         else:
-            api_key = (
-                os.getenv("LYRA_API_KEY", "")
-                or os.getenv("LYRA_ANTHROPIC_API_KEY", "")
-            )
-            mercury_url = (
-                os.getenv("LYRA_BASE_URL", "")
-                or os.getenv("LYRA_ANTHROPIC_BASE_URL", "https://api.inceptionlabs.ai/v1")
+            api_key = os.getenv("LYRA_API_KEY", "") or os.getenv("LYRA_ANTHROPIC_API_KEY", "")
+            mercury_url = os.getenv("LYRA_BASE_URL", "") or os.getenv(
+                "LYRA_ANTHROPIC_BASE_URL", "https://api.inceptionlabs.ai/v1"
             )
             from pipeline.lyra.config import get_max_tokens
 

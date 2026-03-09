@@ -528,9 +528,7 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
         if speculative:
             payload = _build_speculative_payload(speculative)
             logger.info(f"Writing speculative section ({len(speculative)} items)")
-            speculative_text = _write_section(
-                payload, is_speculative=True, settings=settings
-            )
+            speculative_text = _write_section(payload, is_speculative=True, settings=settings)
 
         # Assemble pre-verification body
         pre_body = "\n\n---\n\n".join(section_texts)
