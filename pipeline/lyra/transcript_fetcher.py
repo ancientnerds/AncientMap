@@ -391,7 +391,9 @@ def extract_transcript_segment(
     Returns:
         Extracted segment text, or empty string if timestamps can't be parsed.
     """
-    parts = timestamp_range.split("-")
+    # Normalize unicode dashes (en-dash, em-dash, non-breaking hyphen) to ASCII
+    normalized_range = re.sub(r"[\u2010\u2011\u2012\u2013\u2014\u2015]", "-", timestamp_range)
+    parts = normalized_range.split("-")
     if len(parts) != 2:
         return ""
 

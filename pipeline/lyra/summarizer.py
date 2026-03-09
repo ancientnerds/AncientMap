@@ -329,7 +329,14 @@ def summarize_video(
             ts_range = topic.get("timestamp_range")
             ts_seconds = None
             if ts_range:
-                parts = ts_range.split("-")
+                # Normalize unicode dashes to ASCII before splitting
+                normalized = (
+                    ts_range.replace("\u2010", "-")
+                    .replace("\u2011", "-")
+                    .replace("\u2013", "-")
+                    .replace("\u2014", "-")
+                )
+                parts = normalized.split("-")
                 if parts:
                     ts_seconds = parse_timestamp_to_seconds(parts[0])
 
