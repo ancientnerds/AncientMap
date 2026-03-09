@@ -3,34 +3,108 @@ import { createPortal } from 'react-dom'
 import type { UnifiedGalleryItem } from '../types'
 
 const PROXY_BASE = import.meta.env.DEV ? 'http://localhost:8765' : '/webcam-proxy'
-
-const MIN_ZOOM = 1
-const MAX_ZOOM = 5
-const ZOOM_STEP = 0.3
+const MAX_ZOOM = 8
 
 interface WebcamStreamOverlayProps {
   item: UnifiedGalleryItem
   onClose: () => void
 }
 
+function useLocalTime(timezone: string) {
+  const [time, setTime] = useState('')
+  const [icon, setIcon] = useState('\u2600')
+
+  useEffect(() => {
+    const update = () => {
+      try {
+        const fmt = new Intl.DateTimeFormat('en-GB', {
+          timeZone: timezone,
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+        })
+        setTime(fmt.format(new Date()))
+        const h = parseInt(new Intl.DateTimeFormat('en-GB', {
+          timeZone: timezone, hour: 'numeric', hour12: false,
+        }).format(new Date()))
+        setIcon(h >= 6 && h < 20 ? '\u2600' : '\uD83C\uDF19')
+      } catch { /* invalid tz */ }
+    }
+    update()
+    const id = setInterval(update, 1000)
+    return () => clearInterval(id)
+  }, [timezone])
+
+  return { time, icon }
+}
+
 export function WebcamStreamOverlay({ item, onClose }: WebcamStreamOverlayProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const hlsRef = useRef<{ destroy: () => void } | null>(null)
-  const wrapRef = useRef<HTMLDivElement>(null)
+  const feedRef = useRef<HTMLDivElement>(null)
+  const bodyRef = useRef<HTMLDivElement>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [muted, setMuted] = useState(true)
+  const [showHint, setShowHint] = useState(true)
+  const [zoomVisible, setZoomVisible] = useState(false)
 
-  // Zoom & pan state
-  const [zoom, setZoom] = useState(1)
-  const [pan, setPan] = useState({ x: 0, y: 0 })
-  const dragging = useRef(false)
-  const dragStart = useRef({ x: 0, y: 0 })
-  const panStart = useRef({ x: 0, y: 0 })
+  // Pixel-based zoom & pan (matching test page)
+  const pz = useRef({ scale: 1, x: 0, y: 0 })
+  const dragState = useRef({ active: false, startX: 0, startY: 0, origX: 0, origY: 0 })
+  const touchState = useRef({ initDist: 0, initScale: 1 })
+  const zoomHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const original = item.original as Record<string, unknown>
   const pageUrl = original.pageUrl as string
+  const timezone = original.timezone as string
+  const region = original.region as string
+  const flag = original.flag as string
 
+  const { time: localTime, icon: timeIcon } = useLocalTime(timezone)
+
+  // Apply transform to video element
+  const applyTransform = useCallback(() => {
+    const feed = feedRef.current
+    const video = videoRef.current
+    if (!feed || !video) return
+
+    const { scale, x, y } = pz.current
+    // Clamp pan
+    if (scale <= 1) {
+      pz.current.x = 0
+      pz.current.y = 0
+    } else {
+      const rect = feed.getBoundingClientRect()
+      const maxX = rect.width * (scale - 1)
+      const maxY = rect.height * (scale - 1)
+      pz.current.x = Math.max(-maxX, Math.min(0, x))
+      pz.current.y = Math.max(-maxY, Math.min(0, y))
+    }
+
+    video.style.transform = `translate(${pz.current.x}px, ${pz.current.y}px) scale(${scale})`
+
+    // Show zoom level
+    const isZoomed = scale > 1.05
+    setZoomVisible(isZoomed)
+    if (isZoomed) setShowHint(false)
+
+    // Auto-hide zoom indicator
+    if (zoomHideTimer.current) clearTimeout(zoomHideTimer.current)
+    if (isZoomed) {
+      zoomHideTimer.current = setTimeout(() => setZoomVisible(false), 2000)
+    }
+  }, [])
+
+  const resetZoom = useCallback(() => {
+    pz.current = { scale: 1, x: 0, y: 0 }
+    if (videoRef.current) videoRef.current.style.transform = ''
+    setZoomVisible(false)
+    setShowHint(true)
+  }, [])
+
+  // HLS stream init
   useEffect(() => {
     let cancelled = false
 
@@ -72,9 +146,8 @@ export function WebcamStreamOverlay({ item, onClose }: WebcamStreamOverlayProps)
 
         const hls = new Hls({
           enableWorker: true,
-          lowLatencyMode: true,
           maxBufferLength: 10,
-          maxMaxBufferLength: 30,
+          liveSyncDurationCount: 3,
         })
         hlsRef.current = hls
 
@@ -113,7 +186,7 @@ export function WebcamStreamOverlay({ item, onClose }: WebcamStreamOverlayProps)
     }
   }, [pageUrl])
 
-  // Close on Escape
+  // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -122,100 +195,155 @@ export function WebcamStreamOverlay({ item, onClose }: WebcamStreamOverlayProps)
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
 
-  // Clamp pan so the video doesn't disappear off-screen
-  const clampPan = useCallback((x: number, y: number, z: number) => {
-    if (z <= 1) return { x: 0, y: 0 }
-    const maxPan = ((z - 1) / z) * 50 // percentage-based limit
-    return {
-      x: Math.max(-maxPan, Math.min(maxPan, x)),
-      y: Math.max(-maxPan, Math.min(maxPan, y)),
-    }
-  }, [])
-
-  // Scroll to zoom
+  // Wheel zoom — zoom toward cursor position (matching test page)
   useEffect(() => {
-    const el = wrapRef.current
-    if (!el) return
+    const feed = feedRef.current
+    if (!feed) return
+
     const handler = (e: WheelEvent) => {
       e.preventDefault()
-      setZoom(prev => {
-        const next = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, prev - e.deltaY * 0.002))
-        // Re-clamp pan for the new zoom
-        setPan(p => clampPan(p.x, p.y, next))
-        return next
-      })
+
+      const rect = feed.getBoundingClientRect()
+      const cursorX = e.clientX - rect.left
+      const cursorY = e.clientY - rect.top
+
+      const oldScale = pz.current.scale
+      const delta = e.deltaY > 0 ? 0.85 : 1.18
+      pz.current.scale = Math.max(1, Math.min(MAX_ZOOM, oldScale * delta))
+
+      if (pz.current.scale > 1) {
+        const ratio = pz.current.scale / oldScale
+        pz.current.x = cursorX - ratio * (cursorX - pz.current.x)
+        pz.current.y = cursorY - ratio * (cursorY - pz.current.y)
+      }
+
+      applyTransform()
     }
-    el.addEventListener('wheel', handler, { passive: false })
-    return () => el.removeEventListener('wheel', handler)
-  }, [clampPan])
+    feed.addEventListener('wheel', handler, { passive: false })
+    return () => feed.removeEventListener('wheel', handler)
+  }, [applyTransform])
 
-  // Mouse drag to pan
-  const onPointerDown = useCallback((e: React.PointerEvent) => {
-    if (zoom <= 1) return
-    dragging.current = true
-    dragStart.current = { x: e.clientX, y: e.clientY }
-    panStart.current = { ...pan }
-    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
-  }, [zoom, pan])
+  // Mouse drag to pan (pixel-based like test page)
+  useEffect(() => {
+    const feed = feedRef.current
+    if (!feed) return
 
-  const onPointerMove = useCallback((e: React.PointerEvent) => {
-    if (!dragging.current || !wrapRef.current) return
-    const rect = wrapRef.current.getBoundingClientRect()
-    const dx = ((e.clientX - dragStart.current.x) / rect.width) * 100
-    const dy = ((e.clientY - dragStart.current.y) / rect.height) * 100
-    setPan(clampPan(panStart.current.x + dx, panStart.current.y + dy, zoom))
-  }, [zoom, clampPan])
+    const onDown = (e: MouseEvent) => {
+      if (pz.current.scale <= 1) return
+      e.preventDefault()
+      dragState.current = {
+        active: true,
+        startX: e.clientX,
+        startY: e.clientY,
+        origX: pz.current.x,
+        origY: pz.current.y,
+      }
+      feed.style.cursor = 'grabbing'
+    }
 
-  const onPointerUp = useCallback(() => {
-    dragging.current = false
+    const onMove = (e: MouseEvent) => {
+      if (!dragState.current.active) return
+      pz.current.x = dragState.current.origX + (e.clientX - dragState.current.startX)
+      pz.current.y = dragState.current.origY + (e.clientY - dragState.current.startY)
+      applyTransform()
+    }
+
+    const onUp = () => {
+      if (!dragState.current.active) return
+      dragState.current.active = false
+      feed.style.cursor = pz.current.scale > 1 ? 'grab' : ''
+    }
+
+    feed.addEventListener('mousedown', onDown)
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    return () => {
+      feed.removeEventListener('mousedown', onDown)
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+  }, [applyTransform])
+
+  // Double-click to reset
+  useEffect(() => {
+    const feed = feedRef.current
+    if (!feed) return
+    const handler = () => resetZoom()
+    feed.addEventListener('dblclick', handler)
+    return () => feed.removeEventListener('dblclick', handler)
+  }, [resetZoom])
+
+  // Touch: pinch-to-zoom + drag-to-pan
+  useEffect(() => {
+    const feed = feedRef.current
+    if (!feed) return
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        touchState.current.initDist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        )
+        touchState.current.initScale = pz.current.scale
+      } else if (e.touches.length === 1 && pz.current.scale > 1) {
+        dragState.current = {
+          active: true,
+          startX: e.touches[0].clientX,
+          startY: e.touches[0].clientY,
+          origX: pz.current.x,
+          origY: pz.current.y,
+        }
+      }
+    }
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        e.preventDefault()
+        const dist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        )
+        pz.current.scale = Math.max(1, Math.min(MAX_ZOOM,
+          touchState.current.initScale * (dist / touchState.current.initDist)
+        ))
+        applyTransform()
+      } else if (e.touches.length === 1 && pz.current.scale > 1) {
+        pz.current.x = dragState.current.origX + (e.touches[0].clientX - dragState.current.startX)
+        pz.current.y = dragState.current.origY + (e.touches[0].clientY - dragState.current.startY)
+        applyTransform()
+      }
+    }
+
+    feed.addEventListener('touchstart', onTouchStart, { passive: true })
+    feed.addEventListener('touchmove', onTouchMove, { passive: false })
+    return () => {
+      feed.removeEventListener('touchstart', onTouchStart)
+      feed.removeEventListener('touchmove', onTouchMove)
+    }
+  }, [applyTransform])
+
+  const toggleFullscreen = useCallback(() => {
+    const el = bodyRef.current
+    if (!el) return
+    if (document.fullscreenElement) {
+      document.exitFullscreen()
+    } else {
+      el.requestFullscreen?.()
+    }
   }, [])
 
-  const resetView = useCallback(() => {
-    setZoom(1)
-    setPan({ x: 0, y: 0 })
-  }, [])
-
-  const zoomIn = useCallback(() => {
-    setZoom(prev => {
-      const next = Math.min(MAX_ZOOM, prev + ZOOM_STEP)
-      setPan(p => clampPan(p.x, p.y, next))
-      return next
-    })
-  }, [clampPan])
-
-  const zoomOut = useCallback(() => {
-    setZoom(prev => {
-      const next = Math.max(MIN_ZOOM, prev - ZOOM_STEP)
-      setPan(p => clampPan(p.x, p.y, next))
-      return next
-    })
-  }, [clampPan])
-
-  const isZoomed = zoom > 1.01
+  const flagImg = flag
+    ? <img src={`https://flagcdn.com/16x12/${flag}.png`} alt="" style={{ height: 10, borderRadius: 1, marginRight: 4, verticalAlign: 'middle' }} />
+    : null
 
   return createPortal(
     <div className="webcam-stream-overlay" onClick={onClose}>
-      <div className="webcam-stream-content" onClick={e => e.stopPropagation()}>
-        <div className="webcam-stream-header">
-          <span className="webcam-stream-title">{item.title}</span>
-          <div className="webcam-stream-controls">
-            <button onClick={zoomIn} title="Zoom in" disabled={zoom >= MAX_ZOOM}>+</button>
-            <button onClick={zoomOut} title="Zoom out" disabled={zoom <= MIN_ZOOM}>&minus;</button>
-            {isZoomed && <button onClick={resetView} title="Reset zoom">1:1</button>}
-            <button onClick={() => setMuted(!muted)} title={muted ? 'Unmute' : 'Mute'}>
-              {muted ? '\uD83D\uDD07' : '\uD83D\uDD0A'}
-            </button>
-            <button onClick={onClose} title="Close">&times;</button>
-          </div>
-        </div>
+      <div ref={bodyRef} className="webcam-stream-body" onClick={e => e.stopPropagation()}>
+        <button className="webcam-stream-close" onClick={onClose} title="Close (Esc)">&times;</button>
         <div
-          ref={wrapRef}
-          className="webcam-stream-video-wrap"
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
-          style={{ cursor: isZoomed ? 'grab' : 'default', overflow: 'hidden' }}
+          ref={feedRef}
+          className="webcam-stream-feed"
+          style={{ cursor: pz.current.scale > 1 ? 'grab' : 'default' }}
         >
           {loading && <div className="webcam-stream-loading"><div className="map-loading-spinner" /></div>}
           {error && <div className="webcam-stream-error">{error}</div>}
@@ -229,22 +357,45 @@ export function WebcamStreamOverlay({ item, onClose }: WebcamStreamOverlayProps)
               height: '100%',
               objectFit: 'contain',
               display: error ? 'none' : 'block',
-              transform: `scale(${zoom}) translate(${pan.x}%, ${pan.y}%)`,
-              transformOrigin: 'center center',
-              transition: dragging.current ? 'none' : 'transform 0.15s ease-out',
+              transformOrigin: '0 0',
+              willChange: 'transform',
+              pointerEvents: 'none',
+              userSelect: 'none',
             }}
           />
-        </div>
-        <div className="webcam-stream-footer">
-          <span className="webcam-stream-attribution">
-            Stream provided by{' '}
-            <a href={pageUrl} target="_blank" rel="noopener noreferrer">SkylineWebcams</a>
-            {' \u00B7 '}
-            <a href="https://www.skylinewebcams.com" target="_blank" rel="noopener noreferrer">skylinewebcams.com</a>
-          </span>
-          {isZoomed && (
-            <span className="webcam-stream-zoom-level">{Math.round(zoom * 100)}%</span>
+          <div className={`webcam-zoom-level ${zoomVisible ? 'visible' : ''}`}>
+            {pz.current.scale.toFixed(1)}x
+          </div>
+          {showHint && !error && !loading && (
+            <div className="webcam-zoom-hint">
+              Scroll to zoom &middot; Drag to pan &middot; Double-click to reset
+            </div>
           )}
+        </div>
+        <div className="webcam-stream-bar">
+          <div>
+            <div className="webcam-stream-title">{item.title}</div>
+            <div className="webcam-stream-sub">
+              {flagImg}{region}
+              {localTime && <> &middot; {timeIcon} {localTime} local time</>}
+            </div>
+          </div>
+          <div className="webcam-stream-actions">
+            <button className="webcam-lb-btn secondary" onClick={() => setMuted(!muted)} title={muted ? 'Unmute' : 'Mute'}>
+              {muted ? '\uD83D\uDD07' : '\uD83D\uDD0A'}
+            </button>
+            <button className="webcam-lb-btn secondary" onClick={toggleFullscreen} title="Fullscreen">
+              &#x26F6;
+            </button>
+            <a
+              className="webcam-lb-btn primary"
+              href={pageUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Watch on SkylineWebcams &#x2197;
+            </a>
+          </div>
         </div>
       </div>
     </div>,
