@@ -1,5 +1,6 @@
 """Fetch YouTube transcripts via YouTube Data API + youtube-transcript-api, store in PostgreSQL."""
 
+import concurrent.futures
 import logging
 import re
 from datetime import UTC, datetime, timedelta
@@ -113,14 +114,29 @@ def get_recent_videos(channel: NewsChannel, lookup_days: int, api_key: str) -> l
 def fetch_transcript(video_id: str, settings: LyraSettings) -> tuple[str | None, float | None]:
     """Fetch and clean a YouTube transcript. Returns (transcript_text, duration_minutes)."""
     ytt_api = _build_ytt_api(settings)
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     try:
-        transcript = ytt_api.fetch(video_id, languages=["en", "en-US", "en-GB"])
+        future = executor.submit(
+            ytt_api.fetch, video_id, languages=["en", "en-US", "en-GB"]
+        )
+        transcript = future.result(timeout=settings.transcript_fetch_timeout)
+    except concurrent.futures.TimeoutError:
+        # shutdown(wait=False) so we don't block on the hung thread
+        executor.shutdown(wait=False, cancel_futures=True)
+        logger.warning(
+            f"Transcript fetch timed out after {settings.transcript_fetch_timeout}s"
+            f" for {video_id}"
+        )
+        return None, None
     except Exception as e:
+        executor.shutdown(wait=False)
         msg = str(e)
         if any(p in msg for p in _PERMANENT_PATTERNS):
             raise PermanentVideoError(msg) from e
         logger.warning(f"No transcript for {video_id}: {e}")
         return None, None
+    else:
+        executor.shutdown(wait=False)
 
     # v1.x returns snippet objects with .text/.start/.duration attributes — convert to dicts
     transcript_list = [

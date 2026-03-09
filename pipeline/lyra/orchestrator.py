@@ -11,6 +11,7 @@ Local dev usage:
 """
 
 import argparse
+import concurrent.futures
 import logging
 import sys
 import time
@@ -161,6 +162,9 @@ def setup_logging() -> None:
     logging.getLogger("anthropic").setLevel(logging.WARNING)
 
 
+STEP_TIMEOUT = 900  # 15 minutes max per step
+
+
 def _run_step(step_name: str, settings: LyraSettings) -> tuple[int, float]:
     """Run a single pipeline step. Returns (result_count, elapsed_seconds)."""
     import importlib
@@ -170,7 +174,17 @@ def _run_step(step_name: str, settings: LyraSettings) -> tuple[int, float]:
     func = getattr(module, func_name)
 
     t0 = time.time()
-    result = func(settings) if needs_settings else func()
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(func, settings) if needs_settings else executor.submit(func)
+    try:
+        result = future.result(timeout=STEP_TIMEOUT)
+    except concurrent.futures.TimeoutError:
+        # shutdown(wait=False) so we don't block on the hung thread
+        executor.shutdown(wait=False, cancel_futures=True)
+        logger.error(f"Step '{step_name}' timed out after {STEP_TIMEOUT}s — skipping")
+        return -1, time.time() - t0
+    else:
+        executor.shutdown(wait=False)
     elapsed = time.time() - t0
     return result, elapsed
 
