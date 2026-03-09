@@ -1,4 +1,4 @@
-import { getCountryFlatFlagUrl } from '../../utils/countryFlags'
+import { getCountryFlatFlagUrl, getCountryDisplayName } from '../../utils/countryFlags'
 import './metadata.css'
 
 export type FlagSize = 'sm' | 'md' | 'lg'
@@ -13,14 +13,16 @@ export function CountryFlag({ country, size = 'sm', showName = false }: CountryF
   const flagUrl = getCountryFlatFlagUrl(country)
   if (!flagUrl) return showName ? <span>{country}</span> : null
 
+  const displayName = showName ? getCountryDisplayName(country) : country
+
   return (
     <>
       <img
         src={flagUrl}
-        alt={showName ? '' : country}
+        alt={showName ? '' : displayName}
         className={`meta-flag meta-flag-${size}`}
       />
-      {showName && <span>{country}</span>}
+      {showName && <span>{displayName}</span>}
     </>
   )
 }

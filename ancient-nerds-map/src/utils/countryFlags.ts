@@ -383,6 +383,21 @@ export function getCountryFlatFlagUrl(country: string): string | null {
   return code ? `/flags-flat/${code.toLowerCase()}.webp` : null
 }
 
+// Reverse lookup: ISO code → display name (first matching entry in COUNTRY_CODES)
+const CODE_TO_NAME: Record<string, string> = {}
+for (const [name, code] of Object.entries(COUNTRY_CODES)) {
+  if (!CODE_TO_NAME[code]) CODE_TO_NAME[code] = name
+}
+
+/** Resolve a country string to a human-readable name.
+ *  Handles both full names ("Peru") and ISO codes ("PE"). */
+export function getCountryDisplayName(country: string): string {
+  if (!country) return country
+  const upper = country.trim().toUpperCase()
+  if (upper.length === 2 && CODE_TO_NAME[upper]) return CODE_TO_NAME[upper]
+  return country
+}
+
 /** Get the continent for a country name */
 export function getCountryContinent(country: string): Continent | null {
   const code = getCountryCode(country)
