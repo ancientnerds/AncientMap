@@ -1524,7 +1524,7 @@ def _run_migrations(engine) -> None:
         conn.execute(
             text("""
             UPDATE user_contributions SET status = 'pending', facts_hash = NULL
-            WHERE site_name_extracted = 'Bees Bejisultan Huyek'
+            WHERE name = 'Bees Bejisultan Huyek'
               AND status = 'not_a_site'
         """)
         )
