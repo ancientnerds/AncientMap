@@ -9546,24 +9546,24 @@ body.hud-hidden .empire-borders-window {
   position: absolute;
   bottom: 12px;
   left: 12px;
-  background: rgba(0, 0, 0, 0.65);
+  background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(4px);
-  color: #aaa;
-  font-size: 12px;
-  font-weight: 500;
-  padding: 5px 10px;
-  border-radius: 4px;
+  padding: 6px 10px;
+  border-radius: 6px;
   text-decoration: none;
   z-index: 3;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  letter-spacing: 0.3px;
-  transition: background 0.2s, color 0.2s;
+  display: block;
+  transition: background 0.2s, opacity 0.2s;
+  opacity: 0.85;
 }
 .webcam-source-watermark:hover {
-  background: rgba(0, 0, 0, 0.85);
-  color: #fff;
+  background: rgba(0, 0, 0, 0.8);
+  opacity: 1;
+}
+.webcam-source-logo {
+  height: 20px;
+  width: auto;
+  display: block;
 }
 .webcam-zoom-level {
   position: absolute;
