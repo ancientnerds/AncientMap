@@ -39,7 +39,7 @@ from pipeline.lyra.site_matcher import fill_contrib_from_site
 from pipeline.lyra.site_researcher import research_site
 from pipeline.normalizers.dates import passes_date_cutoff
 from pipeline.normalizers.site_type import normalize_site_type
-from pipeline.utils.country_lookup import country_name_variants, lookup_country, normalize_country
+from pipeline.utils.country_lookup import lookup_country, normalize_country
 from pipeline.utils.http import fetch_with_retry
 from pipeline.utils.text import (
     categorize_period,
@@ -925,6 +925,72 @@ def _verify_alias_match(
     return same
 
 
+MATCH_VERIFY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "correct_match": {"type": "boolean"},
+        "reasoning": {"type": "string"},
+    },
+    "required": ["correct_match", "reasoning"],
+    "additionalProperties": False,
+}
+
+
+def _verify_db_match(
+    settings: LyraSettings,
+    contribution_name: str,
+    site_name: str,
+    site_country: str | None,
+    facts: list[str] | None,
+    contrib_country: str | None,
+) -> tuple[bool, str]:
+    """LLM verification: does this DB site actually match the news mention?
+
+    Replaces mechanical country-name comparison with an LLM call that
+    understands geography, alternate country names, and context.
+
+    Returns (is_correct, reasoning).
+    """
+    facts_text = "\n".join(f"- {f}" for f in (facts or [])[:10]) or "(none)"
+
+    site_loc = f" (located in {site_country})" if site_country else ""
+    contrib_loc = (
+        f"\nThe news source places '{contribution_name}' in {contrib_country}."
+        if contrib_country
+        else ""
+    )
+
+    prompt = (
+        f"A news video mentions the archaeological site '{contribution_name}'.{contrib_loc}\n"
+        f"Our database matched it to: '{site_name}'{site_loc}.\n\n"
+        f"Known facts about '{contribution_name}':\n{facts_text}\n\n"
+        f"Is '{site_name}' the CORRECT match for '{contribution_name}'?\n"
+        f"Consider:\n"
+        f"- Alternate names/spellings of the same site are CORRECT matches\n"
+        f"- 'China' and 'People's Republic of China' are the SAME country\n"
+        f"- 'England' and 'United Kingdom' and 'Great Britain' are the SAME country\n"
+        f"- Sites in completely different countries are WRONG matches\n"
+        f"- Sites in the same complex but with different specific names are WRONG matches\n"
+        f"- Generic region names matched to specific sites are WRONG matches"
+    )
+
+    result = _call_ai(
+        settings.model_identify,
+        prompt,
+        schema=MATCH_VERIFY_SCHEMA,
+        schema_name="MatchVerify",
+        reasoning_effort="low",
+        max_tokens=200,
+    )
+    if not result:
+        logger.warning(f"  [{contribution_name}] Match verify LLM failed, rejecting")
+        return False, "LLM call failed"
+
+    correct = result.get("correct_match", False)
+    reasoning = result.get("reasoning", "")
+    return correct, reasoning
+
+
 DISAMBIGUATE_SCHEMA = {
     "type": "object",
     "properties": {
@@ -1715,57 +1781,82 @@ def _handle_db_match(
         contribution.enrichment_status = "failed"
         return False
 
-    # Post-match country validation: reject if countries clearly mismatch.
-    # AI confidence is about the name identification, not the DB match —
-    # always validate country regardless of confidence.
-    contrib_country = contribution.country
-    reject_reason = None
-
-    if site.country:
-        site_iso = normalize_country(site.country)
-
-        if contrib_country:
-            # Compare ISO codes so "United States" == "United States of America"
-            if normalize_country(contrib_country) != site_iso:
-                reject_reason = contrib_country
-        elif db_candidate["similarity"] < 0.9 or contribution.corrected_name:
-            # AI no longer provides country — check video context for validation.
-            # Build text blob from facts + video titles/descriptions/tags.
-            context_parts = list(facts or [])
-            for ctx in video_contexts or []:
-                if ctx.get("title"):
-                    context_parts.append(ctx["title"])
-                if ctx.get("description"):
-                    context_parts.append(ctx["description"])
-                if ctx.get("tags"):
-                    context_parts.extend(ctx["tags"])
-            context_text = " ".join(context_parts).lower()
-
-            # Check all known name variants for the country (e.g. "usa",
-            # "united states", "united states of america" all match US)
-            if context_text:
-                variants = country_name_variants(site.country)
-                if not any(v in context_text for v in variants):
-                    reject_reason = "(not in video context)"
-
-    if reject_reason:
-        logger.warning(
-            f"Country mismatch for '{contribution.name}': "
-            f"site '{site.name}' is in '{site.country}' but "
-            f"video facts indicate {reject_reason} — rejecting"
+    # Post-match verification: use LLM to confirm the match is correct.
+    # This replaces brittle mechanical country-name comparison with an LLM
+    # that understands geography, alternate names, and context.
+    if site.country and (
+        contribution.country or db_candidate["similarity"] < 0.9 or contribution.corrected_name
+    ):
+        correct, reasoning = _verify_db_match(
+            settings,
+            contribution.name,
+            site.name,
+            site.country,
+            facts,
+            contribution.country,
         )
-        contribution.enrichment_status = "rejected"
-        contribution.enrichment_data = {
-            "rejected_match": {
-                "site_id": str(site.id),
-                "site_name": site.name,
-                "site_country": site.country,
-                "contribution_country": reject_reason,
-                "reason": "country_mismatch",
-                "identification": identification,
-            },
-        }
-        return False
+        if not correct:
+            logger.warning(
+                f"  [{contribution.name}] Match rejected by LLM: "
+                f"'{site.name}' [{site.country}] — {reasoning}"
+            )
+            # Try remaining candidates before giving up
+            if all_candidates:
+                tried_ids = {site_id_str}
+                for alt in all_candidates:
+                    alt_id = alt.get("site_id")
+                    if alt_id in tried_ids:
+                        continue
+                    tried_ids.add(alt_id)
+                    alt_site = session.get(UnifiedSite, uuid.UUID(alt_id)) if alt_id else None
+                    if not alt_site or not alt_site.country:
+                        continue
+                    ok, alt_reason = _verify_db_match(
+                        settings,
+                        contribution.name,
+                        alt_site.name,
+                        alt_site.country,
+                        facts,
+                        contribution.country,
+                    )
+                    if ok:
+                        logger.info(
+                            f"  [{contribution.name}] Fallback candidate accepted: "
+                            f"'{alt_site.name}' [{alt_site.country}] — {alt_reason}"
+                        )
+                        db_candidate = alt
+                        site = alt_site
+                        site_id_str = alt_id
+                        break
+                else:
+                    # All candidates rejected
+                    contribution.enrichment_status = "rejected"
+                    contribution.enrichment_data = {
+                        "rejected_match": {
+                            "site_id": str(site.id),
+                            "site_name": site.name,
+                            "site_country": site.country,
+                            "contribution_country": contribution.country or "(unknown)",
+                            "reason": "llm_match_rejected",
+                            "llm_reasoning": reasoning,
+                            "identification": identification,
+                        },
+                    }
+                    return False
+            else:
+                contribution.enrichment_status = "rejected"
+                contribution.enrichment_data = {
+                    "rejected_match": {
+                        "site_id": str(site.id),
+                        "site_name": site.name,
+                        "site_country": site.country,
+                        "contribution_country": contribution.country or "(unknown)",
+                        "reason": "llm_match_rejected",
+                        "llm_reasoning": reasoning,
+                        "identification": identification,
+                    },
+                }
+                return False
 
     # Copy base metadata from matched site (fills all missing fields including
     # period_start, wikipedia_url, and description)
