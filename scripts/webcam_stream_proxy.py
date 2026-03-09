@@ -184,6 +184,8 @@ class WebcamProxyHandler(http.server.BaseHTTPRequestHandler):
             self._handle_extract(params)
         elif path == "/proxy":
             self._handle_proxy(params)
+        elif path.startswith("/thumb/"):
+            self._handle_thumb(path)
         elif path == "/api/status":
             self._handle_status()
         else:
@@ -272,6 +274,31 @@ class WebcamProxyHandler(http.server.BaseHTTPRequestHandler):
             self.send_error(e.code, f"Upstream error: {e.reason}")
         except Exception as e:
             self.send_error(502, f"Proxy error: {e}")
+
+    def _handle_thumb(self, path: str):
+        """Proxy CDN thumbnail, bypassing hotlink protection."""
+        # /thumb/831.jpg -> https://cdn.skylinewebcams.com/live831.jpg
+        filename = path.removeprefix("/thumb/")
+        if not filename or "/" in filename:
+            self.send_error(400, "Invalid thumbnail path")
+            return
+        skyline_id = filename.removesuffix(".jpg")
+        cdn_url = f"https://cdn.skylinewebcams.com/live{skyline_id}.jpg"
+        try:
+            body, _ = fetch_url(cdn_url, {
+                "Referer": "https://www.skylinewebcams.com/",
+            })
+            self.send_response(200)
+            self.send_header("Content-Type", "image/jpeg")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "public, max-age=60")
+            self._cors_headers()
+            self.end_headers()
+            self.wfile.write(body)
+        except urllib.error.HTTPError as e:
+            self.send_error(e.code, f"CDN error: {e.reason}")
+        except Exception as e:
+            self.send_error(502, f"Thumbnail proxy error: {e}")
 
     def _handle_status(self):
         """Return cache status."""

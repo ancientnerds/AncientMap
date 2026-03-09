@@ -44,8 +44,10 @@ export function filterByProximity(
     .sort((a, b) => a.distanceKm - b.distanceKm)
 }
 
+const PROXY_BASE = import.meta.env.DEV ? 'http://localhost:8765' : '/webcam-proxy'
+
 export function getThumbnailUrl(skylineId: string): string {
-  return `https://cdn.skylinewebcams.com/live${skylineId}.jpg`
+  return `${PROXY_BASE}/thumb/${skylineId}.jpg`
 }
 
 export function getPageUrl(slug: string): string {
