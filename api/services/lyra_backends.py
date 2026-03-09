@@ -290,12 +290,10 @@ class MercuryBackend:
             "stream": True,
             "stream_options": {"include_usage": True},
             "reasoning_effort": "medium",
+            "extra_body": {"diffusing": True},
         }
         if openai_tools:
             create_kwargs["tools"] = openai_tools
-        else:
-            # Diffusion only works without tool calls — Mercury rejects the combo
-            create_kwargs["diffusing"] = True
 
         try:
             stream = await client.chat.completions.create(**create_kwargs)
@@ -328,10 +326,9 @@ class MercuryBackend:
 
             delta = chunk.choices[0].delta
 
-            # Content tokens
+            # Content tokens (diffusion mode: each chunk is a full replacement)
             if delta.content:
-                is_diffusing = "diffusing" in create_kwargs
-                yield {"type": "diffusion" if is_diffusing else "content", "text": delta.content}
+                yield {"type": "diffusion", "text": delta.content}
 
             # Tool call chunks
             if delta.tool_calls:
