@@ -1484,7 +1484,9 @@ def _run_migrations(engine) -> None:
         conn.execute(text("DELETE FROM unified_site_names WHERE name_type = 'research_alias'"))
 
         # Re-score videos that lost significance: reset 'rescored' → 'verified'
-        # when their items have post_text but NULL or default significance (3).
+        # when their items have post_text but NULL significance (never scored).
+        # NOTE: Do NOT include "significance = 3" — the LLM legitimately assigns
+        # 3 as a score.  Including it caused infinite rescore loops (flip-flopping).
         conn.execute(
             text(
                 """
@@ -1493,7 +1495,7 @@ def _run_migrations(engine) -> None:
                   AND id IN (
                     SELECT DISTINCT video_id FROM news_items
                     WHERE post_text IS NOT NULL
-                      AND (significance IS NULL OR significance = 3)
+                      AND significance IS NULL
                   )
                 """
             )

@@ -216,8 +216,11 @@ def generate_posts_for_video(
             item.post_text = post_text
             if ts_range:
                 item.timestamp_range = ts_range
-            # Placeholders — rescorer overwrites both after the verify step
-            item.significance = 3
+            # NULL significance signals "not yet scored" — the rescorer
+            # fills it after the verify step.  Using 3 as a placeholder
+            # caused infinite rescore loops (startup migration mistook
+            # legitimately-scored-3 items for unscored ones).
+            item.significance = None
             item.news_category = "general"
             count += 1
 
