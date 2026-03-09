@@ -50,6 +50,19 @@ from pipeline.utils.text import (
 
 logger = logging.getLogger(__name__)
 
+# Keys used by one-time startup migrations in orchestrator.py.  When the site
+# identifier overwrites enrichment_data, these flags must be preserved so that
+# old migrations don't re-reset the contribution back to "pending".
+_MIGRATION_FLAG_PREFIXES = ("v", "fix_")
+
+
+def _set_enrichment_data(contribution: UserContribution, data: dict) -> None:
+    """Set enrichment_data while preserving one-time migration flags."""
+    old = contribution.enrichment_data or {}
+    flags = {k: v for k, v in old.items() if k.startswith(_MIGRATION_FLAG_PREFIXES)}
+    contribution.enrichment_data = {**flags, **data}
+
+
 PROMPT_PATH = Path(__file__).parent / "prompts" / "identify_site.txt"
 PICK_ENTITY_PROMPT_PATH = Path(__file__).parent / "prompts" / "pick_wikidata_entity.txt"
 EXTRACT_METADATA_PROMPT_PATH = Path(__file__).parent / "prompts" / "extract_metadata.txt"
@@ -365,7 +378,7 @@ def _process_single(
     # Handle not-a-site
     if not identification.get("is_site", True):
         contribution.enrichment_status = "not_a_site"
-        contribution.enrichment_data = {"identification": identification}
+        _set_enrichment_data(contribution, {"identification": identification})
         logger.info(f"  [{contribution.name}] Not a site: {identification.get('reasoning', '')}")
         return True
 
@@ -1832,7 +1845,26 @@ def _handle_db_match(
                 else:
                     # All candidates rejected
                     contribution.enrichment_status = "rejected"
-                    contribution.enrichment_data = {
+                    _set_enrichment_data(
+                        contribution,
+                        {
+                            "rejected_match": {
+                                "site_id": str(site.id),
+                                "site_name": site.name,
+                                "site_country": site.country,
+                                "contribution_country": contribution.country or "(unknown)",
+                                "reason": "llm_match_rejected",
+                                "llm_reasoning": reasoning,
+                                "identification": identification,
+                            },
+                        },
+                    )
+                    return False
+            else:
+                contribution.enrichment_status = "rejected"
+                _set_enrichment_data(
+                    contribution,
+                    {
                         "rejected_match": {
                             "site_id": str(site.id),
                             "site_name": site.name,
@@ -1842,21 +1874,8 @@ def _handle_db_match(
                             "llm_reasoning": reasoning,
                             "identification": identification,
                         },
-                    }
-                    return False
-            else:
-                contribution.enrichment_status = "rejected"
-                contribution.enrichment_data = {
-                    "rejected_match": {
-                        "site_id": str(site.id),
-                        "site_name": site.name,
-                        "site_country": site.country,
-                        "contribution_country": contribution.country or "(unknown)",
-                        "reason": "llm_match_rejected",
-                        "llm_reasoning": reasoning,
-                        "identification": identification,
                     },
-                }
+                )
                 return False
 
     # Copy base metadata from matched site (fills all missing fields including
@@ -1918,7 +1937,9 @@ def _handle_db_match(
     # Branch: AN Originals or promoted → hidden ("matched"); external source → visible ("enriched")
     if db_candidate["source"] == "ancient_nerds" or site_uuid in promoted_ids:
         contribution.enrichment_status = "matched"
-        contribution.enrichment_data = {"identification": identification, "db_match": db_candidate}
+        _set_enrichment_data(
+            contribution, {"identification": identification, "db_match": db_candidate}
+        )
         logger.info(
             f"DB match (AN/promoted): '{contribution.name}' -> '{site.name}' ({updated} items linked)"
         )
@@ -1942,11 +1963,14 @@ def _handle_db_match(
                 )
 
         contribution.enrichment_status = "enriched"
-        contribution.enrichment_data = {
-            "identification": identification,
-            "db_match": db_candidate,
-            "external_sources": external_sources,
-        }
+        _set_enrichment_data(
+            contribution,
+            {
+                "identification": identification,
+                "db_match": db_candidate,
+                "external_sources": external_sources,
+            },
+        )
         logger.info(
             f"DB match (external: {db_candidate['source']}): '{contribution.name}' -> "
             f"'{site.name}' ({updated} items linked, {len(external_sources)} ext sources)"
@@ -2105,14 +2129,17 @@ def _handle_wikidata_match(
         )
         contribution.enrichment_status = "matched"
         fill_contrib_from_site(contribution, an_match)
-        contribution.enrichment_data = {
-            "identification": identification,
-            "wikidata": enrichment,
-            "an_match": {
-                "an_site_id": str(an_match.id),
-                "an_site_name": an_match.name,
+        _set_enrichment_data(
+            contribution,
+            {
+                "identification": identification,
+                "wikidata": enrichment,
+                "an_match": {
+                    "an_site_id": str(an_match.id),
+                    "an_site_name": an_match.name,
+                },
             },
-        }
+        )
         contribution.score = _compute_score(contribution)
         # Store Wikidata aliases for the matched AN site too
         if enrichment.get("wikidata_names"):
@@ -2139,10 +2166,13 @@ def _handle_wikidata_match(
         )
 
     # Store full enrichment data
-    contribution.enrichment_data = {
-        "identification": identification,
-        "wikidata": enrichment,
-    }
+    _set_enrichment_data(
+        contribution,
+        {
+            "identification": identification,
+            "wikidata": enrichment,
+        },
+    )
 
     contribution.score = _compute_score(contribution)
     contribution.enrichment_status = "enriched"
@@ -2266,14 +2296,17 @@ def _handle_ai_enriched_site(
         )
         contribution.enrichment_status = "matched"
         fill_contrib_from_site(contribution, an_match)
-        contribution.enrichment_data = {
-            "identification": identification,
-            "research": research.to_dict() if research else None,
-            "an_match": {
-                "an_site_id": str(an_match.id),
-                "an_site_name": an_match.name,
+        _set_enrichment_data(
+            contribution,
+            {
+                "identification": identification,
+                "research": research.to_dict() if research else None,
+                "an_match": {
+                    "an_site_id": str(an_match.id),
+                    "an_site_name": an_match.name,
+                },
             },
-        }
+        )
         contribution.score = _compute_score(contribution)
         return True
 
@@ -2286,10 +2319,13 @@ def _handle_ai_enriched_site(
             contribution.period_name,
         )
 
-    contribution.enrichment_data = {
-        "identification": identification,
-        "research": research.to_dict() if research else None,
-    }
+    _set_enrichment_data(
+        contribution,
+        {
+            "identification": identification,
+            "research": research.to_dict() if research else None,
+        },
+    )
     contribution.score = _compute_score(contribution)
     contribution.enrichment_status = "enriched"
 
