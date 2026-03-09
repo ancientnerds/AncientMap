@@ -12,6 +12,7 @@ export function WebcamCard({ item, onStreamClick }: WebcamCardProps) {
   const distanceKm = original.distanceKm as number
   const flag = original.flag as string
   const region = original.region as string
+  const pageUrl = original.pageUrl as string
 
   const [localTime, setLocalTime] = useState('')
   const [isDayTime, setIsDayTime] = useState(true)
@@ -70,6 +71,14 @@ export function WebcamCard({ item, onStreamClick }: WebcamCardProps) {
           </div>
         )}
         <div className="webcam-live-badge">LIVE</div>
+        <a
+          className="webcam-card-source"
+          href={pageUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={e => e.stopPropagation()}
+          title="View on SkylineWebcams"
+        >SkylineWebcams</a>
         {localTime && (
           <div className="webcam-time-badge">
             <span>{isDayTime ? '\u2600' : '\uD83C\uDF19'}</span> {localTime}

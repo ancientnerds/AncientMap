@@ -189,6 +189,18 @@ attribution to the original data sources as specified below.
 
 ---
 
+## Live Webcams
+
+### SkylineWebcams
+- **Website**: https://www.skylinewebcams.com/
+- **Operator**: VisioRay S.r.l. (Italy)
+- **License**: Proprietary — all webcam content is owned by VisioRay S.r.l. and respective camera operators
+- **Usage**: Live streams are displayed with visible source attribution and clickable watermark linking back to the original SkylineWebcams page. Used for educational purposes to provide real-time views of archaeological and heritage sites.
+- **Data**: 25 curated webcam feeds near ancient sites (Rome, Athens, Jerusalem, Petra, Cusco, etc.)
+- **Note**: If VisioRay S.r.l. requests removal, all webcam features will be disabled immediately. Contact: ancient.nerds@protonmail.com
+
+---
+
 ## Media Sources
 
 ### Wikimedia Commons

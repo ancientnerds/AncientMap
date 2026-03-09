@@ -9432,6 +9432,25 @@ body.hud-hidden .empire-borders-window {
   backdrop-filter: blur(4px);
 }
 
+.webcam-card-source {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #888;
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  text-decoration: none;
+  letter-spacing: 0.3px;
+  z-index: 2;
+  backdrop-filter: blur(4px);
+}
+.webcam-card-source:hover {
+  color: #ccc;
+  background: rgba(0, 0, 0, 0.8);
+}
+
 .webcam-card-info {
   padding: 6px 8px;
   display: flex;
@@ -9522,6 +9541,29 @@ body.hud-hidden .empire-borders-window {
   justify-content: center;
   color: #888;
   font-size: 14px;
+}
+.webcam-source-watermark {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  color: #aaa;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 10px;
+  border-radius: 4px;
+  text-decoration: none;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: 0.3px;
+  transition: background 0.2s, color 0.2s;
+}
+.webcam-source-watermark:hover {
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
 }
 .webcam-zoom-level {
   position: absolute;

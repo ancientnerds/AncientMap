@@ -113,6 +113,10 @@ export function getDisclaimerHTML(buildHash?: string, buildTime?: string): strin
         </ul>
       </div>
       <div class="license-group">
+        <h4>Live Webcams</h4>
+        <p>Live webcam streams near archaeological sites are provided by <a href="https://www.skylinewebcams.com" target="_blank" rel="noopener noreferrer">SkylineWebcams</a> (VisioRay S.r.l.). All webcam content remains the property of VisioRay S.r.l. and the respective camera operators. Streams are displayed with visible source attribution and link back to SkylineWebcams. This feature is provided for educational purposes to give visitors a real-time view of heritage sites.</p>
+      </div>
+      <div class="license-group">
         <h4>Country Flags</h4>
         <ul>
           <li><a href="https://flagpedia.net/" target="_blank" rel="noopener noreferrer">Flagpedia</a> via <a href="https://flagcdn.com/" target="_blank" rel="noopener noreferrer">FlagCDN</a></li>
