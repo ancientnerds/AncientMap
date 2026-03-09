@@ -1356,20 +1356,54 @@ def _store_garble_alias(
 
 
 def _check_spatial_an_match(
-    session: Session, lat: float, lon: float, threshold_km: float = 2.0
+    session: Session,
+    lat: float,
+    lon: float,
+    site_name: str,
+    threshold_km: float = 2.0,
+    name_similarity: float = 0.3,
 ) -> UnifiedSite | None:
-    """Find AN Originals site within threshold_km of given coordinates."""
-    # ~0.018 degrees per km at equator (conservative)
+    """Find AN Originals site within threshold_km whose name also matches.
+
+    Uses pg_trgm word_similarity against unified_site_names to prevent
+    false matches between nearby but unrelated sites (e.g. Sacsayhuamán
+    vs Kusilluchayoc in Cusco).
+    """
     delta = threshold_km / 111.0
-    return (
-        session.query(UnifiedSite)
-        .filter(
-            UnifiedSite.source_id == "ancient_nerds",
-            UnifiedSite.lat.between(lat - delta, lat + delta),
-            UnifiedSite.lon.between(lon - delta, lon + delta),
-        )
-        .first()
-    )
+    normalized = normalize_name(site_name)
+    if not normalized or len(normalized) < 3:
+        return None
+
+    try:
+        with session.begin_nested():
+            row = session.execute(
+                text("""
+                SELECT us.id
+                FROM unified_sites us
+                JOIN unified_site_names usn ON usn.site_id = us.id
+                WHERE us.source_id = 'ancient_nerds'
+                  AND us.lat BETWEEN :lat_min AND :lat_max
+                  AND us.lon BETWEEN :lon_min AND :lon_max
+                  AND word_similarity(:name, usn.name_normalized) >= :threshold
+                ORDER BY word_similarity(:name, usn.name_normalized) DESC
+                LIMIT 1
+                """),
+                {
+                    "lat_min": lat - delta,
+                    "lat_max": lat + delta,
+                    "lon_min": lon - delta,
+                    "lon_max": lon + delta,
+                    "name": normalized,
+                    "threshold": name_similarity,
+                },
+            ).first()
+    except Exception as e:
+        logger.warning(f"Spatial+name match query failed for '{site_name}': {e}")
+        return None
+
+    if row:
+        return session.get(UnifiedSite, row.id)
+    return None
 
 
 def _check_name_an_match(session: Session, site_name: str) -> UnifiedSite | None:
@@ -1753,16 +1787,15 @@ def _handle_wikidata_match(
         contribution.lat = enrichment["lat"]
         contribution.lon = enrichment["lon"]
 
-    # Dedup: check if an AN Originals site matches (spatial + name)
+    # Dedup: check if an AN Originals site matches (spatial+name, then name-only)
     an_match = None
     if contribution.lat is not None and contribution.lon is not None:
-        an_match = _check_spatial_an_match(session, contribution.lat, contribution.lon)
+        an_match = _check_spatial_an_match(session, contribution.lat, contribution.lon, site_name)
     if not an_match:
         an_match = _check_name_an_match(session, site_name)
     if an_match:
-        match_type = "spatial" if contribution.lat is not None else "name"
         logger.info(
-            f"  [{site_name}] {match_type.title()} match to AN '{an_match.name}' — matching instead of enriching"
+            f"  [{site_name}] Spatial match to AN '{an_match.name}' — matching instead of enriching"
         )
         contribution.enrichment_status = "matched"
         fill_contrib_from_site(contribution, an_match)
@@ -1772,7 +1805,6 @@ def _handle_wikidata_match(
             "an_match": {
                 "an_site_id": str(an_match.id),
                 "an_site_name": an_match.name,
-                "match_type": match_type,
             },
         }
         contribution.score = _compute_score(contribution)
@@ -1889,18 +1921,15 @@ def _handle_ai_enriched_site(
     if contribution.lat and contribution.lon and not contribution.country:
         contribution.country = lookup_country(contribution.lat, contribution.lon)
 
-    # Dedup: check if an AN Originals site matches (spatial + name)
+    # Dedup: check if an AN Originals site matches (spatial+name, then name-only)
     an_match = None
-    match_type = "name"
     if contribution.lat is not None and contribution.lon is not None:
-        an_match = _check_spatial_an_match(session, contribution.lat, contribution.lon)
-        if an_match:
-            match_type = "spatial"
+        an_match = _check_spatial_an_match(session, contribution.lat, contribution.lon, search_name)
     if not an_match:
         an_match = _check_name_an_match(session, search_name)
     if an_match:
         logger.info(
-            f"  [{contribution.name}] {match_type.title()} match to AN '{an_match.name}' — matching instead of enriching"
+            f"  [{contribution.name}] Match to AN '{an_match.name}' — matching instead of enriching"
         )
         contribution.enrichment_status = "matched"
         fill_contrib_from_site(contribution, an_match)
@@ -1910,7 +1939,6 @@ def _handle_ai_enriched_site(
             "an_match": {
                 "an_site_id": str(an_match.id),
                 "an_site_name": an_match.name,
-                "match_type": match_type,
             },
         }
         contribution.score = _compute_score(contribution)
@@ -1991,11 +2019,13 @@ def _maybe_promote(
     elif geo_country and not contribution.country:
         contribution.country = geo_country
 
-    # 4. Spatial dedup against AN Originals
-    an_match = _check_spatial_an_match(session, contribution.lat, contribution.lon)
+    # 4. Spatial+name dedup against AN Originals
+    an_match = _check_spatial_an_match(
+        session, contribution.lat, contribution.lon, contribution.name
+    )
     if an_match:
         logger.info(
-            f"  [{contribution.name}] Spatial match to AN '{an_match.name}' — matching instead of promoting"
+            f"  [{contribution.name}] Match to AN '{an_match.name}' — matching instead of promoting"
         )
         contribution.enrichment_status = "matched"
         fill_contrib_from_site(contribution, an_match)
