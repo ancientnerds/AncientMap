@@ -398,7 +398,9 @@ async def _extract_news_filters(query: str) -> dict:
     llm = _get_filter_llm()
     from datetime import datetime
 
-    prompt = _NEWS_FILTER_EXTRACTION_PROMPT_TEMPLATE.format(current_year=datetime.now().year)
+    prompt = _NEWS_FILTER_EXTRACTION_PROMPT_TEMPLATE.replace(
+        "{current_year}", str(datetime.now().year)
+    )
     try:
         result = await llm.ainvoke(
             [
@@ -861,7 +863,8 @@ async def run_agent_stream(
             enable_thinking=ctx.supports_thinking,
         ):
             if ev["type"] == "heartbeat":
-                yield {"type": "status", "content": f"Processing input ({ev['elapsed_s']}s)..."}
+                if ctx.backend_type != "mercury":
+                    yield {"type": "status", "content": f"Processing input ({ev['elapsed_s']}s)..."}
             elif ev["type"] == "reasoning":
                 yield {"type": "thinking", "content": ev["text"]}
             elif ev["type"] == "content":
@@ -895,7 +898,8 @@ async def run_agent_stream(
         # The preamble text (e.g. "I'll search for...") was streamed as tokens.
         # Re-emit it as a status event so the frontend can style it differently,
         # then clear the token content so the real answer starts fresh.
-        if collected_content.strip():
+        # Skip for Mercury diffusion — no extra status messages.
+        if collected_content.strip() and ctx.backend_type != "mercury":
             yield {"type": "status", "content": collected_content.strip()}
 
         # Execute tool calls
