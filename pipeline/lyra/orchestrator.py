@@ -1444,12 +1444,12 @@ def _run_migrations(engine) -> None:
             text(
                 """
                 INSERT INTO unified_site_names (site_id, name, name_normalized, name_type)
-                SELECT id, name, name_normalized, 'label'
+                SELECT id, name, COALESCE(name_normalized, lower(name)), 'label'
                 FROM unified_sites us
                 WHERE NOT EXISTS (
                     SELECT 1 FROM unified_site_names usn
                     WHERE usn.site_id = us.id
-                      AND usn.name_normalized = us.name_normalized
+                      AND usn.name_normalized = COALESCE(us.name_normalized, lower(us.name))
                 )
                 """
             )
