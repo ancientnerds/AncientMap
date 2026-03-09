@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import type { UnifiedGalleryItem } from '../types'
 
-const PROXY_BASE = 'http://localhost:8765'
+const PROXY_BASE = import.meta.env.DEV ? 'http://localhost:8765' : '/webcam-proxy'
 
 interface WebcamStreamOverlayProps {
   item: UnifiedGalleryItem

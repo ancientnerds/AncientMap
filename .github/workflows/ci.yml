@@ -231,6 +231,9 @@ jobs:
             if echo "$CHANGED" | grep -qE "^(pipeline/|Dockerfile\.lyra|requirements\.lyra)"; then
               REBUILD="$REBUILD lyra"
             fi
+            if echo "$CHANGED" | grep -qE "^(scripts/webcam_stream_proxy|Dockerfile\.webcam-proxy)"; then
+              REBUILD="$REBUILD webcam-proxy"
+            fi
 
             if [ -n "$REBUILD" ]; then
               echo "==> Rebuilding:$REBUILD"

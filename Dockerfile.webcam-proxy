@@ -1,0 +1,20 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# No external dependencies — uses only stdlib
+COPY scripts/webcam_stream_proxy.py ./proxy.py
+
+# Non-root user
+RUN groupadd --gid 1000 appgroup && \
+    useradd --uid 1000 --gid appgroup --shell /bin/bash --create-home appuser
+USER appuser
+
+ENV PYTHONUNBUFFERED=1
+
+EXPOSE 8765
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8765/api/status')" || exit 1
+
+CMD ["python", "proxy.py"]
