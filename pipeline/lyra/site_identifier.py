@@ -16,7 +16,7 @@ import urllib.parse
 import uuid
 from pathlib import Path
 
-from sqlalchemy import case, func, text
+from sqlalchemy import case, func, or_, text
 from sqlalchemy.orm import Session
 
 from pipeline.database import (
@@ -1866,13 +1866,25 @@ def _handle_db_match(
     if contribution.lat and contribution.lon and not contribution.country:
         contribution.country = lookup_country(contribution.lat, contribution.lon)
 
-    # Update all related NewsItems to point to this site
+    # Update all related NewsItems to point to this site.
+    # If the matched site is AN Originals, also overwrite items that were
+    # previously linked to an external source (GeoNames, OSM, etc.) so the
+    # card always points to the AN entry.
     name_lower = contribution.name.lower().strip()
+    is_an = site.source_id == "ancient_nerds"
+    site_filter = (
+        NewsItem.site_id.is_(None)
+        if not is_an
+        else or_(
+            NewsItem.site_id.is_(None),
+            NewsItem.site_id != site.id,
+        )
+    )
     updated = (
         session.query(NewsItem)
         .filter(
             func.lower(NewsItem.site_name_extracted) == name_lower,
-            NewsItem.site_id.is_(None),
+            site_filter,
         )
         .update(
             {NewsItem.site_id: site.id},
