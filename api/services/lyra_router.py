@@ -1,7 +1,7 @@
 """
 Lyra model router — per-request context.
 
-Lyra uses MiniMax cloud exclusively. Theo uses local Ollama (configured separately).
+Lyra uses Mercury 2 cloud exclusively. Theo uses local Ollama (configured separately).
 """
 
 from contextvars import ContextVar
@@ -16,7 +16,7 @@ from dataclasses import dataclass
 class RequestContext:
     """Immutable per-request context. Passed through the pipeline."""
 
-    backend_type: str  # "minimax" | "local" (local = Theo only)
+    backend_type: str  # "mercury" | "local" (local = Theo only)
     model_tier: str  # "premium" | "heavy"
     model_name: str
     embedding_backend: str  # "voyage" | "local"
@@ -43,20 +43,20 @@ def set_request_context(ctx: RequestContext) -> None:
 
 
 def route_request(backend: str, message: str) -> RequestContext:
-    """Route to MiniMax. Called once at request start.
+    """Route to Mercury cloud. Called once at request start.
 
     Args:
-        backend: Always "minimax" for Lyra.
+        backend: Always "mercury" for Lyra.
         message: The user's message text (unused, kept for API compat).
     """
     from api.services.lyra_tools import LLM_MODEL
 
     return RequestContext(
-        backend_type="minimax",
+        backend_type="mercury",
         model_tier="premium",
         model_name=LLM_MODEL,
         embedding_backend="voyage",
-        supports_thinking=True,
+        supports_thinking=False,
         supports_tools=True,
     )
 

@@ -189,16 +189,15 @@ export function getDisclaimerHTML(buildHash?: string, buildTime?: string): strin
     <h4>AI Pipeline &amp; Third-Party Data Processing</h4>
     <p>Our news pipeline and AI research assistant use third-party services to process <strong>publicly available archaeological data</strong> (YouTube video content, site names, descriptions). No user personal data is sent to these services.</p>
     <ul>
-      <li><strong>MiniMax M2.5 API</strong> &mdash; Used for content summarization, post generation, fact verification, and site identification via Anthropic-compatible endpoint. MiniMax&rsquo;s ToS allow use of API data for service improvement. Data is processed on US servers; the API is operated by Nanonoble Pte. Ltd. (Singapore), a subsidiary of MiniMax (Shanghai, China). <a href="https://platform.minimax.io/protocol/privacy-policy" target="_blank" rel="noopener noreferrer">MiniMax Privacy Policy</a></li>
+      <li><strong>Mercury 2 API</strong> (Inception Labs) &mdash; Used for content summarization, post generation, fact verification, and site identification via OpenAI-compatible endpoint. Data is processed on US servers by Inception Labs, a US-based company. <a href="https://www.inceptionlabs.ai/privacy" target="_blank" rel="noopener noreferrer">Inception Labs Privacy Policy</a></li>
       <li><strong>Voyage AI</strong> (voyage-4, rerank-2.5-lite) &mdash; Used for embedding site/news data for semantic search. We have <strong>opted out of data training</strong>, which provides zero-day retention (data is deleted immediately after processing). <a href="https://www.voyageai.com/privacy" target="_blank" rel="noopener noreferrer">Voyage AI Privacy Policy</a></li>
       <li><strong>Qdrant</strong> (vector database) &mdash; <strong>Self-hosted</strong> on our infrastructure with telemetry disabled. No data leaves our servers.</li>
     </ul>
     <h4>AI Chat (Research Assistant)</h4>
     <ul>
-      <li>Chat queries are processed in real-time via MiniMax M2.5 through the MiniMax API.</li>
+      <li>Chat queries are processed in real-time via Mercury 2 through the Inception Labs API.</li>
       <li>Conversations are <strong>not stored</strong> on our servers beyond the active session.</li>
-      <li>MiniMax&rsquo;s ToS allow use of API data to &ldquo;improve algorithms or enhance services.&rdquo; Retention periods are not publicly disclosed.</li>
-      <li>MiniMax&rsquo;s API is operated from US servers by a Singapore entity (Nanonoble Pte. Ltd.), subsidiary of MiniMax (Shanghai, China).</li>
+      <li>Inception Labs is a US-based company. Data is processed on US servers.</li>
     </ul>
   </div>
 </details>

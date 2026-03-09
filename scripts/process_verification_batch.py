@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Process verification batches using MiniMax LLM API (async).
+"""Process verification batches using Mercury 2 LLM API (async).
 
 Usage:
     python scripts/process_verification_batch.py all
@@ -21,9 +21,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BATCH_DIR = Path(__file__).parent.parent / "output" / "verification_batches"
-API_KEY = os.environ.get("LYRA_ANTHROPIC_API_KEY", "")
-API_BASE = os.environ.get("LYRA_ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
-LLM_MODEL = os.environ.get("LYRA_LLM_MODEL", "MiniMax-M2.5")
+API_KEY = os.environ.get("LYRA_API_KEY", "") or os.environ.get("LYRA_ANTHROPIC_API_KEY", "")
+API_BASE = os.environ.get("LYRA_BASE_URL", "") or os.environ.get("LYRA_ANTHROPIC_BASE_URL", "https://api.inceptionlabs.ai/v1")
+LLM_MODEL = os.environ.get("LYRA_LLM_MODEL", "mercury-2")
 
 BATCH_CONCURRENCY = 5
 LLM_TIMEOUT = 60
@@ -111,15 +111,14 @@ Return ONLY valid JSON (no markdown fences):
 
 
 async def call_llm(client: httpx.AsyncClient, prompt: str) -> str | None:
-    """Call MiniMax LLM API with retry."""
+    """Call Mercury LLM API (OpenAI-compatible) with retry."""
     for attempt in range(3):
         try:
             resp = await client.post(
-                f"{API_BASE}/v1/messages",
+                f"{API_BASE}/chat/completions",
                 headers={
-                    "x-api-key": API_KEY,
-                    "content-type": "application/json",
-                    "anthropic-version": "2023-06-01",
+                    "Authorization": f"Bearer {API_KEY}",
+                    "Content-Type": "application/json",
                 },
                 json={
                     "model": LLM_MODEL,
@@ -130,9 +129,10 @@ async def call_llm(client: httpx.AsyncClient, prompt: str) -> str | None:
                 timeout=LLM_TIMEOUT,
             )
             if resp.status_code == 200:
-                for block in resp.json().get("content", []):
-                    if block.get("type") == "text":
-                        return block["text"]
+                data = resp.json()
+                choices = data.get("choices", [])
+                if choices:
+                    return choices[0].get("message", {}).get("content")
                 return None
             # Retry on 429 (rate limit) or 5xx (server error)
             if resp.status_code in (429, 500, 502, 503, 529) and attempt < 2:
@@ -269,7 +269,7 @@ async def run_all(batch_ids: list[str]):
 
 def main():
     if not API_KEY:
-        print("Error: LYRA_ANTHROPIC_API_KEY not set")
+        print("Error: LYRA_API_KEY not set")
         sys.exit(1)
     if len(sys.argv) < 2:
         print("Usage: python scripts/process_verification_batch.py <batch_id|range|all> [--retry]")

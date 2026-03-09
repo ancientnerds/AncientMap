@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ---------------------------------------------------------------------------
 
-LLM_PROVIDER = os.getenv("LYRA_LLM_PROVIDER", "anthropic")
-LLM_MODEL = os.getenv("LYRA_LLM_MODEL", "MiniMax-M2.5")
+LLM_PROVIDER = os.getenv("LYRA_LLM_PROVIDER", "openai")
+LLM_MODEL = os.getenv("LYRA_LLM_MODEL", "mercury-2")
 
 # Per-request backend: set via contextvars by lyra_agent before each request.
 # "voyage" (default) uses Voyage embeddings + original collections.

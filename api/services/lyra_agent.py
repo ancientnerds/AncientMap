@@ -5,7 +5,7 @@ Lyra Whiskerbyte is an archaeological agent who monitors YouTube channels,
 extracts transcripts, and can chat about any of the 750K+ sites in the database.
 
 Three model tiers (single local model, two modes):
-  - premium (MiniMax M2.5) — paid, credit-based, highest quality
+  - premium (Mercury 2) — paid, credit-based, highest quality
   - heavy (Qwen3.5 2B, think=on) — queries, thinking + tools + retrieval
   - trivial (Qwen3.5 2B, think=off) — greetings/meta/reactions, no tools
 """
@@ -373,19 +373,23 @@ def _get_filter_llm():
     """
     global _filter_llm
     if _filter_llm is None:
-        from langchain_anthropic import ChatAnthropic
+        from langchain_openai import ChatOpenAI
 
-        api_key = os.getenv("LYRA_ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
-        base_url = os.getenv("LYRA_ANTHROPIC_BASE_URL", "https://api.minimax.io/anthropic")
-        kwargs: dict = {
-            "model": LLM_MODEL,
-            "max_tokens": get_max_tokens(),
-            "temperature": 0.01,
-            "api_key": api_key,
-        }
-        if base_url:
-            kwargs["anthropic_api_url"] = base_url
-        _filter_llm = ChatAnthropic(**kwargs).with_structured_output(NewsFilters)
+        api_key = (
+            os.getenv("LYRA_API_KEY")
+            or os.getenv("LYRA_ANTHROPIC_API_KEY")
+        )
+        base_url = (
+            os.getenv("LYRA_BASE_URL")
+            or os.getenv("LYRA_ANTHROPIC_BASE_URL", "https://api.inceptionlabs.ai/v1")
+        )
+        _filter_llm = ChatOpenAI(
+            model=LLM_MODEL,
+            max_tokens=get_max_tokens(),
+            temperature=0.0,
+            api_key=api_key,
+            base_url=base_url,
+        ).with_structured_output(NewsFilters)
     return _filter_llm
 
 
@@ -406,7 +410,7 @@ async def _extract_news_filters(query: str) -> dict:
                 HumanMessage(content=query),
             ]
         )
-        # Handle both Pydantic model and raw dict (MiniMax proxy may return dict)
+        # Handle both Pydantic model and raw dict (proxy may return dict)
         raw = result if isinstance(result, dict) else result.model_dump()
         return {k: v for k, v in raw.items() if v is not None}
     except Exception:
@@ -532,7 +536,7 @@ async def run_agent_stream(
     Run the Lyra agent and stream results.
 
     Args:
-        ctx: RequestContext from route_request(). If None, defaults to MiniMax premium.
+        ctx: RequestContext from route_request(). If None, defaults to Mercury premium.
 
     Yields dicts with:
       {"type": "token", "content": "..."}
@@ -542,7 +546,7 @@ async def run_agent_stream(
     """
     # Build context if not provided (backwards compat)
     if ctx is None:
-        ctx = route_request("minimax", message)
+        ctx = route_request("mercury", message)
 
     # Set contextvars for the pipeline (so _hybrid_search uses the right backend)
     set_request_context(ctx)
@@ -601,7 +605,7 @@ async def run_agent_stream(
         auto_news_results: list[dict] = []
 
         # Q1: Run auto-retrieval (Qdrant) and filter extraction (LLM) in parallel — zero data dependency
-        # Filter extraction uses MiniMax LLM — skip it for local backend to avoid costs
+        # Filter extraction uses cloud LLM — skip it for local backend to avoid costs
         use_filter_extraction = ctx.backend_type != "local"
 
         yield {

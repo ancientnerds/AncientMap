@@ -22,15 +22,14 @@ aiohttp>=3.9.0
 tenacity>=8.2.0
 aiofiles>=23.2.0
 
-# --- Lyra RAG Agent (LangChain + Claude Haiku) ---
+# --- Lyra RAG Agent (LangChain + OpenAI-compatible) ---
 langchain>=0.3
-langchain-anthropic>=0.3
 langchain-core>=0.3
 langchain-openai>=0.3
 qdrant-client>=1.7.0
 fastembed>=0.4.0
 voyageai>=0.3
-anthropic>=0.40
+openai>=1.30.0
 
 # --- Image processing ---
 Pillow>=10.0.0

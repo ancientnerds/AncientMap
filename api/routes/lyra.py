@@ -2,7 +2,7 @@
 Lyra Chat API Routes.
 
 Endpoints:
-- POST /lyra/chat         — Discord OAuth login required, MiniMax cloud only
+- POST /lyra/chat         — Discord OAuth login required, Mercury cloud only
 - GET  /lyra/queue-status — Queue length, inference status
 """
 
@@ -78,9 +78,9 @@ class LyraChatRequest(BaseModel):
         default=None, max_length=50, description="Conversation history [{role, content}]"
     )
     backend: str = Field(
-        default="minimax",
-        pattern=r"^(minimax)$",
-        description="AI backend: minimax (cloud)",
+        default="mercury",
+        pattern=r"^(mercury)$",
+        description="AI backend: mercury (cloud)",
     )
 
 
@@ -92,7 +92,7 @@ class LyraChatRequest(BaseModel):
 @router.post("/chat")
 async def lyra_chat(request: LyraChatRequest, req: Request):
     """
-    Chat with Lyra. Requires Discord login. MiniMax cloud backend only.
+    Chat with Lyra. Requires Discord login. Mercury cloud backend only.
 
     Returns SSE stream with token, sites, done events.
     """
@@ -101,10 +101,10 @@ async def lyra_chat(request: LyraChatRequest, req: Request):
 
     user = get_current_user(req)
 
-    # Route request to MiniMax
+    # Route request to Mercury cloud
     ctx = route_request(request.backend, request.message)
 
-    return _handle_minimax_backend(request, user, ctx)
+    return _handle_cloud_backend(request, user, ctx)
 
 
 @router.get("/queue-status")
@@ -114,14 +114,14 @@ async def queue_status(req: Request):
 
 
 # ---------------------------------------------------------------------------
-# MiniMax backend (paid, credit-based)
+# Cloud backend (paid, credit-based)
 # ---------------------------------------------------------------------------
 
 
-def _handle_minimax_backend(
+def _handle_cloud_backend(
     request: LyraChatRequest, user, ctx: RequestContext
 ) -> StreamingResponse:
-    """Original credit-based flow for MiniMax."""
+    """Credit-based flow for Mercury cloud."""
     with get_db_session() as session:
         db_user = session.query(DBUser).filter(DBUser.id == user.id).with_for_update().first()
         if not db_user:

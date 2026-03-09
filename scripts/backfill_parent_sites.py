@@ -477,7 +477,7 @@ def _run_metadata_validation(conn, rows, site_qids, claims_map, labels: dict, ap
 def _run_gaps_report(rows, site_qids, claims_map, fixes_applied: list | None) -> None:
     """Report sites still missing key metadata after backfill.
 
-    These are candidates for LLM research (MiniMax).
+    These are candidates for LLM research (Mercury).
     """
     print("\n" + "=" * 60)
     print("REMAINING GAPS (candidates for AI research)")
@@ -554,7 +554,7 @@ def _run_gaps_report(rows, site_qids, claims_map, fixes_applied: list | None) ->
                 print(f"    ... and {len(items) - 20} more")
 
     print(f"\n  Total gaps: {total_gaps}")
-    print("  These sites need AI research (MiniMax) to fill remaining fields.")
+    print("  These sites need AI research (Mercury) to fill remaining fields.")
 
 
 # ── Main ─────────────────────────────────────────────────────────────

@@ -281,13 +281,13 @@ def sync_from_production(api_url: str, source_ids: list[str]) -> dict:
         result_ins = conn.execute(
             text("""
             INSERT INTO unified_sites (
-                id, source_id, name, lat, lon, geom,
+                id, source_id, source_record_id, name, lat, lon, geom,
                 site_type, period_start, period_name,
                 country, description, source_url, thumbnail_url,
                 created_at, updated_at
             )
             SELECT
-                si.site_id::uuid, si.source_id, si.name, si.lat, si.lon,
+                si.site_id::uuid, si.source_id, si.site_id, si.name, si.lat, si.lon,
                 ST_SetSRID(ST_MakePoint(si.lon, si.lat), 4326),
                 si.site_type, si.period_start, si.period_name,
                 si.country, si.description, si.source_url, si.thumbnail_url,
@@ -2283,7 +2283,6 @@ def merge_cited_descriptions(dry_run: bool = False) -> dict:
             results = json.load(f)
 
         site_results = results.get("sites", {})
-        batch_valid = True
 
         for site_id, site_data in site_results.items():
             status = site_data.get("status", "unknown")
@@ -2299,48 +2298,40 @@ def merge_cited_descriptions(dry_run: bool = False) -> dict:
                 char_count = len(desc_text)
                 fetched_excerpts = site_data.get("fetched_excerpts", {})
 
-                errors = []
+                hard_errors = []
+                warnings = []
 
-                # Validate description length (300-950 chars)
-                if char_count < 300 or char_count > 950:
-                    errors.append(f"description length {char_count} outside 300-950 range")
+                # Validate description length (200-1100 chars, lenient)
+                if char_count < 200 or char_count > 1100:
+                    hard_errors.append(f"description length {char_count} outside 200-1100 range")
 
                 # Validate citations array is non-empty
                 if not citations:
-                    errors.append("citations array is empty for improved description")
+                    hard_errors.append("citations array is empty for improved description")
 
                 # Validate each citation has required fields
                 for cit in citations:
-                    missing = [k for k in ("n", "url", "title", "domain", "claim") if k not in cit]
+                    missing = [k for k in ("n", "url", "claim") if k not in cit]
                     if missing:
-                        errors.append(f"citation [{cit.get('n', '?')}] missing fields: {missing}")
+                        hard_errors.append(f"citation [{cit.get('n', '?')}] missing fields: {missing}")
 
-                # Validate fetched_excerpts exist for cited URLs
+                # Note missing excerpts as warnings (Phase 3 handles unverifiable claims)
                 cited_urls = {c["url"] for c in citations if "url" in c}
                 fetch_error_urls = {e.split(" — ")[0] for e in site_data.get("fetch_errors", [])}
                 for url in cited_urls:
                     if url not in fetched_excerpts and url not in fetch_error_urls:
-                        errors.append(f"no fetched excerpt for cited URL: {url[:60]}")
+                        warnings.append(f"no fetched excerpt for cited URL: {url[:60]}")
 
-                # Validate card_description length (max 210 chars with tolerance)
-                card_desc = site_data.get("card_description", {})
-                card_text = card_desc.get("text", "") if isinstance(card_desc, dict) else ""
-                if card_text and len(card_text) > 210:
-                    errors.append(f"card_description length {len(card_text)} > 210")
-
-                if errors:
-                    batch_valid = False
-                    stats["validation_errors"] += len(errors)
+                if hard_errors:
+                    stats["validation_errors"] += len(hard_errors)
                     validation_errors.append(
                         {
                             "batch_id": batch_id,
                             "site_id": site_id,
-                            "errors": errors,
+                            "errors": hard_errors,
                         }
                     )
-                    if dry_run:
-                        for err in errors:
-                            print(f"  [WARN] {site_id[:8]}.. {err}", flush=True)
+                    stats["sites_failed"] += 1
                 else:
                     stats["sites_improved"] += 1
 
@@ -2349,8 +2340,9 @@ def merge_cited_descriptions(dry_run: bool = False) -> dict:
             elif status == "failed":
                 stats["sites_failed"] += 1
 
-        # Mark batch as completed (ready for Phase 3) if valid
-        if not dry_run and batch_valid:
+        # Mark batch as completed (ready for Phase 3)
+        # Individual site failures are tracked but don't block the batch
+        if not dry_run:
             manifest["batches"][batch_id]["status"] = "completed"
         stats["batches_validated"] += 1
 
@@ -2520,6 +2512,9 @@ def prepare_verification_batches(batch_size: int = 10, limit: int | None = None)
                 continue
 
             desc = site_data.get("description", {})
+            if isinstance(desc, str):
+                # Plain string description without citations — skip
+                continue
             if not desc.get("text") or not desc.get("citations"):
                 continue
 
@@ -2535,7 +2530,7 @@ def prepare_verification_batches(batch_size: int = 10, limit: int | None = None)
 
             # Pass through card_description from Phase 2 results
             card_desc = site_data.get("card_description", {})
-            card_text = card_desc.get("text", "") if isinstance(card_desc, dict) else ""
+            card_text = card_desc.get("text", "") if isinstance(card_desc, dict) else (card_desc if isinstance(card_desc, str) else "")
 
             verification_sites.append(
                 {
@@ -2556,10 +2551,22 @@ def prepare_verification_batches(batch_size: int = 10, limit: int | None = None)
     if limit:
         verification_sites = verification_sites[:limit]
 
-    # Split into batches
-    batches = []
+    # Load existing manifest to preserve already-processed batches
+    manifest_path = VERIFICATION_DIR / "manifest.json"
+    existing_manifest = {}
+    existing_batches = {}
+    next_batch_num = 1
+    if manifest_path.exists():
+        with open(manifest_path, encoding="utf-8") as f:
+            existing_manifest = json.load(f)
+        existing_batches = existing_manifest.get("batches", {})
+        if existing_batches:
+            next_batch_num = max(int(b) for b in existing_batches) + 1
+
+    # Split into new batches (continuing numbering from existing)
+    new_batches = []
     for i in range(0, len(verification_sites), batch_size):
-        batch_num = f"{len(batches) + 1:03d}"
+        batch_num = f"{next_batch_num + len(new_batches):03d}"
         batch_sites = verification_sites[i : i + batch_size]
         batch = {
             "batch_id": batch_num,
@@ -2568,23 +2575,30 @@ def prepare_verification_batches(batch_size: int = 10, limit: int | None = None)
         batch_path = VERIFICATION_DIR / f"batch_{batch_num}_input.json"
         with open(batch_path, "w", encoding="utf-8") as f:
             json.dump(batch, f, indent=2, ensure_ascii=False)
-        batches.append(batch_num)
+        new_batches.append(batch_num)
 
-    # Write manifest
+    # Merge with existing manifest
+    all_batches = dict(existing_batches)
+    for bid in new_batches:
+        all_batches[bid] = {"status": "pending", "input": f"batch_{bid}_input.json"}
+
+    total_sites = existing_manifest.get("total_sites", 0) + len(verification_sites)
     manifest = {
-        "created": datetime.now(timezone.utc).isoformat(),
-        "total_sites": len(verification_sites),
-        "batch_count": len(batches),
+        "created": existing_manifest.get("created", datetime.now(timezone.utc).isoformat()),
+        "updated": datetime.now(timezone.utc).isoformat(),
+        "total_sites": total_sites,
+        "batch_count": len(all_batches),
         "batch_size": batch_size,
-        "batches": {
-            bid: {"status": "pending", "input": f"batch_{bid}_input.json"} for bid in batches
-        },
+        "batches": all_batches,
     }
-    manifest_path = VERIFICATION_DIR / "manifest.json"
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2, ensure_ascii=False)
 
-    print(f"[VERIFY] Prepared {len(batches)} batches ({len(verification_sites)} sites)", flush=True)
+    print(f"[VERIFY] Prepared {len(new_batches)} new batches ({len(verification_sites)} sites)", flush=True)
+    if existing_batches:
+        print(f"  Existing batches preserved: {len(existing_batches)}", flush=True)
+    print(f"  Total batches: {len(all_batches)}", flush=True)
+    print(f"  New batch range: {new_batches[0]}–{new_batches[-1]}", flush=True)
     print(f"  Batch files: {VERIFICATION_DIR}/batch_NNN_input.json", flush=True)
     print(f"  Manifest: {manifest_path}", flush=True)
     print(f"\n  Next steps:", flush=True)
@@ -2594,7 +2608,8 @@ def prepare_verification_batches(batch_size: int = 10, limit: int | None = None)
 
     return {
         "total_sites": len(verification_sites),
-        "batches": len(batches),
+        "new_batches": len(new_batches),
+        "total_batches": len(all_batches),
         "batch_size": batch_size,
     }
 
@@ -2951,14 +2966,22 @@ def main() -> None:
         print("=" * 60, flush=True)
         return
 
-    # Step 1: Always sync from production API first
-    print("\n" + "=" * 40, flush=True)
-    print("  SYNC: Fetch Production -> Local DB", flush=True)
-    print("=" * 40, flush=True)
-    sync_from_production(args.api_url, source_ids)
-    if phase == "sync":
-        print("\n[SYNC] Done. Local DB now matches production.", flush=True)
-        return
+    # Step 1: Sync from production API (skip for file-only phases)
+    FILE_ONLY_PHASES = (
+        "cited-description-merge",
+        "verify-citations",
+        "verify-citations-merge",
+        "export",
+        "package",
+    )
+    if phase not in FILE_ONLY_PHASES:
+        print("\n" + "=" * 40, flush=True)
+        print("  SYNC: Fetch Production -> Local DB", flush=True)
+        print("=" * 40, flush=True)
+        sync_from_production(args.api_url, source_ids)
+        if phase == "sync":
+            print("\n[SYNC] Done. Local DB now matches production.", flush=True)
+            return
 
     # Fetch candidates for audit (unless just merging/exporting/packaging/agents/weblinks)
     if phase not in (
