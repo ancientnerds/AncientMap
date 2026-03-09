@@ -63,6 +63,10 @@ export function WebcamGallery({ items, isLoading, isOffline }: WebcamGalleryProp
           />
         ))}
       </div>
+      <div className="webcam-gallery-attribution">
+        Streams by{' '}
+        <a href="https://www.skylinewebcams.com" target="_blank" rel="noopener noreferrer">SkylineWebcams</a>
+      </div>
       {activeStream && (
         <WebcamStreamOverlay
           item={activeStream}
