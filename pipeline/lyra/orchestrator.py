@@ -1476,6 +1476,23 @@ def _run_migrations(engine) -> None:
             )
         )
 
+        # v_postgen: Reset videos whose news_items have NULL post_text back to
+        # 'summarized' so the tweet_generator re-runs.  Videos advanced past
+        # summarized before post generation ran, leaving 68 items with no text.
+        conn.execute(
+            text("""
+            UPDATE news_videos SET status = 'summarized'
+            WHERE status IN ('posted', 'verified', 'rescored')
+              AND id IN (
+                SELECT DISTINCT video_id FROM news_items
+                WHERE post_text IS NULL
+                  AND news_category IS DISTINCT FROM 'rejected'
+                  AND news_category IS DISTINCT FROM 'duplicate'
+              )
+              AND summary_json IS NOT NULL
+        """)
+        )
+
         conn.commit()
 
 

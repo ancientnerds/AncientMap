@@ -867,6 +867,9 @@ async def run_agent_stream(
             elif ev["type"] == "content":
                 collected_content += ev["text"]
                 yield {"type": "token", "content": ev["text"]}
+            elif ev["type"] == "diffusion":
+                collected_content = ev["text"]  # full replacement, not append
+                yield {"type": "diffusion", "content": ev["text"]}
             elif ev["type"] == "tool_call_chunk":
                 _accumulate_tool_call(tool_calls, ev)
             elif ev["type"] == "usage":

@@ -3,7 +3,8 @@ Unified LLM backend abstraction for Lyra.
 
 All backends normalize output to the same StreamEvent dicts:
   {"type": "reasoning", "text": str}
-  {"type": "content", "text": str}
+  {"type": "content", "text": str}          — standard append-mode tokens
+  {"type": "diffusion", "text": str}        — full-text replacement (Mercury diffusing mode)
   {"type": "tool_call_chunk", "index": int, "id": str|None, "name": str|None, "args": str}
   {"type": "usage", "input": int, "output": int}
 """
@@ -289,6 +290,7 @@ class MercuryBackend:
             "stream": True,
             "stream_options": {"include_usage": True},
             "reasoning_effort": "medium",
+            "diffusing": True,
         }
         if openai_tools:
             create_kwargs["tools"] = openai_tools
@@ -324,9 +326,9 @@ class MercuryBackend:
 
             delta = chunk.choices[0].delta
 
-            # Content tokens
+            # Content tokens (diffusion mode: each chunk is a full replacement)
             if delta.content:
-                yield {"type": "content", "text": delta.content}
+                yield {"type": "diffusion", "text": delta.content}
 
             # Tool call chunks
             if delta.tool_calls:

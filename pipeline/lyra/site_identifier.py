@@ -411,7 +411,12 @@ def _process_single(
                 )
             elif is_short or name_sim < 0.8:
                 verified = _verify_alias_match(
-                    settings, search_name, best["name"], alias_used, facts
+                    settings,
+                    search_name,
+                    best["name"],
+                    alias_used,
+                    facts,
+                    db_country=best.get("country"),
                 )
                 if not verified:
                     logger.info(
@@ -518,7 +523,12 @@ def _process_single(
                     continue
                 elif is_short or name_sim < 0.8:
                     verified = _verify_alias_match(
-                        settings, alt_name, best["name"], alias_used, facts
+                        settings,
+                        alt_name,
+                        best["name"],
+                        alias_used,
+                        facts,
+                        db_country=best.get("country"),
                     )
                     if not verified:
                         logger.info(
@@ -840,6 +850,8 @@ def _verify_alias_match(
     site_name: str,
     matched_alias: str,
     facts: list[str],
+    *,
+    db_country: str | None = None,
 ) -> bool:
     """Quick Mercury check: is the alias match correct?
 
@@ -848,14 +860,19 @@ def _verify_alias_match(
     genuinely different sites.
     """
     facts_text = "\n".join(f"- {f}" for f in facts[:10]) if facts else "(none)"
+    country_note = ""
+    if db_country:
+        country_note = f"\nThe database site '{site_name}' is located in {db_country}.\n"
     prompt = (
         f"A news video mentions the archaeological site '{search_name}'.\n"
         f"Our database matched it via the alias '{matched_alias}' to a site "
-        f"named '{site_name}'.\n\n"
+        f"named '{site_name}'.{country_note}\n\n"
         f"Known facts about '{search_name}':\n{facts_text}\n\n"
         f"Is '{search_name}' the SAME archaeological site as '{site_name}'? "
         f"Consider that sites can have alternate names/spellings, but nearby "
-        f"sites in the same complex are DIFFERENT sites."
+        f"sites in the same complex are DIFFERENT sites. "
+        f"If the facts suggest a different country/region than the database site, "
+        f"they are almost certainly NOT the same."
     )
 
     result = _call_ai(

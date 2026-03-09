@@ -61,6 +61,7 @@ export interface LyraMessage {
   news?: NewsHighlight[]
   timestamp: Date
   isStreaming?: boolean
+  isDiffusing?: boolean
   confidence?: number | null
   tokens?: { input: number; output: number; voyage?: number }
   discoveries?: { newCount: number; total: number }
@@ -82,10 +83,15 @@ export interface LyraChatRequest {
 /**
  * Server-Sent Event types for streaming.
  */
-export type SSEEventType = 'token' | 'status' | 'sites' | 'news' | 'done' | 'error' | 'achievements' | 'pipeline' | 'queue_info' | 'queue_position'
+export type SSEEventType = 'token' | 'diffusion' | 'status' | 'sites' | 'news' | 'done' | 'error' | 'achievements' | 'pipeline' | 'queue_info' | 'queue_position'
 
 export interface SSETokenEvent {
   type: 'token'
+  content: string
+}
+
+export interface SSEDiffusionEvent {
+  type: 'diffusion'
   content: string
 }
 
@@ -148,7 +154,7 @@ export interface SSEQueuePositionEvent {
   estimated_wait_seconds: number
 }
 
-export type SSEEvent = SSETokenEvent | SSEStatusEvent | SSESitesEvent | SSENewsEvent | SSEDoneEvent | SSEErrorEvent | SSEAchievementsEvent | SSEQueueInfoEvent | SSEQueuePositionEvent
+export type SSEEvent = SSETokenEvent | SSEDiffusionEvent | SSEStatusEvent | SSESitesEvent | SSENewsEvent | SSEDoneEvent | SSEErrorEvent | SSEAchievementsEvent | SSEQueueInfoEvent | SSEQueuePositionEvent
 
 /**
  * Summary of a saved conversation for the history panel.

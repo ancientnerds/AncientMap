@@ -794,6 +794,13 @@ export default function LyraChatModal({
                     ? { ...m, thinking: (m.thinking || '') + data.content }
                     : m
                 ))
+              } else if (type === 'diffusion' && data.content) {
+                setLyraStatus(null)
+                setMessages(prev => prev.map(m =>
+                  m.id === assistantId
+                    ? { ...m, content: data.content, isDiffusing: true }
+                    : m
+                ))
               } else if (type === 'token' && data.content) {
                 setLyraStatus(null)
                 setMessages(prev => prev.map(m =>
@@ -1246,12 +1253,20 @@ export default function LyraChatModal({
                             )}
                             <div className="lyra-chat-msg-content">
                               {msg.role === 'assistant' ? (
-                                <TypewriterMessage
-                                  content={msg.content}
-                                  isStreaming={!!msg.isStreaming}
-                                  sidebarNews={sidebarNews}
-                                  mdComponents={mdComponents}
-                                />
+                                msg.isDiffusing ? (
+                                  <div className="lyra-chat-msg-text">
+                                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                                      {enrichLyraContent(msg.content, sidebarNews)}
+                                    </ReactMarkdown>
+                                  </div>
+                                ) : (
+                                  <TypewriterMessage
+                                    content={msg.content}
+                                    isStreaming={!!msg.isStreaming}
+                                    sidebarNews={sidebarNews}
+                                    mdComponents={mdComponents}
+                                  />
+                                )
                               ) : (
                                 <>
                                   <div className="lyra-chat-msg-text">
