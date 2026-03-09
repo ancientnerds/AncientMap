@@ -9634,21 +9634,6 @@ body.hud-hidden .empire-borders-window {
 .webcam-lb-btn.primary { background: #c02023; color: white; }
 .webcam-lb-btn.primary:hover { opacity: 0.85; }
 .webcam-lb-btn.secondary { background: #1a1a2e; color: #e8e8f0; border: 1px solid #222238; }
-.webcam-gallery-attribution {
-  text-align: center;
-  padding: 6px 8px 10px;
-  color: #777;
-  font-size: 11px;
-}
-.webcam-gallery-attribution a {
-  color: #999;
-  text-decoration: underline;
-  text-decoration-color: rgba(150, 150, 150, 0.3);
-}
-.webcam-gallery-attribution a:hover {
-  color: #ccc;
-}
-
 /* Background haze overlay for gallery section */
 .gallery-grid-container::after {
   content: '';
