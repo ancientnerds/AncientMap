@@ -15,7 +15,7 @@ IMPORTANT: If you can figure out which real site the garbled name refers to, set
 Determine whether the extracted name refers to a specific, named archaeological site. If yes, identify it with the correct name.
 
 If NOT a specific archaeological site (e.g. a region like "Egypt", a people like "the Maya", a method like "LIDAR", a person, or a vague reference like "the ruins"), set is_site to false.
-"Site" here means a physical archaeological location — caves, temples, ruins, rock shelters, monuments, and stone circles ARE sites. Do NOT confuse this with "website".
+An archaeological site is any named physical location where archaeological remains exist — excavation sites, caves, temples, ruins, rock shelters, monuments, stone circles, tells, mounds, etc. The is_site field asks ONLY whether this is a real archaeological location.
 
 Rules:
 - Use video titles, descriptions, and tags for correct spelling when available

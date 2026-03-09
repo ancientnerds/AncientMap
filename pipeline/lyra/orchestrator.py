@@ -1518,6 +1518,17 @@ def _run_migrations(engine) -> None:
         """)
         )
 
+        # Reset discoveries wrongly classified as not_a_site due to prompt
+        # confusion (LLM interpreted "site" as "website").  Idempotent: once
+        # reprocessed, status changes and this no longer matches.
+        conn.execute(
+            text("""
+            UPDATE user_contributions SET status = 'pending', facts_hash = NULL
+            WHERE site_name_extracted = 'Bees Bejisultan Huyek'
+              AND status = 'not_a_site'
+        """)
+        )
+
         conn.commit()
 
 
