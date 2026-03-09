@@ -438,8 +438,12 @@ def _process_single(
                     )
             else:
                 # name_similarity >= 0.8 — trusted match
-                # Disambiguate if top 2+ candidates have very close scores
-                if (
+                # Always prefer AN Originals over external sources —
+                # skip LLM disambiguation if an AN candidate exists.
+                an_preferred = _pick_an_candidate(db_candidates, promoted_ids)
+                if an_preferred:
+                    best = an_preferred
+                elif (
                     len(db_candidates) >= 2
                     and db_candidates[1]["similarity"] >= settings.pg_trgm_threshold
                     and abs(best["similarity"] - db_candidates[1]["similarity"]) <= 0.1
@@ -542,8 +546,11 @@ def _process_single(
                     f"  [{contribution.name}] DB match via alternative name '{alt_name}': "
                     f"{best['name']} (sim={best['similarity']}, name_sim={name_sim})"
                 )
-                # Disambiguate if needed
-                if (
+                # Always prefer AN Originals over external sources
+                an_preferred = _pick_an_candidate(alt_candidates, promoted_ids)
+                if an_preferred:
+                    best = an_preferred
+                elif (
                     len(alt_candidates) >= 2
                     and alt_candidates[1]["similarity"] >= settings.pg_trgm_threshold
                     and abs(best["similarity"] - alt_candidates[1]["similarity"]) <= 0.1
@@ -748,6 +755,27 @@ def _aggregate_facts(
     # Deduplicate facts while preserving order
     all_facts = list(dict.fromkeys(all_facts))
     return all_facts, video_contexts, transcript_segments
+
+
+def _pick_an_candidate(
+    candidates: list[dict], promoted_ids: set[uuid.UUID] | None = None
+) -> dict | None:
+    """Return the first AN Originals or promoted candidate, if any.
+
+    Called before LLM disambiguation so that AN entries always win ties
+    against external sources (osm_historic, wikidata, etc.).
+    """
+    if promoted_ids is None:
+        promoted_ids = set()
+    for cand in candidates:
+        if cand["source"] == "ancient_nerds":
+            return cand
+        try:
+            if uuid.UUID(cand["site_id"]) in promoted_ids:
+                return cand
+        except (ValueError, TypeError):
+            continue
+    return None
 
 
 def _compute_facts_hash(facts: list[str], video_contexts: list[dict] | None = None) -> str:

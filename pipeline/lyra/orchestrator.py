@@ -1455,6 +1455,29 @@ def _run_migrations(engine) -> None:
             )
         )
 
+        # Strip diacritics from unified_site_names.name_normalized so trigram
+        # search treats accented and unaccented forms identically.  The backfill
+        # migration used lower(name) which keeps accents (e.g. 'sacsayhuamán'),
+        # while normalize_name() strips them — causing AN Originals entries
+        # to rank below accent-free external sources in fuzzy matches.
+        conn.execute(
+            text("""
+            UPDATE unified_site_names
+            SET name_normalized = left(lower(unaccent(name_normalized)), 500)
+            WHERE name_normalized IS DISTINCT FROM lower(unaccent(name_normalized))
+        """)
+        )
+
+        # Also fix unified_sites.name_normalized for the same reason
+        conn.execute(
+            text("""
+            UPDATE unified_sites
+            SET name_normalized = left(lower(unaccent(name)), 500)
+            WHERE name_normalized IS NULL
+               OR name_normalized IS DISTINCT FROM lower(unaccent(name_normalized))
+        """)
+        )
+
         # Delete stale AI-generated research_alias entries that cause false
         # matches (e.g. Stonehenge → Avebury).  Code no longer creates these;
         # they were replaced by wikidata_alias.
