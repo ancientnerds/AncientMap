@@ -175,13 +175,19 @@ def get_max_tokens() -> int:
 
 
 class _KeyPool:
-    """Rotates through free API keys, falling back to the main key when exhausted."""
+    """Rotates through free API keys with cooldown, falling back to the main key.
+
+    When a key hits a rate limit, it's cooled down for 60 seconds (not permanently
+    removed). After cooldown, the key becomes available again. This handles
+    per-minute rate limits without wasting the key's remaining quota.
+    """
+
+    COOLDOWN_SECONDS = 60
 
     def __init__(self):
         self._free_keys: list[str] = []
         self._main_key: str = ""
-        self._index: int = 0
-        self._exhausted: set[int] = set()
+        self._cooldowns: dict[int, float] = {}  # index -> time.monotonic() when available
         self._initialized: bool = False
 
     def _init(self, settings: LyraSettings) -> None:
@@ -193,10 +199,18 @@ class _KeyPool:
         if self._free_keys:
             logger.info(f"Key pool: {len(self._free_keys)} free keys + 1 main key")
 
+    def _is_available(self, index: int) -> bool:
+        import time
+
+        if index not in self._cooldowns:
+            return True
+        return time.monotonic() >= self._cooldowns[index]
+
     @property
     def current_key(self) -> str:
-        for i in range(self._index, len(self._free_keys)):
-            if i not in self._exhausted:
+        # Find first available free key
+        for i in range(len(self._free_keys)):
+            if self._is_available(i):
                 return self._free_keys[i]
         return self._main_key
 
@@ -204,20 +218,22 @@ class _KeyPool:
     def using_free_key(self) -> bool:
         return self.current_key != self._main_key
 
-    def mark_exhausted(self) -> str:
-        """Mark the current free key as exhausted and return the next key."""
-        if self._index < len(self._free_keys):
-            self._exhausted.add(self._index)
-            # Advance past exhausted keys
-            while self._index < len(self._free_keys) and self._index in self._exhausted:
-                self._index += 1
-            remaining = len(self._free_keys) - len(self._exhausted)
-            next_key = self.current_key
-            is_main = next_key == self._main_key
-            logger.info(
-                f"Key rotated: {'main key' if is_main else f'{remaining} free keys remaining'}"
-            )
-            return next_key
+    def mark_rate_limited(self) -> str:
+        """Put the current free key on cooldown and return the next available key."""
+        import time
+
+        for i in range(len(self._free_keys)):
+            if self._is_available(i):
+                self._cooldowns[i] = time.monotonic() + self.COOLDOWN_SECONDS
+                cooling = sum(1 for j in range(len(self._free_keys)) if not self._is_available(j))
+                available = len(self._free_keys) - cooling
+                next_key = self.current_key
+                is_main = next_key == self._main_key
+                logger.info(
+                    f"Key {i + 1} rate-limited (cooldown {self.COOLDOWN_SECONDS}s): "
+                    f"{'using main key' if is_main else f'{available} free keys available'}"
+                )
+                return next_key
         return self._main_key
 
 
@@ -231,8 +247,8 @@ def get_current_api_key() -> str:
 
 
 def mark_api_key_exhausted() -> str:
-    """Mark the current key as exhausted and return the next one."""
-    return _key_pool.mark_exhausted()
+    """Mark the current key as rate-limited (60s cooldown) and return the next one."""
+    return _key_pool.mark_rate_limited()
 
 
 # ---------------------------------------------------------------------------
@@ -390,7 +406,7 @@ def _call_openai_api(
     except Exception as e:
         # Rotate to next key on rate limit / quota exhaustion (free keys only)
         if not is_ollama and _key_pool.using_free_key and _is_rate_limit_error(e):
-            next_key = _key_pool.mark_exhausted()
+            next_key = _key_pool.mark_rate_limited()
             client = _get_mercury_client(next_key, settings.base_url)
             response = client.chat.completions.create(**create_kwargs)
         else:
