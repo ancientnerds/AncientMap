@@ -1119,6 +1119,24 @@ async def run_agent_stream(
         if len(all_news) > news_before:
             yield {"type": "news", "news": all_news}
 
+    # If we exhausted all tool rounds without a final text response,
+    # do one more LLM call with tools disabled to force a text answer.
+    if tool_calls:
+        logger.info("Max tool rounds reached — forcing final text response")
+        async for ev in _stream_with_heartbeat(
+            backend_impl,
+            messages,
+            [],  # no tools — force text
+            enable_thinking=False,
+        ):
+            if ev["type"] == "content":
+                yield {"type": "token", "content": ev["text"]}
+            elif ev["type"] == "diffusion":
+                yield {"type": "diffusion", "content": ev["text"]}
+            elif ev["type"] == "usage":
+                total_input_tokens += ev["input"]
+                total_output_tokens += ev["output"]
+
     # Collect distinct metadata for gamification achievement checks
     site_ids_found = list({s["id"] for s in all_sites if s.get("id")})
     countries_found = list({s["country"] for s in all_sites if s.get("country")})
