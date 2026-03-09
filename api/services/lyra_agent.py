@@ -375,13 +375,9 @@ def _get_filter_llm():
     if _filter_llm is None:
         from langchain_openai import ChatOpenAI
 
-        api_key = (
-            os.getenv("LYRA_API_KEY")
-            or os.getenv("LYRA_ANTHROPIC_API_KEY")
-        )
-        base_url = (
-            os.getenv("LYRA_BASE_URL")
-            or os.getenv("LYRA_ANTHROPIC_BASE_URL", "https://api.inceptionlabs.ai/v1")
+        api_key = os.getenv("LYRA_API_KEY") or os.getenv("LYRA_ANTHROPIC_API_KEY")
+        base_url = os.getenv("LYRA_BASE_URL") or os.getenv(
+            "LYRA_ANTHROPIC_BASE_URL", "https://api.inceptionlabs.ai/v1"
         )
         _filter_llm = ChatOpenAI(
             model=LLM_MODEL,

@@ -118,9 +118,7 @@ async def queue_status(req: Request):
 # ---------------------------------------------------------------------------
 
 
-def _handle_cloud_backend(
-    request: LyraChatRequest, user, ctx: RequestContext
-) -> StreamingResponse:
+def _handle_cloud_backend(request: LyraChatRequest, user, ctx: RequestContext) -> StreamingResponse:
     """Credit-based flow for Mercury cloud."""
     with get_db_session() as session:
         db_user = session.query(DBUser).filter(DBUser.id == user.id).with_for_update().first()
