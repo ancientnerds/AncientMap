@@ -116,16 +116,13 @@ def fetch_transcript(video_id: str, settings: LyraSettings) -> tuple[str | None,
     ytt_api = _build_ytt_api(settings)
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     try:
-        future = executor.submit(
-            ytt_api.fetch, video_id, languages=["en", "en-US", "en-GB"]
-        )
+        future = executor.submit(ytt_api.fetch, video_id, languages=["en", "en-US", "en-GB"])
         transcript = future.result(timeout=settings.transcript_fetch_timeout)
     except concurrent.futures.TimeoutError:
         # shutdown(wait=False) so we don't block on the hung thread
         executor.shutdown(wait=False, cancel_futures=True)
         logger.warning(
-            f"Transcript fetch timed out after {settings.transcript_fetch_timeout}s"
-            f" for {video_id}"
+            f"Transcript fetch timed out after {settings.transcript_fetch_timeout}s for {video_id}"
         )
         return None, None
     except Exception as e:
