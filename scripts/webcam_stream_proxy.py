@@ -13,6 +13,7 @@ Then open http://localhost:8765 in your browser.
 
 import http.server
 import json
+import os
 import re
 import ssl
 import threading
@@ -24,6 +25,8 @@ from pathlib import Path
 
 PORT = 8765
 CACHE_TTL = 300  # Cache stream URLs for 5 minutes (tokens rotate)
+# Path prefix when running behind a reverse proxy (e.g. "/webcam-proxy")
+PATH_PREFIX = os.environ.get("PATH_PREFIX", "")
 
 # Stream URL cache: {skyline_page_url: (m3u8_url, timestamp)}
 _stream_cache: dict[str, tuple[str, float]] = {}
@@ -148,7 +151,7 @@ def rewrite_m3u8(content: str, base_url: str) -> str:
             else:
                 abs_url = urllib.parse.urljoin(base_url, stripped)
             encoded = urllib.parse.quote(abs_url, safe="")
-            result.append(f"/proxy?url={encoded}")
+            result.append(f"{PATH_PREFIX}/proxy?url={encoded}")
         else:
             result.append(line)
     return "\n".join(result)

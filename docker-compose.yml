@@ -153,6 +153,8 @@ services:
       dockerfile: Dockerfile.webcam-proxy
     container_name: ancient_nerds_webcam_proxy
     restart: unless-stopped
+    environment:
+      PATH_PREFIX: /webcam-proxy
     logging:
       driver: json-file
       options:
