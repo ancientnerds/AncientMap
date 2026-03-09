@@ -2072,8 +2072,23 @@ def _handle_wikidata_match(
     if not an_match:
         an_match = _check_name_an_match(session, site_name)
     if an_match:
+        # LLM verification: don't blindly trust fuzzy/spatial matches
+        an_ok, an_reason = _verify_db_match(
+            settings,
+            site_name,
+            an_match.name,
+            an_match.country,
+            None,
+            contribution.country,
+        )
+        if not an_ok:
+            logger.info(
+                f"  [{site_name}] AN dedup match '{an_match.name}' rejected by LLM: {an_reason}"
+            )
+            an_match = None
+    if an_match:
         logger.info(
-            f"  [{site_name}] Spatial match to AN '{an_match.name}' — matching instead of enriching"
+            f"  [{site_name}] Verified AN match '{an_match.name}' — matching instead of enriching"
         )
         contribution.enrichment_status = "matched"
         fill_contrib_from_site(contribution, an_match)
@@ -2218,8 +2233,23 @@ def _handle_ai_enriched_site(
     if not an_match:
         an_match = _check_name_an_match(session, search_name)
     if an_match:
+        # LLM verification: don't blindly trust fuzzy/spatial matches
+        an_ok, an_reason = _verify_db_match(
+            settings,
+            search_name,
+            an_match.name,
+            an_match.country,
+            None,
+            contribution.country,
+        )
+        if not an_ok:
+            logger.info(
+                f"  [{contribution.name}] AN dedup match '{an_match.name}' rejected by LLM: {an_reason}"
+            )
+            an_match = None
+    if an_match:
         logger.info(
-            f"  [{contribution.name}] Match to AN '{an_match.name}' — matching instead of enriching"
+            f"  [{contribution.name}] Verified AN match '{an_match.name}' — matching instead of enriching"
         )
         contribution.enrichment_status = "matched"
         fill_contrib_from_site(contribution, an_match)

@@ -10,7 +10,8 @@ When the name looks like nonsense English words but the facts describe a real si
 
 Determine whether the extracted name refers to a specific, named archaeological site. If yes, identify it with the correct name.
 
-If NOT a specific site (e.g. a region like "Egypt", a people like "the Maya", a method like "LIDAR", a person, or a vague reference like "the ruins"), set is_site to false.
+If NOT a specific archaeological site (e.g. a region like "Egypt", a people like "the Maya", a method like "LIDAR", a person, or a vague reference like "the ruins"), set is_site to false.
+"Site" here means a physical archaeological location — caves, temples, ruins, rock shelters, monuments, and stone circles ARE sites. Do NOT confuse this with "website".
 
 Rules:
 - Use video titles, descriptions, and tags for correct spelling when available
