@@ -1435,6 +1435,47 @@ def _run_migrations(engine) -> None:
             text("ALTER TABLE db_snapshots ADD COLUMN IF NOT EXISTS source_id VARCHAR(50)")
         )
 
+        # --- Data migrations (idempotent) ---
+
+        # Backfill AN Originals into unified_site_names so _fetch_db_candidates()
+        # can find them.  Inserts a 'label' row for every unified_sites entry
+        # that doesn't already have a matching normalized name.
+        conn.execute(
+            text(
+                """
+                INSERT INTO unified_site_names (site_id, name, name_normalized, name_type)
+                SELECT id, name, name_normalized, 'label'
+                FROM unified_sites us
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM unified_site_names usn
+                    WHERE usn.site_id = us.id
+                      AND usn.name_normalized = us.name_normalized
+                )
+                """
+            )
+        )
+
+        # Delete stale AI-generated research_alias entries that cause false
+        # matches (e.g. Stonehenge → Avebury).  Code no longer creates these;
+        # they were replaced by wikidata_alias.
+        conn.execute(text("DELETE FROM unified_site_names WHERE name_type = 'research_alias'"))
+
+        # Re-score videos that lost significance: reset 'rescored' → 'verified'
+        # when their items have post_text but NULL or default significance (3).
+        conn.execute(
+            text(
+                """
+                UPDATE news_videos SET status = 'verified'
+                WHERE status = 'rescored'
+                  AND id IN (
+                    SELECT DISTINCT video_id FROM news_items
+                    WHERE post_text IS NOT NULL
+                      AND (significance IS NULL OR significance = 3)
+                  )
+                """
+            )
+        )
+
         conn.commit()
 
 
