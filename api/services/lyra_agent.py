@@ -14,6 +14,7 @@ import asyncio
 import json
 import logging
 import os
+import random
 import time
 from collections.abc import AsyncIterator
 from typing import Any
@@ -46,6 +47,48 @@ from pipeline.database import get_session
 from pipeline.lyra.config import get_max_tokens
 
 logger = logging.getLogger(__name__)
+
+# Characters used to simulate diffusion noise (visually interesting unicode)
+_NOISE_CHARS = "░▒▓█▄▀■□▪▫●○◆◇◈◉⬡⬢⬣"
+
+
+async def _simulate_diffusion(
+    final_text: str, steps: int = 8, interval: float = 0.06
+) -> AsyncIterator[dict]:
+    """Simulate Mercury diffusion crystallization effect.
+
+    Takes the final text and yields progressive diffusion events where
+    random characters "crystallize" from noise into the real text.
+    """
+    if not final_text.strip():
+        yield {"type": "diffusion", "content": final_text}
+        return
+
+    chars = list(final_text)
+
+    # Start fully noisy, then reveal more real characters each step
+    # Preserve whitespace, newlines, and markdown syntax from the start
+    _preserve = set(" \n\r\t#*_-|>[](){}!`:")
+    mutable = [i for i, c in enumerate(chars) if c not in _preserve]
+    random.shuffle(mutable)
+
+    for step in range(steps):
+        # Fraction of characters revealed (exponential curve — slow start, fast finish)
+        frac = (step / (steps - 1)) ** 0.5 if steps > 1 else 1.0
+        revealed = int(frac * len(mutable))
+        revealed_set = set(mutable[:revealed])
+
+        frame = []
+        for i, c in enumerate(chars):
+            if c in _preserve or i in revealed_set:
+                frame.append(c)
+            else:
+                frame.append(_NOISE_CHARS[random.randrange(len(_NOISE_CHARS))])  # noqa: S311
+        yield {"type": "diffusion", "content": "".join(frame)}
+        await asyncio.sleep(interval)
+
+    # Final clean frame
+    yield {"type": "diffusion", "content": final_text}
 
 
 # ---------------------------------------------------------------------------
@@ -894,7 +937,9 @@ async def run_agent_stream(
                 except Exception as e:
                     logger.warning(f"Structured output parse failed: {e}")
                     collected_content = clean_response_text(result["content"])
-                yield {"type": "diffusion", "content": collected_content}
+                # Simulate diffusion crystallization effect
+                async for diff_ev in _simulate_diffusion(collected_content):
+                    yield diff_ev
         else:
             # Ollama/local: stream with heartbeat
             async for ev in _stream_with_heartbeat(
@@ -1172,7 +1217,8 @@ async def run_agent_stream(
                     logger.warning(f"Forced structured output issues: {validation_issues}")
                 expanded = clean_response_text(expanded)
                 if expanded.strip():
-                    yield {"type": "diffusion", "content": expanded}
+                    async for diff_ev in _simulate_diffusion(expanded):
+                        yield diff_ev
                 else:
                     raise ValueError("Structured output returned empty text")
             except Exception as e:
@@ -1183,7 +1229,8 @@ async def run_agent_stream(
                 total_output_tokens += result["usage"]["output"]
                 fallback = clean_response_text(result["content"])
                 if fallback:
-                    yield {"type": "diffusion", "content": fallback}
+                    async for diff_ev in _simulate_diffusion(fallback):
+                        yield diff_ev
         else:
             async for ev in _stream_with_heartbeat(
                 backend_impl,
