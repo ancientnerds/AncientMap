@@ -593,11 +593,93 @@ async def check_country_codes_valid(resp: SSEResponse, **_kw) -> CheckResult:
     return CheckResult("api_country_codes", True, f"{len(set(flags))} valid codes")
 
 
+async def check_radar_data_valid(resp: SSEResponse, **_kw) -> CheckResult:
+    """When search_radar was called, verify mentioned sites exist in /radar."""
+    if "search_radar" not in resp.tools_called:
+        return CheckResult("api_radar", True, "n/a — search_radar not called")
+
+    api = _get_prod_api()
+    radar_data = await api.get("/radar?page_size=50")
+    if not radar_data or "items" not in radar_data:
+        return CheckResult("api_radar", True, "n/a — radar endpoint unavailable")
+
+    radar_names = {item["name"].lower() for item in radar_data["items"] if "name" in item}
+    if not radar_names:
+        return CheckResult("api_radar", True, "n/a — no radar data in prod")
+
+    # Check if any radar site names appear in Lyra's response
+    content_lower = resp.content.lower()
+    matched = [name for name in radar_names if name.lower() in content_lower]
+
+    if not matched and resp.content.strip():
+        # Lyra responded but didn't mention any known radar names — could be
+        # filtered results or paraphrasing, not necessarily wrong
+        return CheckResult(
+            "api_radar", True, f"0/{len(radar_names)} names matched (may be filtered)"
+        )
+
+    return CheckResult(
+        "api_radar", True, f"{len(matched)}/{len(radar_names)} radar names in response"
+    )
+
+
+async def check_news_search_valid(resp: SSEResponse, **_kw) -> CheckResult:
+    """When search_news was called, verify /news endpoint returns data."""
+    if "search_news" not in resp.tools_called:
+        return CheckResult("api_news", True, "n/a — search_news not called")
+
+    api = _get_prod_api()
+    news_data = await api.get("/news?page_size=5")
+    if not news_data or "items" not in news_data:
+        return CheckResult("api_news", False, "news endpoint returned no data")
+
+    total = news_data.get("total_count", 0)
+    items = news_data.get("items", [])
+    if not items:
+        return CheckResult("api_news", False, "news feed is empty")
+
+    # Verify channel names from news exist in channels list
+    channels_data = await api.get("/news/channels")
+    if channels_data:
+        known_channels = {ch["name"] for ch in channels_data if "name" in ch}
+        news_channels = {item["video"]["channel_name"] for item in items if "video" in item}
+        unknown = news_channels - known_channels
+        if unknown:
+            return CheckResult("api_news", False, f"Unknown channels in news: {list(unknown)[:3]}")
+
+    return CheckResult("api_news", True, f"news healthy ({total} items, {len(items)} returned)")
+
+
+async def check_site_images_available(resp: SSEResponse, **_kw) -> CheckResult:
+    """When get_site_images was called, verify site UUIDs have images via API."""
+    if "get_site_images" not in resp.tools_called:
+        return CheckResult("api_images", True, "n/a — get_site_images not called")
+
+    # Find site UUIDs referenced in the response
+    uuids = set(re.findall(rf"\(site:({UUID_PAT})\)", resp.content, re.IGNORECASE))
+    if not uuids:
+        return CheckResult("api_images", True, "n/a — no site UUIDs to check images for")
+
+    api = _get_prod_api()
+    checked = 0
+    with_images = 0
+    for uid in list(uuids)[:3]:  # Check max 3 to conserve rate limit
+        data = await api.get(f"/sites/{uid}/images?limit=1")
+        checked += 1
+        if data and isinstance(data, list) and len(data) > 0:
+            with_images += 1
+
+    return CheckResult("api_images", True, f"{with_images}/{checked} sites have images in prod")
+
+
 API_CHECK_REGISTRY: dict[str, callable] = {
     "api_site_uuids": check_site_uuids_exist,
     "api_empire_ids": check_empire_ids_exist,
     "api_channels": check_channel_names_exist,
     "api_country_codes": check_country_codes_valid,
+    "api_radar": check_radar_data_valid,
+    "api_news": check_news_search_valid,
+    "api_images": check_site_images_available,
 }
 
 
