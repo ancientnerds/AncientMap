@@ -538,3 +538,52 @@ All backends implement the same `LLMBackend.stream()` protocol, yielding 4 event
 - `usage` — token counts
 
 This replaces the previous dual-path streaming logic (separate code for OpenAI SDK vs LangChain).
+
+### Mercury Structured Output (Chat Responses)
+
+Mercury (cloud backend) uses `response_format: json_schema` to guarantee well-formed references in Lyra's responses. Instead of fragile regex enrichment on free-form markdown, the LLM outputs structured JSON with guillemet markers.
+
+**Schema** (`api/services/lyra_schema.py`):
+
+```
+LyraResponse {
+  text: string          // Markdown with «s0», «c0», «v0», «e0», «i0», «l0», «f0» markers
+  sites: [{marker, name, id}]
+  coords: [{marker, lat, lon}]
+  videos: [{marker, channel, video_id, timestamp_seconds}]
+  empires: [{marker, name, polity_id}]
+  images: [{marker, title, original_url, author, license}]
+  links: [{marker, text, url}]
+  countries: [{marker, name, code}]
+}
+```
+
+**Marker expansion** (`expand_markers()`):
+- `«sN»` → `[name](site:UUID)` — clickable site chips
+- `«cN»` → `[lat, lon](lyra-coord:lat,lon)` — coordinate links
+- `«vN»` → `[▶ channel MM:SS](lyra-video:INDEX)` — video citations with timestamps
+- `«eN»` → `[name](empire:polity_id)` — empire links
+- `«iN»` → `![title](url)` + attribution — inline images
+- `«lN»` → `[text](url)` — external links
+- `«fN»` → `[name](flag:code)` — country flag chips
+
+**Two injection points** in `lyra_agent.py`:
+1. **Normal final response** (~line 885): After streaming completes with no tool calls, calls `MercuryBackend.complete()` with `LYRA_RESPONSE_SCHEMA`, runs `expand_markers()`, emits as diffusion replacement.
+2. **Forced final response** (~line 1177): When max tool rounds exhausted, same structured output flow.
+
+Both points have fallback paths that strip unresolved guillemet markers if `complete()` fails.
+
+**Key parameters for `MercuryBackend.complete()`:**
+- `max_tokens=4096` (capped — `reasoning_effort="high"` shares the budget with completion tokens)
+- `temperature=0.1` (deterministic for data extraction)
+- `stream=False` (structured output requires non-streaming)
+
+### Test Suite (`scripts/test_lyra_quality.py`)
+
+Comprehensive quality validation: 48 tests across 14 categories, combining 14 regex-based structural checks with a Mercury LLM judge.
+
+**Structural checks** (deterministic): site link format, coordinate ranges, UUID validity, video citations, empire links, image format, country flags, bare UUID detection, marker resolution, conciseness, tool invocations, hallucinated IDs.
+
+**LLM judge** (Mercury structured output): relevance score (0-10), site linking, source citations, conciseness, accuracy, marker usage, overall pass/fail. Uses `response_format: json_schema` for guaranteed valid JSON scoring.
+
+**Results** (Mar 2026): 48/48 PASS (100%), 695s total, 0 rate-limited judge calls.

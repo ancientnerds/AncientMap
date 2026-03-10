@@ -1140,6 +1140,33 @@ ESCALATION_SCHEMA:
   </div>
 </div>
 
+<div class="comparison">
+  <div class="compare-box" style="border-left: 3px solid var(--cyan); grid-column: span 2;">
+    <h3 style="color: var(--cyan);">LYRA_RESPONSE_SCHEMA <span class="badge badge-new">new</span></h3>
+    <p style="font-size: 11px; color: var(--dim); margin-bottom: 8px;">
+      Mercury structured output for chat responses. Replaces fragile regex enrichment with guaranteed JSON.
+      LLM places guillemet markers (&laquo;s0&raquo;, &laquo;c0&raquo;, &laquo;v0&raquo;, &laquo;e0&raquo;, &laquo;i0&raquo;, &laquo;l0&raquo;, &laquo;f0&raquo;) in text &mdash;
+      <code>expand_markers()</code> resolves them to frontend markdown links.
+    </p>
+    <pre style="background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 10px; color: var(--dim); max-height: 220px; overflow-y: auto;">{
+  text: string,           // Markdown with guillemet markers
+  sites: [{marker, name, id}],            // &laquo;sN&raquo; &rarr; [name](site:UUID)
+  coords: [{marker, lat, lon}],           // &laquo;cN&raquo; &rarr; [lat,lon](lyra-coord:lat,lon)
+  videos: [{marker, channel,              // &laquo;vN&raquo; &rarr; [&#9654; channel MM:SS](lyra-video:INDEX)
+            video_id, timestamp_seconds}],
+  empires: [{marker, name, polity_id}],   // &laquo;eN&raquo; &rarr; [name](empire:polity_id)
+  images: [{marker, title, original_url,  // &laquo;iN&raquo; &rarr; ![title](url) + attribution
+            author, license}],
+  links: [{marker, text, url}],           // &laquo;lN&raquo; &rarr; [text](url)
+  countries: [{marker, name, code}]       // &laquo;fN&raquo; &rarr; [name](flag:XX)
+}</pre>
+    <p style="font-size: 10px; color: var(--dim); margin-top: 8px;">
+      <strong>Key parameters:</strong> <code>reasoning_effort="high"</code>, <code>temperature=0.1</code>, <code>max_tokens=4096</code> (capped &mdash; reasoning shares token budget).
+      Validated: 48/48 tests pass, 0% JSON parse failures.
+    </p>
+  </div>
+</div>
+
 <div class="sep"></div>
 
 <!-- ================================================================== -->
@@ -1250,12 +1277,12 @@ ESCALATION_SCHEMA:
       <div class="node node-llm">
         <div class="node-title">
           Multi-Model Agent Loop
-          <span class="badge badge-model">M2.5 / Qwen3.5</span>
+          <span class="badge badge-model">Mercury 2 / Qwen3.5</span>
         </div>
         <div class="node-desc">
-          Streams tokens as <code>{"type": "token", "content": "..."}</code>. Up to 5 tool-call rounds.<br>
-          <strong>ModelRouter</strong> selects tier: <em>Premium</em> (MiniMax M2.5), <em>Heavy</em> (Qwen3.5 4B), or <em>Fast</em> (Qwen3.5 0.8B).<br>
-          Unified <code>LLMBackend.stream()</code> &mdash; one code path for all backends.
+          Streams tokens via <code>LLMBackend.stream()</code>. Up to 5 tool-call rounds.<br>
+          <strong>ModelRouter</strong> selects tier: <em>Cloud</em> (Mercury 2 &mdash; diffusion streaming + structured output), <em>Heavy</em> (Qwen3.5 4B), or <em>Fast</em> (Qwen3.5 0.8B).<br>
+          Mercury uses diffusion mode (parallel token generation, ~1000 tok/s). Final response formatted via <code>complete()</code> with <code>LYRA_RESPONSE_SCHEMA</code>.
         </div>
       </div>
 
@@ -1323,6 +1350,29 @@ ESCALATION_SCHEMA:
 
   <div class="flow-arrow">&#x25BC;</div>
 
+  <!-- Structured Output Formatting -->
+  <div class="stage">
+    <div class="stage-label" style="color: var(--cyan); font-weight: 700;">structured<br>output<br><small>(Mercury only)</small></div>
+    <div class="stage-content">
+      <div class="node" style="border: 1px solid var(--cyan); background: rgba(34, 211, 238, 0.03);">
+        <div class="node-title">
+          MercuryBackend.complete() + expand_markers()
+          <span class="badge badge-new">new</span>
+        </div>
+        <div class="node-desc">
+          After streaming completes, a non-streaming <code>complete()</code> call with <code>response_format: LYRA_RESPONSE_SCHEMA</code>
+          produces guaranteed structured JSON. <code>expand_markers()</code> resolves guillemet markers
+          (&laquo;s0&raquo;, &laquo;v0&raquo;, &laquo;e0&raquo;, etc.) into frontend markdown links.<br>
+          <strong>Two injection points:</strong> Point 1 (normal final) + Point 2 (forced when max tool rounds exhausted).<br>
+          <strong>Fallback:</strong> If <code>complete()</code> fails, keeps streamed diffusion text with markers stripped.<br>
+          <em style="color: var(--dim); font-size: 11px;">Parameters: reasoning_effort="high", temperature=0.1, max_tokens=4096 (capped).</em>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-arrow">&#x25BC;</div>
+
   <!-- Output -->
   <div class="stage">
     <div class="stage-label">output stream</div>
@@ -1337,8 +1387,8 @@ ESCALATION_SCHEMA:
           <div class="node-desc">News items for sidebar cards</div>
         </div>
         <div class="node node-output">
-          <div class="node-title" style="font-size: 12px;">{"type": "token"}</div>
-          <div class="node-desc">Streamed LLM text</div>
+          <div class="node-title" style="font-size: 12px;">{"type": "diffusion"}</div>
+          <div class="node-desc">Full-text replacement (structured output resolved)</div>
         </div>
       </div>
       <div class="split-3">
@@ -1347,10 +1397,13 @@ ESCALATION_SCHEMA:
           <div class="node-desc">Tool-call preamble (styled differently)</div>
         </div>
         <div class="node node-output">
+          <div class="node-title" style="font-size: 12px;">{"type": "pipeline"}</div>
+          <div class="node-desc">Stage events: structured_format start/end</div>
+        </div>
+        <div class="node node-output">
           <div class="node-title" style="font-size: 12px;">{"type": "done"}</div>
           <div class="node-desc">Metadata: model, tool_calls, sites_found, tokens</div>
         </div>
-        <div class="node" style="opacity: 0;"></div>
       </div>
     </div>
   </div>
@@ -1558,7 +1611,83 @@ ESCALATION_SCHEMA:
 <!-- ================================================================== -->
 <!-- TEST SCORECARD -->
 <!-- ================================================================== -->
-<h2><span class="num">10</span> Test Scorecard &mdash; 14 Graded Queries</h2>
+<h2><span class="num">10</span> Test Scorecards</h2>
+
+<h3 style="color: var(--cyan); margin-bottom: 12px;">10a. End-to-End Quality Suite &mdash; 48 Tests <span class="badge badge-new">new</span></h3>
+
+<p style="font-size: 12px; color: var(--dim); margin-bottom: 12px;">
+  Full chat pipeline with Mercury LLM judge + 14 structural checks. Measured Mar 2026. See <code>scripts/test_lyra_quality.py</code>.
+</p>
+
+<div style="margin: 16px 0; font-size: 11px; overflow-x: auto;">
+  <div style="display: grid; grid-template-columns: 140px 60px 1fr; gap: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; min-width: 400px;">
+    <div style="background: var(--surface2); padding: 8px 10px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Category</div>
+    <div style="background: var(--surface2); padding: 8px 10px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Result</div>
+    <div style="background: var(--surface2); padding: 8px 10px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">What It Tests</div>
+
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">basic</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 600;">4/4</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">Greeting, off-topic rejection, follow-up, conciseness</div>
+
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">site_refs</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 600;">5/5</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">Single/multi site links, regional, tables, details</div>
+
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">coordinates</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 600;">3/3</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">Coordinate links, range validation, multi-coord</div>
+
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">news_video</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 600;">5/5</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">Discoveries, channel attribution, timestamps, multi-source</div>
+
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">transcripts</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 600;">3/3</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">Transcript search, timestamps, channel-specific</div>
+
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">articles</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 600;">2/2</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">Weekly digest, topic search</div>
+
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">empires</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 600;">3/3</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">Empire data, search, context mode</div>
+
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">images</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 600;">2/2</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">Site images, attribution</div>
+
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">links_flags</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 600;">3/3</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">Wikipedia links, country flags, multi-country</div>
+
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">radar</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 600;">3/3</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">Radar overview, filtered, details</div>
+
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">channels</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 600;">2/2</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">List channels, channel count</div>
+
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">edge_cases</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 600;">5/5</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">Long query, Unicode, nonexistent site, single char, empty results</div>
+
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">multi_turn</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 600;">3/3</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">Image follow-up, reference resolution, empire follow-up</div>
+
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">full_pipeline</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 600;">5/5</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">Context modes (site/empire/news), multi-tool, structured output validation</div>
+
+    <div style="background: var(--surface); padding: 8px 10px; font-weight: 700; color: var(--accent);">TOTAL</div>
+    <div style="background: var(--surface); padding: 8px 10px; font-weight: 700; color: var(--green);">48/48</div>
+    <div style="background: var(--surface); padding: 8px 10px; font-weight: 700; color: var(--dim);">695s total &bull; 14 structural checks + Mercury LLM judge &bull; 0 rate limits</div>
+  </div>
+</div>
+
+<h3 style="color: var(--accent); margin: 24px 0 12px;">10b. Hybrid Search Scorecard &mdash; 14 Graded Queries</h3>
 
 <p style="font-size: 12px; color: var(--dim); margin-bottom: 16px;">
   Full hybrid search pipeline. Measured Feb 2026 on local Qdrant + Voyage API.

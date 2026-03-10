@@ -30,6 +30,7 @@ from sqlalchemy import text
 
 from api.services.lyra_backends import get_backend
 from api.services.lyra_prompts import LYRA_SYSTEM_PROMPT, LYRA_TRIVIAL_PROMPT, _build_context_prompt
+from api.services.lyra_schema import LYRA_RESPONSE_SCHEMA, expand_markers
 from api.services.lyra_router import (
     RequestContext,
     get_classification_reason,
@@ -881,6 +882,58 @@ async def run_agent_stream(
 
         # If no tool calls, we're done
         if not tool_calls:
+            # For Mercury: reformat via structured output for guaranteed link syntax
+            if ctx.backend_type == "mercury" and collected_content.strip():
+                try:
+                    yield {
+                        "type": "pipeline",
+                        "stage": "structured_format",
+                        "status": "start",
+                        "duration_ms": None,
+                        "meta": None,
+                    }
+                    _t_struct = time.monotonic()
+                    parsed = await backend_impl.complete(
+                        messages, response_format=LYRA_RESPONSE_SCHEMA
+                    )
+                    expanded, validation_issues = expand_markers(parsed, all_news)
+                    if validation_issues:
+                        logger.warning(f"Structured output issues: {validation_issues}")
+                    # Only replace if structured output produced non-empty text
+                    if expanded.strip():
+                        yield {"type": "diffusion", "content": expanded}
+                        collected_content = expanded
+                    else:
+                        logger.warning("Structured output returned empty text, keeping streamed content")
+                        # Strip unresolved guillemet markers from the fallback text
+                        import re as _re
+                        cleaned = _re.sub(r"\u00ab[a-z]+\d+\u00bb", "", collected_content)
+                        if cleaned != collected_content:
+                            collected_content = cleaned.strip()
+                            yield {"type": "diffusion", "content": collected_content}
+                    yield {
+                        "type": "pipeline",
+                        "stage": "structured_format",
+                        "status": "done",
+                        "duration_ms": int((time.monotonic() - _t_struct) * 1000),
+                        "meta": {"issues": len(validation_issues)},
+                    }
+                except Exception as e:
+                    logger.warning(f"Structured output failed, keeping raw text: {e}")
+                    # Strip unresolved guillemet markers from fallback text
+                    import re as _re
+                    cleaned = _re.sub(r"\u00ab[a-z]+\d+\u00bb", "", collected_content)
+                    if cleaned != collected_content:
+                        collected_content = cleaned.strip()
+                        yield {"type": "diffusion", "content": collected_content}
+                    yield {
+                        "type": "pipeline",
+                        "stage": "structured_format",
+                        "status": "done",
+                        "duration_ms": 0,
+                        "meta": {"error": str(e)[:100]},
+                    }
+
             _round_tokens = total_input_tokens + total_output_tokens - _round_tokens_before
             yield {
                 "type": "pipeline",
@@ -1123,19 +1176,49 @@ async def run_agent_stream(
     # do one more LLM call with tools disabled to force a text answer.
     if tool_calls:
         logger.info("Max tool rounds reached — forcing final text response")
-        async for ev in _stream_with_heartbeat(
-            backend_impl,
-            messages,
-            [],  # no tools — force text
-            enable_thinking=False,
-        ):
-            if ev["type"] == "content":
-                yield {"type": "token", "content": ev["text"]}
-            elif ev["type"] == "diffusion":
-                yield {"type": "diffusion", "content": ev["text"]}
-            elif ev["type"] == "usage":
-                total_input_tokens += ev["input"]
-                total_output_tokens += ev["output"]
+        if ctx.backend_type == "mercury":
+            # Use structured output for guaranteed formatting
+            try:
+                parsed = await backend_impl.complete(
+                    messages, response_format=LYRA_RESPONSE_SCHEMA
+                )
+                expanded, validation_issues = expand_markers(parsed, all_news)
+                if validation_issues:
+                    logger.warning(f"Forced structured output issues: {validation_issues}")
+                if expanded.strip():
+                    yield {"type": "token", "content": expanded}
+                else:
+                    raise ValueError("Structured output returned empty text")
+            except Exception as e:
+                logger.warning(f"Forced structured output failed, falling back to stream: {e}")
+                _fallback_text = ""
+                async for ev in _stream_with_heartbeat(
+                    backend_impl, messages, [], enable_thinking=False,
+                ):
+                    if ev["type"] == "content":
+                        _fallback_text += ev["text"]
+                    elif ev["type"] == "diffusion":
+                        _fallback_text = ev["text"]
+                    elif ev["type"] == "usage":
+                        total_input_tokens += ev["input"]
+                        total_output_tokens += ev["output"]
+                # Strip unresolved guillemet markers from fallback text
+                import re as _re
+                _fallback_text = _re.sub(r"\u00ab[a-z]+\d+\u00bb", "", _fallback_text)
+                _fallback_text = _re.sub(r"  +", " ", _fallback_text).strip()
+                if _fallback_text:
+                    yield {"type": "diffusion", "content": _fallback_text}
+        else:
+            async for ev in _stream_with_heartbeat(
+                backend_impl, messages, [], enable_thinking=False,
+            ):
+                if ev["type"] == "content":
+                    yield {"type": "token", "content": ev["text"]}
+                elif ev["type"] == "diffusion":
+                    yield {"type": "diffusion", "content": ev["text"]}
+                elif ev["type"] == "usage":
+                    total_input_tokens += ev["input"]
+                    total_output_tokens += ev["output"]
 
     # Collect distinct metadata for gamification achievement checks
     site_ids_found = list({s["id"] for s in all_sites if s.get("id")})

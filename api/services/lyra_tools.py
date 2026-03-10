@@ -776,8 +776,10 @@ def search_transcripts(
         channel: Filter by channel name (optional).
         limit: Max results (default 5, max 10).
     """
-    query = (query or "")[:500]
+    query = (query or "").strip()[:500]
     limit = min(limit, 10)
+    if not query:
+        return "No query provided. Please specify what to search for in transcripts."
 
     # Use hybrid search on transcripts collection
     items, _vt = _hybrid_search(query, collection="transcripts", limit=limit, channel=channel)
@@ -827,8 +829,10 @@ def search_articles(
         query: What to search for in articles.
         limit: Max results (default 5, max 10).
     """
-    query = (query or "")[:500]
+    query = (query or "").strip()[:500]
     limit = min(limit, 10)
+    if not query:
+        return "No query provided. Please specify what to search for in articles."
 
     items, _vt = _hybrid_search(query, collection="articles", limit=limit)
     if not items:

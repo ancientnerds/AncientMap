@@ -316,7 +316,7 @@ function TypewriterMessage({
         const colonIndex = url.indexOf(':');
         if (colonIndex === -1) return url;
         const protocol = url.trim().slice(0, colonIndex);
-        if (['http', 'https', 'mailto', 'lyra-video', 'lyra-site', 'lyra-coord', 'site', 'flag'].includes(protocol.toLowerCase())) return url;
+        if (['http', 'https', 'mailto', 'lyra-video', 'lyra-site', 'lyra-coord', 'site', 'flag', 'empire'].includes(protocol.toLowerCase())) return url;
         return '';
       }}>
         {displayedContent || '\u200B'}
@@ -485,6 +485,16 @@ export default function LyraChatModal({
         const newsItem = sidebarNewsRef.current[idx]
         if (!newsItem) return <span>{children}</span>
         return <LyraInlineVideo news={newsItem}>{children}</LyraInlineVideo>
+      }
+      // Empire link: empire:POLITY_ID
+      if (href?.startsWith('empire:')) {
+        const polityId = href.slice('empire:'.length)
+        if (!/^[a-z][a-z0-9_]+$/.test(polityId)) return <span>{children}</span>
+        return (
+          <span className="lyra-empire-link" title={`Empire: ${polityId}`}>
+            {children}
+          </span>
+        )
       }
       // Normal link
       return <a {...props} href={href} target="_blank" rel="noopener noreferrer">{children}</a>

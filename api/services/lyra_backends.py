@@ -355,6 +355,44 @@ class MercuryBackend:
                     }
                 tool_calls.clear()
 
+    async def complete(self, messages: list, response_format: dict | None = None) -> dict:
+        """Non-streaming completion with optional structured output.
+
+        Used for final response formatting (structured JSON) and judge scoring.
+        Returns parsed JSON dict when response_format is json_schema.
+        """
+        client = self._get_client()
+        openai_messages = _langchain_messages_to_openai(messages)
+
+        # Use capped max_tokens for structured output — reasoning_effort="high"
+        # consumes most of the budget; 4096 is enough for reasoning + JSON output.
+        create_kwargs: dict = {
+            "model": self.model,
+            "messages": openai_messages,
+            "max_tokens": min(self.max_tokens, 4096),
+            "stream": False,
+            "reasoning_effort": "high",
+            "temperature": 0.1,
+        }
+        if response_format:
+            create_kwargs["response_format"] = response_format
+
+        try:
+            response = await client.chat.completions.create(**create_kwargs)
+        except Exception as e:
+            from pipeline.lyra.config import mark_api_key_exhausted
+
+            msg = str(e).lower()
+            if "rate limit" in msg or "429" in msg or "quota" in msg:
+                mark_api_key_exhausted()
+                client = self._get_client()
+                response = await client.chat.completions.create(**create_kwargs)
+            else:
+                raise
+
+        content = response.choices[0].message.content or "{}"
+        return json.loads(content)
+
 
 # ---------------------------------------------------------------------------
 # Backend factory — creates singleton backends keyed by model name

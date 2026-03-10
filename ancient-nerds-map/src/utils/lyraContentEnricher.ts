@@ -35,6 +35,19 @@ function formatTimestamp(seconds: number): string {
 export function enrichLyraContent(content: string, news?: NewsHighlight[]): string {
   let result = content
 
+  // 0a. Normalize en-dashes (U+2011, U+2013) in site UUIDs to regular hyphens
+  //     Mercury's diffusion model sometimes outputs non-breaking or en-dash hyphens
+  result = result.replace(
+    /(site:[0-9a-f]{8})[‑–]([0-9a-f]{4})[‑–]([0-9a-f]{4})[‑–]([0-9a-f]{4})[‑–]([0-9a-f]{12})/gi,
+    (_m, a, b, c, d, e) => `${a}-${b}-${c}-${d}-${e}`
+  )
+
+  // 0b. Fix bare [site:UUID] links → wrap as [View Site](site:UUID)
+  result = result.replace(
+    /(?<!\()\[site:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\](?!\()/gi,
+    (_match, uuid) => `[View Site](site:${uuid})`
+  )
+
   // 1. Coordinates: [lat, lon] or [lat,lon] → custom link
   //    Match patterns like [37.0928, 39.3041] but NOT already-linked markdown
   result = result.replace(
@@ -63,7 +76,8 @@ export function enrichLyraContent(content: string, news?: NewsHighlight[]): stri
   }
 
   // 3. YouTube video references → lyra-video:INDEX links
-  if (news && news.length > 0) {
+  //    Skip if content already has lyra-video links (avoids double-enrichment during streaming)
+  if (news && news.length > 0 && !result.includes('lyra-video:')) {
     // 3a. Direct [youtube: VIDEO_ID] markers (if LLM echoes them from context)
     result = result.replace(
       /\[youtube:\s*([a-zA-Z0-9_-]{11})\]/g,
