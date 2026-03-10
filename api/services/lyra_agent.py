@@ -15,6 +15,7 @@ import json
 import logging
 import os
 import random
+import re
 import time
 from collections.abc import AsyncIterator
 from typing import Any
@@ -948,7 +949,17 @@ async def run_agent_stream(
                         collected_content = clean_response_text(expanded)
                 except Exception as e:
                     logger.warning(f"Structured output parse failed: {e}")
-                    collected_content = clean_response_text(result["content"])
+                    # Try to extract the "text" field from raw JSON even if
+                    # full parse failed (Mercury may produce nearly-valid JSON
+                    # with one malformed array while the text field is fine)
+                    raw = result["content"]
+                    text_match = re.search(r'"text"\s*:\s*"((?:[^"\\]|\\.)*)"', raw)
+                    if text_match:
+                        collected_content = clean_response_text(
+                            text_match.group(1).replace("\\n", "\n").replace('\\"', '"')
+                        )
+                    else:
+                        collected_content = clean_response_text(raw)
                 # Simulate diffusion crystallization effect
                 async for diff_ev in _simulate_diffusion(collected_content):
                     yield diff_ev
@@ -1233,6 +1244,22 @@ async def run_agent_stream(
                         yield diff_ev
                 else:
                     raise ValueError("Structured output returned empty text")
+            except json.JSONDecodeError as e:
+                logger.warning(f"Forced structured output parse failed: {e}")
+                # Try to extract "text" field from partially-valid JSON
+                raw = result["content"]
+                text_match = re.search(r'"text"\s*:\s*"((?:[^"\\]|\\.)*)"', raw)
+                if text_match:
+                    fallback = clean_response_text(
+                        text_match.group(1).replace("\\n", "\n").replace('\\"', '"')
+                    )
+                    if fallback.strip():
+                        async for diff_ev in _simulate_diffusion(fallback):
+                            yield diff_ev
+                    else:
+                        raise ValueError("Extracted text is empty") from e
+                else:
+                    raise
             except Exception as e:
                 logger.warning(f"Forced generate failed: {e}")
                 # Last resort: raw generate without structured output
