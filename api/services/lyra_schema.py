@@ -123,7 +123,16 @@ LYRA_RESPONSE_SCHEMA = {
                     },
                 },
             },
-            "required": ["text", "sites", "coords", "videos", "empires", "images", "links", "countries"],
+            "required": [
+                "text",
+                "sites",
+                "coords",
+                "videos",
+                "empires",
+                "images",
+                "links",
+                "countries",
+            ],
             "additionalProperties": False,
         },
     },
@@ -134,7 +143,9 @@ LYRA_RESPONSE_SCHEMA = {
 # Marker expansion — resolve guillemet markers into frontend markdown links
 # ---------------------------------------------------------------------------
 
-_UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
+_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
+)
 _MARKER_RE = re.compile(r"\u00ab[a-z]+\d+\u00bb")  # Matches «s0», «c1», «cn0», etc.
 
 

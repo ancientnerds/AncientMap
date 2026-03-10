@@ -256,7 +256,8 @@ def check_markers_resolved(resp: SSEResponse, **_kw) -> CheckResult:
     remaining = re.findall(r"\u00ab[a-z]+\d+\u00bb", resp.content)
     ok = len(remaining) <= 10
     return CheckResult(
-        "markers_resolved", ok,
+        "markers_resolved",
+        ok,
         f"{len(remaining)} unresolved: {remaining[:5]}" if remaining else "",
     )
 
@@ -269,12 +270,17 @@ def check_site_links(resp: SSEResponse, **_kw) -> CheckResult:
     # Validate UUID format
     bad = [u for _, u in links if not re.match(rf"^{UUID_PAT}$", u, re.IGNORECASE)]
     ok = len(bad) == 0
-    return CheckResult("site_links", ok, f"{len(links)} links" + (f", {len(bad)} bad UUIDs" if bad else ""))
+    return CheckResult(
+        "site_links", ok, f"{len(links)} links" + (f", {len(bad)} bad UUIDs" if bad else "")
+    )
 
 
 def check_coord_links(resp: SSEResponse, **_kw) -> CheckResult:
     """[lat, lon](lyra-coord:lat,lon) with valid ranges."""
-    coords = re.findall(r"\[(-?\d+\.?\d*),\s*(-?\d+\.?\d*)\]\(lyra-coord:(-?\d+\.?\d*),(-?\d+\.?\d*)\)", resp.content)
+    coords = re.findall(
+        r"\[(-?\d+\.?\d*),\s*(-?\d+\.?\d*)\]\(lyra-coord:(-?\d+\.?\d*),(-?\d+\.?\d*)\)",
+        resp.content,
+    )
     if not coords:
         return CheckResult("coord_links", True, "n/a — no coord links")
     for lat_s, lon_s, _, _ in coords:
@@ -344,7 +350,8 @@ def check_no_bare_uuids(resp: SSEResponse, **_kw) -> CheckResult:
 def check_conciseness(resp: SSEResponse, max_chars: int = 3500, **_kw) -> CheckResult:
     ok = len(resp.content) <= max_chars
     return CheckResult(
-        "conciseness", ok,
+        "conciseness",
+        ok,
         f"{len(resp.content)} chars" + ("" if ok else f" (max {max_chars})"),
     )
 
@@ -359,7 +366,8 @@ def check_tools_called(resp: SSEResponse, expected: list[str] | None = None, **_
     matched = [t for t in expected if t in called_set]
     ok = len(matched) > 0
     return CheckResult(
-        "tools_called", ok,
+        "tools_called",
+        ok,
         f"Expected one of {expected}, got {resp.tools_called}",
     )
 
@@ -376,7 +384,8 @@ def check_no_hallucinated_ids(resp: SSEResponse, **_kw) -> CheckResult:
         return CheckResult("no_hallucinated_ids", True, "n/a — no sites event to compare")
     ok = len(unknown) == 0
     return CheckResult(
-        "no_hallucinated_ids", ok,
+        "no_hallucinated_ids",
+        ok,
         f"{len(unknown)} unknown IDs" if unknown else f"All {len(response_uuids)} verified",
     )
 
@@ -471,8 +480,14 @@ JUDGE_SCHEMA = {
                 "reason": {"type": "string"},
             },
             "required": [
-                "relevance", "site_linking", "source_citations",
-                "conciseness", "accuracy", "marker_usage", "overall", "reason",
+                "relevance",
+                "site_linking",
+                "source_citations",
+                "conciseness",
+                "accuracy",
+                "marker_usage",
+                "overall",
+                "reason",
             ],
             "additionalProperties": False,
         },
@@ -501,9 +516,7 @@ Score each dimension:
 IMPORTANT: overall is "pass" if relevance >= 5 AND accuracy pass AND conciseness pass. Individual fail on site_linking or source_citations does NOT make overall fail."""
 
 
-async def evaluate_with_judge(
-    prompt: str, response_text: str, tools: list[str]
-) -> dict | None:
+async def evaluate_with_judge(prompt: str, response_text: str, tools: list[str]) -> dict | None:
     """Call Mercury as LLM judge with structured output and key pool rotation."""
     if not LYRA_API_KEY and not LYRA_FREE_API_KEYS:
         return None
@@ -590,7 +603,10 @@ TEST_CASES: list[TestCase] = [
         prompt="Tell me more about that",
         history=[
             {"role": "user", "content": "What do you know about Göbekli Tepe?"},
-            {"role": "assistant", "content": "Göbekli Tepe is a Neolithic site in southeastern Turkey, dating to around 9500 BCE."},
+            {
+                "role": "assistant",
+                "content": "Göbekli Tepe is a Neolithic site in southeastern Turkey, dating to around 9500 BCE.",
+            },
         ],
         structural_checks=["not_empty", "no_error", "markers_resolved", "conciseness"],
     ),
@@ -600,19 +616,30 @@ TEST_CASES: list[TestCase] = [
         prompt="What is the oldest known temple?",
         structural_checks=["not_empty", "no_error", "markers_resolved", "conciseness"],
     ),
-
     # ── Category 2: Site References (5) ──
     TestCase(
         name="Single site link",
         category="site_refs",
         prompt="Tell me about Gobekli Tepe",
-        structural_checks=["not_empty", "no_error", "markers_resolved", "site_links", "no_bare_uuids"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "site_links",
+            "no_bare_uuids",
+        ],
     ),
     TestCase(
         name="Multiple site links",
         category="site_refs",
         prompt="Compare Stonehenge and the Pyramids of Giza",
-        structural_checks=["not_empty", "no_error", "markers_resolved", "site_links", "no_bare_uuids"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "site_links",
+            "no_bare_uuids",
+        ],
     ),
     TestCase(
         name="Sites in region",
@@ -634,7 +661,6 @@ TEST_CASES: list[TestCase] = [
         structural_checks=["not_empty", "no_error", "markers_resolved", "site_links"],
         expected_tools=["get_site_details", "search_sites", "get_site_images"],
     ),
-
     # ── Category 3: Coordinate References (3) ──
     TestCase(
         name="Coordinates query",
@@ -654,7 +680,6 @@ TEST_CASES: list[TestCase] = [
         prompt="Where are Pompeii and Petra? Give coordinates for both.",
         structural_checks=["not_empty", "no_error", "markers_resolved", "coord_links"],
     ),
-
     # ── Category 4: News & Video References (5) ──
     TestCase(
         name="Recent discoveries",
@@ -691,7 +716,6 @@ TEST_CASES: list[TestCase] = [
         structural_checks=["not_empty", "no_error", "markers_resolved"],
         expected_tools=["search_news"],
     ),
-
     # ── Category 5: Transcript References (3) ──
     TestCase(
         name="Transcript search",
@@ -715,7 +739,6 @@ TEST_CASES: list[TestCase] = [
         expected_tools=["search_transcripts"],
         min_relevance=5,
     ),
-
     # ── Category 6: Article References (2) ──
     TestCase(
         name="Weekly digest",
@@ -731,7 +754,6 @@ TEST_CASES: list[TestCase] = [
         structural_checks=["not_empty", "no_error", "markers_resolved"],
         expected_tools=["search_articles"],
     ),
-
     # ── Category 7: Empire References (3) ──
     TestCase(
         name="Empire military",
@@ -757,7 +779,6 @@ TEST_CASES: list[TestCase] = [
         expected_tools=["get_empire_data"],
         min_relevance=5,
     ),
-
     # ── Category 8: Image References (2) ──
     TestCase(
         name="Site images",
@@ -775,7 +796,6 @@ TEST_CASES: list[TestCase] = [
         expected_tools=["get_site_images"],
         min_relevance=5,
     ),
-
     # ── Category 9: External Links & Flags (3) ──
     TestCase(
         name="Wikipedia link",
@@ -795,7 +815,6 @@ TEST_CASES: list[TestCase] = [
         prompt="Compare ancient sites in Egypt and Greece",
         structural_checks=["not_empty", "no_error", "markers_resolved"],
     ),
-
     # ── Category 10: Radar & Discovery (3) ──
     TestCase(
         name="Radar overview",
@@ -818,7 +837,6 @@ TEST_CASES: list[TestCase] = [
         structural_checks=["not_empty", "no_error", "markers_resolved"],
         expected_tools=["search_radar", "search_news", "vector_search"],
     ),
-
     # ── Category 11: Channel Directory (2) ──
     TestCase(
         name="List channels",
@@ -834,7 +852,6 @@ TEST_CASES: list[TestCase] = [
         structural_checks=["not_empty", "no_error", "markers_resolved", "conciseness"],
         expected_tools=["list_channels"],
     ),
-
     # ── Category 12: Edge Cases (5) ──
     TestCase(
         name="Long complex query",
@@ -875,7 +892,6 @@ TEST_CASES: list[TestCase] = [
         structural_checks=["not_empty", "no_error", "markers_resolved", "conciseness"],
         min_relevance=4,
     ),
-
     # ── Category 13: Multi-turn Conversations (3) ──
     TestCase(
         name="Image follow-up",
@@ -883,7 +899,10 @@ TEST_CASES: list[TestCase] = [
         prompt="Show me images of it",
         history=[
             {"role": "user", "content": "Tell me about Pompeii"},
-            {"role": "assistant", "content": "Pompeii is a famous Roman city preserved by the eruption of Vesuvius in 79 AD."},
+            {
+                "role": "assistant",
+                "content": "Pompeii is a famous Roman city preserved by the eruption of Vesuvius in 79 AD.",
+            },
         ],
         structural_checks=["not_empty", "no_error", "markers_resolved"],
         expected_tools=["get_site_images"],
@@ -894,7 +913,10 @@ TEST_CASES: list[TestCase] = [
         prompt="Tell me more about the first one",
         history=[
             {"role": "user", "content": "What Neolithic sites are in Turkey?"},
-            {"role": "assistant", "content": "Turkey has several major Neolithic sites including Göbekli Tepe, Çatalhöyük, and Karahan Tepe."},
+            {
+                "role": "assistant",
+                "content": "Turkey has several major Neolithic sites including Göbekli Tepe, Çatalhöyük, and Karahan Tepe.",
+            },
         ],
         structural_checks=["not_empty", "no_error", "markers_resolved"],
     ),
@@ -904,12 +926,14 @@ TEST_CASES: list[TestCase] = [
         prompt="What about their economy?",
         history=[
             {"role": "user", "content": "Tell me about the Roman Empire's military"},
-            {"role": "assistant", "content": "The Roman Empire had a highly organized military with legions stationed across the empire."},
+            {
+                "role": "assistant",
+                "content": "The Roman Empire had a highly organized military with legions stationed across the empire.",
+            },
         ],
         structural_checks=["not_empty", "no_error", "markers_resolved"],
         expected_tools=["get_empire_data", "search_empires"],
     ),
-
     # ── Category 14: Context Modes & Full Pipeline (5) ──
     TestCase(
         name="Site context",
@@ -940,7 +964,14 @@ TEST_CASES: list[TestCase] = [
         name="Structured output validation",
         category="full_pipeline",
         prompt="Tell me about Göbekli Tepe including coordinates and recent news",
-        structural_checks=["not_empty", "no_error", "markers_resolved", "site_links", "no_bare_uuids", "no_hallucinated_ids"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "site_links",
+            "no_bare_uuids",
+            "no_hallucinated_ids",
+        ],
     ),
     TestCase(
         name="News context",
@@ -988,7 +1019,9 @@ async def run_test(
         if resp.content.strip():
             break
         # Only stop retrying on permanent errors (auth failures)
-        if resp.error and any(s in resp.error.lower() for s in ["401", "403", "forbidden", "authentication"]):
+        if resp.error and any(
+            s in resp.error.lower() for s in ["401", "403", "forbidden", "authentication"]
+        ):
             break
 
     # Show response summary
@@ -1032,17 +1065,23 @@ async def run_test(
     overall_pass = structural_pass
 
     if use_judge and not tc.skip_judge and resp.content.strip():
-        judge_result = await evaluate_with_judge(
-            tc.prompt, resp.content, resp.tools_called
-        )
+        judge_result = await evaluate_with_judge(tc.prompt, resp.content, resp.tools_called)
         if judge_result and "error" not in judge_result:
             relevance = judge_result.get("relevance", 0)
             j_parts = [f"relevance={relevance}"]
-            for dim in ["site_linking", "source_citations", "conciseness", "accuracy", "marker_usage"]:
+            for dim in [
+                "site_linking",
+                "source_citations",
+                "conciseness",
+                "accuracy",
+                "marker_usage",
+            ]:
                 val = judge_result.get(dim, "n_a")
                 icon = (
-                    f"{GREEN}✓{RESET}" if val == "pass"
-                    else f"{RED}✗{RESET}" if val == "fail"
+                    f"{GREEN}✓{RESET}"
+                    if val == "pass"
+                    else f"{RED}✗{RESET}"
+                    if val == "fail"
                     else f"{DIM}n/a{RESET}"
                 )
                 j_parts.append(f"{dim}={icon}")
@@ -1123,9 +1162,7 @@ async def main():
 
     results: list[dict] = []
     for i, tc in enumerate(cases, 1):
-        passed, detail = await run_test(
-            i, total, tc, use_judge=use_judge, verbose=args.verbose
-        )
+        passed, detail = await run_test(i, total, tc, use_judge=use_judge, verbose=args.verbose)
         results.append(detail)
         if i < total:
             await asyncio.sleep(1.0)

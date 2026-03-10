@@ -904,9 +904,12 @@ async def run_agent_stream(
                         yield {"type": "diffusion", "content": expanded}
                         collected_content = expanded
                     else:
-                        logger.warning("Structured output returned empty text, keeping streamed content")
+                        logger.warning(
+                            "Structured output returned empty text, keeping streamed content"
+                        )
                         # Strip unresolved guillemet markers from the fallback text
                         import re as _re
+
                         cleaned = _re.sub(r"\u00ab[a-z]+\d+\u00bb", "", collected_content)
                         if cleaned != collected_content:
                             collected_content = cleaned.strip()
@@ -922,6 +925,7 @@ async def run_agent_stream(
                     logger.warning(f"Structured output failed, keeping raw text: {e}")
                     # Strip unresolved guillemet markers from fallback text
                     import re as _re
+
                     cleaned = _re.sub(r"\u00ab[a-z]+\d+\u00bb", "", collected_content)
                     if cleaned != collected_content:
                         collected_content = cleaned.strip()
@@ -1179,9 +1183,7 @@ async def run_agent_stream(
         if ctx.backend_type == "mercury":
             # Use structured output for guaranteed formatting
             try:
-                parsed = await backend_impl.complete(
-                    messages, response_format=LYRA_RESPONSE_SCHEMA
-                )
+                parsed = await backend_impl.complete(messages, response_format=LYRA_RESPONSE_SCHEMA)
                 expanded, validation_issues = expand_markers(parsed, all_news)
                 if validation_issues:
                     logger.warning(f"Forced structured output issues: {validation_issues}")
@@ -1193,7 +1195,10 @@ async def run_agent_stream(
                 logger.warning(f"Forced structured output failed, falling back to stream: {e}")
                 _fallback_text = ""
                 async for ev in _stream_with_heartbeat(
-                    backend_impl, messages, [], enable_thinking=False,
+                    backend_impl,
+                    messages,
+                    [],
+                    enable_thinking=False,
                 ):
                     if ev["type"] == "content":
                         _fallback_text += ev["text"]
@@ -1204,13 +1209,17 @@ async def run_agent_stream(
                         total_output_tokens += ev["output"]
                 # Strip unresolved guillemet markers from fallback text
                 import re as _re
+
                 _fallback_text = _re.sub(r"\u00ab[a-z]+\d+\u00bb", "", _fallback_text)
                 _fallback_text = _re.sub(r"  +", " ", _fallback_text).strip()
                 if _fallback_text:
                     yield {"type": "diffusion", "content": _fallback_text}
         else:
             async for ev in _stream_with_heartbeat(
-                backend_impl, messages, [], enable_thinking=False,
+                backend_impl,
+                messages,
+                [],
+                enable_thinking=False,
             ):
                 if ev["type"] == "content":
                     yield {"type": "token", "content": ev["text"]}
