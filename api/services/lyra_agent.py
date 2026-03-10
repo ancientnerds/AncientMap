@@ -853,86 +853,71 @@ async def run_agent_stream(
         }
         _t_round = time.monotonic()
         _round_tokens_before = total_input_tokens + total_output_tokens
-        # Stream the LLM response — unified path for all backends
         collected_content = ""
         tool_calls: list[dict[str, str | int | None]] = []
 
-        async for ev in _stream_with_heartbeat(
-            backend_impl,
-            messages,
-            TOOLS if ctx.supports_tools else [],
-            enable_thinking=ctx.supports_thinking,
-        ):
-            if ev["type"] == "heartbeat":
-                if ctx.backend_type != "mercury":
-                    yield {"type": "status", "content": f"Processing input ({ev['elapsed_s']}s)..."}
-            elif ev["type"] == "reasoning":
-                yield {"type": "thinking", "content": ev["text"]}
-            elif ev["type"] == "content":
-                collected_content += ev["text"]
-                yield {"type": "token", "content": ev["text"]}
-            elif ev["type"] == "diffusion":
-                collected_content = ev["text"]  # full replacement, not append
-                yield {"type": "diffusion", "content": ev["text"]}
-            elif ev["type"] == "tool_call_chunk":
-                _accumulate_tool_call(tool_calls, ev)
-            elif ev["type"] == "usage":
-                total_input_tokens += ev["input"]
-                total_output_tokens += ev["output"]
+        # Mercury: single non-streaming call with tools + structured output
+        if ctx.backend_type == "mercury":
+            result = await backend_impl.generate(
+                messages,
+                tools=TOOLS if ctx.supports_tools else None,
+                response_format=LYRA_RESPONSE_SCHEMA,
+            )
+            total_input_tokens += result["usage"]["input"]
+            total_output_tokens += result["usage"]["output"]
 
-        # If no tool calls, we're done
-        if not tool_calls:
-            # For Mercury: reformat via structured output for guaranteed link syntax
-            if ctx.backend_type == "mercury" and collected_content.strip():
-                try:
-                    yield {
-                        "type": "pipeline",
-                        "stage": "structured_format",
-                        "status": "start",
-                        "duration_ms": None,
-                        "meta": None,
-                    }
-                    _t_struct = time.monotonic()
-                    parsed = await backend_impl.complete(
-                        messages, response_format=LYRA_RESPONSE_SCHEMA
+            if result["tool_calls"]:
+                # Model wants to call tools — parse tool_calls
+                for tc in result["tool_calls"]:
+                    tool_calls.append(
+                        {
+                            "id": tc["id"],
+                            "name": tc["name"],
+                            "args": tc["args"],
+                        }
                     )
+                collected_content = result["content"]
+            else:
+                # Final text response — parse structured output
+                try:
+                    parsed = json.loads(result["content"])
+                    text_field = parsed.get("text", "")
+                    if not text_field.strip():
+                        raise ValueError("Structured output returned empty text")
+                    # Filter empty site IDs
+                    if "sites" in parsed:
+                        parsed["sites"] = [s for s in parsed["sites"] if s.get("id", "").strip()]
                     expanded, validation_issues = expand_markers(parsed, all_news)
                     if validation_issues:
                         logger.warning(f"Structured output issues: {validation_issues}")
-                    # Clean any JSON artifacts Mercury put in the text field
-                    expanded = clean_response_text(expanded)
-                    # Only replace if structured output produced non-empty text
-                    if expanded.strip():
-                        yield {"type": "diffusion", "content": expanded}
-                        collected_content = expanded
-                    else:
-                        logger.warning(
-                            "Structured output returned empty text, keeping streamed content"
-                        )
-                        collected_content = clean_response_text(collected_content)
-                        yield {"type": "diffusion", "content": collected_content}
-                    yield {
-                        "type": "pipeline",
-                        "stage": "structured_format",
-                        "status": "done",
-                        "duration_ms": int((time.monotonic() - _t_struct) * 1000),
-                        "meta": {
-                            "issues": len(validation_issues),
-                            "structured_json": parsed,
-                        },
-                    }
+                    collected_content = clean_response_text(expanded)
                 except Exception as e:
-                    logger.warning(f"Structured output failed, keeping raw text: {e}")
-                    collected_content = clean_response_text(collected_content)
-                    yield {"type": "diffusion", "content": collected_content}
-                    yield {
-                        "type": "pipeline",
-                        "stage": "structured_format",
-                        "status": "done",
-                        "duration_ms": 0,
-                        "meta": {"error": str(e)[:100]},
-                    }
+                    logger.warning(f"Structured output parse failed: {e}")
+                    collected_content = clean_response_text(result["content"])
+                yield {"type": "diffusion", "content": collected_content}
+        else:
+            # Ollama/local: stream with heartbeat
+            async for ev in _stream_with_heartbeat(
+                backend_impl,
+                messages,
+                TOOLS if ctx.supports_tools else [],
+                enable_thinking=ctx.supports_thinking,
+            ):
+                if ev["type"] == "heartbeat":
+                    yield {"type": "status", "content": f"Processing input ({ev['elapsed_s']}s)..."}
+                elif ev["type"] == "reasoning":
+                    yield {"type": "thinking", "content": ev["text"]}
+                elif ev["type"] == "content":
+                    collected_content += ev["text"]
+                    yield {"type": "token", "content": ev["text"]}
+                elif ev["type"] == "tool_call_chunk":
+                    _accumulate_tool_call(tool_calls, ev)
+                elif ev["type"] == "usage":
+                    total_input_tokens += ev["input"]
+                    total_output_tokens += ev["output"]
 
+        # If no tool calls, we're done
+        if not tool_calls:
             _round_tokens = total_input_tokens + total_output_tokens - _round_tokens_before
             yield {
                 "type": "pipeline",
@@ -947,10 +932,8 @@ async def run_agent_stream(
             }
             break
 
-        # The preamble text (e.g. "I'll search for...") was streamed as tokens.
-        # Re-emit it as a status event so the frontend can style it differently,
-        # then clear the token content so the real answer starts fresh.
-        # Skip for Mercury diffusion — no extra status messages.
+        # For Ollama streaming, the preamble text (e.g. "I'll search for...") was
+        # streamed as tokens. Re-emit it as a status event.
         if collected_content.strip() and ctx.backend_type != "mercury":
             yield {"type": "status", "content": collected_content.strip()}
 
@@ -1176,47 +1159,31 @@ async def run_agent_stream(
     if tool_calls:
         logger.info("Max tool rounds reached — forcing final text response")
         if ctx.backend_type == "mercury":
-            # Use structured output for guaranteed formatting
+            # Single generate() call with structured output, no tools
             try:
-                parsed = await backend_impl.complete(messages, response_format=LYRA_RESPONSE_SCHEMA)
+                result = await backend_impl.generate(messages, response_format=LYRA_RESPONSE_SCHEMA)
+                total_input_tokens += result["usage"]["input"]
+                total_output_tokens += result["usage"]["output"]
+                parsed = json.loads(result["content"])
+                if "sites" in parsed:
+                    parsed["sites"] = [s for s in parsed["sites"] if s.get("id", "").strip()]
                 expanded, validation_issues = expand_markers(parsed, all_news)
                 if validation_issues:
                     logger.warning(f"Forced structured output issues: {validation_issues}")
                 expanded = clean_response_text(expanded)
                 if expanded.strip():
-                    yield {"type": "token", "content": expanded}
-                    yield {
-                        "type": "pipeline",
-                        "stage": "structured_format",
-                        "status": "done",
-                        "duration_ms": 0,
-                        "meta": {
-                            "issues": len(validation_issues),
-                            "structured_json": parsed,
-                            "forced": True,
-                        },
-                    }
+                    yield {"type": "diffusion", "content": expanded}
                 else:
                     raise ValueError("Structured output returned empty text")
             except Exception as e:
-                logger.warning(f"Forced structured output failed, falling back to stream: {e}")
-                _fallback_text = ""
-                async for ev in _stream_with_heartbeat(
-                    backend_impl,
-                    messages,
-                    [],
-                    enable_thinking=False,
-                ):
-                    if ev["type"] == "content":
-                        _fallback_text += ev["text"]
-                    elif ev["type"] == "diffusion":
-                        _fallback_text = ev["text"]
-                    elif ev["type"] == "usage":
-                        total_input_tokens += ev["input"]
-                        total_output_tokens += ev["output"]
-                _fallback_text = clean_response_text(_fallback_text)
-                if _fallback_text:
-                    yield {"type": "diffusion", "content": _fallback_text}
+                logger.warning(f"Forced generate failed: {e}")
+                # Last resort: raw generate without structured output
+                result = await backend_impl.generate(messages)
+                total_input_tokens += result["usage"]["input"]
+                total_output_tokens += result["usage"]["output"]
+                fallback = clean_response_text(result["content"])
+                if fallback:
+                    yield {"type": "diffusion", "content": fallback}
         else:
             async for ev in _stream_with_heartbeat(
                 backend_impl,
@@ -1226,8 +1193,6 @@ async def run_agent_stream(
             ):
                 if ev["type"] == "content":
                     yield {"type": "token", "content": ev["text"]}
-                elif ev["type"] == "diffusion":
-                    yield {"type": "diffusion", "content": ev["text"]}
                 elif ev["type"] == "usage":
                     total_input_tokens += ev["input"]
                     total_output_tokens += ev["output"]

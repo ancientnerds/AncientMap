@@ -361,10 +361,78 @@ class MercuryBackend:
                     }
                 tool_calls.clear()
 
-    async def complete(self, messages: list, response_format: dict | None = None) -> dict:
-        """Non-streaming completion with optional structured output.
+    async def generate(
+        self,
+        messages: list,
+        tools: list | None = None,
+        response_format: dict | None = None,
+    ) -> dict:
+        """Single non-streaming call that handles tools + structured output.
 
-        Used for final response formatting (structured JSON) and judge scoring.
+        Returns {"content": str, "tool_calls": list, "usage": dict}.
+        When response_format is set and no tool calls, content is the raw
+        structured JSON string (caller parses it).
+        """
+        import asyncio as _aio
+
+        client = self._get_client()
+        openai_messages = _langchain_messages_to_openai(messages)
+
+        create_kwargs: dict = {
+            "model": self.model,
+            "messages": openai_messages,
+            "max_tokens": self.max_tokens,
+            "stream": False,
+            "reasoning_effort": "medium",
+        }
+        if tools:
+            create_kwargs["tools"] = _langchain_tools_to_openai(tools)
+        if response_format:
+            create_kwargs["response_format"] = response_format
+
+        async def _call() -> dict:
+            try:
+                resp = await _aio.wait_for(
+                    client.chat.completions.create(**create_kwargs), timeout=60.0
+                )
+            except Exception as e:
+                from pipeline.lyra.config import mark_api_key_exhausted
+
+                msg = str(e).lower()
+                if "rate limit" in msg or "429" in msg or "quota" in msg:
+                    mark_api_key_exhausted()
+                    refreshed = self._get_client()
+                    resp = await _aio.wait_for(
+                        refreshed.chat.completions.create(**create_kwargs), timeout=60.0
+                    )
+                else:
+                    raise
+
+            message = resp.choices[0].message
+            result: dict = {
+                "content": message.content or "",
+                "tool_calls": [],
+                "usage": {
+                    "input": resp.usage.prompt_tokens or 0 if resp.usage else 0,
+                    "output": resp.usage.completion_tokens or 0 if resp.usage else 0,
+                },
+            }
+            if message.tool_calls:
+                for tc in message.tool_calls:
+                    result["tool_calls"].append(
+                        {
+                            "id": tc.id,
+                            "name": tc.function.name,
+                            "args": tc.function.arguments,
+                        }
+                    )
+            return result
+
+        return await _call()
+
+    async def complete(self, messages: list, response_format: dict | None = None) -> dict:
+        """Non-streaming structured output only (used by judge scorer).
+
         Returns parsed JSON dict when response_format is json_schema.
         """
         import asyncio as _aio
