@@ -367,15 +367,15 @@ class MercuryBackend:
         Used for final response formatting (structured JSON) and judge scoring.
         Returns parsed JSON dict when response_format is json_schema.
         """
+        import asyncio as _aio
+
         client = self._get_client()
         openai_messages = _langchain_messages_to_openai(messages)
 
-        # Use capped max_tokens for structured output — reasoning_effort="high"
-        # consumes most of the budget; 4096 is enough for reasoning + JSON output.
         create_kwargs: dict = {
             "model": self.model,
             "messages": openai_messages,
-            "max_tokens": min(self.max_tokens, 4096),
+            "max_tokens": self.max_tokens,
             "stream": False,
             "reasoning_effort": "high",
             "temperature": 0.1,
@@ -383,21 +383,38 @@ class MercuryBackend:
         if response_format:
             create_kwargs["response_format"] = response_format
 
+        async def _call(effort: str = "high") -> dict:
+            kw = {**create_kwargs, "reasoning_effort": effort}
+            try:
+                resp = await _aio.wait_for(client.chat.completions.create(**kw), timeout=30.0)
+            except Exception as e:
+                from pipeline.lyra.config import mark_api_key_exhausted
+
+                msg = str(e).lower()
+                if "rate limit" in msg or "429" in msg or "quota" in msg:
+                    mark_api_key_exhausted()
+                    refreshed = self._get_client()
+                    resp = await _aio.wait_for(
+                        refreshed.chat.completions.create(**kw), timeout=30.0
+                    )
+                else:
+                    raise
+            content = resp.choices[0].message.content or "{}"
+            parsed = json.loads(content)
+            # Validate text field
+            text = parsed.get("text", "")
+            if response_format and not text.strip():
+                raise ValueError("Structured output returned empty text")
+            # Filter out empty site IDs
+            if "sites" in parsed:
+                parsed["sites"] = [s for s in parsed["sites"] if s.get("id", "").strip()]
+            return parsed
+
         try:
-            response = await client.chat.completions.create(**create_kwargs)
-        except Exception as e:
-            from pipeline.lyra.config import mark_api_key_exhausted
-
-            msg = str(e).lower()
-            if "rate limit" in msg or "429" in msg or "quota" in msg:
-                mark_api_key_exhausted()
-                client = self._get_client()
-                response = await client.chat.completions.create(**create_kwargs)
-            else:
-                raise
-
-        content = response.choices[0].message.content or "{}"
-        return json.loads(content)
+            return await _call("high")
+        except TimeoutError:
+            logger.warning("complete() timed out with effort=high, retrying with medium")
+            return await _call("medium")
 
 
 # ---------------------------------------------------------------------------

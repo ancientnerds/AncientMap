@@ -36,7 +36,7 @@ from api.services.lyra_router import (
     route_request,
     set_request_context,
 )
-from api.services.lyra_schema import LYRA_RESPONSE_SCHEMA, expand_markers
+from api.services.lyra_schema import LYRA_RESPONSE_SCHEMA, clean_response_text, expand_markers
 from api.services.lyra_tools import (
     LLM_MODEL,
     TOOLS,
@@ -899,6 +899,8 @@ async def run_agent_stream(
                     expanded, validation_issues = expand_markers(parsed, all_news)
                     if validation_issues:
                         logger.warning(f"Structured output issues: {validation_issues}")
+                    # Clean any JSON artifacts Mercury put in the text field
+                    expanded = clean_response_text(expanded)
                     # Only replace if structured output produced non-empty text
                     if expanded.strip():
                         yield {"type": "diffusion", "content": expanded}
@@ -907,29 +909,22 @@ async def run_agent_stream(
                         logger.warning(
                             "Structured output returned empty text, keeping streamed content"
                         )
-                        # Strip unresolved guillemet markers from the fallback text
-                        import re as _re
-
-                        cleaned = _re.sub(r"\u00ab[a-z]+\d+\u00bb", "", collected_content)
-                        if cleaned != collected_content:
-                            collected_content = cleaned.strip()
-                            yield {"type": "diffusion", "content": collected_content}
+                        collected_content = clean_response_text(collected_content)
+                        yield {"type": "diffusion", "content": collected_content}
                     yield {
                         "type": "pipeline",
                         "stage": "structured_format",
                         "status": "done",
                         "duration_ms": int((time.monotonic() - _t_struct) * 1000),
-                        "meta": {"issues": len(validation_issues)},
+                        "meta": {
+                            "issues": len(validation_issues),
+                            "structured_json": parsed,
+                        },
                     }
                 except Exception as e:
                     logger.warning(f"Structured output failed, keeping raw text: {e}")
-                    # Strip unresolved guillemet markers from fallback text
-                    import re as _re
-
-                    cleaned = _re.sub(r"\u00ab[a-z]+\d+\u00bb", "", collected_content)
-                    if cleaned != collected_content:
-                        collected_content = cleaned.strip()
-                        yield {"type": "diffusion", "content": collected_content}
+                    collected_content = clean_response_text(collected_content)
+                    yield {"type": "diffusion", "content": collected_content}
                     yield {
                         "type": "pipeline",
                         "stage": "structured_format",
@@ -1187,8 +1182,20 @@ async def run_agent_stream(
                 expanded, validation_issues = expand_markers(parsed, all_news)
                 if validation_issues:
                     logger.warning(f"Forced structured output issues: {validation_issues}")
+                expanded = clean_response_text(expanded)
                 if expanded.strip():
                     yield {"type": "token", "content": expanded}
+                    yield {
+                        "type": "pipeline",
+                        "stage": "structured_format",
+                        "status": "done",
+                        "duration_ms": 0,
+                        "meta": {
+                            "issues": len(validation_issues),
+                            "structured_json": parsed,
+                            "forced": True,
+                        },
+                    }
                 else:
                     raise ValueError("Structured output returned empty text")
             except Exception as e:
@@ -1207,11 +1214,7 @@ async def run_agent_stream(
                     elif ev["type"] == "usage":
                         total_input_tokens += ev["input"]
                         total_output_tokens += ev["output"]
-                # Strip unresolved guillemet markers from fallback text
-                import re as _re
-
-                _fallback_text = _re.sub(r"\u00ab[a-z]+\d+\u00bb", "", _fallback_text)
-                _fallback_text = _re.sub(r"  +", " ", _fallback_text).strip()
+                _fallback_text = clean_response_text(_fallback_text)
                 if _fallback_text:
                     yield {"type": "diffusion", "content": _fallback_text}
         else:

@@ -146,7 +146,53 @@ LYRA_RESPONSE_SCHEMA = {
 _UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
 )
-_MARKER_RE = re.compile(r"\u00ab[a-z]+\d+\u00bb")  # Matches «s0», «c1», «cn0», etc.
+_MARKER_RE = re.compile(
+    r"\u00ab[a-z]+\d+(?:[–\-][a-z]*\d+)?\u00bb"
+)  # Matches «s0», «c1», «c2–c5», etc.
+
+# Reference array key names used in structured output
+_REF_KEYS = ("sites", "coords", "videos", "empires", "images", "links", "countries")
+
+
+def clean_response_text(text: str) -> str:
+    """Strip artifacts that should never appear in user-facing responses.
+
+    Consolidates ALL text cleanup into one place:
+    - JSON code blocks containing marker data
+    - Bare JSON array patterns with marker keys
+    - Stray guillemet markers
+    - JSON wrapper remnants
+    """
+    # 1. Remove ```json ... ``` fenced code blocks (handles nested braces)
+    text = re.sub(r"```json\s*[\s\S]*?```", "", text)
+    # 2. Remove bare JSON object blocks with marker keys (e.g. { "sites": [...], ... })
+    #    Match opening { through closing } when the block contains ref array keys
+    text = re.sub(
+        r'\{\s*"(?:text|sites|coords|videos|empires|images|links|countries)"\s*:[\s\S]*?\n\}',
+        "",
+        text,
+    )
+    # 3. Remove stray guillemet markers
+    text = _MARKER_RE.sub("", text)
+    # 4. Clean up empty JSON wrapper remnants
+    text = re.sub(r"[{},]\s*[{},]", "", text)
+    text = re.sub(r"^\s*[{}]\s*$", "", text, flags=re.MULTILINE)
+    # 5. Remove "text": "..." JSON wrapper if present
+    text = re.sub(r'^"text"\s*:\s*"', "", text)
+    # 6. Fix doubled image markdown: ![title]![title](url) → ![title](url)
+    text = re.sub(r"!\[([^\]]*)\]\s*!\[([^\]]*)\]\(", r"![\1](", text)
+    # 7. Fix nested image markdown: ![outer](![inner](url)attr) → ![inner](url)attr
+    text = re.sub(r"!\[[^\]]*\]\(\s*(!\[[^\]]*\]\([^)]+\))([^)]*)\)", r"\1\2", text)
+    # 8. Fix broken link syntax: [text][text](url) → [text](url)
+    text = re.sub(r"\[([^\]]*)\]\s*\[([^\]]*)\]\(", r"[\1](", text)
+    # 9. Strip bare marker references without guillemets: [s0], [c1], etc.
+    text = re.sub(r"\[(?:s|c|v|e|i|l|f)\d+\](?!\()", "", text)
+    # 10. Clean orphaned "see ." left after marker removal
+    text = re.sub(r",?\s+see\s+\.\s*$", ".", text, flags=re.MULTILINE)
+    # 11. Collapse excessive whitespace
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r"  +", " ", text)
+    return text.strip()
 
 
 def _format_timestamp(seconds: int) -> str:
@@ -194,10 +240,15 @@ def expand_markers(parsed: dict, all_news: list[dict] | None = None) -> tuple[st
         raw_marker = match.group(0)
         marker = _norm(raw_marker)  # Strip guillemets: «s0» → s0
 
-        # Sites: «sN» → [name](site:id)
+        # Sites: «sN» → [name](site:id) — only if id is a valid UUID
         if marker in site_map:
             e = site_map[marker]
-            return f"[{e['name']}](site:{e['id']})"
+            sid = e.get("id", "")
+            if sid and _UUID_RE.match(sid):
+                return f"[{e['name']}](site:{sid})"
+            # Non-UUID or empty ID: output plain name, don't create broken link
+            issues.append(f"Site '{e['name']}' has invalid ID '{sid}', rendered as plain text")
+            return e["name"]
 
         # Coords: «cN» → [lat, lon](lyra-coord:lat,lon)
         if marker in coord_map:

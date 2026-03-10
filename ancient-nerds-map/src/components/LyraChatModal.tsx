@@ -200,12 +200,10 @@ function LyraInlineVideo({ news, children }: { news: NewsHighlight; children?: R
 function TypewriterMessage({
   content,
   isStreaming,
-  sidebarNews,
   mdComponents,
 }: {
   content: string
   isStreaming: boolean
-  sidebarNews: NewsHighlight[]
   mdComponents: React.ComponentProps<typeof ReactMarkdown>['components']
 }) {
   // For already-complete messages (loaded from history), show everything immediately
@@ -307,8 +305,8 @@ function TypewriterMessage({
   // Q2: Only run enrichment (flags, coords, videos) after streaming completes — avoids ~500 redundant regex passes
   const displayedContent = useMemo(() => {
     if (isTyping) return partialContent
-    return enrichLyraContent(content, sidebarNews)
-  }, [isTyping, partialContent, content, sidebarNews])
+    return enrichLyraContent(content)
+  }, [isTyping, partialContent, content])
 
   return (
     <div ref={containerRef} className={`lyra-chat-msg-text${isTyping ? ' streaming' : ''}`}>
@@ -1232,14 +1230,13 @@ export default function LyraChatModal({
                                 msg.isDiffusing ? (
                                   <div className="lyra-chat-msg-text">
                                     <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-                                      {enrichLyraContent(msg.content, sidebarNews)}
+                                      {enrichLyraContent(msg.content)}
                                     </ReactMarkdown>
                                   </div>
                                 ) : (
                                   <TypewriterMessage
                                     content={msg.content}
                                     isStreaming={!!msg.isStreaming}
-                                    sidebarNews={sidebarNews}
                                     mdComponents={mdComponents}
                                   />
                                 )
