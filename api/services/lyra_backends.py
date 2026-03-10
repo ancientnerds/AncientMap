@@ -40,6 +40,10 @@ class LLMBackend(Protocol):
 
     async def complete(self, messages: list, response_format: dict | None = None) -> dict: ...
 
+    async def generate(
+        self, messages: list, tools: list | None = None, response_format: dict | None = None
+    ) -> dict: ...
+
 
 # ---------------------------------------------------------------------------
 # Conversion helpers (moved from lyra_agent.py)
@@ -240,6 +244,12 @@ class OllamaBackend:
     async def complete(self, messages: list, response_format: dict | None = None) -> dict:
         """Not supported for Ollama backend — structured output is Mercury-only."""
         raise NotImplementedError("OllamaBackend does not support complete()")
+
+    async def generate(
+        self, messages: list, tools: list | None = None, response_format: dict | None = None
+    ) -> dict:
+        """Not supported for Ollama backend — Mercury-only."""
+        raise NotImplementedError("OllamaBackend does not support generate()")
 
 
 # ---------------------------------------------------------------------------
