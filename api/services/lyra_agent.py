@@ -924,16 +924,28 @@ async def run_agent_stream(
                 # Final text response — parse structured output
                 try:
                     parsed = json.loads(result["content"])
-                    text_field = parsed.get("text", "")
-                    if not text_field.strip():
-                        raise ValueError("Structured output returned empty text")
-                    # Filter empty site IDs
-                    if "sites" in parsed:
-                        parsed["sites"] = [s for s in parsed["sites"] if s.get("id", "").strip()]
-                    expanded, validation_issues = expand_markers(parsed, all_news)
-                    if validation_issues:
-                        logger.warning(f"Structured output issues: {validation_issues}")
-                    collected_content = clean_response_text(expanded)
+                    # Off-topic guardrail: if Mercury flagged it as off-topic,
+                    # replace with a redirect regardless of what it generated
+                    if not parsed.get("on_topic", True):
+                        logger.info("Off-topic query detected via schema guardrail")
+                        collected_content = (
+                            "🏺 That's not really my area! I'm all about ancient ruins, "
+                            "lost civilizations, and archaeological discoveries. "
+                            "What do you want to dig into?"
+                        )
+                    else:
+                        text_field = parsed.get("text", "")
+                        if not text_field.strip():
+                            raise ValueError("Structured output returned empty text")
+                        # Filter empty site IDs
+                        if "sites" in parsed:
+                            parsed["sites"] = [
+                                s for s in parsed["sites"] if s.get("id", "").strip()
+                            ]
+                        expanded, validation_issues = expand_markers(parsed, all_news)
+                        if validation_issues:
+                            logger.warning(f"Structured output issues: {validation_issues}")
+                        collected_content = clean_response_text(expanded)
                 except Exception as e:
                     logger.warning(f"Structured output parse failed: {e}")
                     collected_content = clean_response_text(result["content"])

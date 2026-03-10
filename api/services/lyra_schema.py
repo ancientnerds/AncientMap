@@ -24,6 +24,10 @@ LYRA_RESPONSE_SCHEMA = {
         "schema": {
             "type": "object",
             "properties": {
+                "on_topic": {
+                    "type": "boolean",
+                    "description": "true if the user's question is about archaeology, ancient history, civilizations, or related topics. false if it's about coding, math, cooking, medical, legal, or other unrelated topics. Greetings and meta-questions about yourself are on-topic.",
+                },
                 "text": {
                     "type": "string",
                     "description": "Markdown response with guillemet markers like «s0», «c0», «v0», «e0», «i0», «l0», «f0»",
@@ -124,6 +128,7 @@ LYRA_RESPONSE_SCHEMA = {
                 },
             },
             "required": [
+                "on_topic",
                 "text",
                 "sites",
                 "coords",
@@ -168,7 +173,7 @@ def clean_response_text(text: str) -> str:
     # 2. Remove bare JSON object blocks with marker keys (e.g. { "sites": [...], ... })
     #    Match opening { through closing } when the block contains ref array keys
     text = re.sub(
-        r'\{\s*"(?:text|sites|coords|videos|empires|images|links|countries)"\s*:[\s\S]*?\n\}',
+        r'\{\s*"(?:on_topic|text|sites|coords|videos|empires|images|links|countries)"\s*:[\s\S]*?\n\}',
         "",
         text,
     )
@@ -177,7 +182,8 @@ def clean_response_text(text: str) -> str:
     # 4. Clean up empty JSON wrapper remnants
     text = re.sub(r"[{},]\s*[{},]", "", text)
     text = re.sub(r"^\s*[{}]\s*$", "", text, flags=re.MULTILINE)
-    # 5. Remove "text": "..." JSON wrapper if present
+    # 5. Remove "on_topic": ..., and "text": "..." JSON wrappers if present
+    text = re.sub(r'^\s*"on_topic"\s*:\s*(?:true|false)\s*,?\s*', "", text)
     text = re.sub(r'^"text"\s*:\s*"', "", text)
     # 6. Fix doubled image markdown: ![title]![title](url) → ![title](url)
     text = re.sub(r"!\[([^\]]*)\]\s*!\[([^\]]*)\]\(", r"![\1](", text)
