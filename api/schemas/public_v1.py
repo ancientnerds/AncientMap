@@ -354,7 +354,7 @@ class EmpireListOut(BaseModel):
 class RadarItemOut(BaseModel):
     """A site auto-discovered by Lyra from YouTube archaeology channels."""
 
-    id: int = Field(description="Discovery ID")
+    id: str = Field(description="Discovery ID (UUID)")
     name: str = Field(description="Site name", json_schema_extra={"example": "Karahan Tepe"})
     country: str | None = Field(None, description="Country name")
     site_type: str | None = Field(None, description="Site type")
@@ -369,7 +369,7 @@ class RadarItemOut(BaseModel):
     mention_count: int = Field(
         description="Times mentioned across channels", json_schema_extra={"example": 5}
     )
-    score: float | None = Field(None, description="Enrichment score")
+    score: int | None = Field(None, description="Enrichment score")
     wikipedia_url: str | None = Field(None, description="Wikipedia article URL")
     thumbnail_url: str | None = Field(None, description="Thumbnail image URL")
 

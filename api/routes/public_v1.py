@@ -1200,7 +1200,7 @@ def create_public_api() -> FastAPI:
         ).scalar()
 
         query = text(f"""
-            SELECT uc.id, uc.name, uc.corrected_name, uc.country, uc.site_type,
+            SELECT uc.id::text, uc.name, uc.corrected_name, uc.country, uc.site_type,
                    uc.period_name, uc.lat, uc.lon, uc.description,
                    uc.enrichment_status, uc.mention_count, uc.score,
                    uc.wikipedia_url, uc.thumbnail_url
