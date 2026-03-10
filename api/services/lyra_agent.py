@@ -30,13 +30,13 @@ from sqlalchemy import text
 
 from api.services.lyra_backends import get_backend
 from api.services.lyra_prompts import LYRA_SYSTEM_PROMPT, LYRA_TRIVIAL_PROMPT, _build_context_prompt
-from api.services.lyra_schema import LYRA_RESPONSE_SCHEMA, expand_markers
 from api.services.lyra_router import (
     RequestContext,
     get_classification_reason,
     route_request,
     set_request_context,
 )
+from api.services.lyra_schema import LYRA_RESPONSE_SCHEMA, expand_markers
 from api.services.lyra_tools import (
     LLM_MODEL,
     TOOLS,

@@ -14,8 +14,8 @@ Usage:
     python scripts/test_lyra_quality.py --list                   # List all tests
 """
 
-import sys
 import io
+import sys
 
 # Fix Windows console encoding
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -1101,7 +1101,7 @@ async def main():
         cases = [tc for tc in cases if tc.category == args.category]
         if not cases:
             print(f"{RED}No tests in category '{args.category}'{RESET}")
-            print(f"Available: {', '.join(sorted(set(tc.category for tc in TEST_CASES)))}")
+            print(f"Available: {', '.join(sorted({tc.category for tc in TEST_CASES}))}")
             sys.exit(1)
     if args.name:
         cases = [tc for tc in cases if args.name.lower() in tc.name.lower()]
