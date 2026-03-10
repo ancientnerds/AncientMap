@@ -31,7 +31,10 @@ from api.schemas.public_v1 import (
     NewsItemPublic,
     NewsSiteRef,
     NewsVideoPublic,
+    RadarItemOut,
+    RadarResponse,
     SiteDetailResponse,
+    SiteImageOut,
     SiteResult,
     SiteSearchResponse,
     SourceDetailResponse,
@@ -1136,5 +1139,162 @@ def create_public_api() -> FastAPI:
         response = _polity_to_empire(polity_id, p)
         cache_set(cache_key, response.model_dump(), ttl=3600)
         return response
+
+    # =========================================================================
+    # 13. GET /radar — Lyra auto-discovered sites
+    # =========================================================================
+
+    @public_app.get(
+        "/radar",
+        summary="List Lyra's discoveries",
+        description=(
+            "Sites auto-discovered by Lyra from YouTube archaeology channels.\n\n"
+            "Filter by keyword (`q`), country, or status (`enriched`, `promoted`, `pending`)."
+        ),
+        response_model=RadarResponse,
+        tags=["Radar"],
+        dependencies=[Depends(rate_limit_dependency)],
+        responses={429: {"description": "Rate limit exceeded"}},
+    )
+    async def list_radar(
+        q: str | None = Query(None, min_length=2, max_length=200, description="Search by name"),
+        country: str | None = Query(None, description="Filter by country (case-insensitive)"),
+        status: str | None = Query(
+            None, description="Filter by status: enriched, promoted, pending"
+        ),
+        page: int = Query(1, ge=1, description="Page number"),
+        page_size: int = Query(20, ge=1, le=50, description="Items per page"),
+        db: Session = Depends(get_db),
+    ):
+        cache_key = f"pubv1:radar:{q or '_'}:{country or '_'}:{status or '_'}:{page}:{page_size}"
+        cached = cache_get(cache_key)
+        if cached:
+            return cached
+
+        conditions = ["uc.source = 'lyra'"]
+        params: dict = {"limit": page_size, "offset": (page - 1) * page_size}
+
+        visible = ("enriched", "promoted", "pending")
+        if status and status in visible:
+            conditions.append("uc.enrichment_status = :status")
+            params["status"] = status
+        else:
+            conditions.append("uc.enrichment_status IN ('enriched', 'promoted', 'pending')")
+
+        if q:
+            q_escaped = q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            conditions.append("(uc.name ILIKE :q OR uc.corrected_name ILIKE :q)")
+            params["q"] = f"%{q_escaped}%"
+        if country:
+            c_escaped = (
+                country.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            )
+            conditions.append("uc.country ILIKE :country")
+            params["country"] = f"%{c_escaped}%"
+
+        where_clause = " AND ".join(conditions)
+
+        total = db.execute(
+            text(f"SELECT COUNT(*) FROM user_contributions uc WHERE {where_clause}"),
+            params,
+        ).scalar()
+
+        query = text(f"""
+            SELECT uc.id, uc.name, uc.corrected_name, uc.country, uc.site_type,
+                   uc.period_name, uc.lat, uc.lon, uc.description,
+                   uc.enrichment_status, uc.mention_count, uc.score,
+                   uc.wikipedia_url, uc.thumbnail_url
+            FROM user_contributions uc
+            WHERE {where_clause}
+            ORDER BY uc.mention_count DESC, uc.score DESC NULLS LAST
+            LIMIT :limit OFFSET :offset
+        """)
+        result = db.execute(query, params)
+
+        items = [
+            RadarItemOut(
+                id=row.id,
+                name=row.corrected_name or row.name,
+                country=row.country,
+                site_type=row.site_type,
+                period_name=row.period_name,
+                latitude=row.lat,
+                longitude=row.lon,
+                description=(row.description or "")[:200] or None,
+                status=row.enrichment_status,
+                mention_count=row.mention_count or 0,
+                score=row.score,
+                wikipedia_url=row.wikipedia_url,
+                thumbnail_url=row.thumbnail_url,
+            )
+            for row in result
+        ]
+
+        response = RadarResponse(items=items, total=total)
+        cache_set(cache_key, response.model_dump(), ttl=300)
+        return response
+
+    # =========================================================================
+    # 14. GET /sites/{site_id}/images — Wiki images for a site
+    # =========================================================================
+
+    @public_app.get(
+        "/sites/{site_id}/images",
+        summary="Get site images",
+        description=(
+            "Wikipedia/Wikimedia Commons images for an archaeological site.\n\n"
+            "Returns image URLs, attribution, and license information."
+        ),
+        response_model=list[SiteImageOut],
+        tags=["Sites"],
+        dependencies=[Depends(rate_limit_dependency)],
+        responses={
+            404: {"description": "Site not found or no images available"},
+            429: {"description": "Rate limit exceeded"},
+        },
+    )
+    async def get_site_images(
+        site_id: str,
+        limit: int = Query(20, ge=1, le=50, description="Max images"),
+        db: Session = Depends(get_db),
+    ):
+        cache_key = f"pubv1:images:{site_id}:{limit}"
+        cached = cache_get(cache_key)
+        if cached:
+            return cached
+
+        query = text("""
+            SELECT filename, original_url, commons_page_url,
+                   author, license, title, is_hero, source_type,
+                   width, height
+            FROM wiki_images
+            WHERE site_id = CAST(:site_id AS uuid)
+            ORDER BY sort_order
+            LIMIT :limit
+        """)
+        try:
+            result = db.execute(query, {"site_id": site_id, "limit": limit})
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid site ID format") from None
+
+        rows = result.fetchall()
+        if not rows:
+            raise HTTPException(status_code=404, detail="No images found for this site")
+
+        images = [
+            SiteImageOut(
+                title=row.title,
+                original_url=row.original_url,
+                commons_url=row.commons_page_url,
+                author=row.author,
+                license=row.license,
+                is_hero=row.is_hero or False,
+                width=row.width,
+                height=row.height,
+            )
+            for row in rows
+        ]
+        cache_set(cache_key, [img.model_dump() for img in images], ttl=600)
+        return images
 
     return public_app

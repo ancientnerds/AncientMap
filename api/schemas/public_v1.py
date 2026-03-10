@@ -344,3 +344,56 @@ class EmpireListOut(BaseModel):
 
     empires: list[EmpireOut] = Field(description="Matching polities")
     total: int = Field(description="Total matching polities", json_schema_extra={"example": 400})
+
+
+# =============================================================================
+# Radar (Lyra auto-discovered sites)
+# =============================================================================
+
+
+class RadarItemOut(BaseModel):
+    """A site auto-discovered by Lyra from YouTube archaeology channels."""
+
+    id: int = Field(description="Discovery ID")
+    name: str = Field(description="Site name", json_schema_extra={"example": "Karahan Tepe"})
+    country: str | None = Field(None, description="Country name")
+    site_type: str | None = Field(None, description="Site type")
+    period_name: str | None = Field(None, description="Historical period")
+    latitude: float | None = Field(None, description="Latitude")
+    longitude: float | None = Field(None, description="Longitude")
+    description: str | None = Field(None, description="Short description")
+    status: str = Field(
+        description="Discovery status: enriched, promoted, or pending",
+        json_schema_extra={"example": "enriched"},
+    )
+    mention_count: int = Field(
+        description="Times mentioned across channels", json_schema_extra={"example": 5}
+    )
+    score: float | None = Field(None, description="Enrichment score")
+    wikipedia_url: str | None = Field(None, description="Wikipedia article URL")
+    thumbnail_url: str | None = Field(None, description="Thumbnail image URL")
+
+
+class RadarResponse(BaseModel):
+    """Paginated radar discoveries response."""
+
+    items: list[RadarItemOut] = Field(description="Discovered sites")
+    total: int = Field(description="Total matching discoveries")
+
+
+# =============================================================================
+# Site Images (Wiki/Wikimedia Commons)
+# =============================================================================
+
+
+class SiteImageOut(BaseModel):
+    """A Wikipedia/Wikimedia Commons image for an archaeological site."""
+
+    title: str | None = Field(None, description="Image title")
+    original_url: str | None = Field(None, description="Direct image URL")
+    commons_url: str | None = Field(None, description="Wikimedia Commons page URL")
+    author: str | None = Field(None, description="Image author/photographer")
+    license: str | None = Field(None, description="License type (e.g. CC-BY-SA-4.0)")
+    is_hero: bool = Field(False, description="Whether this is the main/hero image")
+    width: int | None = Field(None, description="Image width in pixels")
+    height: int | None = Field(None, description="Image height in pixels")
