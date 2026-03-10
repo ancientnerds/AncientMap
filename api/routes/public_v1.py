@@ -20,6 +20,10 @@ from sqlalchemy.orm import Session
 from api.build_info import BUILD_HASH
 from api.cache import cache_get, cache_set
 from api.schemas.public_v1 import (
+    ArticleDetail,
+    ArticleListResponse,
+    ArticleSummary,
+    ArticleVideoRef,
     CardPublic,
     CardsResponse,
     ChannelPublic,
@@ -1235,7 +1239,171 @@ def create_public_api() -> FastAPI:
         return response
 
     # =========================================================================
-    # 14. GET /sites/{site_id}/images — Wiki images for a site
+    # 14. GET /articles — Paginated weekly digest articles
+    # =========================================================================
+
+    @public_app.get(
+        "/articles",
+        summary="List weekly digest articles",
+        description=(
+            "Paginated list of Lyra's weekly archaeological digest articles.\n\n"
+            "Each article summarises the most significant discoveries from YouTube "
+            "archaeology channels during a given week.\n\n"
+            "Use the optional `q` parameter to search by keyword in title and content."
+        ),
+        response_model=ArticleListResponse,
+        tags=["Articles"],
+        dependencies=[Depends(rate_limit_dependency)],
+        responses={429: {"description": "Rate limit exceeded"}},
+    )
+    async def list_articles(
+        page: int = Query(1, ge=1, description="Page number"),
+        page_size: int = Query(20, ge=1, le=50, description="Items per page"),
+        q: str | None = Query(
+            None,
+            min_length=2,
+            max_length=200,
+            description="Search keyword (filters title and content)",
+        ),
+        db: Session = Depends(get_db),
+    ):
+        cache_key = f"pubv1:articles:{page}:{page_size}:{q or '_'}"
+        cached = cache_get(cache_key)
+        if cached:
+            return cached
+
+        offset = (page - 1) * page_size
+        where_parts = ["1=1"]
+        params: dict = {"limit": page_size, "offset": offset}
+
+        if q:
+            q_escaped = q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            where_parts.append("(title ILIKE :q_pattern OR content ILIKE :q_pattern)")
+            params["q_pattern"] = f"%{q_escaped}%"
+
+        where_clause = " AND ".join(where_parts)
+
+        count_result = db.execute(
+            text(f"SELECT COUNT(*) FROM news_articles WHERE {where_clause}"), params
+        )
+        total_count = count_result.scalar() or 0
+
+        query = text(f"""
+            SELECT id, title, summary, week_start, week_end,
+                   published_at, video_ids
+            FROM news_articles
+            WHERE {where_clause}
+            ORDER BY published_at DESC NULLS LAST, id DESC
+            LIMIT :limit OFFSET :offset
+        """)
+        rows = db.execute(query, params).fetchall()
+
+        items = [
+            ArticleSummary(
+                id=row.id,
+                title=row.title,
+                summary=row.summary,
+                week_start=row.week_start.isoformat() if row.week_start else None,
+                week_end=row.week_end.isoformat() if row.week_end else None,
+                published_at=row.published_at.isoformat() if row.published_at else None,
+                source_count=len(row.video_ids) if row.video_ids else 0,
+            )
+            for row in rows
+        ]
+
+        response = ArticleListResponse(
+            items=items,
+            total_count=total_count,
+            page=page,
+            has_more=(offset + page_size) < total_count,
+        )
+        cache_set(cache_key, response.model_dump(), ttl=300)
+        return response
+
+    # =========================================================================
+    # 15. GET /articles/search — Search articles by keyword (alias)
+    # =========================================================================
+
+    @public_app.get(
+        "/articles/search",
+        summary="Search articles",
+        description="Search weekly digest articles by keyword. Alias for GET /articles?q=...",
+        response_model=ArticleListResponse,
+        tags=["Articles"],
+        dependencies=[Depends(rate_limit_dependency)],
+        responses={429: {"description": "Rate limit exceeded"}},
+    )
+    async def search_articles(
+        q: str = Query(..., min_length=2, max_length=200, description="Search keyword"),
+        limit: int = Query(20, ge=1, le=50, description="Max results"),
+        db: Session = Depends(get_db),
+    ):
+        return await list_articles(page=1, page_size=limit, q=q, db=db)
+
+    # =========================================================================
+    # 16. GET /articles/{article_id} — Full article detail
+    # =========================================================================
+
+    @public_app.get(
+        "/articles/{article_id}",
+        summary="Get article detail",
+        description=(
+            "Get the full content of a weekly digest article including Markdown body, "
+            "TLDR summary, and source video references."
+        ),
+        response_model=ArticleDetail,
+        tags=["Articles"],
+        dependencies=[Depends(rate_limit_dependency)],
+        responses={
+            404: {"description": "Article not found"},
+            429: {"description": "Rate limit exceeded"},
+        },
+    )
+    async def get_article(
+        article_id: int,
+        db: Session = Depends(get_db),
+    ):
+        cache_key = f"pubv1:article:{article_id}"
+        cached = cache_get(cache_key)
+        if cached:
+            return cached
+
+        query = text("""
+            SELECT id, title, content, summary, week_start, week_end,
+                   published_at, video_ids
+            FROM news_articles
+            WHERE id = :article_id
+        """)
+        row = db.execute(query, {"article_id": article_id}).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Article not found")
+
+        vids = row.video_ids or []
+        videos = [
+            ArticleVideoRef(
+                video_id=vid,
+                url=f"https://www.youtube.com/watch?v={vid}",
+            )
+            for vid in vids
+        ]
+
+        response = ArticleDetail(
+            id=row.id,
+            title=row.title,
+            content=row.content,
+            summary=row.summary,
+            week_start=row.week_start.isoformat() if row.week_start else None,
+            week_end=row.week_end.isoformat() if row.week_end else None,
+            published_at=row.published_at.isoformat() if row.published_at else None,
+            source_count=len(vids),
+            video_ids=vids,
+            videos=videos,
+        )
+        cache_set(cache_key, response.model_dump(), ttl=600)
+        return response
+
+    # =========================================================================
+    # 17. GET /sites/{site_id}/images — Wiki images for a site
     # =========================================================================
 
     @public_app.get(

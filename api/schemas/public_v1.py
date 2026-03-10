@@ -382,6 +382,81 @@ class RadarResponse(BaseModel):
 
 
 # =============================================================================
+# Articles (Weekly archaeological digests)
+# =============================================================================
+
+
+class ArticleVideoRef(BaseModel):
+    """A YouTube video referenced as a source in an article."""
+
+    video_id: str = Field(description="YouTube video ID")
+    url: str = Field(description="YouTube watch URL")
+
+
+class ArticleSummary(BaseModel):
+    """An article summary for list views (no full content)."""
+
+    id: int = Field(description="Article ID", json_schema_extra={"example": 42})
+    title: str = Field(
+        description="Article headline",
+        json_schema_extra={"example": "This Week in Archaeology: Göbekli Tepe Reveals New Secrets"},
+    )
+    summary: str | None = Field(
+        None,
+        description="TLDR summary",
+        json_schema_extra={
+            "example": "New excavations at Göbekli Tepe uncovered a previously unknown enclosure..."
+        },
+    )
+    week_start: str | None = Field(
+        None,
+        description="Start of the week covered (ISO 8601)",
+        json_schema_extra={"example": "2026-03-03T00:00:00"},
+    )
+    week_end: str | None = Field(
+        None,
+        description="End of the week covered (ISO 8601)",
+        json_schema_extra={"example": "2026-03-09T23:59:59"},
+    )
+    published_at: str | None = Field(
+        None,
+        description="Publication timestamp (ISO 8601)",
+        json_schema_extra={"example": "2026-03-09T20:00:00"},
+    )
+    source_count: int = Field(
+        description="Number of YouTube videos cited as sources",
+        json_schema_extra={"example": 8},
+    )
+
+
+class ArticleDetail(ArticleSummary):
+    """Full article with content and source references."""
+
+    content: str = Field(
+        description="Full article body in Markdown",
+        json_schema_extra={"example": "## New Enclosure at Göbekli Tepe\n\nExcavations led by..."},
+    )
+    video_ids: list[str] = Field(
+        description="YouTube video IDs used as sources",
+        json_schema_extra={"example": ["dQw4w9WgXcQ", "abc123"]},
+    )
+    videos: list[ArticleVideoRef] = Field(
+        description="Source videos with URLs",
+    )
+
+
+class ArticleListResponse(BaseModel):
+    """Paginated article list response."""
+
+    items: list[ArticleSummary] = Field(description="Articles")
+    total_count: int = Field(
+        description="Total articles matching filters", json_schema_extra={"example": 25}
+    )
+    page: int = Field(description="Current page number", json_schema_extra={"example": 1})
+    has_more: bool = Field(description="Whether more pages are available")
+
+
+# =============================================================================
 # Site Images (Wiki/Wikimedia Commons)
 # =============================================================================
 

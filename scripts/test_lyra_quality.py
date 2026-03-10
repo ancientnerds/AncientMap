@@ -1060,7 +1060,7 @@ TEST_CASES: list[TestCase] = [
             "no_raw_json",
             "no_empty_ids",
         ],
-        expected_tools=["search_news"],
+        expected_tools=["search_news", "search_radar"],
     ),
     TestCase(
         name="Channel attribution",

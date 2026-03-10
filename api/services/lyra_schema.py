@@ -193,6 +193,8 @@ def clean_response_text(text: str) -> str:
     text = re.sub(r"\[([^\]]*)\]\s*\[([^\]]*)\]\(", r"[\1](", text)
     # 9. Strip bare marker references without guillemets: [s0], [c1], etc.
     text = re.sub(r"\[(?:s|c|v|e|i|l|f)\d+\](?!\()", "", text)
+    # 9b. Strip incomplete guillemet markers: «s0 (missing closing »)
+    text = re.sub(r"\u00ab[a-z]+\d+(?!\u00bb)", "", text)
     # 10. Clean orphaned "see ." left after marker removal
     text = re.sub(r",?\s+see\s+\.\s*$", ".", text, flags=re.MULTILINE)
     # 11. Collapse excessive whitespace
