@@ -420,6 +420,24 @@ def check_no_hallucinated_ids(resp: SSEResponse, **_kw) -> CheckResult:
     )
 
 
+def check_off_topic_rejected(resp: SSEResponse, **_kw) -> CheckResult:
+    """Off-topic requests should be declined, not answered.
+
+    Fails if response contains code fences or programming patterns,
+    which indicates Lyra answered a coding/tech question instead of redirecting.
+    """
+    problems = []
+    # Code fences = answered a coding question
+    if re.search(r"```(?:python|javascript|java|cpp|bash|sql|ruby|go|rust|typescript|sh|c\b)", resp.content):
+        problems.append("Contains code block")
+    # Programming keywords without archaeological context
+    code_patterns = re.findall(r"\b(?:def |import |function |class |var |let |const |return )\b", resp.content)
+    if len(code_patterns) >= 2:
+        problems.append(f"{len(code_patterns)} code keywords")
+    ok = len(problems) == 0
+    return CheckResult("off_topic_rejected", ok, ", ".join(problems) if problems else "Properly declined")
+
+
 CHECK_REGISTRY: dict[str, callable] = {
     "not_empty": check_not_empty,
     "no_error": check_no_error,
@@ -437,6 +455,7 @@ CHECK_REGISTRY: dict[str, callable] = {
     "conciseness": check_conciseness,
     "tools_called": check_tools_called,
     "no_hallucinated_ids": check_no_hallucinated_ids,
+    "off_topic_rejected": check_off_topic_rejected,
 }
 
 
