@@ -38,6 +38,8 @@ class LLMBackend(Protocol):
         self, messages: list[BaseMessage], tools: list, enable_thinking: bool = True
     ) -> AsyncIterator[dict]: ...
 
+    async def complete(self, messages: list, response_format: dict | None = None) -> dict: ...
+
 
 # ---------------------------------------------------------------------------
 # Conversion helpers (moved from lyra_agent.py)
@@ -234,6 +236,10 @@ class OllamaBackend:
                             "input": data.get("prompt_eval_count", 0),
                             "output": data.get("eval_count", 0),
                         }
+
+    async def complete(self, messages: list, response_format: dict | None = None) -> dict:
+        """Not supported for Ollama backend — structured output is Mercury-only."""
+        raise NotImplementedError("OllamaBackend does not support complete()")
 
 
 # ---------------------------------------------------------------------------
