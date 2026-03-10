@@ -23,6 +23,8 @@ from api.schemas.public_v1 import (
     CardPublic,
     CardsResponse,
     ChannelPublic,
+    EmpireListOut,
+    EmpireOut,
     FacetSource,
     FacetsResponse,
     NewsFeedPublicResponse,
@@ -93,6 +95,34 @@ _SOURCE_COLORS = {
     "open_context": "#2980b9",
     "default": "#ff00ff",
 }
+
+
+# ---------------------------------------------------------------------------
+# Seshat polities (loaded once, served from memory)
+# ---------------------------------------------------------------------------
+
+
+def _load_polities() -> dict[str, dict]:
+    """Load Seshat polities JSON and return {polity_id: polity_data} dict."""
+    from pathlib import Path
+
+    candidates = [
+        Path("ancient-nerds-map/src/data/seshat/polities.json"),
+        Path("/app/ancient-nerds-map/src/data/seshat/polities.json"),
+    ]
+    for path in candidates:
+        if path.exists():
+            import json
+
+            data = json.loads(path.read_text(encoding="utf-8"))
+            polities = data.get("polities", {})
+            logger.info(f"Public API: loaded {len(polities)} Seshat polities from {path}")
+            return polities
+    logger.warning("Public API: polities.json not found — empire endpoints will return empty")
+    return {}
+
+
+_POLITIES: dict[str, dict] = _load_polities()
 
 
 def create_public_api() -> FastAPI:
@@ -602,7 +632,8 @@ def create_public_api() -> FastAPI:
         summary="Get archaeological news",
         description=(
             "Paginated news feed from the Lyra archaeological news pipeline.\n\n"
-            "Each item links to a YouTube video and optionally to an archaeological site on the map."
+            "Each item links to a YouTube video and optionally to an archaeological site on the map.\n\n"
+            "Use the optional `q` parameter to filter by keyword (searches headline, summary, and channel name)."
         ),
         response_model=NewsFeedPublicResponse,
         tags=["News"],
@@ -612,22 +643,49 @@ def create_public_api() -> FastAPI:
     async def get_news(
         page: int = Query(1, ge=1, description="Page number"),
         page_size: int = Query(20, ge=1, le=50, description="Items per page"),
+        q: str | None = Query(
+            None,
+            min_length=2,
+            max_length=200,
+            description="Search keyword (filters headline, summary, channel name)",
+        ),
         db: Session = Depends(get_db),
     ):
-        cache_key = f"pubv1:news:{page}:{page_size}"
+        cache_key = f"pubv1:news:{page}:{page_size}:{q or '_'}"
         cached = cache_get(cache_key)
         if cached:
             return cached
 
         offset = (page - 1) * page_size
 
-        # Total count of published items
+        # Build WHERE clause
+        where_parts = ["ni.post_text IS NOT NULL"]
+        params: dict = {"limit": page_size, "offset": offset}
+
+        if q:
+            q_escaped = q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            where_parts.append(
+                "(ni.headline ILIKE :q_pattern OR ni.summary ILIKE :q_pattern"
+                " OR nc.name ILIKE :q_pattern)"
+            )
+            params["q_pattern"] = f"%{q_escaped}%"
+
+        where_clause = " AND ".join(where_parts)
+
+        # Total count of matching items
         count_result = db.execute(
-            text("SELECT COUNT(*) FROM news_items WHERE post_text IS NOT NULL")
+            text(f"""
+                SELECT COUNT(*)
+                FROM news_items ni
+                JOIN news_videos nv ON ni.video_id = nv.id
+                JOIN news_channels nc ON nv.channel_id = nc.id
+                WHERE {where_clause}
+            """),
+            params,
         )
         total_count = count_result.scalar()
 
-        query = text("""
+        query = text(f"""
             SELECT
                 ni.id,
                 ni.headline,
@@ -647,11 +705,11 @@ def create_public_api() -> FastAPI:
             JOIN news_videos nv ON ni.video_id = nv.id
             JOIN news_channels nc ON nv.channel_id = nc.id
             LEFT JOIN unified_sites us ON ni.site_id = us.id
-            WHERE ni.post_text IS NOT NULL
+            WHERE {where_clause}
             ORDER BY nv.published_at DESC, ni.created_at DESC
             LIMIT :limit OFFSET :offset
         """)
-        result = db.execute(query, {"limit": page_size, "offset": offset})
+        result = db.execute(query, params)
 
         items = []
         for row in result:
@@ -968,6 +1026,115 @@ def create_public_api() -> FastAPI:
 
         response = CardsResponse(count=len(cards), total=total, cards=cards)
         cache_set(cache_key, response.model_dump(), ttl=60)
+        return response
+
+    # =========================================================================
+    # 10. GET /empires — List Seshat polities
+    # =========================================================================
+
+    def _polity_to_empire(pid: str, p: dict) -> EmpireOut:
+        return EmpireOut(
+            polity_id=pid,
+            name=p.get("name", pid),
+            start_year=p.get("startYear"),
+            end_year=p.get("endYear"),
+            capital=p.get("capital"),
+            territory=p.get("peakTerritory") or p.get("territory"),
+        )
+
+    @public_app.get(
+        "/empires",
+        summary="List historical empires",
+        description=(
+            "List all Seshat historical polities (empires, kingdoms, city-states).\n\n"
+            "Data sourced from the Seshat Global History Databank (~400 polities)."
+        ),
+        response_model=EmpireListOut,
+        tags=["Empires"],
+        dependencies=[Depends(rate_limit_dependency)],
+        responses={429: {"description": "Rate limit exceeded"}},
+    )
+    async def list_empires(
+        limit: int = Query(50, ge=1, le=500, description="Max results"),
+        offset: int = Query(0, ge=0, description="Pagination offset"),
+    ):
+        cache_key = f"pubv1:empires:{limit}:{offset}"
+        cached = cache_get(cache_key)
+        if cached:
+            return cached
+
+        all_ids = list(_POLITIES.keys())
+        page = all_ids[offset : offset + limit]
+        empires = [_polity_to_empire(pid, _POLITIES[pid]) for pid in page]
+
+        response = EmpireListOut(empires=empires, total=len(all_ids))
+        cache_set(cache_key, response.model_dump(), ttl=3600)
+        return response
+
+    # =========================================================================
+    # 11. GET /empires/search — Search polities by name
+    # =========================================================================
+
+    @public_app.get(
+        "/empires/search",
+        summary="Search empires by name",
+        description="Search Seshat polities by name (case-insensitive substring match).",
+        response_model=EmpireListOut,
+        tags=["Empires"],
+        dependencies=[Depends(rate_limit_dependency)],
+        responses={429: {"description": "Rate limit exceeded"}},
+    )
+    async def search_empires(
+        q: str = Query(..., min_length=2, max_length=200, description="Search query"),
+        limit: int = Query(20, ge=1, le=100, description="Max results"),
+    ):
+        q_lower = q.strip().lower()
+        cache_key = f"pubv1:empires:search:{q_lower}:{limit}"
+        cached = cache_get(cache_key)
+        if cached:
+            return cached
+
+        matches = []
+        for pid, p in _POLITIES.items():
+            name = p.get("name", "").lower()
+            alt_names = [a.lower() for a in p.get("alternateNames", [])]
+            if q_lower in name or q_lower in pid.lower() or any(q_lower in a for a in alt_names):
+                matches.append(_polity_to_empire(pid, p))
+                if len(matches) >= limit:
+                    break
+
+        response = EmpireListOut(empires=matches, total=len(matches))
+        cache_set(cache_key, response.model_dump(), ttl=3600)
+        return response
+
+    # =========================================================================
+    # 12. GET /empires/{polity_id} — Single polity detail
+    # =========================================================================
+
+    @public_app.get(
+        "/empires/{polity_id}",
+        summary="Get empire details",
+        description="Get details for a single Seshat polity by its identifier.",
+        response_model=EmpireOut,
+        tags=["Empires"],
+        dependencies=[Depends(rate_limit_dependency)],
+        responses={
+            404: {"description": "Polity not found"},
+            429: {"description": "Rate limit exceeded"},
+        },
+    )
+    async def get_empire(polity_id: str):
+        cache_key = f"pubv1:empire:{polity_id}"
+        cached = cache_get(cache_key)
+        if cached:
+            return cached
+
+        p = _POLITIES.get(polity_id)
+        if not p:
+            raise HTTPException(status_code=404, detail="Polity not found")
+
+        response = _polity_to_empire(polity_id, p)
+        cache_set(cache_key, response.model_dump(), ttl=3600)
         return response
 
     return public_app

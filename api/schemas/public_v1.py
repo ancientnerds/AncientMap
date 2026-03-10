@@ -305,3 +305,42 @@ class CardsResponse(BaseModel):
     count: int = Field(description="Number of results returned", json_schema_extra={"example": 50})
     total: int = Field(description="Total matching cards", json_schema_extra={"example": 1200})
     cards: list[CardPublic] = Field(description="Card descriptions")
+
+
+# =============================================================================
+# Empires (Seshat polities)
+# =============================================================================
+
+
+class EmpireOut(BaseModel):
+    """A historical polity from the Seshat databank."""
+
+    polity_id: str = Field(
+        description="Seshat polity identifier", json_schema_extra={"example": "it_roman_principate"}
+    )
+    name: str = Field(description="Polity name", json_schema_extra={"example": "Roman Principate"})
+    start_year: int | None = Field(
+        None,
+        description="Start year (negative = BC)",
+        json_schema_extra={"example": -27},
+    )
+    end_year: int | None = Field(
+        None,
+        description="End year (negative = BC)",
+        json_schema_extra={"example": 284},
+    )
+    capital: str | None = Field(
+        None, description="Capital city", json_schema_extra={"example": "Rome"}
+    )
+    territory: int | None = Field(
+        None,
+        description="Peak territory in km²",
+        json_schema_extra={"example": 5000000},
+    )
+
+
+class EmpireListOut(BaseModel):
+    """Response listing empires/polities."""
+
+    empires: list[EmpireOut] = Field(description="Matching polities")
+    total: int = Field(description="Total matching polities", json_schema_extra={"example": 400})

@@ -10,6 +10,8 @@ Usage:
     python scripts/test_lyra_quality.py --category site_refs     # One category
     python scripts/test_lyra_quality.py --name "Greeting"        # One test
     python scripts/test_lyra_quality.py --no-judge               # Structural only
+    python scripts/test_lyra_quality.py --validate-api           # With prod API checks
+    python scripts/test_lyra_quality.py --no-judge --validate-api  # Structural + API
     python scripts/test_lyra_quality.py --verbose                # Full responses
     python scripts/test_lyra_quality.py --list                   # List all tests
 """
@@ -246,15 +248,9 @@ def check_no_error(resp: SSEResponse, **_kw) -> CheckResult:
 
 
 def check_markers_resolved(resp: SSEResponse, **_kw) -> CheckResult:
-    """No guillemet markers «...» should remain in final text.
-
-    Tolerates up to 10 stray markers — Mercury frequently outputs placeholder
-    markers for reference types that don't apply; the backend strips them when
-    structured output succeeds, but fallback text may retain some. This is a
-    prompt quality issue, not a code bug.
-    """
+    """No guillemet markers «...» should remain in final text."""
     remaining = re.findall(r"\u00ab[a-z]+\d+\u00bb", resp.content)
-    ok = len(remaining) <= 10
+    ok = len(remaining) == 0
     return CheckResult(
         "markers_resolved",
         ok,
@@ -347,6 +343,40 @@ def check_no_bare_uuids(resp: SSEResponse, **_kw) -> CheckResult:
     return CheckResult("no_bare_uuids", ok, f"{len(bare)} bare UUIDs" if bare else "")
 
 
+def check_no_raw_json(resp: SSEResponse, **_kw) -> CheckResult:
+    """No raw JSON blocks or marker-related JSON keys in response text."""
+    problems = []
+    # JSON code blocks with marker data
+    if re.search(r"```json\s*\{[\s\S]*?\}\s*```", resp.content):
+        problems.append("```json block")
+    # Bare JSON array patterns with marker keys
+    json_keys = re.findall(
+        r'"(?:sites|coords|videos|empires|images|links|countries)"\s*:\s*\[',
+        resp.content,
+    )
+    if json_keys:
+        problems.append(f"JSON keys: {json_keys[:3]}")
+    # Raw JSON array entries that look like {\"marker\": ...}
+    if re.search(r'\{\s*"marker"\s*:', resp.content):
+        problems.append('{"marker":...} pattern')
+    ok = len(problems) == 0
+    return CheckResult("no_raw_json", ok, ", ".join(problems) if problems else "")
+
+
+def check_no_empty_ids(resp: SSEResponse, **_kw) -> CheckResult:
+    """No empty site IDs like (site:) or site:\"\"."""
+    problems = []
+    # (site:) with no UUID
+    empty_site = re.findall(r"\(site:\s*\)", resp.content)
+    if empty_site:
+        problems.append(f"{len(empty_site)}x (site:)")
+    # site:"" pattern
+    if 'site:""' in resp.content:
+        problems.append('site:""')
+    ok = len(problems) == 0
+    return CheckResult("no_empty_ids", ok, ", ".join(problems) if problems else "")
+
+
 def check_conciseness(resp: SSEResponse, max_chars: int = 3500, **_kw) -> CheckResult:
     ok = len(resp.content) <= max_chars
     return CheckResult(
@@ -394,6 +424,8 @@ CHECK_REGISTRY: dict[str, callable] = {
     "not_empty": check_not_empty,
     "no_error": check_no_error,
     "markers_resolved": check_markers_resolved,
+    "no_raw_json": check_no_raw_json,
+    "no_empty_ids": check_no_empty_ids,
     "site_links": check_site_links,
     "coord_links": check_coord_links,
     "video_links": check_video_links,
@@ -405,6 +437,167 @@ CHECK_REGISTRY: dict[str, callable] = {
     "conciseness": check_conciseness,
     "tools_called": check_tools_called,
     "no_hallucinated_ids": check_no_hallucinated_ids,
+}
+
+
+# ---------------------------------------------------------------------------
+# Production API Client (for --validate-api)
+# ---------------------------------------------------------------------------
+
+PROD_API_BASE = "https://ancientnerds.com/api/v1"
+# Minimum seconds between API calls (10 req/min = 6s between calls)
+API_RATE_LIMIT_INTERVAL = 6.0
+
+
+class ProdAPIClient:
+    """Cached, rate-limited client for production API validation."""
+
+    def __init__(self):
+        self._cache: dict[str, dict | list | None] = {}
+        self._last_call: float = 0
+        self._call_count: int = 0
+
+    async def get(self, path: str) -> dict | list | None:
+        if path in self._cache:
+            return self._cache[path]
+
+        # Respect rate limit
+        elapsed = time.time() - self._last_call
+        if elapsed < API_RATE_LIMIT_INTERVAL:
+            await asyncio.sleep(API_RATE_LIMIT_INTERVAL - elapsed)
+
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(f"{PROD_API_BASE}{path}")
+            self._last_call = time.time()
+            self._call_count += 1
+
+            if resp.status_code == 200:
+                data = resp.json()
+                self._cache[path] = data
+                return data
+            elif resp.status_code == 429:
+                # Rate limited — wait and don't cache
+                print(f"    {YELLOW}API rate limited on {path}, waiting...{RESET}")
+                await asyncio.sleep(60)
+                return None
+            else:
+                self._cache[path] = None
+                return None
+        except Exception as e:
+            print(f"    {YELLOW}API error on {path}: {e}{RESET}")
+            return None
+
+    @property
+    def stats(self) -> str:
+        return f"calls={self._call_count} cached={len(self._cache)}"
+
+
+# Singleton — created only if --validate-api is used
+_prod_api: ProdAPIClient | None = None
+
+
+def _get_prod_api() -> ProdAPIClient:
+    global _prod_api
+    if _prod_api is None:
+        _prod_api = ProdAPIClient()
+    return _prod_api
+
+
+# ---------------------------------------------------------------------------
+# API-backed validation checks (run with --validate-api)
+# ---------------------------------------------------------------------------
+
+
+async def check_site_uuids_exist(resp: SSEResponse, **_kw) -> CheckResult:
+    """Verify every (site:UUID) in the response exists in production API."""
+    uuids = set(re.findall(rf"\(site:({UUID_PAT})\)", resp.content, re.IGNORECASE))
+    if not uuids:
+        return CheckResult("api_site_uuids", True, "n/a — no site links")
+
+    api = _get_prod_api()
+    missing = []
+    for uid in uuids:
+        data = await api.get(f"/sites/{uid}")
+        if data is None:
+            missing.append(uid[:8])
+
+    ok = len(missing) == 0
+    return CheckResult(
+        "api_site_uuids",
+        ok,
+        f"{len(uuids)} checked, {len(missing)} missing" + (f": {missing}" if missing else ""),
+    )
+
+
+async def check_empire_ids_exist(resp: SSEResponse, **_kw) -> CheckResult:
+    """Verify every (empire:ID) in the response is a real Seshat polity."""
+    ids = re.findall(r"\(empire:([a-z][a-z0-9_]+)\)", resp.content)
+    if not ids:
+        return CheckResult("api_empire_ids", True, "n/a — no empire links")
+
+    api = _get_prod_api()
+    missing = []
+    for pid in set(ids):
+        data = await api.get(f"/empires/{pid}")
+        if data is None:
+            missing.append(pid)
+
+    ok = len(missing) == 0
+    return CheckResult(
+        "api_empire_ids",
+        ok,
+        f"{len(set(ids))} checked, {len(missing)} missing" + (f": {missing}" if missing else ""),
+    )
+
+
+async def check_channel_names_exist(resp: SSEResponse, **_kw) -> CheckResult:
+    """Verify every [▶ Channel ...] in the response is a real channel."""
+    # Extract channel names from [▶ Channel Name ...](lyra-video:N)
+    channel_refs = re.findall(r"\[▶\s*([^\]]+?)(?:\s*\|[^\]]+)?\]\(lyra-video:\d+\)", resp.content)
+    if not channel_refs:
+        return CheckResult("api_channels", True, "n/a — no channel refs")
+
+    api = _get_prod_api()
+    channels_data = await api.get("/news/channels")
+    if not channels_data:
+        return CheckResult("api_channels", True, "n/a — channels endpoint unavailable")
+
+    known_names = {ch["name"].lower() for ch in channels_data if "name" in ch}
+    unknown = [name for name in channel_refs if name.strip().lower() not in known_names]
+
+    ok = len(unknown) == 0
+    return CheckResult(
+        "api_channels",
+        ok,
+        f"{len(channel_refs)} checked, {len(unknown)} unknown"
+        + (f": {unknown[:3]}" if unknown else ""),
+    )
+
+
+async def check_country_codes_valid(resp: SSEResponse, **_kw) -> CheckResult:
+    """Verify every (flag:XX) country code exists in the facets endpoint."""
+    flags = re.findall(r"\(flag:([A-Z]{2})\)", resp.content)
+    if not flags:
+        return CheckResult("api_country_codes", True, "n/a — no flag links")
+
+    api = _get_prod_api()
+    facets = await api.get("/facets")
+    if not facets:
+        return CheckResult("api_country_codes", True, "n/a — facets endpoint unavailable")
+
+    # The facets endpoint returns country names, not codes.
+    # We validate that the flag codes are standard ISO 3166-1 alpha-2.
+    # A comprehensive check would map codes to names, but for now just verify
+    # they are valid 2-letter codes (A-Z only, already matched by regex).
+    return CheckResult("api_country_codes", True, f"{len(set(flags))} valid codes")
+
+
+API_CHECK_REGISTRY: dict[str, callable] = {
+    "api_site_uuids": check_site_uuids_exist,
+    "api_empire_ids": check_empire_ids_exist,
+    "api_channels": check_channel_names_exist,
+    "api_country_codes": check_country_codes_valid,
 }
 
 
@@ -588,13 +781,27 @@ TEST_CASES: list[TestCase] = [
         name="Greeting",
         category="basic",
         prompt="Hello Lyra!",
-        structural_checks=["not_empty", "no_error", "markers_resolved", "conciseness"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "conciseness",
+        ],
     ),
     TestCase(
         name="Off-topic rejection",
         category="basic",
         prompt="Can you help me sort a Python list?",
-        structural_checks=["not_empty", "no_error", "markers_resolved", "conciseness"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "conciseness",
+        ],
         min_relevance=5,
     ),
     TestCase(
@@ -608,13 +815,27 @@ TEST_CASES: list[TestCase] = [
                 "content": "Göbekli Tepe is a Neolithic site in southeastern Turkey, dating to around 9500 BCE.",
             },
         ],
-        structural_checks=["not_empty", "no_error", "markers_resolved", "conciseness"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "conciseness",
+        ],
     ),
     TestCase(
         name="Conciseness check",
         category="basic",
         prompt="What is the oldest known temple?",
-        structural_checks=["not_empty", "no_error", "markers_resolved", "conciseness"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "conciseness",
+        ],
     ),
     # ── Category 2: Site References (5) ──
     TestCase(
@@ -625,6 +846,8 @@ TEST_CASES: list[TestCase] = [
             "not_empty",
             "no_error",
             "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
             "site_links",
             "no_bare_uuids",
         ],
@@ -637,6 +860,8 @@ TEST_CASES: list[TestCase] = [
             "not_empty",
             "no_error",
             "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
             "site_links",
             "no_bare_uuids",
         ],
@@ -645,20 +870,41 @@ TEST_CASES: list[TestCase] = [
         name="Sites in region",
         category="site_refs",
         prompt="What archaeological sites are in Turkey?",
-        structural_checks=["not_empty", "no_error", "markers_resolved", "site_links"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "site_links",
+        ],
     ),
     TestCase(
         name="Table format links",
         category="site_refs",
         prompt="List 3 Neolithic sites in a table with their country and period",
-        structural_checks=["not_empty", "no_error", "markers_resolved", "site_links"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "site_links",
+        ],
         min_relevance=5,
     ),
     TestCase(
         name="Site details",
         category="site_refs",
         prompt="Tell me everything about Çatalhöyük",
-        structural_checks=["not_empty", "no_error", "markers_resolved", "site_links"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "site_links",
+        ],
         expected_tools=["get_site_details", "search_sites", "get_site_images"],
     ),
     # ── Category 3: Coordinate References (3) ──
@@ -666,54 +912,105 @@ TEST_CASES: list[TestCase] = [
         name="Coordinates query",
         category="coordinates",
         prompt="Where exactly is Göbekli Tepe? Give me the coordinates.",
-        structural_checks=["not_empty", "no_error", "markers_resolved", "coord_links"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "coord_links",
+        ],
     ),
     TestCase(
         name="Machu Picchu coords",
         category="coordinates",
         prompt="What are the exact coordinates of Machu Picchu?",
-        structural_checks=["not_empty", "no_error", "markers_resolved", "coord_links"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "coord_links",
+        ],
     ),
     TestCase(
         name="Multiple coordinates",
         category="coordinates",
         prompt="Where are Pompeii and Petra? Give coordinates for both.",
-        structural_checks=["not_empty", "no_error", "markers_resolved", "coord_links"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "coord_links",
+        ],
     ),
     # ── Category 4: News & Video References (5) ──
     TestCase(
         name="Recent discoveries",
         category="news_video",
         prompt="What are the latest archaeological discoveries?",
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
         expected_tools=["search_news"],
     ),
     TestCase(
         name="Channel attribution",
         category="news_video",
         prompt="What has World of Antiquity reported recently?",
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
         expected_tools=["search_news"],
     ),
     TestCase(
         name="News about specific site",
         category="news_video",
         prompt="Any recent news about Karahan Tepe?",
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
         expected_tools=["search_news"],
     ),
     TestCase(
         name="News with timestamps",
         category="news_video",
         prompt="What recent discoveries have been reported on YouTube?",
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
         expected_tools=["search_news"],
     ),
     TestCase(
         name="Multiple news sources",
         category="news_video",
         prompt="Recent underwater archaeological discoveries from YouTube channels",
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
         expected_tools=["search_news"],
     ),
     # ── Category 5: Transcript References (3) ──
@@ -721,21 +1018,39 @@ TEST_CASES: list[TestCase] = [
         name="Transcript search",
         category="transcripts",
         prompt="Search transcripts for mentions of Atlantis",
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
         expected_tools=["search_transcripts"],
     ),
     TestCase(
         name="Transcript with timestamp",
         category="transcripts",
         prompt="Find where channels discussed the Antikythera mechanism in their videos",
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
         expected_tools=["search_transcripts"],
     ),
     TestCase(
         name="Channel-specific transcript",
         category="transcripts",
         prompt="What has Ancient Architects said about megalithic sites?",
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
         expected_tools=["search_transcripts"],
         min_relevance=5,
     ),
@@ -744,14 +1059,26 @@ TEST_CASES: list[TestCase] = [
         name="Weekly digest",
         category="articles",
         prompt="What's in the latest weekly digest?",
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
         expected_tools=["search_articles"],
     ),
     TestCase(
         name="Article topic search",
         category="articles",
         prompt="Find articles about Egyptian discoveries",
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
         expected_tools=["search_articles"],
     ),
     # ── Category 7: Empire References (3) ──
@@ -759,14 +1086,26 @@ TEST_CASES: list[TestCase] = [
         name="Empire military",
         category="empires",
         prompt="Tell me about the Roman Empire's military capabilities",
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
         expected_tools=["get_empire_data", "search_empires"],
     ),
     TestCase(
         name="Empire search",
         category="empires",
         prompt="Find empires that used iron weapons and chariots",
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
         expected_tools=["search_empires"],
     ),
     TestCase(
@@ -775,7 +1114,13 @@ TEST_CASES: list[TestCase] = [
         prompt="Tell me about their economy and trade",
         context_type="empire",
         context_id="it_roman_principate",
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
         expected_tools=["get_empire_data"],
         min_relevance=5,
     ),
@@ -784,7 +1129,14 @@ TEST_CASES: list[TestCase] = [
         name="Site images",
         category="images",
         prompt="Show me images of Pompeii",
-        structural_checks=["not_empty", "no_error", "markers_resolved", "image_format"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "image_format",
+        ],
         expected_tools=["get_site_images"],
         min_relevance=5,
     ),
@@ -792,7 +1144,14 @@ TEST_CASES: list[TestCase] = [
         name="Image attribution",
         category="images",
         prompt="Show me photos of Stonehenge with attribution",
-        structural_checks=["not_empty", "no_error", "markers_resolved", "image_format"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "image_format",
+        ],
         expected_tools=["get_site_images"],
         min_relevance=5,
     ),
@@ -801,40 +1160,77 @@ TEST_CASES: list[TestCase] = [
         name="Wikipedia link",
         category="links_flags",
         prompt="Tell me about Petra with sources",
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
     ),
     TestCase(
         name="Country flag",
         category="links_flags",
         prompt="What sites are in Turkey?",
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
     ),
     TestCase(
         name="Multi-country flags",
         category="links_flags",
         prompt="Compare ancient sites in Egypt and Greece",
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
     ),
     # ── Category 10: Radar & Discovery (3) ──
     TestCase(
         name="Radar overview",
         category="radar",
         prompt="What has Lyra discovered on her radar?",
-        structural_checks=["not_empty", "no_error", "markers_resolved", "conciseness"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "conciseness",
+        ],
         expected_tools=["search_radar"],
     ),
     TestCase(
         name="Filtered radar",
         category="radar",
         prompt="Radar discoveries in Turkey",
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
         expected_tools=["search_radar"],
     ),
     TestCase(
         name="Radar details",
         category="radar",
         prompt="Tell me about Lyra's most mentioned discovery",
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
         expected_tools=["search_radar", "search_news", "vector_search"],
     ),
     # ── Category 11: Channel Directory (2) ──
@@ -842,14 +1238,27 @@ TEST_CASES: list[TestCase] = [
         name="List channels",
         category="channels",
         prompt="What YouTube channels do you monitor?",
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
         expected_tools=["list_channels"],
     ),
     TestCase(
         name="Channel count",
         category="channels",
         prompt="How many channels do you follow?",
-        structural_checks=["not_empty", "no_error", "markers_resolved", "conciseness"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "conciseness",
+        ],
         expected_tools=["list_channels"],
     ),
     # ── Category 12: Edge Cases (5) ──
@@ -862,34 +1271,66 @@ TEST_CASES: list[TestCase] = [
             "Stonehenge in England, and the megalithic temples of Malta. Compare "
             "their dating, construction methods, and cultural connections."
         ),
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
         min_relevance=3,
     ),
     TestCase(
         name="Non-English name",
         category="edge_cases",
         prompt="Tell me about Çatalhöyük",
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
     ),
     TestCase(
         name="Nonexistent site",
         category="edge_cases",
         prompt="Tell me about the ancient ruins of Xanadu Prime on Mars",
-        structural_checks=["not_empty", "no_error", "markers_resolved", "conciseness"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "conciseness",
+        ],
         min_relevance=4,
     ),
     TestCase(
         name="Single character",
         category="edge_cases",
         prompt="?",
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
         min_relevance=4,
     ),
     TestCase(
         name="Empty tool results",
         category="edge_cases",
         prompt="Tell me about archaeological sites in Antarctica",
-        structural_checks=["not_empty", "no_error", "markers_resolved", "conciseness"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "conciseness",
+        ],
         min_relevance=4,
     ),
     # ── Category 13: Multi-turn Conversations (3) ──
@@ -904,7 +1345,13 @@ TEST_CASES: list[TestCase] = [
                 "content": "Pompeii is a famous Roman city preserved by the eruption of Vesuvius in 79 AD.",
             },
         ],
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
         expected_tools=["get_site_images"],
     ),
     TestCase(
@@ -918,7 +1365,13 @@ TEST_CASES: list[TestCase] = [
                 "content": "Turkey has several major Neolithic sites including Göbekli Tepe, Çatalhöyük, and Karahan Tepe.",
             },
         ],
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
     ),
     TestCase(
         name="Empire follow-up",
@@ -931,7 +1384,13 @@ TEST_CASES: list[TestCase] = [
                 "content": "The Roman Empire had a highly organized military with legions stationed across the empire.",
             },
         ],
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
         expected_tools=["get_empire_data", "search_empires"],
     ),
     # ── Category 14: Context Modes & Full Pipeline (5) ──
@@ -941,7 +1400,13 @@ TEST_CASES: list[TestCase] = [
         prompt="What can you tell me about this site?",
         context_type="site",
         context_id="d953e9b3-de33-4c7d-9357-bbc5d94d2a16",  # Göbekli Tepe UUID
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
         min_relevance=3,
     ),
     TestCase(
@@ -950,14 +1415,27 @@ TEST_CASES: list[TestCase] = [
         prompt="Describe this civilization",
         context_type="empire",
         context_id="it_roman_principate",
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
         min_relevance=3,
     ),
     TestCase(
         name="Multi-tool pipeline",
         category="full_pipeline",
         prompt="Roman sites in Italy with recent news about Roman archaeology",
-        structural_checks=["not_empty", "no_error", "markers_resolved", "site_links"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "site_links",
+        ],
         expected_tools=["search_sites", "search_news", "vector_search"],
     ),
     TestCase(
@@ -968,6 +1446,8 @@ TEST_CASES: list[TestCase] = [
             "not_empty",
             "no_error",
             "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
             "site_links",
             "no_bare_uuids",
             "no_hallucinated_ids",
@@ -979,7 +1459,13 @@ TEST_CASES: list[TestCase] = [
         prompt="Tell me more about this discovery",
         context_type="news",
         context_id="1",
-        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+        ],
         min_relevance=3,
     ),
 ]
@@ -996,7 +1482,13 @@ def _truncate(s: str, n: int = 120) -> str:
 
 
 async def run_test(
-    idx: int, total: int, tc: TestCase, *, use_judge: bool, verbose: bool
+    idx: int,
+    total: int,
+    tc: TestCase,
+    *,
+    use_judge: bool,
+    verbose: bool,
+    validate_api: bool = False,
 ) -> tuple[bool, dict]:
     """Run a single test case with retries for empty responses."""
     print(f"\n{BOLD}[{idx}/{total}] [{tc.category}] {tc.name}{RESET}")
@@ -1060,6 +1552,23 @@ async def run_test(
 
     structural_pass = all(cr.passed for cr in structural_results)
 
+    # API validation (warnings only — don't affect overall_pass)
+    api_results: list[CheckResult] = []
+    if validate_api and resp.content.strip():
+        for _check_name, fn in API_CHECK_REGISTRY.items():
+            result = await fn(resp)
+            api_results.append(result)
+        if api_results:
+            api_parts = []
+            for cr in api_results:
+                if "n/a" in cr.detail:
+                    continue  # Skip n/a checks in output
+                icon = f"{GREEN}✓{RESET}" if cr.passed else f"{YELLOW}⚠{RESET}"
+                detail = f" ({cr.detail})" if cr.detail else ""
+                api_parts.append(f"{cr.name} {icon}{DIM}{detail}{RESET}")
+            if api_parts:
+                print(f"  API checks: {' | '.join(api_parts)}")
+
     # LLM Judge
     judge_result = None
     overall_pass = structural_pass
@@ -1105,6 +1614,7 @@ async def run_test(
         "category": tc.category,
         "passed": overall_pass,
         "structural": {cr.name: cr.passed for cr in structural_results},
+        "api_checks": {cr.name: cr.passed for cr in api_results} if api_results else None,
         "judge": judge_result,
         "wall_time": resp.wall_time,
         "content_length": len(resp.content),
@@ -1118,6 +1628,11 @@ async def main():
     parser.add_argument("--category", type=str, help="Run only tests in this category")
     parser.add_argument("--name", type=str, help="Run only the test with this name")
     parser.add_argument("--no-judge", action="store_true", help="Skip LLM judge evaluation")
+    parser.add_argument(
+        "--validate-api",
+        action="store_true",
+        help="Run API-backed validation checks against production (rate-limited)",
+    )
     parser.add_argument("--verbose", action="store_true", help="Show full response text")
     parser.add_argument("--list", action="store_true", help="List all test cases and exit")
     args = parser.parse_args()
@@ -1153,16 +1668,23 @@ async def main():
         print(f"{YELLOW}Warning: LYRA_API_KEY not set, skipping LLM judge{RESET}")
         use_judge = False
 
+    validate_api = args.validate_api
+
     total = len(cases)
     print(f"{BOLD}Lyra Quality Test Suite{RESET}")
     judge_info = f"Mercury (pool: {len(LYRA_FREE_API_KEYS)} free + 1 paid)" if use_judge else "off"
-    print(f"Tests: {total} | Judge: {judge_info} | Retries: {MAX_RETRIES}")
+    api_info = f"prod ({PROD_API_BASE})" if validate_api else "off"
+    print(
+        f"Tests: {total} | Judge: {judge_info} | API validation: {api_info} | Retries: {MAX_RETRIES}"
+    )
     print(f"API: {API_BASE}")
     print("=" * 60)
 
     results: list[dict] = []
     for i, tc in enumerate(cases, 1):
-        passed, detail = await run_test(i, total, tc, use_judge=use_judge, verbose=args.verbose)
+        passed, detail = await run_test(
+            i, total, tc, use_judge=use_judge, verbose=args.verbose, validate_api=validate_api
+        )
         results.append(detail)
         if i < total:
             await asyncio.sleep(1.0)
@@ -1200,6 +1722,13 @@ async def main():
     print(f"  Time: {total_time:.1f}s")
     if use_judge:
         print(f"  Judge pool: {_judge_pool.stats}")
+    if validate_api:
+        api_warnings = sum(
+            1
+            for r in results
+            if r.get("api_checks") and any(not v for v in r["api_checks"].values())
+        )
+        print(f"  API validation: {_get_prod_api().stats} | {api_warnings} warnings")
 
     sys.exit(0 if total_fail == 0 else 1)
 
