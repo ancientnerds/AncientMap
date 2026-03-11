@@ -393,7 +393,7 @@ class MercuryBackend:
             "messages": openai_messages,
             "max_tokens": self.max_tokens,
             "stream": False,
-            "reasoning_effort": "medium",
+            "reasoning_effort": "high",
         }
         if tools:
             create_kwargs["tools"] = _langchain_tools_to_openai(tools)
