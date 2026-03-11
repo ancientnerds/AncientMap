@@ -892,7 +892,23 @@ async def run_agent_stream(
     # Capture structured output for frontend debug panel
     _structured_output: dict[str, Any] | None = None
 
+    # After this many rounds, stop passing tools so the LLM MUST produce text
+    force_answer_after = 3
+
     for _round in range(max_tool_rounds):
+        # After force_answer_after rounds of tool use, cut off tools and nudge
+        allow_tools = _round < force_answer_after and tool_calls_made < 6
+        if not allow_tools and _round > 0:
+            messages.append(
+                SystemMessage(
+                    content=(
+                        f"Round {_round + 1}/{max_tool_rounds}: You have already called "
+                        f"{tool_calls_made} tools. You MUST write your final response NOW "
+                        "using the data you already have. Do NOT request any more tools."
+                    )
+                )
+            )
+
         yield {
             "type": "pipeline",
             "stage": "llm_round",
@@ -915,7 +931,7 @@ async def run_agent_stream(
                 try:
                     result = await backend_impl.generate(
                         messages,
-                        tools=TOOLS if ctx.supports_tools else None,
+                        tools=TOOLS if (ctx.supports_tools and allow_tools) else None,
                         response_format=LYRA_RESPONSE_SCHEMA,
                     )
                     break
@@ -1019,7 +1035,7 @@ async def run_agent_stream(
             async for ev in _stream_with_heartbeat(
                 backend_impl,
                 messages,
-                TOOLS if ctx.supports_tools else [],
+                TOOLS if (ctx.supports_tools and allow_tools) else [],
                 enable_thinking=ctx.supports_thinking,
             ):
                 if ev["type"] == "heartbeat":
