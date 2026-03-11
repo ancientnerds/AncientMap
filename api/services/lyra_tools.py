@@ -260,7 +260,7 @@ def get_site_details(site_id: str) -> str:
 
 @tool
 def search_news(
-    query: str,
+    query: str = "",
     channel: str | None = None,
     days_back: int = 30,
     limit: int = 10,
@@ -269,9 +269,11 @@ def search_news(
 
     Use when the user asks about recent discoveries, news, updates, or 'what's new'.
     Results contain YouTube video_ids and channel names for creating video markers.
+    For broad requests like 'what's new' or 'latest news', use query="" (empty string)
+    to get all recent items. Only use specific keywords when the user asks about a topic.
 
     Args:
-        query: Search text for headline or summary.
+        query: Search text for headline or summary. Use "" for broad/general news requests.
         channel: Filter by channel name (optional).
         days_back: How many days back to search (default 30, max 365).
         limit: Maximum results (default 10, max 20).
