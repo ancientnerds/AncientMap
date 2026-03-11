@@ -30,10 +30,11 @@ LYRA_RESPONSE_SCHEMA = {
                 },
                 "text": {
                     "type": "string",
-                    "description": "Markdown response with guillemet markers like «s0», «c0», «v0», «e0», «i0», «l0», «f0»",
+                    "description": "Your response in Markdown. Embed interactive markers using guillemets: «s0», «v0», «c0», «e0», «i0», «l0», «f0». Plain text like 's0' does NOT work — ONLY «s0» with guillemets works. Every marker in text MUST have a matching entry in the corresponding array.",
                 },
                 "sites": {
                     "type": "array",
+                    "description": "Array of archaeological sites referenced in text. Each «sN» marker in text MUST have a corresponding entry here. Fields: marker (e.g. 's0'), name (site name), id (UUID from tool results — NEVER fabricate).",
                     "items": {
                         "type": "object",
                         "properties": {
@@ -47,6 +48,7 @@ LYRA_RESPONSE_SCHEMA = {
                 },
                 "coords": {
                     "type": "array",
+                    "description": "Array of coordinates referenced in text. Each «cN» marker MUST have an entry. Fields: marker (e.g. 'c0'), lat (decimal), lon (decimal). Use coordinates from tool results only.",
                     "items": {
                         "type": "object",
                         "properties": {
@@ -60,6 +62,7 @@ LYRA_RESPONSE_SCHEMA = {
                 },
                 "videos": {
                     "type": "array",
+                    "description": "Array of YouTube videos referenced in text. Each «vN» marker MUST have an entry. Fields: marker (e.g. 'v0'), channel (channel name), video_id (YouTube ID from tool results — NEVER fabricate), timestamp_seconds (integer, 0 if unknown). Each entry MUST reference a DIFFERENT video_id.",
                     "items": {
                         "type": "object",
                         "properties": {
@@ -74,6 +77,7 @@ LYRA_RESPONSE_SCHEMA = {
                 },
                 "empires": {
                     "type": "array",
+                    "description": "Array of empires/civilizations referenced in text. Each «eN» marker MUST have an entry. Fields: marker (e.g. 'e0'), name (empire name), polity_id (Seshat ID from tool results).",
                     "items": {
                         "type": "object",
                         "properties": {
@@ -87,6 +91,7 @@ LYRA_RESPONSE_SCHEMA = {
                 },
                 "images": {
                     "type": "array",
+                    "description": "Array of images to display inline. Each «iN» marker MUST have an entry. Fields: marker (e.g. 'i0'), title, original_url (from get_site_images results — NEVER fabricate URLs), author, license.",
                     "items": {
                         "type": "object",
                         "properties": {
@@ -102,6 +107,7 @@ LYRA_RESPONSE_SCHEMA = {
                 },
                 "links": {
                     "type": "array",
+                    "description": "Array of clickable links. Each «lN» marker MUST have an entry. Fields: marker (e.g. 'l0'), text (display text), url (from tool results — NEVER fabricate URLs).",
                     "items": {
                         "type": "object",
                         "properties": {
@@ -115,6 +121,7 @@ LYRA_RESPONSE_SCHEMA = {
                 },
                 "countries": {
                     "type": "array",
+                    "description": "Array of country flags. Each «fN» marker MUST have an entry. Fields: marker (e.g. 'f0'), name (country name), code (ISO 3166-1 alpha-2, e.g. 'GR', 'EG', 'TR').",
                     "items": {
                         "type": "object",
                         "properties": {

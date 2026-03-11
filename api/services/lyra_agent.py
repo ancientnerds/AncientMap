@@ -4,10 +4,10 @@ Lyra RAG Agent — unified streaming pipeline with multi-model routing.
 Lyra Whiskerbyte is an archaeological agent who monitors YouTube channels,
 extracts transcripts, and can chat about any of the 750K+ sites in the database.
 
-Three model tiers (single local model, two modes):
+Two model tiers:
   - premium (Mercury 2) — paid, credit-based, highest quality
   - heavy (Qwen3.5 2B, think=on) — queries, thinking + tools + retrieval
-  - trivial (Qwen3.5 2B, think=off) — greetings/meta/reactions, no tools
+All messages get full tools and structured output (no trivial mode).
 """
 
 import asyncio
@@ -42,6 +42,7 @@ from api.services.lyra_router import (
     set_request_context,
 )
 from api.services.lyra_schema import LYRA_RESPONSE_SCHEMA, clean_response_text, expand_markers
+from api.services.lyra_tool_prompts import wrap_tool_result
 from api.services.lyra_tools import (
     LLM_MODEL,
     TOOLS,
@@ -439,6 +440,7 @@ def _get_filter_llm():
             temperature=0.0,
             api_key=api_key,
             base_url=base_url,
+            model_kwargs={"reasoning_effort": "high"},
         ).with_structured_output(NewsFilters)
     return _filter_llm
 
@@ -1190,7 +1192,8 @@ async def run_agent_stream(
                     except (json.JSONDecodeError, KeyError, TypeError):
                         pass
 
-                messages.append(ToolMessage(content=result, tool_call_id=str(tc["id"])))
+                wrapped = wrap_tool_result(str(tc["name"]), result)
+                messages.append(ToolMessage(content=wrapped, tool_call_id=str(tc["id"])))
 
                 # Count result items for the pipeline panel
                 _result_len = None

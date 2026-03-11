@@ -305,7 +305,7 @@ class MercuryBackend:
             "max_tokens": self.max_tokens,
             "stream": True,
             "stream_options": {"include_usage": True},
-            "reasoning_effort": "medium",
+            "reasoning_effort": "high",
             "extra_body": {"diffusing": True},
         }
         if openai_tools:

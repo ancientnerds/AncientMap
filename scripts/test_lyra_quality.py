@@ -2,7 +2,7 @@
 Lyra Chat Quality Test Suite
 
 Comprehensive test runner that sends prompts to the Lyra API, collects SSE
-responses, runs 14 structural checks, and uses Mercury with structured output
+responses, runs 18 structural checks, and uses Mercury with structured output
 as LLM judge for guaranteed-valid scoring.
 
 Usage:
@@ -929,7 +929,7 @@ class TestCase:
 
 
 # ---------------------------------------------------------------------------
-# Test cases (~48 across 14 categories)
+# Test cases (~52 across 15 categories)
 # ---------------------------------------------------------------------------
 
 TEST_CASES: list[TestCase] = [
@@ -959,6 +959,7 @@ TEST_CASES: list[TestCase] = [
             "no_raw_json",
             "no_empty_ids",
             "conciseness",
+            "off_topic_rejected",
         ],
         min_relevance=5,
     ),
@@ -993,7 +994,9 @@ TEST_CASES: list[TestCase] = [
             "no_raw_json",
             "no_empty_ids",
             "conciseness",
+            "site_links",
         ],
+        expected_tools=["search_sites", "vector_search", "get_site_details"],
     ),
     # ── Category 2: Site References (5) ──
     TestCase(
@@ -1008,7 +1011,9 @@ TEST_CASES: list[TestCase] = [
             "no_empty_ids",
             "site_links",
             "no_bare_uuids",
+            "no_hallucinated_ids",
         ],
+        expected_tools=["search_sites", "get_site_details"],
     ),
     TestCase(
         name="Multiple site links",
@@ -1022,7 +1027,9 @@ TEST_CASES: list[TestCase] = [
             "no_empty_ids",
             "site_links",
             "no_bare_uuids",
+            "no_hallucinated_ids",
         ],
+        expected_tools=["search_sites", "get_site_details"],
     ),
     TestCase(
         name="Sites in region",
@@ -1077,7 +1084,9 @@ TEST_CASES: list[TestCase] = [
             "no_raw_json",
             "no_empty_ids",
             "coord_links",
+            "site_links",
         ],
+        expected_tools=["search_sites", "get_site_details"],
     ),
     TestCase(
         name="Machu Picchu coords",
@@ -1090,7 +1099,9 @@ TEST_CASES: list[TestCase] = [
             "no_raw_json",
             "no_empty_ids",
             "coord_links",
+            "site_links",
         ],
+        expected_tools=["search_sites", "get_site_details"],
     ),
     TestCase(
         name="Multiple coordinates",
@@ -1103,7 +1114,9 @@ TEST_CASES: list[TestCase] = [
             "no_raw_json",
             "no_empty_ids",
             "coord_links",
+            "site_links",
         ],
+        expected_tools=["search_sites", "get_site_details"],
     ),
     # ── Category 4: News & Video References (5) ──
     TestCase(
@@ -1116,6 +1129,7 @@ TEST_CASES: list[TestCase] = [
             "markers_resolved",
             "no_raw_json",
             "no_empty_ids",
+            "video_links",
         ],
         expected_tools=["search_news", "search_radar"],
     ),
@@ -1129,6 +1143,7 @@ TEST_CASES: list[TestCase] = [
             "markers_resolved",
             "no_raw_json",
             "no_empty_ids",
+            "video_links",
         ],
         expected_tools=["search_news"],
     ),
@@ -1142,6 +1157,7 @@ TEST_CASES: list[TestCase] = [
             "markers_resolved",
             "no_raw_json",
             "no_empty_ids",
+            "video_links",
         ],
         expected_tools=["search_news"],
     ),
@@ -1155,6 +1171,7 @@ TEST_CASES: list[TestCase] = [
             "markers_resolved",
             "no_raw_json",
             "no_empty_ids",
+            "video_links",
         ],
         expected_tools=["search_news"],
     ),
@@ -1168,6 +1185,7 @@ TEST_CASES: list[TestCase] = [
             "markers_resolved",
             "no_raw_json",
             "no_empty_ids",
+            "video_links",
         ],
         expected_tools=["search_news"],
     ),
@@ -1250,6 +1268,7 @@ TEST_CASES: list[TestCase] = [
             "markers_resolved",
             "no_raw_json",
             "no_empty_ids",
+            "empire_links",
         ],
         expected_tools=["get_empire_data", "search_empires"],
     ),
@@ -1263,6 +1282,7 @@ TEST_CASES: list[TestCase] = [
             "markers_resolved",
             "no_raw_json",
             "no_empty_ids",
+            "empire_links",
         ],
         expected_tools=["search_empires"],
     ),
@@ -1278,6 +1298,7 @@ TEST_CASES: list[TestCase] = [
             "markers_resolved",
             "no_raw_json",
             "no_empty_ids",
+            "empire_links",
         ],
         expected_tools=["get_empire_data"],
         min_relevance=5,
@@ -1336,7 +1357,10 @@ TEST_CASES: list[TestCase] = [
             "markers_resolved",
             "no_raw_json",
             "no_empty_ids",
+            "country_flags",
+            "site_links",
         ],
+        expected_tools=["search_sites"],
     ),
     TestCase(
         name="Multi-country flags",
@@ -1348,7 +1372,10 @@ TEST_CASES: list[TestCase] = [
             "markers_resolved",
             "no_raw_json",
             "no_empty_ids",
+            "country_flags",
+            "site_links",
         ],
+        expected_tools=["search_sites"],
     ),
     # ── Category 10: Radar & Discovery (3) ──
     TestCase(
@@ -1594,6 +1621,7 @@ TEST_CASES: list[TestCase] = [
             "no_raw_json",
             "no_empty_ids",
             "site_links",
+            "video_links",
         ],
         expected_tools=["search_sites", "search_news", "vector_search"],
     ),
@@ -1608,9 +1636,11 @@ TEST_CASES: list[TestCase] = [
             "no_raw_json",
             "no_empty_ids",
             "site_links",
+            "coord_links",
             "no_bare_uuids",
             "no_hallucinated_ids",
         ],
+        expected_tools=["search_sites", "get_site_details", "search_news"],
     ),
     TestCase(
         name="News context",
@@ -1626,6 +1656,70 @@ TEST_CASES: list[TestCase] = [
             "no_empty_ids",
         ],
         min_relevance=3,
+    ),
+    # ── Category 15: Marker Quality (4) ──
+    # Tests that the per-tool prompt instructions produce correct guillemet markers
+    TestCase(
+        name="Video markers from news",
+        category="marker_quality",
+        prompt="Was gibts neues in der Archäologie?",
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "video_links",
+        ],
+        expected_tools=["search_news"],
+    ),
+    TestCase(
+        name="Site chips with UUIDs",
+        category="marker_quality",
+        prompt="Tell me about Pompeii",
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "site_links",
+            "no_bare_uuids",
+            "no_hallucinated_ids",
+        ],
+        expected_tools=["search_sites", "get_site_details"],
+    ),
+    TestCase(
+        name="Coords from site details",
+        category="marker_quality",
+        prompt="Where is Angkor Wat? Show me on the map.",
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "coord_links",
+            "site_links",
+        ],
+        expected_tools=["search_sites", "get_site_details"],
+    ),
+    TestCase(
+        name="Mixed marker types",
+        category="marker_quality",
+        prompt="Tell me about Knossos including coordinates, country, and any recent videos about it",
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "site_links",
+            "coord_links",
+            "no_bare_uuids",
+            "no_hallucinated_ids",
+        ],
+        expected_tools=["search_sites", "get_site_details", "search_news"],
     ),
 ]
 

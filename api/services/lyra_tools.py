@@ -84,6 +84,9 @@ def search_sites(
 ) -> str:
     """Search archaeological sites by name, period, country, or type.
 
+    Use when the user asks about a specific site, wants to find sites by region/period/type,
+    or asks 'what sites are in X'. Results contain site UUIDs, names, coordinates, and metadata.
+
     Args:
         query: Search text (site name, keyword, or description fragment).
         period: Filter by period name (e.g. 'Bronze Age', 'Iron Age', 'Neolithic').
@@ -167,6 +170,9 @@ def search_sites(
 @tool
 def get_site_details(site_id: str) -> str:
     """Get detailed information about a specific archaeological site by its UUID or name.
+
+    Use to get full details about a site already identified. Returns alternate names,
+    content links, coordinates, and full metadata for creating site/coord/flag/link markers.
 
     Args:
         site_id: The UUID or name/slug of the site.
@@ -261,6 +267,9 @@ def search_news(
 ) -> str:
     """Search recent archaeological news items from YouTube channels.
 
+    Use when the user asks about recent discoveries, news, updates, or 'what's new'.
+    Results contain YouTube video_ids and channel names for creating video markers.
+
     Args:
         query: Search text for headline or summary.
         channel: Filter by channel name (optional).
@@ -339,7 +348,8 @@ def search_news(
 def get_empire_data(empire_id: str) -> str:
     """Get Seshat historical data for an empire/civilization.
 
-    Returns warfare technology, social complexity, economy, and crisis data.
+    Use to get detailed Seshat data for a specific polity. Returns warfare, social complexity,
+    economy, and crisis data for creating empire markers.
 
     Args:
         empire_id: The Seshat polity ID (e.g. 'it_roman_principate', 'eg_new_kingdom').
@@ -508,8 +518,9 @@ def vector_search(
 ) -> str:
     """Deep semantic search across sites, news, transcripts, articles, or empires using hybrid dense+BM25 vectors.
 
-    Use this for follow-up deep dives beyond the auto-retrieved context.
-    Supports metadata filters for targeted searches.
+    Use for deep semantic search when keyword search (search_sites, search_news) didn't find enough.
+    Works across sites, news, transcripts, articles, and empires collections. Results contain
+    collection-specific fields for creating the appropriate marker types.
 
     Args:
         query: Natural language query.
@@ -544,9 +555,9 @@ def search_radar(
 ) -> str:
     """Search Lyra's auto-discovered archaeological sites (Radar).
 
+    Use when users ask about sites Lyra discovered, new/recent discoveries, or 'what have you found'.
     These are sites discovered by Lyra from YouTube archaeology channels,
-    enriched with Wikidata/Wikipedia data. Use this when users ask about
-    recent discoveries, new sites, or what Lyra has found.
+    enriched with Wikidata/Wikipedia data. Results contain coordinates and wikipedia URLs.
 
     Args:
         query: Search by site name (optional).
@@ -618,8 +629,8 @@ def search_radar(
 def list_channels() -> str:
     """List all YouTube archaeology channels that Lyra monitors.
 
-    Use this when users ask what channels you follow, what sources you have,
-    or where your news comes from.
+    Use when users ask about your sources, channels, or where news comes from.
+    Results contain channel names and YouTube URLs for creating link markers.
     """
     sql = """
         SELECT nc.id, nc.name, nc.enabled,
@@ -655,7 +666,8 @@ def get_site_images(
 ) -> str:
     """Get Wikipedia/Wikimedia Commons images for an archaeological site.
 
-    Returns images with URLs, attribution, and metadata. Each image has:
+    Use when users want to see images/photos of a site. Returns Wikimedia images with
+    attribution for creating image markers. Each image has:
     - original_url: Direct image URL — use this for inline images: ![title](original_url)
     - url: Local cached copy (may not be available)
     - commons_url: Wikimedia Commons page (for attribution links, NOT for img src)
@@ -774,8 +786,9 @@ def search_transcripts(
 ) -> str:
     """Search video transcript passages for specific discussions, quotes, or mentions.
 
-    Returns excerpts with YouTube deep-link timestamps. Use this when users ask
-    what creators have said about a topic, or to find specific discussions in videos.
+    Use when users ask what a creator said, want quotes, or ask about discussions in videos.
+    Returns excerpts with YouTube deep-link timestamps, video_ids, and channel names for
+    creating video markers.
 
     Args:
         query: What to search for in transcripts.
@@ -827,9 +840,9 @@ def search_articles(
 ) -> str:
     """Search Lyra's weekly archaeological digest articles.
 
+    Use when users ask about weekly summaries or want a digest of recent findings.
     These are magazine-quality articles generated from the week's most significant
-    discoveries across all monitored YouTube channels. Use this when users ask
-    about weekly summaries, digests, or want a comprehensive overview of recent findings.
+    discoveries across all monitored YouTube channels.
 
     Args:
         query: What to search for in articles.
@@ -873,9 +886,9 @@ def search_empires(
 ) -> str:
     """Search ancient empires and civilizations using Seshat historical data.
 
-    Use this to find empires by attributes like warfare technology, economy,
-    geographic region, time period, or any other characteristic. Returns matched
-    empires with key facts and Seshat polity IDs for deeper lookup with get_empire_data.
+    Use when users ask about empires, civilizations, or want to find polities by attributes.
+    Returns matched empires with key facts, polity IDs, and wikipedia URLs for creating
+    empire and link markers. Use get_empire_data(polity_id) for full details.
 
     Args:
         query: What to search for (e.g. 'largest army', 'iron age mesopotamia', 'naval power').
