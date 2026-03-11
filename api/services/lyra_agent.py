@@ -938,7 +938,7 @@ async def run_agent_stream(
     # Initialize tool_calls for the post-loop check (may be skipped for trivial)
     tool_calls: list[dict[str, str | int | None]] = []
     # Capture structured output for frontend debug panel
-    _structured_output: dict | None = None
+    _structured_output: dict[str, Any] | None = None
 
     for _round in range(max_tool_rounds if not is_trivial else 0):
         yield {
@@ -951,13 +951,13 @@ async def run_agent_stream(
         _t_round = time.monotonic()
         _round_tokens_before = total_input_tokens + total_output_tokens
         collected_content = ""
-        tool_calls: list[dict[str, str | int | None]] = []
+        tool_calls = []
 
         # Mercury: single non-streaming call with tools + structured output
         if ctx.backend_type == "mercury":
             # Retry up to 2 times for transient Mercury errors
             # (empty content, content_filter_error / 400)
-            result = None
+            result = None  # type: ignore[assignment, no-redef]
             _mercury_last_err: Exception | None = None
             for _attempt in range(3):
                 try:
@@ -1327,7 +1327,7 @@ async def run_agent_stream(
         logger.info("Max tool rounds reached — forcing final text response")
         if ctx.backend_type == "mercury":
             # Retry up to 2 times for transient Mercury errors
-            _forced_result = None
+            _forced_result: dict[str, Any] | None = None
             for _attempt in range(3):
                 try:
                     _forced_result = await backend_impl.generate(
