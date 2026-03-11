@@ -433,8 +433,8 @@ class MercuryBackend:
                 "content": content,
                 "tool_calls": [],
                 "usage": {
-                    "input": resp.usage.prompt_tokens or 0 if resp.usage else 0,
-                    "output": resp.usage.completion_tokens or 0 if resp.usage else 0,
+                    "input": (resp.usage.prompt_tokens or 0) if resp.usage else 0,
+                    "output": (resp.usage.completion_tokens or 0) if resp.usage else 0,
                 },
             }
             if message.tool_calls:

@@ -21,7 +21,6 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ---------------------------------------------------------------------------
 
-LLM_PROVIDER = os.getenv("LYRA_LLM_PROVIDER", "openai")
 LLM_MODEL = os.getenv("LYRA_LLM_MODEL", "mercury-2")
 
 # Per-request backend: set via contextvars by lyra_agent before each request.
@@ -137,7 +136,6 @@ def search_sites(
             ORDER BY period_start ASC NULLS LAST
             LIMIT :limit
         """
-        params["q"] = "%"
 
     with get_session() as session:
         result = session.execute(text(sql), params)
@@ -623,6 +621,7 @@ def list_channels() -> str:
         LEFT JOIN news_videos nv ON nc.id = nv.channel_id
         GROUP BY nc.id, nc.name, nc.enabled
         ORDER BY video_count DESC
+        LIMIT 100
     """
     with get_session() as session:
         result = session.execute(text(sql))
@@ -792,7 +791,7 @@ def search_transcripts(
         video_id = item.get("video_id", "")
         video_title = item.get("video_title", "Unknown video")
         ch = item.get("channel", "")
-        start = item.get("start_seconds", 0)
+        start = int(item.get("start_seconds", 0))
         preview = item.get("text_preview", "")
 
         # Format timestamp as MM:SS

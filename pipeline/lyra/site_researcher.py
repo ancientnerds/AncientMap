@@ -377,9 +377,10 @@ def _search_geonames(name: str, username: str, limit: int = 5) -> list[dict]:
 
 def _search_wikidata_sparql(name: str) -> list[dict]:
     """SPARQL search filtered to archaeological site instances."""
-    # Sanitize for SPARQL string literal — strip all characters that could
-    # break out of the quoted string or alter query structure
-    safe_name = re.sub(r'[{}()#<>\\"' + "'" + r"\n\r\t]", "", name).strip()
+    # Sanitize for SPARQL string literal — whitelist approach: keep only
+    # word characters (letters, digits, underscore in any script), spaces,
+    # hyphens, and periods.  Everything else is stripped.
+    safe_name = re.sub(r"[^\w\s\-.]", "", name, flags=re.UNICODE).strip()
     if not safe_name:
         return []
 

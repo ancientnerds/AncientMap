@@ -1012,6 +1012,7 @@ def _run_migrations(engine) -> None:
               AND us.name LIKE '%' || ni.site_name_extracted || '%'
         """)
         ).fetchall()
+        _ALLOWED_COLLAPSE_COLS = {"headline", "post_text", "summary", "facts"}
         for row in corrupted:
             idx = row.cname.index(row.extracted)
             prefix = row.cname[:idx]  # e.g. "Chaco Culture NHP- "
@@ -1025,13 +1026,13 @@ def _run_migrations(engine) -> None:
             if not patterns:
                 continue
 
-            def _collapse(val: str) -> str:
+            def _collapse(val: str, patterns=patterns) -> str:
+                # Terminates: bloated is strictly longer than clean
                 for bloated, clean in patterns:
                     while bloated in val:
                         val = val.replace(bloated, clean)
                 return val
 
-            _ALLOWED_COLLAPSE_COLS = {"headline", "post_text", "summary", "facts"}
             fields = {"headline": row.headline, "post_text": row.post_text, "summary": row.summary}
             updates = {}
             for col, val in fields.items():

@@ -466,7 +466,7 @@ async def _extract_news_filters(query: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Intent classification (LLM-powered, replaces regex _trivial_re)
+# Intent classification (LLM-powered)
 # ---------------------------------------------------------------------------
 
 

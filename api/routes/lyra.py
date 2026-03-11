@@ -68,7 +68,9 @@ class LyraChatRequest(BaseModel):
         default=None, max_length=5, description="Base64 images"
     )
     context_type: str = Field(
-        default="global", description="Where chat was opened: global, site, empire, news"
+        default="global",
+        pattern=r"^(global|site|empire|news)$",
+        description="Where chat was opened: global, site, empire, news",
     )
     context_id: str | None = Field(
         default=None, max_length=100, description="UUID of site, empire polity ID, or news item ID"
@@ -403,7 +405,9 @@ def _update_chat_streak(session: "Session", user_id: uuid.UUID) -> None:  # type
     if last_chat == today:
         return  # already chatted today
 
-    yesterday = (date.today() - __import__("datetime").timedelta(days=1)).isoformat()
+    from datetime import timedelta
+
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
     if last_chat == yesterday:
         flags["lyra_chat_streak"] = flags.get("lyra_chat_streak", 0) + 1
     else:

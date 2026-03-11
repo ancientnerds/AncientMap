@@ -159,6 +159,11 @@ _MARKER_RE = re.compile(
 _REF_KEYS = ("sites", "coords", "videos", "empires", "images", "links", "countries")
 
 
+def _norm(m: str) -> str:
+    """Normalize a marker string: strip guillemets and leading slash."""
+    return m.strip("\u00ab\u00bb").lstrip("/")
+
+
 def clean_response_text(text: str) -> str:
     """Strip artifacts that should never appear in user-facing responses.
 
@@ -232,9 +237,6 @@ def expand_markers(parsed: dict, all_news: list[dict] | None = None) -> tuple[st
 
     # Build lookup dicts: normalized marker string -> entry
     # LLM may use "s0" or "«s0»" in arrays — normalize to bare form (s0)
-    def _norm(m: str) -> str:
-        return m.strip("\u00ab\u00bb").lstrip("/")
-
     site_map = {_norm(e["marker"]): e for e in parsed.get("sites", [])}
     coord_map = {_norm(e["marker"]): e for e in parsed.get("coords", [])}
     video_map = {_norm(e["marker"]): e for e in parsed.get("videos", [])}
@@ -343,10 +345,6 @@ def validate_structured_response(parsed: dict, expanded_text: str | None = None)
     """
     issues: list[str] = []
     text = parsed.get("text", "")
-
-    # Normalize markers: strip guillemets and leading / for comparison
-    def _norm(m: str) -> str:
-        return m.strip("\u00ab\u00bb").lstrip("/")
 
     # Find all markers in text (normalized)
     markers_in_text = {_norm(m) for m in _MARKER_RE.findall(text)}

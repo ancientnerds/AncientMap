@@ -28,15 +28,15 @@ flowchart LR
 |-------|------|-------------|----------|
 | 1. Fetch | `transcript_fetcher.py` | `fetch_new_videos()` | - |
 | 2. Retry | `transcript_fetcher.py` | `retry_failed_videos()` | - |
-| 3. Summarize | `summarizer.py` | `summarize_pending_videos()` | MiniMax M2.5 |
+| 3. Summarize | `summarizer.py` | `summarize_pending_videos()` | Mercury 2 |
 | 4. Match | `site_matcher.py` | `match_sites_for_pending_items()` | - |
-| 5. Posts | `tweet_generator.py` | `generate_pending_posts()` | MiniMax M2.5 |
-| 6. Verify | `tweet_verifier.py` | `verify_pending_posts()` | MiniMax M2.5 |
-| 7. Rescore | `significance_scorer.py` | `rescore_pending_items()` | MiniMax M2.5 |
+| 5. Posts | `tweet_generator.py` | `generate_pending_posts()` | Mercury 2 |
+| 6. Verify | `tweet_verifier.py` | `verify_pending_posts()` | Mercury 2 |
+| 7. Rescore | `significance_scorer.py` | `rescore_pending_items()` | Mercury 2 |
 | 8. Dedup | `tweet_deduplicator.py` | `deduplicate_posts()` | - |
 | 9. Screenshots | `screenshot_extractor.py` | `extract_screenshots()` | - |
 | 10. Backfill | `transcript_fetcher.py` | `backfill_video_descriptions()` | - |
-| 11. Identify | `site_identifier.py` | `identify_and_enrich_sites()` | MiniMax M2.5 |
+| 11. Identify | `site_identifier.py` | `identify_and_enrich_sites()` | Mercury 2 |
 
 ---
 
@@ -45,11 +45,11 @@ flowchart LR
 ```mermaid
 flowchart TD
     YT["YouTube RSS\n(39 channels)"] -->|transcripts| NV[(news_videos)]
-    NV -->|MiniMax summarize| NI[(news_items)]
+    NV -->|Mercury summarize| NI[(news_items)]
     NI -->|exact/spaceless match| US[(unified_sites\nunified_site_names)]
     NI -->|unmatched names| UC[(user_contributions\nsource='lyra')]
 
-    UC -->|MiniMax identify| DB{"DB fuzzy\nsearch\n(pg_trgm)"}
+    UC -->|Mercury identify| DB{"DB fuzzy\nsearch\n(pg_trgm)"}
     DB -->|match found| BRANCH{"AN/promoted\nor external?"}
     DB -->|no match| WD["Wikidata API"]
 
@@ -57,7 +57,7 @@ flowchart TD
     BRANCH -->|external| ENRICHED["status='enriched'\nmerge all sources\n(Radar card)"]
 
     WD -->|entity found| WP["Wikipedia API\n(summary + lead)"]
-    WP -->|MiniMax extract| SCORE["Score 0-100"]
+    WP -->|Mercury extract| SCORE["Score 0-100"]
     DB -->|no match, no Wikidata| SCORE
 
     SCORE -->|"score >= 55\n+ coords"| PROMOTE["Promote to\nunified_sites\n(source='lyra')"]
@@ -86,11 +86,11 @@ Re-attempts transcript downloads for videos that failed in previous cycles (prox
 
 ### 3. Summarize (`summarizer.py`)
 
-Sends full transcript to MiniMax M2.5. Extracts 2-8 key archaeological topics per video (scaled by duration).
+Sends full transcript to Mercury 2. Extracts 2-8 key archaeological topics per video (scaled by duration).
 
 - **Reads:** `news_videos` (status=`transcribed`)
 - **Writes:** `news_items` (headline, facts[], site_name_extracted), `news_videos.summary_json`
-- **Model:** MiniMax M2.5 (`prompts/summary.txt`)
+- **Model:** Mercury 2 (`prompts/summary.txt`)
 
 ### 4. Match (`site_matcher.py`)
 
@@ -120,11 +120,11 @@ flowchart TD
 
 ### 5. Posts (`tweet_generator.py`)
 
-Generates short-form news feed posts (max 170 chars) from news items via MiniMax M2.5. One post per item. Includes timestamp attribution and recency note. Significance scoring and categorization are handled by the separate rescore step (5b).
+Generates short-form news feed posts (max 170 chars) from news items via Mercury 2. One post per item. Includes timestamp attribution and recency note. Significance scoring and categorization are handled by the separate rescore step (5b).
 
 - **Reads:** `news_items`, `news_videos.summary_json`
 - **Writes:** `news_items.post_text`
-- **Model:** MiniMax M2.5 (`prompts/tweet_template.txt`)
+- **Model:** Mercury 2 (`prompts/tweet_template.txt`)
 - **Security:** Shared API client pool, prompt caching (ephemeral)
 
 ### 6. Verify (`tweet_verifier.py`)
@@ -134,7 +134,7 @@ Fact-checks posts against the transcript segment around the timestamp (+/-10s). 
 - **Reads:** `news_items.post_text`, `news_videos.transcript_text`
 - **Writes:** `news_items.post_text` (modifications), `news_items.timestamp_seconds` (refinements)
 - **Deletes:** rejected items (post_text set to NULL)
-- **Model:** MiniMax M2.5 (`prompts/verify_tweets.txt`)
+- **Model:** Mercury 2 (`prompts/verify_tweets.txt`)
 - **Security:** Prompt injection guard on transcript segment
 
 ### 7. Rescore (`significance_scorer.py`)
@@ -144,7 +144,7 @@ Independent re-scoring of each verified item's significance (1-10) and category 
 - **Reads:** `news_items` (verified videos), `news_videos`
 - **Writes:** `news_items.significance`, `news_items.news_category`, `news_items.post_text` (NULL for score=1)
 - **Video status:** `verified` → `rescored`
-- **Model:** MiniMax M2.5 (`prompts/rescore_significance.txt`)
+- **Model:** Mercury 2 (`prompts/rescore_significance.txt`)
 - **Security:** Shared API client pool, prompt caching, injection guard
 
 ### 8. Dedup (`tweet_deduplicator.py`)
@@ -176,7 +176,7 @@ The core AI discovery engine. Processes up to 20 candidates per cycle.
 flowchart TD
     START["user_contributions\n(pending/enriched/rejected)"] --> HASH{"Facts hash\nchanged?"}
     HASH -->|no| SKIP["Skip\n(already processed)"]
-    HASH -->|yes| AI["MiniMax: identify site\n(name + confidence)"]
+    HASH -->|yes| AI["Mercury: identify site\n(name + confidence)"]
 
     AI --> SITE{"is_site?"}
     SITE -->|false| NAS["status=\n'not_a_site'"]
@@ -355,12 +355,13 @@ erDiagram
 | youtube-transcript-api | Fetch | Download video captions |
 | yt-dlp | Fetch, Screenshots, Backfill | Video metadata + frame extraction |
 | ffmpeg | Screenshots | Extract WebP frame from clip |
-| MiniMax M2.5 (via Anthropic SDK) | Summarize, Verify, Rescore, Identify, Extract Metadata, Pick Entity, Posts | AI processing + creative generation |
+| Mercury 2 (via Anthropic SDK) | Summarize, Verify, Rescore, Identify, Extract Metadata, Pick Entity, Posts | AI processing + creative generation |
 | Wikidata | Identify | Entity search + claims (coords, dates) |
 
-### Assistant Prefill Pattern
+### Structured Output
 
-MiniMax M2.5 does not support Anthropic's `output_config` (JSON schema enforcement). To ensure structured JSON responses without preamble text or markdown fences, `call_api()` in `config.py` strips `output_config` for non-Anthropic providers and uses **assistant prefill** (`prefill="{"`) on all 13 LLM calls. This forces the model to start its response mid-JSON, producing clean parseable output.
+Mercury 2 supports `response_format: json_schema` with `strict: true` for reliable structured output. All pipeline LLM calls use this instead of the legacy assistant prefill pattern. The `call_api()` helper in `config.py` handles schema enforcement transparently.
+
 | Wikipedia REST | Identify | Page summary + lead section |
 
 ---
@@ -502,32 +503,21 @@ Auto-retrieve runs before the LLM on every query, searching sites (top 5) + news
 
 ---
 
-## Lyra Chat — Multi-Model Architecture
+## Lyra Chat — Architecture
 
-The Lyra chat agent uses a tiered model architecture for the local (self-hosted) backend:
+The Lyra chat agent uses Mercury 2 (by Inception Labs) as its cloud backend.
 
-### Model Tiers
+### Intent Classification
 
-| Tier | Model | Use Case | Thinking | Tools |
-|------|-------|----------|----------|-------|
-| **Premium** | MiniMax M2.5 | Paid users (credit-based) | Yes | Yes |
-| **Heavy** | Qwen3.5 4B | Complex archaeology queries | Yes | Yes |
-| **Fast** | Qwen3.5 0.8B | Greetings, simple questions | No | Yes |
+An LLM-powered intent classifier (`_classify_intent` in `lyra_agent.py`) categorizes each incoming message as `trivial` (greetings, meta questions) or `substantive` (archaeology queries). Trivial messages skip the retrieval pipeline for lower latency. This runs in parallel with auto-retrieval so it adds no latency to substantive queries.
 
-### Routing
+### Backend
 
-A zero-latency keyword heuristic router (`lyra_router.py`) classifies each incoming message:
-- **Fast tier**: Greetings, very short messages (<12 chars), meta questions ("who are you", "help")
-- **Heavy tier**: Everything else (default — archaeology queries, tool-calling scenarios)
-- **Premium**: MiniMax backend selected by user toggle
+| Backend | Model | Use Case |
+|---------|-------|----------|
+| **Mercury** | Mercury 2 | All chat requests — streaming, structured output, tool calling |
 
-### Queue Architecture
-
-Two independent semaphore(1) queues allow 2 concurrent local inferences:
-- `fast` queue → Qwen3.5 0.8B (1 slot)
-- `heavy` queue → Qwen3.5 4B (1 slot)
-
-A fast-tier request never blocks a heavy-tier request and vice versa.
+The backend is restricted to `"mercury"` in the API schema. A local Ollama backend (`lyra_queue.py`, `lyra_backends.py`) exists in the codebase but is not currently wired into the chat flow.
 
 ### Unified Backend Abstraction
 

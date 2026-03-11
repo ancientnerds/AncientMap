@@ -12,7 +12,7 @@ import json
 import logging
 from pathlib import Path
 
-from pipeline.database import NewsItem, NewsVideo, get_session
+from pipeline.database import NewsChannel, NewsItem, NewsVideo, get_session
 from pipeline.lyra.config import (
     VALID_CATEGORIES,
     VALID_SPECULATIVE_TAGS,
@@ -35,8 +35,10 @@ RESCORE_SCHEMA = {
             "enum": sorted(VALID_CATEGORIES),
         },
         "speculative_tag": {
-            "type": "string",
-            "enum": sorted(VALID_SPECULATIVE_TAGS),
+            "anyOf": [
+                {"type": "string", "enum": sorted(VALID_SPECULATIVE_TAGS)},
+                {"type": "null"},
+            ],
         },
         "reason": {"type": "string"},
     },
@@ -94,8 +96,6 @@ def rescore_pending_items(settings: LyraSettings) -> int:
                 continue
 
             # Load channel name (video is detached, so query directly)
-            from pipeline.database import NewsChannel
-
             ch = session.get(NewsChannel, video.channel_id)
             channel_name = ch.name if ch else video.channel_id
 
