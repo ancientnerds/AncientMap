@@ -705,12 +705,10 @@ async def run_agent_stream(
         },
     }
 
-    # Intent classification replaces regex-based trivial detection.
-    # For single-word messages, skip retrieval (likely trivial: "hi", "thanks").
-    # For 2+ words, run classification + retrieval in parallel (zero added latency).
-    # Previously <=3 words, but that caught substantive queries like "was gibts neues".
-    _msg_words = len(message.strip().split()) if message else 0
-    skip_retrieval = ctx.model_tier == "trivial" or context_type == "empire" or _msg_words <= 1
+    # Always run classification + retrieval in parallel — the LLM classifier decides
+    # trivial vs substantive, not word count.  If trivial, retrieval results are
+    # discarded (costs a Voyage call but adds zero latency since it runs in parallel).
+    skip_retrieval = ctx.model_tier == "trivial" or context_type == "empire"
     is_trivial = not message or len(message.strip()) <= 2  # provisional; refined by classifier
 
     if not skip_retrieval:
@@ -926,8 +924,13 @@ async def run_agent_stream(
                 news_lines.append(line)
             retrieved_context += "\n\n### Related News\n" + "\n".join(news_lines) + "\n"
     else:
-        # Short message, fast tier, or empire context — classify intent only (no retrieval)
-        if message and _msg_words > 0 and ctx.model_tier != "trivial" and context_type != "empire":
+        # Empire context or pre-classified trivial — classify intent only (no retrieval)
+        if (
+            message
+            and len(message.strip()) > 2
+            and ctx.model_tier != "trivial"
+            and context_type != "empire"
+        ):
             yield {
                 "type": "pipeline",
                 "stage": "classify_intent",
