@@ -229,12 +229,15 @@ def _format_timestamp(seconds: int) -> str:
     return f"{m}:{s:02d}"
 
 
-def expand_markers(parsed: dict, all_news: list[dict] | None = None) -> tuple[str, list[str]]:
+def expand_markers(
+    parsed: dict,
+    all_news: list[dict] | None = None,  # noqa: ARG001
+) -> tuple[str, list[str]]:
     """Expand guillemet markers in parsed structured response into markdown links.
 
     Args:
         parsed: Parsed LyraResponse JSON with text + reference arrays.
-        all_news: List of news items (from SSE news events) for video index lookup.
+        all_news: Unused (kept for API compat). Video IDs are now embedded in the protocol.
 
     Returns:
         (expanded_text, validation_issues) — the final markdown and any issues found.
@@ -251,14 +254,6 @@ def expand_markers(parsed: dict, all_news: list[dict] | None = None) -> tuple[st
     image_map = {_norm(e["marker"]): e for e in parsed.get("images", [])}
     link_map = {_norm(e["marker"]): e for e in parsed.get("links", [])}
     country_map = {_norm(e["marker"]): e for e in parsed.get("countries", [])}
-
-    # Build news video_id -> index lookup
-    news_index: dict[str, int] = {}
-    if all_news:
-        for i, n in enumerate(all_news):
-            vid = n.get("video_id", "")
-            if vid:
-                news_index[vid] = i
 
     def _replace_marker(match: re.Match) -> str:
         raw_marker = match.group(0)
@@ -279,20 +274,16 @@ def expand_markers(parsed: dict, all_news: list[dict] | None = None) -> tuple[st
             e = coord_map[marker]
             return f"[{e['lat']}, {e['lon']}](lyra-coord:{e['lat']},{e['lon']})"
 
-        # Videos: «vN» → [▶ channel MM:SS](lyra-video:INDEX) or direct YouTube link
+        # Videos: «vN» → [▶ channel MM:SS](lyra-video:VIDEO_ID:TIMESTAMP)
         if marker in video_map:
             e = video_map[marker]
-            ts = e.get("timestamp_seconds", 0)
+            vid = e.get("video_id", "")
+            ts = e.get("timestamp_seconds", 0) or 0
             ts_label = f" {_format_timestamp(ts)}" if ts else ""
-            # Try to find video in all_news for lyra-video:INDEX
-            idx = news_index.get(e["video_id"])
-            if idx is not None:
-                return f"[▶ {e['channel']}{ts_label}](lyra-video:{idx})"
-            # Fallback: direct YouTube link
-            yt_url = f"https://youtu.be/{e['video_id']}"
-            if ts:
-                yt_url += f"?t={ts}"
-            return f"[▶ {e['channel']}{ts_label}]({yt_url})"
+            if vid:
+                return f"[▶ {e['channel']}{ts_label}](lyra-video:{vid}:{ts})"
+            issues.append(f"Video marker {marker} has no video_id")
+            return f"▶ {e['channel']}{ts_label}"
 
         # Empires: «eN» → [name](empire:polity_id)
         if marker in empire_map:

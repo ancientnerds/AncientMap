@@ -37,6 +37,7 @@ import type { PipelineEvent } from '../types/pipeline'
 import { navigateGlobeToCoords } from '../utils/globeNavigation'
 import { addDiscoveries, getDiscoveryCount } from '../utils/lyraDiscoveries'
 import { notifyAchievements } from './AchievementToast'
+import NewsCard, { newsHighlightToCardProps } from './news/NewsCard'
 
 const LyraProfileModal = lazy(() => import('./LyraProfileModal'))
 
@@ -135,6 +136,9 @@ function lyraUrlTransform(url: string): string {
 function LyraInlineVideo({ news, children }: { news: NewsHighlight; children?: React.ReactNode }) {
   const [expanded, setExpanded] = useState(false)
   const [playing, setPlaying] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const videoId = news.video_id
   const ts = news.timestamp_seconds
@@ -152,15 +156,43 @@ function LyraInlineVideo({ news, children }: { news: NewsHighlight; children?: R
     return `${m}:${String(sec).padStart(2, '0')}`
   }
 
+  const handleMouseEnter = () => {
+    if (leaveTimer.current) { clearTimeout(leaveTimer.current); leaveTimer.current = null }
+    if (!expanded) {
+      hoverTimer.current = setTimeout(() => setShowPreview(true), 300)
+    }
+  }
+  const handleMouseLeave = () => {
+    if (hoverTimer.current) { clearTimeout(hoverTimer.current); hoverTimer.current = null }
+    leaveTimer.current = setTimeout(() => setShowPreview(false), 200)
+  }
+  const handlePreviewEnter = () => {
+    if (leaveTimer.current) { clearTimeout(leaveTimer.current); leaveTimer.current = null }
+  }
+  const handlePreviewLeave = () => {
+    leaveTimer.current = setTimeout(() => setShowPreview(false), 200)
+  }
+
   return (
-    <span className="lyra-inline-video-wrap" style={{ display: 'inline' }}>
+    <span className="lyra-inline-video-wrap">
       <button
         className="lyra-inline-video"
-        onClick={() => setExpanded(!expanded)}
+        onClick={() => { setExpanded(!expanded); setShowPreview(false) }}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
         title={news.headline || `Watch on YouTube`}
       >
         {children}
       </button>
+      {showPreview && !expanded && news.headline && (
+        <div
+          className="lyra-video-preview"
+          onMouseEnter={handlePreviewEnter}
+          onMouseLeave={handlePreviewLeave}
+        >
+          <NewsCard {...newsHighlightToCardProps(news)} size="sm" />
+        </div>
+      )}
       {expanded && (
         <span className="lyra-inline-video-embed" style={{ display: 'block' }}>
           {!playing ? (
@@ -345,7 +377,7 @@ export default function LyraChatModal({
                   if (onFlyToSite) {
                     onFlyToSite([numLon, numLat])
                   } else {
-                    navigateGlobeToCoords(numLat, numLon)
+                    navigateGlobeToCoords(numLat, numLon, true)
                   }
                 }}
               >
@@ -359,19 +391,25 @@ export default function LyraChatModal({
           </span>
         )
       }
-      // Video link: lyra-video:INDEX
+      // Video link: lyra-video:VIDEO_ID:TIMESTAMP
       if (href?.startsWith('lyra-video:')) {
-        const idx = parseInt(href.slice('lyra-video:'.length), 10)
-        const newsItem = sidebarNewsRef.current[idx]
-        if (!newsItem) return <span>{children}</span>
+        const parts = href.slice('lyra-video:'.length).split(':')
+        const videoId = parts[0]
+        const timestamp = parseInt(parts[1] || '0', 10) || 0
+        // Look up by video_id — no index mismatch possible
+        const newsItem = sidebarNewsRef.current.find(n => n.video_id === videoId)
+          ?? { video_id: videoId, headline: '', channel: String(children) || '', timestamp_seconds: timestamp }
         return <LyraInlineVideo news={newsItem}>{children}</LyraInlineVideo>
       }
-      // Empire link: empire:POLITY_ID
+      // Empire link: empire:POLITY_ID — styled badge
       if (href?.startsWith('empire:')) {
         const polityId = href.slice('empire:'.length)
         if (!/^[a-z][a-z0-9_]+$/.test(polityId)) return <span>{children}</span>
         return (
-          <span className="lyra-empire-link" title={`Empire: ${polityId}`}>
+          <span className="lyra-empire-chip" title={polityId}>
+            <svg className="lyra-empire-chip-icon" width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
+            </svg>
             {children}
           </span>
         )

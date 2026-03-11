@@ -42,7 +42,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-API_BASE = os.getenv("TEST_API_BASE", "http://localhost:8000/api/lyra")
+API_BASE = os.getenv("TEST_API_BASE", "https://ancientnerds.com/api/lyra")
 API_SECRET_KEY = os.getenv("API_SECRET_KEY", "")
 LYRA_API_KEY = os.getenv("LYRA_API_KEY", "")
 MERCURY_BASE_URL = os.getenv(

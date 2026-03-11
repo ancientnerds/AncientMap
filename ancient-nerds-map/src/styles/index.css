@@ -14935,6 +14935,11 @@ body.news-feed-open .empire-borders-window {
 
 /* ---- Inline YouTube video links & embeds ---- */
 
+.lyra-inline-video-wrap {
+  position: relative;
+  display: inline;
+}
+
 .lyra-inline-video {
   display: inline-flex;
   align-items: center;
@@ -15024,6 +15029,29 @@ body.news-feed-open .empire-borders-window {
 }
 .lyra-inline-video-external:hover {
   color: rgba(255, 255, 255, 0.7);
+}
+
+/* Video hover preview — NewsCard floating above the link */
+.lyra-video-preview {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 100;
+  min-width: 240px;
+  max-width: 320px;
+  background: rgba(15, 25, 35, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 68, 68, 0.15);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  animation: lyra-preview-in 0.15s ease;
+}
+.lyra-video-preview .news-feed-item {
+  background: transparent;
+  border: none;
+  margin: 0;
 }
 
 /* Message footer (confidence + tokens) */
@@ -15865,6 +15893,26 @@ body.news-feed-open .empire-borders-window {
 @keyframes lyra-preview-in {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* Empire chip — amber badge for historical polities */
+.lyra-empire-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #d4a03c;
+  font-size: inherit;
+  padding: 0 2px;
+  border-bottom: 1px dashed rgba(212, 160, 60, 0.35);
+  transition: color 0.15s;
+}
+.lyra-empire-chip:hover {
+  color: #e8b84a;
+  border-bottom-color: rgba(232, 184, 74, 0.5);
+}
+.lyra-empire-chip-icon {
+  opacity: 0.6;
+  flex-shrink: 0;
 }
 
 

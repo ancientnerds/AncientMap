@@ -1023,6 +1023,11 @@ function AppContent() {
       if (e.data?.type === 'fly-to-coords' && e.data?.lat != null && e.data?.lon != null) {
         setFlyToCoords(null)
         requestAnimationFrame(() => setFlyToCoords([e.data.lon, e.data.lat]))
+        // Activate proximity search around these coordinates
+        if (e.data.activateProximity) {
+          setProximityCenter([e.data.lon, e.data.lat])
+          setSearchWithinProximity(true)
+        }
         return
       }
       if (e.data?.type !== 'focus-site' || !e.data?.siteId) return

@@ -5,6 +5,14 @@ Each tool's results get prepended with instructions telling the LLM
 exactly which guillemet markers to create and how to map fields.
 """
 
+# Shared instruction appended to ALL tool results
+_SHARED_SUFFIX = """
+FORMATTING RULES:
+- Do NOT prefix markers with labels like "Video:", "Link:", "Koordinaten:", "Land:" — markers render as interactive UI elements, labels are redundant.
+- Do NOT create «lN» link markers for videos that already have «vN» markers — the video embed already links to YouTube.
+- Integrate markers naturally into your prose. Example: "Recent excavations at «s0» revealed..." not "Site: «s0»".
+"""
+
 TOOL_RESULT_INSTRUCTIONS: dict[str, str] = {
     "search_sites": """
 INSTRUCTION: Results are archaeological sites. For each site you reference in your text:
@@ -18,7 +26,7 @@ INSTRUCTION: Results are archaeological sites. For each site you reference in yo
 INSTRUCTION: Detailed site data. Create a «sN» marker for this site:
 - Map: marker="sN", name=result.name, id=result.id
 - Create «cN» for coordinates: lat=result.lat, lon=result.lon
-- If result has content_links with YouTube URLs, create «lN» links
+- If result has content_links with YouTube URLs, create «vN» video markers (not «lN»)
 - If result has alternate_names, mention them in text
 - Create «fN» for the country
 - NEVER fabricate URLs or sources not in this result.
@@ -28,7 +36,7 @@ INSTRUCTION: News items from YouTube archaeology channels. For each news item yo
 - Create a «vN» marker and matching videos[] entry. Use DIFFERENT markers for DIFFERENT videos.
 - Map: marker="vN", channel=result.channel, video_id=result.video_id, timestamp_seconds=result.timestamp_seconds (or 0)
 - Each «vN» MUST reference a DIFFERENT video_id. Do NOT create multiple entries for the same video.
-- If a result has a youtube_link field, you may also create «lN» with that URL
+- Do NOT create «lN» links for the same video — the «vN» marker already embeds the video.
 - If result mentions a site_mentioned, create «sN» only if you also have the site's UUID from another tool
 - NEVER fabricate video_ids. Only use video_ids from these results.
 """,
@@ -43,7 +51,7 @@ INSTRUCTION: Seshat historical polity data. Create an «eN» marker:
 INSTRUCTION: Semantic search results. The collection searched determines what markers to create:
 - collection="sites" -> create «sN» with marker, name, id (UUID) from each result
 - collection="news" -> create «vN» with marker, channel, video_id, timestamp_seconds
-- collection="transcripts" -> create «lN» links for YouTube deep-link URLs if present
+- collection="transcripts" -> create «vN» for video references with timestamps
 - collection="articles" -> cite in text, no special marker needed unless an article references a specific site
 - collection="empires" -> create «eN» with marker, name, polity_id
 ALWAYS check which collection was searched and create the appropriate marker type.
@@ -73,7 +81,7 @@ INSTRUCTION: Video transcript excerpts with timestamps. For each transcript pass
 - Create «vN» with the video_id and timestamp from the result
 - Map: marker="vN", channel=result channel, video_id=result video_id, timestamp_seconds=start_seconds
 - Quote relevant text from the passage in your response
-- If result has a YouTube link, you may also create «lN»
+- Do NOT create «lN» links for the same video — the «vN» marker already embeds the video.
 """,
     "search_articles": """
 INSTRUCTION: Weekly digest article passages. For each article passage:
@@ -96,4 +104,4 @@ def wrap_tool_result(tool_name: str, raw_result: str) -> str:
     instruction = TOOL_RESULT_INSTRUCTIONS.get(tool_name, "")
     if not instruction:
         return raw_result
-    return f"{instruction.strip()}\n\nRESULTS:\n{raw_result}"
+    return f"{instruction.strip()}\n{_SHARED_SUFFIX.strip()}\n\nRESULTS:\n{raw_result}"
