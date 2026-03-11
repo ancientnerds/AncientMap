@@ -15246,24 +15246,6 @@ body.news-feed-open .empire-borders-window {
   50% { opacity: 0; }
 }
 
-/* Red fade on last typed element — Matrix-inspired */
-.lyra-chat-msg-text.streaming > :last-child,
-.lyra-chat-msg-text.streaming > ul:last-child > li:last-child,
-.lyra-chat-msg-text.streaming > ol:last-child > li:last-child,
-.lyra-chat-msg-text.streaming > table:last-child tr:last-child td:last-child {
-  animation: lyra-fresh-type 0.8s ease-out forwards;
-}
-
-@keyframes lyra-fresh-type {
-  0% { opacity: 0.7; }
-  100% { opacity: 1; }
-}
-
-/* P4: Class-based glow trigger (avoids forced reflow from JS animation reset) */
-.lyra-typing-glow {
-  animation: lyra-fresh-type 0.8s ease-out forwards;
-}
-
 /* Typing indicator dots */
 .lyra-chat-typing-dots {
   display: flex; gap: 4px; padding: 12px 16px;
@@ -16885,9 +16867,6 @@ body.news-feed-open .empire-borders-window {
   .lyra-chat-msg,
   .lyra-chat-typing-dots span,
   .lyra-status-dot,
-  .lyra-chat-msg-text.streaming > :last-child,
-  .lyra-chat-msg-text.streaming > :last-child::after,
-  .lyra-typing-glow,
   .lyra-chat-search-panel,
   .lyra-chat-history-panel,
   .lyra-chat-thinking-bubble::before,

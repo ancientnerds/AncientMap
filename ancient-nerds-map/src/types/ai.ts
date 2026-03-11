@@ -61,7 +61,6 @@ export interface LyraMessage {
   news?: NewsHighlight[]
   timestamp: Date
   isStreaming?: boolean
-  isDiffusing?: boolean
   confidence?: number | null
   tokens?: { input: number; output: number; voyage?: number }
   discoveries?: { newCount: number; total: number }

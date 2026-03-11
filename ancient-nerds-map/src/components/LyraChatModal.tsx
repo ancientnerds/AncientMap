@@ -205,128 +205,6 @@ function LyraInlineVideo({ news, children }: { news: NewsHighlight; children?: R
   )
 }
 
-/* ---- Typewriter: reveals content char-by-char like fast human typing ---- */
-
-function TypewriterMessage({
-  content,
-  isStreaming,
-  mdComponents,
-}: {
-  content: string
-  isStreaming: boolean
-  mdComponents: React.ComponentProps<typeof ReactMarkdown>['components']
-}) {
-  // For already-complete messages (loaded from history), show everything immediately
-  const prefersReducedMotion = useRef(
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  )
-  const [revealedLen, setRevealedLen] = useState(() =>
-    isStreaming && !prefersReducedMotion.current ? 0 : content.length
-  )
-  const contentRef = useRef(content)
-  const streamingRef = useRef(isStreaming)
-  const revealedRef = useRef(revealedLen)
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  contentRef.current = content
-  streamingRef.current = isStreaming
-
-  useEffect(() => { revealedRef.current = revealedLen }, [revealedLen])
-
-  useEffect(() => {
-    // Already fully revealed (e.g. loaded conversation) — nothing to animate
-    if (prefersReducedMotion.current || (!streamingRef.current && revealedRef.current >= contentRef.current.length)) return
-
-    let running = true
-    let lastTime = 0
-    let nextDelay = 0
-
-    const tick = (now: number) => {
-      if (!running) return
-
-      const cur = contentRef.current
-      const revealed = revealedRef.current
-
-      // Fully done — stop
-      if (!streamingRef.current && revealed >= cur.length) return
-
-      if (!lastTime) lastTime = now
-      const elapsed = now - lastTime
-
-      if (revealed < cur.length && elapsed >= nextDelay) {
-        lastTime = now
-
-        // Adaptive speed: type faster when buffer is large
-        const buffered = cur.length - revealed
-        const speed = buffered > 200 ? 0.25 : buffered > 100 ? 0.4 : buffered > 50 ? 0.6 : 1.0
-
-        // Type 1-4 chars at a time (bursts)
-        const chunk = 1 + Math.floor(Math.random() * 3)
-        const next = Math.min(revealed + chunk, cur.length)
-
-        // Delay based on character — simulate human rhythm
-        const char = cur[revealed] || ''
-        let base: number
-        if (char === '.' || char === '!' || char === '?') {
-          base = 80 + Math.random() * 120 // sentence end — think pause
-        } else if (char === ',' || char === ':' || char === ';') {
-          base = 40 + Math.random() * 60
-        } else if (char === '\n') {
-          base = 50 + Math.random() * 80 // new line — brief pause
-        } else {
-          base = 12 + Math.random() * 20 // fast typing
-        }
-        // Random micro-pauses (~5% chance) to feel human
-        if (Math.random() < 0.05) base += 100 + Math.random() * 150
-        nextDelay = base * speed
-
-        revealedRef.current = next
-        setRevealedLen(next)
-
-        // Re-trigger red fade animation on the last element via class toggle (avoids forced reflow)
-        const el = containerRef.current
-        if (el) {
-          const last = el.querySelector(':scope > :last-child > :last-child')
-            || el.querySelector(':scope > :last-child')
-          if (last instanceof HTMLElement) {
-            last.classList.remove('lyra-typing-glow')
-            // rAF ensures a paint without the class before re-adding (restarts the animation)
-            requestAnimationFrame(() => last.classList.add('lyra-typing-glow'))
-          }
-        }
-      }
-
-      requestAnimationFrame(tick)
-    }
-
-    requestAnimationFrame(tick)
-    return () => { running = false }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Snap to full content when streaming completes (covers reduced-motion skip)
-  useEffect(() => {
-    if (!isStreaming && revealedLen < content.length) {
-      setRevealedLen(content.length)
-    }
-  }, [isStreaming, content.length]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const isTyping = isStreaming
-  const partialContent = isTyping ? content.substring(0, revealedLen) : content
-  // Q2: Only run enrichment (flags, coords, videos) after streaming completes — avoids ~500 redundant regex passes
-  const displayedContent = useMemo(() => {
-    if (isTyping) return partialContent
-    return enrichLyraContent(content)
-  }, [isTyping, partialContent, content])
-
-  return (
-    <div ref={containerRef} className={`lyra-chat-msg-text${isTyping ? ' streaming' : ''}`}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents} urlTransform={lyraUrlTransform}>
-        {displayedContent || '\u200B'}
-      </ReactMarkdown>
-    </div>
-  )
-}
-
 export default function LyraChatModal({
   isOpen,
   onClose,
@@ -810,14 +688,7 @@ export default function LyraChatModal({
                 setLyraStatus(null)
                 setMessages(prev => prev.map(m =>
                   m.id === assistantId
-                    ? { ...m, content: data.content, isDiffusing: true }
-                    : m
-                ))
-              } else if (type === 'token' && data.content) {
-                setLyraStatus(null)
-                setMessages(prev => prev.map(m =>
-                  m.id === assistantId
-                    ? { ...m, content: m.content + data.content }
+                    ? { ...m, content: data.content }
                     : m
                 ))
               } else if (type === 'status' && data.content) {
@@ -1233,19 +1104,11 @@ export default function LyraChatModal({
                             )}
                             <div className="lyra-chat-msg-content">
                               {msg.role === 'assistant' ? (
-                                msg.isDiffusing ? (
-                                  <div className="lyra-chat-msg-text">
-                                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents} urlTransform={lyraUrlTransform}>
-                                      {enrichLyraContent(msg.content)}
-                                    </ReactMarkdown>
-                                  </div>
-                                ) : (
-                                  <TypewriterMessage
-                                    content={msg.content}
-                                    isStreaming={!!msg.isStreaming}
-                                    mdComponents={mdComponents}
-                                  />
-                                )
+                                <div className="lyra-chat-msg-text">
+                                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents} urlTransform={lyraUrlTransform}>
+                                    {enrichLyraContent(msg.content)}
+                                  </ReactMarkdown>
+                                </div>
                               ) : (
                                 <>
                                   <div className="lyra-chat-msg-text">
