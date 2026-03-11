@@ -14980,6 +14980,13 @@ body.news-feed-open .empire-borders-window {
   background: rgba(0, 0, 0, 0.3);
   width: calc(100% + 28px);
 }
+/* When video is expanded, let the message bubble stretch wider */
+.lyra-chat-msg-content:has(.lyra-inline-video-wrap--expanded) {
+  max-width: 100%;
+}
+.lyra-chat-msg-content:has(.lyra-inline-video-wrap--expanded) .lyra-chat-msg-text {
+  border-radius: 4px;
+}
 
 .lyra-inline-video-thumb {
   display: block;
