@@ -120,6 +120,16 @@ function loadAllStored(): StoredConversation[] {
   }
 }
 
+/* ---- Custom URL sanitizer — allow Lyra's custom protocols ---- */
+const ALLOWED_PROTOCOLS = ['http', 'https', 'mailto', 'lyra-video', 'lyra-site', 'lyra-coord', 'site', 'flag', 'empire']
+function lyraUrlTransform(url: string): string {
+  const colonIndex = url.indexOf(':')
+  if (colonIndex === -1) return url
+  const protocol = url.trim().slice(0, colonIndex)
+  if (ALLOWED_PROTOCOLS.includes(protocol.toLowerCase())) return url
+  return ''
+}
+
 /* ---- Inline YouTube video embed (thumbnail → iframe) ---- */
 
 function LyraInlineVideo({ news, children }: { news: NewsHighlight; children?: React.ReactNode }) {
@@ -310,13 +320,7 @@ function TypewriterMessage({
 
   return (
     <div ref={containerRef} className={`lyra-chat-msg-text${isTyping ? ' streaming' : ''}`}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents} urlTransform={(url) => {
-        const colonIndex = url.indexOf(':');
-        if (colonIndex === -1) return url;
-        const protocol = url.trim().slice(0, colonIndex);
-        if (['http', 'https', 'mailto', 'lyra-video', 'lyra-site', 'lyra-coord', 'site', 'flag', 'empire'].includes(protocol.toLowerCase())) return url;
-        return '';
-      }}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents} urlTransform={lyraUrlTransform}>
         {displayedContent || '\u200B'}
       </ReactMarkdown>
     </div>
@@ -1231,7 +1235,7 @@ export default function LyraChatModal({
                               {msg.role === 'assistant' ? (
                                 msg.isDiffusing ? (
                                   <div className="lyra-chat-msg-text">
-                                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents} urlTransform={lyraUrlTransform}>
                                       {enrichLyraContent(msg.content)}
                                     </ReactMarkdown>
                                   </div>
@@ -1321,13 +1325,18 @@ export default function LyraChatModal({
                                     {msg.structuredOutput.videos?.length ? (
                                       <div className="lyra-so-section">
                                         <div className="lyra-so-label">Videos</div>
-                                        {msg.structuredOutput.videos.map((v, i) => (
-                                          <div key={i} className="lyra-so-item">
-                                            <span className="lyra-so-marker">{v.marker}</span>
-                                            <span className="lyra-so-name">{v.channel}</span>
-                                            <span className="lyra-so-id" title={v.video_id}>{v.video_id.slice(0, 8)}</span>
-                                          </div>
-                                        ))}
+                                        {msg.structuredOutput.videos.map((v, i) => {
+                                          const ytUrl = v.timestamp_seconds
+                                            ? `https://www.youtube.com/watch?v=${v.video_id}&t=${v.timestamp_seconds}`
+                                            : `https://www.youtube.com/watch?v=${v.video_id}`
+                                          return (
+                                            <div key={i} className="lyra-so-item">
+                                              <span className="lyra-so-marker">{v.marker}</span>
+                                              <a className="lyra-so-link" href={ytUrl} target="_blank" rel="noopener noreferrer">{v.channel}</a>
+                                              <span className="lyra-so-id" title={v.video_id}>{v.video_id.slice(0, 8)}</span>
+                                            </div>
+                                          )
+                                        })}
                                       </div>
                                     ) : null}
                                     {msg.structuredOutput.empires?.length ? (
