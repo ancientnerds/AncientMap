@@ -892,19 +892,16 @@ async def run_agent_stream(
     # Capture structured output for frontend debug panel
     _structured_output: dict[str, Any] | None = None
 
-    # After this many rounds, stop passing tools so the LLM MUST produce text
-    force_answer_after = 3
-
     for _round in range(max_tool_rounds):
-        # After force_answer_after rounds of tool use, cut off tools and nudge
-        allow_tools = _round < force_answer_after and tool_calls_made < 6
-        if not allow_tools and _round > 0:
+        # Inject round awareness so the LLM knows how many rounds remain
+        if _round >= 2 and tool_calls_made > 0:
+            remaining = max_tool_rounds - _round
             messages.append(
                 SystemMessage(
                     content=(
-                        f"Round {_round + 1}/{max_tool_rounds}: You have already called "
-                        f"{tool_calls_made} tools. You MUST write your final response NOW "
-                        "using the data you already have. Do NOT request any more tools."
+                        f"[Round {_round + 1}/{max_tool_rounds} — {remaining} round(s) left, "
+                        f"{tool_calls_made} tool calls used so far] "
+                        "Answer with what you have unless critical info is still missing."
                     )
                 )
             )
@@ -931,7 +928,7 @@ async def run_agent_stream(
                 try:
                     result = await backend_impl.generate(
                         messages,
-                        tools=TOOLS if (ctx.supports_tools and allow_tools) else None,
+                        tools=TOOLS if ctx.supports_tools else None,
                         response_format=LYRA_RESPONSE_SCHEMA,
                     )
                     break
@@ -1035,7 +1032,7 @@ async def run_agent_stream(
             async for ev in _stream_with_heartbeat(
                 backend_impl,
                 messages,
-                TOOLS if (ctx.supports_tools and allow_tools) else [],
+                TOOLS if ctx.supports_tools else [],
                 enable_thinking=ctx.supports_thinking,
             ):
                 if ev["type"] == "heartbeat":
@@ -1386,6 +1383,7 @@ async def run_agent_stream(
                 except (json.JSONDecodeError, ValueError) as e:
                     logger.warning(f"Forced structured output parse failed: {e}")
                     raw = _forced_result["content"]
+                    _fallback_emitted = False
                     text_match = re.search(r'"text"\s*:\s*"((?:[^"\\]|\\.)*)"', raw)
                     if text_match:
                         fallback = clean_response_text(
@@ -1394,11 +1392,36 @@ async def run_agent_stream(
                         if fallback.strip():
                             async for diff_ev in _simulate_diffusion(fallback):
                                 yield diff_ev
+                            _fallback_emitted = True
                     elif raw.strip():
                         fallback = clean_response_text(raw)
                         if fallback.strip():
                             async for diff_ev in _simulate_diffusion(fallback):
                                 yield diff_ev
+                            _fallback_emitted = True
+                    if not _fallback_emitted:
+                        # Mercury returned empty — try once more without structured output
+                        logger.warning("Forced response was empty — retrying without schema")
+                        try:
+                            result = await backend_impl.generate(messages)
+                            total_input_tokens += result["usage"]["input"]
+                            total_output_tokens += result["usage"]["output"]
+                            fallback = clean_response_text(result["content"])
+                            if fallback.strip():
+                                async for diff_ev in _simulate_diffusion(fallback):
+                                    yield diff_ev
+                                _fallback_emitted = True
+                        except Exception as e2:
+                            logger.error(f"Raw generate fallback also failed: {e2}")
+                        if not _fallback_emitted:
+                            logger.error("All forced response attempts returned empty")
+                            yield {
+                                "type": "error",
+                                "error": (
+                                    "I gathered the data but couldn't form a response. "
+                                    "Please try asking again!"
+                                ),
+                            }
                 except Exception as e:
                     logger.warning(f"Forced generate failed: {e}")
                     # Last resort: raw generate without structured output
