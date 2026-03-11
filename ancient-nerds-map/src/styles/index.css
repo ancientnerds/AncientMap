@@ -14996,6 +14996,9 @@ div.lyra-inline-video-wrap {
   height: 100%;
   object-fit: cover;
   display: block;
+  max-width: none;      /* override .lyra-chat-msg-text img { max-width: 280px } */
+  border: none;         /* override .lyra-chat-msg-text img border */
+  border-radius: 0;     /* override .lyra-chat-msg-text img border-radius */
 }
 .lyra-inline-video-play-overlay {
   position: absolute;
