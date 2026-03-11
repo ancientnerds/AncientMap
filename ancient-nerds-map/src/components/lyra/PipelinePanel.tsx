@@ -66,6 +66,7 @@ interface ToolCallInfo {
   name: string
   args: Record<string, unknown> | null
   resultLen: number | null
+  resultPreview: string | null
   status: PipelineNodeStatus
   duration_ms: number | null
   error: string | null
@@ -89,6 +90,7 @@ function buildRounds(nodes: PipelineNodeInstance[]): RoundInfo[] {
           name: String(n.meta?.tool ?? 'unknown'),
           args: (n.meta?.args as Record<string, unknown>) ?? null,
           resultLen: n.meta?.result_len != null ? Number(n.meta.result_len) : null,
+          resultPreview: n.meta?.result_preview ? String(n.meta.result_preview) : null,
           status: n.status,
           duration_ms: n.duration_ms,
           error: n.meta?.error ? String(n.meta.error) : null,
@@ -459,6 +461,12 @@ export default function PipelinePanel({ trace, isLive, onClose }: PipelinePanelP
                           )}
                           {tool.error && (
                             <span className="lp-tool-error">{'\u2717'} {tool.error}</span>
+                          )}
+                          {tool.resultPreview && (
+                            <details className="lp-tool-preview">
+                              <summary>response</summary>
+                              <pre>{tool.resultPreview}</pre>
+                            </details>
                           )}
                         </div>
                       ))}

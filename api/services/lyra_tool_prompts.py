@@ -11,6 +11,7 @@ FORMATTING RULES:
 - Do NOT prefix markers with labels like "Video:", "Link:", "Koordinaten:", "Land:" — markers render as interactive UI elements, labels are redundant.
 - Do NOT create «lN» link markers for videos that already have «vN» markers — the video embed already links to YouTube.
 - Integrate markers naturally into your prose. Example: "Recent excavations at «s0» revealed..." not "Site: «s0»".
+- IMPORTANT: If you already have enough results to answer the user's question, STOP calling tools and write your response. Do not repeat searches with slightly different queries.
 """
 
 TOOL_RESULT_INSTRUCTIONS: dict[str, str] = {

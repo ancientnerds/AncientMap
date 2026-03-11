@@ -342,12 +342,24 @@ export default function LyraChatModal({
         const numLon = parseFloat(lon)
         return (
           <span className="lyra-inline-coord">
-            <svg className="lyra-inline-coord-pin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="2" y1="12" x2="22" y2="12" />
-              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-            </svg>
-            <span className="lyra-inline-coord-text">{lat}, {lon}</span>
+            <button
+              className="lyra-inline-coord-link"
+              title="Fly to location on globe"
+              onClick={() => {
+                if (onFlyToSite) {
+                  onFlyToSite([numLon, numLat])
+                } else {
+                  navigateGlobeToCoords(numLat, numLon, true)
+                }
+              }}
+            >
+              <svg className="lyra-inline-coord-pin" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="2" y1="12" x2="22" y2="12" />
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+              </svg>
+              <span>{lat}, {lon}</span>
+            </button>
             <button
               className="lyra-inline-coord-copy"
               title="Copy coordinates"
@@ -366,28 +378,6 @@ export default function LyraChatModal({
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </button>
-            {!isNaN(numLat) && !isNaN(numLon) && (
-              <button
-                className="lyra-inline-coord-fly"
-                title="Fly to location on globe"
-                onClick={(e) => {
-                  const textEl = e.currentTarget.parentElement?.querySelector('.lyra-inline-coord-text')
-                  textEl?.classList.add('navigating')
-                  setTimeout(() => textEl?.classList.remove('navigating'), 300)
-                  if (onFlyToSite) {
-                    onFlyToSite([numLon, numLat])
-                  } else {
-                    navigateGlobeToCoords(numLat, numLon, true)
-                  }
-                }}
-              >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="2" y1="12" x2="22" y2="12" />
-                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                </svg>
-              </button>
-            )}
           </span>
         )
       }

@@ -14878,10 +14878,29 @@ body.news-feed-open .empire-borders-window {
 .lyra-inline-coord {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 2px;
   font-size: 12px;
   color: rgba(255, 255, 255, 0.55);
   vertical-align: baseline;
+}
+
+.lyra-inline-coord-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  color: #00d2d2;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0 2px;
+  border-bottom: 1px dashed rgba(0, 210, 210, 0.3);
+  transition: color 0.15s, border-color 0.15s;
+}
+.lyra-inline-coord-link:hover {
+  color: #33e0e0;
+  border-bottom-color: rgba(0, 210, 210, 0.6);
 }
 
 .lyra-inline-coord-pin {
@@ -14889,26 +14908,18 @@ body.news-feed-open .empire-borders-window {
   opacity: 0.5;
 }
 
-.lyra-inline-coord-text {
-  font-family: var(--font-body);
-  font-size: 11px;
-  user-select: all;
-}
-
 .lyra-inline-coord-copy {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 44px;
-  min-height: 44px;
   background: none;
   border: none;
   color: rgba(255, 255, 255, 0.35);
   cursor: pointer;
-  padding: 0;
+  padding: 2px;
   border-radius: 3px;
   opacity: 0.6;
-  transition: color 0.2s ease, background 0.2s ease, opacity 0.2s ease;
+  transition: color 0.2s ease, opacity 0.2s ease;
 }
 
 .lyra-inline-coord-copy:hover {
@@ -15812,31 +15823,6 @@ body.news-feed-open .empire-borders-window {
 }
 .lyra-welcome-prompt-btn:disabled { opacity: 0.5; cursor: default; }
 
-/* ── Coordinate fly-to button ── */
-.lyra-inline-coord-fly {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: none;
-  color: var(--accent-glow-60);
-  cursor: pointer;
-  padding: 2px;
-  margin-left: 2px;
-  border-radius: 3px;
-  transition: color 0.15s, background 0.15s;
-  vertical-align: middle;
-}
-.lyra-inline-coord-fly:hover {
-  color: rgba(0, 210, 210, 1);
-  background: var(--accent-glow-12);
-}
-.lyra-inline-coord-text.navigating {
-  color: var(--accent-glow-100);
-  text-shadow: 0 0 6px var(--accent-glow-40);
-  transition: color 0.15s, text-shadow 0.15s;
-}
-
 /* ── SiteChip: Interactive site reference pill ── */
 .lyra-site-chip-wrap {
   position: relative;
@@ -16254,6 +16240,37 @@ body.news-feed-open .empire-borders-window {
 .lp-tool-result { color: var(--accent-primary); flex-shrink: 0; }
 .lp-tool-time { color: var(--crt-800); flex-shrink: 0; }
 .lp-tool-error { color: var(--status-error-bright); }
+
+/* Tool result preview — collapsed by default */
+.lp-tool-preview {
+  width: 100%;
+  margin-top: 2px;
+  font-size: 10px;
+}
+.lp-tool-preview summary {
+  cursor: pointer;
+  color: var(--crt-700);
+  user-select: none;
+  font-size: 10px;
+  padding: 1px 0;
+}
+.lp-tool-preview summary:hover {
+  color: var(--accent-primary);
+}
+.lp-tool-preview pre {
+  margin: 2px 0 4px;
+  padding: 4px 6px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-crt);
+  border-radius: 4px;
+  font-size: 9px;
+  line-height: 1.4;
+  color: var(--crt-800);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+}
 
 /* Summary footer */
 .lp-summary {

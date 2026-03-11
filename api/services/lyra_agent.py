@@ -1210,12 +1210,19 @@ async def run_agent_stream(
                 except Exception:
                     pass
 
+                # Truncated preview for pipeline debug panel (max 2000 chars)
+                _result_preview = result[:2000] if result else ""
+
                 yield {
                     "type": "pipeline",
                     "stage": "tool_call",
                     "status": "done",
                     "duration_ms": int((time.monotonic() - _t_tool) * 1000),
-                    "meta": {"tool": str(tc["name"]), "result_len": _result_len},
+                    "meta": {
+                        "tool": str(tc["name"]),
+                        "result_len": _result_len,
+                        "result_preview": _result_preview,
+                    },
                 }
 
             except Exception as e:
