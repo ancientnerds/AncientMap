@@ -646,16 +646,10 @@ async def run_agent_stream(
         re.IGNORECASE,
     )
     is_trivial = (
-        not message
-        or len(message.strip()) <= 2
-        or bool(_trivial_re.match(message.strip()))
+        not message or len(message.strip()) <= 2 or bool(_trivial_re.match(message.strip()))
     )
 
-    skip_retrieval = (
-        ctx.model_tier == "trivial"
-        or context_type == "empire"
-        or is_trivial
-    )
+    skip_retrieval = ctx.model_tier == "trivial" or context_type == "empire" or is_trivial
 
     if not skip_retrieval:
         auto_site_results: list[dict] = []
@@ -983,9 +977,7 @@ async def run_agent_stream(
                         or "400" in err_msg
                     )
                     if _attempt < 2 and is_retryable:
-                        logger.warning(
-                            f"Mercury transient error (attempt {_attempt + 1}/3): {exc}"
-                        )
+                        logger.warning(f"Mercury transient error (attempt {_attempt + 1}/3): {exc}")
                         await asyncio.sleep(1.5)
                         continue
                     if is_retryable:
@@ -995,7 +987,10 @@ async def run_agent_stream(
 
             if result is None:
                 logger.error(f"Mercury failed after 3 attempts: {_mercury_last_err}")
-                yield {"type": "error", "error": "Mercury is temporarily unavailable. Please try again."}
+                yield {
+                    "type": "error",
+                    "error": "Mercury is temporarily unavailable. Please try again.",
+                }
                 break
 
             total_input_tokens += result["usage"]["input"]
@@ -1041,7 +1036,18 @@ async def run_agent_stream(
                         # Capture for frontend debug panel (strip raw text to save bandwidth)
                         _so = {k: v for k, v in parsed.items() if k != "text"}
                         # Only include if there's actual structured data
-                        if any(_so.get(k) for k in ("sites", "coords", "videos", "empires", "images", "links", "countries")):
+                        if any(
+                            _so.get(k)
+                            for k in (
+                                "sites",
+                                "coords",
+                                "videos",
+                                "empires",
+                                "images",
+                                "links",
+                                "countries",
+                            )
+                        ):
                             _structured_output = _so
                 except Exception as e:
                     logger.warning(f"Structured output parse failed: {e}")
@@ -1348,16 +1354,17 @@ async def run_agent_stream(
 
             if _forced_result is None:
                 logger.error("All forced generate retries failed")
-                yield {"type": "error", "error": "Mercury is temporarily unavailable. Please try again."}
+                yield {
+                    "type": "error",
+                    "error": "Mercury is temporarily unavailable. Please try again.",
+                }
             else:
                 total_input_tokens += _forced_result["usage"]["input"]
                 total_output_tokens += _forced_result["usage"]["output"]
                 try:
                     parsed = json.loads(_forced_result["content"])
                     if "sites" in parsed:
-                        parsed["sites"] = [
-                            s for s in parsed["sites"] if s.get("id", "").strip()
-                        ]
+                        parsed["sites"] = [s for s in parsed["sites"] if s.get("id", "").strip()]
                     expanded, validation_issues = expand_markers(parsed, all_news)
                     if validation_issues:
                         logger.warning(f"Forced structured output issues: {validation_issues}")
@@ -1365,7 +1372,18 @@ async def run_agent_stream(
                     if expanded.strip():
                         # Capture structured output for frontend
                         _so = {k: v for k, v in parsed.items() if k != "text"}
-                        if any(_so.get(k) for k in ("sites", "coords", "videos", "empires", "images", "links", "countries")):
+                        if any(
+                            _so.get(k)
+                            for k in (
+                                "sites",
+                                "coords",
+                                "videos",
+                                "empires",
+                                "images",
+                                "links",
+                                "countries",
+                            )
+                        ):
                             _structured_output = _so
                         async for diff_ev in _simulate_diffusion(expanded):
                             yield diff_ev

@@ -428,22 +428,34 @@ def check_off_topic_rejected(resp: SSEResponse, **_kw) -> CheckResult:
     """
     problems = []
     # Code fences = answered a coding question
-    if re.search(r"```(?:python|javascript|java|cpp|bash|sql|ruby|go|rust|typescript|sh|c\b)", resp.content):
+    if re.search(
+        r"```(?:python|javascript|java|cpp|bash|sql|ruby|go|rust|typescript|sh|c\b)", resp.content
+    ):
         problems.append("Contains code block")
     # Programming keywords without archaeological context
-    code_patterns = re.findall(r"\b(?:def |import |function |class |var |let |const |return )\b", resp.content)
+    code_patterns = re.findall(
+        r"\b(?:def |import |function |class |var |let |const |return )\b", resp.content
+    )
     if len(code_patterns) >= 2:
         problems.append(f"{len(code_patterns)} code keywords")
     ok = len(problems) == 0
-    return CheckResult("off_topic_rejected", ok, ", ".join(problems) if problems else "Properly declined")
+    return CheckResult(
+        "off_topic_rejected", ok, ", ".join(problems) if problems else "Properly declined"
+    )
 
 
 def check_no_json_leak(resp: SSEResponse, **_kw) -> CheckResult:
     """No references to JSON structure (arrays, fields) should leak into user text."""
     leaks = []
     patterns = [
-        (r"(?:see|in)\s+the\s+(?:links|sites|coords|videos|empires|images|countries)\s+array", "array reference"),
-        (r"(?:links|sites|coords|videos|empires|images|countries)\s+(?:field|property|object)", "field reference"),
+        (
+            r"(?:see|in)\s+the\s+(?:links|sites|coords|videos|empires|images|countries)\s+array",
+            "array reference",
+        ),
+        (
+            r"(?:links|sites|coords|videos|empires|images|countries)\s+(?:field|property|object)",
+            "field reference",
+        ),
         (r'"(?:on_topic|text|sites|coords|videos|empires|images|links|countries)"\s*:', "JSON key"),
     ]
     for pat, label in patterns:
@@ -467,7 +479,9 @@ def check_personality(resp: SSEResponse, **_kw) -> CheckResult:
     ]
     is_bland = any(re.search(p, text) for p in bland_patterns)
     # Should have at least one personality signal (emoji, archaeology reference, exclamation)
-    has_emoji = bool(re.search(r"[\U0001F300-\U0001FAFF\u2600-\u27BF]|🏛|🏺|🗿|⚱|🔍|💀", resp.content))
+    has_emoji = bool(
+        re.search(r"[\U0001F300-\U0001FAFF\u2600-\u27BF]|🏛|🏺|🗿|⚱|🔍|💀", resp.content)
+    )
     has_archaeology = bool(re.search(r"archaeolog|ancient|ruin|civilization|dig|history", text))
     has_energy = "!" in resp.content or "?" in resp.content
 
