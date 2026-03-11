@@ -32,30 +32,8 @@ export function useFlyToAnimation({
       return
     }
 
-    // Handle Three.js globe mode — scene may not be ready on initial page load
-    if (!refs.scene.current) {
-      // Retry until scene is initialized (e.g. globe opened via URL params)
-      const retryId = setInterval(() => {
-        if (refs.scene.current) {
-          clearInterval(retryId)
-          const { camera, controls } = refs.scene.current
-          const currentDist = camera.position.length()
-          const phi = (90 - lat) * Math.PI / 180
-          const theta = (lng + 180) * Math.PI / 180
-          const targetPos = new THREE.Vector3(
-            -Math.sin(phi) * Math.cos(theta),
-            Math.cos(phi),
-            Math.sin(phi) * Math.sin(theta)
-          ).normalize().multiplyScalar(currentDist)
-          camera.position.copy(targetPos)
-          camera.lookAt(0, 0, 0)
-          controls.update()
-        }
-      }, 100)
-      // Give up after 5 seconds
-      setTimeout(() => clearInterval(retryId), 5000)
-      return () => clearInterval(retryId)
-    }
+    // Handle Three.js globe mode
+    if (!refs.scene.current) return
 
     const { camera, controls } = refs.scene.current
 

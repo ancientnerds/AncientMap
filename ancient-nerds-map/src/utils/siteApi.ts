@@ -14,6 +14,7 @@ export interface ApiSiteDetail {
   country?: string
   description?: string
   cardDescription?: string
+  thumbnailUrl?: string
   sourceUrl?: string
   bestWikiUrl?: string
   sourceLanguage?: string
@@ -42,6 +43,7 @@ export function apiDetailToSiteData(detail: ApiSiteDetail): SiteData {
     location: detail.country || '',
     description: detail.description || '',
     cardDescription: detail.cardDescription,
+    image: detail.thumbnailUrl || undefined,
     sourceId: detail.sourceId || 'unknown',
     sourceUrl: detail.sourceUrl,
     bestWikiUrl: detail.bestWikiUrl,

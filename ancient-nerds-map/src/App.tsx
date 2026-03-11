@@ -1734,7 +1734,7 @@ function AppContent() {
         }}
         onProximitySet={handleProximitySet}
         onProximityHover={handleProximityHover}
-        initialPosition={userLocation}
+        initialPosition={initialNav?.coords ?? userLocation}
         onLayersReady={() => {
           updateLoadingStatus('Map layers ready!')
           setLayersReady(true)
@@ -2074,6 +2074,7 @@ function AppContent() {
             setTimeout(() => setFlyToCoords(coords), 10)
           }}
           onOpenSitePopup={openSitePopup}
+          onOpenEmpirePopup={openEmpirePopup}
         />
       </Suspense></LazyErrorBoundary>
     </>

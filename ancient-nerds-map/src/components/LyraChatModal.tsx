@@ -50,6 +50,7 @@ interface Props {
   onHighlightSites?: (siteIds: string[]) => void
   onFlyToSite?: (coords: [number, number]) => void
   onOpenSitePopup?: (site: SiteData) => void
+  onOpenEmpirePopup?: (empireId: string) => void
   mode?: 'modal' | 'page'
 }
 
@@ -246,6 +247,7 @@ export default function LyraChatModal({
   onHighlightSites,
   onFlyToSite,
   onOpenSitePopup,
+  onOpenEmpirePopup,
   mode = 'modal',
 }: Props) {
   const [messages, setMessages] = useState<LyraMessage[]>([])
@@ -391,17 +393,21 @@ export default function LyraChatModal({
           ?? { video_id: videoId, headline: '', channel: String(children) || '', timestamp_seconds: timestamp }
         return <LyraInlineVideo news={newsItem}>{children}</LyraInlineVideo>
       }
-      // Empire link: empire:POLITY_ID — styled badge
+      // Empire link: empire:POLITY_ID — clickable badge that opens empire popup
       if (href?.startsWith('empire:')) {
         const polityId = href.slice('empire:'.length)
         if (!/^[a-z][a-z0-9_]+$/.test(polityId)) return <span>{children}</span>
         return (
-          <span className="lyra-empire-chip" title={polityId}>
+          <button
+            className="lyra-empire-chip"
+            title={`View ${polityId}`}
+            onClick={() => onOpenEmpirePopup?.(polityId)}
+          >
             <svg className="lyra-empire-chip-icon" width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
             </svg>
             {children}
-          </span>
+          </button>
         )
       }
       // Normal link
@@ -419,7 +425,7 @@ export default function LyraChatModal({
         />
       )
     },
-  }), [onHighlightSites, onFlyToSite, onOpenSitePopup, onClose]) // sidebarNews accessed via ref — no re-render on news events
+  }), [onHighlightSites, onFlyToSite, onOpenSitePopup, onOpenEmpirePopup, onClose]) // sidebarNews accessed via ref — no re-render on news events
 
   // Auto-scroll: only if user hasn't scrolled up
   const lastMsg = messages[messages.length - 1]
