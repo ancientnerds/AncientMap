@@ -32,7 +32,6 @@ from sqlalchemy import text
 
 from api.services.lyra_backends import get_backend
 from api.services.lyra_prompts import (
-    LYRA_PERSONALITY_PROMPT,
     LYRA_SYSTEM_PROMPT,
     _build_context_prompt,
 )
@@ -466,73 +465,6 @@ async def _extract_news_filters(query: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Intent classification (LLM-powered)
-# ---------------------------------------------------------------------------
-
-
-class IntentClassification(BaseModel):
-    """Whether a message is a substantive archaeology question."""
-
-    substantive: bool
-
-
-_intent_llm = None
-
-
-def _get_intent_llm():
-    """Get a cached structured LLM for intent classification."""
-    global _intent_llm
-    if _intent_llm is None:
-        from langchain_openai import ChatOpenAI
-
-        api_key = os.getenv("LYRA_API_KEY") or os.getenv("LYRA_ANTHROPIC_API_KEY")
-        base_url = os.getenv("LYRA_BASE_URL") or os.getenv(
-            "LYRA_ANTHROPIC_BASE_URL", "https://api.inceptionlabs.ai/v1"
-        )
-        _intent_llm = ChatOpenAI(
-            model=LLM_MODEL,
-            max_tokens=128,
-            temperature=0.0,
-            api_key=api_key,
-            base_url=base_url,
-        ).with_structured_output(IntentClassification)
-    return _intent_llm
-
-
-_INTENT_PROMPT = (
-    "You are classifying messages for an archaeology news app. "
-    "Set substantive=true if the message asks about archaeology, a specific site, "
-    "civilization, artifact, period, historical topic, OR requests news/updates/discoveries "
-    "(e.g. 'what's new', 'latest news', 'was gibts neues', 'any updates'). "
-    "Set substantive=false ONLY for: greetings (hi, hello, hallo, bonjour, ciao, etc.), "
-    "reactions (cool, wow, thanks, ok, lol), meta-questions (who are you, what can you do), "
-    "or clearly off-topic messages. When in doubt, set substantive=true. "
-    "The message may be in any language."
-)
-
-
-async def _classify_intent(message: str) -> bool:
-    """Classify user intent via LLM. Returns True if trivial."""
-    llm = _get_intent_llm()
-    try:
-        result = await llm.ainvoke(
-            [
-                SystemMessage(content=_INTENT_PROMPT),
-                HumanMessage(content=message),
-            ]
-        )
-        raw = result if isinstance(result, dict) else result.model_dump()
-        is_trivial = not raw.get("substantive", True)
-        logger.info(
-            f"Intent classification: {'trivial' if is_trivial else 'substantive'} for {message!r}"
-        )
-        return is_trivial
-    except Exception:
-        logger.warning(f"Intent classification failed for: {message!r}, defaulting to substantive")
-        return False  # Safe default: treat as substantive
-
-
-# ---------------------------------------------------------------------------
 # Tool call accumulation helper (shared by all backends)
 # ---------------------------------------------------------------------------
 
@@ -582,8 +514,6 @@ def _build_messages(
         system_text = (
             system_prompt + "\n\n" + retrieved_context if retrieved_context else system_prompt
         )
-    elif model_tier == "trivial":
-        system_text = LYRA_PERSONALITY_PROMPT
     else:
         # Empire context goes AFTER retrieved context so it takes precedence over noisy results
         context_prompt = _build_context_prompt(context_type, context_id, context_year)
@@ -705,26 +635,16 @@ async def run_agent_stream(
         },
     }
 
-    # Always run classification + retrieval in parallel — the LLM classifier decides
-    # trivial vs substantive, not word count.  If trivial, retrieval results are
-    # discarded (costs a Voyage call but adds zero latency since it runs in parallel).
-    skip_retrieval = ctx.model_tier == "trivial" or context_type == "empire"
-    is_trivial = not message or len(message.strip()) <= 2  # provisional; refined by classifier
+    # Empire context: skip retrieval (empire data comes from tools/context builder)
+    skip_retrieval = context_type == "empire"
 
     if not skip_retrieval:
         auto_site_results: list[dict] = []
         auto_news_results: list[dict] = []
 
-        # Run intent classification + retrieval + filter extraction in parallel — zero added latency
+        # Run retrieval + filter extraction in parallel — zero added latency
         use_filter_extraction = ctx.backend_type != "local"
 
-        yield {
-            "type": "pipeline",
-            "stage": "classify_intent",
-            "status": "start",
-            "duration_ms": None,
-            "meta": None,
-        }
         yield {
             "type": "pipeline",
             "stage": "auto_retrieve",
@@ -742,35 +662,16 @@ async def run_agent_stream(
             }
         _t_phase1 = time.monotonic()
 
-        intent_task = _classify_intent(message)
         auto_task = asyncio.to_thread(_auto_retrieve, message, context_type)
         if use_filter_extraction:
             filter_task = _extract_news_filters(message)
-            auto_result_or_exc, filters_or_exc, intent_or_exc = await asyncio.gather(
-                auto_task, filter_task, intent_task, return_exceptions=True
+            auto_result_or_exc, filters_or_exc = await asyncio.gather(
+                auto_task, filter_task, return_exceptions=True
             )
         else:
-            auto_result_or_exc, intent_or_exc = await asyncio.gather(
-                auto_task, intent_task, return_exceptions=True
-            )
+            (auto_result_or_exc,) = await asyncio.gather(auto_task, return_exceptions=True)
             filters_or_exc = {}  # No filter extraction for local backend
         _phase1_ms = int((time.monotonic() - _t_phase1) * 1000)
-
-        # Extract classification result (default to substantive on failure)
-        if isinstance(intent_or_exc, bool):
-            is_trivial = intent_or_exc
-        elif isinstance(intent_or_exc, BaseException):
-            logger.warning(f"Intent classification failed in parallel: {intent_or_exc}")
-            is_trivial = False
-        else:
-            is_trivial = bool(intent_or_exc)
-        yield {
-            "type": "pipeline",
-            "stage": "classify_intent",
-            "status": "done",
-            "duration_ms": _phase1_ms,
-            "meta": {"result": "trivial" if is_trivial else "substantive"},
-        }
 
         news_filters: dict = {}
         if isinstance(auto_result_or_exc, BaseException):
@@ -826,12 +727,6 @@ async def run_agent_stream(
                 "duration_ms": None,
                 "meta": {"reason": "local backend"},
             }
-
-        # If classifier says trivial, discard retrieval results
-        if is_trivial:
-            retrieved_context = ""
-            auto_site_results = []
-            auto_news_results = []
 
         # Extract sites from auto-retrieved results for map highlighting
         # Only include sites with relevance above threshold to avoid irrelevant results
@@ -924,117 +819,14 @@ async def run_agent_stream(
                 news_lines.append(line)
             retrieved_context += "\n\n### Related News\n" + "\n".join(news_lines) + "\n"
     else:
-        # Empire context or pre-classified trivial — classify intent only (no retrieval)
-        if (
-            message
-            and len(message.strip()) > 2
-            and ctx.model_tier != "trivial"
-            and context_type != "empire"
-        ):
-            yield {
-                "type": "pipeline",
-                "stage": "classify_intent",
-                "status": "start",
-                "duration_ms": None,
-                "meta": None,
-            }
-            _t_intent = time.monotonic()
-            is_trivial = await _classify_intent(message)
-            _intent_ms = int((time.monotonic() - _t_intent) * 1000)
-            yield {
-                "type": "pipeline",
-                "stage": "classify_intent",
-                "status": "done",
-                "duration_ms": _intent_ms,
-                "meta": {"result": "trivial" if is_trivial else "substantive"},
-            }
-            if not is_trivial:
-                # Classifier says substantive despite short message — run retrieval now
-                yield {
-                    "type": "pipeline",
-                    "stage": "auto_retrieve",
-                    "status": "start",
-                    "duration_ms": None,
-                    "meta": None,
-                }
-                _t_late = time.monotonic()
-                try:
-                    (
-                        retrieved_context,
-                        auto_sr,
-                        auto_nr,
-                        avg_relevance,
-                        vt,
-                    ) = await asyncio.to_thread(_auto_retrieve, message, context_type)
-                    total_voyage_tokens += vt
-                    # Extract sites for map highlighting
-                    SITE_RELEVANCE_THRESHOLD = 0.3
-                    for s in auto_sr:
-                        if (
-                            s.get("lat")
-                            and s.get("lon")
-                            and s.get("relevance", 0) >= SITE_RELEVANCE_THRESHOLD
-                        ):
-                            all_sites.append(
-                                {
-                                    "id": s.get("id", ""),
-                                    "name": s.get("name", ""),
-                                    "lat": s["lat"],
-                                    "lon": s["lon"],
-                                    "site_type": s.get("site_type"),
-                                    "period_name": s.get("period_name"),
-                                    "country": s.get("country"),
-                                    "thumbnail_url": s.get("thumbnail_url"),
-                                }
-                            )
-                    for r in auto_nr:
-                        all_news.append(
-                            {
-                                "headline": r.get("headline", ""),
-                                "summary": r.get("summary"),
-                                "channel": r.get("channel", ""),
-                                "video_id": r.get("video_id", ""),
-                                "video_title": None,
-                                "category": r.get("category"),
-                                "significance": r.get("significance"),
-                                "date": str(r["date"]) if r.get("date") else None,
-                                "site_name": r.get("site_mentioned"),
-                                "timestamp_seconds": r.get("timestamp_seconds"),
-                                "source": "qdrant",
-                            }
-                        )
-                    yield {
-                        "type": "pipeline",
-                        "stage": "auto_retrieve",
-                        "status": "done",
-                        "duration_ms": int((time.monotonic() - _t_late) * 1000),
-                        "meta": {
-                            "sites_count": len(auto_sr),
-                            "news_count": len(auto_nr),
-                            "voyage_tokens": vt,
-                        },
-                    }
-                except Exception as e:
-                    logger.error(f"Late retrieval failed: {e}")
-                    yield {
-                        "type": "pipeline",
-                        "stage": "auto_retrieve",
-                        "status": "error",
-                        "duration_ms": int((time.monotonic() - _t_late) * 1000),
-                        "meta": None,
-                    }
-        else:
-            is_trivial = ctx.model_tier == "trivial" or (not message or len(message.strip()) <= 2)
-
-        # Emit skip events for phases we didn't run
-        if is_trivial or context_type == "empire" or ctx.model_tier == "trivial":
-            yield {
-                "type": "pipeline",
-                "stage": "auto_retrieve",
-                "status": "skip",
-                "duration_ms": None,
-                "meta": None,
-            }
+        # Empire context — skip retrieval, filter extraction, and news augmentation
+        yield {
+            "type": "pipeline",
+            "stage": "auto_retrieve",
+            "status": "skip",
+            "duration_ms": None,
+            "meta": None,
+        }
         yield {
             "type": "pipeline",
             "stage": "filter_extraction",
@@ -1051,9 +843,6 @@ async def run_agent_stream(
         }
 
     _t_ctx = time.monotonic()
-    # Use personality prompt (model_tier="trivial") for trivial queries so
-    # Mercury generates free-text with full character, not JSON schema.
-    _effective_tier = "trivial" if is_trivial else ctx.model_tier
     messages = _build_messages(
         message,
         images,
@@ -1062,7 +851,7 @@ async def run_agent_stream(
         context_id,
         context_year,
         retrieved_context,
-        model_tier=_effective_tier,
+        model_tier=ctx.model_tier,
         system_prompt=system_prompt,
     )
     yield {
@@ -1091,53 +880,11 @@ async def run_agent_stream(
 
     tool_calls_made = 0
     max_tool_rounds = 5
-
-    # Trivial queries: skip structured output and tools entirely.
-    # Mercury's structured JSON schema kills personality for greetings.
-    if is_trivial and ctx.backend_type == "mercury":
-        yield {
-            "type": "pipeline",
-            "stage": "llm_round",
-            "status": "start",
-            "duration_ms": None,
-            "meta": {"round": 1},
-        }
-        _t_trivial = time.monotonic()
-        try:
-            result = await backend_impl.generate(messages)
-            total_input_tokens += result["usage"]["input"]
-            total_output_tokens += result["usage"]["output"]
-            content = clean_response_text(result["content"])
-            if content.strip():
-                async for diff_ev in _simulate_diffusion(content):
-                    yield diff_ev
-            else:
-                # Empty trivial response — use a default greeting
-                async for diff_ev in _simulate_diffusion(
-                    "🏛️ Hey! Ready to dig into some ancient history? What era or site are you curious about?"
-                ):
-                    yield diff_ev
-        except Exception as e:
-            logger.warning(f"Trivial generate failed: {e}")
-            async for diff_ev in _simulate_diffusion(
-                "🏛️ Hey! Ready to dig into some ancient history? What era or site are you curious about?"
-            ):
-                yield diff_ev
-        _round_ms = int((time.monotonic() - _t_trivial) * 1000)
-        yield {
-            "type": "pipeline",
-            "stage": "llm_round",
-            "status": "done",
-            "duration_ms": _round_ms,
-            "meta": {"tokens": total_input_tokens + total_output_tokens},
-        }
-        # Skip the tool loop entirely — jump to done
-    # Initialize tool_calls for the post-loop check (may be skipped for trivial)
     tool_calls: list[dict[str, str | int | None]] = []
     # Capture structured output for frontend debug panel
     _structured_output: dict[str, Any] | None = None
 
-    for _round in range(max_tool_rounds if not is_trivial else 0):
+    for _round in range(max_tool_rounds):
         yield {
             "type": "pipeline",
             "stage": "llm_round",
