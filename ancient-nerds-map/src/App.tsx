@@ -102,11 +102,11 @@ function getFocusSiteId(): string | null {
 }
 
 // Check for coordinate fly-to (opened via ?lat=&lon= from Lyra coord links)
-function getInitialCoords(): [number, number] | null {
+function getInitialCoords(): { coords: [number, number]; proximity: boolean } | null {
   const urlParams = new URLSearchParams(window.location.search)
   const lat = parseFloat(urlParams.get('lat') || '')
   const lon = parseFloat(urlParams.get('lon') || '')
-  if (!isNaN(lat) && !isNaN(lon)) return [lon, lat]
+  if (!isNaN(lat) && !isNaN(lon)) return { coords: [lon, lat], proximity: urlParams.get('proximity') === '1' }
   return null
 }
 
@@ -145,7 +145,7 @@ function AppContent() {
   const [standaloneSiteId] = useState(() => getStandaloneSiteId())
   // Focus mode: warp directly to site (from ?focus=)
   const [focusSiteId] = useState(() => getFocusSiteId())
-  const [initialCoords] = useState(() => getInitialCoords())
+  const [initialNav] = useState(() => getInitialCoords())
   const initialCoordsHandledRef = useRef(false)
   const focusHandledRef = useRef(false)
 
@@ -1008,13 +1008,17 @@ function AppContent() {
     setListFrozenSiteIds([site.id])
   }, [focusSiteId, sites, setSearchQuery])
 
-  // Coordinate fly-to from URL params (?lat=&lon=)
+  // Coordinate fly-to from URL params (?lat=&lon=&proximity=1)
   useEffect(() => {
-    if (!initialCoords || initialCoordsHandledRef.current) return
+    if (!initialNav || initialCoordsHandledRef.current) return
     initialCoordsHandledRef.current = true
     setFlyToCoords(null)
-    requestAnimationFrame(() => setFlyToCoords(initialCoords))
-  }, [initialCoords])
+    requestAnimationFrame(() => setFlyToCoords(initialNav.coords))
+    if (initialNav.proximity) {
+      setProximityCenter(initialNav.coords)
+      setSearchWithinProximity(true)
+    }
+  }, [initialNav])
 
   // Listen for postMessage from search page / Lyra — switch site or fly to coords
   useEffect(() => {

@@ -14950,6 +14950,9 @@ body.news-feed-open .empire-borders-window {
   position: relative;
   display: inline;
 }
+.lyra-inline-video-wrap.lyra-inline-video-wrap--expanded {
+  display: block;
+}
 
 .lyra-inline-video {
   display: inline-flex;
@@ -15854,20 +15857,17 @@ body.news-feed-open .empire-borders-window {
   flex-shrink: 0;
 }
 
-/* SiteChip hover preview — floating card */
+/* SiteChip hover preview — full SiteCard with hero image */
 .lyra-site-preview {
   position: absolute;
   bottom: calc(100% + 8px);
   left: 0;
   z-index: 100;
-  min-width: 220px;
-  max-width: 300px;
-  background: rgba(15, 25, 35, 0.95);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  width: 280px;
+  background: var(--surface-deep);
   border: 1px solid var(--accent-glow-10);
   border-radius: 10px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
   overflow: hidden;
   animation: lyra-preview-in 0.15s ease;
 }
@@ -15875,6 +15875,10 @@ body.news-feed-open .empire-borders-window {
   background: transparent;
   border: none;
   margin: 0;
+}
+.lyra-site-preview .site-card:hover {
+  transform: none;
+  box-shadow: none;
 }
 @keyframes lyra-preview-in {
   from { opacity: 0; transform: translateY(4px); }

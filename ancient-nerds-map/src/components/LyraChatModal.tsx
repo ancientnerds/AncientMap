@@ -174,7 +174,7 @@ function LyraInlineVideo({ news, children }: { news: NewsHighlight; children?: R
   }
 
   return (
-    <span className="lyra-inline-video-wrap">
+    <span className={`lyra-inline-video-wrap${expanded ? ' lyra-inline-video-wrap--expanded' : ''}`}>
       <button
         className="lyra-inline-video"
         onClick={() => { setExpanded(!expanded); setShowPreview(false) }}

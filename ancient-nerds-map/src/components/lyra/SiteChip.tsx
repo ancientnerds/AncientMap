@@ -86,7 +86,6 @@ export default function SiteChip({ siteId, children, onOpenPopup, onFlyTo, onHig
         >
           <SiteCard
             site={preview}
-            compact
             onClick={handleClick}
           />
         </div>
