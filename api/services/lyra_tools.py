@@ -283,8 +283,10 @@ def search_news(
         params["channel"] = f"%{channel}%"
 
     where = " AND ".join(conditions)
+    # DISTINCT ON video_id ensures at most 1 result per video (most significant item)
     sql = f"""
-        SELECT ni.id, ni.headline, ni.summary, ni.significance, ni.news_category,
+        SELECT DISTINCT ON (nv.id)
+               ni.id, ni.headline, ni.summary, ni.significance, ni.news_category,
                ni.timestamp_seconds, ni.site_name_extracted,
                nv.id AS video_id, nv.title AS video_title,
                nc.name AS channel_name,
@@ -295,7 +297,12 @@ def search_news(
         JOIN news_channels nc ON nv.channel_id = nc.id
         LEFT JOIN unified_sites us ON ni.site_id = us.id
         WHERE {where}
-        ORDER BY ni.created_at DESC
+        ORDER BY nv.id, ni.significance DESC NULLS LAST, ni.created_at DESC
+    """
+    # Wrap to apply the final ordering and limit after dedup
+    sql = f"""
+        SELECT * FROM ({sql}) deduped
+        ORDER BY created_at DESC
         LIMIT :limit
     """
 

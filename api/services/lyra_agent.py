@@ -315,8 +315,10 @@ def _get_related_news(
     where_clause = " AND ".join(conditions)
     params["lim"] = limit
 
-    sql = f"""
-        SELECT ni.id, ni.headline, ni.summary, ni.video_id, ni.timestamp_seconds,
+    # DISTINCT ON video_id ensures at most 1 result per video (most significant item)
+    inner_sql = f"""
+        SELECT DISTINCT ON (ni.video_id)
+               ni.id, ni.headline, ni.summary, ni.video_id, ni.timestamp_seconds,
                ni.news_category, ni.significance, ni.created_at,
                ni.post_text, ni.screenshot_url, ni.site_name_extracted, ni.site_id, ni.facts,
                nv.title AS video_title, nc.name AS channel,
@@ -328,7 +330,11 @@ def _get_related_news(
         JOIN news_channels nc ON nv.channel_id = nc.id
         LEFT JOIN unified_sites us ON ni.site_id = us.id
         WHERE {where_clause}
-        ORDER BY ni.significance DESC NULLS LAST, ni.created_at DESC
+        ORDER BY ni.video_id, ni.significance DESC NULLS LAST, ni.created_at DESC
+    """
+    sql = f"""
+        SELECT * FROM ({inner_sql}) deduped
+        ORDER BY significance DESC NULLS LAST, created_at DESC
         LIMIT :lim
     """
     with get_session() as session:
