@@ -14964,7 +14964,7 @@ body.news-feed-open .empire-borders-window {
   border-radius: 8px;
   overflow: hidden;
   background: rgba(0, 0, 0, 0.3);
-  max-width: 480px;
+  width: 100%;
 }
 
 .lyra-inline-video-thumb {
