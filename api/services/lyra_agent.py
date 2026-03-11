@@ -500,11 +500,14 @@ def _get_intent_llm():
 
 
 _INTENT_PROMPT = (
-    "Classify the user's message. Set substantive=true ONLY if it asks about "
-    "archaeology, a specific site, civilization, artifact, period, or historical topic. "
-    "Set substantive=false for: greetings (hi, hello, hallo, bonjour, ciao, etc.), "
+    "You are classifying messages for an archaeology news app. "
+    "Set substantive=true if the message asks about archaeology, a specific site, "
+    "civilization, artifact, period, historical topic, OR requests news/updates/discoveries "
+    "(e.g. 'what's new', 'latest news', 'was gibts neues', 'any updates'). "
+    "Set substantive=false ONLY for: greetings (hi, hello, hallo, bonjour, ciao, etc.), "
     "reactions (cool, wow, thanks, ok, lol), meta-questions (who are you, what can you do), "
-    "or off-topic messages. The message may be in any language."
+    "or clearly off-topic messages. When in doubt, set substantive=true. "
+    "The message may be in any language."
 )
 
 
@@ -703,10 +706,11 @@ async def run_agent_stream(
     }
 
     # Intent classification replaces regex-based trivial detection.
-    # For short messages (<=3 words), skip retrieval as optimization (likely trivial).
-    # For longer messages, run classification + retrieval in parallel (zero added latency).
+    # For single-word messages, skip retrieval (likely trivial: "hi", "thanks").
+    # For 2+ words, run classification + retrieval in parallel (zero added latency).
+    # Previously <=3 words, but that caught substantive queries like "was gibts neues".
     _msg_words = len(message.strip().split()) if message else 0
-    skip_retrieval = ctx.model_tier == "trivial" or context_type == "empire" or _msg_words <= 3
+    skip_retrieval = ctx.model_tier == "trivial" or context_type == "empire" or _msg_words <= 1
     is_trivial = not message or len(message.strip()) <= 2  # provisional; refined by classifier
 
     if not skip_retrieval:
