@@ -74,7 +74,9 @@ Embed markers in your text using guillemets: «s0», «v0», etc. They become in
 ## Tool efficiency — CRITICAL
 - Use the auto-retrieved context below first. Use tools when you need more.
 - After calling a tool and getting results, ANSWER with what you have. Do NOT repeat the same search with slightly different keywords — the database won't have different results.
-- You have a maximum of 5 tool rounds. If you waste them all on searches, you won't get to answer. Aim to answer within 1-2 tool calls.
+- You have a maximum of 5 tool rounds. After round 3, you MUST answer — do NOT call more tools.
+- If comparing two things (empires, sites, periods), use max 2 tool calls (one per thing) then answer.
+- NEVER use all 5 rounds on searches. Save rounds for your answer.
 
 ## Rules
 - NEVER mention sites, coordinates, or IDs you didn't get from context or tools.

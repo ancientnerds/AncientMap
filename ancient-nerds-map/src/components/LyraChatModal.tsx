@@ -149,7 +149,12 @@ function LyraInlineVideo({ news, children }: { news: NewsHighlight; children?: R
   const embedUrl = ts != null
     ? `https://www.youtube.com/embed/${videoId}?start=${ts}&autoplay=1`
     : `https://www.youtube.com/embed/${videoId}?autoplay=1`
-  const thumbUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
+  // Use maxresdefault (1280x720, true 16:9) with fallback to mqdefault (320x180, true 16:9)
+  // Never use hqdefault — it's 480x360 (4:3) with black letterbox bars
+  const [thumbFailed, setThumbFailed] = useState(false)
+  const thumbUrl = thumbFailed
+    ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
+    : `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
 
   const formatTs = (s: number) => {
     const m = Math.floor(s / 60)
@@ -204,7 +209,7 @@ function LyraInlineVideo({ news, children }: { news: NewsHighlight; children?: R
               tabIndex={0}
               onKeyDown={(e) => { if (e.key === 'Enter') setPlaying(true) }}
             >
-              <img src={thumbUrl} alt={news.headline || 'Video thumbnail'} />
+              <img src={thumbUrl} alt={news.headline || 'Video thumbnail'} onError={() => { if (!thumbFailed) setThumbFailed(true) }} />
               <span className="lyra-inline-video-play-overlay">
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="white">
                   <path d="M8 5v14l11-7z"/>

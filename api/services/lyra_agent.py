@@ -1285,6 +1285,24 @@ async def run_agent_stream(
     # do one more LLM call with tools disabled to force a text answer.
     if tool_calls:
         logger.info("Max tool rounds reached — forcing final text response")
+        # Inject a system nudge so the LLM knows it MUST answer now
+        messages.append(
+            SystemMessage(
+                content=(
+                    "You have used all available tool rounds. You MUST write your response NOW "
+                    "using the data you already have. Do NOT request any more tools. Synthesize "
+                    "the information from your previous tool results into a complete answer."
+                )
+            )
+        )
+        yield {
+            "type": "pipeline",
+            "stage": "llm_round",
+            "status": "start",
+            "duration_ms": None,
+            "meta": {"round": max_tool_rounds + 1, "forced": True},
+        }
+        _t_forced = time.monotonic()
         if ctx.backend_type == "mercury":
             # Retry up to 2 times for transient Mercury errors
             _forced_result: dict[str, Any] | None = None
@@ -1394,6 +1412,18 @@ async def run_agent_stream(
                 elif ev["type"] == "usage":
                     total_input_tokens += ev["input"]
                     total_output_tokens += ev["output"]
+
+        yield {
+            "type": "pipeline",
+            "stage": "llm_round",
+            "status": "done",
+            "duration_ms": int((time.monotonic() - _t_forced) * 1000),
+            "meta": {
+                "round": max_tool_rounds + 1,
+                "has_tools": False,
+                "forced": True,
+            },
+        }
 
     # Collect distinct metadata for gamification achievement checks
     site_ids_found = list({s["id"] for s in all_sites if s.get("id")})
