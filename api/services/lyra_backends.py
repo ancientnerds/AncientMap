@@ -277,9 +277,9 @@ class MercuryBackend:
     def _get_client(self):
         from openai import AsyncOpenAI
 
-        from pipeline.lyra.config import get_current_api_key
+        from pipeline.lyra.config import get_main_api_key
 
-        current_key = get_current_api_key()
+        current_key = get_main_api_key()
         if self._client is None or self._client_key != current_key:
             self._client = AsyncOpenAI(
                 base_url=self.base_url,
@@ -543,9 +543,9 @@ def get_backend(
             )
             logger.info(f"Created OllamaBackend for {model_name} at {url}")
         else:
-            from pipeline.lyra.config import get_current_api_key, get_max_tokens
+            from pipeline.lyra.config import get_main_api_key, get_max_tokens
 
-            api_key = get_current_api_key()
+            api_key = get_main_api_key()
             mercury_url = os.getenv("LYRA_BASE_URL", "") or os.getenv(
                 "LYRA_ANTHROPIC_BASE_URL", "https://api.inceptionlabs.ai/v1"
             )

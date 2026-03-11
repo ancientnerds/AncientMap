@@ -241,9 +241,18 @@ _key_pool = _KeyPool()
 
 
 def get_current_api_key() -> str:
-    """Return the current API key from the pool (for use by chat backends)."""
+    """Return the current API key from the pool (for background/pipeline tasks)."""
     _key_pool._init(_get_settings())
     return _key_pool.current_key
+
+
+def get_main_api_key() -> str:
+    """Return the main (paid) API key directly, bypassing the free key pool.
+
+    Use this for user-facing chat to avoid rate limits from free keys.
+    """
+    _key_pool._init(_get_settings())
+    return _key_pool._main_key
 
 
 def mark_api_key_exhausted() -> str:

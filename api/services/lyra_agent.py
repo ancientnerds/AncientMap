@@ -1298,16 +1298,7 @@ async def run_agent_stream(
     # do one more LLM call with tools disabled to force a text answer.
     if tool_calls:
         logger.info("Max tool rounds reached — forcing final text response")
-        # Inject a system nudge so the LLM knows it MUST answer now
-        messages.append(
-            SystemMessage(
-                content=(
-                    "You have used all available tool rounds. You MUST write your response NOW "
-                    "using the data you already have. Do NOT request any more tools. Synthesize "
-                    "the information from your previous tool results into a complete answer."
-                )
-            )
-        )
+
         yield {
             "type": "pipeline",
             "stage": "llm_round",
