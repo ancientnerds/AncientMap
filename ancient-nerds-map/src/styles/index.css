@@ -14948,9 +14948,11 @@ body.news-feed-open .empire-borders-window {
 
 .lyra-inline-video-wrap {
   position: relative;
+}
+span.lyra-inline-video-wrap {
   display: inline;
 }
-.lyra-inline-video-wrap.lyra-inline-video-wrap--expanded {
+div.lyra-inline-video-wrap {
   display: block;
 }
 
@@ -14974,26 +14976,20 @@ body.news-feed-open .empire-borders-window {
 }
 
 .lyra-inline-video-embed {
-  margin: 8px -14px 4px;
-  border-radius: 0;
+  display: block;
+  margin: 8px 0 4px;
+  border-radius: 8px;
   overflow: hidden;
-  background: rgba(0, 0, 0, 0.3);
-  width: calc(100% + 28px);
-}
-/* When video is expanded, let the message bubble stretch wider */
-.lyra-chat-msg-content:has(.lyra-inline-video-wrap--expanded) {
-  max-width: 100%;
-}
-.lyra-chat-msg-content:has(.lyra-inline-video-wrap--expanded) .lyra-chat-msg-text {
-  border-radius: 4px;
+  background: #000;
 }
 
 .lyra-inline-video-thumb {
-  display: block;
   position: relative;
   cursor: pointer;
+  width: 100%;
   aspect-ratio: 16 / 9;
   overflow: hidden;
+  background: #000;
 }
 .lyra-inline-video-thumb img {
   width: 100%;
@@ -15028,8 +15024,8 @@ body.news-feed-open .empire-borders-window {
 }
 
 .lyra-inline-video-iframe-wrap {
-  display: block;
   position: relative;
+  width: 100%;
   aspect-ratio: 16 / 9;
 }
 .lyra-inline-video-iframe-wrap iframe {

@@ -179,67 +179,80 @@ function LyraInlineVideo({ news, children }: { news: NewsHighlight; children?: R
     leaveTimer.current = setTimeout(() => setShowPreview(false), 200)
   }
 
+  // When collapsed: inline span with button. When expanded: div with full embed.
+  if (!expanded) {
+    return (
+      <span className="lyra-inline-video-wrap">
+        <button
+          className="lyra-inline-video"
+          onClick={() => { setExpanded(true); setShowPreview(false) }}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+          title={news.headline || `Watch on YouTube`}
+        >
+          {children}
+        </button>
+        {showPreview && news.headline && (
+          <div
+            className="lyra-video-preview"
+            onMouseEnter={handlePreviewEnter}
+            onMouseLeave={handlePreviewLeave}
+          >
+            <NewsCard {...newsHighlightToCardProps(news)} size="sm" />
+          </div>
+        )}
+      </span>
+    )
+  }
+
   return (
-    <span className={`lyra-inline-video-wrap${expanded ? ' lyra-inline-video-wrap--expanded' : ''}`}>
+    <div className="lyra-inline-video-wrap lyra-inline-video-wrap--expanded">
       <button
         className="lyra-inline-video"
-        onClick={() => { setExpanded(!expanded); setShowPreview(false) }}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        title={news.headline || `Watch on YouTube`}
+        onClick={() => setExpanded(false)}
+        title="Collapse video"
       >
         {children}
       </button>
-      {showPreview && !expanded && news.headline && (
-        <div
-          className="lyra-video-preview"
-          onMouseEnter={handlePreviewEnter}
-          onMouseLeave={handlePreviewLeave}
-        >
-          <NewsCard {...newsHighlightToCardProps(news)} size="sm" />
-        </div>
-      )}
-      {expanded && (
-        <span className="lyra-inline-video-embed" style={{ display: 'block' }}>
-          {!playing ? (
-            <span
-              className="lyra-inline-video-thumb"
-              onClick={() => setPlaying(true)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => { if (e.key === 'Enter') setPlaying(true) }}
-            >
-              <img src={thumbUrl} alt={news.headline || 'Video thumbnail'} onError={() => { if (!thumbFailed) setThumbFailed(true) }} />
-              <span className="lyra-inline-video-play-overlay">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="white">
-                  <path d="M8 5v14l11-7z"/>
-                </svg>
-              </span>
-              {ts != null && (
-                <span className="lyra-inline-video-ts">{formatTs(ts)}</span>
-              )}
-            </span>
-          ) : (
-            <span className="lyra-inline-video-iframe-wrap">
-              <iframe
-                src={embedUrl}
-                title={news.headline || 'YouTube video'}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
-            </span>
-          )}
-          <a
-            className="lyra-inline-video-external"
-            href={ytUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+      <div className="lyra-inline-video-embed">
+        {!playing ? (
+          <div
+            className="lyra-inline-video-thumb"
+            onClick={() => setPlaying(true)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter') setPlaying(true) }}
           >
-            Watch on YouTube {ts != null && `at ${formatTs(ts)}`} ↗
-          </a>
-        </span>
-      )}
-    </span>
+            <img src={thumbUrl} alt={news.headline || 'Video thumbnail'} onError={() => { if (!thumbFailed) setThumbFailed(true) }} />
+            <div className="lyra-inline-video-play-overlay">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="white">
+                <path d="M8 5v14l11-7z"/>
+              </svg>
+            </div>
+            {ts != null && (
+              <span className="lyra-inline-video-ts">{formatTs(ts)}</span>
+            )}
+          </div>
+        ) : (
+          <div className="lyra-inline-video-iframe-wrap">
+            <iframe
+              src={embedUrl}
+              title={news.headline || 'YouTube video'}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+        )}
+        <a
+          className="lyra-inline-video-external"
+          href={ytUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Watch on YouTube {ts != null && `at ${formatTs(ts)}`} ↗
+        </a>
+      </div>
+    </div>
   )
 }
 
