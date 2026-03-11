@@ -152,8 +152,8 @@ _UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
 )
 _MARKER_RE = re.compile(
-    r"\u00ab[a-z]+\d+(?:[–\-][a-z]*\d+)?\u00bb"
-)  # Matches «s0», «c1», «c2–c5», etc.
+    r"\u00ab/?[a-z]+\d+(?:[–\-][a-z]*\d+)?\u00bb"
+)  # Matches «s0», «c1», «c2–c5», «/l0», etc.
 
 # Reference array key names used in structured output
 _REF_KEYS = ("sites", "coords", "videos", "empires", "images", "links", "countries")
@@ -193,10 +193,17 @@ def clean_response_text(text: str) -> str:
     text = re.sub(r"\[([^\]]*)\]\s*\[([^\]]*)\]\(", r"[\1](", text)
     # 9. Strip bare marker references without guillemets: [s0], [c1], etc.
     text = re.sub(r"\[(?:s|c|v|e|i|l|f)\d+\](?!\()", "", text)
-    # 9b. Strip incomplete guillemet markers: «s0 (missing closing »)
-    text = re.sub(r"\u00ab[a-z]+\d+(?!\u00bb)", "", text)
+    # 9b. Strip incomplete/malformed guillemet markers: «s0, «/s0», «s0»
+    text = re.sub(r"\u00ab/?[a-z]+\d+\u00bb?", "", text)
     # 10. Clean orphaned "see ." left after marker removal
     text = re.sub(r",?\s+see\s+\.\s*$", ".", text, flags=re.MULTILINE)
+    # 10b. Clean JSON structure leaks: "see the links/sites/... array"
+    text = re.sub(
+        r"(?:see|in)\s+the\s+(?:links|sites|coords|videos|empires|images|countries)\s+array[^.]*\.",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
     # 11. Collapse excessive whitespace
     text = re.sub(r"\n{3,}", "\n\n", text)
     text = re.sub(r"  +", " ", text)
@@ -226,7 +233,7 @@ def expand_markers(parsed: dict, all_news: list[dict] | None = None) -> tuple[st
     # Build lookup dicts: normalized marker string -> entry
     # LLM may use "s0" or "«s0»" in arrays — normalize to bare form (s0)
     def _norm(m: str) -> str:
-        return m.strip("\u00ab\u00bb")
+        return m.strip("\u00ab\u00bb").lstrip("/")
 
     site_map = {_norm(e["marker"]): e for e in parsed.get("sites", [])}
     coord_map = {_norm(e["marker"]): e for e in parsed.get("coords", [])}
@@ -337,9 +344,9 @@ def validate_structured_response(parsed: dict, expanded_text: str | None = None)
     issues: list[str] = []
     text = parsed.get("text", "")
 
-    # Normalize markers: strip guillemets for comparison
+    # Normalize markers: strip guillemets and leading / for comparison
     def _norm(m: str) -> str:
-        return m.strip("\u00ab\u00bb")
+        return m.strip("\u00ab\u00bb").lstrip("/")
 
     # Find all markers in text (normalized)
     markers_in_text = {_norm(m) for m in _MARKER_RE.findall(text)}

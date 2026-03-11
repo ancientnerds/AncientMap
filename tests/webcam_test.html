@@ -1,0 +1,1447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AncientMap - Live Webcams</title>
+<style>
+  :root {
+    --bg-primary: #0a0a0f;
+    --bg-card: #14141f;
+    --bg-card-hover: #1a1a2e;
+    --bg-header: #0f0f18;
+    --text-primary: #e8e8f0;
+    --text-secondary: #8888a8;
+    --text-muted: #555570;
+    --accent-red: #c02023;
+    --accent-green: #22c55e;
+    --accent-amber: #f59e0b;
+    --border: #222238;
+    --border-hover: #333350;
+    --radius: 8px;
+    --radius-lg: 12px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+  }
+
+  /* Header */
+  .header {
+    background: var(--bg-header);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .header-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 2px;
+    padding: 12px 24px 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-header);
+  }
+  .tab {
+    padding: 8px 16px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: none;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tab:hover { color: var(--text-primary); }
+  .tab.active { color: var(--text-primary); border-bottom-color: var(--accent-red); }
+  .tab .count {
+    background: var(--bg-card);
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .tab.active .count { background: var(--accent-red); color: white; }
+
+  /* Filter bar */
+  .filter-bar {
+    padding: 12px 24px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .filter-chip {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .filter-chip:hover { border-color: var(--border-hover); color: var(--text-primary); }
+  .filter-chip.active { background: var(--accent-red); border-color: var(--accent-red); color: white; }
+  .filter-chip .count { opacity: 0.6; font-size: 11px; }
+  .filter-chip.active .count { opacity: 0.85; }
+  .search-input {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 5px 12px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    margin-left: auto;
+    width: 200px;
+  }
+  .search-input::placeholder { color: var(--text-muted); }
+  .search-input:focus { outline: none; border-color: var(--accent-red); }
+
+  /* Grid */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+    padding: 16px 24px;
+  }
+
+  /* Webcam Card — shows livestream with thumbnail fallback */
+  .cam-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    transition: all 0.25s;
+    position: relative;
+  }
+  .cam-card:hover {
+    border-color: var(--border-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+
+  /* Live feed area */
+  .cam-feed {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16/9;
+    overflow: hidden;
+    background: #0c0c14;
+    cursor: pointer;
+  }
+  .cam-feed img, .cam-feed video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: opacity 0.3s;
+  }
+  .cam-feed img.stale { opacity: 0.6; }
+  .cam-feed img.error { opacity: 0.15; filter: grayscale(1); }
+  .cam-feed video { background: #000; }
+  .cam-feed img.hidden { display: none; }
+  .cam-feed video.hidden { display: none; }
+
+  /* Stream loading spinner */
+  .stream-spinner {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .stream-spinner::after {
+    content: '';
+    width: 28px;
+    height: 28px;
+    border: 3px solid transparent;
+    border-top-color: var(--accent-red);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  .stream-spinner.hidden { display: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Refresh animation overlay */
+  .cam-feed .refresh-flash {
+    position: absolute;
+    inset: 0;
+    background: rgba(255,255,255,0.03);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s;
+  }
+  .cam-feed .refresh-flash.active { opacity: 1; }
+
+  /* LIVE badge */
+  .live-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(0,0,0,0.75);
+    backdrop-filter: blur(4px);
+    padding: 3px 9px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    z-index: 2;
+    text-transform: uppercase;
+  }
+  .live-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+  }
+  .live-badge.live { color: #ff4444; }
+  .live-badge.live .live-dot { background: #ff4444; animation: pulse-dot 2s infinite; }
+  .live-badge.offline { color: var(--text-muted); }
+  .live-badge.offline .live-dot { background: var(--text-muted); }
+  @keyframes pulse-dot {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255,68,68,0.6); }
+    50% { box-shadow: 0 0 0 4px rgba(255,68,68,0); }
+  }
+
+  /* Watch Live button overlay */
+  .watch-live-btn {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    background: rgba(192,32,35,0.9);
+    color: white;
+    border: none;
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: all 0.2s;
+    text-decoration: none;
+  }
+  .cam-card:hover .watch-live-btn { opacity: 1; transform: translateY(0); }
+  .watch-live-btn:hover { background: rgba(220,40,40,1); }
+
+  /* Source tag */
+  .source-tag {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(0,0,0,0.6);
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-size: 9px;
+    color: var(--text-muted);
+    letter-spacing: 0.3px;
+    z-index: 2;
+  }
+
+  /* Updated timestamp */
+  .update-tag {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    background: rgba(0,0,0,0.6);
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-size: 9px;
+    color: var(--text-muted);
+    z-index: 2;
+    font-family: monospace;
+  }
+
+  /* Card info */
+  .cam-info {
+    padding: 10px 12px;
+  }
+  .cam-name {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 3px;
+  }
+  .cam-meta {
+    font-size: 12px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .cam-meta .sep { color: var(--text-muted); }
+
+  /* Lightbox */
+  .lightbox {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    z-index: 1000;
+    display: none;
+    flex-direction: column;
+    padding: 0;
+  }
+  .lightbox.visible { display: flex; }
+  .lightbox-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: rgba(255,255,255,0.1);
+    border: none;
+    color: white;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 20px;
+    z-index: 10;
+  }
+  .lightbox-close:hover { background: rgba(255,255,255,0.2); }
+  .lightbox-body {
+    width: 100%;
+    height: 100%;
+    background: #000;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .lightbox-feed {
+    width: 100%;
+    flex: 1;
+    background: #000;
+    position: relative;
+    overflow: hidden;
+    cursor: grab;
+    min-height: 0;
+  }
+  .lightbox-feed.dragging { cursor: grabbing; }
+  .lightbox-feed img, .lightbox-feed video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    transform-origin: 0 0;
+    will-change: transform;
+    pointer-events: none;
+    user-select: none;
+  }
+  .lightbox-body:fullscreen { max-width: 100%; width: 100%; height: 100%; border-radius: 0; display: flex; flex-direction: column; background: #000; }
+  .lightbox-body:-webkit-full-screen { max-width: 100%; width: 100%; height: 100%; border-radius: 0; display: flex; flex-direction: column; background: #000; }
+  .lightbox-body:fullscreen .lightbox-feed { flex: 1; aspect-ratio: auto; }
+  .lightbox-body:-webkit-full-screen .lightbox-feed { flex: 1; aspect-ratio: auto; }
+  .lightbox-body:fullscreen .lightbox-bar { background: rgba(0,0,0,0.8); }
+  .lightbox-body:-webkit-full-screen .lightbox-bar { background: rgba(0,0,0,0.8); }
+
+  /* Zoom hint */
+  .zoom-hint {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.7);
+    color: var(--text-muted);
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 11px;
+    pointer-events: none;
+    transition: opacity 0.3s;
+    z-index: 2;
+  }
+  .zoom-level {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(0,0,0,0.7);
+    color: var(--text-primary);
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: monospace;
+    font-weight: 600;
+    pointer-events: none;
+    z-index: 2;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .zoom-level.visible { opacity: 1; }
+  .lightbox-bar {
+    padding: 14px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    background: rgba(10,10,15,0.85);
+    backdrop-filter: blur(8px);
+    flex-shrink: 0;
+  }
+  .lightbox-title { font-size: 16px; font-weight: 600; }
+  .lightbox-sub { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+  .lightbox-actions { display: flex; gap: 8px; }
+  .lb-btn {
+    padding: 8px 16px;
+    border-radius: var(--radius);
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .lb-btn.primary { background: var(--accent-red); color: white; }
+  .lb-btn.primary:hover { opacity: 0.85; }
+  .lb-btn.secondary { background: var(--bg-card-hover); color: var(--text-primary); border: 1px solid var(--border); }
+
+  /* Stats */
+  .stats-bar {
+    padding: 10px 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 20px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  /* Responsive */
+  @media (max-width: 720px) {
+    .grid { grid-template-columns: 1fr; gap: 12px; padding: 12px; }
+    .header { flex-wrap: wrap; gap: 8px; }
+  }
+
+  .empty-state { text-align: center; padding: 60px 24px; color: var(--text-muted); grid-column: 1/-1; }
+
+  /* Proximity controls */
+  .proximity-bar {
+    padding: 12px 24px;
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-header);
+    flex-wrap: wrap;
+  }
+  .proximity-bar label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+  .site-select {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 5px 10px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    min-width: 260px;
+    max-width: 380px;
+  }
+  .site-select:focus { outline: none; border-color: var(--accent-red); }
+  .site-select option { background: var(--bg-card); color: var(--text-primary); }
+
+  .slider-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .slider-group input[type="range"] {
+    -webkit-appearance: none;
+    width: 160px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+    outline: none;
+  }
+  .slider-group input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent-red);
+    cursor: pointer;
+    border: 2px solid var(--bg-primary);
+  }
+  .radius-value {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    min-width: 55px;
+    font-family: monospace;
+  }
+
+  .proximity-info {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-left: auto;
+  }
+
+  /* Distance badge on card */
+  .distance-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(0,0,0,0.8);
+    backdrop-filter: blur(4px);
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    z-index: 2;
+    font-family: monospace;
+  }
+  .distance-badge.near { color: var(--accent-green); }
+  .distance-badge.mid { color: var(--accent-amber); }
+  .distance-badge.far { color: var(--accent-red); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Live Webcams <span style="font-size:12px;font-weight:400;color:var(--text-muted)">— 25 cameras · AncientMap prototype</span></h1>
+  <div class="header-controls">
+    <span id="proxyStatus" style="color:var(--text-muted)">Proxy: checking...</span>
+    <span>|</span>
+    <span id="refreshStatus">Auto-refreshing every 30s</span>
+    <span>|</span>
+    <span id="lastUpdate">—</span>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab" onclick="showTab('photos',this)">Photos <span class="count">—</span></button>
+  <button class="tab" onclick="showTab('videos',this)">Videos <span class="count">—</span></button>
+  <button class="tab active" onclick="showTab('webcams',this)">Webcams <span class="count" id="webcamCount">0</span></button>
+</div>
+
+<div class="proximity-bar">
+  <label>Site:</label>
+  <select class="site-select" id="siteSelect" onchange="onSiteChange()">
+    <option value="">-- Browse all webcams --</option>
+  </select>
+  <div class="slider-group">
+    <label>Radius:</label>
+    <input type="range" id="radiusSlider" min="0.5" max="100" step="0.5" value="10" oninput="onRadiusChange()">
+    <span class="radius-value" id="radiusLabel">10 km</span>
+  </div>
+  <span class="proximity-info" id="proximityInfo"></span>
+</div>
+
+<div class="filter-bar">
+  <button class="filter-chip active" onclick="filter('all',this)">All</button>
+  <button class="filter-chip" onclick="filter('rome',this)">Rome <span class="count"></span></button>
+  <button class="filter-chip" onclick="filter('greece',this)">Greece <span class="count"></span></button>
+  <button class="filter-chip" onclick="filter('middle-east',this)">Middle East <span class="count"></span></button>
+  <button class="filter-chip" onclick="filter('egypt',this)">Egypt <span class="count"></span></button>
+  <button class="filter-chip" onclick="filter('americas',this)">Americas <span class="count"></span></button>
+  <button class="filter-chip" onclick="filter('other',this)">Other <span class="count"></span></button>
+  <input class="search-input" type="text" placeholder="Search..." oninput="searchQ=this.value.toLowerCase();render()">
+</div>
+
+<div class="grid" id="grid"></div>
+<div class="stats-bar" id="stats"></div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lb" onclick="if(event.target===this)closeLb()">
+  <button class="lightbox-close" onclick="closeLb()">&times;</button>
+  <div class="lightbox-body" onclick="event.stopPropagation()">
+    <div class="lightbox-feed" id="lbFeed">
+      <video id="lbVideo" muted autoplay playsinline></video>
+      <img id="lbImg" src="" class="hidden">
+      <div class="zoom-level" id="zoomLevel">1.0x</div>
+      <div class="zoom-hint" id="zoomHint">Scroll to zoom · Drag to pan · Double-click to reset</div>
+    </div>
+    <div class="lightbox-bar">
+      <div>
+        <div class="lightbox-title" id="lbTitle"></div>
+        <div class="lightbox-sub" id="lbSub"></div>
+      </div>
+      <div class="lightbox-actions">
+        <button class="lb-btn secondary" onclick="lbNav(-1)" title="Previous (←)">&#x25C0;</button>
+        <button class="lb-btn secondary" onclick="lbNav(1)" title="Next (→)">&#x25B6;</button>
+        <button class="lb-btn secondary" id="lbMute" onclick="lbToggleMute()" title="Toggle audio">&#x1F507;</button>
+        <button class="lb-btn secondary" onclick="lbFullscreen()" title="Fullscreen">&#x26F6;</button>
+        <a class="lb-btn primary" id="lbWatch" href="#" target="_blank">Watch Live &#x2197;</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+<script>
+// ==========================================
+// PROXY CONFIG
+// ==========================================
+const PROXY_BASE = 'http://localhost:8765';
+
+// ==========================================
+// DATA
+// ==========================================
+const CAMS = [
+  { id:'1151', name:'Colosseum', loc:'Rome, Italy', region:'rome', flag:'\u{1F1EE}\u{1F1F9}', lat:41.8902, lon:12.4922, period:'Roman Empire', tz:'Europe/Rome', slug:'italia/lazio/roma/roma-colosseo' },
+  { id:'181',  name:'Colosseum & Ludus Magnus', loc:'Rome, Italy', region:'rome', flag:'\u{1F1EE}\u{1F1F9}', lat:41.8893, lon:12.4942, period:'Roman Empire', tz:'Europe/Rome', slug:'italia/lazio/roma/colosseo' },
+  { id:'607',  name:'Piazza Venezia', loc:'Rome, Italy', region:'rome', flag:'\u{1F1EE}\u{1F1F9}', lat:41.8958, lon:12.4823, period:'Roman / Modern', tz:'Europe/Rome', slug:'italia/lazio/roma/piazza-venezia' },
+  { id:'619',  name:'Castel Sant\'Angelo', loc:'Rome, Italy', region:'rome', flag:'\u{1F1EE}\u{1F1F9}', lat:41.9031, lon:12.4663, period:'Roman Empire', tz:'Europe/Rome', slug:'italia/lazio/roma/castel-santangelo' },
+  { id:'682',  name:'Spanish Steps', loc:'Rome, Italy', region:'rome', flag:'\u{1F1EE}\u{1F1F9}', lat:41.906, lon:12.4833, period:'Baroque', tz:'Europe/Rome', slug:'italia/lazio/roma/chiesa-trinita-dei-monti' },
+  { id:'661',  name:'Basilica Santa Maria Maggiore', loc:'Rome, Italy', region:'rome', flag:'\u{1F1EE}\u{1F1F9}', lat:41.8976, lon:12.4984, period:'5th century', tz:'Europe/Rome', slug:'italia/lazio/roma/basilica-papale-santa-maria-maggiore' },
+  { id:'599',  name:'Trastevere', loc:'Rome, Italy', region:'rome', flag:'\u{1F1EE}\u{1F1F9}', lat:41.8895, lon:12.4695, period:'Medieval', tz:'Europe/Rome', slug:'italia/lazio/roma/trastevere' },
+  { id:'692',  name:'Campo de\' Fiori', loc:'Rome, Italy', region:'rome', flag:'\u{1F1EE}\u{1F1F9}', lat:41.8956, lon:12.4722, period:'Renaissance', tz:'Europe/Rome', slug:'italia/lazio/roma/campo-de-fiori' },
+  { id:'5714', name:'Parthenon - Acropolis', loc:'Athens, Greece', region:'greece', flag:'\u{1F1EC}\u{1F1F7}', lat:37.9715, lon:23.7267, period:'Classical Greece', tz:'Europe/Athens', slug:'ellada/atiki/athina/acropolis-parthenon' },
+  { id:'553',  name:'Acropolis Panorama', loc:'Athens, Greece', region:'greece', flag:'\u{1F1EC}\u{1F1F7}', lat:37.9715, lon:23.7267, period:'Classical Greece', tz:'Europe/Athens', slug:'ellada/atiki/athina/acropolis-athens' },
+  { id:'4717', name:'Acropolis of Lindos', loc:'Rhodes, Greece', region:'greece', flag:'\u{1F1EC}\u{1F1F7}', lat:36.0913, lon:28.088, period:'Hellenistic', tz:'Europe/Athens', slug:'ellada/naigaio/dodecanisa/tour-acropolis-of-lindos' },
+  { id:'4108', name:'Hippocrates Square', loc:'Rhodes, Greece', region:'greece', flag:'\u{1F1EC}\u{1F1F7}', lat:36.4441, lon:28.2253, period:'Medieval', tz:'Europe/Athens', slug:'ellada/naigaio/dodecanisa/hippocrates-square' },
+  { id:'1281', name:'Meteora Monasteries', loc:'Thessaly, Greece', region:'greece', flag:'\u{1F1EC}\u{1F1F7}', lat:39.7217, lon:21.6306, period:'Byzantine', tz:'Europe/Athens', slug:'ellada/thessalia/trikala/meteora' },
+  { id:'1215', name:'Mount Athos', loc:'Greece', region:'greece', flag:'\u{1F1EC}\u{1F1F7}', lat:40.1572, lon:24.3267, period:'Byzantine', tz:'Europe/Athens', slug:'ellada/mount-athos/karyes/mount-athos' },
+  { id:'860',  name:'Western Wall', loc:'Jerusalem, Israel', region:'middle-east', flag:'\u{1F1EE}\u{1F1F1}', lat:31.7767, lon:35.2345, period:'Second Temple', tz:'Asia/Jerusalem', slug:'israel/jerusalem-district/jerusalem/western-wall' },
+  { id:'829',  name:'Petra - The Treasury', loc:'Jordan', region:'middle-east', flag:'\u{1F1EF}\u{1F1F4}', lat:30.3285, lon:35.4444, period:'Nabataean', tz:'Asia/Amman', slug:'jordan/maan/amman/petra-the-treasury' },
+  { id:'963',  name:'Arena di Verona', loc:'Verona, Italy', region:'other', flag:'\u{1F1EE}\u{1F1F9}', lat:45.439, lon:10.9942, period:'Roman Empire', tz:'Europe/Rome', slug:'italia/veneto/verona/arena-di-verona' },
+  { id:'3457', name:'Matera Sassi', loc:'Matera, Italy', region:'other', flag:'\u{1F1EE}\u{1F1F9}', lat:40.6664, lon:16.6114, period:'Paleolithic', tz:'Europe/Rome', slug:'italia/basilicata/matera/matera' },
+  { id:'522',  name:'Piazza San Marco', loc:'Venice, Italy', region:'other', flag:'\u{1F1EE}\u{1F1F9}', lat:45.4343, lon:12.3388, period:'Byzantine', tz:'Europe/Rome', slug:'italia/veneto/venezia/piazza-san-marco' },
+  { id:'995',  name:'Tower of Pisa', loc:'Pisa, Italy', region:'other', flag:'\u{1F1EE}\u{1F1F9}', lat:43.723, lon:10.3966, period:'Medieval', tz:'Europe/Rome', slug:'italia/toscana/pisa/pisa' },
+  { id:'979',  name:'Cappadocia', loc:'Turkey', region:'other', flag:'\u{1F1F9}\u{1F1F7}', lat:38.6431, lon:34.8289, period:'Hittite / Byzantine', tz:'Europe/Istanbul', slug:'turkey/anatolia-region/nevsehir/cappadocia-uchisar' },
+  { id:'831',  name:'Cusco - Plaza Mayor', loc:'Peru', region:'americas', flag:'\u{1F1F5}\u{1F1EA}', lat:-13.517, lon:-71.9785, period:'Inca Empire', tz:'America/Lima', slug:'peru/cusco/cusco/plaza-mayor' },
+  { id:'962',  name:'Easter Island Moai', loc:'Chile', region:'americas', flag:'\u{1F1E8}\u{1F1F1}', lat:-27.1127, lon:-109.3497, period:'Rapa Nui', tz:'Pacific/Easter', slug:'chile/valparaiso/easter-island/easter-island' },
+  { id:'3165', name:'Plitvice Lakes', loc:'Croatia', region:'other', flag:'\u{1F1ED}\u{1F1F7}', lat:44.8654, lon:15.582, period:'Natural Heritage', tz:'Europe/Zagreb', slug:'hrvatska/licko-senjska-zupanija/plitvicka-jezera/plitvice-lakes-national-park' },
+  { id:'207',  name:'Grand Harbour Valletta', loc:'Malta', region:'other', flag:'\u{1F1F2}\u{1F1F9}', lat:35.8935, lon:14.5091, period:'Knights of Malta', tz:'Europe/Malta', slug:'malta/malta/floriana/grand-harbour-valletta-waterfront' },
+];
+
+// ==========================================
+// SAMPLE SITES (simulates unified_sites from DB)
+// ==========================================
+const SITES = [
+  { name: 'Colosseum', loc: 'Rome, Italy', lat: 41.8902, lon: 12.4922, period: '70-80 AD', type: 'amphitheatre' },
+  { name: 'Roman Forum', loc: 'Rome, Italy', lat: 41.8925, lon: 12.4853, period: '753 BC', type: 'civic center' },
+  { name: 'Pantheon', loc: 'Rome, Italy', lat: 41.8986, lon: 12.4769, period: '125 AD', type: 'temple' },
+  { name: 'Parthenon', loc: 'Athens, Greece', lat: 37.9715, lon: 23.7267, period: '447 BC', type: 'temple' },
+  { name: 'Ancient Agora of Athens', loc: 'Athens, Greece', lat: 37.9747, lon: 23.7222, period: '6th c. BC', type: 'marketplace' },
+  { name: 'Temple of Olympian Zeus', loc: 'Athens, Greece', lat: 37.9693, lon: 23.7331, period: '6th c. BC', type: 'temple' },
+  { name: 'Western Wall', loc: 'Jerusalem, Israel', lat: 31.7767, lon: 35.2345, period: '19 BC', type: 'wall' },
+  { name: 'Temple Mount', loc: 'Jerusalem, Israel', lat: 31.7781, lon: 35.2354, period: '957 BC', type: 'platform' },
+  { name: 'Petra', loc: 'Jordan', lat: 30.3285, lon: 35.4444, period: '312 BC', type: 'city' },
+  { name: 'Cusco (Inca capital)', loc: 'Peru', lat: -13.517, lon: -71.9785, period: '1100 AD', type: 'city' },
+  { name: 'Sacsayhuaman', loc: 'Cusco, Peru', lat: -13.5094, lon: -71.9822, period: '1400 AD', type: 'fortress' },
+  { name: 'Acropolis of Lindos', loc: 'Rhodes, Greece', lat: 36.0913, lon: 28.088, period: '300 BC', type: 'acropolis' },
+  { name: 'Meteora Monasteries', loc: 'Thessaly, Greece', lat: 39.7217, lon: 21.6306, period: '14th c. AD', type: 'monastery' },
+  { name: 'Arena di Verona', loc: 'Verona, Italy', lat: 45.439, lon: 10.9942, period: '30 AD', type: 'amphitheatre' },
+  { name: 'Sassi di Matera', loc: 'Matera, Italy', lat: 40.6664, lon: 16.6114, period: '10000 BC', type: 'cave dwellings' },
+  { name: 'Cappadocia cave churches', loc: 'Turkey', lat: 38.6431, lon: 34.8289, period: '4th c. AD', type: 'cave churches' },
+  { name: 'St. Peter\'s Basilica', loc: 'Vatican City', lat: 41.9022, lon: 12.4539, period: '1626 AD', type: 'basilica' },
+  { name: 'Moai statues', loc: 'Easter Island, Chile', lat: -27.1127, lon: -109.3497, period: '1250 AD', type: 'statues' },
+  { name: 'Basilica San Marco', loc: 'Venice, Italy', lat: 45.4345, lon: 12.3396, period: '1092 AD', type: 'basilica' },
+  { name: 'Leaning Tower of Pisa', loc: 'Pisa, Italy', lat: 43.723, lon: 10.3966, period: '1173 AD', type: 'tower' },
+  { name: 'Grand Harbour fortifications', loc: 'Valletta, Malta', lat: 35.8935, lon: 14.5091, period: '1566 AD', type: 'fortification' },
+  { name: 'Plitvice Roman road', loc: 'Croatia', lat: 44.8654, lon: 15.582, period: 'Roman era', type: 'road' },
+  { name: 'Mount Athos monasteries', loc: 'Greece', lat: 40.1572, lon: 24.3267, period: '963 AD', type: 'monastery' },
+  { name: 'Hippocrates Plane Tree', loc: 'Kos, Greece', lat: 36.8956, lon: 27.0917, period: '5th c. BC', type: 'landmark' },
+].sort((a, b) => a.name.localeCompare(b.name));
+
+// ==========================================
+// HAVERSINE DISTANCE (km)
+// ==========================================
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// ==========================================
+// UTILS
+// ==========================================
+function debounce(fn, ms) {
+  let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+// ==========================================
+// STATE
+// ==========================================
+let regionFilter = 'all';
+let searchQ = '';
+let selectedSite = null; // SITES entry or null
+let radiusKm = 10;
+const camDistances = {}; // cam.id -> distance in km (when site selected)
+const status = {}; // id -> 'ok' | 'error'
+const lastLoaded = {}; // id -> timestamp
+
+function thumbUrl(id) { return `https://cdn.skylinewebcams.com/live${id}.jpg`; }
+function pageUrl(slug) { return `https://www.skylinewebcams.com/en/webcam/${slug}.html`; }
+function localHour(tz) {
+  return parseInt(new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', hour12: false }).format(new Date()));
+}
+function isDaylight(tz) { const h = localHour(tz); return h >= 6 && h < 20; }
+function dayNightIcon(tz) { return isDaylight(tz) ? '\u2600' : '\u{1F319}'; }
+function localTime(tz) {
+  return new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date());
+}
+function localTimeFull(tz) {
+  const time = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date());
+  return dayNightIcon(tz) + ' ' + time + ' local time';
+}
+
+// ==========================================
+// HLS STREAM MANAGEMENT
+// ==========================================
+const hlsInstances = {}; // cam.id -> Hls instance
+const streamStatus = {}; // cam.id -> 'loading' | 'playing' | 'failed'
+let proxyAvailable = null; // null=unknown, true/false
+
+async function checkProxy() {
+  try {
+    const resp = await fetch(`${PROXY_BASE}/api/status`, { signal: AbortSignal.timeout(2000) });
+    proxyAvailable = resp.ok;
+  } catch {
+    proxyAvailable = false;
+  }
+  document.getElementById('proxyStatus').textContent = proxyAvailable ? 'Proxy: connected' : 'Proxy: offline (thumbnails only)';
+  document.getElementById('proxyStatus').style.color = proxyAvailable ? 'var(--accent-green)' : 'var(--accent-amber)';
+  return proxyAvailable;
+}
+
+function destroyStream(id) {
+  if (hlsInstances[id]) {
+    hlsInstances[id].destroy();
+    delete hlsInstances[id];
+  }
+  delete streamStatus[id];
+}
+
+function destroyAllStreams() {
+  Object.keys(hlsInstances).forEach(destroyStream);
+}
+
+async function initStream(camId, videoEl) {
+  if (!proxyAvailable || !Hls.isSupported()) return false;
+
+  const cam = CAMS.find(c => c.id === camId);
+  if (!cam) return false;
+
+  streamStatus[camId] = 'loading';
+  const spinner = document.getElementById(`spinner-${camId}`);
+  if (spinner) spinner.classList.remove('hidden');
+
+  try {
+    const pageFullUrl = pageUrl(cam.slug);
+    const resp = await fetch(`${PROXY_BASE}/api/extract?url=${encodeURIComponent(pageFullUrl)}`, { signal: AbortSignal.timeout(10000) });
+    const data = await resp.json();
+
+    if (data.offline) {
+      streamStatus[camId] = 'offline';
+      if (spinner) spinner.classList.add('hidden');
+      // Show thumbnail with offline badge
+      const img = document.getElementById(`img-${camId}`);
+      if (img) { img.classList.remove('hidden'); img.classList.add('stale'); }
+      videoEl.classList.add('hidden');
+      updateBadge(camId, 'offline');
+      return false;
+    }
+
+    if (!data.stream_url) {
+      throw new Error('No stream URL');
+    }
+
+    // stream_url is already a proxy-relative path like /proxy?url=...
+    const hlsUrl = `${PROXY_BASE}${data.stream_url}`;
+
+    return new Promise((resolve) => {
+      const hls = new Hls({
+        maxBufferLength: 5,
+        maxMaxBufferLength: 10,
+        liveSyncDurationCount: 2,
+        liveMaxLatencyDurationCount: 5,
+        enableWorker: true,
+      });
+
+      hlsInstances[camId] = hls;
+
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        streamStatus[camId] = 'playing';
+        if (spinner) spinner.classList.add('hidden');
+        videoEl.play().catch(() => {});
+        // Hide thumbnail, show video
+        const img = document.getElementById(`img-${camId}`);
+        if (img) img.classList.add('hidden');
+        videoEl.classList.remove('hidden');
+        updateBadge(camId, 'streaming');
+        resolve(true);
+      });
+
+      hls.on(Hls.Events.ERROR, (_, errData) => {
+        if (errData.fatal) {
+          hls.destroy();
+          delete hlsInstances[camId];
+          streamStatus[camId] = 'failed';
+          if (spinner) spinner.classList.add('hidden');
+          // Show thumbnail fallback
+          const img = document.getElementById(`img-${camId}`);
+          if (img) img.classList.remove('hidden');
+          videoEl.classList.add('hidden');
+          updateBadge(camId, 'live');
+          resolve(false);
+        }
+      });
+
+      hls.loadSource(hlsUrl);
+      hls.attachMedia(videoEl);
+    });
+  } catch (e) {
+    streamStatus[camId] = 'failed';
+    if (spinner) spinner.classList.add('hidden');
+    return false;
+  }
+}
+
+function updateBadge(camId, mode) {
+  const card = document.querySelector(`[data-id="${camId}"]`);
+  if (!card) return;
+  const badge = card.querySelector('.live-badge');
+  if (!badge) return;
+  if (mode === 'streaming') {
+    badge.className = 'live-badge live';
+    badge.innerHTML = '<span class="live-dot"></span>STREAMING';
+  } else if (mode === 'offline') {
+    badge.className = 'live-badge offline';
+    badge.innerHTML = '<span class="live-dot"></span>OFFLINE';
+  } else {
+    badge.className = 'live-badge live';
+    badge.innerHTML = '<span class="live-dot"></span>LIVE';
+  }
+}
+
+// Lazy stream loading — only init when card scrolls into viewport
+let streamObserver = null;
+
+function setupStreamObserver() {
+  if (streamObserver) streamObserver.disconnect();
+  if (!proxyAvailable) return;
+
+  streamObserver = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      const card = entry.target;
+      const id = card.dataset.id;
+      if (hlsInstances[id] || streamStatus[id] === 'loading' || streamStatus[id] === 'offline') continue;
+      const videoEl = document.getElementById(`video-${id}`);
+      if (videoEl) initStream(id, videoEl);
+    }
+  }, { rootMargin: '200px' }); // start loading 200px before visible
+}
+
+function observeCards() {
+  if (!streamObserver) return;
+  document.querySelectorAll('.cam-card').forEach(card => {
+    if (card.style.display !== 'none') streamObserver.observe(card);
+  });
+}
+
+function initVisibleStreams() {
+  if (!proxyAvailable) return;
+  observeCards();
+}
+
+function filtered() {
+  let cams = CAMS.filter(c => {
+    if (regionFilter !== 'all' && c.region !== regionFilter) return false;
+    if (searchQ && !`${c.name} ${c.loc} ${c.period}`.toLowerCase().includes(searchQ)) return false;
+    return true;
+  });
+
+  // Compute distances but do NOT filter by radius here —
+  // render() puts all cards in DOM, updateProximityView() handles hide/show
+  if (selectedSite) {
+    cams.forEach(c => {
+      camDistances[c.id] = haversineKm(selectedSite.lat, selectedSite.lon, c.lat, c.lon);
+    });
+    cams.sort((a, b) => camDistances[a.id] - camDistances[b.id]);
+  }
+
+  return cams;
+}
+
+// ==========================================
+// RENDER
+// ==========================================
+function cardHtml(c) {
+  const dist = selectedSite ? camDistances[c.id] : null;
+  const distClass = dist !== null ? (dist < 1 ? 'near' : dist < 10 ? 'mid' : 'far') : '';
+  const distLabel = dist !== null ? (dist < 1 ? `${(dist*1000).toFixed(0)} m` : `${dist.toFixed(1)} km`) : '';
+  return `
+  <div class="cam-card" data-id="${c.id}">
+    <div class="cam-feed" onclick="openLb('${c.id}')">
+      <video id="video-${c.id}" muted autoplay playsinline class="hidden"></video>
+      <img
+        id="img-${c.id}"
+        src="${thumbUrl(c.id)}?_=${Date.now()}"
+        alt="${c.name}"
+        loading="lazy"
+        onload="onThumbLoad('${c.id}')"
+        onerror="onThumbError('${c.id}')"
+      >
+      <div class="stream-spinner hidden" id="spinner-${c.id}"></div>
+      <div class="refresh-flash" id="flash-${c.id}"></div>
+      <div class="live-badge ${streamStatus[c.id]==='playing'?'live':streamStatus[c.id]==='offline'||status[c.id]==='error'?'offline':'live'}">
+        <span class="live-dot"></span>
+        ${streamStatus[c.id]==='playing'?'STREAMING':streamStatus[c.id]==='offline'?'OFFLINE':status[c.id]==='error'?'OFFLINE':'LIVE'}
+      </div>
+      ${dist !== null
+        ? `<div class="distance-badge ${distClass}">${distLabel}</div>`
+        : `<div class="source-tag">SkylineWebcams</div>`
+      }
+      <div class="update-tag" id="time-${c.id}" data-tz="${c.tz}">${dayNightIcon(c.tz)} ${localTime(c.tz)}</div>
+      <a class="watch-live-btn" href="${pageUrl(c.slug)}" target="_blank" onclick="event.stopPropagation()">
+        Open on SkylineWebcams &#x2197;
+      </a>
+    </div>
+    <div class="cam-info">
+      <div class="cam-name">${c.flag} ${c.name}</div>
+      <div class="cam-meta">
+        ${c.loc}
+        <span class="sep">|</span>
+        ${c.period}
+        <span class="sep">|</span>
+        <span class="local-clock" data-tz="${c.tz}" style="font-family:monospace;font-size:11px">${dayNightIcon(c.tz)} ${localTime(c.tz)}</span>
+        ${dist !== null ? `<span class="sep">|</span><span data-dist style="font-family:monospace;font-size:11px;color:${distClass==='near'?'var(--accent-green)':distClass==='mid'?'var(--accent-amber)':'var(--accent-red)'}">${distLabel} away</span>` : ''}
+      </div>
+    </div>
+  </div>
+  `;
+}
+
+// Full render — destroys streams, rebuilds DOM, re-inits streams
+function render() {
+  destroyAllStreams();
+  const cams = filtered();
+  const grid = document.getElementById('grid');
+
+  if (!cams.length) {
+    grid.innerHTML = '<div class="empty-state">No webcams match your filters</div>';
+    document.getElementById('webcamCount').textContent = '0';
+    return;
+  }
+
+  grid.innerHTML = cams.map(cardHtml).join('');
+
+  document.getElementById('webcamCount').textContent = cams.length;
+  updateStats();
+
+  // Apply radius filtering if a site is selected
+  if (selectedSite) updateProximityView();
+
+  // Init streams for rendered cards
+  if (proxyAvailable) initVisibleStreams();
+}
+
+// Lightweight update — hides/shows/reorders cards WITHOUT destroying streams
+function updateProximityView() {
+  if (!selectedSite) return;
+
+  const grid = document.getElementById('grid');
+  const allCards = [...grid.querySelectorAll('.cam-card')];
+
+  // Recompute distances
+  CAMS.forEach(c => {
+    camDistances[c.id] = haversineKm(selectedSite.lat, selectedSite.lon, c.lat, c.lon);
+  });
+
+  let visibleCount = 0;
+  const orderMap = {}; // id -> sort order
+
+  // Determine which to show/hide and update distance badges
+  allCards.forEach(card => {
+    const id = card.dataset.id;
+    const dist = camDistances[id];
+    const inRange = dist <= radiusKm;
+
+    card.style.display = inRange ? '' : 'none';
+    if (inRange) {
+      visibleCount++;
+      orderMap[id] = dist;
+
+      // Update distance badge
+      const distClass = dist < 1 ? 'near' : dist < 10 ? 'mid' : 'far';
+      const distLabel = dist < 1 ? `${(dist*1000).toFixed(0)} m` : `${dist.toFixed(1)} km`;
+      const existingBadge = card.querySelector('.distance-badge, .source-tag');
+      if (existingBadge) {
+        existingBadge.className = `distance-badge ${distClass}`;
+        existingBadge.textContent = distLabel;
+      }
+
+      // Update distance in meta
+      const meta = card.querySelector('.cam-meta');
+      const distSpan = meta?.querySelector('[data-dist]');
+      if (distSpan) {
+        distSpan.style.color = distClass==='near'?'var(--accent-green)':distClass==='mid'?'var(--accent-amber)':'var(--accent-red)';
+        distSpan.textContent = `${distLabel} away`;
+      }
+    }
+  });
+
+  // Reorder cards by distance (closest first)
+  const sorted = allCards
+    .filter(c => c.style.display !== 'none')
+    .sort((a, b) => (orderMap[a.dataset.id] || 0) - (orderMap[b.dataset.id] || 0));
+  sorted.forEach(card => grid.appendChild(card));
+
+  // Handle empty state
+  const emptyEl = grid.querySelector('.empty-state');
+  if (visibleCount === 0 && !emptyEl) {
+    grid.insertAdjacentHTML('beforeend', '<div class="empty-state">No webcams within this radius</div>');
+  } else if (visibleCount > 0 && emptyEl) {
+    emptyEl.remove();
+  }
+
+  document.getElementById('webcamCount').textContent = visibleCount;
+  updateStats();
+
+  // Start streams for newly visible cards that don't have one yet
+  if (proxyAvailable) initVisibleStreams();
+}
+
+function onThumbLoad(id) {
+  status[id] = 'ok';
+  lastLoaded[id] = Date.now();
+  const card = document.querySelector(`[data-id="${id}"]`);
+  if (!card) return;
+  const badge = card.querySelector('.live-badge');
+  badge.className = 'live-badge live';
+  badge.innerHTML = '<span class="live-dot"></span>LIVE';
+  const timeEl = document.getElementById(`time-${id}`);
+  if (timeEl) timeEl.textContent = new Date().toLocaleTimeString();
+  // Flash effect
+  const flash = document.getElementById(`flash-${id}`);
+  if (flash) { flash.classList.add('active'); setTimeout(() => flash.classList.remove('active'), 300); }
+  updateStats();
+}
+
+function onThumbError(id) {
+  status[id] = 'error';
+  const card = document.querySelector(`[data-id="${id}"]`);
+  if (!card) return;
+  card.querySelector('img').classList.add('error');
+  const badge = card.querySelector('.live-badge');
+  badge.className = 'live-badge offline';
+  badge.innerHTML = '<span class="live-dot"></span>OFFLINE';
+  updateStats();
+}
+
+function updateStats() {
+  const ok = Object.values(status).filter(s => s === 'ok').length;
+  const err = Object.values(status).filter(s => s === 'error').length;
+  const pending = CAMS.length - ok - err;
+  document.getElementById('stats').innerHTML = `
+    <span>${ok} online</span>
+    <span>${err} offline</span>
+    <span>${pending} loading</span>
+    <span>|</span>
+    <span>${Object.values(streamStatus).filter(s => s === 'playing').length} streaming</span>
+    <span>${Object.values(streamStatus).filter(s => s === 'offline').length} offline</span>
+    <span>|</span>
+    <span>${proxyAvailable ? 'HLS livestreams via proxy' : 'Proxy offline — thumbnail fallback (start: python scripts/webcam_stream_proxy.py)'}</span>
+  `;
+}
+
+// ==========================================
+// AUTO-REFRESH
+// ==========================================
+function refreshAll() {
+  const now = Date.now();
+  document.getElementById('lastUpdate').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  // Only refresh thumbnails for cams that aren't streaming
+  document.querySelectorAll('.cam-feed img:not(.hidden)').forEach(img => {
+    const base = img.src.split('?')[0];
+    img.src = base + '?_=' + now;
+  });
+}
+
+setInterval(refreshAll, 30_000);
+
+// ==========================================
+// INTERACTIONS
+// ==========================================
+function filter(region, el) {
+  regionFilter = region;
+  sessionStorage.setItem('wcFilter', region);
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  render();
+}
+
+function showTab(tab, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  if (tab !== 'webcams') {
+    document.getElementById('grid').innerHTML = `<div class="empty-state">${tab} tab — not implemented in this prototype</div>`;
+  } else {
+    render();
+  }
+}
+
+// ==========================================
+// LIGHTBOX
+// ==========================================
+let lbCam = null;
+let lbInterval = null;
+let lbHls = null;
+
+function openLb(id) {
+  lbCam = CAMS.find(c => c.id === id);
+  if (!lbCam) return;
+
+  const lbVideo = document.getElementById('lbVideo');
+  const lbImg = document.getElementById('lbImg');
+
+  document.getElementById('lbTitle').textContent = `${lbCam.flag} ${lbCam.name}`;
+  document.getElementById('lbSub').textContent = `${lbCam.loc} | ${lbCam.period} | ${localTimeFull(lbCam.tz)}`;
+  document.getElementById('lbWatch').href = pageUrl(lbCam.slug);
+  document.getElementById('lb').classList.add('visible');
+  document.body.style.overflow = 'hidden';
+
+  // Try livestream in lightbox
+  if (proxyAvailable && Hls.isSupported()) {
+    lbVideo.classList.remove('hidden');
+    lbImg.classList.add('hidden');
+    lbImg.src = thumbUrl(id) + '?_=' + Date.now(); // preload fallback
+
+    const pageFullUrl = pageUrl(lbCam.slug);
+    fetch(`${PROXY_BASE}/api/extract?url=${encodeURIComponent(pageFullUrl)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.offline || !data.stream_url) { lbFallbackToThumb(id); return; }
+        lbHls = new Hls({ maxBufferLength: 10, liveSyncDurationCount: 3 });
+        lbHls.loadSource(`${PROXY_BASE}${data.stream_url}`);
+        lbHls.attachMedia(lbVideo);
+        lbHls.on(Hls.Events.MANIFEST_PARSED, () => lbVideo.play().catch(() => {}));
+        lbHls.on(Hls.Events.ERROR, (_, d) => {
+          if (d.fatal) { lbFallbackToThumb(id); }
+        });
+      })
+      .catch(() => lbFallbackToThumb(id));
+  } else {
+    lbFallbackToThumb(id);
+  }
+}
+
+function lbFallbackToThumb(id) {
+  const lbVideo = document.getElementById('lbVideo');
+  const lbImg = document.getElementById('lbImg');
+  lbVideo.classList.add('hidden');
+  lbImg.classList.remove('hidden');
+  lbImg.src = thumbUrl(id) + '?_=' + Date.now();
+  clearInterval(lbInterval);
+  lbInterval = setInterval(() => {
+    lbImg.src = thumbUrl(id) + '?_=' + Date.now();
+  }, 10_000);
+}
+
+function closeLb() {
+  document.getElementById('lb').classList.remove('visible');
+  document.body.style.overflow = '';
+  clearInterval(lbInterval);
+  if (lbHls) { lbHls.destroy(); lbHls = null; }
+  const lbVideo = document.getElementById('lbVideo');
+  lbVideo.pause();
+  lbVideo.src = '';
+  lbCam = null;
+  pzReset();
+}
+
+function lbToggleMute() {
+  const v = document.getElementById('lbVideo');
+  v.muted = !v.muted;
+  document.getElementById('lbMute').textContent = v.muted ? '\u{1F507}' : '\u{1F50A}';
+}
+
+function lbFullscreen() {
+  const body = document.querySelector('.lightbox-body');
+  if (document.fullscreenElement || document.webkitFullscreenElement) {
+    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  } else if (body.requestFullscreen) {
+    body.requestFullscreen();
+  } else if (body.webkitRequestFullscreen) {
+    body.webkitRequestFullscreen();
+  }
+}
+
+function lbNav(dir) {
+  if (!lbCam) return;
+  const cams = filtered();
+  const idx = cams.findIndex(c => c.id === lbCam.id);
+  if (idx === -1) return;
+  const next = cams[idx + dir];
+  if (!next) return;
+  pzReset();
+  closeLb();
+  setTimeout(() => openLb(next.id), 50);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeLb();
+  if (e.key === 'ArrowLeft') lbNav(-1);
+  if (e.key === 'ArrowRight') lbNav(1);
+});
+
+// ==========================================
+// PAN & ZOOM (lightbox feed)
+// ==========================================
+let pzScale = 1, pzX = 0, pzY = 0;
+let pzDragging = false, pzStartX = 0, pzStartY = 0, pzOrigX = 0, pzOrigY = 0;
+let pzHideTimer = null;
+
+function pzApply() {
+  const feed = document.getElementById('lbFeed');
+  if (!feed) return;
+  const el = feed.querySelector('video:not(.hidden)') || feed.querySelector('img:not(.hidden)');
+  if (!el) return;
+
+  // Clamp pan so image doesn't fly off
+  if (pzScale <= 1) { pzX = 0; pzY = 0; }
+  else {
+    const rect = feed.getBoundingClientRect();
+    const maxX = rect.width * (pzScale - 1);
+    const maxY = rect.height * (pzScale - 1);
+    pzX = Math.max(-maxX, Math.min(0, pzX));
+    pzY = Math.max(-maxY, Math.min(0, pzY));
+  }
+
+  el.style.transform = `translate(${pzX}px, ${pzY}px) scale(${pzScale})`;
+
+  // Update zoom indicator
+  const zoomEl = document.getElementById('zoomLevel');
+  if (zoomEl) {
+    zoomEl.textContent = pzScale.toFixed(1) + 'x';
+    zoomEl.classList.toggle('visible', pzScale > 1.05);
+  }
+
+  // Hide hint once they zoom
+  const hint = document.getElementById('zoomHint');
+  if (hint && pzScale > 1.05) hint.style.opacity = '0';
+}
+
+function pzReset() {
+  pzScale = 1; pzX = 0; pzY = 0;
+  const feed = document.getElementById('lbFeed');
+  if (!feed) return;
+  feed.querySelectorAll('video, img').forEach(el => el.style.transform = '');
+  const zoomEl = document.getElementById('zoomLevel');
+  if (zoomEl) zoomEl.classList.remove('visible');
+  const hint = document.getElementById('zoomHint');
+  if (hint) hint.style.opacity = '';
+}
+
+// Wheel zoom — zoom toward cursor position
+document.addEventListener('wheel', e => {
+  const feed = document.getElementById('lbFeed');
+  if (!feed || !feed.closest('.lightbox.visible')) return;
+  if (!feed.contains(e.target) && e.target !== feed) return;
+  e.preventDefault();
+
+  const rect = feed.getBoundingClientRect();
+  const cursorX = e.clientX - rect.left;
+  const cursorY = e.clientY - rect.top;
+
+  const oldScale = pzScale;
+  const delta = e.deltaY > 0 ? 0.85 : 1.18;
+  pzScale = Math.max(1, Math.min(8, pzScale * delta));
+
+  // Adjust pan to zoom toward cursor
+  if (pzScale > 1) {
+    const ratio = pzScale / oldScale;
+    pzX = cursorX - ratio * (cursorX - pzX);
+    pzY = cursorY - ratio * (cursorY - pzY);
+  }
+
+  pzApply();
+}, { passive: false });
+
+// Drag to pan
+document.addEventListener('mousedown', e => {
+  const feed = document.getElementById('lbFeed');
+  if (!feed || !feed.closest('.lightbox.visible')) return;
+  if (!feed.contains(e.target) && e.target !== feed) return;
+  if (pzScale <= 1) return;
+  e.preventDefault();
+  pzDragging = true;
+  pzStartX = e.clientX; pzStartY = e.clientY;
+  pzOrigX = pzX; pzOrigY = pzY;
+  feed.classList.add('dragging');
+});
+
+document.addEventListener('mousemove', e => {
+  if (!pzDragging) return;
+  pzX = pzOrigX + (e.clientX - pzStartX);
+  pzY = pzOrigY + (e.clientY - pzStartY);
+  pzApply();
+});
+
+document.addEventListener('mouseup', () => {
+  if (!pzDragging) return;
+  pzDragging = false;
+  const feed = document.getElementById('lbFeed');
+  if (feed) feed.classList.remove('dragging');
+});
+
+// Double-click to reset
+document.addEventListener('dblclick', e => {
+  const feed = document.getElementById('lbFeed');
+  if (!feed || !feed.closest('.lightbox.visible')) return;
+  if (!feed.contains(e.target) && e.target !== feed) return;
+  pzReset();
+});
+
+// Touch: pinch to zoom + drag to pan
+let pzTouches = [];
+let pzInitDist = 0, pzInitScale = 1;
+
+document.addEventListener('touchstart', e => {
+  const feed = document.getElementById('lbFeed');
+  if (!feed || !feed.closest('.lightbox.visible')) return;
+  if (!feed.contains(e.target)) return;
+  pzTouches = [...e.touches];
+  if (pzTouches.length === 2) {
+    pzInitDist = Math.hypot(pzTouches[0].clientX - pzTouches[1].clientX, pzTouches[0].clientY - pzTouches[1].clientY);
+    pzInitScale = pzScale;
+  } else if (pzTouches.length === 1 && pzScale > 1) {
+    pzStartX = pzTouches[0].clientX; pzStartY = pzTouches[0].clientY;
+    pzOrigX = pzX; pzOrigY = pzY;
+  }
+}, { passive: true });
+
+document.addEventListener('touchmove', e => {
+  const feed = document.getElementById('lbFeed');
+  if (!feed || !feed.closest('.lightbox.visible')) return;
+  if (!feed.contains(e.target)) return;
+  if (e.touches.length === 2) {
+    e.preventDefault();
+    const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    pzScale = Math.max(1, Math.min(8, pzInitScale * (dist / pzInitDist)));
+    pzApply();
+  } else if (e.touches.length === 1 && pzScale > 1) {
+    pzX = pzOrigX + (e.touches[0].clientX - pzStartX);
+    pzY = pzOrigY + (e.touches[0].clientY - pzStartY);
+    pzApply();
+  }
+}, { passive: false });
+
+// ==========================================
+// PROXIMITY CONTROLS
+// ==========================================
+function populateSiteSelect() {
+  const sel = document.getElementById('siteSelect');
+  SITES.forEach((s, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = `${s.name} — ${s.loc}`;
+    sel.appendChild(opt);
+  });
+}
+
+function onSiteChange() {
+  const sel = document.getElementById('siteSelect');
+  if (sel.value === '') {
+    selectedSite = null;
+    document.getElementById('proximityInfo').textContent = '';
+    render(); // full render to remove distance badges and show all
+  } else {
+    selectedSite = SITES[parseInt(sel.value)];
+    updateProximityInfo();
+    render(); // full render needed to add distance badges to cards
+  }
+}
+
+const _debouncedProximity = debounce(() => {
+  if (selectedSite) { updateProximityInfo(); updateProximityView(); }
+}, 60);
+
+function onRadiusChange() {
+  const slider = document.getElementById('radiusSlider');
+  radiusKm = parseFloat(slider.value);
+  const label = radiusKm < 1 ? `${(radiusKm*1000).toFixed(0)} m` : `${radiusKm} km`;
+  document.getElementById('radiusLabel').textContent = label;
+  _debouncedProximity();
+}
+
+function updateProximityInfo() {
+  if (!selectedSite) return;
+  const inRange = CAMS.filter(c => haversineKm(selectedSite.lat, selectedSite.lon, c.lat, c.lon) <= radiusKm);
+  const info = document.getElementById('proximityInfo');
+  info.textContent = `${inRange.length} webcam${inRange.length !== 1 ? 's' : ''} within ${radiusKm < 1 ? (radiusKm*1000).toFixed(0)+'m' : radiusKm+'km'} of ${selectedSite.name}`;
+}
+
+// ==========================================
+// INIT
+// ==========================================
+populateSiteSelect();
+// Restore saved filter
+const savedFilter = sessionStorage.getItem('wcFilter');
+if (savedFilter) {
+  regionFilter = savedFilter;
+  document.querySelectorAll('.filter-chip').forEach(c => {
+    const m = (c.getAttribute('onclick')||'').match(/filter\('([^']+)'/);
+    c.classList.toggle('active', m && m[1] === savedFilter);
+  });
+}
+// Populate filter chip counts
+document.querySelectorAll('.filter-chip').forEach(chip => {
+  const onclick = chip.getAttribute('onclick') || '';
+  const m = onclick.match(/filter\('([^']+)'/);
+  if (!m || m[1] === 'all') return;
+  const region = m[1];
+  const count = CAMS.filter(c => c.region === region).length;
+  const span = chip.querySelector('.count');
+  if (span) span.textContent = count;
+});
+render();
+// Check proxy and start streams if available
+checkProxy().then(ok => {
+  if (ok) { setupStreamObserver(); initVisibleStreams(); }
+});
+// Tick local clocks every 30s
+setInterval(() => {
+  document.querySelectorAll('.local-clock').forEach(el => {
+    el.textContent = dayNightIcon(el.dataset.tz) + ' ' + localTime(el.dataset.tz);
+  });
+  document.querySelectorAll('.update-tag[data-tz]').forEach(el => {
+    el.textContent = dayNightIcon(el.dataset.tz) + ' ' + localTime(el.dataset.tz);
+  });
+  // Update lightbox sub if open
+  if (lbCam) {
+    document.getElementById('lbSub').textContent = `${lbCam.loc} | ${lbCam.period} | ${localTimeFull(lbCam.tz)}`;
+  }
+}, 30_000);
+</script>
+
+</body>
+</html>

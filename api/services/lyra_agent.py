@@ -636,11 +636,25 @@ async def run_agent_stream(
 
     # Skip retrieval for trivial queries (greetings, meta, reactions) —
     # no point in searching Qdrant for "hi" or "who are you"
+    # Detect trivial queries: greetings, meta-questions, reactions, very short messages
+    _trivial_re = re.compile(
+        r"^(?:h(?:i|ello|ey|owdy)|yo|sup|thanks?|ty|ok|cool|nice|wow|omg|lol|"
+        r"what'?s up|good (?:morning|afternoon|evening|day)|"
+        r"who are you|what (?:are|can) you|tell me about yourself|"
+        r"how are you|what do you do|hey lyra|hello lyra|hi lyra"
+        r")[\s!?.🏛🗿⚱🔍💀🏺]*$",
+        re.IGNORECASE,
+    )
+    is_trivial = (
+        not message
+        or len(message.strip()) <= 2
+        or bool(_trivial_re.match(message.strip()))
+    )
+
     skip_retrieval = (
         ctx.model_tier == "trivial"
         or context_type == "empire"
-        or not message
-        or len(message.strip()) <= 2
+        or is_trivial
     )
 
     if not skip_retrieval:
@@ -887,7 +901,52 @@ async def run_agent_stream(
     tool_calls_made = 0
     max_tool_rounds = 5
 
-    for _round in range(max_tool_rounds):
+    # Trivial queries: skip structured output and tools entirely.
+    # Mercury's structured JSON schema kills personality for greetings.
+    if is_trivial and ctx.backend_type == "mercury":
+        yield {
+            "type": "pipeline",
+            "stage": "llm_round",
+            "status": "start",
+            "duration_ms": None,
+            "meta": {"round": 1},
+        }
+        _t_trivial = time.monotonic()
+        try:
+            result = await backend_impl.generate(messages)
+            total_input_tokens += result["usage"]["input"]
+            total_output_tokens += result["usage"]["output"]
+            content = clean_response_text(result["content"])
+            if content.strip():
+                async for diff_ev in _simulate_diffusion(content):
+                    yield diff_ev
+            else:
+                # Empty trivial response — use a default greeting
+                async for diff_ev in _simulate_diffusion(
+                    "🏛️ Hey! Ready to dig into some ancient history? What era or site are you curious about?"
+                ):
+                    yield diff_ev
+        except Exception as e:
+            logger.warning(f"Trivial generate failed: {e}")
+            async for diff_ev in _simulate_diffusion(
+                "🏛️ Hey! Ready to dig into some ancient history? What era or site are you curious about?"
+            ):
+                yield diff_ev
+        _round_ms = int((time.monotonic() - _t_trivial) * 1000)
+        yield {
+            "type": "pipeline",
+            "stage": "llm_round",
+            "status": "done",
+            "duration_ms": _round_ms,
+            "meta": {"tokens": total_input_tokens + total_output_tokens},
+        }
+        # Skip the tool loop entirely — jump to done
+    # Initialize tool_calls for the post-loop check (may be skipped for trivial)
+    tool_calls: list[dict[str, str | int | None]] = []
+    # Capture structured output for frontend debug panel
+    _structured_output: dict | None = None
+
+    for _round in range(max_tool_rounds if not is_trivial else 0):
         yield {
             "type": "pipeline",
             "stage": "llm_round",
@@ -902,11 +961,43 @@ async def run_agent_stream(
 
         # Mercury: single non-streaming call with tools + structured output
         if ctx.backend_type == "mercury":
-            result = await backend_impl.generate(
-                messages,
-                tools=TOOLS if ctx.supports_tools else None,
-                response_format=LYRA_RESPONSE_SCHEMA,
-            )
+            # Retry up to 2 times for transient Mercury errors
+            # (empty content, content_filter_error / 400)
+            result = None
+            _mercury_last_err: Exception | None = None
+            for _attempt in range(3):
+                try:
+                    result = await backend_impl.generate(
+                        messages,
+                        tools=TOOLS if ctx.supports_tools else None,
+                        response_format=LYRA_RESPONSE_SCHEMA,
+                    )
+                    break
+                except Exception as exc:
+                    _mercury_last_err = exc
+                    err_msg = str(exc).lower()
+                    is_retryable = (
+                        "empty content" in err_msg
+                        or "content_filter" in err_msg
+                        or "content policy" in err_msg
+                        or "400" in err_msg
+                    )
+                    if _attempt < 2 and is_retryable:
+                        logger.warning(
+                            f"Mercury transient error (attempt {_attempt + 1}/3): {exc}"
+                        )
+                        await asyncio.sleep(1.5)
+                        continue
+                    if is_retryable:
+                        # Exhausted retries on a retryable error — don't crash
+                        break
+                    raise
+
+            if result is None:
+                logger.error(f"Mercury failed after 3 attempts: {_mercury_last_err}")
+                yield {"type": "error", "error": "Mercury is temporarily unavailable. Please try again."}
+                break
+
             total_input_tokens += result["usage"]["input"]
             total_output_tokens += result["usage"]["output"]
 
@@ -947,11 +1038,13 @@ async def run_agent_stream(
                         if validation_issues:
                             logger.warning(f"Structured output issues: {validation_issues}")
                         collected_content = clean_response_text(expanded)
+                        # Capture for frontend debug panel (strip raw text to save bandwidth)
+                        _so = {k: v for k, v in parsed.items() if k != "text"}
+                        # Only include if there's actual structured data
+                        if any(_so.get(k) for k in ("sites", "coords", "videos", "empires", "images", "links", "countries")):
+                            _structured_output = _so
                 except Exception as e:
                     logger.warning(f"Structured output parse failed: {e}")
-                    # Try to extract the "text" field from raw JSON even if
-                    # full parse failed (Mercury may produce nearly-valid JSON
-                    # with one malformed array while the text field is fine)
                     raw = result["content"]
                     text_match = re.search(r'"text"\s*:\s*"((?:[^"\\]|\\.)*)"', raw)
                     if text_match:
@@ -1227,49 +1320,90 @@ async def run_agent_stream(
     if tool_calls:
         logger.info("Max tool rounds reached — forcing final text response")
         if ctx.backend_type == "mercury":
-            # Single generate() call with structured output, no tools
-            try:
-                result = await backend_impl.generate(messages, response_format=LYRA_RESPONSE_SCHEMA)
-                total_input_tokens += result["usage"]["input"]
-                total_output_tokens += result["usage"]["output"]
-                parsed = json.loads(result["content"])
-                if "sites" in parsed:
-                    parsed["sites"] = [s for s in parsed["sites"] if s.get("id", "").strip()]
-                expanded, validation_issues = expand_markers(parsed, all_news)
-                if validation_issues:
-                    logger.warning(f"Forced structured output issues: {validation_issues}")
-                expanded = clean_response_text(expanded)
-                if expanded.strip():
-                    async for diff_ev in _simulate_diffusion(expanded):
-                        yield diff_ev
-                else:
-                    raise ValueError("Structured output returned empty text")
-            except json.JSONDecodeError as e:
-                logger.warning(f"Forced structured output parse failed: {e}")
-                # Try to extract "text" field from partially-valid JSON
-                raw = result["content"]
-                text_match = re.search(r'"text"\s*:\s*"((?:[^"\\]|\\.)*)"', raw)
-                if text_match:
-                    fallback = clean_response_text(
-                        text_match.group(1).replace("\\n", "\n").replace('\\"', '"')
+            # Retry up to 2 times for transient Mercury errors
+            _forced_result = None
+            for _attempt in range(3):
+                try:
+                    _forced_result = await backend_impl.generate(
+                        messages, response_format=LYRA_RESPONSE_SCHEMA
                     )
-                    if fallback.strip():
-                        async for diff_ev in _simulate_diffusion(fallback):
+                    break
+                except Exception as exc:
+                    err_msg = str(exc).lower()
+                    is_retryable = (
+                        "empty content" in err_msg
+                        or "content_filter" in err_msg
+                        or "content policy" in err_msg
+                        or "400" in err_msg
+                    )
+                    if _attempt < 2 and is_retryable:
+                        logger.warning(
+                            f"Forced response transient error (attempt {_attempt + 1}/3): {exc}"
+                        )
+                        await asyncio.sleep(1.5)
+                        continue
+                    if is_retryable:
+                        break
+                    raise
+
+            if _forced_result is None:
+                logger.error("All forced generate retries failed")
+                yield {"type": "error", "error": "Mercury is temporarily unavailable. Please try again."}
+            else:
+                total_input_tokens += _forced_result["usage"]["input"]
+                total_output_tokens += _forced_result["usage"]["output"]
+                try:
+                    parsed = json.loads(_forced_result["content"])
+                    if "sites" in parsed:
+                        parsed["sites"] = [
+                            s for s in parsed["sites"] if s.get("id", "").strip()
+                        ]
+                    expanded, validation_issues = expand_markers(parsed, all_news)
+                    if validation_issues:
+                        logger.warning(f"Forced structured output issues: {validation_issues}")
+                    expanded = clean_response_text(expanded)
+                    if expanded.strip():
+                        # Capture structured output for frontend
+                        _so = {k: v for k, v in parsed.items() if k != "text"}
+                        if any(_so.get(k) for k in ("sites", "coords", "videos", "empires", "images", "links", "countries")):
+                            _structured_output = _so
+                        async for diff_ev in _simulate_diffusion(expanded):
                             yield diff_ev
                     else:
-                        raise ValueError("Extracted text is empty") from e
-                else:
-                    raise
-            except Exception as e:
-                logger.warning(f"Forced generate failed: {e}")
-                # Last resort: raw generate without structured output
-                result = await backend_impl.generate(messages)
-                total_input_tokens += result["usage"]["input"]
-                total_output_tokens += result["usage"]["output"]
-                fallback = clean_response_text(result["content"])
-                if fallback:
-                    async for diff_ev in _simulate_diffusion(fallback):
-                        yield diff_ev
+                        raise ValueError("Structured output returned empty text")
+                except (json.JSONDecodeError, ValueError) as e:
+                    logger.warning(f"Forced structured output parse failed: {e}")
+                    raw = _forced_result["content"]
+                    text_match = re.search(r'"text"\s*:\s*"((?:[^"\\]|\\.)*)"', raw)
+                    if text_match:
+                        fallback = clean_response_text(
+                            text_match.group(1).replace("\\n", "\n").replace('\\"', '"')
+                        )
+                        if fallback.strip():
+                            async for diff_ev in _simulate_diffusion(fallback):
+                                yield diff_ev
+                    elif raw.strip():
+                        fallback = clean_response_text(raw)
+                        if fallback.strip():
+                            async for diff_ev in _simulate_diffusion(fallback):
+                                yield diff_ev
+                except Exception as e:
+                    logger.warning(f"Forced generate failed: {e}")
+                    # Last resort: raw generate without structured output
+                    try:
+                        result = await backend_impl.generate(messages)
+                        total_input_tokens += result["usage"]["input"]
+                        total_output_tokens += result["usage"]["output"]
+                        fallback = clean_response_text(result["content"])
+                        if fallback:
+                            async for diff_ev in _simulate_diffusion(fallback):
+                                yield diff_ev
+                    except Exception as e2:
+                        logger.error(f"Last resort generate also failed: {e2}")
+                        yield {
+                            "type": "error",
+                            "error": "Mercury is temporarily unavailable. Please try again.",
+                        }
         else:
             async for ev in _stream_with_heartbeat(
                 backend_impl,
@@ -1315,5 +1449,6 @@ async def run_agent_stream(
             "periods_found": periods_found,
             "tool_calls_count": tool_calls_made,
             "history_length": len(history) if history else 0,
+            "structured_output": _structured_output,
         },
     }

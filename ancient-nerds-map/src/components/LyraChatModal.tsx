@@ -852,6 +852,7 @@ export default function LyraChatModal({
               } else if (type === 'done') {
                 receivedDone = true
                 const tokens = data.metadata?.tokens ?? undefined
+                const structuredOutput = data.metadata?.structured_output ?? undefined
                 // Update credits from done event (Discord auth only)
                 if (data.metadata?.credits_remaining !== undefined) {
                   setUserCredits(data.metadata.credits_remaining)
@@ -866,6 +867,7 @@ export default function LyraChatModal({
                           ...m,
                           isStreaming: false,
                           tokens,
+                          structuredOutput,
                           pipelineTrace: m.pipelineTrace
                             ? { ...m.pipelineTrace, isLive: false }
                             : undefined,
@@ -1269,6 +1271,113 @@ export default function LyraChatModal({
                                     <polyline points="20 6 9 17 4 12" />
                                   </svg>
                                 </button>
+                              )}
+                              {msg.role === 'assistant' && !msg.isStreaming && msg.structuredOutput && (
+                                <details className="lyra-structured-output">
+                                  <summary className="lyra-structured-output-toggle">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <path d="M4 7h16M4 12h16M4 17h10" />
+                                    </svg>
+                                    Structured data
+                                    <span className="lyra-so-count">
+                                      {(() => {
+                                        const so = msg.structuredOutput!
+                                        const counts: string[] = []
+                                        if (so.sites?.length) counts.push(`${so.sites.length} site${so.sites.length > 1 ? 's' : ''}`)
+                                        if (so.coords?.length) counts.push(`${so.coords.length} coord${so.coords.length > 1 ? 's' : ''}`)
+                                        if (so.videos?.length) counts.push(`${so.videos.length} video${so.videos.length > 1 ? 's' : ''}`)
+                                        if (so.empires?.length) counts.push(`${so.empires.length} empire${so.empires.length > 1 ? 's' : ''}`)
+                                        if (so.images?.length) counts.push(`${so.images.length} image${so.images.length > 1 ? 's' : ''}`)
+                                        if (so.links?.length) counts.push(`${so.links.length} link${so.links.length > 1 ? 's' : ''}`)
+                                        if (so.countries?.length) counts.push(`${so.countries.length} flag${so.countries.length > 1 ? 's' : ''}`)
+                                        return counts.join(' · ')
+                                      })()}
+                                    </span>
+                                  </summary>
+                                  <div className="lyra-so-content">
+                                    {msg.structuredOutput.sites?.length ? (
+                                      <div className="lyra-so-section">
+                                        <div className="lyra-so-label">Sites</div>
+                                        {msg.structuredOutput.sites.map((s, i) => (
+                                          <div key={i} className="lyra-so-item">
+                                            <span className="lyra-so-marker">{s.marker}</span>
+                                            <span className="lyra-so-name">{s.name}</span>
+                                            <span className="lyra-so-id" title={s.id}>{s.id.slice(0, 8)}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : null}
+                                    {msg.structuredOutput.coords?.length ? (
+                                      <div className="lyra-so-section">
+                                        <div className="lyra-so-label">Coordinates</div>
+                                        {msg.structuredOutput.coords.map((c, i) => (
+                                          <div key={i} className="lyra-so-item">
+                                            <span className="lyra-so-marker">{c.marker}</span>
+                                            <span className="lyra-so-name">{c.lat.toFixed(4)}, {c.lon.toFixed(4)}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : null}
+                                    {msg.structuredOutput.videos?.length ? (
+                                      <div className="lyra-so-section">
+                                        <div className="lyra-so-label">Videos</div>
+                                        {msg.structuredOutput.videos.map((v, i) => (
+                                          <div key={i} className="lyra-so-item">
+                                            <span className="lyra-so-marker">{v.marker}</span>
+                                            <span className="lyra-so-name">{v.channel}</span>
+                                            <span className="lyra-so-id" title={v.video_id}>{v.video_id.slice(0, 8)}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : null}
+                                    {msg.structuredOutput.empires?.length ? (
+                                      <div className="lyra-so-section">
+                                        <div className="lyra-so-label">Empires</div>
+                                        {msg.structuredOutput.empires.map((e, i) => (
+                                          <div key={i} className="lyra-so-item">
+                                            <span className="lyra-so-marker">{e.marker}</span>
+                                            <span className="lyra-so-name">{e.name}</span>
+                                            <span className="lyra-so-id">{e.polity_id}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : null}
+                                    {msg.structuredOutput.images?.length ? (
+                                      <div className="lyra-so-section">
+                                        <div className="lyra-so-label">Images</div>
+                                        {msg.structuredOutput.images.map((im, i) => (
+                                          <div key={i} className="lyra-so-item">
+                                            <span className="lyra-so-marker">{im.marker}</span>
+                                            <span className="lyra-so-name">{im.title}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : null}
+                                    {msg.structuredOutput.links?.length ? (
+                                      <div className="lyra-so-section">
+                                        <div className="lyra-so-label">Links</div>
+                                        {msg.structuredOutput.links.map((l, i) => (
+                                          <div key={i} className="lyra-so-item">
+                                            <span className="lyra-so-marker">{l.marker}</span>
+                                            <a className="lyra-so-link" href={l.url} target="_blank" rel="noopener noreferrer">{l.text}</a>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : null}
+                                    {msg.structuredOutput.countries?.length ? (
+                                      <div className="lyra-so-section">
+                                        <div className="lyra-so-label">Countries</div>
+                                        {msg.structuredOutput.countries.map((f, i) => (
+                                          <div key={i} className="lyra-so-item">
+                                            <span className="lyra-so-marker">{f.marker}</span>
+                                            <span className="lyra-so-name">{f.name}</span>
+                                            <span className="lyra-so-id">{f.code}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </details>
                               )}
                               {msg.role === 'assistant' && !msg.isStreaming && msg.tokens && (msg.tokens.input > 0 || msg.tokens.output > 0 || (msg.tokens.voyage ?? 0) > 0) && (
                                 <div className="lyra-chat-msg-footer">

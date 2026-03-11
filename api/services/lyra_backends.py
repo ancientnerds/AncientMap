@@ -419,8 +419,18 @@ class MercuryBackend:
                     raise
 
             message = resp.choices[0].message
+            content = message.content or ""
+
+            # Guard: Mercury sometimes returns empty content on rate limits
+            # or overloaded state.  Raise explicitly so callers can retry.
+            if not content.strip() and not message.tool_calls:
+                raise ValueError(
+                    "Mercury returned empty content with no tool calls — "
+                    "likely rate-limited or overloaded"
+                )
+
             result: dict = {
-                "content": message.content or "",
+                "content": content,
                 "tool_calls": [],
                 "usage": {
                     "input": resp.usage.prompt_tokens or 0 if resp.usage else 0,

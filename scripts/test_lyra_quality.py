@@ -249,7 +249,7 @@ def check_no_error(resp: SSEResponse, **_kw) -> CheckResult:
 
 def check_markers_resolved(resp: SSEResponse, **_kw) -> CheckResult:
     """No guillemet markers «...» should remain in final text."""
-    remaining = re.findall(r"\u00ab[a-z]+\d+\u00bb", resp.content)
+    remaining = re.findall(r"\u00ab/?[a-z]+\d+\u00bb?", resp.content)
     ok = len(remaining) == 0
     return CheckResult(
         "markers_resolved",
@@ -438,6 +438,46 @@ def check_off_topic_rejected(resp: SSEResponse, **_kw) -> CheckResult:
     return CheckResult("off_topic_rejected", ok, ", ".join(problems) if problems else "Properly declined")
 
 
+def check_no_json_leak(resp: SSEResponse, **_kw) -> CheckResult:
+    """No references to JSON structure (arrays, fields) should leak into user text."""
+    leaks = []
+    patterns = [
+        (r"(?:see|in)\s+the\s+(?:links|sites|coords|videos|empires|images|countries)\s+array", "array reference"),
+        (r"(?:links|sites|coords|videos|empires|images|countries)\s+(?:field|property|object)", "field reference"),
+        (r'"(?:on_topic|text|sites|coords|videos|empires|images|links|countries)"\s*:', "JSON key"),
+    ]
+    for pat, label in patterns:
+        if re.search(pat, resp.content, re.IGNORECASE):
+            leaks.append(label)
+    ok = len(leaks) == 0
+    return CheckResult("no_json_leak", ok, ", ".join(leaks) if leaks else "")
+
+
+def check_personality(resp: SSEResponse, **_kw) -> CheckResult:
+    """Greeting responses should show Lyra's personality — not bland generic text."""
+    text = resp.content.lower()
+    # Must NOT be generic chatbot filler
+    bland_patterns = [
+        r"how can i (?:assist|help) you",
+        r"how may i help you",
+        r"what can i do for you",
+        r"i'm here to help",
+        r"feel free to ask",
+        r"your (?:ai |virtual )?(?:assistant|companion)",
+    ]
+    is_bland = any(re.search(p, text) for p in bland_patterns)
+    # Should have at least one personality signal (emoji, archaeology reference, exclamation)
+    has_emoji = bool(re.search(r"[\U0001F300-\U0001FAFF\u2600-\u27BF]|🏛|🏺|🗿|⚱|🔍|💀", resp.content))
+    has_archaeology = bool(re.search(r"archaeolog|ancient|ruin|civilization|dig|history", text))
+    has_energy = "!" in resp.content or "?" in resp.content
+
+    if is_bland:
+        return CheckResult("personality", False, "Bland generic greeting")
+    if has_emoji or (has_archaeology and has_energy):
+        return CheckResult("personality", True, "Has personality")
+    return CheckResult("personality", True, "Acceptable")
+
+
 CHECK_REGISTRY: dict[str, callable] = {
     "not_empty": check_not_empty,
     "no_error": check_no_error,
@@ -456,6 +496,8 @@ CHECK_REGISTRY: dict[str, callable] = {
     "tools_called": check_tools_called,
     "no_hallucinated_ids": check_no_hallucinated_ids,
     "off_topic_rejected": check_off_topic_rejected,
+    "no_json_leak": check_no_json_leak,
+    "personality": check_personality,
 }
 
 
@@ -889,6 +931,7 @@ TEST_CASES: list[TestCase] = [
             "no_raw_json",
             "no_empty_ids",
             "conciseness",
+            "personality",
         ],
     ),
     TestCase(
@@ -1417,6 +1460,7 @@ TEST_CASES: list[TestCase] = [
             "markers_resolved",
             "no_raw_json",
             "no_empty_ids",
+            "personality",
         ],
         min_relevance=4,
     ),
@@ -1642,6 +1686,10 @@ async def run_test(
     # Tool-specific check (if expected_tools and not already in structural_checks)
     if tc.expected_tools and "tools_called" not in tc.structural_checks:
         structural_results.append(check_tools_called(resp, expected=tc.expected_tools))
+
+    # Auto-checks: always run on every test (catch real-world failures)
+    if "no_json_leak" not in tc.structural_checks:
+        structural_results.append(check_no_json_leak(resp))
 
     # Print structural results
     parts = []

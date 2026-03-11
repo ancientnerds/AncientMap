@@ -16785,6 +16785,99 @@ body.news-feed-open .empire-borders-window {
   color: var(--accent-primary);
 }
 
+/* Structured output collapsible panel */
+.lyra-structured-output {
+  margin-top: 6px;
+  border: 1px solid var(--border-crt);
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-family: var(--font-body);
+  overflow: hidden;
+}
+.lyra-structured-output-toggle {
+  padding: 4px 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--crt-600);
+  font-size: 0.65rem;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  user-select: none;
+  list-style: none;
+}
+.lyra-structured-output-toggle::-webkit-details-marker { display: none; }
+.lyra-structured-output-toggle::before {
+  content: '\25B6';
+  font-size: 0.5rem;
+  transition: transform 0.15s;
+  color: var(--crt-700);
+}
+.lyra-structured-output[open] > .lyra-structured-output-toggle::before {
+  transform: rotate(90deg);
+}
+.lyra-structured-output-toggle:hover { color: var(--accent-primary); }
+.lyra-structured-output-toggle svg { flex-shrink: 0; opacity: 0.6; }
+.lyra-so-count {
+  margin-left: auto;
+  color: var(--crt-700);
+  font-size: 0.6rem;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.lyra-so-content {
+  padding: 0 8px 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.lyra-so-section { margin-bottom: 4px; }
+.lyra-so-section:last-child { margin-bottom: 0; }
+.lyra-so-label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--accent-primary);
+  opacity: 0.7;
+  margin-bottom: 2px;
+  padding-top: 3px;
+  border-top: 1px solid var(--border-crt);
+}
+.lyra-so-section:first-child .lyra-so-label { border-top: none; padding-top: 0; }
+.lyra-so-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 0;
+  color: var(--crt-500);
+  font-size: 0.65rem;
+}
+.lyra-so-marker {
+  color: var(--crt-700);
+  font-size: 0.6rem;
+  min-width: 20px;
+}
+.lyra-so-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lyra-so-id {
+  font-family: monospace;
+  font-size: 0.6rem;
+  color: var(--crt-700);
+  flex-shrink: 0;
+}
+.lyra-so-link {
+  color: var(--accent-secondary);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lyra-so-link:hover { text-decoration: underline; }
+
 /* Pipeline panel inherits CRT from modal — transparent bg to blend */
 .lp-panel:not(.lp-maximized) { background: transparent; border-left-color: var(--border-crt); }
 

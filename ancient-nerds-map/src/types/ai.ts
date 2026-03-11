@@ -66,6 +66,22 @@ export interface LyraMessage {
   tokens?: { input: number; output: number; voyage?: number }
   discoveries?: { newCount: number; total: number }
   pipelineTrace?: PipelineTrace
+  structuredOutput?: StructuredOutput
+}
+
+/**
+ * Structured output data from Mercury (sites, coords, videos, etc.)
+ * Excludes the `text` field since that's already in message content.
+ */
+export interface StructuredOutput {
+  on_topic?: boolean
+  sites?: Array<{ marker: string; name: string; id: string }>
+  coords?: Array<{ marker: string; lat: number; lon: number }>
+  videos?: Array<{ marker: string; channel: string; video_id: string; timestamp_seconds: number }>
+  empires?: Array<{ marker: string; name: string; polity_id: string }>
+  images?: Array<{ marker: string; title: string; original_url: string; author: string; license: string }>
+  links?: Array<{ marker: string; text: string; url: string }>
+  countries?: Array<{ marker: string; name: string; code: string }>
 }
 
 /**
