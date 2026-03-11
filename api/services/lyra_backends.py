@@ -277,9 +277,9 @@ class MercuryBackend:
     def _get_client(self):
         from openai import AsyncOpenAI
 
-        from pipeline.lyra.config import get_main_api_key
+        from pipeline.lyra.config import get_api_key
 
-        current_key = get_main_api_key()
+        current_key = get_api_key()
         if self._client is None or self._client_key != current_key:
             self._client = AsyncOpenAI(
                 base_url=self.base_url,
@@ -311,18 +311,7 @@ class MercuryBackend:
         if openai_tools:
             create_kwargs["tools"] = openai_tools
 
-        try:
-            stream = await client.chat.completions.create(**create_kwargs)
-        except Exception as e:
-            from pipeline.lyra.config import mark_api_key_exhausted
-
-            msg = str(e).lower()
-            if "rate limit" in msg or "429" in msg or "quota" in msg:
-                mark_api_key_exhausted()
-                client = self._get_client()  # Picks up new key
-                stream = await client.chat.completions.create(**create_kwargs)
-            else:
-                raise
+        stream = await client.chat.completions.create(**create_kwargs)
 
         # Accumulate tool call chunks by index
         tool_calls: dict[int, dict] = {}
@@ -401,22 +390,9 @@ class MercuryBackend:
             create_kwargs["response_format"] = response_format
 
         async def _call() -> dict:
-            try:
-                resp = await _aio.wait_for(
-                    client.chat.completions.create(**create_kwargs), timeout=60.0
-                )
-            except Exception as e:
-                from pipeline.lyra.config import mark_api_key_exhausted
-
-                msg = str(e).lower()
-                if "rate limit" in msg or "429" in msg or "quota" in msg:
-                    mark_api_key_exhausted()
-                    refreshed = self._get_client()
-                    resp = await _aio.wait_for(
-                        refreshed.chat.completions.create(**create_kwargs), timeout=60.0
-                    )
-                else:
-                    raise
+            resp = await _aio.wait_for(
+                client.chat.completions.create(**create_kwargs), timeout=60.0
+            )
 
             message = resp.choices[0].message
             content = message.content or ""
@@ -473,20 +449,7 @@ class MercuryBackend:
 
         async def _call(effort: str = "high") -> dict:
             kw = {**create_kwargs, "reasoning_effort": effort}
-            try:
-                resp = await _aio.wait_for(client.chat.completions.create(**kw), timeout=30.0)
-            except Exception as e:
-                from pipeline.lyra.config import mark_api_key_exhausted
-
-                msg = str(e).lower()
-                if "rate limit" in msg or "429" in msg or "quota" in msg:
-                    mark_api_key_exhausted()
-                    refreshed = self._get_client()
-                    resp = await _aio.wait_for(
-                        refreshed.chat.completions.create(**kw), timeout=30.0
-                    )
-                else:
-                    raise
+            resp = await _aio.wait_for(client.chat.completions.create(**kw), timeout=30.0)
             content = resp.choices[0].message.content or "{}"
             parsed = json.loads(content)
             # Validate text field
@@ -543,9 +506,9 @@ def get_backend(
             )
             logger.info(f"Created OllamaBackend for {model_name} at {url}")
         else:
-            from pipeline.lyra.config import get_main_api_key, get_max_tokens
+            from pipeline.lyra.config import get_api_key, get_max_tokens
 
-            api_key = get_main_api_key()
+            api_key = get_api_key()
             mercury_url = os.getenv("LYRA_BASE_URL", "") or os.getenv(
                 "LYRA_ANTHROPIC_BASE_URL", "https://api.inceptionlabs.ai/v1"
             )

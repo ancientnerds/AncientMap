@@ -82,7 +82,7 @@ class LyraSettings(BaseSettings):
 
     # LLM API (OpenAI-compatible — Mercury 2 by Inception Labs)
     api_key: str = ""
-    free_api_keys: str = ""  # Comma-separated free keys (used before main key)
+    free_api_keys: str = ""  # Unused — kept for .env compat
     base_url: str = "https://api.inceptionlabs.ai/v1"
     temperature_min: float = 0.0
     model_summarize: str = "mercury-2"
@@ -170,94 +170,23 @@ def get_max_tokens() -> int:
 
 
 # ---------------------------------------------------------------------------
-# Key pool — rotates through free API keys before using the main (paid) key
+# API key access
 # ---------------------------------------------------------------------------
 
 
-class _KeyPool:
-    """Rotates through free API keys with cooldown, falling back to the main key.
-
-    When a key hits a rate limit, it's cooled down for 60 seconds (not permanently
-    removed). After cooldown, the key becomes available again. This handles
-    per-minute rate limits without wasting the key's remaining quota.
-    """
-
-    COOLDOWN_SECONDS = 60
-
-    def __init__(self):
-        self._free_keys: list[str] = []
-        self._main_key: str = ""
-        self._cooldowns: dict[int, float] = {}  # index -> time.monotonic() when available
-        self._initialized: bool = False
-
-    def _init(self, settings: LyraSettings) -> None:
-        if self._initialized:
-            return
-        self._main_key = settings.api_key
-        self._free_keys = [k.strip() for k in settings.free_api_keys.split(",") if k.strip()]
-        self._initialized = True
-        if self._free_keys:
-            logger.info(f"Key pool: {len(self._free_keys)} free keys + 1 main key")
-
-    def _is_available(self, index: int) -> bool:
-        import time
-
-        if index not in self._cooldowns:
-            return True
-        return time.monotonic() >= self._cooldowns[index]
-
-    @property
-    def current_key(self) -> str:
-        # Find first available free key
-        for i in range(len(self._free_keys)):
-            if self._is_available(i):
-                return self._free_keys[i]
-        return self._main_key
-
-    @property
-    def using_free_key(self) -> bool:
-        return self.current_key != self._main_key
-
-    def mark_rate_limited(self) -> str:
-        """Put the current free key on cooldown and return the next available key."""
-        import time
-
-        for i in range(len(self._free_keys)):
-            if self._is_available(i):
-                self._cooldowns[i] = time.monotonic() + self.COOLDOWN_SECONDS
-                cooling = sum(1 for j in range(len(self._free_keys)) if not self._is_available(j))
-                available = len(self._free_keys) - cooling
-                next_key = self.current_key
-                is_main = next_key == self._main_key
-                logger.info(
-                    f"Key {i + 1} rate-limited (cooldown {self.COOLDOWN_SECONDS}s): "
-                    f"{'using main key' if is_main else f'{available} free keys available'}"
-                )
-                return next_key
-        return self._main_key
+def get_api_key() -> str:
+    """Return the configured API key."""
+    return _get_settings().api_key
 
 
-_key_pool = _KeyPool()
-
-
-def get_current_api_key() -> str:
-    """Return the current API key from the pool (for background/pipeline tasks)."""
-    _key_pool._init(_get_settings())
-    return _key_pool.current_key
-
-
-def get_main_api_key() -> str:
-    """Return the main (paid) API key directly, bypassing the free key pool.
-
-    Use this for user-facing chat to avoid rate limits from free keys.
-    """
-    _key_pool._init(_get_settings())
-    return _key_pool._main_key
+# Backwards-compat aliases
+get_current_api_key = get_api_key
+get_main_api_key = get_api_key
 
 
 def mark_api_key_exhausted() -> str:
-    """Mark the current key as rate-limited (60s cooldown) and return the next one."""
-    return _key_pool.mark_rate_limited()
+    """No-op — free key pool removed. Returns the main key."""
+    return get_api_key()
 
 
 # ---------------------------------------------------------------------------
@@ -305,19 +234,6 @@ def _get_ollama_client(settings: LyraSettings):
     return _cached_ollama_client
 
 
-def _is_rate_limit_error(exc: Exception) -> bool:
-    """Check if an exception indicates rate limiting or quota exhaustion."""
-    try:
-        from openai import RateLimitError
-
-        if isinstance(exc, RateLimitError):
-            return True
-    except ImportError:
-        pass
-    msg = str(exc).lower()
-    return "rate limit" in msg or "quota" in msg or "429" in msg
-
-
 def _call_openai_api(
     settings: LyraSettings,
     *,
@@ -330,8 +246,7 @@ def _call_openai_api(
     if is_ollama:
         client = _get_ollama_client(settings)
     else:
-        _key_pool._init(settings)
-        client = _get_mercury_client(_key_pool.current_key, settings.base_url)
+        client = _get_mercury_client(settings.api_key, settings.base_url)
 
     # Build OpenAI messages from system + user/assistant messages
     messages: list[dict] = []
@@ -410,16 +325,7 @@ def _call_openai_api(
     if not is_ollama and effective_effort:
         create_kwargs["reasoning_effort"] = effective_effort
 
-    try:
-        response = client.chat.completions.create(**create_kwargs)
-    except Exception as e:
-        # Rotate to next key on rate limit / quota exhaustion (free keys only)
-        if not is_ollama and _key_pool.using_free_key and _is_rate_limit_error(e):
-            next_key = _key_pool.mark_rate_limited()
-            client = _get_mercury_client(next_key, settings.base_url)
-            response = client.chat.completions.create(**create_kwargs)
-        else:
-            raise
+    response = client.chat.completions.create(**create_kwargs)
     return _normalize_openai_response(response)
 
 
