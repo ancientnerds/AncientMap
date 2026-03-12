@@ -33,14 +33,24 @@ export function timeAgo(iso: string): string {
 }
 
 export function formatRelativeDate(isoDate: string): string {
-  const date = new Date(isoDate)
+  const d = new Date(isoDate)
   const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-
-  if (diffHours < 1) return 'Just now'
-  if (diffHours < 24) return `${diffHours}h ago`
-  if (diffDays < 7) return `${diffDays}d ago`
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const diffMs = now.getTime() - d.getTime()
+  if (diffMs < 0) {
+    const futureMin = Math.floor(-diffMs / 60000)
+    if (futureMin < 1) return 'just now'
+    if (futureMin < 60) return `in ${futureMin}m`
+    const futureHr = Math.floor(futureMin / 60)
+    if (futureHr < 24) return `in ${futureHr}h`
+    const futureDays = Math.floor(futureHr / 24)
+    return `in ${futureDays}d`
+  }
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 1) return 'just now'
+  if (diffMin < 60) return `${diffMin}m ago`
+  const diffHr = Math.floor(diffMin / 60)
+  if (diffHr < 24) return `${diffHr}h ago`
+  const diffDays = Math.floor(diffHr / 24)
+  if (diffDays < 30) return `${diffDays}d ago`
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined })
 }

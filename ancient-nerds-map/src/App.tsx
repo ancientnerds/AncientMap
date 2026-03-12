@@ -1023,6 +1023,7 @@ function AppContent() {
   // Listen for postMessage from search page / Lyra — switch site or fly to coords
   useEffect(() => {
     const handler = async (e: MessageEvent) => {
+      if (e.origin !== window.location.origin) return
       // Handle fly-to-coords from Lyra coordinate links
       if (e.data?.type === 'fly-to-coords' && e.data?.lat != null && e.data?.lon != null) {
         setFlyToCoords(null)

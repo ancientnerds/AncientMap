@@ -1190,7 +1190,7 @@ class DuelView(discord.ui.View):
         try:
             from api.cardgame.battle import resolve_battle
             from api.cardgame.models import CardBattle, CardDeck, CardStats
-            from pipeline.database import DiscordUser, get_session
+            from pipeline.database import CreditGrant, DiscordUser, get_session
 
             with get_session() as session:
                 battle = session.get(CardBattle, uuid.UUID(self.battle_id))
@@ -1230,6 +1230,20 @@ class DuelView(discord.ui.View):
                         return
                     challenger.credits -= battle.stake_credits
                     defender.credits -= battle.stake_credits
+                    session.add(
+                        CreditGrant(
+                            user_id=challenger.id,
+                            amount=-battle.stake_credits,
+                            reason="card_battle_stake_escrow",
+                        )
+                    )
+                    session.add(
+                        CreditGrant(
+                            user_id=defender.id,
+                            amount=-battle.stake_credits,
+                            reason="card_battle_stake_escrow",
+                        )
+                    )
 
                 battle.status = "active"
 
@@ -1523,7 +1537,7 @@ class SnapResponseView(discord.ui.View):
 
         from api.cardgame.battle import apply_battle_result
         from api.cardgame.models import CardBattle
-        from pipeline.database import DiscordUser, get_session
+        from pipeline.database import CreditGrant, DiscordUser, get_session
 
         with get_session() as session:
             battle = (
@@ -1556,15 +1570,30 @@ class SnapResponseView(discord.ui.View):
                 if challenger.credits >= additional and defender.credits >= additional:
                     challenger.credits -= additional
                     defender.credits -= additional
+                    session.add(
+                        CreditGrant(
+                            user_id=challenger.id,
+                            amount=-additional,
+                            reason="card_battle_snap_escrow",
+                        )
+                    )
+                    session.add(
+                        CreditGrant(
+                            user_id=defender.id,
+                            amount=-additional,
+                            reason="card_battle_snap_escrow",
+                        )
+                    )
                 else:
                     battle.snap_multiplier = 1  # revert — can't afford snap
                 apply_battle_result(session, battle, self.result, challenger, defender)
 
+        snap_mult = battle.snap_multiplier if battle else 1
         embed = _build_result_embed(
             self.result,
             self.challenger_id,
             self.defender_id,
-            snap_multiplier=2,
+            snap_multiplier=snap_mult,
         )
         for item in self.children:
             item.disabled = True

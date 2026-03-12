@@ -13,6 +13,20 @@ import markdown  # noqa: I001 — third-party, separated intentionally
 
 BASE_URL = "https://ancientnerds.com"
 
+# Strip dangerous HTML from Markdown output (defense-in-depth for LLM-generated content)
+_DANGEROUS_TAGS_RE = re.compile(
+    r"<\s*/?\s*(?:script|iframe|object|embed|form|input|textarea|button)\b[^>]*>",
+    re.IGNORECASE,
+)
+_EVENT_HANDLER_RE = re.compile(r"\s+on\w+\s*=\s*[\"'][^\"']*[\"']", re.IGNORECASE)
+
+
+def _sanitize_html(html: str) -> str:
+    """Remove dangerous tags and event handler attributes from HTML."""
+    html = _DANGEROUS_TAGS_RE.sub("", html)
+    html = _EVENT_HANDLER_RE.sub("", html)
+    return html
+
 # Shared CSS for all rendered pages (dark theme matching main site)
 _SHARED_CSS = """
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -166,7 +180,7 @@ def render_article_html(
 ) -> str:
     """Render a single article as a full SEO-optimized HTML page."""
     md = markdown.Markdown(extensions=["extra", "smarty", "toc"])
-    body_html = md.convert(content_md)
+    body_html = _sanitize_html(md.convert(content_md))
 
     meta_desc = (summary or title)[:160]
     pub_date = published_at.strftime("%Y-%m-%d") if published_at else ""
@@ -177,7 +191,7 @@ def render_article_html(
         date_range = f"{week_start.strftime('%b %d')} &ndash; {week_end.strftime('%b %d, %Y')}"
 
     canonical = f"{BASE_URL}/articles/{slug}"
-    og_image = _first_image_url(content_md) or f"{BASE_URL}/landing/og-image.png"
+    og_image = escape(_first_image_url(content_md) or f"{BASE_URL}/landing/og-image.png")
     e_title = escape(title)
     e_desc = escape(meta_desc)
 
@@ -465,7 +479,7 @@ def render_medium_copy_html(
 ) -> str:
     """Render a clean, light-themed page for copying into Medium's editor."""
     md = markdown.Markdown(extensions=["extra", "smarty"])
-    body_html = md.convert(content_md)
+    body_html = _sanitize_html(md.convert(content_md))
     canonical = f"{BASE_URL}/articles/{slug}"
     e_title = escape(title)
 
@@ -554,6 +568,7 @@ def render_medium_copy_html(
 
 def render_404_html(what: str = "Page") -> str:
     """Render a styled 404 page."""
+    what = escape(what)
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>

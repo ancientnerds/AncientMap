@@ -2,7 +2,7 @@ let globeWindow: Window | null = null
 
 export function navigateGlobeToSite(siteId: string) {
   if (globeWindow && !globeWindow.closed) {
-    globeWindow.postMessage({ type: 'focus-site', siteId }, '*')
+    globeWindow.postMessage({ type: 'focus-site', siteId }, window.location.origin)
     globeWindow.focus()
     return
   }
@@ -11,7 +11,7 @@ export function navigateGlobeToSite(siteId: string) {
 
 export function navigateGlobeToCoords(lat: number, lon: number, activateProximity = false) {
   if (globeWindow && !globeWindow.closed) {
-    globeWindow.postMessage({ type: 'fly-to-coords', lat, lon, activateProximity }, '*')
+    globeWindow.postMessage({ type: 'fly-to-coords', lat, lon, activateProximity }, window.location.origin)
     globeWindow.focus()
     return
   }

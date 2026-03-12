@@ -159,10 +159,9 @@ def normalize_coordinates(
         lon = float(lon)
 
         # Handle common mistakes: swapped lat/lon
-        if -180 <= lat <= 180 and -90 <= lon <= 90:
-            if abs(lat) > 90 or abs(lon) > 180:
-                # Might be swapped
-                lat, lon = lon, lat
+        # If lat is out of [-90,90] but lon is in [-90,90], they are likely swapped
+        if abs(lat) > 90 and abs(lon) <= 90:
+            lat, lon = lon, lat
 
         if is_valid_coordinates(lat, lon):
             return lat, lon

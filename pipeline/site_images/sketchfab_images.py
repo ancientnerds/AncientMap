@@ -373,9 +373,9 @@ def get_sites_without_images(session: Session, limit: int = None) -> list[dict]:
     """
 
     if limit:
-        query += f" LIMIT {limit}"
+        query += " LIMIT :limit"
 
-    result = session.execute(text(query))
+    result = session.execute(text(query), {"limit": limit} if limit else {})
 
     sites = []
     for row in result.fetchall():

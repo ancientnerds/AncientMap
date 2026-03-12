@@ -8,6 +8,7 @@ Falls back to in-memory cache when Redis is unavailable.
 import json
 import logging
 import os
+import threading
 import time
 from collections.abc import Callable
 from functools import wraps
@@ -22,11 +23,12 @@ _redis_available = False
 # In-memory fallback cache when Redis is unavailable
 # Format: {key: (value, expiry_timestamp)}
 _memory_cache: dict[str, tuple[Any, float]] = {}
+_memory_lock = threading.Lock()
 _MEMORY_CACHE_MAX_ENTRIES = 50  # Limit memory usage
 
 
 def _cleanup_memory_cache():
-    """Remove expired entries from memory cache."""
+    """Remove expired entries from memory cache. Caller must hold _memory_lock."""
     global _memory_cache
     now = time.time()
     # Remove expired entries
@@ -72,13 +74,14 @@ def cache_get(key: str) -> Any | None:
             logger.warning(f"Cache get error for {key}: {e}")
 
     # Fallback to in-memory cache
-    if key in _memory_cache:
-        value, expiry = _memory_cache[key]
-        if time.time() < expiry:
-            logger.debug(f"Memory cache hit: {key}")
-            return value
-        else:
-            del _memory_cache[key]
+    with _memory_lock:
+        if key in _memory_cache:
+            value, expiry = _memory_cache[key]
+            if time.time() < expiry:
+                logger.debug(f"Memory cache hit: {key}")
+                return value
+            else:
+                del _memory_cache[key]
 
     return None
 
@@ -95,8 +98,9 @@ def cache_set(key: str, value: Any, ttl: int = 3600) -> bool:
             logger.warning(f"Cache set error for {key}: {e}")
 
     # Fallback to in-memory cache
-    _cleanup_memory_cache()
-    _memory_cache[key] = (value, time.time() + ttl)
+    with _memory_lock:
+        _cleanup_memory_cache()
+        _memory_cache[key] = (value, time.time() + ttl)
     logger.debug(f"Memory cache set: {key} (TTL: {ttl}s)")
     return True
 
@@ -115,9 +119,10 @@ def cache_delete(key: str) -> bool:
             logger.warning(f"Cache delete error for {key}: {e}")
 
     # Also delete from memory cache
-    if key in _memory_cache:
-        del _memory_cache[key]
-        deleted = True
+    with _memory_lock:
+        if key in _memory_cache:
+            del _memory_cache[key]
+            deleted = True
 
     return deleted
 
@@ -143,10 +148,11 @@ def cache_delete_pattern(pattern: str) -> int:
     # Also delete from memory cache (simple prefix match)
     import fnmatch
 
-    keys_to_delete = [k for k in _memory_cache.keys() if fnmatch.fnmatch(k, pattern)]
-    for key in keys_to_delete:
-        del _memory_cache[key]
-        count += 1
+    with _memory_lock:
+        keys_to_delete = [k for k in _memory_cache.keys() if fnmatch.fnmatch(k, pattern)]
+        for key in keys_to_delete:
+            del _memory_cache[key]
+            count += 1
 
     return count
 

@@ -1241,9 +1241,17 @@ async def run_agent_stream(
             except Exception as e:
                 err_msg = str(e)[:500]
                 logger.error(f"Tool {tc['name']} failed: {err_msg} | args={tc['args']!r}")
+                # Sanitize error for LLM — don't leak internal details
+                safe_msg = "Tool encountered an error"
+                if "not found" in err_msg.lower():
+                    safe_msg = "No results found"
+                elif "timeout" in err_msg.lower() or "timed out" in err_msg.lower():
+                    safe_msg = "Request timed out"
+                elif "connection" in err_msg.lower():
+                    safe_msg = "Service temporarily unavailable"
                 messages.append(
                     ToolMessage(
-                        content=f"Tool error: {err_msg[:200]}. Try a different approach.",
+                        content=f"{safe_msg}. Try a different approach.",
                         tool_call_id=str(tc["id"]),
                     )
                 )

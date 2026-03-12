@@ -135,7 +135,7 @@ let globeWindow: Window | null = null
 /** Navigate to a site on the globe — reuses existing globe tab via postMessage. */
 export function viewOnGlobe(siteId: string) {
   if (globeWindow && !globeWindow.closed) {
-    globeWindow.postMessage({ type: 'focus-site', siteId }, '*')
+    globeWindow.postMessage({ type: 'focus-site', siteId }, window.location.origin)
     globeWindow.focus()
     return
   }

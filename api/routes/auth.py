@@ -230,12 +230,15 @@ def process_credit_grants(session: Session, user: DiscordUser) -> None:
         reason = config["reason"]
 
         if role_type == "one_time":
+            # Use sentinel "one_time" instead of NULL so the DB unique constraint
+            # (user_id, reason, grant_period) can prevent duplicate grants.
+            # PostgreSQL treats NULL != NULL in unique constraints.
             existing = (
                 session.query(CreditGrant)
                 .filter(
                     CreditGrant.user_id == user.id,
                     CreditGrant.reason == reason,
-                    CreditGrant.grant_period.is_(None),
+                    CreditGrant.grant_period == "one_time",
                 )
                 .first()
             )
@@ -247,7 +250,7 @@ def process_credit_grants(session: Session, user: DiscordUser) -> None:
                         user_id=user.id,
                         amount=amount,
                         reason=reason,
-                        grant_period=None,
+                        grant_period="one_time",
                     )
                 )
                 logger.info(f"Granted {amount} credits to {user.username} ({reason})")
@@ -320,7 +323,7 @@ async def discord_oauth_redirect(req: Request, return_to: str | None = None):
         raise HTTPException(status_code=429, detail="Too many pending logins. Try again later.")
 
     # Sanitize return_to: must be a relative path, no open redirect
-    if not return_to or not return_to.startswith("/") or return_to.startswith("//"):
+    if not return_to or not return_to.startswith("/") or return_to.startswith("//") or return_to.startswith("/\\"):
         return_to = "/account.html"
 
     state = secrets.token_urlsafe(32)
@@ -637,8 +640,14 @@ async def logout():
 
 class CreditAdjustRequest(BaseModel):
     user_id: str
-    action: str  # "set" or "add"
+    action: str  # "set", "add", or "remove"
     amount: int
+
+    @property
+    def validated_amount(self) -> int:
+        if self.amount < 0:
+            raise ValueError("amount must be non-negative")
+        return min(self.amount, 10_000_000)
 
 
 class BulkCreditRequest(BaseModel):
@@ -701,6 +710,8 @@ async def admin_adjust_credits(
         raise HTTPException(
             status_code=400, detail="action must be 'set', 'add', 'remove', or 'set_unlimited'"
         )
+    if body.action in ("set", "add", "remove") and body.amount < 0:
+        raise HTTPException(status_code=400, detail="amount must be non-negative")
 
     with get_session() as session:
         user = (

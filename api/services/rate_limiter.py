@@ -26,7 +26,7 @@ def get_client_ip(request: Request) -> str:
     if _BEHIND_PROXY:
         forwarded = request.headers.get("X-Forwarded-For")
         if forwarded:
-            ip = forwarded.split(",")[0].strip()
+            ip = forwarded.split(",")[-1].strip()
     return ip
 
 

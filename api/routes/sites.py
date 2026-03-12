@@ -832,6 +832,7 @@ async def export_file_snapshot_endpoint(
 async def preview_snapshot_endpoint(
     snapshot_id: str,
     db: Session = Depends(get_db),
+    _user: DiscordUser = Depends(require_founder),
 ):
     """Preview what restoring a snapshot would change (current vs old values)."""
     from api.services.snapshots import preview_snapshot
@@ -869,6 +870,7 @@ async def restore_snapshot_endpoint(
 async def get_site_edit_history(
     site_id: str,
     db: Session = Depends(get_db),
+    _user: DiscordUser = Depends(require_founder),
 ):
     """Get the edit history for a single site from snapshot records."""
     from api.services.snapshots import site_edit_history

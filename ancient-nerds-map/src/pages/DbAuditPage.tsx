@@ -12,6 +12,7 @@ import type { ParsedSite } from '../utils/exportFormats'
 import { MetadataBadge } from '../components/metadata/MetadataBadge'
 import { CopyButton } from '../components/metadata/CopyButton'
 import { viewOnGlobe } from '../components/SiteCard'
+import { formatRelativeDate } from '../utils/formatters'
 import SiteForm from '../components/SiteForm'
 import type { SiteFormValues } from '../components/SiteForm'
 import '../styles/db-audit.css'
@@ -106,29 +107,6 @@ function confColor(cf?: number): string {
   return '#ef4444'
 }
 
-function formatRelativeDate(iso: string): string {
-  const d = new Date(iso)
-  const now = new Date()
-  const diffMs = now.getTime() - d.getTime()
-  if (diffMs < 0) {
-    const futureMin = Math.floor(-diffMs / 60000)
-    if (futureMin < 1) return 'just now'
-    if (futureMin < 60) return `in ${futureMin}m`
-    const futureHr = Math.floor(futureMin / 60)
-    if (futureHr < 24) return `in ${futureHr}h`
-    const futureDays = Math.floor(futureHr / 24)
-    return `in ${futureDays}d`
-  }
-  const diffMin = Math.floor(diffMs / 60000)
-  if (diffMin < 1) return 'just now'
-  if (diffMin < 60) return `${diffMin}m ago`
-  const diffHr = Math.floor(diffMin / 60)
-  if (diffHr < 24) return `${diffHr}h ago`
-  const diffDays = Math.floor(diffHr / 24)
-  if (diffDays < 30) return `${diffDays}d ago`
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined })
-}
-
 // ─── Multi-select dropdown ───────────────────────────────────────────────────
 function MultiSelect({ label, options, selected, onChange, colorFn }: {
   label: string
@@ -214,6 +192,34 @@ function MultiSelect({ label, options, selected, onChange, colorFn }: {
       )}
     </div>
   )
+}
+
+// Scroll-arrow helper: hides native scrollbar, shows red chevron arrows
+function useScrollArrows() {
+  const ref = useRef<HTMLDivElement>(null)
+  const [left, setLeft] = useState(false)
+  const [right, setRight] = useState(false)
+  const update = useCallback(() => {
+    const el = ref.current
+    if (!el) return
+    setLeft(el.scrollLeft > 1)
+    setRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1)
+  }, [])
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    update()
+    el.addEventListener('scroll', update)
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => { el.removeEventListener('scroll', update); ro.disconnect() }
+  }, [update])
+  const scroll = useCallback((dir: 'left' | 'right') => {
+    const el = ref.current
+    if (!el) return
+    el.scrollBy({ left: dir === 'left' ? -el.clientWidth * 0.7 : el.clientWidth * 0.7, behavior: 'smooth' })
+  }, [])
+  return { ref, canLeft: left, canRight: right, scroll }
 }
 
 // ─── Main component ──────────────────────────────────────────────────────────
@@ -340,33 +346,6 @@ export default function DbAuditPage() {
   const [diffAddedOpen, setDiffAddedOpen] = useState(true)
   const [diffRemovedOpen, setDiffRemovedOpen] = useState(true)
 
-  // Scroll-arrow helper: hides native scrollbar, shows red chevron arrows
-  function useScrollArrows() {
-    const ref = useRef<HTMLDivElement>(null)
-    const [left, setLeft] = useState(false)
-    const [right, setRight] = useState(false)
-    const update = useCallback(() => {
-      const el = ref.current
-      if (!el) return
-      setLeft(el.scrollLeft > 1)
-      setRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1)
-    }, [])
-    useEffect(() => {
-      const el = ref.current
-      if (!el) return
-      update()
-      el.addEventListener('scroll', update)
-      const ro = new ResizeObserver(update)
-      ro.observe(el)
-      return () => { el.removeEventListener('scroll', update); ro.disconnect() }
-    }, [update])
-    const scroll = useCallback((dir: 'left' | 'right') => {
-      const el = ref.current
-      if (!el) return
-      el.scrollBy({ left: dir === 'left' ? -el.clientWidth * 0.7 : el.clientWidth * 0.7, behavior: 'smooth' })
-    }, [])
-    return { ref, canLeft: left, canRight: right, scroll }
-  }
   const versionScroll = useScrollArrows()
   const statsScroll = useScrollArrows()
 

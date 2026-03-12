@@ -699,7 +699,7 @@ def get_image_stats(session: Session) -> dict:
             COUNT(*) as total,
             COUNT(thumbnail_url) as with_image,
             COUNT(*) - COUNT(thumbnail_url) as without_image,
-            ROUND(100.0 * COUNT(thumbnail_url) / COUNT(*), 2) as coverage_pct
+            ROUND(100.0 * COUNT(thumbnail_url) / NULLIF(COUNT(*), 0), 2) as coverage_pct
         FROM unified_sites
     """)
     )
@@ -712,7 +712,7 @@ def get_image_stats(session: Session) -> dict:
             source_id,
             COUNT(*) as total,
             COUNT(thumbnail_url) as with_image,
-            ROUND(100.0 * COUNT(thumbnail_url) / COUNT(*), 2) as coverage_pct
+            ROUND(100.0 * COUNT(thumbnail_url) / NULLIF(COUNT(*), 0), 2) as coverage_pct
         FROM unified_sites
         GROUP BY source_id
         ORDER BY total DESC

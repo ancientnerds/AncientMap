@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from api.services.jwt_auth import get_optional_user
+from api.services.rate_limiter import get_client_ip
 from api.services.theo_config import EFFORT_CONFIG, MAX_REQUESTS_PER_USER
 from api.services.theo_worker import get_live_events
 from pipeline.database import get_session
@@ -63,10 +64,7 @@ def _get_user_id(req: Request) -> str:
     user = get_optional_user(req)
     if user:
         return user.discord_id
-    forwarded = req.headers.get("x-forwarded-for", "")
-    return (
-        forwarded.split(",")[0].strip() if forwarded else req.client.host if req.client else "anon"
-    )
+    return get_client_ip(req)
 
 
 def _estimate_minutes(effort: str, queue_position: int) -> int:
