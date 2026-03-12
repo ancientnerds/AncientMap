@@ -1,4 +1,4 @@
-// Centralized configuration - reads from environment variables
+// Centralized configuration — reads from environment variables
 // In production, set these via your hosting provider's environment settings
 
 export const config = {
