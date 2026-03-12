@@ -1289,7 +1289,7 @@ export default function LyraChatModal({
                                         {msg.structuredOutput.links.map((l, i) => (
                                           <div key={i} className="lyra-so-item">
                                             <span className="lyra-so-marker">{l.marker}</span>
-                                            <a className="lyra-so-link" href={l.url} target="_blank" rel="noopener noreferrer">{l.text}</a>
+                                            <a className="lyra-so-link" href={lyraUrlTransform(l.url)} target="_blank" rel="noopener noreferrer">{l.text}</a>
                                           </div>
                                         ))}
                                       </div>

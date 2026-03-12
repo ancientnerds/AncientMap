@@ -231,7 +231,6 @@ def _format_timestamp(seconds: int) -> str:
 
 def expand_markers(
     parsed: dict,
-    all_news: list[dict] | None = None,  # noqa: ARG001
 ) -> tuple[str, list[str]]:
     """Expand guillemet markers in parsed structured response into markdown links.
 

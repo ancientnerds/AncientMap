@@ -540,6 +540,9 @@ def vector_search(
         site_type: Filter by site type (e.g. 'settlement', 'temple').
         channel: Filter by channel name (e.g. 'World of Antiquity'). Works on news and transcripts collections.
     """
+    _VALID_COLLECTIONS = {"sites", "news", "transcripts", "articles", "empires"}
+    if collection not in _VALID_COLLECTIONS:
+        return f"Invalid collection '{collection}'. Must be one of: {', '.join(sorted(_VALID_COLLECTIONS))}"
     query = (query or "")[:500]
     items, _vt = _hybrid_search(
         query,

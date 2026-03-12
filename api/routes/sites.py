@@ -402,8 +402,10 @@ async def get_all_sites(
                         FROM site_content_links
                         WHERE content_type = 'reference'
                         AND content_url IS NOT NULL
+                        AND site_id = ANY(:site_ids)
                         ORDER BY site_id, relevance_score DESC
-                    """)
+                    """),
+                    {"site_ids": site_ids_list},
                 )
                 refs_by_site: dict[str, list] = {}
                 for rrow in ref_result:

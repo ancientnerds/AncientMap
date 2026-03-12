@@ -121,8 +121,13 @@ def claim_daily(session: Session, user: DiscordUser) -> dict:
                     )
                 )
             elif reward_type == "pack":
+                from api.cardgame.constants import PACK_PRICES
                 from api.cardgame.packs import open_pack
 
+                # Grant credits to cover the pack cost so the user isn't charged
+                pack_cost = PACK_PRICES.get(reward_value, {}).get("cost", 0)
+                if pack_cost > 0:
+                    user.credits += pack_cost
                 pack_cards = open_pack(session, user, reward_value)
                 streak_reward["cards"] = pack_cards
             break
@@ -153,6 +158,7 @@ def claim_starter_deck(session: Session, user: DiscordUser) -> list[dict]:
     if not ps:
         ps = CardPlayerStats(user_id=user.id)
         session.add(ps)
+        session.flush()
 
     # Pick 10 well-distributed cards: prefer diverse groups and low tiers
     # Get one card per category group, then fill remaining slots

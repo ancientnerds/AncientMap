@@ -3,7 +3,7 @@
  * Accessed via /news.html (separate Vite entry point).
  */
 
-import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
 import { config } from '../config'
 import { getCategoryColor, getPeriodColor } from '../data/sites'
 import { DataStore } from '../data/DataStore'
@@ -321,6 +321,12 @@ export default function NewsFeedPage() {
 
   const activeFilterCount = Object.values(activeFilters).filter(Boolean).length
 
+  const columns = useMemo(() => {
+    const cols: NewsItemData[][] = Array.from({ length: columnCount }, () => [])
+    items.forEach((item, i) => cols[i % columnCount].push(item))
+    return cols
+  }, [items, columnCount])
+
   return (
     <div className="news-page" ref={pageRef}>
       {/* Sticky header: brand + Lyra in one line */}
@@ -616,9 +622,9 @@ export default function NewsFeedPage() {
 
       {/* Grid */}
       <div className="news-page-grid" ref={gridRef}>
-        {Array.from({ length: columnCount }, (_, colIdx) => (
+        {columns.map((colItems, colIdx) => (
           <div key={colIdx} className="news-page-column">
-            {items.filter((_, i) => i % columnCount === colIdx).map(item => {
+            {colItems.map(item => {
               const screenshotSrc = item.screenshot_url
                 ? `${config.api.baseUrl}${item.screenshot_url.replace('/api', '')}`
                 : item.video.thumbnail_url

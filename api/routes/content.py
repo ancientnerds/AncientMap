@@ -601,7 +601,9 @@ async def verify_refresh(
     """
     Authorize connector refresh (founders only, rate limited to 1 per 5 min per IP).
     """
-    ip = req.client.host if req.client else "unknown"
+    from api.services.rate_limiter import get_client_ip
+
+    ip = get_client_ip(req)
 
     now = time.time()
     last_refresh = _refresh_timestamps.get(ip, 0)

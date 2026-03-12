@@ -20,13 +20,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from api.services.jwt_auth import get_optional_user
-from api.services.rate_limiter import get_client_ip
+from api.services.rate_limiter import RateLimiter, get_client_ip
 from api.services.theo_config import EFFORT_CONFIG, MAX_REQUESTS_PER_USER
 from api.services.theo_worker import get_live_events
 from pipeline.database import get_session
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+_theo_limiter = RateLimiter(max_requests=5, window_seconds=300, namespace="theo_research")
 
 
 # ---------------------------------------------------------------------------
@@ -81,6 +82,8 @@ def _estimate_minutes(effort: str, queue_position: int) -> int:
 @router.post("/research", response_model=ResearchSubmitResponse)
 async def submit_research(body: ResearchSubmitRequest, req: Request):
     """Submit a new research question for Theo to investigate."""
+    _theo_limiter.check(get_client_ip(req))
+
     if body.effort not in EFFORT_CONFIG:
         raise HTTPException(status_code=400, detail=f"Invalid effort: {body.effort}")
 

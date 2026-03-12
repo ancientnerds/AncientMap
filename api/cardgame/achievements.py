@@ -2341,8 +2341,9 @@ def _check_single(
         }
         count = session.execute(
             text("""
-            SELECT COUNT(*) FROM user_contributions WHERE source = 'user'
-        """)
+            SELECT COUNT(*) FROM user_contributions WHERE source = 'user' AND user_id = :uid
+        """),
+            {"uid": str(user_id)},
         ).scalar()
         return (count or 0) >= thresholds[aid]
 

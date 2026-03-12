@@ -15,12 +15,11 @@ import os
 import secrets
 import uuid
 from datetime import UTC, datetime
-from math import ceil
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -250,6 +249,7 @@ def process_credit_grants(session: Session, user: DiscordUser) -> None:
                 amount = config["amount"]
                 user.credits += amount
                 try:
+                    nested = session.begin_nested()
                     session.add(
                         CreditGrant(
                             user_id=user.id,
@@ -259,10 +259,11 @@ def process_credit_grants(session: Session, user: DiscordUser) -> None:
                         )
                     )
                     session.flush()
+                    nested.commit()
                 except IntegrityError:
                     logger.info(f"Grant already exists for {user.username} ({reason})")
-                    session.rollback()
-                    return
+                    user.credits -= amount  # revert in-memory change
+                    continue
                 logger.info(f"Granted {amount} credits to {user.username} ({reason})")
 
         elif role_type == "monthly":
@@ -295,6 +296,7 @@ def process_credit_grants(session: Session, user: DiscordUser) -> None:
 
                 user.credits += effective
                 try:
+                    nested = session.begin_nested()
                     session.add(
                         CreditGrant(
                             user_id=user.id,
@@ -304,12 +306,13 @@ def process_credit_grants(session: Session, user: DiscordUser) -> None:
                         )
                     )
                     session.flush()
+                    nested.commit()
                 except IntegrityError:
                     logger.info(
                         f"Monthly grant already exists for {user.username} ({reason}, period={period})"
                     )
-                    session.rollback()
-                    return
+                    user.credits -= effective  # revert in-memory change
+                    continue
                 logger.info(
                     f"Granted {effective} monthly credits to {user.username} ({reason}, period={period})"
                 )
@@ -662,16 +665,20 @@ class CreditAdjustRequest(BaseModel):
     action: str  # "set", "add", or "remove"
     amount: int
 
-    @property
-    def validated_amount(self) -> int:
-        if self.amount < 0:
-            raise ValueError("amount must be non-negative")
-        return min(self.amount, 10_000_000)
+    @field_validator("amount")
+    @classmethod
+    def cap_amount(cls, v: int) -> int:
+        return min(v, 10_000_000)
 
 
 class BulkCreditRequest(BaseModel):
     role_id: str
     amount: int
+
+    @field_validator("amount")
+    @classmethod
+    def cap_amount(cls, v: int) -> int:
+        return min(v, 10_000_000)
 
 
 @router.get("/admin/users")

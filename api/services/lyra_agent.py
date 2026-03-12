@@ -241,6 +241,22 @@ def _auto_retrieve(
 # ---------------------------------------------------------------------------
 
 
+def _is_valid_uuid(val: str) -> bool:
+    """Check if a string is a valid UUID."""
+    try:
+        import uuid as _uuid
+
+        _uuid.UUID(val)
+        return True
+    except (ValueError, AttributeError):
+        return False
+
+
+def _escape_ilike(val: str) -> str:
+    """Escape LIKE metacharacters for safe ILIKE patterns."""
+    return val.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def _get_related_news(
     site_ids: list[str] | None = None,
     site_names: list[str] | None = None,
@@ -266,21 +282,24 @@ def _get_related_news(
     # Site match: by ID or by extracted name (ORed — covers cross-source ID mismatches)
     site_conditions = []
     if site_ids:
-        site_conditions.append("ni.site_id = ANY(CAST(:site_ids AS uuid[]))")
-        params["site_ids"] = site_ids
+        valid_ids = [sid for sid in site_ids if _is_valid_uuid(sid)]
+        if valid_ids:
+            site_conditions.append("ni.site_id = ANY(CAST(:site_ids AS uuid[]))")
+            params["site_ids"] = valid_ids
     if site_names:
         name_clauses = []
         for i, name in enumerate(site_names):
             key = f"sname_{i}"
+            safe_name = _escape_ilike(name)
             # Match both with and without spaces (e.g. "Karahan Tepe" vs "Karahantepe")
             name_clauses.append(f"ni.site_name_extracted ILIKE :{key}")
-            params[key] = f"%{name}%"
+            params[key] = f"%{safe_name}%"
             # Also try the name with spaces removed
             compact = name.replace(" ", "")
             if compact != name:
                 key_c = f"sname_{i}_c"
                 name_clauses.append(f"ni.site_name_extracted ILIKE :{key_c}")
-                params[key_c] = f"%{compact}%"
+                params[key_c] = f"%{_escape_ilike(compact)}%"
         site_conditions.append(f"({' OR '.join(name_clauses)})")
     if site_conditions:
         conditions.append(f"({' OR '.join(site_conditions)})")
@@ -994,7 +1013,7 @@ async def run_agent_stream(
                             parsed["sites"] = [
                                 s for s in parsed["sites"] if s.get("id", "").strip()
                             ]
-                        expanded, validation_issues = expand_markers(parsed, all_news)
+                        expanded, validation_issues = expand_markers(parsed)
                         if validation_issues:
                             logger.warning(f"Structured output issues: {validation_issues}")
                         collected_content = clean_response_text(expanded)
@@ -1370,7 +1389,7 @@ async def run_agent_stream(
                     parsed = json.loads(_forced_result["content"])
                     if "sites" in parsed:
                         parsed["sites"] = [s for s in parsed["sites"] if s.get("id", "").strip()]
-                    expanded, validation_issues = expand_markers(parsed, all_news)
+                    expanded, validation_issues = expand_markers(parsed)
                     if validation_issues:
                         logger.warning(f"Forced structured output issues: {validation_issues}")
                     expanded = clean_response_text(expanded)

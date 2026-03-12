@@ -1573,8 +1573,9 @@ class SnapResponseView(discord.ui.View):
                 else:
                     battle.snap_multiplier = 1  # revert — can't afford snap
                 apply_battle_result(session, battle, self.result, challenger, defender)
-
-        snap_mult = battle.snap_multiplier if battle else 1
+                snap_mult = battle.snap_multiplier
+            else:
+                snap_mult = 1
         embed = _build_result_embed(
             self.result,
             self.challenger_id,

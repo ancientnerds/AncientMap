@@ -32,8 +32,19 @@ _semaphore = asyncio.Semaphore(THEO_PARALLEL_SLOTS)
 
 # Per-request live events for SSE streaming (request_id -> list[dict])
 _live_events: dict[str, list[dict]] = {}
+_MAX_EVENTS_PER_REQUEST = 500
+_MAX_LIVE_ENTRIES = 100
 
 _shutdown = False
+
+
+def _append_event(request_id: str, event: dict) -> None:
+    """Append an event to the live events list with bounds checking."""
+    events = _live_events.get(request_id)
+    if events is None:
+        return
+    if len(events) < _MAX_EVENTS_PER_REQUEST:
+        events.append(event)
 
 
 def get_live_events(request_id: str) -> list[dict]:
@@ -57,6 +68,10 @@ async def _process_request(request_id: str, question: str, effort: str) -> None:
     )
 
     # Track live events for SSE
+    # Evict oldest entries if at capacity
+    if len(_live_events) >= _MAX_LIVE_ENTRIES:
+        oldest = next(iter(_live_events))
+        _live_events.pop(oldest, None)
     _live_events[request_id] = []
 
     start_ms = time.monotonic()
@@ -75,7 +90,7 @@ async def _process_request(request_id: str, question: str, effort: str) -> None:
             )
             session.commit()
 
-        _live_events[request_id].append({"type": "status", "content": "Research started"})
+        _append_event(request_id,{"type": "status", "content": "Research started"})
 
         async for event in run_agent_stream(
             message=question,
@@ -104,7 +119,7 @@ async def _process_request(request_id: str, question: str, effort: str) -> None:
                 total_tokens = meta.get("input_tokens", 0) + meta.get("output_tokens", 0)
 
             # Forward to SSE listeners
-            _live_events[request_id].append(event)
+            _append_event(request_id,event)
 
             # Respect max rounds for non-auto efforts
             max_rounds = effort_cfg["max_rounds"]
@@ -154,7 +169,7 @@ async def _process_request(request_id: str, question: str, effort: str) -> None:
             )
             session.commit()
 
-        _live_events[request_id].append({"type": "done", "status": "completed"})
+        _append_event(request_id,{"type": "done", "status": "completed"})
         logger.info(
             f"[THEO] Research {request_id} completed in {duration_ms}ms "
             f"({sites_found} sites, {tools_used} tools)"
@@ -176,7 +191,7 @@ async def _process_request(request_id: str, question: str, effort: str) -> None:
                 {"id": request_id, "err": str(e)[:2000], "duration": duration_ms},
             )
             session.commit()
-        _live_events[request_id].append({"type": "error", "error": "Research request failed"})
+        _append_event(request_id,{"type": "error", "error": "Research request failed"})
 
     finally:
         # Clean up live events after a delay (let SSE clients catch up)
