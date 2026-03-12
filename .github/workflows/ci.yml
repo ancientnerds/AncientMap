@@ -206,19 +206,26 @@ jobs:
             # Rebuild frontend if files changed OR dist is missing key assets
             if echo "$CHANGED" | grep -q "^ancient-nerds-map/" || [ ! -f ancient-nerds-map/dist/an-logo.svg ]; then
               echo "==> Building frontend..."
-              # dist/ and node_modules may have root-owned files; rename if rm fails
-              for stale_dir in dist node_modules; do
-                rm -rf "ancient-nerds-map/$stale_dir" 2>/dev/null || {
-                  echo "    $stale_dir has stale permissions, moving aside..."
-                  mv "ancient-nerds-map/$stale_dir" "ancient-nerds-map/${stale_dir}-bak-$(date +%s)" 2>/dev/null || true
-                }
-              done
-              rm -rf ancient-nerds-map/dist-bak-* ancient-nerds-map/node_modules-bak-* 2>/dev/null || true
-              (cd ancient-nerds-map && npm ci && npm run build)
-              if [ ! -f ancient-nerds-map/dist/index.html ] || [ ! -f ancient-nerds-map/dist/an-logo.svg ]; then
-                echo "ERROR: Frontend build failed — dist/index.html or dist/an-logo.svg missing!"
+              # Clean stale node_modules if root-owned
+              rm -rf "ancient-nerds-map/node_modules" 2>/dev/null || {
+                echo "    node_modules has stale permissions, moving aside..."
+                mv "ancient-nerds-map/node_modules" "ancient-nerds-map/node_modules-bak-$(date +%s)" 2>/dev/null || true
+              }
+              rm -rf ancient-nerds-map/node_modules-bak-* 2>/dev/null || true
+              # Build to temp dir so dist/ stays live until build succeeds
+              rm -rf ancient-nerds-map/dist-new
+              (cd ancient-nerds-map && npm ci && npm run build -- --outDir dist-new)
+              if [ ! -f ancient-nerds-map/dist-new/index.html ] || [ ! -f ancient-nerds-map/dist-new/an-logo.svg ]; then
+                echo "ERROR: Frontend build failed — dist-new/index.html or an-logo.svg missing!"
+                rm -rf ancient-nerds-map/dist-new
                 exit 1
               fi
+              # Atomic swap: old dist stays until new one is verified
+              rm -rf ancient-nerds-map/dist-old 2>/dev/null || true
+              mv ancient-nerds-map/dist ancient-nerds-map/dist-old 2>/dev/null || true
+              mv ancient-nerds-map/dist-new ancient-nerds-map/dist
+              rm -rf ancient-nerds-map/dist-old 2>/dev/null || true
+              echo "    Frontend built and swapped successfully"
             else
               echo "==> Frontend unchanged, skipping build"
             fi
