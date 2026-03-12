@@ -436,7 +436,7 @@ async def get_all_sites(
             # missing-column / query bugs are caught immediately instead of
             # serving stale data labelled as "postgres".
             raise HTTPException(
-                status_code=500, detail="Database query failed for live sites"
+                status_code=500, detail=f"Database query failed for live sites: {e}"
             ) from e
 
     data_source = "snapshot"
