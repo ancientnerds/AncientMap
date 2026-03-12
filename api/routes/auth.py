@@ -305,7 +305,9 @@ def process_credit_grants(session: Session, user: DiscordUser) -> None:
                     )
                     session.flush()
                 except IntegrityError:
-                    logger.info(f"Monthly grant already exists for {user.username} ({reason}, period={period})")
+                    logger.info(
+                        f"Monthly grant already exists for {user.username} ({reason}, period={period})"
+                    )
                     session.rollback()
                     return
                 logger.info(
@@ -337,7 +339,12 @@ async def discord_oauth_redirect(req: Request, return_to: str | None = None):
         raise HTTPException(status_code=429, detail="Too many pending logins. Try again later.")
 
     # Sanitize return_to: must be a relative path, no open redirect
-    if not return_to or not return_to.startswith("/") or return_to.startswith("//") or return_to.startswith("/\\"):
+    if (
+        not return_to
+        or not return_to.startswith("/")
+        or return_to.startswith("//")
+        or return_to.startswith("/\\")
+    ):
         return_to = "/account.html"
 
     state = secrets.token_urlsafe(32)
@@ -523,11 +530,7 @@ async def get_me(user: DiscordUser = Depends(get_current_user)):
     try:
         # Read credits from DB (grants are applied at login + webhook, not here)
         with get_session() as session:
-            db_user = (
-                session.query(DiscordUser)
-                .filter(DiscordUser.id == user.id)
-                .first()
-            )
+            db_user = session.query(DiscordUser).filter(DiscordUser.id == user.id).first()
             if db_user:
                 credits = db_user.credits
                 is_unlimited = db_user.is_unlimited

@@ -578,6 +578,7 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
 )
 
+
 # Security response headers
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
@@ -586,6 +587,7 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     return response
+
 
 # GZip compression for responses > 500 bytes (reduces JSON payload 3-5x)
 app.add_middleware(GZipMiddleware, minimum_size=500)

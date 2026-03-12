@@ -474,9 +474,13 @@ async def get_connectors_status(
         try:
             user = get_current_user(req)
         except HTTPException:
-            raise HTTPException(status_code=403, detail="Founder access required for live checks and tests") from None
+            raise HTTPException(
+                status_code=403, detail="Founder access required for live checks and tests"
+            ) from None
         if FOUNDER_ROLE_ID not in (user.roles or []):
-            raise HTTPException(status_code=403, detail="Founder access required for live checks and tests")
+            raise HTTPException(
+                status_code=403, detail="Founder access required for live checks and tests"
+            )
 
     # Single connector test mode
     if run_tests_for:

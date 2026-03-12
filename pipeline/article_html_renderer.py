@@ -27,6 +27,7 @@ def _sanitize_html(html: str) -> str:
     html = _EVENT_HANDLER_RE.sub("", html)
     return html
 
+
 # Shared CSS for all rendered pages (dark theme matching main site)
 _SHARED_CSS = """
     * { margin: 0; padding: 0; box-sizing: border-box; }
