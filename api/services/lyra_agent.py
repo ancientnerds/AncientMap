@@ -1405,7 +1405,9 @@ async def run_agent_stream(
                     try:
                         parsed = json.loads(_forced_result["content"])
                         if "sites" in parsed:
-                            parsed["sites"] = [s for s in parsed["sites"] if s.get("id", "").strip()]
+                            parsed["sites"] = [
+                                s for s in parsed["sites"] if s.get("id", "").strip()
+                            ]
                         expanded, validation_issues = expand_markers(parsed)
                         if validation_issues:
                             logger.warning(f"Forced structured output issues: {validation_issues}")
