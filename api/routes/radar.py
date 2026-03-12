@@ -253,6 +253,7 @@ async def get_radar_map_data(db: Session = Depends(get_db)):
         WHERE source IN ('lyra', 'user')
           AND COALESCE(enrichment_status, 'pending') NOT IN ('matched', 'not_a_site', 'failed')
           AND lat IS NOT NULL AND lon IS NOT NULL
+        LIMIT 5000
     """)
     ).fetchall()
 
@@ -282,6 +283,7 @@ async def get_sites_map(db: Session = Depends(get_db)):
           ) AS score
         FROM unified_sites
         WHERE lat IS NOT NULL AND lon IS NOT NULL
+        LIMIT 5000
     """)
     ).fetchall()
 

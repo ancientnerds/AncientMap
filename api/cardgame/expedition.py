@@ -361,19 +361,26 @@ def play_expedition_stage(
             progress.completed_at = datetime.now(UTC)
             rewards["pack"] = EXPEDITION_COMPLETE_PACK
 
-            # Award completion pack (give credits then open so audit trail is clean)
+            # Award completion pack inside a savepoint so credit grant rolls back
+            # if open_pack() fails, preventing phantom credits
             from api.cardgame.packs import open_pack
 
-            pack_cost = PACK_PRICES[EXPEDITION_COMPLETE_PACK]["cost"]
-            user.credits += pack_cost
-            session.add(
-                CreditGrant(
-                    user_id=user.id,
-                    amount=pack_cost,
-                    reason=f"expedition_{expedition_id}_completion_pack",
+            nested = session.begin_nested()
+            try:
+                pack_cost = PACK_PRICES[EXPEDITION_COMPLETE_PACK]["cost"]
+                user.credits += pack_cost
+                session.add(
+                    CreditGrant(
+                        user_id=user.id,
+                        amount=pack_cost,
+                        reason=f"expedition_{expedition_id}_completion_pack",
+                    )
                 )
-            )
-            rewards["pack_cards"] = open_pack(session, user, EXPEDITION_COMPLETE_PACK)
+                rewards["pack_cards"] = open_pack(session, user, EXPEDITION_COMPLETE_PACK)
+                nested.commit()
+            except Exception:
+                nested.rollback()
+                raise
 
             # Award empire card if this expedition has one
             empire_id = EXPEDITION_EMPIRE_REWARDS.get(expedition_id)

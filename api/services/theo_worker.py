@@ -68,10 +68,16 @@ async def _process_request(request_id: str, question: str, effort: str) -> None:
     )
 
     # Track live events for SSE
-    # Evict oldest entries if at capacity
+    # Evict oldest completed entries if at capacity
     if len(_live_events) >= _MAX_LIVE_ENTRIES:
-        oldest = next(iter(_live_events))
-        _live_events.pop(oldest, None)
+        for rid, events in list(_live_events.items()):
+            if any(e.get("type") in ("done", "error") for e in events):
+                _live_events.pop(rid, None)
+                break
+        else:
+            # All entries are still active — evict oldest anyway
+            oldest = next(iter(_live_events))
+            _live_events.pop(oldest, None)
     _live_events[request_id] = []
 
     start_ms = time.monotonic()
@@ -194,8 +200,8 @@ async def _process_request(request_id: str, question: str, effort: str) -> None:
         _append_event(request_id, {"type": "error", "error": "Research request failed"})
 
     finally:
-        # Clean up live events after a delay (let SSE clients catch up)
-        await asyncio.sleep(120)
+        # Clean up live events after a delay (let SSE clients finish reading)
+        await asyncio.sleep(600)
         _live_events.pop(request_id, None)
 
 

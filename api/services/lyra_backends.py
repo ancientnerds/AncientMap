@@ -472,6 +472,8 @@ class MercuryBackend:
 # Backend factory — creates singleton backends keyed by model name
 # ---------------------------------------------------------------------------
 
+# NOTE: Safe while keys are derived from static env vars (~3 entries).
+# If max_tokens/num_ctx ever become user-configurable, add an LRU eviction policy.
 _backends: dict[str, LLMBackend] = {}
 
 

@@ -1307,7 +1307,10 @@ class DuelView(discord.ui.View):
                     result=result,
                     original_stake=stake_credits,
                 )
-                await interaction.followup.send(embed=preview_embed, view=snap_view)
+                snap_msg = await interaction.followup.send(
+                    embed=preview_embed, view=snap_view, wait=True
+                )
+                snap_view.message = snap_msg
             else:
                 embed = _build_result_embed(result, self.challenger_id, self.defender_id)
                 await interaction.followup.send(embed=embed)
@@ -1439,10 +1442,14 @@ class SnapView(discord.ui.View):
         await self._finalize(interaction)
 
     async def on_timeout(self):
-        """No snap — show full results."""
-        # on_timeout doesn't have an interaction, so we need to finalize via the message
-        # The finalize will happen when the view times out — we handle this by applying results
+        """No snap — apply results and send the outcome via the stored message."""
         self._apply_and_stop(snap_multiplier=1)
+        embed = _build_result_embed(self.result, self.challenger_id, self.defender_id)
+        if self.message:
+            for item in self.children:
+                item.disabled = True
+            await self.message.edit(view=self)
+            await self.message.reply(embed=embed)
 
     async def _finalize(self, interaction: discord.Interaction):
         """Both continued or timed out — show full results at original stakes."""

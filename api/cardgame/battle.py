@@ -159,9 +159,10 @@ def apply_battle_result(
     defender: DiscordUser,
 ) -> None:
     """Update battle record, player stats, and distribute rewards."""
-    # Lock both user rows to prevent concurrent credit manipulation
-    session.query(DiscordUser).filter(DiscordUser.id == challenger.id).with_for_update().first()
-    session.query(DiscordUser).filter(DiscordUser.id == defender.id).with_for_update().first()
+    # Lock both user rows in consistent order (lower ID first) to prevent deadlocks
+    first_id, second_id = sorted([challenger.id, defender.id])
+    session.query(DiscordUser).filter(DiscordUser.id == first_id).with_for_update().first()
+    session.query(DiscordUser).filter(DiscordUser.id == second_id).with_for_update().first()
 
     now = datetime.now(UTC)
 

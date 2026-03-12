@@ -27,6 +27,7 @@ from pipeline.database import DiscordUser, get_db
 from pipeline.normalizers.site_type import normalize_site_type
 
 _heavy_limiter = RateLimiter(max_requests=50, window_seconds=60, namespace="heavy_sites")
+_viewport_limiter = RateLimiter(max_requests=60, window_seconds=60, namespace="viewport")
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -476,6 +477,7 @@ async def get_all_sites(
 
 @router.get("/viewport")
 async def get_sites_in_viewport(
+    req: Request,
     min_lat: float = Query(..., ge=-90, le=90),
     max_lat: float = Query(..., ge=-90, le=90),
     min_lon: float = Query(..., ge=-180, le=180),
@@ -489,6 +491,8 @@ async def get_sites_in_viewport(
 
     Uses PostGIS spatial index via ST_MakeEnvelope and && operator.
     """
+    if not _viewport_limiter.check(get_client_ip(req)):
+        raise HTTPException(status_code=429, detail="Too many requests")
     # Use PostGIS bounding box operator (&&) which leverages spatial index
     # ST_MakeEnvelope(xmin, ymin, xmax, ymax, srid) creates a bounding box
     conditions = ["geom && ST_MakeEnvelope(:min_lon, :min_lat, :max_lon, :max_lat, 4326)"]
