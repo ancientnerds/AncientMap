@@ -203,33 +203,7 @@
 .led.orange { background: var(--nerv-o, #FF9830); box-shadow: 0 0 4px var(--nerv-o, #FF9830); }
 .led.cyan   { background: var(--nerv-c, #20F0FF); box-shadow: 0 0 4px var(--nerv-c, #20F0FF); }
 
-/* ── Text glow utilities ──────────────────────────────────── */
-/* Chromatic aberration (color fringing) */
-.chroma {
-  text-shadow:
-    0 0 8px rgba(0, 204, 102, 0.6),
-    0 0 16px rgba(0, 204, 102, 0.3),
-    0.5px 0 0 rgba(32, 240, 255, 0.15),
-    -0.5px 0 0 rgba(255, 48, 48, 0.1);
-}
-.chroma-o {
-  text-shadow:
-    0 0 8px rgba(255, 152, 48, 0.5),
-    0 0 16px rgba(255, 152, 48, 0.25),
-    0.5px 0 0 rgba(32, 240, 255, 0.1);
-}
-.chroma-c {
-  text-shadow:
-    0 0 8px rgba(32, 240, 255, 0.6),
-    0 0 16px rgba(32, 240, 255, 0.3),
-    0.5px 0 0 rgba(0, 204, 102, 0.1);
-}
-.chroma-r {
-  text-shadow:
-    0 0 8px rgba(160, 8, 8, 0.6),
-    0 0 16px rgba(160, 8, 8, 0.3),
-    0.5px 0 0 rgba(255, 152, 48, 0.1);
-}
+/* Chromatic aberration moved to nerv-ui/crt.css */
 
 /* Pure glow (no fringing) */
 .glow-g { text-shadow: 0 0 8px rgba(0, 204, 102, 0.6), 0 0 18px rgba(0, 204, 102, 0.3), 0 0 40px rgba(0, 204, 102, 0.1); }
@@ -368,18 +342,7 @@
 .nerv-badge-g { color: var(--nerv-g, #00cc66); border-color: var(--nerv-gd, #009944); text-shadow: 0 0 4px var(--nerv-gg, rgba(0, 204, 102, 0.4)); }
 .nerv-badge-o { color: var(--nerv-o, #FF9830); border-color: var(--nerv-od, #C87020); text-shadow: 0 0 4px var(--nerv-og, rgba(255, 152, 48, 0.3)); }
 
-/* ── CRT phosphor glow (full-page background bloom) ───────── */
-.crt-glow {
-  position: fixed;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  transform: translateZ(0);
-  will-change: transform;
-  background:
-    radial-gradient(ellipse 120% 90% at 50% 45%, rgba(0, 204, 102, 0.065) 0%, transparent 80%),
-    radial-gradient(ellipse 80% 60% at 50% 50%, rgba(0, 204, 102, 0.04) 0%, transparent 70%);
-}
+/* crt-glow moved to nerv-ui/crt.css */
 
 /* ── Reduced motion: disable shapes that animate ──────────── */
 @media (prefers-reduced-motion: reduce) {

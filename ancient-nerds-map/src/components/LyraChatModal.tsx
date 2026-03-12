@@ -1073,7 +1073,6 @@ export default function LyraChatModal({
 
   const modalContent = (
     <div className={`lyra-chat-modal${pipelineOpen ? ' lyra-chat-modal--with-pipeline' : ''}`}>
-      <div className="lyra-crt-scanlines" />
       {header}
       {historyPanel}
 

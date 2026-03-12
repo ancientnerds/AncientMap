@@ -1,0 +1,86 @@
+/* ═══════════════════════════════════════════
+   NERV-UI · CRT Filter
+   Global scanlines, vignette, phosphor glow,
+   and chromatic aberration.
+   All layers are GPU-promoted and pointer-transparent.
+   ═══════════════════════════════════════════ */
+
+/* Scanlines */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  transform: translateZ(0);
+  will-change: transform;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0px,
+    transparent 2px,
+    rgba(0, 0, 0, 0.1) 2px,
+    rgba(0, 0, 0, 0.1) 4px
+  );
+}
+
+/* Vignette */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  transform: translateZ(0);
+  will-change: transform;
+  background: radial-gradient(
+    ellipse at 50% 50%,
+    transparent 62%,
+    rgba(0, 0, 0, 0.18) 82%,
+    rgba(0, 0, 0, 0.38) 95%,
+    rgba(0, 0, 0, 0.45) 100%
+  );
+}
+
+/* Phosphor glow — gentle green bloom */
+.crt-glow {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  transform: translateZ(0);
+  will-change: transform;
+  background:
+    radial-gradient(ellipse 120% 90% at 50% 45%, rgba(0, 204, 102, 0.065) 0%, transparent 80%),
+    radial-gradient(ellipse 80% 60% at 50% 50%, rgba(0, 204, 102, 0.04) 0%, transparent 70%);
+}
+
+/* Chromatic aberration — colour fringing on bright text */
+.chroma {
+  text-shadow:
+    -0.4px 0 rgba(255, 60, 60, 0.12),
+     0.4px 0 rgba(60, 180, 255, 0.12),
+     0 0 6px rgba(0, 204, 102, 0.25);
+}
+
+.chroma-c {
+  text-shadow:
+    -0.4px 0 rgba(255, 60, 60, 0.1),
+     0.4px 0 rgba(60, 255, 180, 0.1),
+     0 0 6px rgba(32, 240, 255, 0.25);
+}
+
+.chroma-r {
+  text-shadow:
+    -0.4px 0 rgba(255, 200, 60, 0.1),
+     0.4px 0 rgba(60, 60, 255, 0.1),
+     0 0 6px rgba(187, 10, 10, 0.25);
+}
+
+/* Reduced motion: kill all CRT effects */
+@media (prefers-reduced-motion: reduce) {
+  body::after,
+  body::before,
+  .crt-glow {
+    display: none !important;
+  }
+}

@@ -1,4 +1,5 @@
 @import './tokens.css';
+@import './nerv-ui/crt.css';
 @import './nerv-shapes.css';
 @import './nerv-animations.css';
 @import './disclaimer.css';
@@ -16378,21 +16379,7 @@ div.lyra-inline-video-wrap {
    Re-skins the entire Lyra chat with a CRT/matrix terminal aesthetic.
    ========================================================================= */
 
-/* CRT scanline overlay across entire modal */
-.lyra-crt-scanlines {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 2;
-  background: repeating-linear-gradient(
-    to bottom,
-    transparent 0px,
-    transparent 2px,
-    rgba(0, 0, 0, 0.06) 2px,
-    rgba(0, 0, 0, 0.06) 4px
-  );
-  border-radius: 12px;
-}
+/* Lyra CRT scanlines removed — global CRT filter in nerv-ui/crt.css */
 
 /* Modal container */
 .lyra-chat-modal {
@@ -17933,22 +17920,7 @@ div.lyra-inline-video-wrap {
    as the Lyra chat. Single override block — cascade handles specificity.
    ========================================================================= */
 
-/* CRT scanline overlay on popup */
-.site-popup::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 300;
-  background: repeating-linear-gradient(
-    to bottom,
-    transparent 0px,
-    transparent 2px,
-    rgba(0, 0, 0, 0.04) 2px,
-    rgba(0, 0, 0, 0.04) 4px
-  );
-  border-radius: 8px;
-}
+/* Site popup CRT scanlines removed — global CRT filter in nerv-ui/crt.css */
 
 /* Main container — dark terminal background */
 .site-popup {

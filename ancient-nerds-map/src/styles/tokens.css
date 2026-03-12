@@ -258,47 +258,7 @@
 
 }
 
-/* ── Global CRT Effects ──────────────────────────────────── */
-
-/* Scanlines — subtle horizontal bands (GPU-promoted) */
-body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 2147483647;
-  transform: translateZ(0);
-  will-change: transform;
-  background: repeating-linear-gradient(
-    to bottom,
-    transparent 0px,
-    transparent 2px,
-    rgba(0, 0, 0, 0.06) 2px,
-    rgba(0, 0, 0, 0.06) 4px
-  );
-}
-
-/* Vignette — edge darkening for CRT depth */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 2147483646;
-  transform: translateZ(0);
-  will-change: transform;
-  background: radial-gradient(
-    ellipse at 50% 50%,
-    transparent 62%,
-    rgba(0, 0, 0, 0.18) 82%,
-    rgba(0, 0, 0, 0.38) 95%,
-    rgba(0, 0, 0, 0.45) 100%
-  );
-}
-
-@media (prefers-reduced-motion: reduce) {
-  body::after, body::before { display: none; }
-}
+/* CRT effects moved to nerv-ui/crt.css */
 
 /* ── Satellite Mode (higher opacity for bright imagery) ────── */
 body.satellite-mode {
