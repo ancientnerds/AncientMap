@@ -30,7 +30,13 @@ Before changing any API endpoint parameter (default value, min/max constraint, t
 For every file marked "deep" in the Key Files table (plus new files from Step 0.5):
 1. Read the entire file.
 2. For each function/method, check the applicable items from the Quick-Reference Checklist.
-3. Note any finding with its line number.
+3. **Trace data flow**: for each function, follow inputs from entry to exit. Specifically:
+   - Where does each variable come from? (user input, LLM output, DB, hardcoded)
+   - Is it validated/sanitized before use in SQL, HTML, or system calls?
+   - Are ORM objects accessed only while their session is open?
+   - Do aggregate queries filter to the correct scope?
+   - Do in-memory collections have growth bounds?
+4. Note any finding with its line number.
 
 Skip files marked "grep" — they were already covered by Step 1.
 
@@ -230,6 +236,12 @@ Run these searches across all files in scope. Each hit is a candidate finding.
 | `hmac\.new\(` without `compare_digest` nearby | `*.py` | D2-SEC | Timing-unsafe signature comparison |
 | `grant_anchor_date` mutations | `*.py` | D1-CORRECT | Verify anchor only resets on legitimate events (new/returning patron) |
 | `process_credit_grants\|CreditGrant` | `*.py` | D1-CORRECT | Verify all grant paths enforce idempotency and highest-tier-only |
+| `ILIKE\|ilike\|LIKE` without `_escape_ilike` nearby | `*.py` | D2-SEC | LIKE metacharacter injection (`%`, `_`) |
+| `href=\{` without `lyraUrlTransform\|sanitize` | `*.tsx` | D2-SEC | Unsanitized URLs in rendered links (XSS via `javascript:` protocol) |
+| `CAST.*AS uuid` without UUID validation | `*.py` | D2-SEC | Invalid UUID crashes PostgreSQL cast |
+| `session\.rollback\(\)` inside per-item loop | `*.py` | D1-CORRECT | Full rollback discards entire transaction — use `begin_nested()` instead |
+| `_live_events\[.*\]\.append\|_dict\[.*\]\.append` without cap | `*.py` | D4-PERF | Unbounded in-memory growth per request |
+| `SELECT COUNT\(\*\)` without `WHERE.*user_id\|WHERE.*source` | `*.py` | D1-CORRECT | Aggregate may count wrong scope |
 
 ---
 
@@ -579,6 +591,9 @@ Use this for fast scanning. Each item maps to a dimension above.
 - [ ] No mutable default arguments
 - [ ] React hook dependencies complete
 - [ ] Type assertions match actual runtime types
+- [ ] Every aggregate query (COUNT, SUM, etc.) filters to the intended scope (user_id, org_id, source) — not counting all rows
+- [ ] Every ORM attribute access happens while the session is still open — no reads after `with get_session()` block closes (DetachedInstanceError)
+- [ ] Session state captured into local variables inside the session block before closing, if needed after close
 
 ### API Contract Safety (P9/P10)
 - [ ] No API query parameter defaults, limits, or constraints changed without updating all frontend callers (`DataStore.ts`, `SourceLoader.ts`, `DownloadManager.tsx`)
@@ -598,6 +613,11 @@ Use this for fast scanning. Each item maps to a dimension above.
 - [ ] No `eval()`/`exec()`/`ast.literal_eval()` on untrusted input
 - [ ] LLM tools are read-only (no DB writes)
 - [ ] System prompt contains no secrets or internal URLs
+- [ ] Every `href=` and `src=` attribute in JSX uses sanitized input — check ALL rendering paths, not just ReactMarkdown (structured output, custom renderers, etc.)
+- [ ] Every ILIKE/LIKE pattern escapes metacharacters (`%`, `_`, `\`) via a helper before interpolation
+- [ ] Every parameter received from LLM tool calls is validated against an allowlist before use (collection names, table names, sort fields)
+- [ ] Every UUID string from external input is validated before passing to PostgreSQL `CAST(... AS uuid)` or Qdrant filters
+- [ ] Every query on a large table (>10k rows) has a bounded WHERE clause — no full-table scans via missing filters
 
 ### Maintainability (D3)
 - [ ] No function exceeds 50 lines or complexity 15
@@ -612,6 +632,8 @@ Use this for fast scanning. Each item maps to a dimension above.
 - [ ] Three.js renderer disposed on component unmount
 - [ ] `requestAnimationFrame` loop cancelled on unmount
 - [ ] No unbounded loops in pipeline
+- [ ] In-memory collections (dicts, lists) that grow per-request have a max cap and eviction strategy
+- [ ] Expensive computations inside React render (`.filter()`, `.map()` over large arrays) are wrapped in `useMemo`
 
 ### Architecture (D5)
 - [ ] Routes use service layer (no raw SQL in route handlers)
