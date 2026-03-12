@@ -403,7 +403,7 @@ async def get_all_sites(
                         FROM site_content_links
                         WHERE content_type = 'reference'
                         AND content_url IS NOT NULL
-                        AND site_id = ANY(:site_ids)
+                        AND site_id = ANY(CAST(:site_ids AS uuid[]))
                         ORDER BY site_id, relevance_score DESC
                     """),
                     {"site_ids": site_ids_list},
@@ -436,7 +436,7 @@ async def get_all_sites(
             # missing-column / query bugs are caught immediately instead of
             # serving stale data labelled as "postgres".
             raise HTTPException(
-                status_code=500, detail=f"Database query failed for live sites: {e}"
+                status_code=500, detail="Database query failed for live sites"
             ) from e
 
     data_source = "snapshot"
