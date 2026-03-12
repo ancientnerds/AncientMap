@@ -443,17 +443,17 @@ export default function ArticlesPage() {
     }
   }
 
-  const scheduleHoverClose = () => {
+  const scheduleHoverClose = useCallback(() => {
     cancelHoverClose()
     hoverTimeout.current = setTimeout(() => setHoverCitation(null), 150)
-  }
+  }, [])
 
-  const handleCitationEnter = (num: number, rect: DOMRect) => {
+  const handleCitationEnter = useCallback((num: number, rect: DOMRect) => {
     cancelHoverClose()
     setHoverCitation({ num, rect })
-  }
+  }, [])
 
-  const handleCitationClick = (num: number, rect: DOMRect) => {
+  const handleCitationClick = useCallback((num: number, rect: DOMRect) => {
     setHoverCitation(null)
     cancelHoverClose()
     // Toggle: if already pinned, unpin; otherwise add
@@ -461,7 +461,7 @@ export default function ArticlesPage() {
       if (prev.some(p => p.num === num)) return prev.filter(p => p.num !== num)
       return [...prev, { num, rect }]
     })
-  }
+  }, [])
 
   const dismissPinnedNum = useCallback((num: number) => {
     setPinnedCitations(prev => prev.filter(p => p.num !== num))
@@ -617,7 +617,7 @@ export default function ArticlesPage() {
     () => makeArticleComponents(
       citationItems, handleCitationEnter, scheduleHoverClose, handleCitationClick, hasCitations,
     ),
-    [citationItems, hasCitations],
+    [citationItems, hasCitations, handleCitationEnter, scheduleHoverClose, handleCitationClick],
   )
 
   const hero = articles[0] ?? null

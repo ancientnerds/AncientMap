@@ -120,6 +120,11 @@ def claim_daily(session: Session, user: DiscordUser) -> dict:
                         reason=f"streak_bonus_{day_threshold}d",
                     )
                 )
+            elif reward_type == "pack":
+                from api.cardgame.packs import open_pack
+
+                pack_cards = open_pack(session, user, reward_value)
+                streak_reward["cards"] = pack_cards
             break
 
     return {

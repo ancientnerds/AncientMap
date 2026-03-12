@@ -93,7 +93,13 @@ function saveConversation(id: string, title: string, messages: LyraMessage[]) {
   else all.unshift(serialized)
   // Keep max 50 conversations
   if (all.length > 50) all.length = 50
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(all))
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(all))
+  } catch {
+    // Quota exceeded — drop oldest conversations and retry
+    all.length = Math.min(all.length, 25)
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(all)) } catch { /* give up */ }
+  }
 }
 
 function loadConversation(id: string): LyraMessage[] {
@@ -111,7 +117,7 @@ function listConversations(): ConversationSummary[] {
 
 function deleteConversation(id: string) {
   const all = loadAllStored().filter(c => c.id !== id)
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(all))
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(all)) } catch { /* quota */ }
 }
 
 function loadAllStored(): StoredConversation[] {

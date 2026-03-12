@@ -1417,6 +1417,17 @@ def _run_migrations(engine) -> None:
         """)
         )
 
+        # Migrate one-time grants from NULL to "one_time" sentinel so the
+        # regular unique constraint (user_id, reason, grant_period) can prevent
+        # duplicates. Previously NULL was used, but NULL != NULL in PostgreSQL.
+        conn.execute(
+            text("""
+            UPDATE credit_grants
+            SET grant_period = 'one_time'
+            WHERE grant_period IS NULL
+        """)
+        )
+
         # Card descriptions column for Forgotten Worlds card game
         conn.execute(
             text("ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS card_description VARCHAR(150)")

@@ -191,6 +191,24 @@ def apply_battle_result(
                 reason="card_battle_stake_win",
             )
         )
+    elif effective_stake > 0 and result["winner"] == "draw":
+        # Refund both players on draw — stakes were escrowed at duel acceptance
+        challenger.credits += effective_stake
+        defender.credits += effective_stake
+        session.add(
+            CreditGrant(
+                user_id=challenger.id,
+                amount=effective_stake,
+                reason="card_battle_draw_refund",
+            )
+        )
+        session.add(
+            CreditGrant(
+                user_id=defender.id,
+                amount=effective_stake,
+                reason="card_battle_draw_refund",
+            )
+        )
 
     # Update player stats
     for user, is_winner in [

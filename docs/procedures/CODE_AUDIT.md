@@ -145,10 +145,25 @@ Step 1 mechanical scans run on ALL files in these directories. Step 2 deep revie
 | `api/cardgame/synergies.py` | grep |
 | `api/cardgame/models.py` | grep |
 | `api/cardgame/constants.py` | grep |
+| `api/cardgame/stats.py` | grep |
+| `api/cardgame/generator.py` | deep |
+| `api/cardgame/battle.py` | deep |
+| `api/cardgame/discord_commands.py` | deep |
 | `api/routes/interactions.py` | grep |
+| `api/routes/theo.py` | deep |
+| `api/services/theo_worker.py` | deep |
+| `api/services/theo_prompts.py` | grep |
+| `api/services/theo_config.py` | grep |
+| `api/services/lyra_router.py` | grep |
+| `api/services/lyra_tool_prompts.py` | grep |
+| `api/build_info.py` | grep |
+| `api/schemas/public_v1.py` | grep |
 | `pipeline/unified_loader.py` | grep |
 | `pipeline/content_linker.py` | grep |
 | `pipeline/static_exporter.py` | grep |
+| `pipeline/article_html_renderer.py` | deep |
+| `pipeline/video/asset_collector.py` | grep |
+| `pipeline/site_images/batch_updater.py` | grep |
 | `pipeline/lyra/prompts/*.txt` (all) | deep |
 
 ### frontend / full

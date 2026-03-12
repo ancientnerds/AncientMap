@@ -207,6 +207,35 @@
   --font-body:             'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
   --font-heading:          'Orbitron', 'JetBrains Mono', monospace;
   --font-ui:               'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  --font-stamp:            'Saira Extra Condensed', 'Impact', sans-serif;
+
+  /* ── NERV Palette (EVA-spec colors, short aliases) ─────── */
+  /* Green — primary interactive + data */
+  --nerv-g:  #00cc66;
+  --nerv-gd: #009944;
+  --nerv-gb: #50FF50;
+  --nerv-gg: rgba(0, 204, 102, 0.4);
+  --nerv-gl: rgba(0, 204, 102, 0.12);
+  /* Red — deep blood red, alerts + brand */
+  --nerv-r:  #bb0a0a;
+  --nerv-rb: #dd1111;
+  --nerv-rd: #660808;
+  --nerv-rg: rgba(160, 8, 8, 0.4);
+  /* Cyan — info + wire diagrams */
+  --nerv-c:  #20F0FF;
+  --nerv-cd: #10A0B0;
+  --nerv-cg: rgba(32, 240, 255, 0.3);
+  /* Orange — accent labels + panel headers */
+  --nerv-o:  #FF9830;
+  --nerv-od: #C87020;
+  --nerv-ob: #FFCC50;
+  --nerv-og: rgba(255, 152, 48, 0.3);
+  --nerv-ol: rgba(255, 152, 48, 0.08);
+  /* Steel — neutral text */
+  --nerv-steel:      #D8D8D0;
+  --nerv-steel-dim:  #888880;
+  --nerv-steel-faint: rgba(200, 200, 192, 0.06);
+  --nerv-steel-line: rgba(200, 200, 192, 0.12);
 
   /* — CRT palette shades (unified green phosphor) — */
   --crt-900:               var(--_palette-green-900);
@@ -229,24 +258,46 @@
 
 }
 
-/* ── Global CRT Scanlines ────────────────────────────────── */
+/* ── Global CRT Effects ──────────────────────────────────── */
+
+/* Scanlines — subtle horizontal bands (GPU-promoted) */
 body::after {
   content: '';
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 2147483647;
+  transform: translateZ(0);
+  will-change: transform;
   background: repeating-linear-gradient(
     to bottom,
     transparent 0px,
     transparent 2px,
-    rgba(0, 0, 0, 0.04) 2px,
-    rgba(0, 0, 0, 0.04) 4px
+    rgba(0, 0, 0, 0.06) 2px,
+    rgba(0, 0, 0, 0.06) 4px
+  );
+}
+
+/* Vignette — edge darkening for CRT depth */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2147483646;
+  transform: translateZ(0);
+  will-change: transform;
+  background: radial-gradient(
+    ellipse at 50% 50%,
+    transparent 62%,
+    rgba(0, 0, 0, 0.18) 82%,
+    rgba(0, 0, 0, 0.38) 95%,
+    rgba(0, 0, 0, 0.45) 100%
   );
 }
 
 @media (prefers-reduced-motion: reduce) {
-  body::after { display: none; }
+  body::after, body::before { display: none; }
 }
 
 /* ── Satellite Mode (higher opacity for bright imagery) ────── */

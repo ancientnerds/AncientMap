@@ -21,6 +21,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from api.services.jwt_auth import FOUNDER_ROLE_ID, create_token, get_current_user, require_founder
@@ -171,6 +172,9 @@ _OAUTH_STATE_CAP = 1000
 # Rate limit on OAuth redirects: 5 per minute per IP
 _oauth_limiter = RateLimiter(max_requests=5, window_seconds=60, namespace="oauth_redirect")
 
+# Rate limit on OAuth callbacks: 10 per minute per IP (prevent token exchange abuse)
+_callback_limiter = RateLimiter(max_requests=10, window_seconds=60, namespace="oauth_callback")
+
 
 def _clamp_day(year: int, month: int, day: int) -> int:
     """Clamp a day to the max days in a given month (e.g. 31 in Feb → 28)."""
@@ -245,14 +249,20 @@ def process_credit_grants(session: Session, user: DiscordUser) -> None:
             if not existing:
                 amount = config["amount"]
                 user.credits += amount
-                session.add(
-                    CreditGrant(
-                        user_id=user.id,
-                        amount=amount,
-                        reason=reason,
-                        grant_period="one_time",
+                try:
+                    session.add(
+                        CreditGrant(
+                            user_id=user.id,
+                            amount=amount,
+                            reason=reason,
+                            grant_period="one_time",
+                        )
                     )
-                )
+                    session.flush()
+                except IntegrityError:
+                    logger.info(f"Grant already exists for {user.username} ({reason})")
+                    session.rollback()
+                    return
                 logger.info(f"Granted {amount} credits to {user.username} ({reason})")
 
         elif role_type == "monthly":
@@ -284,19 +294,23 @@ def process_credit_grants(session: Session, user: DiscordUser) -> None:
                     continue
 
                 user.credits += effective
-                session.add(
-                    CreditGrant(
-                        user_id=user.id,
-                        amount=effective,
-                        reason=reason,
-                        grant_period=period,
+                try:
+                    session.add(
+                        CreditGrant(
+                            user_id=user.id,
+                            amount=effective,
+                            reason=reason,
+                            grant_period=period,
+                        )
                     )
-                )
+                    session.flush()
+                except IntegrityError:
+                    logger.info(f"Monthly grant already exists for {user.username} ({reason}, period={period})")
+                    session.rollback()
+                    return
                 logger.info(
                     f"Granted {effective} monthly credits to {user.username} ({reason}, period={period})"
                 )
-
-    session.flush()
 
 
 def _cleanup_states():
@@ -345,9 +359,13 @@ async def discord_oauth_redirect(req: Request, return_to: str | None = None):
 
 @router.get("/discord/callback")
 async def discord_oauth_callback(
-    code: str | None = None, state: str | None = None, error: str | None = None
+    req: Request, code: str | None = None, state: str | None = None, error: str | None = None
 ):
     """Handle Discord OAuth2 callback."""
+    client_ip = get_client_ip(req)
+    if not _callback_limiter.check(client_ip):
+        return RedirectResponse(url="/account.html?error=rate_limited")
+
     if error:
         return RedirectResponse(url="/account.html?error=access_denied")
 
@@ -503,16 +521,14 @@ async def discord_oauth_callback(
 async def get_me(user: DiscordUser = Depends(get_current_user)):
     """Get current authenticated user profile."""
     try:
-        # Process any pending credit grants (monthly accumulation, etc.)
+        # Read credits from DB (grants are applied at login + webhook, not here)
         with get_session() as session:
             db_user = (
                 session.query(DiscordUser)
                 .filter(DiscordUser.id == user.id)
-                .with_for_update()
                 .first()
             )
             if db_user:
-                process_credit_grants(session, db_user)
                 credits = db_user.credits
                 is_unlimited = db_user.is_unlimited
             else:

@@ -441,30 +441,42 @@ class SingleConnectorTestResponse(BaseModel):
 
 @router.get("/connectors/status")
 async def get_connectors_status(
+    req: Request,
     check_live: bool = Query(
         default=False,
-        description="If true, actively ping all connectors (slower but accurate). Otherwise returns cached status.",
+        description="If true, actively ping all connectors (slower but accurate, founder-only).",
     ),
     timeout: float = Query(
         default=10.0, ge=1.0, le=60.0, description="Timeout in seconds for each health check"
     ),
     include_tests: bool = Query(
         default=False,
-        description="If true, run test queries against all connectors (expensive operation).",
+        description="If true, run test queries against all connectors (expensive, founder-only).",
     ),
     run_tests_for: str | None = Query(
         default=None,
-        description="Run tests for a single connector only (returns minimal response).",
+        description="Run tests for a single connector only (founder-only).",
     ),
 ):
     """
     Get status of all content connectors, optionally with test results.
 
-    - check_live=True: actively pings each connector (slower but accurate)
-    - include_tests=True: run test queries against all connectors (expensive)
-    - run_tests_for=<connector_id>: run tests for a single connector only
+    - check_live=True: actively pings each connector (slower but accurate, founder-only)
+    - include_tests=True: run test queries against all connectors (expensive, founder-only)
+    - run_tests_for=<connector_id>: run tests for a single connector only (founder-only)
     """
     from datetime import UTC, datetime
+
+    # Expensive operations require founder authentication
+    if check_live or include_tests or run_tests_for:
+        from api.services.jwt_auth import FOUNDER_ROLE_ID, get_current_user
+
+        try:
+            user = get_current_user(req)
+        except HTTPException:
+            raise HTTPException(status_code=403, detail="Founder access required for live checks and tests")
+        if FOUNDER_ROLE_ID not in (user.roles or []):
+            raise HTTPException(status_code=403, detail="Founder access required for live checks and tests")
 
     # Single connector test mode
     if run_tests_for:

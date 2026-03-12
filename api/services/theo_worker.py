@@ -176,7 +176,7 @@ async def _process_request(request_id: str, question: str, effort: str) -> None:
                 {"id": request_id, "err": str(e)[:2000], "duration": duration_ms},
             )
             session.commit()
-        _live_events[request_id].append({"type": "error", "error": str(e)})
+        _live_events[request_id].append({"type": "error", "error": "Research request failed"})
 
     finally:
         # Clean up live events after a delay (let SSE clients catch up)

@@ -1276,6 +1276,18 @@ async def run_agent_stream(
             },
         }
 
+        # Deduplicate sites by id and cap at 50
+        seen_site_ids: set[str] = set()
+        deduped_sites: list[dict] = []
+        for s in all_sites:
+            sid = s.get("id", "")
+            if sid and sid in seen_site_ids:
+                continue
+            if sid:
+                seen_site_ids.add(sid)
+            deduped_sites.append(s)
+        all_sites = deduped_sites[:50]
+
         # Emit sites after tool calls
         if all_sites:
             yield {"type": "sites", "sites": all_sites}
@@ -1297,6 +1309,9 @@ async def run_agent_stream(
             ]
             if new_news:
                 all_news.extend(new_news)
+
+        # Cap news at 30
+        all_news = all_news[:30]
 
         # Emit news if any were added this round (from search_news tool or site-based fetch)
         if len(all_news) > news_before:

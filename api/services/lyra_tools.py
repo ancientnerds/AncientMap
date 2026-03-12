@@ -17,6 +17,12 @@ from pipeline.database import get_session
 
 logger = logging.getLogger(__name__)
 
+
+def _escape_ilike(value: str) -> str:
+    """Escape ILIKE metacharacters (%, _, \\) so they match literally."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -103,20 +109,21 @@ def search_sites(
         conditions.append(
             "(name ILIKE :q OR description ILIKE :q OR name_normalized ILIKE :q_norm)"
         )
-        params["q"] = f"%{query}%"
-        params["q_norm"] = f"%{query.lower()}%"
+        q_safe = _escape_ilike(query)
+        params["q"] = f"%{q_safe}%"
+        params["q_norm"] = f"%{q_safe.lower()}%"
 
     if period:
         conditions.append("period_name ILIKE :period")
-        params["period"] = f"%{period}%"
+        params["period"] = f"%{_escape_ilike(period)}%"
 
     if country:
         conditions.append("country ILIKE :country")
-        params["country"] = f"%{country}%"
+        params["country"] = f"%{_escape_ilike(country)}%"
 
     if site_type:
         conditions.append("site_type ILIKE :site_type")
-        params["site_type"] = f"%{site_type}%"
+        params["site_type"] = f"%{_escape_ilike(site_type)}%"
 
     where = " AND ".join(conditions)
     sql = f"""
@@ -287,11 +294,11 @@ def search_news(
 
     if query:
         conditions.append("(ni.headline ILIKE :q OR ni.summary ILIKE :q)")
-        params["q"] = f"%{query}%"
+        params["q"] = f"%{_escape_ilike(query)}%"
 
     if channel:
         conditions.append("nc.name ILIKE :channel")
-        params["channel"] = f"%{channel}%"
+        params["channel"] = f"%{_escape_ilike(channel)}%"
 
     where = " AND ".join(conditions)
     # DISTINCT ON video_id ensures at most 1 result per video (most significant item)
@@ -581,10 +588,10 @@ def search_radar(
 
     if query:
         conditions.append("(uc.name ILIKE :q OR uc.corrected_name ILIKE :q)")
-        params["q"] = f"%{query}%"
+        params["q"] = f"%{_escape_ilike(query)}%"
     if country:
         conditions.append("uc.country ILIKE :country")
-        params["country"] = f"%{country}%"
+        params["country"] = f"%{_escape_ilike(country)}%"
 
     where = " AND ".join(conditions)
     sql = f"""

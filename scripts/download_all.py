@@ -114,7 +114,7 @@ def cleanup_old_files() -> int:
                     try:
                         f.unlink()
                         removed += 1
-                    except:
+                    except OSError:
                         pass
     return removed
 

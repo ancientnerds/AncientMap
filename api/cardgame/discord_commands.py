@@ -600,18 +600,8 @@ def register_commands(bot: discord.Client) -> None:
                     )
                     return
 
-                # Check stakes
-                if stake > 0:
-                    if challenger.credits < stake:
-                        await interaction.followup.send(
-                            f"You need {stake} credits to wager.",
-                        )
-                        return
-                    if defender.credits < stake:
-                        await interaction.followup.send(
-                            f"{opponent.display_name} doesn't have enough credits for this stake.",
-                        )
-                        return
+                # Credit check removed — the accept handler's with_for_update()
+                # check is the authoritative guard against insufficient funds.
 
                 # Create pending battle
                 battle = CardBattle(
@@ -1281,13 +1271,20 @@ class DuelView(discord.ui.View):
                     defender_commander=d_commander,
                 )
 
+                # No stake → apply results in the same transaction
+                stake_credits = battle.stake_credits
+                if stake_credits == 0:
+                    from api.cardgame.battle import apply_battle_result
+
+                    apply_battle_result(session, battle, result, challenger, defender)
+
             # Disable accept/decline buttons
             for item in self.children:
                 item.disabled = True
             await interaction.message.edit(view=self)
 
             # If there's a stake, show partial results with snap opportunity
-            if battle.stake_credits > 0:
+            if stake_credits > 0:
                 preview_lines = _build_round_lines(result, up_to=2)
                 preview_embed = discord.Embed(
                     title="Battle in progress...",
@@ -1297,7 +1294,7 @@ class DuelView(discord.ui.View):
                 preview_embed.add_field(
                     name="Snap?",
                     value=(
-                        f"Current stake: **{battle.stake_credits}** credits each\n"
+                        f"Current stake: **{stake_credits}** credits each\n"
                         "Snap to **double** the stakes! Or continue to see results."
                     ),
                 )
@@ -1308,21 +1305,10 @@ class DuelView(discord.ui.View):
                     challenger_id=self.challenger_id,
                     defender_id=self.defender_id,
                     result=result,
-                    original_stake=battle.stake_credits,
+                    original_stake=stake_credits,
                 )
                 await interaction.followup.send(embed=preview_embed, view=snap_view)
             else:
-                # No stake → instant full results
-                from api.cardgame.battle import apply_battle_result
-                from pipeline.database import DiscordUser as DU
-                from pipeline.database import get_session as gs2
-
-                with gs2() as session2:
-                    battle2 = session2.get(CardBattle, uuid.UUID(self.battle_id))
-                    ch2 = session2.get(DU, battle2.challenger_id)
-                    de2 = session2.get(DU, battle2.defender_id)
-                    apply_battle_result(session2, battle2, result, ch2, de2)
-
                 embed = _build_result_embed(result, self.challenger_id, self.defender_id)
                 await interaction.followup.send(embed=embed)
 

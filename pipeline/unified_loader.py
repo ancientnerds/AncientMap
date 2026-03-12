@@ -1656,9 +1656,8 @@ class UnifiedLoader:
                         try:
                             geom_data = json.loads(geom_str)
                         except (ValueError, json.JSONDecodeError):
-                            import ast
-
-                            geom_data = ast.literal_eval(geom_str)
+                            # Arches API sometimes returns Python dict syntax (single quotes)
+                            geom_data = json.loads(geom_str.replace("'", '"'))
                         features = geom_data.get("features", [])
                         if features:
                             geometry = features[0].get("geometry", {})

@@ -1,0 +1,242 @@
+/* ═══════════════════════════════════════════════════════════════
+   NERV ANIMATIONS — 25 Keyframes + Utility Classes
+   EVA-inspired motion: boot sequences, CRT effects, glitch tears,
+   LED breathe, data streams, hex border march, counter rolls.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Base animations (from NERV repo) ─────────────────────── */
+
+/* Sweep — horizontal light wipe (decorative) */
+@keyframes sweep {
+  0%   { left: -30%; }
+  100% { left: 130%; }
+}
+
+/* Corner pulse — subtle opacity cycle */
+@keyframes cpulse {
+  0%, 100% { opacity: 0.6; }
+  50%      { opacity: 1; }
+}
+
+/* Shimmer — loading state light sweep */
+@keyframes shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+/* Blink cursor — terminal caret */
+@keyframes blink-cursor {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0; }
+}
+
+/* Hex border dash march */
+@keyframes dash-march {
+  to { stroke-dashoffset: -20; }
+}
+
+/* Hazard stripe march (GPU-accelerated) */
+@keyframes stripe-march {
+  to { transform: translate3d(45.25px, 0, 0); }
+}
+
+/* Glow breathe — box-shadow intensity cycle */
+@keyframes glow-breathe {
+  0%, 100% { box-shadow: 0 0 8px var(--nerv-gg, rgba(0, 204, 102, 0.4)); }
+  50%      { box-shadow: 0 0 22px var(--nerv-gg, rgba(0, 204, 102, 0.4)), 0 0 44px rgba(0, 204, 102, 0.1); }
+}
+
+/* Phosphor flicker — 4s CRT brightness dip */
+@keyframes flicker {
+  0%, 100% { opacity: 1; }
+  96%      { opacity: 1; }
+  97%      { opacity: 0.7; }
+  98%      { opacity: 1; }
+}
+
+/* Scan line sweep — green line moving down screen */
+@keyframes scan-sweep {
+  0%   { top: -2px; }
+  100% { top: 100%; }
+}
+
+/* Alert flash — pulsing opacity */
+@keyframes alert-flash {
+  0%, 100% { opacity: 0.6; }
+  50%      { opacity: 1; }
+}
+
+/* Emergency flash — brightness oscillation */
+@keyframes emergency-flash {
+  0%, 100% { filter: brightness(0.7); }
+  50%      { filter: brightness(1.3); }
+}
+
+/* LED blink — simple on/off pulse */
+@keyframes led-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.3; }
+}
+
+/* Ticker crawl — horizontal marquee */
+@keyframes crawl {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* ── NEW animations (15 EVA-specific) ─────────────────────── */
+
+/* Boot-in — staggered element reveal with brightness flash */
+@keyframes boot-in {
+  0%   { opacity: 0; transform: translateY(8px); filter: brightness(2); }
+  40%  { filter: brightness(1.5); }
+  100% { opacity: 1; transform: translateY(0); filter: brightness(1); }
+}
+.boot-in { animation: boot-in 0.5s ease-out both; }
+.bi1 { animation-delay: 0.05s; }
+.bi2 { animation-delay: 0.10s; }
+.bi3 { animation-delay: 0.15s; }
+.bi4 { animation-delay: 0.20s; }
+.bi5 { animation-delay: 0.25s; }
+.bi6 { animation-delay: 0.30s; }
+.bi7 { animation-delay: 0.35s; }
+.bi8 { animation-delay: 0.40s; }
+
+/* CRT power-on — panel appears from horizontal line */
+@keyframes crt-open {
+  0%   { transform: scaleY(0.002); opacity: 0.8; filter: brightness(3); }
+  40%  { transform: scaleY(0.002); opacity: 1; filter: brightness(2); }
+  100% { transform: scaleY(1); opacity: 1; filter: brightness(1); }
+}
+.crt-open { animation: crt-open 0.4s ease-out both; }
+
+/* Glitch tear — horizontal slice offset */
+@keyframes glitch-tear {
+  0%, 100% { clip-path: inset(0); transform: translateX(0); }
+  10%      { clip-path: inset(20% 0 60% 0); transform: translateX(-3px); }
+  20%      { clip-path: inset(50% 0 20% 0); transform: translateX(4px); }
+  30%      { clip-path: inset(10% 0 70% 0); transform: translateX(-2px); }
+  40%      { clip-path: inset(0); transform: translateX(0); }
+}
+.glitch-tear { animation: glitch-tear 0.5s steps(1) both; }
+
+/* NV status block cascade — sequential light-up */
+@keyframes block-light {
+  0%   { opacity: 0.05; transform: scaleY(0.3); }
+  60%  { opacity: 0.8; }
+  100% { opacity: 1; transform: scaleY(1); }
+}
+
+/* Counter digit roll — odometer-style number reveal */
+@keyframes digit-roll {
+  0%   { transform: translateY(-100%); opacity: 0; }
+  60%  { opacity: 1; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+.digit-roll { display: inline-block; animation: digit-roll 0.6s ease-out both; }
+
+/* Flicker-in — rapid on/off appearance */
+@keyframes flicker-in {
+  0%   { opacity: 0; }
+  10%  { opacity: 1; }
+  20%  { opacity: 0; }
+  40%  { opacity: 1; }
+  50%  { opacity: 0; }
+  60%  { opacity: 1; }
+  100% { opacity: 1; }
+}
+.flicker-in { animation: flicker-in 0.35s ease-out both; }
+
+/* LED breathe — slow opacity cycle (GPU-friendly) */
+@keyframes led-breathe-pulse {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 1; }
+}
+.led-breathe, .led-breathe-g {
+  box-shadow: 0 0 10px #00cc66, 0 0 20px rgba(0, 204, 102, 0.6), 0 0 32px rgba(0, 204, 102, 0.3);
+  animation: led-breathe-pulse 3s ease-in-out infinite;
+}
+.led-breathe-r {
+  box-shadow: 0 0 10px #bb0a0a, 0 0 20px rgba(187, 10, 10, 0.6), 0 0 32px rgba(187, 10, 10, 0.3);
+  animation: led-breathe-pulse 3s ease-in-out infinite;
+}
+.led-breathe-c {
+  box-shadow: 0 0 10px #20F0FF, 0 0 20px rgba(32, 240, 255, 0.6), 0 0 32px rgba(32, 240, 255, 0.3);
+  animation: led-breathe-pulse 3s ease-in-out infinite;
+}
+.led-breathe-o {
+  box-shadow: 0 0 10px #FF9830, 0 0 20px rgba(255, 152, 48, 0.6), 0 0 32px rgba(255, 152, 48, 0.3);
+  animation: led-breathe-pulse 3s ease-in-out infinite;
+}
+
+/* Border trace — SVG stroke reveal */
+@keyframes border-trace {
+  0%   { stroke-dashoffset: var(--perim, 1000); }
+  100% { stroke-dashoffset: 0; }
+}
+
+/* Type-on — character-by-character text reveal */
+@keyframes type-on {
+  from { width: 0; }
+  to   { width: 100%; }
+}
+.type-on {
+  overflow: hidden;
+  white-space: nowrap;
+  display: inline-block;
+  animation: type-on 1.2s steps(20) both;
+  border-right: 2px solid var(--nerv-g, #00cc66);
+}
+.type-on-fast {
+  overflow: hidden;
+  white-space: nowrap;
+  display: inline-block;
+  animation: type-on 0.6s steps(12) both;
+  border-right: 2px solid var(--nerv-g, #00cc66);
+}
+
+/* Radar sweep — 360deg rotation */
+@keyframes radar-sweep {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Concentric ring pulse — expanding ripple */
+@keyframes ring-pulse {
+  0%   { transform: scale(0.8); opacity: 0.6; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+/* Warning flash — red tint background pulse */
+@keyframes warning-flash {
+  0%, 100% { background-color: transparent; }
+  50%      { background-color: rgba(187, 10, 10, 0.12); }
+}
+
+/* Data stream — vertical scrolling numbers */
+@keyframes data-stream {
+  0%   { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+.data-stream { overflow: hidden; position: relative; }
+.data-stream-inner {
+  animation: data-stream 20s linear infinite;
+  will-change: transform;
+  font-size: 8px;
+  color: rgba(0, 204, 102, 0.08);
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Reduced motion: kill everything ──────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .type-on, .type-on-fast {
+    width: 100% !important;
+    border-right: none !important;
+  }
+}

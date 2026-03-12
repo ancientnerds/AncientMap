@@ -114,14 +114,16 @@ class HolVolIngester(BaseIngester):
                     seen_ids.add(eruption["id"])
                     all_eruptions.append(eruption)
 
-        # Add known major eruptions if APIs didn't work
+        # If all API sources failed, mark unavailable rather than using hardcoded data
         if len(all_eruptions) < 50:
-            logger.info("Adding known major volcanic eruptions...")
-            known_eruptions = self._get_known_eruptions()
-            for eruption in known_eruptions:
-                if eruption["id"] not in seen_ids:
-                    seen_ids.add(eruption["id"])
-                    all_eruptions.append(eruption)
+            if len(all_eruptions) == 0:
+                self.available = False
+                self.unavailable_reason = (
+                    "Both PANGAEA and Smithsonian GVP APIs returned no data. "
+                    "Check endpoint availability."
+                )
+            else:
+                logger.warning(f"Only {len(all_eruptions)} eruptions fetched (below 50 threshold)")
 
         logger.info(f"Total eruptions: {len(all_eruptions):,}")
         self.report_progress(
@@ -186,7 +188,7 @@ class HolVolIngester(BaseIngester):
                     else:
                         year = int(val)
                     break
-                except:
+                except (ValueError, TypeError, OverflowError):
                     pass
 
         if year is None:
@@ -310,211 +312,6 @@ class HolVolIngester(BaseIngester):
             "region": props.get("Region", ""),
             "elevation_m": self._parse_int(props.get("Elevation", "")),
         }
-
-    def _get_known_eruptions(self) -> list[dict]:
-        """Return known major volcanic eruptions with climate impact."""
-        return [
-            {
-                "id": "holvol_tambora_1815",
-                "year": 1815,
-                "volcano_name": "Tambora",
-                "lat": -8.25,
-                "lon": 118.00,
-                "vei": 7,
-                "sulfur_tg": 60,
-                "hemisphere": "SH",
-            },
-            {
-                "id": "holvol_krakatoa_1883",
-                "year": 1883,
-                "volcano_name": "Krakatau",
-                "lat": -6.10,
-                "lon": 105.42,
-                "vei": 6,
-                "sulfur_tg": 15,
-                "hemisphere": "tropical",
-            },
-            {
-                "id": "holvol_pinatubo_1991",
-                "year": 1991,
-                "volcano_name": "Pinatubo",
-                "lat": 15.13,
-                "lon": 120.35,
-                "vei": 6,
-                "sulfur_tg": 20,
-                "hemisphere": "tropical",
-            },
-            {
-                "id": "holvol_santorini_1628bce",
-                "year": -1628,
-                "volcano_name": "Santorini/Thera",
-                "lat": 36.40,
-                "lon": 25.40,
-                "vei": 7,
-                "sulfur_tg": 100,
-                "hemisphere": "NH",
-            },
-            {
-                "id": "holvol_vesuvius_79",
-                "year": 79,
-                "volcano_name": "Vesuvius",
-                "lat": 40.82,
-                "lon": 14.43,
-                "vei": 5,
-                "sulfur_tg": 1,
-                "hemisphere": "NH",
-            },
-            {
-                "id": "holvol_laki_1783",
-                "year": 1783,
-                "volcano_name": "Laki",
-                "lat": 64.07,
-                "lon": -18.23,
-                "vei": 6,
-                "sulfur_tg": 120,
-                "hemisphere": "NH",
-            },
-            {
-                "id": "holvol_samalas_1257",
-                "year": 1257,
-                "volcano_name": "Samalas",
-                "lat": -8.42,
-                "lon": 116.47,
-                "vei": 7,
-                "sulfur_tg": 150,
-                "hemisphere": "tropical",
-            },
-            {
-                "id": "holvol_huaynaputina_1600",
-                "year": 1600,
-                "volcano_name": "Huaynaputina",
-                "lat": -16.61,
-                "lon": -70.85,
-                "vei": 6,
-                "sulfur_tg": 30,
-                "hemisphere": "SH",
-            },
-            {
-                "id": "holvol_eldgja_939",
-                "year": 939,
-                "volcano_name": "Eldgjá",
-                "lat": 63.97,
-                "lon": -18.62,
-                "vei": 6,
-                "sulfur_tg": 70,
-                "hemisphere": "NH",
-            },
-            {
-                "id": "holvol_unknown_536",
-                "year": 536,
-                "volcano_name": "Unknown (536 event)",
-                "lat": None,
-                "lon": None,
-                "vei": 6,
-                "sulfur_tg": 40,
-                "hemisphere": "NH",
-            },
-            {
-                "id": "holvol_unknown_540",
-                "year": 540,
-                "volcano_name": "Ilopango?",
-                "lat": 13.67,
-                "lon": -89.05,
-                "vei": 6,
-                "sulfur_tg": 40,
-                "hemisphere": "tropical",
-            },
-            {
-                "id": "holvol_kuwae_1452",
-                "year": 1452,
-                "volcano_name": "Kuwae",
-                "lat": -16.83,
-                "lon": 168.54,
-                "vei": 6,
-                "sulfur_tg": 35,
-                "hemisphere": "SH",
-            },
-            {
-                "id": "holvol_cosiguina_1835",
-                "year": 1835,
-                "volcano_name": "Cosigüina",
-                "lat": 12.98,
-                "lon": -87.57,
-                "vei": 5,
-                "sulfur_tg": 10,
-                "hemisphere": "tropical",
-            },
-            {
-                "id": "holvol_agung_1963",
-                "year": 1963,
-                "volcano_name": "Agung",
-                "lat": -8.34,
-                "lon": 115.51,
-                "vei": 5,
-                "sulfur_tg": 7,
-                "hemisphere": "SH",
-            },
-            {
-                "id": "holvol_el_chichon_1982",
-                "year": 1982,
-                "volcano_name": "El Chichón",
-                "lat": 17.36,
-                "lon": -93.23,
-                "vei": 5,
-                "sulfur_tg": 7,
-                "hemisphere": "tropical",
-            },
-            {
-                "id": "holvol_katmai_1912",
-                "year": 1912,
-                "volcano_name": "Katmai/Novarupta",
-                "lat": 58.28,
-                "lon": -155.16,
-                "vei": 6,
-                "sulfur_tg": 5,
-                "hemisphere": "NH",
-            },
-            {
-                "id": "holvol_st_helens_1980",
-                "year": 1980,
-                "volcano_name": "Mount St. Helens",
-                "lat": 46.20,
-                "lon": -122.18,
-                "vei": 5,
-                "sulfur_tg": 1,
-                "hemisphere": "NH",
-            },
-            {
-                "id": "holvol_mazama_5677bce",
-                "year": -5677,
-                "volcano_name": "Mount Mazama",
-                "lat": 42.94,
-                "lon": -122.11,
-                "vei": 7,
-                "sulfur_tg": 100,
-                "hemisphere": "NH",
-            },
-            {
-                "id": "holvol_toba_74ka",
-                "year": -72000,
-                "volcano_name": "Toba",
-                "lat": 2.68,
-                "lon": 98.88,
-                "vei": 8,
-                "sulfur_tg": 5000,
-                "hemisphere": "tropical",
-            },
-            {
-                "id": "holvol_etna_44bce",
-                "year": -44,
-                "volcano_name": "Etna",
-                "lat": 37.75,
-                "lon": 15.00,
-                "vei": 4,
-                "sulfur_tg": 2,
-                "hemisphere": "NH",
-            },
-        ]
 
     def _parse_float(self, value) -> float | None:
         """Parse a float value."""

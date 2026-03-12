@@ -77,21 +77,37 @@ const ENDPOINT_EXAMPLES: Record<string, { label: string; params: Record<string, 
   ],
 }
 
+/** Escape HTML entities to prevent XSS when rendering with dangerouslySetInnerHTML. */
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
 /** Lightweight JSON syntax highlighter — no deps, just spans with class names. */
-function highlightJson(json: string): string {
-  return json.replace(
-    /("(?:\\.|[^"\\])*")\s*(:)?|(\b(?:true|false|null)\b)|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g,
-    (match, str: string | undefined, colon: string | undefined, bool: string | undefined, num: string | undefined) => {
-      if (str) {
-        return colon
-          ? `<span class="jh-key">${str}</span>:`
-          : `<span class="jh-str">${str}</span>`
-      }
-      if (bool) return `<span class="jh-bool">${match}</span>`
-      if (num) return `<span class="jh-num">${match}</span>`
-      return match
-    },
-  )
+function highlightJson(raw: string): string {
+  // Escape each token individually to prevent XSS from API response content
+  const re = /("(?:\\.|[^"\\])*")\s*(:)?|(\b(?:true|false|null)\b)|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g
+  let result = ''
+  let lastIndex = 0
+  let m: RegExpExecArray | null
+  while ((m = re.exec(raw)) !== null) {
+    result += escapeHtml(raw.slice(lastIndex, m.index))
+    const [match, str, colon, bool, num] = m
+    if (str) {
+      const safe = escapeHtml(str)
+      result += colon
+        ? `<span class="jh-key">${safe}</span>:`
+        : `<span class="jh-str">${safe}</span>`
+    } else if (bool) {
+      result += `<span class="jh-bool">${escapeHtml(match)}</span>`
+    } else if (num) {
+      result += `<span class="jh-num">${escapeHtml(match)}</span>`
+    } else {
+      result += escapeHtml(match)
+    }
+    lastIndex = re.lastIndex
+  }
+  result += escapeHtml(raw.slice(lastIndex))
+  return result
 }
 
 function parseSpec(spec: OpenAPISpec): ParsedEndpoint[] {

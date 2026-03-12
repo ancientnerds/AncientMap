@@ -207,10 +207,12 @@ async def _handle_ask(
             from sqlalchemy import update
 
             if additional > 0:
+                from sqlalchemy import func
+
                 session.execute(
                     update(DiscordUser)
                     .where(DiscordUser.id == user_id)
-                    .values(credits=DiscordUser.credits - additional)
+                    .values(credits=func.greatest(0, DiscordUser.credits - additional))
                 )
             session.add(
                 TokenUsageLog(
