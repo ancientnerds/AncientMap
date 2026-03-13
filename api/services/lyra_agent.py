@@ -1410,13 +1410,9 @@ async def run_agent_stream(
             if _forced_result is None:
                 # Structured generate failed — try raw generate (no tools, no schema).
                 # Mercury often returns valid JSON even without response_format.
-                logger.warning(
-                    "All structured forced retries failed — trying raw generate"
-                )
+                logger.warning("All structured forced retries failed — trying raw generate")
                 try:
-                    _raw_result = await backend_impl.generate(
-                        messages, max_tokens=16384
-                    )
+                    _raw_result = await backend_impl.generate(messages, max_tokens=16384)
                     total_input_tokens += _raw_result["usage"]["input"]
                     total_output_tokens += _raw_result["usage"]["output"]
                     _raw_content = _raw_result["content"]
@@ -1431,37 +1427,33 @@ async def run_agent_stream(
                         if _raw_text.strip():
                             if "sites" in _raw_parsed:
                                 _raw_parsed["sites"] = [
-                                    s for s in _raw_parsed["sites"]
-                                    if s.get("id", "").strip()
+                                    s for s in _raw_parsed["sites"] if s.get("id", "").strip()
                                 ]
                             expanded_raw, _ = expand_markers(_raw_parsed)
                             _raw_cleaned = clean_response_text(expanded_raw)
                             if _raw_cleaned.strip():
-                                _so_raw = {
-                                    k: v for k, v in _raw_parsed.items()
-                                    if k != "text"
-                                }
+                                _so_raw = {k: v for k, v in _raw_parsed.items() if k != "text"}
                                 if any(
                                     _so_raw.get(k)
                                     for k in (
-                                        "sites", "coords", "videos",
-                                        "empires", "images", "links",
+                                        "sites",
+                                        "coords",
+                                        "videos",
+                                        "empires",
+                                        "images",
+                                        "links",
                                         "countries",
                                     )
                                 ):
                                     _structured_output = _so_raw
-                                async for diff_ev in _simulate_diffusion(
-                                    _raw_cleaned
-                                ):
+                                async for diff_ev in _simulate_diffusion(_raw_cleaned):
                                     yield diff_ev
                                 _raw_emitted = True
                     except (json.JSONDecodeError, ValueError):
                         # Not JSON — try as plain text
                         _raw_cleaned = clean_response_text(_raw_content)
                         if _raw_cleaned.strip():
-                            async for diff_ev in _simulate_diffusion(
-                                _raw_cleaned
-                            ):
+                            async for diff_ev in _simulate_diffusion(_raw_cleaned):
                                 yield diff_ev
                             _raw_emitted = True
                     if not _raw_emitted:
@@ -1488,9 +1480,7 @@ async def run_agent_stream(
                                 except (json.JSONDecodeError, ValueError):
                                     _stream_text = clean_response_text(_stream_text)
                                 if _stream_text.strip():
-                                    async for diff_ev in _simulate_diffusion(
-                                        _stream_text
-                                    ):
+                                    async for diff_ev in _simulate_diffusion(_stream_text):
                                         yield diff_ev
                                     _raw_emitted = True
                         except Exception as e_stream:
@@ -1499,10 +1489,7 @@ async def run_agent_stream(
                         logger.error("All forced response methods exhausted")
                         yield {
                             "type": "error",
-                            "error": (
-                                "Mercury is temporarily unavailable. "
-                                "Please try again."
-                            ),
+                            "error": ("Mercury is temporarily unavailable. Please try again."),
                         }
                 except Exception as e_raw:
                     # Raw generate also failed (Mercury returns tool_calls
@@ -1514,9 +1501,7 @@ async def run_agent_stream(
                         if isinstance(msg, (SystemMessage, HumanMessage)):
                             _clean_msgs.append(msg)
                         elif isinstance(msg, ToolMessage):
-                            _clean_msgs.append(
-                                SystemMessage(content=str(msg.content)[:3000])
-                            )
+                            _clean_msgs.append(SystemMessage(content=str(msg.content)[:3000]))
                         # Skip AIMessage with tool_calls
                     _clean_msgs.append(
                         SystemMessage(
@@ -1529,9 +1514,7 @@ async def run_agent_stream(
                     _stream_ok2 = False
                     _stream_text2 = ""
                     try:
-                        async for ev in backend_impl.stream(
-                            _clean_msgs, [], enable_thinking=False
-                        ):
+                        async for ev in backend_impl.stream(_clean_msgs, [], enable_thinking=False):
                             if ev["type"] == "diffusion":
                                 _stream_text2 = ev["text"]
                             elif ev["type"] == "content":
@@ -1546,21 +1529,16 @@ async def run_agent_stream(
                                 if _st2.strip():
                                     if "sites" in _sp2:
                                         _sp2["sites"] = [
-                                            s for s in _sp2["sites"]
-                                            if s.get("id", "").strip()
+                                            s for s in _sp2["sites"] if s.get("id", "").strip()
                                         ]
                                     exp_s2, _ = expand_markers(_sp2)
                                     _stream_text2 = clean_response_text(exp_s2)
                                 else:
                                     _stream_text2 = ""
                             except (json.JSONDecodeError, ValueError):
-                                _stream_text2 = clean_response_text(
-                                    _stream_text2
-                                )
+                                _stream_text2 = clean_response_text(_stream_text2)
                             if _stream_text2.strip():
-                                async for diff_ev in _simulate_diffusion(
-                                    _stream_text2
-                                ):
+                                async for diff_ev in _simulate_diffusion(_stream_text2):
                                     yield diff_ev
                                 _stream_ok2 = True
                     except Exception as e_s2:
@@ -1569,10 +1547,7 @@ async def run_agent_stream(
                         logger.error("All forced methods exhausted")
                         yield {
                             "type": "error",
-                            "error": (
-                                "Mercury is temporarily unavailable. "
-                                "Please try again."
-                            ),
+                            "error": ("Mercury is temporarily unavailable. Please try again."),
                         }
             else:
                 total_input_tokens += _forced_result["usage"]["input"]
@@ -1648,9 +1623,7 @@ async def run_agent_stream(
                             # Mercury returned empty — try once more without structured output
                             logger.warning("Forced response was empty — retrying without schema")
                             try:
-                                result = await backend_impl.generate(
-                                    messages, max_tokens=16384
-                                )
+                                result = await backend_impl.generate(messages, max_tokens=16384)
                                 total_input_tokens += result["usage"]["input"]
                                 total_output_tokens += result["usage"]["output"]
                                 _raw_fb = result["content"]
@@ -1662,7 +1635,8 @@ async def run_agent_stream(
                                     if _fb_text.strip():
                                         if "sites" in _fb_parsed:
                                             _fb_parsed["sites"] = [
-                                                s for s in _fb_parsed["sites"]
+                                                s
+                                                for s in _fb_parsed["sites"]
                                                 if s.get("id", "").strip()
                                             ]
                                         expanded_fb, _ = expand_markers(_fb_parsed)
@@ -1690,9 +1664,7 @@ async def run_agent_stream(
                         logger.warning(f"Forced generate failed: {e}")
                         # Last resort: raw generate without structured output
                         try:
-                            result = await backend_impl.generate(
-                                messages, max_tokens=16384
-                            )
+                            result = await backend_impl.generate(messages, max_tokens=16384)
                             total_input_tokens += result["usage"]["input"]
                             total_output_tokens += result["usage"]["output"]
                             _raw_lr = result["content"]
@@ -1702,7 +1674,8 @@ async def run_agent_stream(
                                 if _lr_text.strip():
                                     if "sites" in _lr_parsed:
                                         _lr_parsed["sites"] = [
-                                            s for s in _lr_parsed["sites"]
+                                            s
+                                            for s in _lr_parsed["sites"]
                                             if s.get("id", "").strip()
                                         ]
                                     expanded_lr, _ = expand_markers(_lr_parsed)
