@@ -41,18 +41,12 @@
   flex: 1;
   background: none;
   border: none;
-  color: var(--text-primary);
   font-size: 1rem;
-  outline: none;
-  font-family: inherit;
+  box-shadow: none;
 }
 
-.search-bar-input::placeholder {
-  color: rgba(255, 255, 255, 0.3);
-}
-
-.search-bar-input:disabled {
-  opacity: 0.5;
+.search-bar-input:focus {
+  box-shadow: none;
 }
 
 .search-bar-clear {

@@ -1,5 +1,7 @@
 @import './tokens.css';
 @import './nerv-ui/crt.css';
+@import './nerv-ui/input.css';
+@import './nerv-ui/slider.css';
 @import './nerv-shapes.css';
 @import './nerv-animations.css';
 @import './disclaimer.css';
@@ -1664,11 +1666,12 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 
 .radius-slider {
   width: 100%;
-  height: 6px;
+  height: 8px;
   -webkit-appearance: none;
   appearance: none;
-  background: linear-gradient(to right, var(--accent-glow-30), var(--brand-primary));
-  border-radius: 3px;
+  background: rgba(0, 30, 15, 0.8);
+  border: 1px solid rgba(0, 204, 102, 0.25);
+  border-radius: 4px;
   outline: none;
   cursor: pointer;
 }
@@ -1678,21 +1681,21 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   appearance: none;
   width: 16px;
   height: 16px;
-  background: var(--brand-primary);
-  border: 2px solid white;
-  border-radius: 50%;
+  background: var(--accent-primary);
+  border: 2px solid rgba(0, 255, 128, 0.5);
+  border-radius: 3px;
   cursor: pointer;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 0 8px rgba(0, 204, 102, 0.4), inset 0 0 3px rgba(0, 0, 0, 0.3);
 }
 
 .radius-slider::-moz-range-thumb {
   width: 16px;
   height: 16px;
-  background: var(--brand-primary);
-  border: 2px solid white;
-  border-radius: 50%;
+  background: var(--accent-primary);
+  border: 2px solid rgba(0, 255, 128, 0.5);
+  border-radius: 3px;
   cursor: pointer;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 0 8px rgba(0, 204, 102, 0.4), inset 0 0 3px rgba(0, 0, 0, 0.3);
 }
 
 .radius-labels {
@@ -2132,28 +2135,54 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   padding: 0 8px;
 }
 
-.age-slider::-webkit-slider-thumb {
+/* Left thumb (min / oldest) — red */
+.age-slider-min::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 16px;
   height: 16px;
-  background: var(--brand-primary);
-  border: 2px solid white;
-  border-radius: 50%;
+  background: #ff0000;
+  border: 2px solid rgba(255, 80, 80, 0.5);
+  border-radius: 3px;
   cursor: pointer;
   pointer-events: auto;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 0 8px rgba(255, 0, 0, 0.4), inset 0 0 3px rgba(0, 0, 0, 0.3);
 }
 
-.age-slider::-moz-range-thumb {
+.age-slider-min::-moz-range-thumb {
   width: 16px;
   height: 16px;
-  background: var(--brand-primary);
-  border: 2px solid white;
-  border-radius: 50%;
+  background: #ff0000;
+  border: 2px solid rgba(255, 80, 80, 0.5);
+  border-radius: 3px;
   cursor: pointer;
   pointer-events: auto;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 0 8px rgba(255, 0, 0, 0.4), inset 0 0 3px rgba(0, 0, 0, 0.3);
+}
+
+/* Right thumb (max / newest) — yellow */
+.age-slider-max::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: #ffcc00;
+  border: 2px solid rgba(255, 220, 60, 0.5);
+  border-radius: 3px;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: 0 0 8px rgba(255, 204, 0, 0.4), inset 0 0 3px rgba(0, 0, 0, 0.3);
+}
+
+.age-slider-max::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: #ffcc00;
+  border: 2px solid rgba(255, 220, 60, 0.5);
+  border-radius: 3px;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: 0 0 8px rgba(255, 204, 0, 0.4), inset 0 0 3px rgba(0, 0, 0, 0.3);
 }
 
 .age-range-labels {
@@ -3569,7 +3598,8 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   height: 4px;
   -webkit-appearance: none;
   appearance: none;
-  background: var(--accent-glow-20);
+  background: rgba(0, 30, 15, 0.8);
+  border: 1px solid rgba(0, 204, 102, 0.2);
   border-radius: 2px;
   cursor: pointer;
 }
@@ -3579,18 +3609,21 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   appearance: none;
   width: 10px;
   height: 10px;
-  background: var(--brand-primary);
-  border-radius: 50%;
+  background: var(--accent-primary);
+  border: 1px solid rgba(0, 255, 128, 0.5);
+  border-radius: 2px;
   cursor: pointer;
+  box-shadow: 0 0 6px rgba(0, 204, 102, 0.3);
 }
 
 .setting-slider::-moz-range-thumb {
   width: 10px;
   height: 10px;
-  background: var(--brand-primary);
-  border-radius: 50%;
+  background: var(--accent-primary);
+  border: 1px solid rgba(0, 255, 128, 0.5);
+  border-radius: 2px;
   cursor: pointer;
-  border: none;
+  box-shadow: 0 0 6px rgba(0, 204, 102, 0.3);
 }
 
 /* HUD Control Buttons */
@@ -5235,9 +5268,10 @@ a.popup-window-btn {
   width: 16px;
   height: 16px;
   background: #c02023;
-  border: 1px solid #a01a1c;
-  border-radius: 2px;
+  border: 2px solid rgba(255, 60, 60, 0.5);
+  border-radius: 3px;
   cursor: pointer;
+  box-shadow: 0 0 8px rgba(192, 32, 35, 0.5), inset 0 0 3px rgba(0, 0, 0, 0.3);
   position: relative;
   z-index: 10;
 }
@@ -5246,9 +5280,10 @@ a.popup-window-btn {
   width: 16px;
   height: 16px;
   background: #c02023;
-  border: 1px solid #a01a1c;
-  border-radius: 2px;
+  border: 2px solid rgba(255, 60, 60, 0.5);
+  border-radius: 3px;
   cursor: pointer;
+  box-shadow: 0 0 8px rgba(192, 32, 35, 0.5), inset 0 0 3px rgba(0, 0, 0, 0.3);
   position: relative;
   z-index: 10;
 }

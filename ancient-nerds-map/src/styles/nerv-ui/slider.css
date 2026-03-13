@@ -1,0 +1,23 @@
+/* ═══════════════════════════════════════════
+   NERV-UI · Slider
+   Unified range input reset.
+   Strips browser chrome only — each slider
+   class fully owns its visual appearance.
+   ═══════════════════════════════════════════ */
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+input[type="range"]:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

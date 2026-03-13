@@ -29,41 +29,20 @@
   flex: 1;
 }
 
-/* Inputs, selects, textareas */
+/* Inputs, selects, textareas — colors from nerv-ui/input.css */
 .site-form-input,
 .site-form-select,
 .site-form-textarea {
   width: 100%;
   height: 36px;
   padding: 0 12px;
-  background: var(--surface-input);
-  border: 1px solid var(--border-accent);
-  border-radius: 4px;
-  color: var(--text-primary);
   font-size: 14px;
-  outline: none;
-  transition: border-color 0.2s ease;
-  box-sizing: border-box;
 }
 
 .site-form-textarea {
   height: auto;
   padding: 10px 12px;
-  resize: vertical;
   min-height: 60px;
-  font-family: inherit;
-}
-
-.site-form-input:focus,
-.site-form-select:focus,
-.site-form-textarea:focus {
-  border-color: var(--brand-primary);
-}
-
-.site-form-input::placeholder,
-.site-form-textarea::placeholder {
-  color: var(--text-secondary);
-  opacity: 0.5;
 }
 
 .site-form-input.valid {
@@ -71,17 +50,7 @@
 }
 
 .site-form-select {
-  cursor: pointer;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
   padding-right: 36px;
-}
-
-.site-form-select option {
-  background: var(--surface-page);
-  color: var(--text-primary);
 }
 
 /* Coordinate row: input + optional globe button */

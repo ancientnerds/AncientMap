@@ -46,22 +46,11 @@
 }
 
 .db-source-badge select {
-  background: var(--surface-raised);
   border: none;
-  color: var(--text-primary);
+  background: transparent;
   font-size: 0.78rem;
-  font-family: inherit;
-  cursor: pointer;
   padding-right: 4px;
-}
-
-.db-source-badge select:focus {
-  outline: none;
-}
-
-.db-source-badge select option {
-  background: var(--surface-raised-solid);
-  color: var(--text-primary);
+  background-image: none;
 }
 
 /* Version snapshot badge */
@@ -84,22 +73,11 @@
 }
 
 .db-version-badge select {
-  background: var(--surface-raised);
   border: none;
-  color: var(--text-primary);
+  background: transparent;
   font-size: 0.78rem;
-  font-family: inherit;
-  cursor: pointer;
   padding-right: 4px;
-}
-
-.db-version-badge select:focus {
-  outline: none;
-}
-
-.db-version-badge select option {
-  background: var(--surface-raised-solid);
-  color: var(--text-primary);
+  background-image: none;
 }
 
 .db-unlock-btn {
@@ -208,25 +186,9 @@
 
 .db-filter-group select,
 .db-filter-group input {
-  background: var(--surface-raised);
-  border: 1px solid var(--border-accent);
-  color: var(--text-primary);
   padding: 6px 12px;
-  border-radius: 6px;
   font-size: 0.82rem;
-  font-family: inherit;
   min-width: 160px;
-}
-
-.db-filter-group select:focus,
-.db-filter-group input:focus {
-  outline: none;
-  border-color: var(--brand-primary);
-}
-
-.db-filter-group select option {
-  background: var(--surface-raised-solid);
-  color: var(--text-primary);
 }
 
 .db-search-wrap {
@@ -236,19 +198,9 @@
 }
 
 .db-search-wrap input {
-  background: var(--surface-raised);
-  border: 1px solid var(--border-accent);
-  color: var(--text-primary);
   padding: 6px 28px 6px 12px;
-  border-radius: 6px;
   font-size: 0.82rem;
-  font-family: inherit;
   min-width: 160px;
-}
-
-.db-search-wrap input:focus {
-  outline: none;
-  border-color: var(--brand-primary);
 }
 
 .db-search-clear {
@@ -393,17 +345,7 @@
 .db-multiselect-search {
   margin: 8px 8px 0;
   padding: 6px 10px;
-  background: var(--surface-raised);
-  border: 1px solid var(--border-accent);
-  border-radius: 4px;
-  color: var(--text-primary);
   font-size: 0.8rem;
-  font-family: inherit;
-}
-
-.db-multiselect-search:focus {
-  outline: none;
-  border-color: var(--brand-primary);
 }
 
 .db-multiselect-actions {
@@ -901,20 +843,9 @@
 }
 
 .db-hero-input {
-  background: var(--surface-page);
-  border: 1px solid var(--border-accent);
-  border-radius: 4px;
   padding: 6px 8px;
-  color: var(--text-primary);
   font-size: 12px;
-  font-family: inherit;
   width: 100%;
-  box-sizing: border-box;
-}
-
-.db-hero-input:focus {
-  outline: none;
-  border-color: var(--brand-primary);
 }
 
 .db-hero-error {
@@ -1036,18 +967,8 @@
 .db-inline-select,
 .db-inline-input {
   width: 100%;
-  background: var(--surface-sunken);
-  border: 1px solid var(--brand-primary);
-  color: var(--text-primary);
   padding: 4px 8px;
-  border-radius: 4px;
   font-size: 0.82rem;
-  font-family: inherit;
-}
-
-.db-inline-select:focus,
-.db-inline-input:focus {
-  outline: none;
 }
 
 /* Edit button */
@@ -1213,21 +1134,8 @@
 .db-field input,
 .db-field select,
 .db-field textarea {
-  background: var(--surface-sunken);
-  border: 1px solid var(--border-accent);
-  color: var(--text-primary);
   padding: 8px 12px;
-  border-radius: 6px;
   font-size: 0.85rem;
-  font-family: inherit;
-  resize: vertical;
-}
-
-.db-field input:focus,
-.db-field select:focus,
-.db-field textarea:focus {
-  outline: none;
-  border-color: var(--brand-primary);
 }
 
 .db-checkbox-label {
@@ -2243,23 +2151,8 @@
 }
 
 .db-diff-select-group select {
-  background: var(--surface-sunken);
-  border: 1px solid var(--border-accent);
-  color: var(--text-primary);
   padding: 7px 10px;
-  border-radius: 6px;
   font-size: 0.82rem;
-  font-family: inherit;
-}
-
-.db-diff-select-group select:focus {
-  outline: none;
-  border-color: #22d3ee;
-}
-
-.db-diff-select-group select option {
-  background: var(--surface-raised-solid);
-  color: var(--text-primary);
 }
 
 .db-diff-arrow {

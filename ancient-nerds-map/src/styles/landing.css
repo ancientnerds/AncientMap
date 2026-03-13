@@ -1,5 +1,7 @@
 @import './tokens.css';
 @import './nerv-ui/crt.css';
+@import './nerv-ui/input.css';
+@import './nerv-ui/slider.css';
 @import './disclaimer.css';
 
 /* ANCIENT NERDS - Landing Page Styles */

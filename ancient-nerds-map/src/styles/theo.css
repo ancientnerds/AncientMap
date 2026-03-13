@@ -114,18 +114,15 @@
   width: 100%;
   background: transparent;
   border: none;
-  outline: none;
-  color: var(--text-primary);
-  font-family: var(--font-body);
   font-size: 16px;
   padding: 16px 18px;
-  resize: vertical;
   min-height: 56px;
   max-height: 180px;
+  box-shadow: none;
 }
 
-.theo-input::placeholder {
-  color: var(--text-dimmed);
+.theo-input:focus {
+  box-shadow: none;
 }
 
 /* — Effort Buttons — */
