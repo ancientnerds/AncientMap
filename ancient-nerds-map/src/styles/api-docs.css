@@ -138,19 +138,14 @@
 /* -- Endpoint cards -- */
 
 .api-card {
-  background: var(--surface-raised);
-  border: 1px solid var(--border-accent);
-  border-radius: 8px;
+  position: relative;
   margin-bottom: 8px;
   transition: border-color 0.2s, background 0.2s;
 }
-.api-card:hover {
-  border-color: var(--border-accent-strong);
-}
+/* hover → nerv-ui/hover.css */
 .api-card.expanded {
-  border-color: var(--accent-glow-30);
-  background: rgba(0, 20, 25, 0.5);
-  box-shadow: 0 0 8px var(--accent-glow-15);
+  border-color: var(--nerv-hover-color);
+  box-shadow: inset 3px 0 0 var(--nerv-hover-color), var(--nerv-panel-shadow);
 }
 
 .api-card-header {

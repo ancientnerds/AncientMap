@@ -119,9 +119,7 @@
 }
 
 .db-stat-card {
-  background: var(--surface-raised);
-  border: 1px solid var(--accent-glow-15);
-  border-radius: 8px;
+  position: relative;
   padding: 12px 20px;
   min-width: 110px;
   text-align: center;
@@ -134,9 +132,7 @@
   color: inherit;
 }
 
-.db-stat-card:hover {
-  background: var(--surface-raised-solid);
-}
+/* hover → nerv-ui/hover.css */
 
 .db-stat-card.active {
   border-color: var(--accent-primary);

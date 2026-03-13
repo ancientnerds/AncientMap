@@ -516,12 +516,8 @@ body {
 }
 
 .split-card {
+  position: relative;
   padding: 40px;
-  background: var(--surface-raised);
-  border: 1px solid var(--border-accent);
-  border-radius: 16px;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   contain: layout style paint;
 }
 
@@ -554,19 +550,14 @@ body {
 }
 
 .tool-card {
-  background: var(--surface-raised);
-  border: 1px solid var(--border-accent);
-  border-radius: 12px;
+  position: relative;
   padding: 20px;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   transition: border-color 0.3s, box-shadow 0.3s, transform 0.3s;
   contain: layout style paint;
 }
 
+/* hover → nerv-ui/hover.css (transform kept as layout) */
 .tool-card:hover {
-  border-color: var(--border-accent-strong);
-  box-shadow: 0 0 30px var(--glow-cyan);
   transform: translateY(-4px);
 }
 

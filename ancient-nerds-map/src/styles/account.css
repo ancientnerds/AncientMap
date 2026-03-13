@@ -152,9 +152,7 @@
 
 /* Profile card */
 .account-card {
-  background: var(--accent-glow-08);
-  border: 1px solid var(--accent-glow-15);
-  border-radius: 12px;
+  position: relative;
   padding: 24px;
   margin-bottom: 24px;
 }

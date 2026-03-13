@@ -222,17 +222,13 @@
 }
 
 .theo-card {
-  border: 1px solid var(--border-default);
-  border-radius: 6px;
-  background: var(--surface-raised);
+  position: relative;
   padding: 16px 18px;
   margin-bottom: 10px;
   transition: border-color 0.2s;
 }
 
-.theo-card:hover {
-  border-color: var(--theo-border-hover);
-}
+/* hover → nerv-ui/hover.css */
 
 .theo-card-top {
   display: flex;

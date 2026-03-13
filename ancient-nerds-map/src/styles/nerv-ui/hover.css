@@ -1,0 +1,90 @@
+/* ═══════════════════════════════════════════
+   NERV-UI · Hover Effects
+   Three unified hover styles:
+   1. Icons  — red glow pulse on icon buttons
+   2. Text   — red underline glow on links/labels
+   3. Rows   — red left-edge + dim bg on list items
+   Change tokens → updates everywhere.
+   ═══════════════════════════════════════════ */
+
+:root {
+  --nerv-hover-color:    rgba(192, 32, 35, 0.7);
+  --nerv-hover-glow:     rgba(192, 32, 35, 0.4);
+  --nerv-hover-bg:       rgba(192, 32, 35, 0.06);
+  --nerv-hover-speed:    0.15s;
+}
+
+/* ── 1. Icon hover: red glow ──────────────── */
+.social-link,
+.action-link,
+.zoom-btn,
+.signin-btn-full,
+.popup-close,
+.layer-toggle,
+.base-layer-btn {
+  transition:
+    color var(--nerv-hover-speed) ease,
+    text-shadow var(--nerv-hover-speed) ease,
+    box-shadow var(--nerv-hover-speed) ease,
+    background var(--nerv-hover-speed) ease;
+}
+
+.social-link:hover,
+.action-link:hover,
+.zoom-btn:hover,
+.signin-btn-full:hover,
+.popup-close:hover,
+.layer-toggle:hover,
+.base-layer-btn:hover {
+  color: var(--nerv-hover-color);
+  text-shadow: 0 0 8px var(--nerv-hover-glow);
+}
+
+/* ── 2. Text hover: red glow + underline ──── */
+a:not([class]),
+.panel-label a,
+.connector-link,
+.news-link,
+.theo-card-question,
+.site-name-link {
+  transition:
+    color var(--nerv-hover-speed) ease,
+    text-shadow var(--nerv-hover-speed) ease;
+}
+
+a:not([class]):hover,
+.panel-label a:hover,
+.connector-link:hover,
+.news-link:hover,
+.theo-card-question:hover,
+.site-name-link:hover {
+  color: var(--nerv-hover-color);
+  text-shadow: 0 0 6px var(--nerv-hover-glow);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ── 3. Row hover: red left bar + bg tint ─── */
+.filter-source-item,
+.connector-row,
+.news-item,
+.db-row,
+.theo-card,
+.api-card,
+.db-stat-card {
+  transition:
+    background var(--nerv-hover-speed) ease,
+    border-color var(--nerv-hover-speed) ease,
+    box-shadow var(--nerv-hover-speed) ease;
+}
+
+.filter-source-item:hover,
+.connector-row:hover,
+.news-item:hover,
+.db-row:hover,
+.theo-card:hover,
+.api-card:hover,
+.db-stat-card:hover {
+  background: var(--nerv-hover-bg);
+  box-shadow: inset 3px 0 0 var(--nerv-hover-color);
+}

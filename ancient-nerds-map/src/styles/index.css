@@ -2,6 +2,8 @@
 @import './nerv-ui/crt.css';
 @import './nerv-ui/input.css';
 @import './nerv-ui/slider.css';
+@import './nerv-ui/panel.css';
+@import './nerv-ui/hover.css';
 @import './nerv-shapes.css';
 @import './nerv-animations.css';
 @import './disclaimer.css';
@@ -526,17 +528,11 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 
 .connector-status-modal {
   position: relative;
-  background: var(--surface-raised-solid);
-  backdrop-filter: blur(var(--blur-amount));
-  -webkit-backdrop-filter: blur(var(--blur-amount));
-  border: 1px solid var(--border-accent);
-  border-radius: 8px;
   max-width: 900px;
   width: 90vw;
   height: 80vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
 /* Close button on the right side for connector modal */
@@ -1200,11 +1196,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 }
 
 .glass-panel {
-  background: var(--surface-raised);
-  backdrop-filter: blur(var(--blur-amount));
-  -webkit-backdrop-filter: blur(var(--blur-amount));
-  border: 1px solid var(--border-accent);
-  border-radius: 8px;
+  position: relative;
   padding: 16px;
   flex-shrink: 0;
   width: 280px;
@@ -2514,11 +2506,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   align-items: center;
   gap: 2px;
   padding: 6px 8px;
-  background: var(--surface-raised);
-  backdrop-filter: blur(var(--blur-amount));
-  -webkit-backdrop-filter: blur(var(--blur-amount));
-  border: 1px solid var(--border-accent);
-  border-radius: 6px;
+  position: relative;
   pointer-events: auto; /* Re-enable for interactive content */
 }
 
@@ -2529,11 +2517,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   align-items: center;
   gap: 2px;
   padding: 6px 8px;
-  background: var(--surface-raised);
-  backdrop-filter: blur(var(--blur-amount));
-  -webkit-backdrop-filter: blur(var(--blur-amount));
-  border: 1px solid var(--border-accent);
-  border-radius: 6px;
+  position: relative;
   pointer-events: auto;
 }
 
@@ -2615,11 +2599,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   font-weight: 500;
   letter-spacing: 1px;
   color: var(--crt-600);
-  background: var(--surface-raised);
-  backdrop-filter: blur(var(--blur-amount));
-  -webkit-backdrop-filter: blur(var(--blur-amount));
-  border: 1px solid var(--border-accent);
-  border-radius: 6px;
+  position: relative;
   cursor: pointer;
   transition: color 0.2s ease, background 0.2s ease;
 }
@@ -2637,10 +2617,6 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   z-index: 200;
   width: 220px;
   padding: 16px;
-  background: var(--surface-page);
-  border: 1px solid var(--border-accent);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   text-align: center;
 }
 
@@ -2766,16 +2742,11 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 }
 
 .contribute-modal {
-  background: var(--surface-raised-solid);
-  backdrop-filter: blur(var(--blur-amount));
-  -webkit-backdrop-filter: blur(var(--blur-amount));
-  border: 1px solid var(--border-accent);
-  border-radius: 8px;
+  position: relative;
   max-width: 480px;
   width: 100%;
   max-height: calc(100vh - 40px);
   overflow-y: auto;
-  position: relative;
   padding: 20px 24px;
 }
 
@@ -3296,12 +3267,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   flex-direction: column;
   gap: 8px;
   padding: 10px;
-  background: var(--surface-raised);
-  backdrop-filter: blur(var(--blur-amount));
-  -webkit-backdrop-filter: blur(var(--blur-amount));
-  border: 1px solid var(--border-accent);
-  border-radius: 6px;
-  font-family: 'Orbitron', monospace;
+  font-family: var(--font-body);
   pointer-events: auto; /* Re-enable for interactive content */
 }
 
@@ -3316,6 +3282,7 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
 }
 
 .fps-display {
+  font-family: var(--font-heading);
   font-size: 12px;
   color: var(--brand-primary);
   letter-spacing: 1px;
@@ -3814,16 +3781,11 @@ body.screenshot-mode .screenshot-mode-buttons {
 }
 
 .site-popup {
-  background: var(--surface-raised-solid);
-  backdrop-filter: blur(var(--blur-amount));
-  -webkit-backdrop-filter: blur(var(--blur-amount));
-  border: 1px solid var(--border-accent);
-  border-radius: 8px;
+  position: relative;
   max-width: 700px;
   width: 100%;
   max-height: 80vh;
   overflow: hidden;
-  position: relative;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -4812,11 +4774,10 @@ a.popup-window-btn {
 
 /* Site Count */
 .site-count {
+  position: relative;
   font-size: 12px;
   color: var(--text-secondary);
   padding: 8px 12px;
-  background: var(--surface-sunken);
-  border-radius: 6px;
   text-align: center;
   flex-shrink: 0;
   width: 280px;
@@ -5199,11 +5160,6 @@ a.popup-window-btn {
   align-items: center;
   gap: 8px;
   padding: 12px 10px;
-  background: var(--surface-raised);
-  backdrop-filter: blur(var(--blur-amount));
-  -webkit-backdrop-filter: blur(var(--blur-amount));
-  border: 1px solid var(--border-accent);
-  border-radius: 6px;
 }
 
 .zoom-percent-display {
@@ -5351,12 +5307,7 @@ a.popup-window-btn {
   right: calc(20px + 72px * var(--hud-scale, 1));
   z-index: 100;
   transition: right 0.25s ease-out;
-  padding: 12px;
-  background: var(--surface-raised);
-  backdrop-filter: blur(var(--blur-amount));
-  -webkit-backdrop-filter: blur(var(--blur-amount));
-  border: 1px solid var(--border-accent);
-  border-radius: 4px;
+  padding: 8px;
   min-width: 180px;
   width: 180px;
 }
@@ -5366,14 +5317,14 @@ a.popup-window-btn {
   text-transform: uppercase;
   letter-spacing: 1px;
   color: var(--brand-primary);
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .panel-label-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .panel-label-row .panel-label {
@@ -5402,18 +5353,18 @@ a.popup-window-btn {
 }
 
 .base-layer-section {
-  margin-bottom: 12px;
-  padding-bottom: 12px;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
   border-bottom: 1px solid var(--accent-glow-20);
 }
 
 .lod-toggle {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin-bottom: 4px;
   cursor: pointer;
-  padding: 6px 8px;
+  padding: 3px 6px;
   border-radius: 2px;
   background: transparent;
   border: 1px solid var(--accent-glow-20);
@@ -5509,12 +5460,12 @@ a.popup-window-btn {
 .vector-layers-section {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
 }
 
 .base-maps-section {
-  margin-bottom: 8px;
-  padding-bottom: 8px;
+  margin-bottom: 4px;
+  padding-bottom: 4px;
   border-bottom: 1px solid var(--accent-glow-15);
 }
 
@@ -5558,18 +5509,18 @@ a.popup-window-btn {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-secondary);
-  margin-bottom: 4px;
-  padding-left: 8px;
+  margin-bottom: 2px;
+  padding-left: 6px;
   opacity: 0.7;
 }
 
 .layer-toggle {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   cursor: pointer;
-  padding: 6px 8px;
-  border-radius: 6px;
+  padding: 3px 6px;
+  border-radius: 2px;
   transition: background 0.2s ease;
 }
 
@@ -7957,15 +7908,9 @@ body.hud-hidden .empire-borders-window {
 .site-hover-tooltip {
   position: fixed;
   z-index: 50;
-  background: var(--surface-raised);
-  border: 1px solid var(--border-accent);
-  border-radius: 6px;
   padding: 10px 14px;
   pointer-events: auto;
   cursor: pointer;
-  backdrop-filter: blur(var(--blur-amount));
-  -webkit-backdrop-filter: blur(var(--blur-amount));
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 1px var(--accent-glow-20);
   animation: tooltipFadeIn 0.2s ease-out;
   max-width: 280px;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -8028,13 +7973,7 @@ body.hud-hidden .empire-borders-window {
   pointer-events: none;
   z-index: 100;
   white-space: nowrap;
-  background: var(--surface-raised);
-  backdrop-filter: blur(var(--blur-amount));
-  -webkit-backdrop-filter: blur(var(--blur-amount));
   padding: 6px 12px;
-  border-radius: 4px;
-  border: 1px solid var(--border-crt);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), 0 0 6px var(--accent-glow-15);
   min-width: 220px;
   text-align: center;
 }
@@ -8093,13 +8032,7 @@ body.hud-hidden .empire-borders-window {
   align-items: center;
   pointer-events: none;
   z-index: 100;
-  background: var(--surface-raised);
-  backdrop-filter: blur(var(--blur-amount));
-  -webkit-backdrop-filter: blur(var(--blur-amount));
   padding: 6px 12px;
-  border-radius: 4px;
-  border: 1px solid var(--accent-glow-20);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .scale-bar-line {
@@ -11212,12 +11145,6 @@ body.hud-hidden .empire-borders-window {
 
 .ai-chat-modal {
   position: relative;
-  background: var(--surface-raised);
-  backdrop-filter: blur(var(--blur-amount));
-  -webkit-backdrop-filter: blur(var(--blur-amount));
-  border-radius: 8px;
-  border: 1px solid var(--border-accent);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   width: 100%;
   max-width: 600px;
   height: 70vh;
@@ -12795,10 +12722,6 @@ body.hud-hidden .empire-borders-window {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--surface-raised-solid);
-  backdrop-filter: blur(var(--blur-amount));
-  -webkit-backdrop-filter: blur(var(--blur-amount));
-  border-left: 1px solid var(--border-accent);
   overflow: hidden;
   animation: news-feed-slide-in 0.25s ease-out;
 }
@@ -17957,12 +17880,9 @@ div.lyra-inline-video-wrap {
 
 /* Site popup CRT scanlines removed — global CRT filter in nerv-ui/crt.css */
 
-/* Main container — dark terminal background */
+/* Main container — font override */
 .site-popup {
-  background: var(--surface-page);
-  border-color: var(--border-crt);
   font-family: var(--font-body);
-  box-shadow: 0 0 40px var(--accent-glow-05), 0 8px 32px rgba(0, 0, 0, 0.6);
 }
 
 /* Overlay backdrop — darker green tint */

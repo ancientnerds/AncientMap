@@ -1,0 +1,131 @@
+/* ═══════════════════════════════════════════
+   NERV-UI · Panel
+   Single source of truth for ALL panel, modal,
+   card, tooltip, and HUD visual styling.
+   Change here → updates everywhere.
+   Layout stays in each class's original file.
+
+   Corner brackets drawn via ::before pseudo
+   using 8 CSS gradient layers — no extra DOM.
+   ═══════════════════════════════════════════ */
+
+/* ── Tokens ───────────────────────────────── */
+:root {
+  --nerv-panel-bg:     rgba(0, 20, 25, 0.35);
+  --nerv-panel-border: rgba(0, 204, 102, 0.2);
+  --nerv-panel-blur:   16px;
+  --nerv-panel-shadow: 0 0 8px rgba(0, 204, 102, 0.04);
+  --nerv-panel-radius: 0;
+  --nerv-cb-color:     rgba(0, 204, 102, 0.5);
+  --nerv-cb-size:      14px;
+  --nerv-cb-weight:    2px;
+}
+
+/* ── Satellite mode: more opaque for contrast ── */
+body.satellite-mode {
+  --nerv-panel-bg:     rgba(0, 15, 20, 0.75);
+  --nerv-panel-blur:   20px;
+  --nerv-panel-border: rgba(0, 204, 102, 0.3);
+}
+
+/* ── Visual properties: all containers ────── */
+.glass-panel,
+.info-panel-top-right,
+.zoom-slider-top,
+.layer-toggle-panel,
+.social-links,
+.action-links,
+.signin-btn-full,
+.signin-popup,
+.site-hover-tooltip,
+.scale-bar,
+.cursor-coords,
+.connector-status-modal,
+.contribute-modal,
+.site-popup,
+.ai-chat-modal,
+.disclaimer-modal,
+.news-feed-panel,
+.db-stat-card,
+.theo-card,
+.api-card,
+.account-card,
+.site-count,
+.split-card,
+.tool-card {
+  background: var(--nerv-panel-bg);
+  backdrop-filter: blur(var(--nerv-panel-blur));
+  -webkit-backdrop-filter: blur(var(--nerv-panel-blur));
+  border: 1px solid var(--nerv-panel-border);
+  border-radius: var(--nerv-panel-radius);
+  box-shadow: var(--nerv-panel-shadow);
+}
+
+/* Modals get extra drop shadow */
+.connector-status-modal,
+.contribute-modal,
+.site-popup,
+.ai-chat-modal,
+.disclaimer-modal,
+.signin-popup {
+  box-shadow: var(--nerv-panel-shadow), 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Corner brackets: panels & modals (14px) ── */
+.glass-panel::before,
+.info-panel-top-right::before,
+.zoom-slider-top::before,
+.layer-toggle-panel::before,
+.connector-status-modal::before,
+.contribute-modal::before,
+.site-popup::before,
+.ai-chat-modal::before,
+.disclaimer-modal::before,
+.news-feed-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background:
+    /* TL ─ */  linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 0 0 / var(--nerv-cb-size) var(--nerv-cb-weight) no-repeat,
+    /* TL │ */  linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 0 var(--nerv-cb-weight) / var(--nerv-cb-weight) calc(var(--nerv-cb-size) - var(--nerv-cb-weight)) no-repeat,
+    /* TR ─ */  linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 100% 0 / var(--nerv-cb-size) var(--nerv-cb-weight) no-repeat,
+    /* TR │ */  linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 100% var(--nerv-cb-weight) / var(--nerv-cb-weight) calc(var(--nerv-cb-size) - var(--nerv-cb-weight)) no-repeat,
+    /* BL ─ */  linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 0 100% / var(--nerv-cb-size) var(--nerv-cb-weight) no-repeat,
+    /* BL │ */  linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 0 calc(100% - var(--nerv-cb-weight)) / var(--nerv-cb-weight) calc(var(--nerv-cb-size) - var(--nerv-cb-weight)) no-repeat,
+    /* BR ─ */  linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 100% 100% / var(--nerv-cb-size) var(--nerv-cb-weight) no-repeat,
+    /* BR │ */  linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 100% calc(100% - var(--nerv-cb-weight)) / var(--nerv-cb-weight) calc(var(--nerv-cb-size) - var(--nerv-cb-weight)) no-repeat;
+}
+
+/* ── Corner brackets: cards, bars, HUD (10px) ── */
+.social-links::before,
+.action-links::before,
+.signin-btn-full::before,
+.signin-popup::before,
+.site-hover-tooltip::before,
+.scale-bar::before,
+.cursor-coords::before,
+.site-count::before,
+.db-stat-card::before,
+.theo-card::before,
+.api-card::before,
+.account-card::before,
+.split-card::before,
+.tool-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  --_cb-s: 10px;
+  background:
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 0 0 / var(--_cb-s) var(--nerv-cb-weight) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 0 var(--nerv-cb-weight) / var(--nerv-cb-weight) calc(var(--_cb-s) - var(--nerv-cb-weight)) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 100% 0 / var(--_cb-s) var(--nerv-cb-weight) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 100% var(--nerv-cb-weight) / var(--nerv-cb-weight) calc(var(--_cb-s) - var(--nerv-cb-weight)) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 0 100% / var(--_cb-s) var(--nerv-cb-weight) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 0 calc(100% - var(--nerv-cb-weight)) / var(--nerv-cb-weight) calc(var(--_cb-s) - var(--nerv-cb-weight)) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 100% 100% / var(--_cb-s) var(--nerv-cb-weight) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 100% calc(100% - var(--nerv-cb-weight)) / var(--nerv-cb-weight) calc(var(--_cb-s) - var(--nerv-cb-weight)) no-repeat;
+}
