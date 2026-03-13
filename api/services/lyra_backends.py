@@ -41,7 +41,12 @@ class LLMBackend(Protocol):
     async def complete(self, messages: list, response_format: dict | None = None) -> dict: ...
 
     async def generate(
-        self, messages: list, tools: list | None = None, response_format: dict | None = None
+        self,
+        messages: list,
+        tools: list | None = None,
+        response_format: dict | None = None,
+        max_tokens: int | None = None,
+        tool_choice: str | None = None,
     ) -> dict: ...
 
 
@@ -246,7 +251,12 @@ class OllamaBackend:
         raise NotImplementedError("OllamaBackend does not support complete()")
 
     async def generate(
-        self, messages: list, tools: list | None = None, response_format: dict | None = None
+        self,
+        messages: list,
+        tools: list | None = None,
+        response_format: dict | None = None,
+        max_tokens: int | None = None,
+        tool_choice: str | None = None,
     ) -> dict:
         """Not supported for Ollama backend — Mercury-only."""
         raise NotImplementedError("OllamaBackend does not support generate()")
