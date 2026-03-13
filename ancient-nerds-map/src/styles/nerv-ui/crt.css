@@ -18,8 +18,8 @@ body::after {
     0deg,
     transparent 0px,
     transparent 2px,
-    rgba(0, 0, 0, 0.1) 2px,
-    rgba(0, 0, 0, 0.1) 4px
+    rgba(0, 0, 0, 0.08) 2px,
+    rgba(0, 0, 0, 0.08) 4px
   );
 }
 
@@ -35,9 +35,9 @@ body::before {
   background: radial-gradient(
     ellipse at 50% 50%,
     transparent 62%,
-    rgba(0, 0, 0, 0.18) 82%,
-    rgba(0, 0, 0, 0.38) 95%,
-    rgba(0, 0, 0, 0.45) 100%
+    rgba(0, 0, 0, 0.14) 82%,
+    rgba(0, 0, 0, 0.30) 95%,
+    rgba(0, 0, 0, 0.36) 100%
   );
 }
 
@@ -50,8 +50,8 @@ body::before {
   transform: translateZ(0);
   will-change: transform;
   background:
-    radial-gradient(ellipse 120% 90% at 50% 45%, rgba(0, 204, 102, 0.065) 0%, transparent 80%),
-    radial-gradient(ellipse 80% 60% at 50% 50%, rgba(0, 204, 102, 0.04) 0%, transparent 70%);
+    radial-gradient(ellipse 120% 90% at 50% 45%, rgba(0, 204, 102, 0.052) 0%, transparent 80%),
+    radial-gradient(ellipse 80% 60% at 50% 50%, rgba(0, 204, 102, 0.032) 0%, transparent 70%);
 }
 
 /* Chromatic aberration — colour fringing on bright text */
