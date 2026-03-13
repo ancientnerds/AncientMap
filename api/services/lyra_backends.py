@@ -365,12 +365,19 @@ class MercuryBackend:
         messages: list,
         tools: list | None = None,
         response_format: dict | None = None,
+        max_tokens: int | None = None,
+        tool_choice: str | None = None,
     ) -> dict:
         """Single non-streaming call that handles tools + structured output.
 
         Returns {"content": str, "tool_calls": list, "usage": dict}.
         When response_format is set and no tool calls, content is the raw
         structured JSON string (caller parses it).
+
+        Args:
+            max_tokens: Override instance max_tokens. Structured output calls
+                should cap at 4096 (reasoning_effort="high" shares the budget).
+            tool_choice: "none" to prevent tool calls, "auto" (default), etc.
         """
         import asyncio as _aio
 
@@ -380,12 +387,14 @@ class MercuryBackend:
         create_kwargs: dict = {
             "model": self.model,
             "messages": openai_messages,
-            "max_tokens": self.max_tokens,
+            "max_tokens": max_tokens or self.max_tokens,
             "stream": False,
             "reasoning_effort": "high",
         }
         if tools:
             create_kwargs["tools"] = _langchain_tools_to_openai(tools)
+            if tool_choice:
+                create_kwargs["tool_choice"] = tool_choice
         if response_format:
             create_kwargs["response_format"] = response_format
 
@@ -394,15 +403,40 @@ class MercuryBackend:
                 client.chat.completions.create(**create_kwargs), timeout=60.0
             )
 
-            message = resp.choices[0].message
+            choice = resp.choices[0]
+            message = choice.message
             content = message.content or ""
+            finish_reason = choice.finish_reason
+
+            logger.debug(
+                f"Mercury generate: finish_reason={finish_reason}, "
+                f"content_len={len(content)}, "
+                f"tokens={resp.usage.completion_tokens if resp.usage else '?'}"
+            )
+
+            # When no tools were requested, Mercury may still return
+            # tool_calls if the message history contains tool call patterns.
+            # Ignore spurious tool_calls — only content matters.
+            effective_tool_calls = message.tool_calls if tools else None
 
             # Guard: Mercury sometimes returns empty content on rate limits
             # or overloaded state.  Raise explicitly so callers can retry.
-            if not content.strip() and not message.tool_calls:
+            if not content.strip() and not effective_tool_calls:
                 raise ValueError(
-                    "Mercury returned empty content with no tool calls — "
+                    f"Mercury returned empty content "
+                    f"(finish_reason={finish_reason}, "
+                    f"spurious_tool_calls={bool(message.tool_calls)}) — "
                     "likely rate-limited or overloaded"
+                )
+
+            # Guard: if Mercury stopped due to length, the JSON is truncated
+            # and will fail to parse. Raise explicitly so callers can retry.
+            if finish_reason == "length" and response_format:
+                raise ValueError(
+                    f"Mercury response truncated (finish_reason=length, "
+                    f"{len(content)} chars, "
+                    f"{resp.usage.completion_tokens if resp.usage else '?'} tokens) — "
+                    "hit max_tokens limit"
                 )
 
             result: dict = {
@@ -413,8 +447,8 @@ class MercuryBackend:
                     "output": (resp.usage.completion_tokens or 0) if resp.usage else 0,
                 },
             }
-            if message.tool_calls:
-                for tc in message.tool_calls:
+            if effective_tool_calls:
+                for tc in effective_tool_calls:
                     result["tool_calls"].append(
                         {
                             "id": tc.id,
@@ -439,7 +473,7 @@ class MercuryBackend:
         create_kwargs: dict = {
             "model": self.model,
             "messages": openai_messages,
-            "max_tokens": self.max_tokens,
+            "max_tokens": 4096,  # Structured output: cap tokens (reasoning shares budget)
             "stream": False,
             "reasoning_effort": "high",
             "temperature": 0.1,

@@ -910,20 +910,36 @@ async def run_agent_stream(
     tool_calls: list[dict[str, str | int | None]] = []
     # Capture structured output for frontend debug panel
     _structured_output: dict[str, Any] | None = None
+    # Track whether any text was successfully emitted to the user
+    _text_emitted = False
 
     for _round in range(max_tool_rounds):
         # Inject round awareness so the LLM knows how many rounds remain
         if _round >= 2 and tool_calls_made > 0:
             remaining = max_tool_rounds - _round
-            messages.append(
-                SystemMessage(
-                    content=(
-                        f"[Round {_round + 1}/{max_tool_rounds} — {remaining} round(s) left, "
-                        f"{tool_calls_made} tool calls used so far] "
-                        "Answer with what you have unless critical info is still missing."
+            if remaining <= 1:
+                # Last round — strong instruction to generate text, not tool calls
+                messages.append(
+                    SystemMessage(
+                        content=(
+                            f"[FINAL ROUND {_round + 1}/{max_tool_rounds} — "
+                            f"{tool_calls_made} tool calls completed] "
+                            "You MUST generate your final text response NOW. "
+                            "Do NOT call any more tools. You have enough information. "
+                            "Respond using the structured JSON format with your text answer."
+                        )
                     )
                 )
-            )
+            else:
+                messages.append(
+                    SystemMessage(
+                        content=(
+                            f"[Round {_round + 1}/{max_tool_rounds} — {remaining} round(s) left, "
+                            f"{tool_calls_made} tool calls used so far] "
+                            "Answer with what you have unless critical info is still missing."
+                        )
+                    )
+                )
 
         yield {
             "type": "pipeline",
@@ -949,13 +965,16 @@ async def run_agent_stream(
                         messages,
                         tools=TOOLS if ctx.supports_tools else None,
                         response_format=LYRA_RESPONSE_SCHEMA,
+                        max_tokens=16384,
                     )
                     break
                 except Exception as exc:
                     _mercury_last_err = exc
                     err_msg = str(exc).lower()
                     is_retryable = (
-                        "empty content" in err_msg
+                        isinstance(exc, (asyncio.TimeoutError, TimeoutError))
+                        or "empty content" in err_msg
+                        or "truncated" in err_msg
                         or "content_filter" in err_msg
                         or "content policy" in err_msg
                         or "400" in err_msg
@@ -1044,6 +1063,8 @@ async def run_agent_stream(
                     else:
                         collected_content = clean_response_text(raw)
                 # Simulate diffusion crystallization effect
+                if collected_content.strip():
+                    _text_emitted = True
                 async for diff_ev in _simulate_diffusion(collected_content):
                     yield diff_ev
         else:
@@ -1060,6 +1081,7 @@ async def run_agent_stream(
                     yield {"type": "thinking", "content": ev["text"]}
                 elif ev["type"] == "content":
                     collected_content += ev["text"]
+                    _text_emitted = True
                     yield {"type": "token", "content": ev["text"]}
                 elif ev["type"] == "tool_call_chunk":
                     _accumulate_tool_call(tool_calls, ev)
@@ -1336,10 +1358,13 @@ async def run_agent_stream(
         if len(all_news) > news_before:
             yield {"type": "news", "news": all_news}
 
-    # If we exhausted all tool rounds without a final text response,
-    # do one more LLM call with tools disabled to force a text answer.
-    if tool_calls:
-        logger.info("Max tool rounds reached — forcing final text response")
+    # Force a text answer if we exhausted tool rounds without responding,
+    # OR if the LLM returned no text and no tool calls (empty response).
+    if tool_calls or not _text_emitted:
+        if tool_calls:
+            logger.info("Max tool rounds reached — forcing final text response")
+        else:
+            logger.warning("No text emitted after normal rounds — forcing text response")
 
         yield {
             "type": "pipeline",
@@ -1350,18 +1375,24 @@ async def run_agent_stream(
         }
         _t_forced = time.monotonic()
         if ctx.backend_type == "mercury":
-            # Retry up to 2 times for transient Mercury errors
+            # Force text response: generate WITHOUT tools so Mercury
+            # can't return tool_calls. Use response_format for structured
+            # JSON when possible; fall back to raw text if needed.
             _forced_result: dict[str, Any] | None = None
             for _attempt in range(3):
                 try:
                     _forced_result = await backend_impl.generate(
-                        messages, response_format=LYRA_RESPONSE_SCHEMA
+                        messages,
+                        response_format=LYRA_RESPONSE_SCHEMA,
+                        max_tokens=16384,
                     )
                     break
                 except Exception as exc:
                     err_msg = str(exc).lower()
                     is_retryable = (
-                        "empty content" in err_msg
+                        isinstance(exc, (asyncio.TimeoutError, TimeoutError))
+                        or "empty content" in err_msg
+                        or "truncated" in err_msg
                         or "content_filter" in err_msg
                         or "content policy" in err_msg
                         or "400" in err_msg
@@ -1377,18 +1408,180 @@ async def run_agent_stream(
                     raise
 
             if _forced_result is None:
-                logger.error("All forced generate retries failed")
-                yield {
-                    "type": "error",
-                    "error": "Mercury is temporarily unavailable. Please try again.",
-                }
+                # Structured generate failed — try raw generate (no tools, no schema).
+                # Mercury often returns valid JSON even without response_format.
+                logger.warning(
+                    "All structured forced retries failed — trying raw generate"
+                )
+                try:
+                    _raw_result = await backend_impl.generate(
+                        messages, max_tokens=16384
+                    )
+                    total_input_tokens += _raw_result["usage"]["input"]
+                    total_output_tokens += _raw_result["usage"]["output"]
+                    _raw_content = _raw_result["content"]
+                    logger.info(
+                        f"Raw forced result: {len(_raw_content)} chars, "
+                        f"usage: {_raw_result['usage']}"
+                    )
+                    _raw_emitted = False
+                    try:
+                        _raw_parsed = json.loads(_raw_content)
+                        _raw_text = _raw_parsed.get("text", "")
+                        if _raw_text.strip():
+                            if "sites" in _raw_parsed:
+                                _raw_parsed["sites"] = [
+                                    s for s in _raw_parsed["sites"]
+                                    if s.get("id", "").strip()
+                                ]
+                            expanded_raw, _ = expand_markers(_raw_parsed)
+                            _raw_cleaned = clean_response_text(expanded_raw)
+                            if _raw_cleaned.strip():
+                                _so_raw = {
+                                    k: v for k, v in _raw_parsed.items()
+                                    if k != "text"
+                                }
+                                if any(
+                                    _so_raw.get(k)
+                                    for k in (
+                                        "sites", "coords", "videos",
+                                        "empires", "images", "links",
+                                        "countries",
+                                    )
+                                ):
+                                    _structured_output = _so_raw
+                                async for diff_ev in _simulate_diffusion(
+                                    _raw_cleaned
+                                ):
+                                    yield diff_ev
+                                _raw_emitted = True
+                    except (json.JSONDecodeError, ValueError):
+                        # Not JSON — try as plain text
+                        _raw_cleaned = clean_response_text(_raw_content)
+                        if _raw_cleaned.strip():
+                            async for diff_ev in _simulate_diffusion(
+                                _raw_cleaned
+                            ):
+                                yield diff_ev
+                            _raw_emitted = True
+                    if not _raw_emitted:
+                        # Last resort: stream response (bypasses tool_calls issue)
+                        logger.warning("Raw generate empty — falling back to streaming")
+                        _stream_text = ""
+                        try:
+                            async for ev in backend_impl.stream(
+                                messages, [], enable_thinking=False
+                            ):
+                                if ev["type"] == "diffusion":
+                                    _stream_text = ev["text"]
+                                elif ev["type"] == "usage":
+                                    total_input_tokens += ev["input"]
+                                    total_output_tokens += ev["output"]
+                            if _stream_text.strip():
+                                # Try parsing as JSON
+                                try:
+                                    _sp = json.loads(_stream_text)
+                                    _st = _sp.get("text", "")
+                                    if _st.strip():
+                                        exp_s, _ = expand_markers(_sp)
+                                        _stream_text = clean_response_text(exp_s)
+                                except (json.JSONDecodeError, ValueError):
+                                    _stream_text = clean_response_text(_stream_text)
+                                if _stream_text.strip():
+                                    async for diff_ev in _simulate_diffusion(
+                                        _stream_text
+                                    ):
+                                        yield diff_ev
+                                    _raw_emitted = True
+                        except Exception as e_stream:
+                            logger.error(f"Stream fallback failed: {e_stream}")
+                    if not _raw_emitted:
+                        logger.error("All forced response methods exhausted")
+                        yield {
+                            "type": "error",
+                            "error": (
+                                "Mercury is temporarily unavailable. "
+                                "Please try again."
+                            ),
+                        }
+                except Exception as e_raw:
+                    # Raw generate also failed (Mercury returns tool_calls
+                    # from message history). Build clean messages that
+                    # preserve tool result context without tool call patterns.
+                    logger.warning(f"Raw generate failed ({e_raw}) — streaming")
+                    _clean_msgs = []
+                    for msg in messages:
+                        if isinstance(msg, (SystemMessage, HumanMessage)):
+                            _clean_msgs.append(msg)
+                        elif isinstance(msg, ToolMessage):
+                            _clean_msgs.append(
+                                SystemMessage(content=str(msg.content)[:3000])
+                            )
+                        # Skip AIMessage with tool_calls
+                    _clean_msgs.append(
+                        SystemMessage(
+                            content=(
+                                "Respond with your answer now. "
+                                "All the tool results above are your context."
+                            )
+                        )
+                    )
+                    _stream_ok2 = False
+                    _stream_text2 = ""
+                    try:
+                        async for ev in backend_impl.stream(
+                            _clean_msgs, [], enable_thinking=False
+                        ):
+                            if ev["type"] == "diffusion":
+                                _stream_text2 = ev["text"]
+                            elif ev["type"] == "content":
+                                _stream_text2 += ev["text"]
+                            elif ev["type"] == "usage":
+                                total_input_tokens += ev["input"]
+                                total_output_tokens += ev["output"]
+                        if _stream_text2.strip():
+                            try:
+                                _sp2 = json.loads(_stream_text2)
+                                _st2 = _sp2.get("text", "")
+                                if _st2.strip():
+                                    if "sites" in _sp2:
+                                        _sp2["sites"] = [
+                                            s for s in _sp2["sites"]
+                                            if s.get("id", "").strip()
+                                        ]
+                                    exp_s2, _ = expand_markers(_sp2)
+                                    _stream_text2 = clean_response_text(exp_s2)
+                                else:
+                                    _stream_text2 = ""
+                            except (json.JSONDecodeError, ValueError):
+                                _stream_text2 = clean_response_text(
+                                    _stream_text2
+                                )
+                            if _stream_text2.strip():
+                                async for diff_ev in _simulate_diffusion(
+                                    _stream_text2
+                                ):
+                                    yield diff_ev
+                                _stream_ok2 = True
+                    except Exception as e_s2:
+                        logger.error(f"Stream fallback failed: {e_s2}")
+                    if not _stream_ok2:
+                        logger.error("All forced methods exhausted")
+                        yield {
+                            "type": "error",
+                            "error": (
+                                "Mercury is temporarily unavailable. "
+                                "Please try again."
+                            ),
+                        }
             else:
                 total_input_tokens += _forced_result["usage"]["input"]
                 total_output_tokens += _forced_result["usage"]["output"]
+                _raw_forced = _forced_result["content"]
                 # Off-topic guardrail (same check as normal path)
                 _forced_off_topic = False
                 try:
-                    _forced_parsed = json.loads(_forced_result["content"])
+                    _forced_parsed = json.loads(_raw_forced)
                     _forced_off_topic = not _forced_parsed.get("on_topic", True)
                 except json.JSONDecodeError:
                     pass
@@ -1455,10 +1648,29 @@ async def run_agent_stream(
                             # Mercury returned empty — try once more without structured output
                             logger.warning("Forced response was empty — retrying without schema")
                             try:
-                                result = await backend_impl.generate(messages)
+                                result = await backend_impl.generate(
+                                    messages, max_tokens=16384
+                                )
                                 total_input_tokens += result["usage"]["input"]
                                 total_output_tokens += result["usage"]["output"]
-                                fallback = clean_response_text(result["content"])
+                                _raw_fb = result["content"]
+                                # Mercury often returns JSON even without schema —
+                                # try to parse and extract text field first
+                                try:
+                                    _fb_parsed = json.loads(_raw_fb)
+                                    _fb_text = _fb_parsed.get("text", "")
+                                    if _fb_text.strip():
+                                        if "sites" in _fb_parsed:
+                                            _fb_parsed["sites"] = [
+                                                s for s in _fb_parsed["sites"]
+                                                if s.get("id", "").strip()
+                                            ]
+                                        expanded_fb, _ = expand_markers(_fb_parsed)
+                                        fallback = clean_response_text(expanded_fb)
+                                    else:
+                                        fallback = ""
+                                except (json.JSONDecodeError, ValueError):
+                                    fallback = clean_response_text(_raw_fb)
                                 if fallback.strip():
                                     async for diff_ev in _simulate_diffusion(fallback):
                                         yield diff_ev
@@ -1478,10 +1690,27 @@ async def run_agent_stream(
                         logger.warning(f"Forced generate failed: {e}")
                         # Last resort: raw generate without structured output
                         try:
-                            result = await backend_impl.generate(messages)
+                            result = await backend_impl.generate(
+                                messages, max_tokens=16384
+                            )
                             total_input_tokens += result["usage"]["input"]
                             total_output_tokens += result["usage"]["output"]
-                            fallback = clean_response_text(result["content"])
+                            _raw_lr = result["content"]
+                            try:
+                                _lr_parsed = json.loads(_raw_lr)
+                                _lr_text = _lr_parsed.get("text", "")
+                                if _lr_text.strip():
+                                    if "sites" in _lr_parsed:
+                                        _lr_parsed["sites"] = [
+                                            s for s in _lr_parsed["sites"]
+                                            if s.get("id", "").strip()
+                                        ]
+                                    expanded_lr, _ = expand_markers(_lr_parsed)
+                                    fallback = clean_response_text(expanded_lr)
+                                else:
+                                    fallback = ""
+                            except (json.JSONDecodeError, ValueError):
+                                fallback = clean_response_text(_raw_lr)
                             if fallback:
                                 async for diff_ev in _simulate_diffusion(fallback):
                                     yield diff_ev
