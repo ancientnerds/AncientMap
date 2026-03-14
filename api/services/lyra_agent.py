@@ -453,13 +453,13 @@ def _get_related_news(
             key = f"sname_{i}"
             safe_name = _escape_ilike(name)
             # Match both with and without spaces (e.g. "Karahan Tepe" vs "Karahantepe")
-            name_clauses.append(f"ni.site_name_extracted ILIKE :{key}")
+            name_clauses.append(f"unaccent(ni.site_name_extracted) ILIKE unaccent(:{key})")
             params[key] = f"%{safe_name}%"
             # Also try the name with spaces removed
             compact = name.replace(" ", "")
             if compact != name:
                 key_c = f"sname_{i}_c"
-                name_clauses.append(f"ni.site_name_extracted ILIKE :{key_c}")
+                name_clauses.append(f"unaccent(ni.site_name_extracted) ILIKE unaccent(:{key_c})")
                 params[key_c] = f"%{_escape_ilike(compact)}%"
         site_conditions.append(f"({' OR '.join(name_clauses)})")
     if site_conditions:

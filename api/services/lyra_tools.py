@@ -382,8 +382,20 @@ def search_news(
     params: dict = {"days_interval": days_back, "limit": limit}
 
     if query:
-        conditions.append("(ni.headline ILIKE :q OR ni.summary ILIKE :q)")
-        params["q"] = f"%{_escape_ilike(query)}%"
+        # Split multi-word queries into individual words and AND them together.
+        # Uses unaccent() for accent-insensitive matching (e.g., Sacsayhuamán = Sacsayhuaman).
+        # This way "Sacsayhuaman tunnels" matches headlines containing BOTH words in any order.
+        words = [w for w in query.split() if len(w) >= 2]
+        if words:
+            word_conditions = []
+            for i, word in enumerate(words):
+                key = f"qw_{i}"
+                params[key] = f"%{_escape_ilike(word)}%"
+                word_conditions.append(
+                    f"(unaccent(ni.headline) ILIKE unaccent(:{key})"
+                    f" OR unaccent(ni.summary) ILIKE unaccent(:{key}))"
+                )
+            conditions.append(f"({' AND '.join(word_conditions)})")
 
     if channel:
         conditions.append("nc.name ILIKE :channel")
