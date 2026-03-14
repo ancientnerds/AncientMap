@@ -335,6 +335,13 @@ def expand_markers(
         cleaned = re.sub(r"  +", " ", cleaned).strip()
         expanded = cleaned
 
+    # Remove duplicate site name: [Name](site:UUID) **Name** → [Name](site:UUID)
+    expanded = re.sub(
+        r"(\[([^\]]+)\]\(site:[^)]+\))\s*\*\*\2\*\*",
+        r"\1",
+        expanded,
+    )
+
     return expanded, issues
 
 
