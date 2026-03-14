@@ -3,6 +3,7 @@ Lyra system prompt and context builder.
 """
 
 import logging
+import re
 
 from sqlalchemy import text
 
@@ -10,6 +11,37 @@ from api.services.lyra_tools import _load_seshat_data
 from pipeline.database import get_session
 
 logger = logging.getLogger(__name__)
+
+
+def strip_tool_instructions(prompt: str) -> str:
+    """Remove tool-related instructions from the system prompt.
+
+    Mercury hallucates tool calls when the prompt mentions tools.
+    For forced-response (clean messages) mode, replace the tool
+    efficiency section with a simple instruction.
+    """
+    # Remove the "## Tool efficiency" section (lines 74-79 of the prompt)
+    prompt = re.sub(
+        r"## Tool efficiency — CRITICAL\n(?:- .*\n)*",
+        "## Data usage\n- Use the retrieved data provided below to answer the user's question.\n",
+        prompt,
+    )
+    # Remove tool-referencing lines in the Rules section
+    prompt = prompt.replace(
+        "- If asked for news/updates, use search_news or vector_search tools.\n", ""
+    )
+    # Replace "tools and context" / "tools or context" references with "context"
+    prompt = prompt.replace(
+        "from your tools and\nthe retrieved context below", "from the retrieved context below"
+    )
+    prompt = prompt.replace("from your tools or context", "from the retrieved context")
+    prompt = prompt.replace(
+        "USE YOUR TOOLS to search — don't make things up and don't say you can't search.",
+        "use the retrieved data to answer.",
+    )
+    prompt = prompt.replace("from context or tools", "from context")
+    return prompt
+
 
 # ---------------------------------------------------------------------------
 # System prompt

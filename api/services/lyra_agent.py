@@ -34,6 +34,7 @@ from api.services.lyra_backends import get_backend
 from api.services.lyra_prompts import (
     LYRA_SYSTEM_PROMPT,
     _build_context_prompt,
+    strip_tool_instructions,
 )
 from api.services.lyra_router import (
     RequestContext,
@@ -98,6 +99,105 @@ def _build_fallback_response(
         )
 
     return "".join(parts)
+
+
+def _build_clean_messages(messages: list[BaseMessage]) -> list[BaseMessage]:
+    """Build Mercury-friendly messages by removing tool call patterns.
+
+    Mercury returns ``finish_reason=tool_calls`` with empty content whenever
+    the message history contains AIMessage/ToolMessage pairs.  This strips
+    those out, consolidates tool result data into a single context block,
+    and removes tool instructions from the system prompt.
+    """
+    clean: list[BaseMessage] = []
+    tool_data_parts: list[str] = []
+
+    for msg in messages:
+        if isinstance(msg, SystemMessage):
+            # Strip tool instructions from the first system message (the prompt)
+            if not clean:
+                clean.append(SystemMessage(content=strip_tool_instructions(msg.content)))
+            else:
+                clean.append(msg)
+        elif isinstance(msg, HumanMessage):
+            clean.append(msg)
+        elif isinstance(msg, ToolMessage):
+            tool_data_parts.append(str(msg.content)[:3000])
+        # Skip AIMessage — tool_call patterns poison Mercury
+
+    # Inject all tool data as one context block
+    if tool_data_parts:
+        clean.append(
+            SystemMessage(
+                content=(
+                    "Here is all the data retrieved for the user's question. "
+                    "Use it to write your answer:\n\n" + "\n---\n".join(tool_data_parts)
+                )
+            )
+        )
+
+    clean.append(
+        SystemMessage(
+            content=(
+                "Write your answer using the retrieved data above. "
+                "Use «s0» markers for sites (with their UUID id), "
+                "«v0» for videos (with video_id and timestamp_seconds), "
+                "«c0» for coordinates, «f0» for country flags."
+            )
+        )
+    )
+    return clean
+
+
+def _parse_structured_output(
+    raw_content: str,
+) -> tuple[str, dict[str, Any] | None, bool]:
+    """Parse structured JSON from Mercury and return (text, structured_data, off_topic).
+
+    Returns:
+        text: The cleaned, marker-expanded text to emit.
+        structured_data: Non-text fields (sites, videos, coords, etc.) or None.
+        off_topic: Whether the response was flagged off-topic.
+    """
+    parsed = json.loads(raw_content)
+
+    if not parsed.get("on_topic", True):
+        return (
+            (
+                "🏺 That's not really my area! I'm all about ancient ruins, "
+                "lost civilizations, and archaeological discoveries. "
+                "What do you want to dig into?"
+            ),
+            None,
+            True,
+        )
+
+    text_field = parsed.get("text", "")
+    if not text_field.strip():
+        raise ValueError("Structured output returned empty text")
+
+    # Filter empty site IDs
+    if "sites" in parsed:
+        parsed["sites"] = [s for s in parsed["sites"] if s.get("id", "").strip()]
+
+    expanded, validation_issues = expand_markers(parsed)
+    if validation_issues:
+        logger.warning(f"Structured output issues: {validation_issues}")
+    cleaned = clean_response_text(expanded)
+    if not cleaned.strip():
+        raise ValueError("Structured output text empty after cleaning")
+
+    # Capture structured data (sans raw text)
+    so = {k: v for k, v in parsed.items() if k != "text"}
+    structured = (
+        so
+        if any(
+            so.get(k)
+            for k in ("sites", "coords", "videos", "empires", "images", "links", "countries")
+        )
+        else None
+    )
+    return cleaned, structured, False
 
 
 async def _simulate_diffusion(
@@ -1055,45 +1155,11 @@ async def run_agent_stream(
             else:
                 # Final text response — parse structured output
                 try:
-                    parsed = json.loads(result["content"])
-                    # Off-topic guardrail: if Mercury flagged it as off-topic,
-                    # replace with a redirect regardless of what it generated
-                    if not parsed.get("on_topic", True):
-                        logger.info("Off-topic query detected via schema guardrail")
-                        collected_content = (
-                            "🏺 That's not really my area! I'm all about ancient ruins, "
-                            "lost civilizations, and archaeological discoveries. "
-                            "What do you want to dig into?"
-                        )
-                    else:
-                        text_field = parsed.get("text", "")
-                        if not text_field.strip():
-                            raise ValueError("Structured output returned empty text")
-                        # Filter empty site IDs
-                        if "sites" in parsed:
-                            parsed["sites"] = [
-                                s for s in parsed["sites"] if s.get("id", "").strip()
-                            ]
-                        expanded, validation_issues = expand_markers(parsed)
-                        if validation_issues:
-                            logger.warning(f"Structured output issues: {validation_issues}")
-                        collected_content = clean_response_text(expanded)
-                        # Capture for frontend debug panel (strip raw text to save bandwidth)
-                        _so = {k: v for k, v in parsed.items() if k != "text"}
-                        # Only include if there's actual structured data
-                        if any(
-                            _so.get(k)
-                            for k in (
-                                "sites",
-                                "coords",
-                                "videos",
-                                "empires",
-                                "images",
-                                "links",
-                                "countries",
-                            )
-                        ):
-                            _structured_output = _so
+                    collected_content, so_data, _off_topic = _parse_structured_output(
+                        result["content"]
+                    )
+                    if so_data is not None:
+                        _structured_output = so_data
                 except Exception as e:
                     logger.warning(f"Structured output parse failed: {e}")
                     raw = result["content"]
@@ -1417,317 +1483,33 @@ async def run_agent_stream(
         }
         _t_forced = time.monotonic()
         if ctx.backend_type == "mercury":
-            # Force text response: generate WITHOUT tools so Mercury
-            # can't return tool_calls. Use response_format for structured
-            # JSON when possible; fall back to raw text if needed.
-            _forced_result: dict[str, Any] | None = None
-            for _attempt in range(3):
-                try:
-                    _forced_result = await backend_impl.generate(
-                        messages,
-                        response_format=LYRA_RESPONSE_SCHEMA,
-                        max_tokens=16384,
-                    )
-                    break
-                except Exception as exc:
-                    err_msg = str(exc).lower()
-                    is_retryable = (
-                        isinstance(exc, (asyncio.TimeoutError, TimeoutError))
-                        or "empty content" in err_msg
-                        or "truncated" in err_msg
-                        or "content_filter" in err_msg
-                        or "content policy" in err_msg
-                        or "400" in err_msg
-                    )
-                    if _attempt < 2 and is_retryable:
-                        logger.warning(
-                            f"Forced response transient error (attempt {_attempt + 1}/3): {exc}"
-                        )
-                        await asyncio.sleep(1.5)
-                        continue
-                    if is_retryable:
-                        break
-                    raise
-
-            if _forced_result is None:
-                # Structured generate failed — try raw generate (no tools, no schema).
-                # Mercury often returns valid JSON even without response_format.
-                logger.warning("All structured forced retries failed — trying raw generate")
-                try:
-                    _raw_result = await backend_impl.generate(messages, max_tokens=16384)
-                    total_input_tokens += _raw_result["usage"]["input"]
-                    total_output_tokens += _raw_result["usage"]["output"]
-                    _raw_content = _raw_result["content"]
-                    logger.info(
-                        f"Raw forced result: {len(_raw_content)} chars, "
-                        f"usage: {_raw_result['usage']}"
-                    )
-                    _raw_emitted = False
-                    try:
-                        _raw_parsed = json.loads(_raw_content)
-                        _raw_text = _raw_parsed.get("text", "")
-                        if _raw_text.strip():
-                            if "sites" in _raw_parsed:
-                                _raw_parsed["sites"] = [
-                                    s for s in _raw_parsed["sites"] if s.get("id", "").strip()
-                                ]
-                            expanded_raw, _ = expand_markers(_raw_parsed)
-                            _raw_cleaned = clean_response_text(expanded_raw)
-                            if _raw_cleaned.strip():
-                                _so_raw = {k: v for k, v in _raw_parsed.items() if k != "text"}
-                                if any(
-                                    _so_raw.get(k)
-                                    for k in (
-                                        "sites",
-                                        "coords",
-                                        "videos",
-                                        "empires",
-                                        "images",
-                                        "links",
-                                        "countries",
-                                    )
-                                ):
-                                    _structured_output = _so_raw
-                                async for diff_ev in _simulate_diffusion(_raw_cleaned):
-                                    yield diff_ev
-                                _raw_emitted = True
-                    except (json.JSONDecodeError, ValueError):
-                        # Not JSON — try as plain text
-                        _raw_cleaned = clean_response_text(_raw_content)
-                        if _raw_cleaned.strip():
-                            async for diff_ev in _simulate_diffusion(_raw_cleaned):
-                                yield diff_ev
-                            _raw_emitted = True
-                    if not _raw_emitted:
-                        # Last resort: stream response (bypasses tool_calls issue)
-                        logger.warning("Raw generate empty — falling back to streaming")
-                        _stream_text = ""
-                        try:
-                            async for ev in backend_impl.stream(
-                                messages, [], enable_thinking=False
-                            ):
-                                if ev["type"] == "diffusion":
-                                    _stream_text = ev["text"]
-                                elif ev["type"] == "usage":
-                                    total_input_tokens += ev["input"]
-                                    total_output_tokens += ev["output"]
-                            if _stream_text.strip():
-                                # Try parsing as JSON
-                                try:
-                                    _sp = json.loads(_stream_text)
-                                    _st = _sp.get("text", "")
-                                    if _st.strip():
-                                        exp_s, _ = expand_markers(_sp)
-                                        _stream_text = clean_response_text(exp_s)
-                                except (json.JSONDecodeError, ValueError):
-                                    _stream_text = clean_response_text(_stream_text)
-                                if _stream_text.strip():
-                                    async for diff_ev in _simulate_diffusion(_stream_text):
-                                        yield diff_ev
-                                    _raw_emitted = True
-                        except Exception as e_stream:
-                            logger.error(f"Stream fallback failed: {e_stream}")
-                    if not _raw_emitted:
-                        logger.error("All forced response methods exhausted")
-                        _fb = _build_fallback_response(message, all_sites, all_news)
-                        async for diff_ev in _simulate_diffusion(_fb):
-                            yield diff_ev
-                except Exception as e_raw:
-                    # Raw generate also failed (Mercury returns tool_calls
-                    # from message history). Build clean messages that
-                    # preserve tool result context without tool call patterns.
-                    logger.warning(f"Raw generate failed ({e_raw}) — streaming")
-                    _clean_msgs = []
-                    for msg in messages:
-                        if isinstance(msg, (SystemMessage, HumanMessage)):
-                            _clean_msgs.append(msg)
-                        elif isinstance(msg, ToolMessage):
-                            _clean_msgs.append(SystemMessage(content=str(msg.content)[:3000]))
-                        # Skip AIMessage with tool_calls
-                    _clean_msgs.append(
-                        SystemMessage(
-                            content=(
-                                "Respond with your answer now. "
-                                "All the tool results above are your context."
-                            )
-                        )
-                    )
-                    _stream_ok2 = False
-                    _stream_text2 = ""
-                    try:
-                        async for ev in backend_impl.stream(_clean_msgs, [], enable_thinking=False):
-                            if ev["type"] == "diffusion":
-                                _stream_text2 = ev["text"]
-                            elif ev["type"] == "content":
-                                _stream_text2 += ev["text"]
-                            elif ev["type"] == "usage":
-                                total_input_tokens += ev["input"]
-                                total_output_tokens += ev["output"]
-                        if _stream_text2.strip():
-                            try:
-                                _sp2 = json.loads(_stream_text2)
-                                _st2 = _sp2.get("text", "")
-                                if _st2.strip():
-                                    if "sites" in _sp2:
-                                        _sp2["sites"] = [
-                                            s for s in _sp2["sites"] if s.get("id", "").strip()
-                                        ]
-                                    exp_s2, _ = expand_markers(_sp2)
-                                    _stream_text2 = clean_response_text(exp_s2)
-                                else:
-                                    _stream_text2 = ""
-                            except (json.JSONDecodeError, ValueError):
-                                _stream_text2 = clean_response_text(_stream_text2)
-                            if _stream_text2.strip():
-                                async for diff_ev in _simulate_diffusion(_stream_text2):
-                                    yield diff_ev
-                                _stream_ok2 = True
-                    except Exception as e_s2:
-                        logger.error(f"Stream fallback failed: {e_s2}")
-                    if not _stream_ok2:
-                        logger.error("All forced methods exhausted")
-                        _fb = _build_fallback_response(message, all_sites, all_news)
-                        async for diff_ev in _simulate_diffusion(_fb):
-                            yield diff_ev
-            else:
+            # Clean messages: strip AIMessage/ToolMessage pairs that cause
+            # Mercury to return finish_reason=tool_calls with empty content.
+            # Tool result data is preserved as a single context block.
+            clean_msgs = _build_clean_messages(messages)
+            _forced_ok = False
+            try:
+                _forced_result = await backend_impl.generate(
+                    clean_msgs,
+                    response_format=LYRA_RESPONSE_SCHEMA,
+                    max_tokens=16384,
+                )
                 total_input_tokens += _forced_result["usage"]["input"]
                 total_output_tokens += _forced_result["usage"]["output"]
-                _raw_forced = _forced_result["content"]
-                # Off-topic guardrail (same check as normal path)
-                _forced_off_topic = False
-                try:
-                    _forced_parsed = json.loads(_raw_forced)
-                    _forced_off_topic = not _forced_parsed.get("on_topic", True)
-                except json.JSONDecodeError:
-                    pass
-                if _forced_off_topic:
-                    logger.info("Off-topic query detected via forced response guardrail")
-                    _off_topic_msg = (
-                        "🏺 That's not really my area! I'm all about ancient ruins, "
-                        "lost civilizations, and archaeological discoveries. "
-                        "What do you want to dig into?"
-                    )
-                    async for diff_ev in _simulate_diffusion(_off_topic_msg):
-                        yield diff_ev
-                else:
-                    try:
-                        parsed = json.loads(_forced_result["content"])
-                        if "sites" in parsed:
-                            parsed["sites"] = [
-                                s for s in parsed["sites"] if s.get("id", "").strip()
-                            ]
-                        expanded, validation_issues = expand_markers(parsed)
-                        if validation_issues:
-                            logger.warning(f"Forced structured output issues: {validation_issues}")
-                        expanded = clean_response_text(expanded)
-                        if expanded.strip():
-                            # Capture structured output for frontend
-                            _so = {k: v for k, v in parsed.items() if k != "text"}
-                            if any(
-                                _so.get(k)
-                                for k in (
-                                    "sites",
-                                    "coords",
-                                    "videos",
-                                    "empires",
-                                    "images",
-                                    "links",
-                                    "countries",
-                                )
-                            ):
-                                _structured_output = _so
-                            async for diff_ev in _simulate_diffusion(expanded):
-                                yield diff_ev
-                        else:
-                            raise ValueError("Structured output returned empty text")
-                    except (json.JSONDecodeError, ValueError) as e:
-                        logger.warning(f"Forced structured output parse failed: {e}")
-                        raw = _forced_result["content"]
-                        _fallback_emitted = False
-                        text_match = re.search(r'"text"\s*:\s*"((?:[^"\\]|\\.)*)"', raw)
-                        if text_match:
-                            fallback = clean_response_text(
-                                text_match.group(1).replace("\\n", "\n").replace('\\"', '"')
-                            )
-                            if fallback.strip():
-                                async for diff_ev in _simulate_diffusion(fallback):
-                                    yield diff_ev
-                                _fallback_emitted = True
-                        elif raw.strip():
-                            fallback = clean_response_text(raw)
-                            if fallback.strip():
-                                async for diff_ev in _simulate_diffusion(fallback):
-                                    yield diff_ev
-                                _fallback_emitted = True
-                        if not _fallback_emitted:
-                            # Mercury returned empty — try once more without structured output
-                            logger.warning("Forced response was empty — retrying without schema")
-                            try:
-                                result = await backend_impl.generate(messages, max_tokens=16384)
-                                total_input_tokens += result["usage"]["input"]
-                                total_output_tokens += result["usage"]["output"]
-                                _raw_fb = result["content"]
-                                # Mercury often returns JSON even without schema —
-                                # try to parse and extract text field first
-                                try:
-                                    _fb_parsed = json.loads(_raw_fb)
-                                    _fb_text = _fb_parsed.get("text", "")
-                                    if _fb_text.strip():
-                                        if "sites" in _fb_parsed:
-                                            _fb_parsed["sites"] = [
-                                                s
-                                                for s in _fb_parsed["sites"]
-                                                if s.get("id", "").strip()
-                                            ]
-                                        expanded_fb, _ = expand_markers(_fb_parsed)
-                                        fallback = clean_response_text(expanded_fb)
-                                    else:
-                                        fallback = ""
-                                except (json.JSONDecodeError, ValueError):
-                                    fallback = clean_response_text(_raw_fb)
-                                if fallback.strip():
-                                    async for diff_ev in _simulate_diffusion(fallback):
-                                        yield diff_ev
-                                    _fallback_emitted = True
-                            except Exception as e2:
-                                logger.error(f"Raw generate fallback also failed: {e2}")
-                            if not _fallback_emitted:
-                                logger.error("All forced response attempts returned empty")
-                                _fb = _build_fallback_response(message, all_sites, all_news)
-                                async for diff_ev in _simulate_diffusion(_fb):
-                                    yield diff_ev
-                    except Exception as e:
-                        logger.warning(f"Forced generate failed: {e}")
-                        # Last resort: raw generate without structured output
-                        try:
-                            result = await backend_impl.generate(messages, max_tokens=16384)
-                            total_input_tokens += result["usage"]["input"]
-                            total_output_tokens += result["usage"]["output"]
-                            _raw_lr = result["content"]
-                            try:
-                                _lr_parsed = json.loads(_raw_lr)
-                                _lr_text = _lr_parsed.get("text", "")
-                                if _lr_text.strip():
-                                    if "sites" in _lr_parsed:
-                                        _lr_parsed["sites"] = [
-                                            s
-                                            for s in _lr_parsed["sites"]
-                                            if s.get("id", "").strip()
-                                        ]
-                                    expanded_lr, _ = expand_markers(_lr_parsed)
-                                    fallback = clean_response_text(expanded_lr)
-                                else:
-                                    fallback = ""
-                            except (json.JSONDecodeError, ValueError):
-                                fallback = clean_response_text(_raw_lr)
-                            if fallback:
-                                async for diff_ev in _simulate_diffusion(fallback):
-                                    yield diff_ev
-                        except Exception as e2:
-                            logger.error(f"Last resort generate also failed: {e2}")
-                            _fb = _build_fallback_response(message, all_sites, all_news)
-                            async for diff_ev in _simulate_diffusion(_fb):
-                                yield diff_ev
+
+                text_out, so_data, _off_topic = _parse_structured_output(_forced_result["content"])
+                if so_data is not None:
+                    _structured_output = so_data
+                async for diff_ev in _simulate_diffusion(text_out):
+                    yield diff_ev
+                _forced_ok = True
+            except Exception as exc:
+                logger.warning(f"Forced response with clean messages failed: {exc}")
+
+            if not _forced_ok:
+                _fb = _build_fallback_response(message, all_sites, all_news)
+                async for diff_ev in _simulate_diffusion(_fb):
+                    yield diff_ev
         else:
             async for ev in _stream_with_heartbeat(
                 backend_impl,
