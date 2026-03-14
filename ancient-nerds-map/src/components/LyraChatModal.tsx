@@ -85,7 +85,12 @@ function saveConversation(id: string, title: string, messages: LyraMessage[]) {
       ...m,
       timestamp: m.timestamp.toISOString(),
       isStreaming: undefined,
-      pipelineTrace: undefined,
+      pipelineTrace: m.pipelineTrace
+        ? {
+            isLive: false,
+            nodes: m.pipelineTrace.nodes.map(n => ({ ...n, startedAt: null })),
+          }
+        : undefined,
     })),
   }
   const idx = all.findIndex(c => c.id === id)
