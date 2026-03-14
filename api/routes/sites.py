@@ -1333,6 +1333,7 @@ async def batch_update_sites(
 # Batch Upload Endpoint
 # =============================================================================
 
+
 @router.post("/rebuild-static")
 async def rebuild_static_json(
     user: DiscordUser = Depends(require_founder),
