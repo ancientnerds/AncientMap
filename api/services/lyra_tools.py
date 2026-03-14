@@ -977,13 +977,8 @@ def get_site_images(
 ) -> str:
     """Get Wikipedia/Wikimedia Commons images for an archaeological site.
 
-    Use when users want to see images/photos of a site. Returns cached local images
-    with attribution. Each image has:
-    - url: Local cached image — use this for inline images: ![title](url)
-    - commons_url: Wikimedia Commons page (for attribution links, NOT for img src)
-
-    When displaying images, ALWAYS use url for the image source.
-    Include author and license as attribution below each image.
+    Returns pre-formatted markdown image blocks. Include them directly in your
+    response — do NOT reformat or summarize, just paste the returned text.
 
     Args:
         site: Site UUID or name (e.g. 'Pompeii', 'fa2293fa-5256-4a41-9e61-26844e54fde4').
@@ -1049,21 +1044,22 @@ def get_site_images(
     if not rows:
         return f"No cached images found for site '{site}'. Images may not have been downloaded yet."
 
-    images = []
+    parts = []
     for r in rows:
         sid_short = str(r.site_id).replace("-", "")[:8]
-        img = {
-            "title": r.title,
-            "url": f"https://ancientnerds.com/data/images/wiki/{sid_short}/{r.filename}",
-            "is_hero": r.is_hero,
-        }
+        url = f"https://ancientnerds.com/data/images/wiki/{sid_short}/{r.filename}"
+        title = r.title or "Image"
+        attribution = []
         if r.author:
-            img["author"] = r.author
+            attribution.append(r.author)
         if r.license:
-            img["license"] = r.license
-        images.append(img)
+            attribution.append(r.license)
+        attr_line = f"*{' · '.join(attribution)}*" if attribution else ""
+        parts.append(f"![{title}]({url})")
+        if attr_line:
+            parts.append(attr_line)
 
-    return json.dumps(images, ensure_ascii=False)
+    return "\n\n".join(parts)
 
 
 def _format_payload_for_rerank(payload: dict) -> str:
