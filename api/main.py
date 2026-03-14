@@ -102,6 +102,8 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE card_stats ADD COLUMN IF NOT EXISTS best_wiki_url VARCHAR(500)",
             # Ensure db_snapshots has source_id column (added after initial table creation)
             "ALTER TABLE db_snapshots ADD COLUMN IF NOT EXISTS source_id VARCHAR(50)",
+            # Widen grant_period from varchar(7) to varchar(10) — "one_time" sentinel is 8 chars
+            "ALTER TABLE credit_grants ALTER COLUMN grant_period TYPE VARCHAR(10)",
             # Ensure site_content_links unique constraint exists (needed for ON CONFLICT upsert)
             """DO $$ BEGIN
                 ALTER TABLE site_content_links

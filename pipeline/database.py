@@ -1135,8 +1135,8 @@ class CreditGrant(Base):
     amount: Mapped[int] = mapped_column(Integer, nullable=False)
     reason: Mapped[str] = mapped_column(String(100), nullable=False)
     grant_period: Mapped[str | None] = mapped_column(
-        String(7), nullable=True
-    )  # "2026-02" for monthly, NULL for one-time
+        String(10), nullable=True
+    )  # "2026-02" for monthly, "one_time" for one-time grants
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     user: Mapped["DiscordUser"] = relationship("DiscordUser", back_populates="credit_grants")
