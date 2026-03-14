@@ -32,6 +32,7 @@ from sqlalchemy import text
 from api.services.lyra_backends import get_backend
 from api.services.lyra_prompts import (
     LYRA_SYSTEM_PROMPT,
+    SYNTHESIS_FALLBACK_PROMPT,
     SYNTHESIS_PROMPT,
     _build_context_prompt,
 )
@@ -108,8 +109,9 @@ def _build_synthesis_messages(
 ) -> list[BaseMessage]:
     """Build messages for the Phase 2 synthesis round.
 
-    Clean slate: SYNTHESIS_PROMPT + consolidated tool data + user question.
-    No AIMessage/ToolMessage pairs (they poison Mercury).
+    Clean slate: SYNTHESIS_PROMPT + consolidated data + user question.
+    IMPORTANT: All retrieved data goes in the HumanMessage, not SystemMessages.
+    Mercury ignores data in system messages but reliably uses data in user messages.
     """
     msgs: list[BaseMessage] = [SystemMessage(content=SYNTHESIS_PROMPT)]
 
@@ -117,21 +119,22 @@ def _build_synthesis_messages(
     if context_prompt:
         msgs.append(SystemMessage(content=context_prompt))
 
-    # Add auto-retrieved context (sites, news from pre-retrieval phase)
-    if retrieved_context:
-        msgs.append(SystemMessage(content=retrieved_context))
+    # Build the user message: data + question combined
+    # Mercury reliably uses data when it's in the HumanMessage
+    user_parts: list[str] = []
 
-    # Consolidate ALL tool results into one data block
-    # Dedup near-identical results, then reorder for lost-in-the-middle
+    if retrieved_context:
+        user_parts.append(retrieved_context)
+
     if raw_tool_results:
         wrapped = [{"text": r} for r in raw_tool_results]
         deduped = _semantic_dedup(wrapped, text_key="text")
         reordered = _reorder_by_relevance(deduped)
         data_block = "\n---\n".join(r["text"][:3000] for r in reordered)
-        msgs.append(SystemMessage(content=f"## Retrieved Data\n\n{data_block}"))
+        user_parts.append(f"## Retrieved Data\n\n{data_block}")
 
-    # User's question — just the question, clean context for synthesis
-    msgs.append(HumanMessage(content=user_question))
+    user_parts.append(f"## Question\n{user_question}")
+    msgs.append(HumanMessage(content="\n\n".join(user_parts)))
 
     return msgs
 
@@ -1723,17 +1726,26 @@ async def run_agent_stream(
                 )
                 break
 
-        # Last resort: if structured output failed 3 times, try once WITHOUT schema.
-        # A plain-text answer is infinitely better than a database dump.
+        # Last resort: if structured output failed, try WITHOUT schema + simpler prompt.
+        # The full SYNTHESIS_PROMPT with marker instructions overwhelms Mercury —
+        # it returns "I don't have that info" even when data is present.
+        # Use SYNTHESIS_FALLBACK_PROMPT (shorter, no markers) for plain text.
         if not _synthesis_ok:
             print(
                 f"[SYNTHESIS] Structured output failed {3 if _synth_last_err else 0}x, "
-                f"trying plain text (no schema)...",
+                f"trying plain text with simplified prompt...",
                 flush=True,
             )
             try:
+                # Rebuild messages with the simpler fallback prompt
+                _fallback_msgs = _build_synthesis_messages(
+                    message, raw_tool_results, context_prompt, retrieved_context
+                )
+                # Replace the first message (SYNTHESIS_PROMPT) with the simpler one
+                _fallback_msgs[0] = SystemMessage(content=SYNTHESIS_FALLBACK_PROMPT)
+
                 _plain_result = await backend_impl.generate(
-                    synthesis_msgs,
+                    _fallback_msgs,
                     response_format=None,  # No schema — just plain text
                     max_tokens=8192,
                 )
