@@ -67,7 +67,7 @@ async def _decompose_query(query: str) -> list[str]:
 
     try:
         client = AsyncOpenAI(api_key=api_key, base_url=base_url)
-        completion = await client.chat.completions.create(
+        completion = await client.chat.completions.create(  # type: ignore[call-overload]
             model=LLM_MODEL,
             messages=[
                 {"role": "system", "content": _DECOMPOSE_SYSTEM},
@@ -594,7 +594,7 @@ def _compress_chunks(
         scored.sort(key=lambda x: x[1], reverse=True)
 
         # Keep sentences above threshold or top-K, preserving original order
-        keep_indices = set()
+        keep_indices: set[int] = set()
         for j, score in scored:
             if score >= min_score or len(keep_indices) < max_sentences_per_chunk:
                 keep_indices.add(j)

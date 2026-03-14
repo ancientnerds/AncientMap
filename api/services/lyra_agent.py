@@ -855,38 +855,46 @@ async def run_agent_stream(
             }
         _t_phase1 = time.monotonic()
 
-        # Phase 0: decompose query + extract filters in parallel
-        sub_queries = [message]
-        if use_decomposition or use_filter_extraction:
-            parallel_tasks = []
-            if use_decomposition:
-                parallel_tasks.append(_decompose_query(message))
-            if use_filter_extraction:
-                parallel_tasks.append(_extract_news_filters(message))
-            phase0_results = await asyncio.gather(*parallel_tasks, return_exceptions=True)
+        # Phase 0: decompose query + extract filters in parallel (both async Mercury calls)
+        sub_queries: list[str] = [message]
+        filters_or_exc: Any = {}
 
-            idx = 0
-            if use_decomposition:
-                decomp_result = phase0_results[idx]
-                idx += 1
-                if isinstance(decomp_result, BaseException):
-                    logger.warning(f"Query decomposition failed: {decomp_result}")
-                else:
-                    sub_queries = decomp_result
-                    if len(sub_queries) > 1:
-                        logger.info(
-                            f"Decomposed query into {len(sub_queries)} sub-queries: {sub_queries}"
-                        )
-            if use_filter_extraction:
-                filters_or_exc = phase0_results[idx]
-            else:
-                filters_or_exc = {}
-        else:
-            filters_or_exc = {}
+        if use_decomposition and use_filter_extraction:
+            decomp_raw, filter_raw = await asyncio.gather(
+                _decompose_query(message),
+                _extract_news_filters(message),
+                return_exceptions=True,
+            )
+            if isinstance(decomp_raw, BaseException):
+                logger.warning(f"Query decomposition failed: {decomp_raw}")
+            elif isinstance(decomp_raw, list):
+                sub_queries = decomp_raw
+                if len(sub_queries) > 1:
+                    logger.info(
+                        f"Decomposed query into {len(sub_queries)} sub-queries: {sub_queries}"
+                    )
+            filters_or_exc = filter_raw
+        elif use_decomposition:
+            try:
+                sub_queries = await _decompose_query(message)
+                if len(sub_queries) > 1:
+                    logger.info(
+                        f"Decomposed query into {len(sub_queries)} sub-queries: {sub_queries}"
+                    )
+            except Exception as exc:
+                logger.warning(f"Query decomposition failed: {exc}")
+        elif use_filter_extraction:
+            try:
+                filters_or_exc = await _extract_news_filters(message)
+            except Exception as exc:
+                filters_or_exc = exc
 
         # Phase 1: run retrieval with sub-queries
-        auto_task = asyncio.to_thread(_auto_retrieve, sub_queries, context_type)
-        (auto_result_or_exc,) = await asyncio.gather(auto_task, return_exceptions=True)
+        auto_result_or_exc: Any
+        (auto_result_or_exc,) = await asyncio.gather(
+            asyncio.to_thread(_auto_retrieve, sub_queries, context_type),
+            return_exceptions=True,
+        )
         _phase1_ms = int((time.monotonic() - _t_phase1) * 1000)
 
         news_filters: dict = {}
