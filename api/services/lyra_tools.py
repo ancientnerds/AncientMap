@@ -1038,7 +1038,7 @@ def get_site_images(
             FROM wiki_images wi
             JOIN unified_sites us_img ON us_img.id = wi.site_id
             JOIN unified_sites us_req ON us_req.id = CAST(:site_id AS uuid)
-            WHERE lower(us_img.name) = lower(us_req.name)
+            WHERE unaccent(lower(us_img.name)) = unaccent(lower(us_req.name))
             ORDER BY wi.sort_order
             LIMIT :limit
         """
@@ -1054,7 +1054,7 @@ def get_site_images(
         sid_short = str(r.site_id).replace("-", "")[:8]
         img = {
             "title": r.title,
-            "url": f"/data/images/wiki/{sid_short}/{r.filename}",
+            "url": f"https://ancientnerds.com/data/images/wiki/{sid_short}/{r.filename}",
             "is_hero": r.is_hero,
         }
         if r.author:
