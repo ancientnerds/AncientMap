@@ -1065,6 +1065,23 @@ export default function DbAuditPage() {
         }
       }
 
+      // Rebuild static JSON so the frontend globe picks up changes
+      setUploadProgress({ sent: total, total, phase: 'Rebuilding static data...' })
+      try {
+        const rebuildRes = await fetch(`${config.api.baseUrl}/sites/rebuild-static`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        })
+        if (rebuildRes.ok) {
+          const rebuildResult = await rebuildRes.json()
+          console.log(`Static rebuild complete in ${rebuildResult.elapsed_seconds}s`)
+        } else {
+          console.error('Static rebuild failed:', await rebuildRes.text())
+        }
+      } catch (e) {
+        console.error('Static rebuild error:', e)
+      }
+
       setShowUploadModal(false)
       setUploadParsed([])
       setUploadFileName('')

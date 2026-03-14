@@ -1333,6 +1333,30 @@ async def batch_update_sites(
 # Batch Upload Endpoint
 # =============================================================================
 
+@router.post("/rebuild-static")
+async def rebuild_static_json(
+    user: DiscordUser = Depends(require_founder),
+    db: Session = Depends(get_db),
+):
+    """Rebuild all static JSON files from the database (founders only).
+
+    Called by the frontend after uploads to ensure static data matches DB.
+    Runs synchronously — the frontend shows a progress indicator while waiting.
+    Also creates a file snapshot for the version history panel.
+    """
+    import time
+
+    from api.services.snapshots import export_file_snapshot
+    from pipeline.static_exporter import build_static
+
+    start = time.time()
+    logger.info("Rebuilding static JSON (triggered by %s)...", user.username)
+    build_static()
+    snapshot_key = export_file_snapshot(db)
+    elapsed = round(time.time() - start, 1)
+    logger.info("Static JSON rebuild complete in %ss (snapshot: %s)", elapsed, snapshot_key)
+    return {"rebuilt": True, "elapsed_seconds": elapsed, "snapshot_key": snapshot_key}
+
 
 class ParsedSitePayload(BaseModel):
     """A site to be upserted via upload."""
