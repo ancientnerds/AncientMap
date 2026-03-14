@@ -16202,11 +16202,12 @@ div.lyra-inline-video-wrap {
 /* Tool lines within rounds */
 .lp-tool-line {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 4px;
   font-size: 9px;
   white-space: nowrap;
-  overflow: hidden;
+  min-width: 0;
 }
 .lp-tool-connector { color: var(--crt-800); flex-shrink: 0; }
 .lp-tool-name { color: var(--crt-500); flex-shrink: 0; }
@@ -16220,8 +16221,10 @@ div.lyra-inline-video-wrap {
 /* Tool result preview — collapsed by default */
 .lp-tool-preview {
   width: 100%;
+  min-width: 0;
   margin-top: 2px;
   font-size: 10px;
+  overflow: hidden;
 }
 .lp-tool-preview summary {
   cursor: pointer;
