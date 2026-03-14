@@ -33,8 +33,8 @@ from sqlalchemy import text
 from api.services.lyra_backends import get_backend
 from api.services.lyra_prompts import (
     LYRA_SYSTEM_PROMPT,
+    SYNTHESIS_PROMPT,
     _build_context_prompt,
-    strip_tool_instructions,
 )
 from api.services.lyra_router import (
     RequestContext,
@@ -47,7 +47,10 @@ from api.services.lyra_tool_prompts import wrap_tool_result
 from api.services.lyra_tools import (
     LLM_MODEL,
     TOOLS,
+    _decompose_query,
     _hybrid_search,
+    _reorder_by_relevance,
+    _semantic_dedup,
 )
 from pipeline.database import get_session
 from pipeline.lyra.config import get_max_tokens
@@ -101,52 +104,40 @@ def _build_fallback_response(
     return "".join(parts)
 
 
-def _build_clean_messages(messages: list[BaseMessage]) -> list[BaseMessage]:
-    """Build Mercury-friendly messages by removing tool call patterns.
+def _build_synthesis_messages(
+    user_question: str,
+    raw_tool_results: list[str],
+    context_prompt: str,
+    retrieved_context: str,
+) -> list[BaseMessage]:
+    """Build messages for the Phase 2 synthesis round.
 
-    Mercury returns ``finish_reason=tool_calls`` with empty content whenever
-    the message history contains AIMessage/ToolMessage pairs.  This strips
-    those out, consolidates tool result data into a single context block,
-    and removes tool instructions from the system prompt.
+    Clean slate: SYNTHESIS_PROMPT + consolidated tool data + user question.
+    No AIMessage/ToolMessage pairs (they poison Mercury).
     """
-    clean: list[BaseMessage] = []
-    tool_data_parts: list[str] = []
+    msgs: list[BaseMessage] = [SystemMessage(content=SYNTHESIS_PROMPT)]
 
-    for msg in messages:
-        if isinstance(msg, SystemMessage):
-            # Strip tool instructions from the first system message (the prompt)
-            if not clean:
-                clean.append(SystemMessage(content=strip_tool_instructions(msg.content)))
-            else:
-                clean.append(msg)
-        elif isinstance(msg, HumanMessage):
-            clean.append(msg)
-        elif isinstance(msg, ToolMessage):
-            tool_data_parts.append(str(msg.content)[:3000])
-        # Skip AIMessage — tool_call patterns poison Mercury
+    # Add context prompt (site/empire/news context) if any
+    if context_prompt:
+        msgs.append(SystemMessage(content=context_prompt))
 
-    # Inject all tool data as one context block
-    if tool_data_parts:
-        clean.append(
-            SystemMessage(
-                content=(
-                    "Here is all the data retrieved for the user's question. "
-                    "Use it to write your answer:\n\n" + "\n---\n".join(tool_data_parts)
-                )
-            )
-        )
+    # Add auto-retrieved context (sites, news from pre-retrieval phase)
+    if retrieved_context:
+        msgs.append(SystemMessage(content=retrieved_context))
 
-    clean.append(
-        SystemMessage(
-            content=(
-                "Write your answer using the retrieved data above. "
-                "Use «s0» markers for sites (with their UUID id), "
-                "«v0» for videos (with video_id and timestamp_seconds), "
-                "«c0» for coordinates, «f0» for country flags."
-            )
-        )
-    )
-    return clean
+    # Consolidate ALL tool results into one data block
+    # Dedup near-identical results, then reorder for lost-in-the-middle
+    if raw_tool_results:
+        wrapped = [{"text": r} for r in raw_tool_results]
+        deduped = _semantic_dedup(wrapped, text_key="text")
+        reordered = _reorder_by_relevance(deduped)
+        data_block = "\n---\n".join(r["text"][:3000] for r in reordered)
+        msgs.append(SystemMessage(content=f"## Retrieved Data\n\n{data_block}"))
+
+    # User's question — just the question, clean context for synthesis
+    msgs.append(HumanMessage(content=user_question))
+
+    return msgs
 
 
 def _parse_structured_output(
@@ -300,15 +291,18 @@ async def _stream_with_heartbeat(
 
 
 def _auto_retrieve(
-    query: str, context_type: str
+    queries: list[str], context_type: str
 ) -> tuple[str, list[dict], list[dict], float | None, int]:
     """Run automatic hybrid retrieval BEFORE the LLM sees the message.
 
-    Searches BOTH Qdrant collections on every query:
+    Searches BOTH Qdrant collections on every sub-query (from decomposition):
     - Sites collection (limit=5) for archaeological site context + map highlighting
     - News collection (limit=3) for semantically relevant news items
 
     Not called for empire context — empire questions use get_empire_data tool instead.
+
+    Args:
+        queries: List of sub-queries (from _decompose_query). Usually 1, up to 3.
 
     Returns:
         Tuple of (formatted context string, list of site result dicts for map highlighting,
@@ -323,15 +317,22 @@ def _auto_retrieve(
 
     # --- Sites collection (skip for news context) ---
     if context_type != "news":
-        results, vt = _hybrid_search(query, collection="sites", limit=5)
-        total_voyage_tokens += vt
-        site_results = results
-        for r in results:
-            if "relevance" in r:
-                all_relevance_scores.append(r["relevance"])
-        if results:
-            lines = []
+        seen_site_ids: set[str] = set()
+        for sub_q in queries:
+            results, vt = _hybrid_search(sub_q, collection="sites", limit=5)
+            total_voyage_tokens += vt
             for r in results:
+                sid = r.get("id", "")
+                if sid and sid in seen_site_ids:
+                    continue
+                if sid:
+                    seen_site_ids.add(sid)
+                site_results.append(r)
+                if "relevance" in r:
+                    all_relevance_scores.append(r["relevance"])
+        if site_results:
+            lines = []
+            for r in site_results:
                 name = r.get("name", "?")
                 site_id = r.get("id", "")
                 period = r.get("period_name", "")
@@ -350,12 +351,19 @@ def _auto_retrieve(
 
     # --- News collection (always — semantic news retrieval) ---
     news_limit = 5 if context_type == "news" else 3
-    news_raw, vt = _hybrid_search(query, collection="news", limit=news_limit)
-    total_voyage_tokens += vt
-    if news_raw:
-        news_results = news_raw
-        lines = []
+    seen_news_keys: set[str] = set()
+    for sub_q in queries:
+        news_raw, vt = _hybrid_search(sub_q, collection="news", limit=news_limit)
+        total_voyage_tokens += vt
         for r in news_raw:
+            key = f"{r.get('video_id', '')}::{r.get('headline', '')}"
+            if key in seen_news_keys:
+                continue
+            seen_news_keys.add(key)
+            news_results.append(r)
+    if news_results:
+        lines = []
+        for r in news_results:
             headline = r.get("headline", "?")
             channel = r.get("channel", "")
             desc = r.get("description", r.get("summary", ""))[:150]
@@ -367,6 +375,14 @@ def _auto_retrieve(
 
     if not context_parts:
         return "", [], [], None, total_voyage_tokens
+
+    # Semantic dedup: remove near-duplicate results across retrieval sources
+    site_results = _semantic_dedup(site_results, text_key="description")
+    news_results = _semantic_dedup(news_results, text_key="summary")
+
+    # Reorder results: most relevant at start and end (lost-in-the-middle mitigation)
+    site_results = _reorder_by_relevance(site_results)
+    news_results = _reorder_by_relevance(news_results)
 
     avg_relevance = (
         sum(all_relevance_scores) / len(all_relevance_scores) if all_relevance_scores else None
@@ -677,6 +693,7 @@ def _build_messages(
     retrieved_context: str = "",
     model_tier: str = "heavy",
     system_prompt: str | None = None,
+    prebuilt_context_prompt: str | None = None,
 ) -> list[BaseMessage]:
     """Build the message list for the LLM."""
     if system_prompt:
@@ -686,7 +703,11 @@ def _build_messages(
         )
     else:
         # Empire context goes AFTER retrieved context so it takes precedence over noisy results
-        context_prompt = _build_context_prompt(context_type, context_id, context_year)
+        context_prompt = (
+            prebuilt_context_prompt
+            if prebuilt_context_prompt is not None
+            else _build_context_prompt(context_type, context_id, context_year)
+        )
         if context_type == "empire":
             system_text = LYRA_SYSTEM_PROMPT + retrieved_context + context_prompt
         else:
@@ -812,8 +833,10 @@ async def run_agent_stream(
         auto_site_results: list[dict] = []
         auto_news_results: list[dict] = []
 
-        # Run retrieval + filter extraction in parallel — zero added latency
+        # Run decomposition + filter extraction in parallel (both async Mercury calls),
+        # then pass sub-queries to _auto_retrieve() in a thread.
         use_filter_extraction = ctx.backend_type != "local"
+        use_decomposition = ctx.backend_type != "local"
 
         yield {
             "type": "pipeline",
@@ -832,15 +855,38 @@ async def run_agent_stream(
             }
         _t_phase1 = time.monotonic()
 
-        auto_task = asyncio.to_thread(_auto_retrieve, message, context_type)
-        if use_filter_extraction:
-            filter_task = _extract_news_filters(message)
-            auto_result_or_exc, filters_or_exc = await asyncio.gather(
-                auto_task, filter_task, return_exceptions=True
-            )
+        # Phase 0: decompose query + extract filters in parallel
+        sub_queries = [message]
+        if use_decomposition or use_filter_extraction:
+            parallel_tasks = []
+            if use_decomposition:
+                parallel_tasks.append(_decompose_query(message))
+            if use_filter_extraction:
+                parallel_tasks.append(_extract_news_filters(message))
+            phase0_results = await asyncio.gather(*parallel_tasks, return_exceptions=True)
+
+            idx = 0
+            if use_decomposition:
+                decomp_result = phase0_results[idx]
+                idx += 1
+                if isinstance(decomp_result, BaseException):
+                    logger.warning(f"Query decomposition failed: {decomp_result}")
+                else:
+                    sub_queries = decomp_result
+                    if len(sub_queries) > 1:
+                        logger.info(
+                            f"Decomposed query into {len(sub_queries)} sub-queries: {sub_queries}"
+                        )
+            if use_filter_extraction:
+                filters_or_exc = phase0_results[idx]
+            else:
+                filters_or_exc = {}
         else:
-            (auto_result_or_exc,) = await asyncio.gather(auto_task, return_exceptions=True)
-            filters_or_exc = {}  # No filter extraction for local backend
+            filters_or_exc = {}
+
+        # Phase 1: run retrieval with sub-queries
+        auto_task = asyncio.to_thread(_auto_retrieve, sub_queries, context_type)
+        (auto_result_or_exc,) = await asyncio.gather(auto_task, return_exceptions=True)
         _phase1_ms = int((time.monotonic() - _t_phase1) * 1000)
 
         news_filters: dict = {}
@@ -969,6 +1015,10 @@ async def run_agent_stream(
                 if key not in existing_keys:
                     all_news.append(n)
                     existing_keys.add(key)
+
+        # Semantic dedup across all news sources (catches near-duplicate headlines)
+        all_news = _semantic_dedup(all_news, text_key="headline")
+
         yield {
             "type": "pipeline",
             "stage": "news_augmentation",
@@ -1013,6 +1063,8 @@ async def run_agent_stream(
         }
 
     _t_ctx = time.monotonic()
+    # Build context_prompt separately — Phase 2 synthesis needs it
+    context_prompt = _build_context_prompt(context_type, context_id, context_year)
     messages = _build_messages(
         message,
         images,
@@ -1023,6 +1075,7 @@ async def run_agent_stream(
         retrieved_context,
         model_tier=ctx.model_tier,
         system_prompt=system_prompt,
+        prebuilt_context_prompt=context_prompt,
     )
     yield {
         "type": "pipeline",
@@ -1050,26 +1103,28 @@ async def run_agent_stream(
 
     tool_calls_made = 0
     max_tool_rounds = 5
+    _round = -1  # initialized before loop for Phase 2 round numbering
     tool_calls: list[dict[str, str | int | None]] = []
     # Capture structured output for frontend debug panel
     _structured_output: dict[str, Any] | None = None
     # Track whether any text was successfully emitted to the user
     _text_emitted = False
+    # Phase 2: collect raw tool results for synthesis
+    raw_tool_results: list[str] = []
 
     for _round in range(max_tool_rounds):
         # Inject round awareness so the LLM knows how many rounds remain
         if _round >= 2 and tool_calls_made > 0:
             remaining = max_tool_rounds - _round
             if remaining <= 1:
-                # Last round — strong instruction to generate text, not tool calls
+                # Last retrieval round — stop calling tools so Phase 2 can synthesize
                 messages.append(
                     SystemMessage(
                         content=(
                             f"[FINAL ROUND {_round + 1}/{max_tool_rounds} — "
                             f"{tool_calls_made} tool calls completed] "
-                            "You MUST generate your final text response NOW. "
-                            "Do NOT call any more tools. You have enough information. "
-                            "Respond using the structured JSON format with your text answer."
+                            "STOP calling tools. You have enough data. "
+                            "A dedicated synthesis step will generate the answer."
                         )
                     )
                 )
@@ -1153,28 +1208,33 @@ async def run_agent_stream(
                     )
                 collected_content = result["content"]
             else:
-                # Final text response — parse structured output
-                try:
-                    collected_content, so_data, _off_topic = _parse_structured_output(
-                        result["content"]
-                    )
-                    if so_data is not None:
-                        _structured_output = so_data
-                except Exception as e:
-                    logger.warning(f"Structured output parse failed: {e}")
-                    raw = result["content"]
-                    text_match = re.search(r'"text"\s*:\s*"((?:[^"\\]|\\.)*)"', raw)
-                    if text_match:
-                        collected_content = clean_response_text(
-                            text_match.group(1).replace("\\n", "\n").replace('\\"', '"')
+                # No tool calls — LLM wants to answer directly
+                if tool_calls_made > 0:
+                    # Phase 2 will handle synthesis — discard this text
+                    collected_content = ""
+                else:
+                    # No tools used at all (simple query) — emit Phase 1 response
+                    try:
+                        collected_content, so_data, _off_topic = _parse_structured_output(
+                            result["content"]
                         )
-                    else:
-                        collected_content = clean_response_text(raw)
-                # Simulate diffusion crystallization effect
-                if collected_content.strip():
-                    _text_emitted = True
-                async for diff_ev in _simulate_diffusion(collected_content):
-                    yield diff_ev
+                        if so_data is not None:
+                            _structured_output = so_data
+                    except Exception as e:
+                        logger.warning(f"Structured output parse failed: {e}")
+                        raw = result["content"]
+                        text_match = re.search(r'"text"\s*:\s*"((?:[^"\\]|\\.)*)"', raw)
+                        if text_match:
+                            collected_content = clean_response_text(
+                                text_match.group(1).replace("\\n", "\n").replace('\\"', '"')
+                            )
+                        else:
+                            collected_content = clean_response_text(raw)
+                    # Simulate diffusion crystallization effect
+                    if collected_content.strip():
+                        _text_emitted = True
+                    async for diff_ev in _simulate_diffusion(collected_content):
+                        yield diff_ev
         else:
             # Ollama/local: stream with heartbeat
             async for ev in _stream_with_heartbeat(
@@ -1278,6 +1338,9 @@ async def run_agent_stream(
                 }
                 result = tool_fn.invoke(tool_args)
                 tool_calls_made += 1
+
+                # Collect raw result for Phase 2 synthesis
+                raw_tool_results.append(f"[{tc['name']}] {result[:3000]}")
 
                 # Extract site data for map highlighting
                 if tc["name"] in (
@@ -1466,73 +1529,69 @@ async def run_agent_stream(
         if len(all_news) > news_before:
             yield {"type": "news", "news": all_news}
 
-    # Force a text answer if we exhausted tool rounds without responding,
-    # OR if the LLM returned no text and no tool calls (empty response).
-    if tool_calls or not _text_emitted:
-        if tool_calls:
-            logger.info("Max tool rounds reached — forcing final text response")
-        else:
-            logger.warning("No text emitted after normal rounds — forcing text response")
+    # PHASE 2: SYNTHESIS (Mercury only)
+    # Run a dedicated synthesis round when tools were used — the LLM gets a
+    # clean context (SYNTHESIS_PROMPT + consolidated data + user question)
+    # instead of the messy AIMessage/ToolMessage history from Phase 1.
+    #
+    # For Ollama, Phase 1 already streams tokens directly to the client so
+    # _text_emitted is True and Phase 2 is skipped. Ollama handles messy
+    # history better than Mercury and the text is already sent.
+    if tool_calls_made > 0 and not _text_emitted:
+        logger.info(
+            f"Phase 2 synthesis: {tool_calls_made} tool calls, "
+            f"{len(raw_tool_results)} results collected"
+        )
 
         yield {
             "type": "pipeline",
             "stage": "llm_round",
             "status": "start",
             "duration_ms": None,
-            "meta": {"round": max_tool_rounds + 1, "forced": True},
+            "meta": {"round": _round + 2, "synthesis": True},
         }
-        _t_forced = time.monotonic()
-        if ctx.backend_type == "mercury":
-            # Clean messages: strip AIMessage/ToolMessage pairs that cause
-            # Mercury to return finish_reason=tool_calls with empty content.
-            # Tool result data is preserved as a single context block.
-            clean_msgs = _build_clean_messages(messages)
-            _forced_ok = False
-            try:
-                _forced_result = await backend_impl.generate(
-                    clean_msgs,
-                    response_format=LYRA_RESPONSE_SCHEMA,
-                    max_tokens=16384,
-                )
-                total_input_tokens += _forced_result["usage"]["input"]
-                total_output_tokens += _forced_result["usage"]["output"]
+        _t_synthesis = time.monotonic()
 
-                text_out, so_data, _off_topic = _parse_structured_output(_forced_result["content"])
-                if so_data is not None:
-                    _structured_output = so_data
-                async for diff_ev in _simulate_diffusion(text_out):
-                    yield diff_ev
-                _forced_ok = True
-            except Exception as exc:
-                print(f"[FORCED] Clean messages failed: {type(exc).__name__}: {exc}", flush=True)
-                logger.warning(f"Forced response with clean messages failed: {exc}")
+        synthesis_msgs = _build_synthesis_messages(
+            message, raw_tool_results, context_prompt, retrieved_context
+        )
+        _synthesis_ok = False
+        try:
+            _synth_result = await backend_impl.generate(
+                synthesis_msgs,
+                response_format=LYRA_RESPONSE_SCHEMA,
+                max_tokens=16384,
+            )
+            total_input_tokens += _synth_result["usage"]["input"]
+            total_output_tokens += _synth_result["usage"]["output"]
 
-            if not _forced_ok:
-                _fb = _build_fallback_response(message, all_sites, all_news)
-                async for diff_ev in _simulate_diffusion(_fb):
-                    yield diff_ev
-        else:
-            async for ev in _stream_with_heartbeat(
-                backend_impl,
-                messages,
-                [],
-                enable_thinking=False,
-            ):
-                if ev["type"] == "content":
-                    yield {"type": "token", "content": ev["text"]}
-                elif ev["type"] == "usage":
-                    total_input_tokens += ev["input"]
-                    total_output_tokens += ev["output"]
+            text_out, so_data, _off_topic = _parse_structured_output(_synth_result["content"])
+            if so_data is not None:
+                _structured_output = so_data
+            async for diff_ev in _simulate_diffusion(text_out):
+                yield diff_ev
+            _synthesis_ok = True
+        except Exception as exc:
+            print(
+                f"[SYNTHESIS] Phase 2 failed: {type(exc).__name__}: {exc}",
+                flush=True,
+            )
+            logger.warning(f"Phase 2 synthesis failed: {exc}")
+
+        if not _synthesis_ok:
+            _fb = _build_fallback_response(message, all_sites, all_news)
+            async for diff_ev in _simulate_diffusion(_fb):
+                yield diff_ev
 
         yield {
             "type": "pipeline",
             "stage": "llm_round",
             "status": "done",
-            "duration_ms": int((time.monotonic() - _t_forced) * 1000),
+            "duration_ms": int((time.monotonic() - _t_synthesis) * 1000),
             "meta": {
-                "round": max_tool_rounds + 1,
+                "round": _round + 2,
                 "has_tools": False,
-                "forced": True,
+                "synthesis": True,
             },
         }
 

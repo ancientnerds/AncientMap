@@ -8,6 +8,7 @@ and the TOOLS list exported for the agent loop.
 import json
 import logging
 import os
+import re
 from pathlib import Path
 
 from langchain_core.tools import tool
@@ -16,6 +17,78 @@ from sqlalchemy import text
 from pipeline.database import get_session
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Query Decomposition
+# ---------------------------------------------------------------------------
+
+_DECOMPOSE_SCHEMA = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "DecomposedQuery",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "queries": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                }
+            },
+            "required": ["queries"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+_DECOMPOSE_SYSTEM = (
+    "You are a search query decomposer. Given a user question about archaeology, "
+    "split it into 1-3 independent search queries. If the question is already "
+    "focused on a single topic, return it unchanged as a single-element array. "
+    "Never add topics the user didn't ask about."
+)
+
+
+async def _decompose_query(query: str) -> list[str]:
+    """Split complex queries into 1-3 independent search sub-queries.
+
+    Uses Mercury with a tiny prompt. Returns the original query unchanged
+    for simple/focused questions (no extra cost).
+    """
+    from openai import AsyncOpenAI
+
+    api_key = os.getenv("LYRA_API_KEY") or os.getenv("LYRA_ANTHROPIC_API_KEY")
+    base_url = os.getenv("LYRA_BASE_URL") or os.getenv(
+        "LYRA_ANTHROPIC_BASE_URL", "https://api.inceptionlabs.ai/v1"
+    )
+    if not api_key:
+        return [query]
+
+    try:
+        client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        completion = await client.chat.completions.create(
+            model=LLM_MODEL,
+            messages=[
+                {"role": "system", "content": _DECOMPOSE_SYSTEM},
+                {"role": "user", "content": query},
+            ],
+            max_tokens=256,
+            temperature=0.1,
+            response_format=_DECOMPOSE_SCHEMA,
+        )
+        raw = completion.choices[0].message.content or ""
+        if not raw.strip():
+            return [query]
+        parsed = json.loads(raw)
+        queries = parsed.get("queries", [query])
+        # Sanity: return at most 3, at least 1
+        if not queries:
+            return [query]
+        return queries[:3]
+    except Exception as exc:
+        logger.warning(f"Query decomposition failed, using original: {exc}")
+        return [query]
 
 
 def _escape_ilike(value: str) -> str:
@@ -390,6 +463,160 @@ def get_empire_data(empire_id: str) -> str:
     return json.dumps(polity, ensure_ascii=False)
 
 
+def _semantic_dedup(
+    results: list[dict],
+    text_key: str = "text",
+    threshold: float = 0.7,
+) -> list[dict]:
+    """Remove near-duplicate results using token Jaccard similarity.
+
+    Keeps the result with higher relevance score when duplicates found.
+    Falls back to trying common text fields if text_key is missing.
+    """
+    if len(results) <= 1:
+        return results
+
+    def _tokenize(item: dict) -> set[str]:
+        text = item.get(text_key) or ""
+        if not text:
+            # Try common text fields as fallback
+            for key in ("headline", "summary", "description", "text_preview", "name"):
+                if item.get(key):
+                    text += " " + item[key]
+        return set(text.lower().split())
+
+    tokens = [_tokenize(r) for r in results]
+    keep = [True] * len(results)
+
+    for i in range(len(results)):
+        if not keep[i]:
+            continue
+        for j in range(i + 1, len(results)):
+            if not keep[j]:
+                continue
+            if not tokens[i] or not tokens[j]:
+                continue
+            intersection = len(tokens[i] & tokens[j])
+            union = len(tokens[i] | tokens[j])
+            if union > 0 and intersection / union >= threshold:
+                # Keep the one with higher relevance
+                score_i = results[i].get("relevance", 0) or 0
+                score_j = results[j].get("relevance", 0) or 0
+                if score_i >= score_j:
+                    keep[j] = False
+                else:
+                    keep[i] = False
+                    break  # i is removed, skip remaining j comparisons
+
+    return [r for r, k in zip(results, keep, strict=True) if k]
+
+
+def _reorder_by_relevance(results: list[dict]) -> list[dict]:
+    """Reorder results: most relevant at start and end, least relevant in middle.
+
+    Research shows LLMs deprioritize content in the middle of long contexts.
+    Input: results sorted by relevance (best first).
+    Output: [best, 3rd, 5th, ..., 6th, 4th, 2nd] — interleaved.
+    """
+    if len(results) <= 2:
+        return results
+    start = results[::2]  # [0, 2, 4, ...]
+    end = results[1::2]  # [1, 3, 5, ...]
+    return start + list(reversed(end))
+
+
+def _compress_chunks(
+    query: str,
+    results: list[dict],
+    reranker,
+    rerank_model: str,
+    min_score: float = 0.3,
+    max_sentences_per_chunk: int = 5,
+) -> list[dict]:
+    """Extract only query-relevant sentences from retrieved chunks.
+
+    Splits each result's text into sentences, reranks all sentences against the
+    query, and keeps only the top-scoring ones. Preserves all metadata.
+    Applied to transcript and article chunks only (sites/news are already compact).
+    """
+    if not results or not reranker:
+        return results
+
+    text_key = "text_preview"
+    # Collect all sentences with their source chunk index
+    all_sentences: list[str] = []
+    sentence_map: list[tuple[int, int]] = []  # (chunk_idx, sentence_idx_in_chunk)
+    chunk_sentences: list[list[str]] = []
+
+    for i, item in enumerate(results):
+        text = item.get(text_key, "") or ""
+        if not text.strip():
+            chunk_sentences.append([])
+            continue
+        sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+        chunk_sentences.append(sentences)
+        for j, sent in enumerate(sentences):
+            if len(sent.strip()) > 10:  # Skip tiny fragments
+                all_sentences.append(sent)
+                sentence_map.append((i, j))
+
+    if not all_sentences:
+        return results
+
+    # Batch rerank all sentences in one call
+    try:
+        reranked = reranker.rerank(
+            query, all_sentences, model=rerank_model, top_k=len(all_sentences)
+        )
+    except Exception as exc:
+        logger.warning(f"Sentence compression rerank failed: {exc}")
+        return results
+
+    # Score each sentence
+    sentence_scores: dict[tuple[int, int], float] = {}
+    for r in reranked.results:
+        chunk_idx, sent_idx = sentence_map[r.index]
+        sentence_scores[(chunk_idx, sent_idx)] = r.relevance_score
+
+    # Reconstruct chunks with only relevant sentences
+    compressed = []
+    for i, item in enumerate(results):
+        if not chunk_sentences[i]:
+            compressed.append(item)
+            continue
+
+        # Get scored sentences for this chunk, sorted by score desc
+        scored = [
+            (j, sentence_scores.get((i, j), 0.0))
+            for j in range(len(chunk_sentences[i]))
+            if (i, j) in sentence_scores
+        ]
+        scored.sort(key=lambda x: x[1], reverse=True)
+
+        # Keep sentences above threshold or top-K, preserving original order
+        keep_indices = set()
+        for j, score in scored:
+            if score >= min_score or len(keep_indices) < max_sentences_per_chunk:
+                keep_indices.add(j)
+            if len(keep_indices) >= max_sentences_per_chunk:
+                break
+
+        if not keep_indices:
+            # No sentences passed — keep the original chunk
+            compressed.append(item)
+            continue
+
+        # Reconstruct text preserving original sentence order
+        kept_sentences = [
+            chunk_sentences[i][j] for j in sorted(keep_indices) if j < len(chunk_sentences[i])
+        ]
+        new_item = dict(item)
+        new_item[text_key] = " ".join(kept_sentences)
+        compressed.append(new_item)
+
+    return compressed
+
+
 _RERANK_INSTRUCTIONS = {
     "sites": (
         "Prioritize archaeological sites that closely match the queried time period, "
@@ -512,6 +739,11 @@ def _hybrid_search(
         payload["id"] = str(point.id)
         payload["relevance"] = round(r.relevance_score, 3)
         items.append(payload)
+
+    # Step 5: Compress transcript/article chunks — extract query-relevant sentences
+    if collection in ("transcripts", "articles") and items:
+        items = _compress_chunks(query, items, reranker, RERANK_MODEL)
+
     return items, voyage_tokens
 
 

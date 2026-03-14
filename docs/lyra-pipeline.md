@@ -474,12 +474,14 @@ flowchart LR
     PF1 --> RRF["RRF Fusion\nmerged top 20"]
     PF2 --> RRF
     RRF --> RR["Voyage rerank-2.5-lite\ntop K with scores"]
+    RR --> CC["Context Compression\n(transcripts/articles)"]
 ```
 
 1. **Embed query** — Dense via voyage-4 (query-optimized, shared space with voyage-4-large) + sparse via Qdrant/bm25 (local fastembed)
 2. **Prefetch** — Dense ANN top 20 + BM25 inverted index top 20, with optional metadata filters
 3. **RRF fusion** — Reciprocal Rank Fusion merges both result lists
 4. **Rerank** — Voyage rerank-2.5-lite cross-encoder scores each (query, document) pair. Collection-specific instructions prepended to query for optimal ranking.
+5. **Context compression** (transcripts/articles only) — Splits each reranked chunk into sentences, batch-reranks sentences against the query, keeps only sentences scoring above 0.3 or top 5 per chunk. Reduces noise from 2000-char chunks to focused passages.
 
 ### Lyra RAG Tools
 
@@ -499,7 +501,7 @@ flowchart LR
 | `search_articles` | articles | Hybrid search on weekly digest article chunks |
 | `search_empires` | empires | Hybrid search on Seshat polity data |
 
-Auto-retrieve runs before the LLM on every query, searching sites (top 5) + news (top 3). The remaining collections (transcripts, articles, empires) are available via tool calls.
+Auto-retrieve runs before the LLM on every query. For complex multi-part queries (e.g. "compare Göbekli Tepe and Stonehenge"), Mercury decomposes the query into 1-3 sub-queries first (`_decompose_query()`), then runs hybrid search per sub-query on sites (top 5) + news (top 3). Results are merged by ID, semantically deduped (token Jaccard ≥ 0.7), and reordered for lost-in-the-middle mitigation (most relevant at start and end of context). The remaining collections (transcripts, articles, empires) are available via tool calls.
 
 ---
 
@@ -570,10 +572,10 @@ Both points have fallback paths that strip unresolved guillemet markers if `comp
 
 ### Test Suite (`scripts/test_lyra_quality.py`)
 
-Comprehensive quality validation: 48 tests across 14 categories, combining 14 regex-based structural checks with a Mercury LLM judge.
+Comprehensive quality validation: 57 tests across 16 categories, combining 14 regex-based structural checks with a Mercury LLM judge and faithfulness evaluation.
 
 **Structural checks** (deterministic): site link format, coordinate ranges, UUID validity, video citations, empire links, image format, country flags, bare UUID detection, marker resolution, conciseness, tool invocations, hallucinated IDs.
 
 **LLM judge** (Mercury structured output): relevance score (0-10), site linking, source citations, conciseness, accuracy, marker usage, overall pass/fail. Uses `response_format: json_schema` for guaranteed valid JSON scoring.
 
-**Results** (Mar 2026): 48/48 PASS (100%), 695s total, 0 rate-limited judge calls.
+**Faithfulness scoring** (Mercury structured output): Extracts every factual claim from the response, checks whether each is supported/unsupported/contradicted by retrieved context. Calculates faithfulness_score = supported / total claims. Tests fail if score < 0.8 (configurable per test). Only runs with the full judge (not `--no-judge`). 5 faithfulness test cases covering site queries, transcript attribution, news grounding, comparisons, and source descriptions.

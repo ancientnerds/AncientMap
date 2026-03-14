@@ -421,7 +421,7 @@
     <div class="label">Pipeline Steps</div>
   </div>
   <div class="stat-card">
-    <div class="value" style="color: var(--purple);">9</div>
+    <div class="value" style="color: var(--purple);">10</div>
     <div class="label">AI Call Sites</div>
   </div>
   <div class="stat-card">
@@ -1162,7 +1162,7 @@ ESCALATION_SCHEMA:
 }</pre>
     <p style="font-size: 10px; color: var(--dim); margin-top: 8px;">
       <strong>Key parameters:</strong> <code>reasoning_effort="high"</code>, <code>temperature=0.1</code>, <code>max_tokens=4096</code> (capped &mdash; reasoning shares token budget).
-      Validated: 48/48 tests pass, 0% JSON parse failures.
+      Validated: 57/57 tests pass (incl. faithfulness scoring), 0% JSON parse failures.
     </p>
   </div>
 </div>
@@ -1198,15 +1198,33 @@ ESCALATION_SCHEMA:
 
   <div class="flow-arrow">&#x25BC;</div>
 
+  <!-- Query Decomposition -->
+  <div class="stage">
+    <div class="stage-label" style="color: var(--purple); font-weight: 700;">decompose<br><small>(parallel)</small></div>
+    <div class="stage-content">
+      <div class="node" style="border-left: 3px solid var(--purple); background: rgba(192, 132, 252, 0.03);">
+        <div class="node-title" style="color: var(--purple);">_decompose_query() <span style="color: var(--dim); font-size: 11px;">&mdash; Mercury structured output</span></div>
+        <div class="node-desc">
+          Splits complex multi-part queries into 1&ndash;3 independent sub-queries. Simple focused queries pass through unchanged (zero overhead).
+          Runs in parallel with news filter extraction.
+          <br><em style="color: var(--dim); font-size: 11px;">Example: &ldquo;compare G&ouml;bekli Tepe and Stonehenge&rdquo; &rarr; [&ldquo;G&ouml;bekli Tepe archaeology&rdquo;, &ldquo;Stonehenge archaeology&rdquo;]</em>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-arrow">&#x25BC;</div>
+
   <!-- Auto-Retrieve -->
   <div class="stage">
     <div class="stage-label" style="color: var(--green); font-weight: 700;">auto-retrieve<br><small>(before LLM)</small></div>
     <div class="stage-content">
       <div class="node node-embed" style="border: 1px solid var(--green); background: rgba(74, 222, 128, 0.03);">
-        <div class="node-title">_auto_retrieve() + _get_related_news()</div>
+        <div class="node-title">_decompose_query() &rarr; _auto_retrieve() + _get_related_news()</div>
         <div class="node-desc">
-          Runs BEFORE the LLM. Dual hybrid search: sites collection (top 5) + news collection (top 3) on every query.
-          Returns formatted context + site results for map highlighting (relevance &ge; 0.3) + semantic news for sidebar cards.
+          Runs BEFORE the LLM. <strong>Query decomposition</strong> (Mercury): splits complex multi-part queries into 1&ndash;3 sub-queries (e.g. &ldquo;compare G&ouml;bekli Tepe and Stonehenge&rdquo; &rarr; two independent searches). Simple queries pass through unchanged (zero overhead).
+          <br>Dual hybrid search per sub-query: sites collection (top 5) + news collection (top 3).
+          Results merged by ID, <strong>semantic dedup</strong> (token Jaccard &ge; 0.7) removes near-duplicates, then <strong>lost-in-the-middle reordering</strong> places most relevant results at start + end of context.
           SQL-based news fetch (_get_related_news + LLM filter extraction) adds complementary results.
           <br><em style="color: var(--dim); font-size: 11px;">Auto-retrieve searches 2 of 5 total collections. The remaining 3 (transcripts, articles, empires) are available via tool calls.</em>
         </div>
@@ -1255,10 +1273,22 @@ ESCALATION_SCHEMA:
 
       <div class="flow-arrow">&#x25BC;</div>
 
+      <!-- Context Compression -->
+      <div class="node" style="border-left: 3px solid var(--cyan);">
+        <div class="node-title" style="font-size: 13px; color: var(--cyan);">Context Compression <span style="color: var(--dim); font-size: 11px;">(transcripts + articles only)</span></div>
+        <div class="node-desc">
+          Splits each chunk into sentences, batch-reranks all sentences against the query in one reranker call.
+          Keeps sentences scoring &ge; 0.3 or top 5 per chunk, preserving original order.
+          Reduces noise from 2000-char chunks to focused passages. Sites/news skip this step (already compact).
+        </div>
+      </div>
+
+      <div class="flow-arrow">&#x25BC;</div>
+
       <div class="split">
         <div class="node node-output">
           <div class="node-title" style="font-size: 13px;">Inject into System Prompt</div>
-          <div class="node-desc">Top-5 formatted as <code>## Retrieved Context</code> in system message</div>
+          <div class="node-desc">Top results formatted as <code>## Retrieved Context</code>, deduped + reordered (best at start &amp; end)</div>
         </div>
         <div class="node node-output">
           <div class="node-title" style="font-size: 13px;">Emit Sites to Frontend</div>
@@ -1470,6 +1500,20 @@ ESCALATION_SCHEMA:
       </div>
     </div>
   </div>
+
+  <div class="flow-arrow">&#x25BC;</div>
+
+  <div class="stage">
+    <div class="stage-label">step 4<br>compress</div>
+    <div class="stage-content">
+      <div class="node" style="border-left: 3px solid var(--cyan);">
+        <div class="node-title" style="font-size: 13px; color: var(--cyan);">Context Compression <span style="color: var(--dim); font-size: 11px;">(transcripts + articles)</span></div>
+        <div class="node-desc">
+          Sentence-level extraction: split chunks &rarr; batch rerank sentences &rarr; keep top 5 per chunk (score &ge; 0.3). One reranker call per search. Sites/news/empires skip this step.
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div style="margin: 24px 0;">
@@ -1477,7 +1521,7 @@ ESCALATION_SCHEMA:
     <div class="node-desc" style="color: var(--text); font-size: 13px; line-height: 2;">
       <strong style="color: var(--purple);">Dense only</strong> &mdash; "Gobekli Tepe" query may rank semantically similar sites higher than the exact match.<br>
       <strong style="color: var(--cyan);">BM25 only</strong> &mdash; "ancient temple complex in Turkey" returns nothing if no document has that exact phrase.<br>
-      <strong style="color: var(--green);">Dense + BM25 + Rerank</strong> &mdash; BM25 catches exact name. Dense catches semantic concept. RRF fuses. Reranker picks best.
+      <strong style="color: var(--green);">Dense + BM25 + Rerank + Compress</strong> &mdash; BM25 catches exact name. Dense catches semantic concept. RRF fuses. Reranker picks best. Compression extracts only relevant sentences.
       <span style="color: var(--orange);"> 67% fewer retrieval failures vs dense alone.</span>
     </div>
   </div>
@@ -1613,10 +1657,10 @@ ESCALATION_SCHEMA:
 <!-- ================================================================== -->
 <h2><span class="num">10</span> Test Scorecards</h2>
 
-<h3 style="color: var(--cyan); margin-bottom: 12px;">10a. End-to-End Quality Suite &mdash; 48 Tests <span class="badge badge-new">new</span></h3>
+<h3 style="color: var(--cyan); margin-bottom: 12px;">10a. End-to-End Quality Suite &mdash; 57 Tests <span class="badge badge-new">new</span></h3>
 
 <p style="font-size: 12px; color: var(--dim); margin-bottom: 12px;">
-  Full chat pipeline with Mercury LLM judge + 14 structural checks. Measured Mar 2026. See <code>scripts/test_lyra_quality.py</code>.
+  Full chat pipeline with Mercury LLM judge + 14 structural checks + faithfulness scoring. Measured Mar 2026. See <code>scripts/test_lyra_quality.py</code>.
 </p>
 
 <div style="margin: 16px 0; font-size: 11px; overflow-x: auto;">
@@ -1681,9 +1725,17 @@ ESCALATION_SCHEMA:
     <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 600;">5/5</div>
     <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">Context modes (site/empire/news), multi-tool, structured output validation</div>
 
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">marker_quality</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 600;">4/4</div>
+    <div style="background: var(--surface); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">Video markers, site chips, coords from details, mixed marker types</div>
+
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text);">faithfulness</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--cyan); font-weight: 600;">5/5</div>
+    <div style="background: var(--surface2); padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--dim);">Claim grounding: site queries, transcript attribution, news, comparisons, source descriptions (&ge;0.8 score)</div>
+
     <div style="background: var(--surface); padding: 8px 10px; font-weight: 700; color: var(--accent);">TOTAL</div>
-    <div style="background: var(--surface); padding: 8px 10px; font-weight: 700; color: var(--green);">48/48</div>
-    <div style="background: var(--surface); padding: 8px 10px; font-weight: 700; color: var(--dim);">695s total &bull; 14 structural checks + Mercury LLM judge &bull; 0 rate limits</div>
+    <div style="background: var(--surface); padding: 8px 10px; font-weight: 700; color: var(--green);">57/57</div>
+    <div style="background: var(--surface); padding: 8px 10px; font-weight: 700; color: var(--dim);">14 structural checks + Mercury LLM judge + faithfulness scoring &bull; 0 rate limits</div>
   </div>
 </div>
 
@@ -2022,7 +2074,7 @@ ESCALATION_SCHEMA:
   <div class="file-item">
     <span class="file-path">api/services/lyra_tools.py</span> · <span class="file-path">api/services/lyra_prompts.py</span> · <span class="file-path">api/services/lyra_agent.py</span>
     <span class="badge badge-model">M2.5</span>
-    <span class="file-desc">RAG agent: hybrid search, 11 tools, streaming, LangChain ChatAnthropic.</span>
+    <span class="file-desc">RAG agent: hybrid search, query decomposition, context compression, semantic dedup, lost-in-the-middle reordering, 11 tools, streaming.</span>
   </div>
   <div class="file-item">
     <span class="file-path">api/services/lyra_embeddings.py</span>
@@ -2065,7 +2117,7 @@ ESCALATION_SCHEMA:
 
     <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">Hybrid retrieval</div>
     <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 700;">SOTA</div>
-    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">Dense + BM25 + RRF fusion + rerank. 67% fewer retrieval failures vs dense alone.</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">Dense + BM25 + RRF + rerank + context compression + query decomposition + semantic dedup + lost-in-the-middle reordering.</div>
 
     <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">RAG relevance</div>
     <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--green); font-weight: 700;">0.83 avg</div>
@@ -2089,8 +2141,8 @@ ESCALATION_SCHEMA:
   <div class="node-title" style="color: var(--green);">Full-stack AI archaeological pipeline</div>
   <div class="node-desc" style="line-height: 1.8;">
     <strong>News pipeline:</strong> 11 automated steps &mdash; fetch, retry, summarize, match, post, verify, rescore, dedup, screenshot, backfill, identify.<br>
-    <strong>AI stack:</strong> 9 Mercury 2 call sites with structured outputs (via <code>response_format: json_schema</code>), extended thinking, prompt caching.<br>
-    <strong>RAG agent:</strong> Hybrid dense+BM25+rerank retrieval, 11 tools, streaming responses, map highlighting.<br>
+    <strong>AI stack:</strong> 10 Mercury 2 call sites with structured outputs (via <code>response_format: json_schema</code>), extended thinking, prompt caching.<br>
+    <strong>RAG agent:</strong> Hybrid dense+BM25+rerank retrieval, query decomposition, context compression, semantic dedup, lost-in-the-middle reordering. 11 tools, streaming responses, map highlighting. Faithfulness-tested.<br>
     <strong>Embedding:</strong> Voyage-4/4-large (1024-dim) + BM25 sparse + rerank-2.5-lite. Qdrant vector DB.<br>
     <strong>Data:</strong> 750K+ sites, 39 YouTube channels, Seshat empire data, Wikidata/Wikipedia enrichment.
   </div>

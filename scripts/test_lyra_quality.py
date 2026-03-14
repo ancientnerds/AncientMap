@@ -909,6 +909,107 @@ async def evaluate_with_judge(prompt: str, response_text: str, tools: list[str])
 
 
 # ---------------------------------------------------------------------------
+# Faithfulness Judge (structured output — checks claim grounding)
+# ---------------------------------------------------------------------------
+
+FAITHFULNESS_SCHEMA = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "FaithfulnessScore",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "claims": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "text": {"type": "string"},
+                            "verdict": {
+                                "type": "string",
+                                "enum": ["supported", "unsupported", "contradicted"],
+                            },
+                        },
+                        "required": ["text", "verdict"],
+                        "additionalProperties": False,
+                    },
+                },
+                "faithfulness_score": {"type": "number"},
+            },
+            "required": ["claims", "faithfulness_score"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+FAITHFULNESS_PROMPT = """You are evaluating whether an AI chatbot's response is grounded in the retrieved context.
+
+User prompt: {prompt}
+
+Retrieved context (from tools/database):
+{context}
+
+Lyra's response:
+{response}
+
+Instructions:
+1. Extract every factual claim from the response (site names, dates, locations, descriptions, attributions).
+2. For each claim, determine:
+   - "supported": the claim is directly backed by information in the retrieved context
+   - "unsupported": the claim is not mentioned in the retrieved context (could be general knowledge or hallucination)
+   - "contradicted": the claim directly contradicts information in the retrieved context
+3. Calculate faithfulness_score as: (number of supported claims) / (total claims). If there are no factual claims, score 1.0.
+
+Do NOT penalize:
+- Greetings, personality, or conversational filler
+- General archaeological knowledge that is widely known (e.g. "Göbekli Tepe is in Turkey")
+- Formatting, markdown, or link syntax"""
+
+
+async def evaluate_faithfulness(prompt: str, response_text: str, context: str) -> dict | None:
+    """Call Mercury to evaluate faithfulness of response to retrieved context."""
+    if not LYRA_API_KEY and not LYRA_FREE_API_KEYS:
+        return None
+
+    from openai import AsyncOpenAI
+
+    judge_input = FAITHFULNESS_PROMPT.format(
+        prompt=prompt,
+        response=response_text[:2000],
+        context=context[:3000],
+    )
+
+    key = _judge_pool.current_key
+    for _attempt in range(3):
+        client = AsyncOpenAI(api_key=key, base_url=MERCURY_BASE_URL)
+        try:
+            _judge_pool.record_call()
+            completion = await client.chat.completions.create(
+                model=MERCURY_MODEL,
+                messages=[{"role": "user", "content": judge_input}],
+                max_tokens=4096,
+                stream=False,
+                reasoning_effort="high",
+                temperature=0.1,
+                response_format=FAITHFULNESS_SCHEMA,
+            )
+            raw = completion.choices[0].message.content or ""
+            if not raw.strip():
+                return {"error": "Faithfulness judge returned empty content"}
+            return json.loads(raw)
+        except Exception as e:
+            msg = str(e).lower()
+            if "429" in msg or "rate limit" in msg:
+                _judge_pool.mark_rate_limited(key)
+                key = _judge_pool.current_key
+                await asyncio.sleep(2.0)
+                continue
+            return {"error": str(e)[:200]}
+    return {"error": "Rate limited after 3 attempts"}
+
+
+# ---------------------------------------------------------------------------
 # Test case definition
 # ---------------------------------------------------------------------------
 
@@ -926,6 +1027,8 @@ class TestCase:
     context_year: int | None = None
     skip_judge: bool = False
     min_relevance: int = 7
+    check_faithfulness: bool = False
+    min_faithfulness: float = 0.8
 
 
 # ---------------------------------------------------------------------------
@@ -1721,6 +1824,53 @@ TEST_CASES: list[TestCase] = [
         ],
         expected_tools=["search_sites", "get_site_details", "search_news"],
     ),
+    # ── Category 16: Faithfulness (5) ──
+    # These test cases verify that Lyra's claims trace to retrieved context
+    TestCase(
+        name="Simple site faithfulness",
+        category="faithfulness",
+        prompt="Tell me about Göbekli Tepe",
+        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        expected_tools=["search_sites", "get_site_details"],
+        check_faithfulness=True,
+        min_faithfulness=0.8,
+    ),
+    TestCase(
+        name="Transcript attribution",
+        category="faithfulness",
+        prompt="What has World of Antiquity said about Karahan Tepe?",
+        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        expected_tools=["search_transcripts"],
+        check_faithfulness=True,
+        min_faithfulness=0.7,
+    ),
+    TestCase(
+        name="News faithfulness",
+        category="faithfulness",
+        prompt="What are the latest archaeological discoveries?",
+        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        expected_tools=["search_news"],
+        check_faithfulness=True,
+        min_faithfulness=0.7,
+    ),
+    TestCase(
+        name="Comparison faithfulness",
+        category="faithfulness",
+        prompt="Compare Göbekli Tepe and Karahan Tepe",
+        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        expected_tools=["search_sites", "get_site_details"],
+        check_faithfulness=True,
+        min_faithfulness=0.7,
+    ),
+    TestCase(
+        name="Source description faithfulness",
+        category="faithfulness",
+        prompt="What YouTube channels do you monitor?",
+        structural_checks=["not_empty", "no_error", "markers_resolved"],
+        expected_tools=["list_channels"],
+        check_faithfulness=True,
+        min_faithfulness=0.8,
+    ),
 ]
 
 
@@ -1862,6 +2012,46 @@ async def run_test(
         elif judge_result and "error" in judge_result:
             print(f"  Judge: {YELLOW}error — {judge_result['error'][:80]}{RESET}")
 
+    # Faithfulness evaluation (only for flagged tests, requires judge)
+    faithfulness_result = None
+    if use_judge and tc.check_faithfulness and resp.content.strip():
+        # Build context from pipeline tool result previews
+        context_parts = []
+        for pe in resp.pipeline_events:
+            if pe.get("stage") == "tool_call" and pe.get("status") == "done":
+                preview = (pe.get("meta") or {}).get("result_preview", "")
+                if preview:
+                    context_parts.append(preview)
+        # Also include site/news data as context
+        if resp.sites:
+            context_parts.append("Sites: " + ", ".join(s.get("name", "") for s in resp.sites[:10]))
+        if resp.news:
+            context_parts.append(
+                "News: " + ", ".join(n.get("headline", "") for n in resp.news[:10])
+            )
+        retrieved_ctx = "\n---\n".join(context_parts) if context_parts else "(no context retrieved)"
+        faithfulness_result = await evaluate_faithfulness(tc.prompt, resp.content, retrieved_ctx)
+        if faithfulness_result and "error" not in faithfulness_result:
+            f_score = faithfulness_result.get("faithfulness_score", 0)
+            claims = faithfulness_result.get("claims", [])
+            supported = sum(1 for c in claims if c.get("verdict") == "supported")
+            unsupported = sum(1 for c in claims if c.get("verdict") == "unsupported")
+            contradicted = sum(1 for c in claims if c.get("verdict") == "contradicted")
+            score_icon = f"{GREEN}✓{RESET}" if f_score >= tc.min_faithfulness else f"{RED}✗{RESET}"
+            print(
+                f"  Faithfulness: {score_icon} {f_score:.2f} "
+                f"({supported} supported, {unsupported} unsupported, {contradicted} contradicted "
+                f"/ {len(claims)} claims)"
+            )
+            if f_score < tc.min_faithfulness:
+                overall_pass = False
+                # Show contradicted/unsupported claims
+                bad_claims = [c for c in claims if c.get("verdict") != "supported"]
+                for c in bad_claims[:3]:
+                    print(f"    {YELLOW}{c['verdict']}: {_truncate(c['text'], 80)}{RESET}")
+        elif faithfulness_result and "error" in faithfulness_result:
+            print(f"  Faithfulness: {YELLOW}error — {faithfulness_result['error'][:80]}{RESET}")
+
     # Final result
     status = f"{GREEN}PASS{RESET}" if overall_pass else f"{RED}FAIL{RESET}"
     print(f"  RESULT: {status}")
@@ -1873,6 +2063,7 @@ async def run_test(
         "structural": {cr.name: cr.passed for cr in structural_results},
         "api_checks": {cr.name: cr.passed for cr in api_results} if api_results else None,
         "judge": judge_result,
+        "faithfulness": faithfulness_result,
         "wall_time": resp.wall_time,
         "content_length": len(resp.content),
         "tools": resp.tools_called,
