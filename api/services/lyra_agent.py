@@ -218,19 +218,20 @@ def _filter_hallucinated_videos(
 
     structured["videos"] = kept
 
-    # Remove expanded video links from text for filtered videos
+    # Remove expanded video links AND surrounding connective text
     for v in removed:
         vid = v.get("video_id", "")
-        if vid:
-            # Remove [▶ Channel TS](lyra-video:VID:TS) patterns
-            text = re.sub(
-                rf"\[▶[^\]]*\]\(lyra-video:{re.escape(vid)}:\d+\)",
-                "",
-                text,
-            )
-    # Clean up leftover whitespace from removed markers
+        if not vid:
+            continue
+        vid_pat = rf"\[▶[^\]]*\]\(lyra-video:{re.escape(vid)}:\d+\)"
+        # Full sentences that only exist to reference the video:
+        #    "For a short documentary, [▶ ...]. " or "Watch [▶ ...] for more."
+        text = re.sub(rf"[^.!?\n]*{vid_pat}[^.!?\n]*[.!?]\s*", "", text)
+    # Clean up leftover whitespace
     text = re.sub(r"  +", " ", text).strip()
     text = re.sub(r"\n\n\n+", "\n\n", text)
+    # Clean dangling list items (e.g. "- \n" left after removal)
+    text = re.sub(r"^-\s*$", "", text, flags=re.MULTILINE)
 
     logger.info(
         f"Filtered {len(removed)} hallucinated video(s): {[v.get('video_id') for v in removed]}"

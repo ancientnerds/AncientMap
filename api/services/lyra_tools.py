@@ -1054,10 +1054,19 @@ def get_site_images(
             attribution.append(r.author)
         if r.license:
             attribution.append(r.license)
-        attr_line = f"*{' · '.join(attribution)}*" if attribution else ""
+        attr_str = " · ".join(attribution) if attribution else ""
+        commons = r.commons_page_url or ""
+        if attr_str and commons:
+            attr_line = f"*[{attr_str}]({commons})*"
+        elif attr_str:
+            attr_line = f"*{attr_str}*"
+        else:
+            attr_line = ""
         parts.append(f"![{title}]({url})")
         if attr_line:
             parts.append(attr_line)
+        if commons:
+            parts.append(f"commons_page_url: {commons}")
 
     return "\n\n".join(parts)
 

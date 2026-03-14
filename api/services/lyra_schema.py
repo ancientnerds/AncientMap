@@ -91,7 +91,7 @@ LYRA_RESPONSE_SCHEMA = {
                 },
                 "images": {
                     "type": "array",
-                    "description": "Array of images to display inline. Each «iN» marker MUST have an entry. Fields: marker (e.g. 'i0'), title, original_url (from get_site_images results — NEVER fabricate URLs), author, license.",
+                    "description": "Array of images to display inline. Each «iN» marker MUST have an entry. Copy author, license, and commons_page_url EXACTLY from get_site_images results — do NOT fabricate or change them.",
                     "items": {
                         "type": "object",
                         "properties": {
@@ -100,6 +100,7 @@ LYRA_RESPONSE_SCHEMA = {
                             "original_url": {"type": "string"},
                             "author": {"type": "string"},
                             "license": {"type": "string"},
+                            "commons_page_url": {"type": "string"},
                         },
                         "required": ["marker", "title", "original_url", "author", "license"],
                         "additionalProperties": False,
@@ -289,10 +290,22 @@ def expand_markers(
             e = empire_map[marker]
             return f"[{e['name']}](empire:{e['polity_id']})"
 
-        # Images: «iN» → ![title](original_url)\n*Photo: author · license*
+        # Images: «iN» → ![title](original_url)\n*[Photo: author · license](commons_url)*
         if marker in image_map:
             e = image_map[marker]
-            attribution = f"*Photo: {e['author']} · {e['license']}*" if e.get("author") else ""
+            attr_parts = []
+            if e.get("author"):
+                attr_parts.append(e["author"])
+            if e.get("license"):
+                attr_parts.append(e["license"])
+            attr_str = " · ".join(attr_parts) if attr_parts else ""
+            commons = e.get("commons_page_url", "")
+            if attr_str and commons:
+                attribution = f"*[Photo: {attr_str}]({commons})*"
+            elif attr_str:
+                attribution = f"*Photo: {attr_str}*"
+            else:
+                attribution = ""
             img_line = f"![{e['title']}]({e['original_url']})"
             return f"{img_line}\n{attribution}" if attribution else img_line
 
