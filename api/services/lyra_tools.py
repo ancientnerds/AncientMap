@@ -57,11 +57,26 @@ _DECOMPOSE_VAGUE_SYSTEM = (
 )
 
 # Vague/exploratory query detection
-_VAGUE_TERMS = frozenset({
-    "interesting", "cool", "new", "recent", "latest", "intriguing",
-    "fascinating", "notable", "exciting", "surprising", "weird",
-    "strange", "best", "top", "favorite", "recommend",
-})
+_VAGUE_TERMS = frozenset(
+    {
+        "interesting",
+        "cool",
+        "new",
+        "recent",
+        "latest",
+        "intriguing",
+        "fascinating",
+        "notable",
+        "exciting",
+        "surprising",
+        "weird",
+        "strange",
+        "best",
+        "top",
+        "favorite",
+        "recommend",
+    }
+)
 
 
 def _is_vague_query(query: str) -> bool:
@@ -71,9 +86,7 @@ def _is_vague_query(query: str) -> bool:
         return False
     # Check for named entities (uppercase words beyond sentence start)
     has_named_entity = any(
-        w[0].isupper() and i > 0
-        for i, w in enumerate(query.split())
-        if w and w[0].isalpha()
+        w[0].isupper() and i > 0 for i, w in enumerate(query.split()) if w and w[0].isalpha()
     )
     if has_named_entity:
         return False
@@ -104,7 +117,10 @@ async def _decompose_query(query: str, *, vague: bool = False) -> list[str]:
         completion = await client.chat.completions.create(  # type: ignore[call-overload]
             model=LLM_MODEL,
             messages=[
-                {"role": "system", "content": _DECOMPOSE_VAGUE_SYSTEM if vague else _DECOMPOSE_SYSTEM},
+                {
+                    "role": "system",
+                    "content": _DECOMPOSE_VAGUE_SYSTEM if vague else _DECOMPOSE_SYSTEM,
+                },
                 {"role": "user", "content": query},
             ],
             max_tokens=256,

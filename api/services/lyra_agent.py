@@ -63,19 +63,49 @@ logger = logging.getLogger(__name__)
 # Intent classification (keyword heuristic — no LLM call)
 # ---------------------------------------------------------------------------
 
-_INTENT_NEWS_WORDS = frozenset({
-    "recent", "new", "latest", "discovery", "update", "updates",
-    "news", "discovered", "found", "announced",
-})
-_INTENT_EXPLORE_WORDS = frozenset({
-    "interesting", "cool", "intriguing", "tell", "fascinating",
-    "notable", "exciting", "surprising", "weird", "strange",
-    "recommend", "best", "top", "favorite",
-})
-_INTENT_COMPARE_WORDS = frozenset({
-    "compare", "vs", "versus", "difference", "differences",
-    "similarities", "between",
-})
+_INTENT_NEWS_WORDS = frozenset(
+    {
+        "recent",
+        "new",
+        "latest",
+        "discovery",
+        "update",
+        "updates",
+        "news",
+        "discovered",
+        "found",
+        "announced",
+    }
+)
+_INTENT_EXPLORE_WORDS = frozenset(
+    {
+        "interesting",
+        "cool",
+        "intriguing",
+        "tell",
+        "fascinating",
+        "notable",
+        "exciting",
+        "surprising",
+        "weird",
+        "strange",
+        "recommend",
+        "best",
+        "top",
+        "favorite",
+    }
+)
+_INTENT_COMPARE_WORDS = frozenset(
+    {
+        "compare",
+        "vs",
+        "versus",
+        "difference",
+        "differences",
+        "similarities",
+        "between",
+    }
+)
 
 _TOOL_HINTS = {
     "news": (
@@ -118,9 +148,7 @@ def _classify_intent(query: str) -> str:
         return "compare"
     # Check for proper nouns (named entities) → specific query
     has_named_entity = any(
-        w[0].isupper() and i > 0
-        for i, w in enumerate(query.split())
-        if w and w[0].isalpha()
+        w[0].isupper() and i > 0 for i, w in enumerate(query.split()) if w and w[0].isalpha()
     )
     if has_named_entity:
         return "specific"
@@ -232,7 +260,7 @@ def _check_grounding(text: str) -> tuple[str, float]:
     If ratio < 0.4, prepends a grounding disclaimer.
     """
     # Split into sentences (rough but effective)
-    sentences = [s.strip() for s in re.split(r'[.!?]+', text) if len(s.strip()) > 20]
+    sentences = [s.strip() for s in re.split(r"[.!?]+", text) if len(s.strip()) > 20]
     if not sentences:
         return text, 1.0
     grounded = sum(1 for s in sentences if _GROUNDING_PATTERNS.search(s))
