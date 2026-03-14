@@ -1862,11 +1862,12 @@ async def replace_source(
         if existing_ids:
             src_filter = "SELECT id FROM unified_sites WHERE source_id = :src"
             # CASCADE tables: delete explicitly to avoid slow cascades
+            # NOTE: wiki_images is NOT included — images are independently downloaded
+            # and must survive re-ingestion. Files live on disk at /data/images/wiki/.
             for tbl in (
                 "site_content_links",
                 "card_stats",
                 "unified_site_names",
-                "wiki_images",
             ):
                 db.execute(
                     text(
