@@ -1362,9 +1362,9 @@ async def rebuild_static_json(
 class ParsedSitePayload(BaseModel):
     """A site to be upserted via upload."""
 
-    name: str = Field(..., max_length=500)
-    lat: float
-    lon: float
+    name: str | None = Field(default=None, max_length=500)
+    lat: float | None = None
+    lon: float | None = None
     site_type: str | None = Field(default=None, max_length=100)
     period_name: str | None = Field(default=None, max_length=100)
     period_start: int | None = None
@@ -1501,17 +1501,23 @@ async def batch_upload_sites(
                     }
                 )
 
-    # Batch UPDATE existing sites
+    # Batch UPDATE existing sites (COALESCE preserves existing values when upload sends null)
     if update_params:
         db.execute(
             text("""
                 UPDATE unified_sites SET
-                    name = :name, lat = :lat, lon = :lon,
-                    geom = ST_SetSRID(ST_MakePoint(:lon, :lat), 4326),
-                    site_type = :site_type, period_name = :period_name,
-                    period_start = :period_start, country = :country,
-                    description = :description, source_url = :source_url,
-                    thumbnail_url = :thumbnail_url,
+                    name = COALESCE(:name, name),
+                    lat = COALESCE(:lat, lat),
+                    lon = COALESCE(:lon, lon),
+                    geom = CASE WHEN :lat IS NOT NULL AND :lon IS NOT NULL
+                        THEN ST_SetSRID(ST_MakePoint(:lon, :lat), 4326) ELSE geom END,
+                    site_type = COALESCE(:site_type, site_type),
+                    period_name = COALESCE(:period_name, period_name),
+                    period_start = COALESCE(:period_start, period_start),
+                    country = COALESCE(:country, country),
+                    description = COALESCE(:description, description),
+                    source_url = COALESCE(:source_url, source_url),
+                    thumbnail_url = COALESCE(:thumbnail_url, thumbnail_url),
                     edited_by = :edited_by, updated_at = NOW(), last_audited = NOW()
                 WHERE id::text = :site_id
             """),
