@@ -496,7 +496,7 @@ flowchart LR
 | `vector_search` | any | Deep-dive hybrid search with metadata filters |
 | `search_radar` | — (SQL) | Lyra's auto-discovered sites |
 | `list_channels` | — (SQL) | Monitored YouTube channels |
-| `get_site_images` | — (SQL) | Wikimedia Commons images for a site |
+| `get_site_images` | — (SQL) | Wikimedia Commons images for a site (returns pre-formatted markdown with attribution links to Commons) |
 | `search_transcripts` | transcripts | Hybrid search on transcript chunks with YouTube deep links |
 | `search_articles` | articles | Hybrid search on weekly digest article chunks |
 | `search_empires` | empires | Hybrid search on Seshat polity data |
@@ -544,7 +544,7 @@ LyraResponse {
   coords: [{marker, lat, lon}]
   videos: [{marker, channel, video_id, timestamp_seconds}]
   empires: [{marker, name, polity_id}]
-  images: [{marker, title, original_url, author, license}]
+  images: [{marker, title, original_url, author, license, commons_page_url}]
   links: [{marker, text, url}]
   countries: [{marker, name, code}]
 }
@@ -555,7 +555,7 @@ LyraResponse {
 - `«cN»` → `[lat, lon](lyra-coord:lat,lon)` — coordinate links
 - `«vN»` → `[▶ channel MM:SS](lyra-video:INDEX)` — video citations with timestamps
 - `«eN»` → `[name](empire:polity_id)` — empire links
-- `«iN»` → `![title](url)` + attribution — inline images
+- `«iN»` → `![title](url)` + `*[Photo: author · license](commons_url)*` — inline images with Wikimedia attribution link
 - `«lN»` → `[text](url)` — external links
 - `«fN»` → `[name](flag:code)` — country flag chips
 
@@ -575,6 +575,8 @@ Both points have fallback paths that strip unresolved guillemet markers if `comp
 Comprehensive quality validation: 65 tests across 19 categories, combining 19 structural checks with a Mercury LLM judge and faithfulness evaluation.
 
 **Structural checks** (deterministic): site link format, coordinate ranges, UUID validity, video citations, empire links, image format, country flags, bare UUID detection, marker resolution, conciseness, tool invocations, hallucinated IDs.
+
+**Post-processing** (`_filter_hallucinated_videos`): After structured output expansion, videos not found in the news DB are stripped. The filter removes the entire sentence containing the video link (not just the link itself) to prevent dangling text like "watch ." or "As shown in , the temple...".
 
 **LLM judge** (Mercury structured output): relevance score (0-10), site linking, source citations, conciseness, accuracy, marker usage, overall pass/fail. Uses `response_format: json_schema` for guaranteed valid JSON scoring.
 

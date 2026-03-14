@@ -100,7 +100,7 @@ SUMMARY
 | transcripts | 3 | Transcript search, timestamp deep-links, channel-specific transcripts |
 | articles | 2 | Weekly digest, topic search |
 | empires | 3 | Empire military data, empire search, empire context mode |
-| images | 2 | Site images with `![title](url)`, author/license attribution |
+| images | 2 | Site images with `![title](url)`, author/license attribution linked to Wikimedia Commons |
 | links_flags | 3 | Wikipedia links, country flags `flag:XX`, multi-country flags |
 | radar | 3 | Radar overview, filtered radar, radar details |
 | channels | 2 | List channels, channel count |
@@ -119,7 +119,7 @@ SUMMARY
 | `check_coord_links` | `[lat, lon](lyra-coord:lat,lon)`, valid ranges |
 | `check_video_links` | `[▶ Channel](lyra-video:INDEX)` format |
 | `check_empire_links` | `[Name](empire:POLITY_ID)` format |
-| `check_image_format` | `![title](url)` with attribution line |
+| `check_image_format` | `![title](url)` with `*[Photo: author · license](commons_url)*` attribution |
 | `check_external_links` | `[text](https://...)` well-formed |
 | `check_country_flags` | `[Name](flag:XX)` format |
 | `check_no_bare_uuids` | No raw UUIDs outside proper link syntax |
