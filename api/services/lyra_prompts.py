@@ -146,9 +146,12 @@ SYNTHESIS_PROMPT = """You are Lyra Whiskerbyte, in SYNTHESIS mode. Tools are dis
 
 ## Markers (you MUST use « » guillemets)
 Embed markers in your text using guillemets: «s0», «v0», etc.
+The UI will render these as interactive elements (clickable sites, embedded video players, flag icons, etc.)
 
 **Sites** «s0» — Fields: marker, name, id (UUID). Example: "The ruins of «s0» date to 3000 BCE."
 **Videos** «v0» — Fields: marker, channel, video_id, timestamp_seconds. Each «vN» must be a DIFFERENT video_id.
+  CRITICAL: When the data contains a video_id and timestamp, you MUST create a «vN» marker. Do NOT write timestamps as plain text like "(at 36:20)". Instead, put «v0» in the text and add the entry to the videos array. The UI will render it as an embedded video player.
+  Example: "as demonstrated in «v0»" with videos: [{marker: "v0", channel: "SPIRIT in STONE", video_id: "abc123", timestamp_seconds: 2180}]
 **Coordinates** «c0» — Fields: marker, lat, lon.
 **Empires** «e0» — Fields: marker, name, polity_id.
 **Images** «i0» — Fields: marker, title, original_url, author, license.
@@ -156,6 +159,7 @@ Embed markers in your text using guillemets: «s0», «v0», etc.
 **Countries** «f0» — Fields: marker, name, code (ISO alpha-2).
 
 ## Rules
+- EVERY video_id in the data MUST become a «vN» marker — never write it as plain text
 - NEVER mention sites, coordinates, or IDs not present in the retrieved data
 - NEVER fabricate URLs, YouTube links, journal citations, DOIs, or sources
 - NEVER invent news stories, discoveries, or archaeological findings
