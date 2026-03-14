@@ -190,6 +190,54 @@ def _parse_structured_output(
     return cleaned, structured, False
 
 
+def _filter_hallucinated_videos(
+    text: str,
+    structured: dict | None,
+    valid_video_ids: set[str],
+) -> tuple[str, dict | None]:
+    """Remove videos from structured output that weren't in retrieved data.
+
+    Mercury sometimes cites valid video_ids but fabricates what the video is about
+    (e.g., an Egypt video cited as Peru content). This whitelist approach strips any
+    video whose ID didn't appear in auto-retrieve, news, or tool results.
+    """
+    if not structured or not structured.get("videos") or not valid_video_ids:
+        return text, structured
+
+    original = structured["videos"]
+    kept = []
+    removed = []
+    for v in original:
+        if v.get("video_id") in valid_video_ids:
+            kept.append(v)
+        else:
+            removed.append(v)
+
+    if not removed:
+        return text, structured
+
+    structured["videos"] = kept
+
+    # Remove expanded video links from text for filtered videos
+    for v in removed:
+        vid = v.get("video_id", "")
+        if vid:
+            # Remove [▶ Channel TS](lyra-video:VID:TS) patterns
+            text = re.sub(
+                rf"\[▶[^\]]*\]\(lyra-video:{re.escape(vid)}:\d+\)",
+                "",
+                text,
+            )
+    # Clean up leftover whitespace from removed markers
+    text = re.sub(r"  +", " ", text).strip()
+    text = re.sub(r"\n\n\n+", "\n\n", text)
+
+    logger.info(
+        f"Filtered {len(removed)} hallucinated video(s): {[v.get('video_id') for v in removed]}"
+    )
+    return text, structured
+
+
 # ---------------------------------------------------------------------------
 # Heartbeat wrapper for slow backend streams
 # ---------------------------------------------------------------------------
@@ -807,6 +855,8 @@ async def run_agent_stream(
     all_news: list[dict] = []
     radar_names: set[str] = set()
     avg_relevance: float | None = None
+    # Whitelist of video_ids from retrieved data — used to filter hallucinated videos
+    _valid_video_ids: set[str] = set()
     total_input_tokens = 0
     total_output_tokens = 0
     total_voyage_tokens = 0
@@ -1638,9 +1688,28 @@ async def run_agent_stream(
     # _text_emitted is True and Phase 2 is skipped. Ollama handles messy
     # history better than Mercury and the text is already sent.
     if tool_calls_made > 0 and not _text_emitted:
+        # Build video_id whitelist from ALL retrieved data — used to filter hallucinated videos.
+        # Mercury sometimes cites valid video_ids with fabricated narratives (e.g., Egypt video
+        # cited as being about Peru). Only video_ids that appeared in retrieved data are allowed.
+        for n in all_news:
+            vid = n.get("video_id")
+            if vid:
+                _valid_video_ids.add(vid)
+        # Extract video_ids from retrieved context ([youtube: VIDEO_ID] markers)
+        for m in re.finditer(r"\[youtube:\s*([^\]]+)\]", retrieved_context):
+            _valid_video_ids.add(m.group(1).strip())
+        # Extract video_ids from raw tool results (JSON "video_id": "..." fields)
+        for raw in raw_tool_results:
+            for m in re.finditer(r'"video_id":\s*"([^"]+)"', raw):
+                _valid_video_ids.add(m.group(1))
+            # Also catch video_id in transcript tool format
+            for m in re.finditer(r"video_id:\s*([A-Za-z0-9_-]{11})", raw):
+                _valid_video_ids.add(m.group(1))
+
         logger.info(
             f"Phase 2 synthesis: {tool_calls_made} tool calls, "
-            f"{len(raw_tool_results)} results collected"
+            f"{len(raw_tool_results)} results collected, "
+            f"{len(_valid_video_ids)} valid video_ids"
         )
 
         yield {
@@ -1685,6 +1754,11 @@ async def run_agent_stream(
 
                 raw_content = _synth_result["content"]
                 text_out, so_data, _off_topic = _parse_structured_output(raw_content)
+                # Filter hallucinated videos — only keep video_ids from retrieved data
+                if so_data is not None and _valid_video_ids:
+                    text_out, so_data = _filter_hallucinated_videos(
+                        text_out, so_data, _valid_video_ids
+                    )
                 if so_data is not None:
                     _structured_output = so_data
                 if text_out.strip():
