@@ -977,13 +977,12 @@ def get_site_images(
 ) -> str:
     """Get Wikipedia/Wikimedia Commons images for an archaeological site.
 
-    Use when users want to see images/photos of a site. Returns Wikimedia images with
-    attribution for creating image markers. Each image has:
-    - original_url: Direct image URL — use this for inline images: ![title](original_url)
-    - url: Local cached copy (may not be available)
+    Use when users want to see images/photos of a site. Returns cached local images
+    with attribution. Each image has:
+    - url: Local cached image — use this for inline images: ![title](url)
     - commons_url: Wikimedia Commons page (for attribution links, NOT for img src)
 
-    When displaying images, ALWAYS use original_url for the image source.
+    When displaying images, ALWAYS use url for the image source.
     Include author and license as attribution below each image.
 
     Args:
@@ -1028,6 +1027,25 @@ def get_site_images(
         result = session.execute(text(sql), {"site_id": site_id, "limit": limit})
         rows = result.fetchall()
 
+    # Fallback: if no images for this UUID, check other sites with the same name
+    # (handles duplicates across sources like ancient_nerds vs osm_historic)
+    if not rows:
+        fallback_sql = """
+            SELECT wi.filename, wi.original_url, wi.commons_page_url,
+                   wi.author, wi.author_url, wi.license, wi.license_url,
+                   wi.title, wi.is_hero, wi.is_lead, wi.source_type,
+                   wi.width, wi.height, wi.site_id
+            FROM wiki_images wi
+            JOIN unified_sites us_img ON us_img.id = wi.site_id
+            JOIN unified_sites us_req ON us_req.id = CAST(:site_id AS uuid)
+            WHERE lower(us_img.name) = lower(us_req.name)
+            ORDER BY wi.sort_order
+            LIMIT :limit
+        """
+        with get_session() as session:
+            result = session.execute(text(fallback_sql), {"site_id": site_id, "limit": limit})
+            rows = result.fetchall()
+
     if not rows:
         return f"No cached images found for site '{site}'. Images may not have been downloaded yet."
 
@@ -1036,18 +1054,13 @@ def get_site_images(
         sid_short = str(r.site_id).replace("-", "")[:8]
         img = {
             "title": r.title,
-            "original_url": r.original_url,
             "url": f"/data/images/wiki/{sid_short}/{r.filename}",
-            "commons_url": r.commons_page_url,
-            "author": r.author,
-            "author_url": r.author_url,
-            "license": r.license,
-            "license_url": r.license_url,
             "is_hero": r.is_hero,
-            "source": r.source_type,
         }
-        if r.width and r.height:
-            img["dimensions"] = f"{r.width}x{r.height}"
+        if r.author:
+            img["author"] = r.author
+        if r.license:
+            img["license"] = r.license
         images.append(img)
 
     return json.dumps(images, ensure_ascii=False)

@@ -1,12 +1,14 @@
 """
 Lyra Chat Quality Test Suite
 
-Comprehensive test runner that sends prompts to the Lyra API, collects SSE
-responses, runs 18 structural checks, and uses Mercury with structured output
-as LLM judge for guaranteed-valid scoring.
+Comprehensive test runner that sends prompts to the Lyra API (or runs locally),
+collects SSE responses, runs 18 structural checks, and uses Mercury with
+structured output as LLM judge for guaranteed-valid scoring.
 
 Usage:
-    python scripts/test_lyra_quality.py                          # All tests
+    python scripts/test_lyra_quality.py                          # All tests (prod API)
+    python scripts/test_lyra_quality.py --local                  # All tests (local pipeline)
+    python scripts/test_lyra_quality.py --local --no-judge       # Local, structural only
     python scripts/test_lyra_quality.py --category site_refs     # One category
     python scripts/test_lyra_quality.py --name "Greeting"        # One test
     python scripts/test_lyra_quality.py --no-judge               # Structural only
@@ -14,6 +16,11 @@ Usage:
     python scripts/test_lyra_quality.py --no-judge --validate-api  # Structural + API
     python scripts/test_lyra_quality.py --verbose                # Full responses
     python scripts/test_lyra_quality.py --list                   # List all tests
+
+Environment:
+    TEST_DISCORD_ID  — Discord user ID for JWT auth (default: QuetzalcoatlCat)
+    API_SECRET_KEY   — JWT signing secret (required for prod API mode)
+    LYRA_API_KEY     — Mercury API key for LLM judge
 """
 
 import io
@@ -35,6 +42,9 @@ from pathlib import Path
 import httpx
 import jwt
 from dotenv import load_dotenv
+
+# Will be set by --local flag
+LOCAL_MODE = False
 
 # ---------------------------------------------------------------------------
 # Config
@@ -78,9 +88,13 @@ def _make_jwt() -> str:
         sys.exit(1)
     import datetime
 
+    # Use a real discord_id from the discord_users table (unlimited tier)
+    # Override with TEST_DISCORD_ID env var if needed
+    discord_id = os.getenv("TEST_DISCORD_ID", "968657029658980432")  # QuetzalcoatlCat
+
     return jwt.encode(
         {
-            "sub": "test_user_123",
+            "sub": discord_id,
             "user_id": "00000000-0000-0000-0000-000000000000",
             "exp": datetime.datetime.now(datetime.UTC) + datetime.timedelta(hours=1),
             "iat": datetime.datetime.now(datetime.UTC),
@@ -215,6 +229,81 @@ async def send_chat(
 
 
 # ---------------------------------------------------------------------------
+# Local pipeline runner (--local mode, bypasses auth)
+# ---------------------------------------------------------------------------
+
+
+async def send_chat_local(
+    message: str,
+    history: list[dict] | None = None,
+    context_type: str = "global",
+    context_id: str | None = None,
+    context_year: int | None = None,
+) -> SSEResponse:
+    """Run a chat through the local pipeline directly (no HTTP, no auth)."""
+    # Lazy imports so they only load in --local mode
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from api.services.lyra_agent import run_agent_stream
+    from api.services.lyra_router import RequestContext, set_request_context
+
+    ctx = RequestContext(
+        backend_type="mercury",
+        model_tier="premium",
+        model_name="mercury-2",
+        supports_tools=True,
+        supports_thinking=False,
+        embedding_backend="voyage",
+    )
+    set_request_context(ctx)
+
+    resp = SSEResponse()
+    start = time.monotonic()
+
+    try:
+        async for event in run_agent_stream(
+            message=message,
+            context_type=context_type,
+            context_id=context_id,
+            context_year=context_year,
+            history=history or [],
+            ctx=ctx,
+        ):
+            etype = event.get("type", "")
+
+            if etype == "diffusion":
+                if resp.ttft is None:
+                    resp.ttft = time.monotonic() - start
+                resp.content = event.get("content", "")
+
+            elif etype == "sites":
+                resp.sites.extend(event.get("sites", []))
+
+            elif etype == "news":
+                resp.news.extend(event.get("news", []))
+
+            elif etype == "pipeline":
+                resp.pipeline_events.append(event)
+                stage = event.get("stage", "")
+                status = event.get("status", "")
+                if stage == "tool_call" and status == "start":
+                    tool_name = (event.get("meta") or {}).get("tool", "")
+                    if tool_name:
+                        resp.tools_called.append(tool_name)
+
+            elif etype == "done":
+                resp.done_metadata = event.get("metadata", event)
+
+            elif etype == "error":
+                resp.error = event.get("error", event.get("message", "unknown"))
+
+    except Exception as e:
+        resp.error = str(e)
+
+    resp.wall_time = time.monotonic() - start
+    return resp
+
+
+# ---------------------------------------------------------------------------
 # Structural checks (14 total)
 # ---------------------------------------------------------------------------
 
@@ -321,8 +410,8 @@ def check_external_links(resp: SSEResponse, **_kw) -> CheckResult:
 
 
 def check_country_flags(resp: SSEResponse, **_kw) -> CheckResult:
-    """[Name](flag:XX) format."""
-    flags = re.findall(r"\[([^\]]+)\]\(flag:([A-Z]{2})\)", resp.content)
+    """[Name](flag:xx) format — accepts both upper and lowercase codes."""
+    flags = re.findall(r"\[([^\]]+)\]\(flag:([A-Za-z]{2})\)", resp.content)
     if not flags:
         return CheckResult("country_flags", True, "n/a — no flags")
     return CheckResult("country_flags", True, f"{len(flags)} flags")
@@ -651,8 +740,8 @@ async def check_channel_names_exist(resp: SSEResponse, **_kw) -> CheckResult:
 
 
 async def check_country_codes_valid(resp: SSEResponse, **_kw) -> CheckResult:
-    """Verify every (flag:XX) country code exists in the facets endpoint."""
-    flags = re.findall(r"\(flag:([A-Z]{2})\)", resp.content)
+    """Verify every (flag:xx) country code exists in the facets endpoint."""
+    flags = re.findall(r"\(flag:([A-Za-z]{2})\)", resp.content)
     if not flags:
         return CheckResult("api_country_codes", True, "n/a — no flag links")
 
@@ -1032,7 +1121,7 @@ class TestCase:
 
 
 # ---------------------------------------------------------------------------
-# Test cases (~52 across 15 categories)
+# Test cases (~65 across 19 categories)
 # ---------------------------------------------------------------------------
 
 TEST_CASES: list[TestCase] = [
@@ -1824,7 +1913,127 @@ TEST_CASES: list[TestCase] = [
         ],
         expected_tools=["search_sites", "get_site_details", "search_news"],
     ),
-    # ── Category 16: Faithfulness (5) ──
+    # ── Category 16: Synthesis Quality (3) ──
+    # Tests that Lyra synthesizes retrieved data instead of refusing or ignoring it
+    TestCase(
+        name="YouTube tunnels synthesis",
+        category="synthesis_quality",
+        prompt="Sacsayhuaman tunnels + YouTube",
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "video_links",
+        ],
+        expected_tools=["search_news", "search_transcripts", "vector_search"],
+    ),
+    TestCase(
+        name="Polygonal masonry citations",
+        category="synthesis_quality",
+        prompt="polygonal masonry cast — what do YouTube channels say?",
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "video_links",
+        ],
+        expected_tools=["search_news", "search_transcripts", "vector_search"],
+    ),
+    TestCase(
+        name="Image tool invocation",
+        category="synthesis_quality",
+        prompt="show me an image of Sacsayhuaman",
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "image_format",
+        ],
+        expected_tools=["get_site_images"],
+    ),
+    # ── Category 17: Video Embeds (3) ──
+    # Tests video marker correctness and no hallucinated video_ids
+    TestCase(
+        name="Video markers present",
+        category="video_embeds",
+        prompt="Recent archaeology videos about underwater discoveries",
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "video_links",
+        ],
+        expected_tools=["search_news"],
+    ),
+    TestCase(
+        name="No hallucinated videos",
+        category="video_embeds",
+        prompt="What has Ancient Architects posted recently?",
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "video_links",
+        ],
+        expected_tools=["search_news"],
+    ),
+    TestCase(
+        name="Timestamps rendered",
+        category="video_embeds",
+        prompt="Find me videos about Göbekli Tepe with timestamps",
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "video_links",
+        ],
+        expected_tools=["search_news", "search_transcripts"],
+    ),
+    # ── Category 18: Country Flags (2) ──
+    # Tests that flag: links use correct (lowercase) country codes
+    TestCase(
+        name="Flag codes lowercase",
+        category="flags",
+        prompt="List ancient sites in Peru and Egypt with their countries",
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "country_flags",
+            "site_links",
+        ],
+        expected_tools=["search_sites"],
+    ),
+    TestCase(
+        name="Multi-region flags",
+        category="flags",
+        prompt="Compare Neolithic sites in Turkey, Greece, and Iraq",
+        structural_checks=[
+            "not_empty",
+            "no_error",
+            "markers_resolved",
+            "no_raw_json",
+            "no_empty_ids",
+            "country_flags",
+            "site_links",
+        ],
+        expected_tools=["search_sites"],
+    ),
+    # ── Category 19: Faithfulness (5) ──
     # These test cases verify that Lyra's claims trace to retrieved context
     TestCase(
         name="Simple site faithfulness",
@@ -1903,7 +2112,8 @@ async def run_test(
             print(f"  {YELLOW}Retry {attempt}/{MAX_RETRIES} (empty response){RESET}")
             await asyncio.sleep(2.0)
 
-        resp = await send_chat(
+        chat_fn = send_chat_local if LOCAL_MODE else send_chat
+        resp = await chat_fn(
             tc.prompt,
             history=tc.history,
             context_type=tc.context_type,
@@ -2082,6 +2292,11 @@ async def main():
         help="Run API-backed validation checks against production (rate-limited)",
     )
     parser.add_argument("--verbose", action="store_true", help="Show full response text")
+    parser.add_argument(
+        "--local",
+        action="store_true",
+        help="Run through local pipeline (no HTTP, no auth — needs local DB + Qdrant)",
+    )
     parser.add_argument("--list", action="store_true", help="List all test cases and exit")
     args = parser.parse_args()
 
@@ -2111,6 +2326,9 @@ async def main():
             print(f"{RED}No test matching '{args.name}'{RESET}")
             sys.exit(1)
 
+    global LOCAL_MODE
+    LOCAL_MODE = args.local
+
     use_judge = not args.no_judge
     if use_judge and not LYRA_API_KEY:
         print(f"{YELLOW}Warning: LYRA_API_KEY not set, skipping LLM judge{RESET}")
@@ -2122,10 +2340,11 @@ async def main():
     print(f"{BOLD}Lyra Quality Test Suite{RESET}")
     judge_info = f"Mercury (pool: {len(LYRA_FREE_API_KEYS)} free + 1 paid)" if use_judge else "off"
     api_info = f"prod ({PROD_API_BASE})" if validate_api else "off"
+    mode_info = "LOCAL (direct pipeline)" if LOCAL_MODE else f"API ({API_BASE})"
     print(
-        f"Tests: {total} | Judge: {judge_info} | API validation: {api_info} | Retries: {MAX_RETRIES}"
+        f"Tests: {total} | Mode: {mode_info} | Judge: {judge_info} | "
+        f"API validation: {api_info} | Retries: {MAX_RETRIES}"
     )
-    print(f"API: {API_BASE}")
     print("=" * 60)
 
     results: list[dict] = []
