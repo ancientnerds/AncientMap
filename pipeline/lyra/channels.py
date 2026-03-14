@@ -58,13 +58,13 @@ def seed_channels() -> None:
                     .all()
                 ]
                 if video_ids:
-                    session.query(NewsItem).filter(
-                        NewsItem.video_id.in_(video_ids)
-                    ).delete(synchronize_session=False)
+                    session.query(NewsItem).filter(NewsItem.video_id.in_(video_ids)).delete(
+                        synchronize_session=False
+                    )
                 # Delete videos
-                session.query(NewsVideo).filter(
-                    NewsVideo.channel_id == channel_id
-                ).delete(synchronize_session=False)
+                session.query(NewsVideo).filter(NewsVideo.channel_id == channel_id).delete(
+                    synchronize_session=False
+                )
                 # Delete channel
                 session.delete(channel)
                 removed += 1
