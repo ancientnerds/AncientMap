@@ -75,7 +75,7 @@ AncientMap/
 │   │   └── streetview.py    # Street View integration
 │   └── services/            # Business logic
 │       ├── admin_auth.py    # PIN auth (timing-safe, XFF-aware)
-│       ├── lyra_agent.py    # MiniMax-powered RAG agent with tools
+│       ├── lyra_agent.py    # Mercury-powered RAG agent with tools
 │       ├── lyra_embeddings.py # Voyage AI embeddings + Qdrant
 │       └── turnstile.py     # Cloudflare Turnstile verification
 │
@@ -102,7 +102,7 @@ AncientMap/
 │   │   ├── screenshot_extractor.py # Video frame extraction
 │   │   ├── site_identifier.py     # AI site identification
 │   │   ├── article_generator.py   # Weekly article
-│   │   └── prompts/         # 11 LLM prompt files (all guarded)
+│   │   └── prompts/         # 16 LLM prompt files (all guarded)
 │   ├── normalizers/         # Data normalization
 │   ├── deduplication/       # Duplicate detection
 │   └── utils/               # Utility functions
@@ -166,7 +166,7 @@ AncientMap/
 
 **Services**
 - `admin_auth.py`: Timing-safe PIN authentication with XFF-aware IP extraction
-- `lyra_agent.py`: MiniMax-powered RAG agent with 5 tools (site search, news lookup, map navigation, etc.)
+- `lyra_agent.py`: Mercury-powered RAG agent with 5 tools (site search, news lookup, map navigation, etc.)
 - `lyra_embeddings.py`: Voyage AI embeddings + Qdrant vector search
 - `turnstile.py`: Cloudflare Turnstile bot protection
 - `cache.py`: Redis caching with TTL
@@ -220,7 +220,7 @@ AncientMap/
 ```
 1. User submits question
 2. POST /api/lyra/chat (Turnstile + rate limit)
-3. Lyra agent initialized with MiniMax M2.5
+3. Lyra agent initialized with Mercury 2
 4. Agent loop (tool use):
    a. LLM decides which tools to call
    b. Tools: site_search, news_search, navigate_map, etc.
@@ -261,7 +261,7 @@ AncientMap/
        ┌────────────────┼────────────────┐
        ▼                ▼                ▼
 ┌─────────────┐ ┌──────────────┐ ┌─────────────┐
-│   Static    │ │   FastAPI    │ │  MiniMax    │
+│   Static    │ │   FastAPI    │ │  Mercury    │
 │   Files     │ │   (API)      │ │    API      │
 │   (Vite)    │ │              │ │  (external) │
 └─────────────┘ └──────────────┘ └─────────────┘

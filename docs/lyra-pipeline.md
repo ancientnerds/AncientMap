@@ -572,7 +572,7 @@ Both points have fallback paths that strip unresolved guillemet markers if `comp
 
 ### Test Suite (`scripts/test_lyra_quality.py`)
 
-Comprehensive quality validation: 57 tests across 16 categories, combining 14 regex-based structural checks with a Mercury LLM judge and faithfulness evaluation.
+Comprehensive quality validation: 65 tests across 19 categories, combining 19 structural checks with a Mercury LLM judge and faithfulness evaluation.
 
 **Structural checks** (deterministic): site link format, coordinate ranges, UUID validity, video citations, empire links, image format, country flags, bare UUID detection, marker resolution, conciseness, tool invocations, hallucinated IDs.
 
