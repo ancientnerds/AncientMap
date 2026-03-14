@@ -1504,6 +1504,7 @@ async def run_agent_stream(
                     yield diff_ev
                 _forced_ok = True
             except Exception as exc:
+                print(f"[FORCED] Clean messages failed: {type(exc).__name__}: {exc}", flush=True)
                 logger.warning(f"Forced response with clean messages failed: {exc}")
 
             if not _forced_ok:
