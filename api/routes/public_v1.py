@@ -143,7 +143,7 @@ def create_public_api() -> FastAPI:
             "Data is sourced from Pleiades, DARE, UNESCO, OpenStreetMap, Wikidata, "
             "and other open archaeological databases."
         ),
-        version="1.0.0",
+        version="1.1.0",
         docs_url="/docs",
         redoc_url="/redoc",
     )
@@ -191,7 +191,7 @@ def create_public_api() -> FastAPI:
 
         response = StatusResponse(
             status="ok",
-            version="1.0.0",
+            version="1.1.0",
             commit=BUILD_HASH,
             total_sites=total,
             source_count=source_count,

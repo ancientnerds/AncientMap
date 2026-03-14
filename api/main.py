@@ -557,7 +557,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Ancient Nerds Map API",
     description="High-performance API for 750K+ archaeological sites",
-    version="1.0.0",
+    version="1.1.0",
     lifespan=lifespan,
 )
 
