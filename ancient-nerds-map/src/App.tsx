@@ -5,11 +5,17 @@ import { EmpirePolygonData, computeBoundingBox, isSiteInEmpirePolygons } from '.
 import SitePopup, { EmpirePopupData } from './components/SitePopup'
 import { EMPIRES } from './config/empireData'
 class LazyErrorBoundary extends React.Component<
-  { children: React.ReactNode },
+  { children: React.ReactNode; resetKey?: string | number | boolean },
   { hasError: boolean }
 > {
   state = { hasError: false }
   static getDerivedStateFromError() { return { hasError: true } }
+  componentDidUpdate(prevProps: { resetKey?: string | number | boolean }) {
+    // Reset error state when resetKey changes (e.g. modal reopened)
+    if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
+      this.setState({ hasError: false })
+    }
+  }
   render() {
     if (this.state.hasError) {
       return <div style={{ padding: '1rem', textAlign: 'center', opacity: 0.6 }}>
@@ -2027,7 +2033,7 @@ function AppContent() {
       </Suspense></LazyErrorBoundary>
 
       {/* Lazy-loaded modals wrapped in Suspense for faster initial load */}
-      <LazyErrorBoundary><Suspense fallback={null}>
+      <LazyErrorBoundary resetKey={showContributeModal}><Suspense fallback={null}>
         {/* Contribute Modal - always mounted to preserve form state */}
         <ContributeModal
           isOpen={showContributeModal}

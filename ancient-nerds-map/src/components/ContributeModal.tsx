@@ -178,7 +178,7 @@ export default function ContributeModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!formValues?.name.trim()) {
+    if (!formValues?.name?.trim()) {
       setErrorMessage('Site name is required')
       return
     }
@@ -241,7 +241,15 @@ export default function ContributeModal({
         setSubmitStatus('success')
       } else {
         setSubmitStatus('error')
-        setErrorMessage(data.detail || 'Submission failed. Please try again.')
+        // data.detail can be an array of objects for 422 validation errors —
+        // React crashes if we try to render non-string values as JSX children
+        const detail = data.detail
+        const message = typeof detail === 'string'
+          ? detail
+          : Array.isArray(detail)
+            ? detail.map((e: { msg?: string }) => e.msg || '').filter(Boolean).join('. ') || 'Validation failed. Please check your input.'
+            : 'Submission failed. Please try again.'
+        setErrorMessage(message)
         if (turnstileWidgetId.current && window.turnstile) {
           window.turnstile.reset(turnstileWidgetId.current)
           setTurnstileToken(null)
@@ -251,7 +259,7 @@ export default function ContributeModal({
       setSubmitStatus('error')
       setErrorMessage('Network error. Please check your connection.')
       if (turnstileWidgetId.current && window.turnstile) {
-        window.turnstile.reset(turnstileWidgetId.current)
+        try { window.turnstile.reset(turnstileWidgetId.current) } catch { /* widget may be gone */ }
         setTurnstileToken(null)
       }
     }
