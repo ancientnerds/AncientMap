@@ -1270,8 +1270,7 @@ async def run_agent_stream(
             if result is None:
                 logger.error(f"Mercury failed after 3 attempts: {_mercury_last_err}")
                 _fb = _build_fallback_response(message, all_sites, all_news)
-                async for diff_ev in _simulate_diffusion(_fb):
-                    yield diff_ev
+                yield {"type": "diffusion", "content": _fb}
                 break
 
             total_input_tokens += result["usage"]["input"]
@@ -1311,11 +1310,10 @@ async def run_agent_stream(
                             )
                         else:
                             collected_content = clean_response_text(raw)
-                    # Simulate diffusion crystallization effect
+                    # Emit clean text directly (no diffusion simulation)
                     if collected_content.strip():
                         _text_emitted = True
-                    async for diff_ev in _simulate_diffusion(collected_content):
-                        yield diff_ev
+                        yield {"type": "diffusion", "content": collected_content}
         else:
             # Ollama/local: stream with heartbeat
             async for ev in _stream_with_heartbeat(
@@ -1672,8 +1670,8 @@ async def run_agent_stream(
             text_out, so_data, _off_topic = _parse_structured_output(_synth_result["content"])
             if so_data is not None:
                 _structured_output = so_data
-            async for diff_ev in _simulate_diffusion(text_out):
-                yield diff_ev
+            if text_out.strip():
+                yield {"type": "diffusion", "content": text_out}
             _synthesis_ok = True
         except Exception as exc:
             print(
@@ -1684,8 +1682,7 @@ async def run_agent_stream(
 
         if not _synthesis_ok:
             _fb = _build_fallback_response(message, all_sites, all_news)
-            async for diff_ev in _simulate_diffusion(_fb):
-                yield diff_ev
+            yield {"type": "diffusion", "content": _fb}
 
         yield {
             "type": "pipeline",
