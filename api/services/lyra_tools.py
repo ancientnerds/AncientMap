@@ -49,12 +49,46 @@ _DECOMPOSE_SYSTEM = (
     "Never add topics the user didn't ask about."
 )
 
+_DECOMPOSE_VAGUE_SYSTEM = (
+    "You are a search query decomposer. The user asked a vague/exploratory question "
+    "about archaeology. Generate 2-3 specific, searchable sub-queries that would "
+    "surface genuinely interesting results. Focus on: recent discoveries, unusual "
+    "findings, controversial debates. Return as a JSON array of query strings."
+)
 
-async def _decompose_query(query: str) -> list[str]:
+# Vague/exploratory query detection
+_VAGUE_TERMS = frozenset({
+    "interesting", "cool", "new", "recent", "latest", "intriguing",
+    "fascinating", "notable", "exciting", "surprising", "weird",
+    "strange", "best", "top", "favorite", "recommend",
+})
+
+
+def _is_vague_query(query: str) -> bool:
+    """Detect vague/exploratory queries that need expansion before retrieval."""
+    words = query.lower().split()
+    if len(words) > 12:
+        return False
+    # Check for named entities (uppercase words beyond sentence start)
+    has_named_entity = any(
+        w[0].isupper() and i > 0
+        for i, w in enumerate(query.split())
+        if w and w[0].isalpha()
+    )
+    if has_named_entity:
+        return False
+    # Contains vague/exploratory terms
+    return bool(set(words) & _VAGUE_TERMS)
+
+
+async def _decompose_query(query: str, *, vague: bool = False) -> list[str]:
     """Split complex queries into 1-3 independent search sub-queries.
 
     Uses Mercury with a tiny prompt. Returns the original query unchanged
     for simple/focused questions (no extra cost).
+
+    When vague=True, uses an exploratory prompt that generates concrete
+    sub-queries from vague questions like "anything interesting lately?".
     """
     from openai import AsyncOpenAI
 
@@ -70,7 +104,7 @@ async def _decompose_query(query: str) -> list[str]:
         completion = await client.chat.completions.create(  # type: ignore[call-overload]
             model=LLM_MODEL,
             messages=[
-                {"role": "system", "content": _DECOMPOSE_SYSTEM},
+                {"role": "system", "content": _DECOMPOSE_VAGUE_SYSTEM if vague else _DECOMPOSE_SYSTEM},
                 {"role": "user", "content": query},
             ],
             max_tokens=256,

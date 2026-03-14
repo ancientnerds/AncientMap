@@ -49,6 +49,7 @@ from api.services.lyra_tools import (
     TOOLS,
     _decompose_query,
     _hybrid_search,
+    _is_vague_query,
     _reorder_by_relevance,
     _semantic_dedup,
 )
@@ -56,6 +57,78 @@ from pipeline.database import get_session
 from pipeline.lyra.config import get_max_tokens
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Intent classification (keyword heuristic — no LLM call)
+# ---------------------------------------------------------------------------
+
+_INTENT_NEWS_WORDS = frozenset({
+    "recent", "new", "latest", "discovery", "update", "updates",
+    "news", "discovered", "found", "announced",
+})
+_INTENT_EXPLORE_WORDS = frozenset({
+    "interesting", "cool", "intriguing", "tell", "fascinating",
+    "notable", "exciting", "surprising", "weird", "strange",
+    "recommend", "best", "top", "favorite",
+})
+_INTENT_COMPARE_WORDS = frozenset({
+    "compare", "vs", "versus", "difference", "differences",
+    "similarities", "between",
+})
+
+_TOOL_HINTS = {
+    "news": (
+        "## Suggested tool order for this query\n"
+        "This looks like a NEWS/UPDATES query. Prioritize:\n"
+        "1. search_news — for recent discoveries and headlines\n"
+        "2. search_articles — for weekly digest analysis\n"
+        "3. search_transcripts — for expert discussions\n"
+        "Avoid: search_sites (unless you need site details for context)\n"
+    ),
+    "explore": (
+        "## Suggested tool order for this query\n"
+        "This looks like an EXPLORATORY query. Prioritize:\n"
+        "1. vector_search — for semantically relevant content\n"
+        "2. search_transcripts — for expert discussions\n"
+        "3. search_articles — for in-depth analysis\n"
+        "Avoid: search_sites (unless you need site details for context)\n"
+    ),
+    "compare": (
+        "## Suggested tool order for this query\n"
+        "This looks like a COMPARISON query. Prioritize:\n"
+        "1. vector_search — run once per entity being compared\n"
+        "2. get_site_details — for specific site data\n"
+    ),
+    "specific": (
+        "## Suggested tool order for this query\n"
+        "This looks like a SPECIFIC query about a known site or topic. Prioritize:\n"
+        "1. search_sites — find the exact site\n"
+        "2. get_site_details — get detailed information\n"
+        "3. get_site_images — get visual context\n"
+    ),
+}
+
+
+def _classify_intent(query: str) -> str:
+    """Classify query intent using keyword heuristics. Returns intent tag."""
+    words = set(query.lower().split())
+    # Check compare first (most specific)
+    if words & _INTENT_COMPARE_WORDS:
+        return "compare"
+    # Check for proper nouns (named entities) → specific query
+    has_named_entity = any(
+        w[0].isupper() and i > 0
+        for i, w in enumerate(query.split())
+        if w and w[0].isalpha()
+    )
+    if has_named_entity:
+        return "specific"
+    if words & _INTENT_NEWS_WORDS:
+        return "news"
+    if words & _INTENT_EXPLORE_WORDS:
+        return "explore"
+    return "specific"  # default: treat as focused query
 
 
 def _build_fallback_response(
@@ -137,6 +210,37 @@ def _build_synthesis_messages(
     msgs.append(HumanMessage(content="\n\n".join(user_parts)))
 
     return msgs
+
+
+# ---------------------------------------------------------------------------
+# Post-generation faithfulness gate (Option A: regex-based, zero latency)
+# ---------------------------------------------------------------------------
+
+# Patterns that indicate a sentence is grounded (cites a source)
+_GROUNDING_PATTERNS = re.compile(
+    r"according to|reports? that|mentions?|describes?|shows?|discusses?"
+    r"|footage|transcript|news item|article|channel|video|«[svlci]\d+»"
+    r"|from \w+['']s|uploaded by|published by|covered by|reported by",
+    re.IGNORECASE,
+)
+
+
+def _check_grounding(text: str) -> tuple[str, float]:
+    """Check what fraction of sentences cite a source.
+
+    Returns (possibly-prefixed text, grounding_ratio).
+    If ratio < 0.4, prepends a grounding disclaimer.
+    """
+    # Split into sentences (rough but effective)
+    sentences = [s.strip() for s in re.split(r'[.!?]+', text) if len(s.strip()) > 20]
+    if not sentences:
+        return text, 1.0
+    grounded = sum(1 for s in sentences if _GROUNDING_PATTERNS.search(s))
+    ratio = grounded / len(sentences)
+    if ratio < 0.4:
+        logger.info(f"Low grounding ratio: {ratio:.2f} ({grounded}/{len(sentences)} sentences)")
+        text = "Based on available sources: " + text
+    return text, ratio
 
 
 def _parse_structured_output(
@@ -762,10 +866,15 @@ def _build_messages(
             if prebuilt_context_prompt is not None
             else _build_context_prompt(context_type, context_id, context_year)
         )
+        # Intent-based tool priority hint (injected before tool list)
+        intent = _classify_intent(message)
+        tool_hint = _TOOL_HINTS.get(intent, "")
+        if tool_hint:
+            tool_hint = "\n\n" + tool_hint
         if context_type == "empire":
-            system_text = LYRA_SYSTEM_PROMPT + retrieved_context + context_prompt
+            system_text = LYRA_SYSTEM_PROMPT + tool_hint + retrieved_context + context_prompt
         else:
-            system_text = LYRA_SYSTEM_PROMPT + context_prompt + retrieved_context
+            system_text = LYRA_SYSTEM_PROMPT + tool_hint + context_prompt + retrieved_context
     messages: list[BaseMessage] = [SystemMessage(content=system_text)]
 
     # Add conversation history (validated: role whitelist + content length cap)
@@ -893,12 +1002,14 @@ async def run_agent_stream(
         # then pass sub-queries to _auto_retrieve() in a thread.
         use_filter_extraction = ctx.backend_type != "local"
         # Skip decomposition for simple queries — saves 1-3s + Mercury tokens.
-        # Only decompose when conjunctions/comparisons suggest multiple sub-topics.
+        # Decompose when conjunctions/comparisons suggest multiple sub-topics,
+        # OR when the query is vague/exploratory and needs expansion.
         _needs_decomp = any(
             w in message.lower()
             for w in (" and ", " or ", " vs ", " versus ", " compare", " compared to ")
         )
-        use_decomposition = ctx.backend_type != "local" and _needs_decomp
+        _is_vague = _is_vague_query(message)
+        use_decomposition = ctx.backend_type != "local" and (_needs_decomp or _is_vague)
 
         yield {
             "type": "pipeline",
@@ -923,7 +1034,7 @@ async def run_agent_stream(
 
         if use_decomposition and use_filter_extraction:
             decomp_raw, filter_raw = await asyncio.gather(
-                _decompose_query(message),
+                _decompose_query(message, vague=_is_vague),
                 _extract_news_filters(message),
                 return_exceptions=True,
             )
@@ -938,7 +1049,7 @@ async def run_agent_stream(
             filters_or_exc = filter_raw
         elif use_decomposition:
             try:
-                sub_queries = await _decompose_query(message)
+                sub_queries = await _decompose_query(message, vague=_is_vague)
                 if len(sub_queries) > 1:
                     logger.info(
                         f"Decomposed query into {len(sub_queries)} sub-queries: {sub_queries}"
@@ -1361,6 +1472,7 @@ async def run_agent_stream(
                             collected_content = clean_response_text(raw)
                     # Emit clean text directly (no diffusion simulation)
                     if collected_content.strip():
+                        collected_content, _grounding = _check_grounding(collected_content)
                         _text_emitted = True
                         yield {"type": "diffusion", "content": collected_content}
         else:
@@ -1763,6 +1875,8 @@ async def run_agent_stream(
                 if so_data is not None:
                     _structured_output = so_data
                 if text_out.strip():
+                    # Faithfulness gate: check grounding ratio
+                    text_out, _grounding = _check_grounding(text_out)
                     yield {"type": "diffusion", "content": text_out}
                     _synthesis_ok = True
                 else:
