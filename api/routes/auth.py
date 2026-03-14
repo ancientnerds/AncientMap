@@ -465,50 +465,54 @@ async def discord_oauth_callback(
                     return RedirectResponse(url="/account.html?error=not_in_guild")
 
     # Upsert user in database
-    with get_session() as session:
-        user = (
-            session.query(DiscordUser)
-            .filter(DiscordUser.discord_id == discord_id)
-            .with_for_update()
-            .first()
-        )
-        if user:
-            # Detect newly gained patron roles → reset anchor so no backdated credits
-            old_roles = set(user.roles or [])
-            new_roles = set(roles)
-            patron_role_ids = {
-                PATRON_EXPLORER_ROLE_ID,
-                PATRON_ARCHAEOLOGIST_ROLE_ID,
-                PATRON_SCHOLAR_ROLE_ID,
-            }
-            newly_gained_patron = (new_roles & patron_role_ids) - (old_roles & patron_role_ids)
-            if newly_gained_patron:
-                user.grant_anchor_date = datetime.now(UTC)
-
-            user.username = username
-            user.avatar_hash = avatar_hash
-            user.roles = roles
-            user.last_login = datetime.now(UTC)
-        else:
-            user = DiscordUser(
-                discord_id=discord_id,
-                username=username,
-                avatar_hash=avatar_hash,
-                roles=roles,
-                credits=0,
+    try:
+        with get_session() as session:
+            user = (
+                session.query(DiscordUser)
+                .filter(DiscordUser.discord_id == discord_id)
+                .with_for_update()
+                .first()
             )
-            session.add(user)
-            session.flush()  # Get the user ID
+            if user:
+                # Detect newly gained patron roles → reset anchor so no backdated credits
+                old_roles = set(user.roles or [])
+                new_roles = set(roles)
+                patron_role_ids = {
+                    PATRON_EXPLORER_ROLE_ID,
+                    PATRON_ARCHAEOLOGIST_ROLE_ID,
+                    PATRON_SCHOLAR_ROLE_ID,
+                }
+                newly_gained_patron = (new_roles & patron_role_ids) - (old_roles & patron_role_ids)
+                if newly_gained_patron:
+                    user.grant_anchor_date = datetime.now(UTC)
 
-        # Evaluate and apply credit grants for all roles
-        process_credit_grants(session, user)
+                user.username = username
+                user.avatar_hash = avatar_hash
+                user.roles = roles
+                user.last_login = datetime.now(UTC)
+            else:
+                user = DiscordUser(
+                    discord_id=discord_id,
+                    username=username,
+                    avatar_hash=avatar_hash,
+                    roles=roles,
+                    credits=0,
+                )
+                session.add(user)
+                session.flush()  # Get the user ID
 
-        # Check login achievement
-        from api.cardgame.achievements import check_achievements
+            # Evaluate and apply credit grants for all roles
+            process_credit_grants(session, user)
 
-        check_achievements(session, user.id, "login")
+            # Check login achievement
+            from api.cardgame.achievements import check_achievements
 
-        jwt_token = create_token(str(user.id), discord_id)
+            check_achievements(session, user.id, "login")
+
+            jwt_token = create_token(str(user.id), discord_id)
+    except Exception:
+        logger.exception(f"Discord callback DB error for {discord_id} ({username})")
+        return RedirectResponse(url="/account.html?error=server_error")
 
     response = RedirectResponse(url=return_to)
     response.set_cookie(
