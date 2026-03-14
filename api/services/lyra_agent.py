@@ -1162,6 +1162,8 @@ async def run_agent_stream(
     _text_emitted = False
     # Phase 2: collect raw tool results for synthesis
     raw_tool_results: list[str] = []
+    # Duplicate tool call detection: "name::args_json" → result
+    _executed_tool_cache: dict[str, str] = {}
 
     for _round in range(max_tool_rounds):
         # Inject round awareness so the LLM knows how many rounds remain
@@ -1226,6 +1228,10 @@ async def run_agent_stream(
         collected_content = ""
         tool_calls = []
 
+        # Hard tool cutoff: after round 3 or 3+ tool calls, stop offering tools
+        # entirely so the LLM MUST answer (prompt-level enforcement is unreliable)
+        _offer_tools = ctx.supports_tools and _round < 3 and tool_calls_made < 3
+
         # Mercury: single non-streaming call with tools + structured output
         if ctx.backend_type == "mercury":
             # Retry up to 2 times for transient Mercury errors
@@ -1236,7 +1242,7 @@ async def run_agent_stream(
                 try:
                     result = await backend_impl.generate(
                         messages,
-                        tools=TOOLS if ctx.supports_tools else None,
+                        tools=TOOLS if _offer_tools else None,
                         response_format=LYRA_RESPONSE_SCHEMA,
                         max_tokens=16384,
                     )
@@ -1315,7 +1321,7 @@ async def run_agent_stream(
             async for ev in _stream_with_heartbeat(
                 backend_impl,
                 messages,
-                TOOLS if ctx.supports_tools else [],
+                TOOLS if _offer_tools else [],
                 enable_thinking=ctx.supports_thinking,
             ):
                 if ev["type"] == "heartbeat":
@@ -1396,6 +1402,28 @@ async def run_agent_stream(
                 else:
                     tool_args = {}
 
+                # Duplicate detection: skip if same tool+args already executed
+                _dedup_key = f"{tc['name']}::{json.dumps(tool_args, sort_keys=True)}"
+                if _dedup_key in _executed_tool_cache:
+                    logger.info(f"Duplicate tool call skipped: {tc['name']}")
+                    messages.append(
+                        ToolMessage(
+                            content=(
+                                "DUPLICATE: Already searched with these exact parameters. "
+                                "Use the results already provided. Do NOT search again."
+                            ),
+                            tool_call_id=str(tc["id"]),
+                        )
+                    )
+                    yield {
+                        "type": "pipeline",
+                        "stage": "tool_call",
+                        "status": "done",
+                        "duration_ms": 0,
+                        "meta": {"tool": str(tc["name"]), "duplicate": True},
+                    }
+                    continue
+
                 # Summarize args for the pipeline panel (strip verbose fields)
                 _args_summary: dict = {}
                 for k, v in tool_args.items():
@@ -1412,6 +1440,7 @@ async def run_agent_stream(
                     "meta": {"tool": str(tc["name"]), "args": _args_summary},
                 }
                 result = tool_fn.invoke(tool_args)
+                _executed_tool_cache[_dedup_key] = result
                 tool_calls_made += 1
 
                 # Collect raw result for Phase 2 synthesis
