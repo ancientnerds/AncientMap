@@ -830,8 +830,12 @@ async def export_file_snapshot_endpoint(
     """Create a file snapshot of the current DB state (founders only)."""
     from api.services.snapshots import export_file_snapshot
 
-    snapshot_key = export_file_snapshot(db)
-    return {"snapshot_key": snapshot_key}
+    try:
+        snapshot_key = export_file_snapshot(db)
+        return {"snapshot_key": snapshot_key}
+    except Exception as e:
+        logger.error("Snapshot export failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Snapshot export failed: {e}")
 
 
 @router.get("/snapshots/{snapshot_id}/preview")
