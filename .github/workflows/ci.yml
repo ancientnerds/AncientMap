@@ -289,3 +289,46 @@ jobs:
             fi
             echo "==> Deploy complete!"
             exit 0'
+
+  daily-release:
+    name: Daily Release Tag
+    runs-on: ubuntu-latest
+    needs: [deploy]
+    if: needs.deploy.result == 'success'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Auto-tag daily patch release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get latest tag (e.g. v1.1.0)
+          LATEST=$(git tag --sort=-v:refname | head -1)
+          if [ -z "$LATEST" ]; then
+            echo "No existing tags, skipping"
+            exit 0
+          fi
+
+          # Check if this tag was already created today
+          TAG_DATE=$(git log -1 --format=%cd --date=short "$LATEST" 2>/dev/null || echo "")
+          TODAY=$(date -u +%Y-%m-%d)
+          if [ "$TAG_DATE" = "$TODAY" ]; then
+            echo "Already tagged today ($LATEST), skipping"
+            exit 0
+          fi
+
+          # Bump patch: v1.1.0 → v1.1.1
+          MAJOR=$(echo "$LATEST" | sed 's/^v//' | cut -d. -f1)
+          MINOR=$(echo "$LATEST" | sed 's/^v//' | cut -d. -f2)
+          PATCH=$(echo "$LATEST" | sed 's/^v//' | cut -d. -f3)
+          NEW_PATCH=$((PATCH + 1))
+          NEW_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+
+          echo "Tagging $NEW_TAG (previous: $LATEST)"
+          git tag -a "$NEW_TAG" -m "$NEW_TAG"
+          git push origin "$NEW_TAG"
+          gh release create "$NEW_TAG" --title "$NEW_TAG" --generate-notes --latest
