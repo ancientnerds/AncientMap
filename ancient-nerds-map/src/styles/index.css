@@ -3974,6 +3974,7 @@ body.screenshot-mode .screenshot-mode-buttons {
   flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
+  background: rgb(0, 15, 20);
 }
 
 .popup-body {
@@ -17995,6 +17996,9 @@ div.lyra-inline-video-wrap {
 }
 
 /* Body area */
+.popup-content-side {
+  background: var(--surface-page);
+}
 .popup-body {
   background: var(--surface-page);
 }
