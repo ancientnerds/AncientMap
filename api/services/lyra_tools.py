@@ -180,43 +180,46 @@ def search_sites(
 
     if query:
         conditions.append(
-            "(name ILIKE :q OR description ILIKE :q OR name_normalized ILIKE :q_norm)"
+            "(s.name ILIKE :q OR s.description ILIKE :q OR s.name_normalized ILIKE :q_norm)"
         )
         q_safe = _escape_ilike(query)
         params["q"] = f"%{q_safe}%"
         params["q_norm"] = f"%{q_safe.lower()}%"
 
     if period:
-        conditions.append("period_name ILIKE :period")
+        conditions.append("s.period_name ILIKE :period")
         params["period"] = f"%{_escape_ilike(period)}%"
 
     if country:
-        conditions.append("country ILIKE :country")
+        conditions.append("s.country ILIKE :country")
         params["country"] = f"%{_escape_ilike(country)}%"
 
     if site_type:
-        conditions.append("site_type ILIKE :site_type")
+        conditions.append("s.site_type ILIKE :site_type")
         params["site_type"] = f"%{_escape_ilike(site_type)}%"
 
     where = " AND ".join(conditions)
     sql = f"""
-        SELECT id::text, name, lat, lon, site_type, period_name, period_start,
-               country, description, thumbnail_url
-        FROM unified_sites
+        SELECT s.id::text, s.name, s.lat, s.lon, s.site_type, s.period_name,
+               s.period_start, s.country, s.description, s.thumbnail_url
+        FROM unified_sites s
+        LEFT JOIN source_meta sm ON s.source_id = sm.id
         WHERE {where}
         ORDER BY
-            CASE WHEN name ILIKE :q THEN 0 ELSE 1 END,
-            period_start ASC NULLS LAST
+            CASE WHEN s.name ILIKE :q THEN 0 ELSE 1 END,
+            sm.priority ASC NULLS LAST,
+            s.period_start ASC NULLS LAST
         LIMIT :limit
     """
     # If no query provided, don't use the ordering by name match
     if not query:
         sql = f"""
-            SELECT id::text, name, lat, lon, site_type, period_name, period_start,
-                   country, description, thumbnail_url
-            FROM unified_sites
+            SELECT s.id::text, s.name, s.lat, s.lon, s.site_type, s.period_name,
+                   s.period_start, s.country, s.description, s.thumbnail_url
+            FROM unified_sites s
+            LEFT JOIN source_meta sm ON s.source_id = sm.id
             WHERE {where}
-            ORDER BY period_start ASC NULLS LAST
+            ORDER BY sm.priority ASC NULLS LAST, s.period_start ASC NULLS LAST
             LIMIT :limit
         """
 
@@ -243,6 +246,16 @@ def search_sites(
         if r.description:
             site["description"] = r.description[:400]
         sites.append(site)
+
+    # Deduplicate by name (keep first = highest-priority source)
+    seen_names: set[str] = set()
+    deduped: list[dict] = []
+    for site in sites:
+        norm = site["name"].lower().strip()
+        if norm not in seen_names:
+            seen_names.add(norm)
+            deduped.append(site)
+    sites = deduped
 
     return json.dumps(sites, ensure_ascii=False)
 
@@ -277,13 +290,16 @@ def get_site_details(site_id: str) -> str:
         find_params = {"site_id": site_id}
     else:
         # Name/slug lookup: replace hyphens with spaces, try exact match first (fast)
+        # JOIN source_meta to prefer rich sources (ancient_nerds priority=0) over bare OSM rows
         search_name = site_id.replace("-", " ").replace("_", " ").strip()
         find_sql = """
             SELECT s.id::text, s.name, s.lat, s.lon, s.site_type, s.period_name,
                    s.period_start, s.period_end, s.country, s.description,
                    s.source_url, s.source_id, s.thumbnail_url
             FROM unified_sites s
+            LEFT JOIN source_meta sm ON s.source_id = sm.id
             WHERE lower(s.name) = lower(:name)
+            ORDER BY sm.priority ASC NULLS LAST
             LIMIT 1
         """
         find_params = {"name": search_name}

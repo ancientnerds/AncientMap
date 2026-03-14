@@ -373,6 +373,32 @@ def _auto_retrieve(
             lines.append(line)
         context_parts.append("### Related News (semantic)\n" + "\n".join(lines))
 
+    # --- Transcripts collection (semantic transcript retrieval) ---
+    seen_transcript_keys: set[str] = set()
+    transcript_chunks: list[dict] = []
+    for sub_q in queries:
+        t_raw, vt = _hybrid_search(sub_q, collection="transcripts", limit=3)
+        total_voyage_tokens += vt
+        for r in t_raw:
+            key = f"{r.get('video_id', '')}::{r.get('start_seconds', 0)}"
+            if key not in seen_transcript_keys:
+                seen_transcript_keys.add(key)
+                transcript_chunks.append(r)
+    if transcript_chunks:
+        transcript_chunks = _semantic_dedup(transcript_chunks, text_key="text_preview")
+        lines = []
+        for r in transcript_chunks:
+            ch = r.get("channel", "")
+            title = r.get("video_title", "")
+            vid = r.get("video_id", "")
+            start = int(r.get("start_seconds", 0))
+            preview = r.get("text_preview", "")[:300]
+            line = f'- **{ch}** — "{title}" (video_id: {vid}, at {start}s)'
+            if preview:
+                line += f"\n  > {preview}"
+            lines.append(line)
+        context_parts.append("### Transcript Passages\n" + "\n".join(lines))
+
     if not context_parts:
         return "", [], [], None, total_voyage_tokens
 
@@ -1046,6 +1072,23 @@ async def run_agent_stream(
                     line += f" [youtube: {n['video_id']}]"
                 news_lines.append(line)
             retrieved_context += "\n\n### Related News\n" + "\n".join(news_lines) + "\n"
+
+        # Anti-redundancy summary: tell the LLM what NOT to re-search
+        if auto_site_results or all_news:
+            summary_parts = []
+            if auto_site_results:
+                names = [s.get("name", "?") for s in auto_site_results[:5]]
+                summary_parts.append(f"sites: {', '.join(names)}")
+            if all_news:
+                headlines = [n.get("headline", "?") for n in all_news[:3]]
+                summary_parts.append(f"news: {', '.join(headlines)}")
+            retrieved_context += (
+                "\n\n### DO NOT RE-SEARCH\n"
+                "The above data was ALREADY retrieved. "
+                "Do NOT call get_site_details, search_sites, or search_news "
+                "for these same items. Only call tools for DIFFERENT data.\n"
+                f"Already have: {'; '.join(summary_parts)}\n"
+            )
     else:
         # Empire context — skip retrieval, filter extraction, and news augmentation
         yield {
@@ -1122,7 +1165,7 @@ async def run_agent_stream(
 
     for _round in range(max_tool_rounds):
         # Inject round awareness so the LLM knows how many rounds remain
-        if _round >= 2 and tool_calls_made > 0:
+        if _round >= 1 and tool_calls_made > 0:
             remaining = max_tool_rounds - _round
             if remaining <= 1:
                 # Last retrieval round — stop calling tools so Phase 2 can synthesize
@@ -1136,13 +1179,37 @@ async def run_agent_stream(
                         )
                     )
                 )
+            elif _round == 1:
+                messages.append(
+                    SystemMessage(
+                        content=(
+                            f"[Round {_round + 1}/{max_tool_rounds} — "
+                            f"{tool_calls_made} tool calls used so far] "
+                            "Prioritize answering over searching. Auto-retrieved context "
+                            "already has sites, news, and transcripts — only call tools "
+                            "for MISSING data."
+                        )
+                    )
+                )
+            elif _round == 2:
+                messages.append(
+                    SystemMessage(
+                        content=(
+                            f"[Round {_round + 1}/{max_tool_rounds} — "
+                            f"{tool_calls_made} tool calls used so far] "
+                            "You MUST answer now unless absolutely critical info is missing. "
+                            "Do NOT repeat searches or search for things in auto-retrieved context."
+                        )
+                    )
+                )
             else:
                 messages.append(
                     SystemMessage(
                         content=(
                             f"[Round {_round + 1}/{max_tool_rounds} — {remaining} round(s) left, "
                             f"{tool_calls_made} tool calls used so far] "
-                            "Answer with what you have unless critical info is still missing."
+                            "STOP calling tools. You have enough data. "
+                            "A dedicated synthesis step will generate the answer."
                         )
                     )
                 )
