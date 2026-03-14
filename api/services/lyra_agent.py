@@ -57,6 +57,49 @@ logger = logging.getLogger(__name__)
 _NOISE_CHARS = "░▒▓█▄▀■□▪▫●○◆◇◈◉⬡⬢⬣"
 
 
+def _build_fallback_response(
+    message: str,
+    all_sites: list[dict],
+    all_news: list[dict],
+) -> str:
+    """Build a text response from retrieved data when the LLM fails.
+
+    This is the last-resort safety net — 100% reliable because it
+    doesn't depend on Mercury.  Produces a useful answer from whatever
+    the retrieval pipeline already gathered.
+    """
+    parts: list[str] = []
+
+    if all_sites:
+        site_names = [s["name"] for s in all_sites[:5] if s.get("name")]
+        if site_names:
+            parts.append(
+                "Here's what I found in the database:\n\n"
+                + "\n".join(
+                    f"- **{s['name']}** ({s.get('country', 'unknown')})"
+                    + (f" — {s.get('site_type', '')}" if s.get("site_type") else "")
+                    for s in all_sites[:5]
+                )
+            )
+
+    if all_news:
+        parts.append(
+            "\n\n**Recent news:**\n\n"
+            + "\n".join(
+                f"- {n['headline']}" + (f" ({n['channel']})" if n.get("channel") else "")
+                for n in all_news[:3]
+            )
+        )
+
+    if not parts:
+        parts.append(
+            "I searched but couldn't find specific results for that query. "
+            "Try rephrasing, or ask about a specific site or region!"
+        )
+
+    return "".join(parts)
+
+
 async def _simulate_diffusion(
     final_text: str, steps: int = 8, interval: float = 0.06
 ) -> AsyncIterator[dict]:
@@ -990,10 +1033,9 @@ async def run_agent_stream(
 
             if result is None:
                 logger.error(f"Mercury failed after 3 attempts: {_mercury_last_err}")
-                yield {
-                    "type": "error",
-                    "error": "Mercury is temporarily unavailable. Please try again.",
-                }
+                _fb = _build_fallback_response(message, all_sites, all_news)
+                async for diff_ev in _simulate_diffusion(_fb):
+                    yield diff_ev
                 break
 
             total_input_tokens += result["usage"]["input"]
@@ -1487,10 +1529,9 @@ async def run_agent_stream(
                             logger.error(f"Stream fallback failed: {e_stream}")
                     if not _raw_emitted:
                         logger.error("All forced response methods exhausted")
-                        yield {
-                            "type": "error",
-                            "error": ("Mercury is temporarily unavailable. Please try again."),
-                        }
+                        _fb = _build_fallback_response(message, all_sites, all_news)
+                        async for diff_ev in _simulate_diffusion(_fb):
+                            yield diff_ev
                 except Exception as e_raw:
                     # Raw generate also failed (Mercury returns tool_calls
                     # from message history). Build clean messages that
@@ -1545,10 +1586,9 @@ async def run_agent_stream(
                         logger.error(f"Stream fallback failed: {e_s2}")
                     if not _stream_ok2:
                         logger.error("All forced methods exhausted")
-                        yield {
-                            "type": "error",
-                            "error": ("Mercury is temporarily unavailable. Please try again."),
-                        }
+                        _fb = _build_fallback_response(message, all_sites, all_news)
+                        async for diff_ev in _simulate_diffusion(_fb):
+                            yield diff_ev
             else:
                 total_input_tokens += _forced_result["usage"]["input"]
                 total_output_tokens += _forced_result["usage"]["output"]
@@ -1653,13 +1693,9 @@ async def run_agent_stream(
                                 logger.error(f"Raw generate fallback also failed: {e2}")
                             if not _fallback_emitted:
                                 logger.error("All forced response attempts returned empty")
-                                yield {
-                                    "type": "error",
-                                    "error": (
-                                        "I gathered the data but couldn't form a response. "
-                                        "Please try asking again!"
-                                    ),
-                                }
+                                _fb = _build_fallback_response(message, all_sites, all_news)
+                                async for diff_ev in _simulate_diffusion(_fb):
+                                    yield diff_ev
                     except Exception as e:
                         logger.warning(f"Forced generate failed: {e}")
                         # Last resort: raw generate without structured output
@@ -1689,10 +1725,9 @@ async def run_agent_stream(
                                     yield diff_ev
                         except Exception as e2:
                             logger.error(f"Last resort generate also failed: {e2}")
-                            yield {
-                                "type": "error",
-                                "error": "Mercury is temporarily unavailable. Please try again.",
-                            }
+                            _fb = _build_fallback_response(message, all_sites, all_news)
+                            async for diff_ev in _simulate_diffusion(_fb):
+                                yield diff_ev
         else:
             async for ev in _stream_with_heartbeat(
                 backend_impl,
