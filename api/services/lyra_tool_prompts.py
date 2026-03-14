@@ -7,6 +7,7 @@ exactly which guillemet markers to create and how to map fields.
 
 # Shared instruction appended to ALL tool results
 _SHARED_SUFFIX = """
+GROUNDING: Base your answer on THESE results. Quote and attribute. Do NOT add information not present here.
 FORMATTING RULES:
 - Do NOT prefix markers with labels like "Video:", "Link:", "Koordinaten:", "Land:" — markers render as interactive UI elements, labels are redundant.
 - Do NOT create «lN» link markers for videos that already have «vN» markers — the video embed already links to YouTube.
@@ -22,6 +23,7 @@ INSTRUCTION: Results are archaeological sites. For each site you reference in yo
 - If you mention coordinates, create «cN» with lat/lon from the result
 - If result has a country, you may create «fN» with country name and ISO code
 - ONLY use site IDs from these results. NEVER fabricate UUIDs.
+- Use site data as-is. Do NOT add descriptions, dates, or details not present in these results.
 """,
     "get_site_details": """
 INSTRUCTION: Detailed site data. Create a «sN» marker for this site:
@@ -40,6 +42,7 @@ INSTRUCTION: News items from YouTube archaeology channels. For each news item yo
 - Do NOT create «lN» links for the same video — the «vN» marker already embeds the video.
 - If result mentions a site_mentioned, create «sN» only if you also have the site's UUID from another tool
 - NEVER fabricate video_ids. Only use video_ids from these results.
+- Reference these news items by channel and headline. Do NOT fabricate news not in these results.
 """,
     "get_empire_data": """
 INSTRUCTION: Seshat historical polity data. Create an «eN» marker:
@@ -56,6 +59,7 @@ INSTRUCTION: Semantic search results. The collection searched determines what ma
 - collection="articles" -> cite in text, no special marker needed unless an article references a specific site
 - collection="empires" -> create «eN» with marker, name, polity_id
 ALWAYS check which collection was searched and create the appropriate marker type.
+These are semantic matches. Use them as data — do NOT embellish with training knowledge.
 """,
     "search_radar": """
 INSTRUCTION: Lyra-discovered archaeological sites. For each discovery you mention:
@@ -83,6 +87,7 @@ INSTRUCTION: Video transcript excerpts with timestamps. For each transcript pass
 - Map: marker="vN", channel=result channel, video_id=result video_id, timestamp_seconds=start_seconds
 - Quote relevant text from the passage in your response
 - Do NOT create «lN» links for the same video — the «vN» marker already embeds the video.
+- Quote directly where relevant. Attribute each claim to its source (channel name + video title). Do NOT add information not present in these transcripts.
 """,
     "search_articles": """
 INSTRUCTION: Weekly digest article passages. For each article passage:

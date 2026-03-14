@@ -6,7 +6,7 @@ All 3 sources are covered:
 
 | source_id | Name | ~Sites | Role |
 |-----------|------|--------|------|
-| `ancient_nerds` | Originals | 5,005 | Core curated sites. Full audit + enrichment + card descriptions. |
+| `ancient_nerds` | Originals | 4,995 | Core curated sites. Full audit + enrichment + card descriptions. |
 | `lyra` | Radar | varies | Pipeline-discovered sites. Enrich + verify. Stay in their DB. |
 | `ancient_nerds_community` | Community | varies | User submissions. Enrich + verify. Stay in their DB. |
 
@@ -598,6 +598,56 @@ These are explicit "do NOT" rules:
 14. **Do NOT overwrite user-edited values without a conditional WHERE clause.** See "Protecting User Edits" section.
 15. **Do NOT add a site type to one canonical source without the other.** `CANONICAL_TYPES` in `pipeline/normalizers/site_type.py` and `CATEGORY_COLORS` in `ancient-nerds-map/src/constants/colors.ts` must stay in sync.
 16. **Do NOT trust base-article QIDs for fragment Wikipedia URLs.** A `source_url` like `https://en.wikipedia.org/wiki/Giza_pyramid_complex#Osiris_Shaft` refers to the Osiris Shaft, not the Giza pyramid complex. `enrich_reconcile.py` handles this automatically via fragment-aware resolution, but if manually fixing a site's `source_url` or `best_wiki_url`, always check whether a dedicated article exists for the fragment subject (possibly in another language).
+17. **Do NOT accept QIDs that match generic concepts instead of specific sites.** Wikidata reconciliation can match "Roman aqueduct" (the class) instead of a specific aqueduct, or "Rock-cut tomb" (the type) instead of specific tombs. Always verify the QID refers to the actual site, not its *type*.
+18. **Do NOT assume same-name villages/towns are the same site.** Common place names (Belören, Peregonivka, Louisville, El Cedral, Lamay) exist in multiple countries/regions. Coordinates and description can refer to two completely different places 600+ km apart. Cross-reference coordinates against description text.
+19. **Do NOT keep fringe/pseudoarchaeological entries without peer-reviewed support.** If claims are published only in predatory journals (SCIRP, Lambert Academic Publishing) and rejected by official government commissions, the entry should be deleted or clearly flagged. Check Beall's List / Cabells for publisher credibility.
+20. **Do NOT accept `source_url` values that are coordinates, double URLs, or blog posts without checking.** The `source_url` field sometimes contains GPS coordinates (`47.56, 19.04`), two URLs separated by spaces, or WordPress blogs. Validate format during audits.
+21. **Do NOT confuse adjacent sites.** Hotels, museums, and modern buildings near archaeological sites can get conflated with the site itself (e.g., Zenobia Hotel ↔ Temple of Baalshamin, Paracas History Museum ↔ Paracas culture sites). Verify the entry represents the archaeological feature, not a nearby modern structure.
+22. **Do NOT include geological formations, paleontological sites, or national parks as archaeological sites.** Natural rock formations (sandstone weathering, flatirons), fossil localities (Miocene fauna), and national parks with modern founding dates are not archaeological. Mark `available = False` or delete.
+
+---
+
+## Manual Review Workflow (Post-Agent)
+
+After Wave 2 agents complete, some items get flagged `MANUAL_REVIEW`. These are sites where agents couldn't resolve issues automatically. The manual review pass follows this procedure:
+
+### Triage Categories
+
+| Category | Action | Example |
+|----------|--------|---------|
+| **Not archaeological** | DELETE (targeted, with `source_id` filter) | Geological formations, modern museums, national parks, paleontological sites |
+| **Pseudoarchaeology** | Keep with `site_type = 'Geological interest'` OR delete if no scholarly support | Bosnian pyramids (keep), Columbário Fenício (delete) |
+| **Wrong QID** | Research correct QID via Wikidata/Wikipedia, or NULL | QID matching generic concept, wrong location, wrong entity |
+| **Data conflation** | Determine which site the coordinates represent, rewrite description | Two villages with same name in different provinces |
+| **Wrong period** | Research with academic sources, fix or leave NULL | Medieval statue dated to 3000 BC, rock tombs dated to 7000 BC |
+| **Bad source_url** | Replace with Wikipedia/academic URL | Coordinates-as-URL, double URLs, dead links |
+| **Duplicate** | Compare descriptions, keep the better one, delete the other | Same QID, ~identical coordinates, different spelling |
+
+### Research Agent Strategy
+
+For batches of 10-50 sites needing research:
+1. **Group by issue type** (wrong QIDs, missing periods, etc.) — not by geography
+2. **Launch 3-5 parallel agents**, each handling 10-15 sites
+3. **Include in each agent prompt**: site_id, name, current data, specific issue, expected output format
+4. **Apply high-confidence fixes directly**, present medium-confidence to user, skip low-confidence
+5. **For stubborn items**: re-dispatch dedicated deep-dive agents with more specific search terms (researcher name, local-language queries, cultural inventory databases like kulturenvanteri.com)
+
+### Lessons from First Manual Review (March 2026, 742 items)
+
+**What worked well:**
+- Parallel agents (3-5) cut research time from hours to ~7 minutes per batch
+- Structured JSON output format made applying fixes mechanical
+- Deep-dive agents with specific search terms found answers that first-pass agents missed (e.g., Daniel Castillo Benitez for Carachupa, Trebendai identification for Belören)
+
+**Common issue patterns found:**
+- ~28 wrong QIDs (most matched the wrong entity: generic type, nearby town, or different country)
+- ~9 missing periods (most in Peru/Turkey — regions with limited English-language academic coverage)
+- ~8 non-archaeological entries that slipped through ingestion (geological, museums, parks)
+- ~2 data conflations (same village name in different provinces)
+- ~1 entry conflating 3 unrelated things (hotel + Dead Cities + temple)
+- ~1 fringe archaeology entry (predatory journal publications)
+
+**Key insight: QIDs for sub-sites rarely exist on Wikidata.** Individual gates, specific tombs within a necropolis, stelae fields, and architectural sub-groups of larger complexes almost never have dedicated QIDs. Set to NULL rather than using the parent site's QID, which creates false matches.
 
 ---
 
