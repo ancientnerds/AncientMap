@@ -1044,16 +1044,17 @@ async def run_agent_stream(
             "meta": {"count": len(all_news)},
         }
 
-        # Reference news in LLM context without duplicating full content
-        # (news is already sent to the frontend sidebar — M3: avoid bloating LLM context)
+        # Add news to retrieved context so the LLM can reference them
         if all_news:
-            headlines = [n.get("headline", "?") for n in all_news[:5]]
-            retrieved_context += (
-                f"\n\n### Related News ({len(all_news)} items in sidebar)\n"
-                f"Headlines: {'; '.join(headlines)}\n"
-                "The user can see full news details in the sidebar. "
-                "Reference headlines naturally but don't repeat full summaries.\n"
-            )
+            news_lines = []
+            for n in all_news:
+                line = f"- **{n['headline']}** (from {n['channel']})"
+                if n.get("summary"):
+                    line += f" — {n['summary'][:150]}"
+                if n.get("video_id"):
+                    line += f" [youtube: {n['video_id']}]"
+                news_lines.append(line)
+            retrieved_context += "\n\n### Related News\n" + "\n".join(news_lines) + "\n"
 
         # Anti-redundancy summary: tell the LLM what NOT to re-search
         if auto_site_results or all_news:
@@ -1198,6 +1199,22 @@ async def run_agent_stream(
                     )
                 )
 
+        # Hard tool cutoff: after round 3 or 3+ tool calls, stop offering tools
+        # entirely so the LLM MUST answer (prompt-level enforcement is unreliable)
+        _offer_tools = ctx.supports_tools and _round < 3 and tool_calls_made < 3
+
+        # If tools are cut off and we already have tool results, skip straight
+        # to Phase 2 synthesis — no point calling Mercury just to discard the result
+        if not _offer_tools and tool_calls_made > 0 and ctx.backend_type == "mercury":
+            yield {
+                "type": "pipeline",
+                "stage": "llm_round",
+                "status": "skip",
+                "duration_ms": 0,
+                "meta": {"round": _round + 1, "reason": "tools_exhausted"},
+            }
+            break
+
         yield {
             "type": "pipeline",
             "stage": "llm_round",
@@ -1209,15 +1226,6 @@ async def run_agent_stream(
         _round_tokens_before = total_input_tokens + total_output_tokens
         collected_content = ""
         tool_calls = []
-
-        # Hard tool cutoff: after round 3 or 3+ tool calls, stop offering tools
-        # entirely so the LLM MUST answer (prompt-level enforcement is unreliable)
-        _offer_tools = ctx.supports_tools and _round < 3 and tool_calls_made < 3
-
-        # If tools are cut off and we already have tool results, skip straight
-        # to Phase 2 synthesis — no point calling Mercury just to discard the result
-        if not _offer_tools and tool_calls_made > 0 and ctx.backend_type == "mercury":
-            break
 
         # Mercury: single non-streaming call with tools + structured output
         if ctx.backend_type == "mercury":
