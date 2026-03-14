@@ -1455,8 +1455,8 @@ export default function DbAuditPage() {
         )}
       </PageHeader>
 
-      {/* Snapshot version panel — only when a specific source is selected */}
-      {snapshots.length > 0 && sourceFilter !== 'all' && (
+      {/* Snapshot version panel — always visible when a specific source is selected */}
+      {sourceFilter !== 'all' && (
         <div className="db-version-panel">
           <div className="db-version-panel-header">
             <span className="db-version-panel-label">Database Snapshots</span>
