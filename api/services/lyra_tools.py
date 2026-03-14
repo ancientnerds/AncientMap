@@ -676,7 +676,27 @@ def _hybrid_search(
     Uses contextvars to determine which collection set and embedding backend to use.
     Returns tuple of (list of payload dicts with relevance scores, embed tokens used).
     Used by both _auto_retrieve() and the vector_search tool.
+
+    R1: Catches all exceptions so Qdrant/Voyage failures don't crash the entire request.
+    R2: Falls back to BM25-only if embedding fails.
     """
+    try:
+        return _hybrid_search_inner(query, collection, limit, country, period, site_type, channel)
+    except Exception as exc:
+        logger.error(f"Hybrid search failed (collection={collection}): {exc}")
+        return [], 0
+
+
+def _hybrid_search_inner(
+    query: str,
+    collection: str,
+    limit: int,
+    country: str | None,
+    period: str | None,
+    site_type: str | None,
+    channel: str | None,
+) -> tuple[list[dict], int]:
+    """Inner implementation of hybrid search (separated for clean error handling)."""
     from qdrant_client import models
 
     from api.services.lyra_embeddings import (
@@ -695,9 +715,14 @@ def _hybrid_search(
     client = get_qdrant_client()
 
     # Step 1: Embed query \u2014 dense (voyage-4) + sparse (BM25)
+    # R2: If Voyage API fails, fall back to BM25-only search
     embeddings = get_embeddings(usage="query", backend=backend)
-    dense_vec = embeddings.embed_query(query)
-    voyage_tokens += embeddings.last_total_tokens
+    dense_vec = None
+    try:
+        dense_vec = embeddings.embed_query(query)
+        voyage_tokens += embeddings.last_total_tokens
+    except Exception as exc:
+        logger.warning(f"Embedding failed, falling back to BM25-only: {exc}")
     sparse_vecs = list(get_sparse_model().embed([query]))
     sparse_vec = models.SparseVector(
         indices=sparse_vecs[0].indices.tolist(),
@@ -725,15 +750,35 @@ def _hybrid_search(
     query_filter = models.Filter(must=conditions) if conditions else None  # type: ignore[arg-type]
 
     # Step 3: Hybrid query \u2014 prefetch dense + BM25, fuse with RRF
-    results = client.query_points(
-        collection_name=qdrant_collection,
-        prefetch=[
-            models.Prefetch(query=dense_vec, using="dense", limit=20, filter=query_filter),
-            models.Prefetch(query=sparse_vec, using="bm25", limit=20, filter=query_filter),
-        ],
-        query=models.FusionQuery(fusion=models.Fusion.RRF),
-        limit=20,
+    # M1: Scale prefetch to 3\u00d7 limit (was always 20). For limit=5, prefetch 15 not 20.
+    prefetch_limit = min(limit * 3, 20)
+    prefetch = []
+    if dense_vec is not None:
+        prefetch.append(
+            models.Prefetch(
+                query=dense_vec, using="dense", limit=prefetch_limit, filter=query_filter
+            )
+        )
+    prefetch.append(
+        models.Prefetch(query=sparse_vec, using="bm25", limit=prefetch_limit, filter=query_filter)
     )
+
+    if dense_vec is not None:
+        results = client.query_points(
+            collection_name=qdrant_collection,
+            prefetch=prefetch,
+            query=models.FusionQuery(fusion=models.Fusion.RRF),
+            limit=prefetch_limit,
+        )
+    else:
+        # BM25-only fallback (embedding failed)
+        results = client.query_points(
+            collection_name=qdrant_collection,
+            prefetch=prefetch,
+            query=sparse_vec,
+            using="bm25",
+            limit=prefetch_limit,
+        )
 
     scored_points = results.points
     if not scored_points:

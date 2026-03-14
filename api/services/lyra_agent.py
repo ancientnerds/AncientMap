@@ -14,7 +14,6 @@ import asyncio
 import json
 import logging
 import os
-import random
 import re
 import time
 from collections.abc import AsyncIterator
@@ -56,9 +55,6 @@ from pipeline.database import get_session
 from pipeline.lyra.config import get_max_tokens
 
 logger = logging.getLogger(__name__)
-
-# Characters used to simulate diffusion noise (visually interesting unicode)
-_NOISE_CHARS = "░▒▓█▄▀■□▪▫●○◆◇◈◉⬡⬢⬣"
 
 
 def _build_fallback_response(
@@ -191,45 +187,6 @@ def _parse_structured_output(
     return cleaned, structured, False
 
 
-async def _simulate_diffusion(
-    final_text: str, steps: int = 8, interval: float = 0.06
-) -> AsyncIterator[dict]:
-    """Simulate Mercury diffusion crystallization effect.
-
-    Takes the final text and yields progressive diffusion events where
-    random characters "crystallize" from noise into the real text.
-    """
-    if not final_text.strip():
-        yield {"type": "diffusion", "content": final_text}
-        return
-
-    chars = list(final_text)
-
-    # Start fully noisy, then reveal more real characters each step
-    # Preserve whitespace, newlines, and markdown syntax from the start
-    _preserve = set(" \n\r\t#*_-|>[](){}!`:")
-    mutable = [i for i, c in enumerate(chars) if c not in _preserve]
-    random.shuffle(mutable)
-
-    for step in range(steps):
-        # Fraction of characters revealed (exponential curve — slow start, fast finish)
-        frac = (step / (steps - 1)) ** 0.5 if steps > 1 else 1.0
-        revealed = int(frac * len(mutable))
-        revealed_set = set(mutable[:revealed])
-
-        frame = []
-        for i, c in enumerate(chars):
-            if c in _preserve or i in revealed_set:
-                frame.append(c)
-            else:
-                frame.append(_NOISE_CHARS[random.randrange(len(_NOISE_CHARS))])  # noqa: S311
-        yield {"type": "diffusion", "content": "".join(frame)}
-        await asyncio.sleep(interval)
-
-    # Final clean frame
-    yield {"type": "diffusion", "content": final_text}
-
-
 # ---------------------------------------------------------------------------
 # Heartbeat wrapper for slow backend streams
 # ---------------------------------------------------------------------------
@@ -295,11 +252,12 @@ def _auto_retrieve(
 ) -> tuple[str, list[dict], list[dict], float | None, int]:
     """Run automatic hybrid retrieval BEFORE the LLM sees the message.
 
-    Searches BOTH Qdrant collections on every sub-query (from decomposition):
+    Searches Qdrant collections on every sub-query (from decomposition):
     - Sites collection (limit=5) for archaeological site context + map highlighting
     - News collection (limit=3) for semantically relevant news items
+    - Transcripts collection (limit=3) for relevant transcript passages
 
-    Not called for empire context — empire questions use get_empire_data tool instead.
+    All searches run in parallel via ThreadPoolExecutor for speed.
 
     Args:
         queries: List of sub-queries (from _decompose_query). Usually 1, up to 3.
@@ -309,18 +267,43 @@ def _auto_retrieve(
         list of news result dicts for sidebar cards, average relevance score or None,
         total Voyage tokens used).
     """
+    from concurrent.futures import ThreadPoolExecutor
+
     site_results: list[dict] = []
     news_results: list[dict] = []
     all_relevance_scores: list[float] = []
     total_voyage_tokens = 0
     context_parts: list[str] = []
 
-    # --- Sites collection (skip for news context) ---
+    # Build all search tasks: (collection, sub_query, limit)
+    search_tasks: list[tuple[str, str, int]] = []
     if context_type != "news":
-        seen_site_ids: set[str] = set()
         for sub_q in queries:
-            results, vt = _hybrid_search(sub_q, collection="sites", limit=5)
-            total_voyage_tokens += vt
+            search_tasks.append(("sites", sub_q, 5))
+    news_limit = 5 if context_type == "news" else 3
+    for sub_q in queries:
+        search_tasks.append(("news", sub_q, news_limit))
+    for sub_q in queries:
+        search_tasks.append(("transcripts", sub_q, 3))
+
+    # Execute all Qdrant searches in parallel (was sequential: 200-500ms each)
+    def _do_search(task: tuple[str, str, int]) -> tuple[str, list[dict], int]:
+        coll, query, limit = task
+        results, vt = _hybrid_search(query, collection=coll, limit=limit)
+        return coll, results, vt
+
+    with ThreadPoolExecutor(max_workers=min(len(search_tasks), 9)) as pool:
+        search_results = list(pool.map(_do_search, search_tasks))
+
+    # Distribute results by collection
+    seen_site_ids: set[str] = set()
+    seen_news_keys: set[str] = set()
+    seen_transcript_keys: set[str] = set()
+    transcript_chunks: list[dict] = []
+
+    for coll, results, vt in search_results:
+        total_voyage_tokens += vt
+        if coll == "sites":
             for r in results:
                 sid = r.get("id", "")
                 if sid and sid in seen_site_ids:
@@ -330,37 +313,40 @@ def _auto_retrieve(
                 site_results.append(r)
                 if "relevance" in r:
                     all_relevance_scores.append(r["relevance"])
-        if site_results:
-            lines = []
-            for r in site_results:
-                name = r.get("name", "?")
-                site_id = r.get("id", "")
-                period = r.get("period_name", "")
-                country = r.get("country", "")
-                desc = r.get("description", "")[:300]
-                lat = r.get("lat", "")
-                lon = r.get("lon", "")
-                line = f"- **{name}** (id: {site_id}) ({period}, {country}) [{lat}, {lon}]"
-                if desc:
-                    line += f" — {desc}"
-                lines.append(line)
-            context_parts.append(
-                "### Sites\nLink every site name as [Name](site:ID) using the IDs below.\n"
-                + "\n".join(lines)
-            )
+        elif coll == "news":
+            for r in results:
+                key = f"{r.get('video_id', '')}::{r.get('headline', '')}"
+                if key not in seen_news_keys:
+                    seen_news_keys.add(key)
+                    news_results.append(r)
+        elif coll == "transcripts":
+            for r in results:
+                key = f"{r.get('video_id', '')}::{r.get('start_seconds', 0)}"
+                if key not in seen_transcript_keys:
+                    seen_transcript_keys.add(key)
+                    transcript_chunks.append(r)
 
-    # --- News collection (always — semantic news retrieval) ---
-    news_limit = 5 if context_type == "news" else 3
-    seen_news_keys: set[str] = set()
-    for sub_q in queries:
-        news_raw, vt = _hybrid_search(sub_q, collection="news", limit=news_limit)
-        total_voyage_tokens += vt
-        for r in news_raw:
-            key = f"{r.get('video_id', '')}::{r.get('headline', '')}"
-            if key in seen_news_keys:
-                continue
-            seen_news_keys.add(key)
-            news_results.append(r)
+    # Format site results
+    if site_results:
+        lines = []
+        for r in site_results:
+            name = r.get("name", "?")
+            site_id = r.get("id", "")
+            period = r.get("period_name", "")
+            country = r.get("country", "")
+            desc = r.get("description", "")[:300]
+            lat = r.get("lat", "")
+            lon = r.get("lon", "")
+            line = f"- **{name}** (id: {site_id}) ({period}, {country}) [{lat}, {lon}]"
+            if desc:
+                line += f" — {desc}"
+            lines.append(line)
+        context_parts.append(
+            "### Sites\nLink every site name as [Name](site:ID) using the IDs below.\n"
+            + "\n".join(lines)
+        )
+
+    # Format news results
     if news_results:
         lines = []
         for r in news_results:
@@ -373,17 +359,7 @@ def _auto_retrieve(
             lines.append(line)
         context_parts.append("### Related News (semantic)\n" + "\n".join(lines))
 
-    # --- Transcripts collection (semantic transcript retrieval) ---
-    seen_transcript_keys: set[str] = set()
-    transcript_chunks: list[dict] = []
-    for sub_q in queries:
-        t_raw, vt = _hybrid_search(sub_q, collection="transcripts", limit=3)
-        total_voyage_tokens += vt
-        for r in t_raw:
-            key = f"{r.get('video_id', '')}::{r.get('start_seconds', 0)}"
-            if key not in seen_transcript_keys:
-                seen_transcript_keys.add(key)
-                transcript_chunks.append(r)
+    # Format transcript results
     if transcript_chunks:
         transcript_chunks = _semantic_dedup(transcript_chunks, text_key="text_preview")
         lines = []
@@ -862,7 +838,13 @@ async def run_agent_stream(
         # Run decomposition + filter extraction in parallel (both async Mercury calls),
         # then pass sub-queries to _auto_retrieve() in a thread.
         use_filter_extraction = ctx.backend_type != "local"
-        use_decomposition = ctx.backend_type != "local"
+        # Skip decomposition for simple queries — saves 1-3s + Mercury tokens.
+        # Only decompose when conjunctions/comparisons suggest multiple sub-topics.
+        _needs_decomp = any(
+            w in message.lower()
+            for w in (" and ", " or ", " vs ", " versus ", " compare", " compared to ")
+        )
+        use_decomposition = ctx.backend_type != "local" and _needs_decomp
 
         yield {
             "type": "pipeline",
@@ -1027,9 +1009,10 @@ async def run_agent_stream(
         site_names = [s["name"] for s in all_sites if s.get("name")]
 
         # Site-specific news (by ID and name — always works, no LLM needed)
+        # Skip SQL fetch if Qdrant already returned >= 3 news items (M2: saves 300-500ms)
         sql_news = (
             _get_related_news(site_ids=site_ids, site_names=site_names)
-            if (site_ids or site_names)
+            if (site_ids or site_names) and len(all_news) < 3
             else []
         )
         if sql_news:
@@ -1061,17 +1044,16 @@ async def run_agent_stream(
             "meta": {"count": len(all_news)},
         }
 
-        # Add news to retrieved context so the LLM can reference them
+        # Reference news in LLM context without duplicating full content
+        # (news is already sent to the frontend sidebar — M3: avoid bloating LLM context)
         if all_news:
-            news_lines = []
-            for n in all_news:
-                line = f"- **{n['headline']}** (from {n['channel']})"
-                if n.get("summary"):
-                    line += f" — {n['summary'][:150]}"
-                if n.get("video_id"):
-                    line += f" [youtube: {n['video_id']}]"
-                news_lines.append(line)
-            retrieved_context += "\n\n### Related News\n" + "\n".join(news_lines) + "\n"
+            headlines = [n.get("headline", "?") for n in all_news[:5]]
+            retrieved_context += (
+                f"\n\n### Related News ({len(all_news)} items in sidebar)\n"
+                f"Headlines: {'; '.join(headlines)}\n"
+                "The user can see full news details in the sidebar. "
+                "Reference headlines naturally but don't repeat full summaries.\n"
+            )
 
         # Anti-redundancy summary: tell the LLM what NOT to re-search
         if auto_site_results or all_news:
@@ -1231,6 +1213,11 @@ async def run_agent_stream(
         # Hard tool cutoff: after round 3 or 3+ tool calls, stop offering tools
         # entirely so the LLM MUST answer (prompt-level enforcement is unreliable)
         _offer_tools = ctx.supports_tools and _round < 3 and tool_calls_made < 3
+
+        # If tools are cut off and we already have tool results, skip straight
+        # to Phase 2 synthesis — no point calling Mercury just to discard the result
+        if not _offer_tools and tool_calls_made > 0 and ctx.backend_type == "mercury":
+            break
 
         # Mercury: single non-streaming call with tools + structured output
         if ctx.backend_type == "mercury":
@@ -1444,98 +1431,92 @@ async def run_agent_stream(
                 # Collect raw result for Phase 2 synthesis
                 raw_tool_results.append(f"[{tc['name']}] {result[:3000]}")
 
+                # Parse once — reuse for site extraction, news extraction, and pipeline panel
+                _parsed: Any = None
+                try:
+                    _parsed = json.loads(result)
+                except (json.JSONDecodeError, ValueError):
+                    pass
+
                 # Extract site data for map highlighting
-                if tc["name"] in (
+                if _parsed is not None and tc["name"] in (
                     "search_sites",
                     "get_site_details",
                     "vector_search",
                     "search_radar",
                 ):
-                    try:
-                        parsed = json.loads(result)
-                        if isinstance(parsed, list):
-                            for s in parsed:
-                                if "lat" in s and "lon" in s:
-                                    all_sites.append(
-                                        {
-                                            "id": s.get("id", ""),
-                                            "name": s.get("name", ""),
-                                            "lat": s["lat"],
-                                            "lon": s["lon"],
-                                            "site_type": s.get("type") or s.get("site_type"),
-                                            "period_name": s.get("period") or s.get("period_name"),
-                                            "country": s.get("country"),
-                                            "thumbnail_url": s.get("thumbnail_url"),
-                                        }
-                                    )
-                                # Radar discoveries may lack coords — still collect names for news fetch
-                                if tc["name"] == "search_radar":
-                                    name = s.get("name", "")
-                                    if name:
-                                        radar_names.add(name)
-                                    original = s.get("original_name")
-                                    if original and original != name:
-                                        radar_names.add(original)
-                        elif isinstance(parsed, dict) and "lat" in parsed:
-                            all_sites.append(
-                                {
-                                    "id": parsed.get("id", ""),
-                                    "name": parsed.get("name", ""),
-                                    "lat": parsed["lat"],
-                                    "lon": parsed["lon"],
-                                    "site_type": parsed.get("type") or parsed.get("site_type"),
-                                    "period_name": parsed.get("period")
-                                    or parsed.get("period_name"),
-                                    "country": parsed.get("country"),
-                                    "thumbnail_url": parsed.get("thumbnail_url"),
-                                }
-                            )
-                    except (json.JSONDecodeError, KeyError):
-                        pass
+                    if isinstance(_parsed, list):
+                        for s in _parsed:
+                            if "lat" in s and "lon" in s:
+                                all_sites.append(
+                                    {
+                                        "id": s.get("id", ""),
+                                        "name": s.get("name", ""),
+                                        "lat": s["lat"],
+                                        "lon": s["lon"],
+                                        "site_type": s.get("type") or s.get("site_type"),
+                                        "period_name": s.get("period") or s.get("period_name"),
+                                        "country": s.get("country"),
+                                        "thumbnail_url": s.get("thumbnail_url"),
+                                    }
+                                )
+                            # Radar discoveries may lack coords — still collect names for news fetch
+                            if tc["name"] == "search_radar":
+                                name = s.get("name", "")
+                                if name:
+                                    radar_names.add(name)
+                                original = s.get("original_name")
+                                if original and original != name:
+                                    radar_names.add(original)
+                    elif isinstance(_parsed, dict) and "lat" in _parsed:
+                        all_sites.append(
+                            {
+                                "id": _parsed.get("id", ""),
+                                "name": _parsed.get("name", ""),
+                                "lat": _parsed["lat"],
+                                "lon": _parsed["lon"],
+                                "site_type": _parsed.get("type") or _parsed.get("site_type"),
+                                "period_name": _parsed.get("period") or _parsed.get("period_name"),
+                                "country": _parsed.get("country"),
+                                "thumbnail_url": _parsed.get("thumbnail_url"),
+                            }
+                        )
 
                 # Extract news data from search_news tool for sidebar
-                if tc["name"] == "search_news":
-                    try:
-                        parsed_news = json.loads(result)
-                        if isinstance(parsed_news, list):
-                            existing_keys = {f"{n['video_id']}::{n['headline']}" for n in all_news}
-                            for item in parsed_news:
-                                news_entry = {
-                                    "headline": item.get("headline", ""),
-                                    "summary": item.get("summary"),
-                                    "channel": item.get("channel", ""),
-                                    "video_id": item.get("video_id", ""),
-                                    "video_title": item.get("video_title"),
-                                    "category": item.get("category"),
-                                    "significance": item.get("significance"),
-                                    "date": item.get("date"),
-                                    "site_name": item.get("site_mentioned"),
-                                    "timestamp_seconds": item.get("timestamp_seconds"),
-                                }
-                                key = f"{news_entry['video_id']}::{news_entry['headline']}"
-                                if key not in existing_keys:
-                                    all_news.append(news_entry)
-                                    existing_keys.add(key)
-                    except (json.JSONDecodeError, KeyError, TypeError):
-                        pass
+                if _parsed is not None and tc["name"] == "search_news":
+                    if isinstance(_parsed, list):
+                        existing_keys = {f"{n['video_id']}::{n['headline']}" for n in all_news}
+                        for item in _parsed:
+                            news_entry = {
+                                "headline": item.get("headline", ""),
+                                "summary": item.get("summary"),
+                                "channel": item.get("channel", ""),
+                                "video_id": item.get("video_id", ""),
+                                "video_title": item.get("video_title"),
+                                "category": item.get("category"),
+                                "significance": item.get("significance"),
+                                "date": item.get("date"),
+                                "site_name": item.get("site_mentioned"),
+                                "timestamp_seconds": item.get("timestamp_seconds"),
+                            }
+                            key = f"{news_entry['video_id']}::{news_entry['headline']}"
+                            if key not in existing_keys:
+                                all_news.append(news_entry)
+                                existing_keys.add(key)
 
                 wrapped = wrap_tool_result(str(tc["name"]), result)
                 messages.append(ToolMessage(content=wrapped, tool_call_id=str(tc["id"])))
 
-                # Count result items for the pipeline panel
+                # Count result items for the pipeline panel (reuse parsed JSON)
                 _result_len = None
-                try:
-                    _parsed_result = json.loads(result)
-                    if isinstance(_parsed_result, list):
-                        _result_len = len(_parsed_result)
-                    elif isinstance(_parsed_result, dict):
-                        # Handle dict-wrapped results (e.g. {"results": [...]})
+                if _parsed is not None:
+                    if isinstance(_parsed, list):
+                        _result_len = len(_parsed)
+                    elif isinstance(_parsed, dict):
                         for key in ("results", "items", "data", "sites", "news"):
-                            if key in _parsed_result and isinstance(_parsed_result[key], list):
-                                _result_len = len(_parsed_result[key])
+                            if key in _parsed and isinstance(_parsed[key], list):
+                                _result_len = len(_parsed[key])
                                 break
-                except Exception:
-                    pass
 
                 # Truncated preview for pipeline debug panel (max 2000 chars)
                 _result_preview = result[:2000] if result else ""
@@ -1555,14 +1536,20 @@ async def run_agent_stream(
             except Exception as e:
                 err_msg = str(e)[:500]
                 logger.error(f"Tool {tc['name']} failed: {err_msg} | args={tc['args']!r}")
-                # Sanitize error for LLM — don't leak internal details
-                safe_msg = "Tool encountered an error"
+                # Include tool name and query for actionable LLM feedback (m1)
+                tool_name = str(tc["name"])
+                query_hint = ""
+                if isinstance(tool_args, dict):
+                    q = tool_args.get("query") or tool_args.get("name") or tool_args.get("site_id")
+                    if q:
+                        query_hint = f"(query='{str(q)[:60]}') "
+                safe_msg = f"{tool_name}{query_hint}encountered an error"
                 if "not found" in err_msg.lower():
-                    safe_msg = "No results found"
+                    safe_msg = f"{tool_name}{query_hint}found no results"
                 elif "timeout" in err_msg.lower() or "timed out" in err_msg.lower():
-                    safe_msg = "Request timed out"
+                    safe_msg = f"{tool_name}{query_hint}timed out. Try a broader search."
                 elif "connection" in err_msg.lower():
-                    safe_msg = "Service temporarily unavailable"
+                    safe_msg = f"{tool_name}{query_hint}— service temporarily unavailable"
                 messages.append(
                     ToolMessage(
                         content=f"{safe_msg}. Try a different approach.",
@@ -1658,27 +1645,65 @@ async def run_agent_stream(
             message, raw_tool_results, context_prompt, retrieved_context
         )
         _synthesis_ok = False
-        try:
-            _synth_result = await backend_impl.generate(
-                synthesis_msgs,
-                response_format=LYRA_RESPONSE_SCHEMA,
-                max_tokens=16384,
-            )
-            total_input_tokens += _synth_result["usage"]["input"]
-            total_output_tokens += _synth_result["usage"]["output"]
+        _synth_last_err: Exception | None = None
+        _heartbeat_sent = False
+        for _synth_attempt in range(3):
+            try:
+                # Run synthesis with heartbeat — emit status every 8s so the client
+                # knows the connection is alive during the 10-30s Mercury call (R3)
+                _synth_task = asyncio.create_task(
+                    backend_impl.generate(
+                        synthesis_msgs,
+                        response_format=LYRA_RESPONSE_SCHEMA,
+                        max_tokens=16384,
+                    )
+                )
+                while not _synth_task.done():
+                    try:
+                        await asyncio.wait_for(asyncio.shield(_synth_task), timeout=8.0)
+                    except TimeoutError:
+                        if not _heartbeat_sent:
+                            yield {"type": "status", "content": "Synthesizing answer..."}
+                            _heartbeat_sent = True
+                        else:
+                            yield {"type": "status", "content": "Still working..."}
 
-            text_out, so_data, _off_topic = _parse_structured_output(_synth_result["content"])
-            if so_data is not None:
-                _structured_output = so_data
-            if text_out.strip():
-                yield {"type": "diffusion", "content": text_out}
-            _synthesis_ok = True
-        except Exception as exc:
-            print(
-                f"[SYNTHESIS] Phase 2 failed: {type(exc).__name__}: {exc}",
-                flush=True,
-            )
-            logger.warning(f"Phase 2 synthesis failed: {exc}")
+                _synth_result = _synth_task.result()
+                total_input_tokens += _synth_result["usage"]["input"]
+                total_output_tokens += _synth_result["usage"]["output"]
+
+                text_out, so_data, _off_topic = _parse_structured_output(_synth_result["content"])
+                if so_data is not None:
+                    _structured_output = so_data
+                if text_out.strip():
+                    yield {"type": "diffusion", "content": text_out}
+                _synthesis_ok = True
+                break
+            except Exception as exc:
+                _synth_last_err = exc
+                err_msg = str(exc).lower()
+                is_retryable = (
+                    isinstance(exc, (asyncio.TimeoutError, TimeoutError))
+                    or "empty content" in err_msg
+                    or "truncated" in err_msg
+                    or "content_filter" in err_msg
+                    or "content policy" in err_msg
+                    or "400" in err_msg
+                )
+                if _synth_attempt < 2 and is_retryable:
+                    logger.warning(
+                        f"Phase 2 synthesis transient error (attempt {_synth_attempt + 1}/3): {exc}"
+                    )
+                    await asyncio.sleep(1.5)
+                    continue
+                print(
+                    f"[SYNTHESIS] Phase 2 failed: {type(exc).__name__}: {exc}",
+                    flush=True,
+                )
+                logger.warning(
+                    f"Phase 2 synthesis failed after {_synth_attempt + 1} attempts: {exc}"
+                )
+                break
 
         if not _synthesis_ok:
             _fb = _build_fallback_response(message, all_sites, all_news)

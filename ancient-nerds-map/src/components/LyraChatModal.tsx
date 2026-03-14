@@ -313,6 +313,9 @@ export default function LyraChatModal({
   const searchAbortRef = useRef<AbortController | null>(null)
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const lastUserMsgRef = useRef<string>('')
+  // U1: Batch thinking token updates — accumulate in ref, flush every 100ms
+  // (prevents 50-100 re-renders/sec during Ollama streaming)
+  const thinkingBufferRef = useRef<{ content: string; timer: ReturnType<typeof setTimeout> | null; assistantId: string }>({ content: '', timer: null, assistantId: '' })
   const [showScrollFab, setShowScrollFab] = useState(false)
   const [lyraStatus, setLyraStatus] = useState<string | null>(null)
   const userScrolledUpRef = useRef(false)
@@ -324,6 +327,7 @@ export default function LyraChatModal({
       abortRef.current?.abort()
       searchAbortRef.current?.abort()
       if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+      if (thinkingBufferRef.current.timer) clearTimeout(thinkingBufferRef.current.timer)
     }
   }, [])
 
@@ -660,16 +664,13 @@ export default function LyraChatModal({
     // Reset sidebar for new query
     setSidebarNews([])
 
-    // Add user message
+    // Add user message + assistant placeholder in one update (U2: avoid double re-render)
     const userMsg: LyraMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
       content: messageText,
       timestamp: new Date(),
     }
-    setMessages(prev => [...prev, userMsg])
-
-    // Create assistant placeholder
     const assistantId = `assistant-${Date.now()}`
     const assistantMsg: LyraMessage = {
       id: assistantId,
@@ -678,7 +679,7 @@ export default function LyraChatModal({
       timestamp: new Date(),
       isStreaming: true,
     }
-    setMessages(prev => [...prev, assistantMsg])
+    setMessages(prev => [...prev, userMsg, assistantMsg])
     setIsStreaming(true)
     setLyraStatus(null)
 
@@ -761,11 +762,24 @@ export default function LyraChatModal({
 
               if (type === 'thinking' && data.content) {
                 setLyraStatus('Thinking...')
-                setMessages(prev => prev.map(m =>
-                  m.id === assistantId
-                    ? { ...m, thinking: (m.thinking || '') + data.content }
-                    : m
-                ))
+                // U1: Batch thinking tokens — accumulate in ref, flush every 100ms
+                const buf = thinkingBufferRef.current
+                buf.content += data.content
+                buf.assistantId = assistantId
+                if (!buf.timer) {
+                  buf.timer = setTimeout(() => {
+                    const pending = buf.content
+                    buf.content = ''
+                    buf.timer = null
+                    if (pending) {
+                      setMessages(prev => prev.map(m =>
+                        m.id === buf.assistantId
+                          ? { ...m, thinking: (m.thinking || '') + pending }
+                          : m
+                      ))
+                    }
+                  }, 100)
+                }
               } else if (type === 'diffusion' && data.content) {
                 setLyraStatus(null)
                 setMessages(prev => prev.map(m =>
@@ -808,6 +822,18 @@ export default function LyraChatModal({
                 ))
               } else if (type === 'done') {
                 receivedDone = true
+                // U1: Flush any buffered thinking tokens before finalizing
+                const buf = thinkingBufferRef.current
+                if (buf.timer) { clearTimeout(buf.timer); buf.timer = null }
+                if (buf.content) {
+                  const pending = buf.content
+                  buf.content = ''
+                  setMessages(prev => prev.map(m =>
+                    m.id === assistantId
+                      ? { ...m, thinking: (m.thinking || '') + pending }
+                      : m
+                  ))
+                }
                 const tokens = data.metadata?.tokens ?? undefined
                 const structuredOutput = data.metadata?.structured_output ?? undefined
                 // Update credits from done event (Discord auth only)
