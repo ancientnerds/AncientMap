@@ -479,6 +479,25 @@ export default function LyraChatModal({
     }
   }, [isOpen, isAuthenticated])
 
+  // Auto-focus input on any keypress so the user can always type
+  // without clicking the field first (better UX)
+  useEffect(() => {
+    if (!isOpen || !isAuthenticated) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      // Skip if already focused, or if modifier keys are held (Ctrl+C, etc.)
+      if (document.activeElement === inputRef.current) return
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      // Skip non-printable keys (arrows, F-keys, Escape, etc.)
+      if (e.key.length !== 1 && e.key !== 'Backspace') return
+      // Skip if user is typing in another input/textarea
+      const tag = (document.activeElement as HTMLElement)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      inputRef.current?.focus()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [isOpen, isAuthenticated])
+
   // Fetch credits when using Discord auth
   useEffect(() => {
     if (!authToken) return
