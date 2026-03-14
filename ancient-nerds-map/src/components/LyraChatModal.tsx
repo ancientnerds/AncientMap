@@ -340,7 +340,7 @@ export default function LyraChatModal({
     a: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { children?: React.ReactNode }) => {
       // Country flag link: flag:code (from enricher)
       if (href?.startsWith('flag:')) {
-        const code = href.slice('flag:'.length)
+        const code = href.slice('flag:'.length).toLowerCase()
         return (
           <span className="lyra-inline-flag-wrap">
             <img className="lyra-inline-flag" src={`/flags-flat/${code}.webp`} alt="" />
