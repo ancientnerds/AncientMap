@@ -12,16 +12,13 @@
 }
 
 .download-manager-modal {
+  position: relative;
   width: 90%;
   max-width: 480px;
   max-height: 85vh;
-  background: rgba(0, 15, 20, 0.95);
-  border: 1px solid var(--accent-glow-30);
-  border-radius: 8px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
 }
 
 /* Header */

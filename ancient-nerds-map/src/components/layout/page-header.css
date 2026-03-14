@@ -237,13 +237,10 @@
 }
 
 .hamburger-dropdown {
+  position: relative;
   z-index: 99999;
-  background: var(--surface-page);
-  border: 1px solid var(--border-accent);
-  border-radius: 6px;
   padding: 4px 0;
   min-width: 160px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
 .hamburger-link {

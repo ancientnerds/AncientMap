@@ -50,6 +50,9 @@ body.satellite-mode {
 .theo-card,
 .api-card,
 .account-card,
+.download-manager-modal,
+.offline-indicator,
+.hamburger-dropdown,
 .site-count,
 .split-card,
 .tool-card {
@@ -67,7 +70,9 @@ body.satellite-mode {
 .site-popup,
 .ai-chat-modal,
 .disclaimer-modal,
-.signin-popup {
+.signin-popup,
+.download-manager-modal,
+.hamburger-dropdown {
   box-shadow: var(--nerv-panel-shadow), 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
@@ -81,7 +86,8 @@ body.satellite-mode {
 .site-popup::before,
 .ai-chat-modal::before,
 .disclaimer-modal::before,
-.news-feed-panel::before {
+.news-feed-panel::before,
+.download-manager-modal::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -106,6 +112,8 @@ body.satellite-mode {
 .site-hover-tooltip::before,
 .scale-bar::before,
 .cursor-coords::before,
+.offline-indicator::before,
+.hamburger-dropdown::before,
 .site-count::before,
 .db-stat-card::before,
 .theo-card::before,

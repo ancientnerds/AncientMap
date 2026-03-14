@@ -5,9 +5,7 @@
   align-items: center;
   gap: 6px;
   padding: 4px 8px;
-  background: rgba(10, 21, 32, 0.9);
-  border: 1px solid var(--accent-glow-30);
-  border-radius: 16px;
+  position: relative;
   font-size: 11px;
   color: var(--text-faint);
 }

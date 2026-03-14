@@ -1339,43 +1339,108 @@
   border-color: #991b1b;
 }
 
-/* Upload progress overlay */
+/* ─── Upload progress — NERV multi-phase ─────────────────────────────────── */
 .db-upload-progress {
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 10px;
-  padding: 24px 16px;
-  background: rgba(0, 0, 0, 0.6);
-  border-radius: 12px;
-  margin: 0 16px 8px;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(0, 204, 102, 0.15);
+  margin: 0 3px 3px;
+  position: relative;
+}
+
+.db-upload-progress-phase {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
 }
 
 .db-upload-progress-bar-track {
   width: 100%;
-  height: 8px;
-  background: #1a1a28;
-  border-radius: 4px;
+  height: 20px;
+  background: #0a0a0a;
+  border: 1px solid rgba(0, 204, 102, 0.15);
   overflow: hidden;
+  position: relative;
 }
 
 .db-upload-progress-bar-fill {
   height: 100%;
-  background: var(--status-ok);
-  border-radius: 4px;
-  transition: width 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  transition: width 0.5s ease-in-out;
+}
+
+/* Green hazard stripes — same as CAUTION ZONE but green */
+.db-upload-progress-bar-fill::after {
+  content: '';
+  position: absolute;
+  inset: -50px;
+  background: repeating-linear-gradient(-45deg, #00cc66 0 16px, #004d26 16px 32px);
+  animation: stripe-march 1.2s linear infinite;
+  will-change: transform;
 }
 
 .db-upload-progress-text {
-  font-size: 15px;
+  font-family: var(--font-heading);
+  font-size: 18px;
   font-weight: 600;
-  color: var(--text-body);
+  color: var(--nerv-g);
+  text-shadow: 0 0 8px rgba(0, 204, 102, 0.6);
+  text-align: center;
 }
 
 .db-upload-progress-sub {
-  font-size: 12px;
-  color: var(--text-secondary);
+  font-size: 11px;
+  color: var(--nerv-steel-dim);
+  text-align: center;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
 }
+
+/* LED chunk row */
+.db-upload-progress-chunks {
+  display: flex;
+  gap: 3px;
+  justify-content: center;
+  flex-wrap: wrap;
+  padding-top: 4px;
+}
+
+.db-upload-chunk {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #222;
+  transition: all 0.3s;
+}
+.db-upload-chunk.done {
+  background: var(--nerv-g);
+  box-shadow: 0 0 4px var(--nerv-g);
+}
+.db-upload-chunk.active {
+  background: var(--nerv-o);
+  box-shadow: 0 0 6px var(--nerv-o);
+  animation: led-breathe-pulse 1.5s ease-in-out infinite;
+}
+
+/* Phase variants */
+.db-upload-progress.phase-snapshot { border-color: rgba(32, 240, 255, 0.25); }
+.db-upload-progress.phase-snapshot .db-upload-progress-text { color: var(--nerv-c); text-shadow: 0 0 8px rgba(32, 240, 255, 0.6); }
+.db-upload-progress.phase-snapshot .db-upload-progress-bar-fill::after { background: repeating-linear-gradient(-45deg, #20F0FF 0 16px, #0a4d52 16px 32px); }
+
+.db-upload-progress.phase-rebuild { border-color: rgba(32, 240, 255, 0.25); }
+.db-upload-progress.phase-rebuild .db-upload-progress-text { color: var(--nerv-c); text-shadow: 0 0 8px rgba(32, 240, 255, 0.6); }
+
+.db-upload-progress.phase-complete { border-color: rgba(0, 204, 102, 0.3); }
+.db-upload-progress.phase-complete .db-upload-progress-bar-fill::after { animation: none; background: none; }
+
+.db-upload-progress.phase-error { border-color: rgba(160, 8, 8, 0.4); animation: warning-flash 1.5s ease-in-out infinite; }
+.db-upload-progress.phase-error .db-upload-progress-text { color: var(--nerv-r); text-shadow: 0 0 8px rgba(160, 8, 8, 0.6); }
+.db-upload-progress.phase-error .db-upload-progress-bar-fill::after { background: repeating-linear-gradient(-45deg, #bb0a0a 0 16px, #4d0505 16px 32px); }
 
 /* ─── Review modal ───────────────────────────────────────────────────────── */
 .db-modal-review {
@@ -1431,9 +1496,74 @@
   font-weight: 500;
 }
 
-/* ─── Upload modal ───────────────────────────────────────────────────────── */
+/* ─── NERV Upload Modal ──────────────────────────────────────────────────── */
 .db-modal-upload {
   max-width: 1100px;
+  border-radius: 0 !important;
+  border: 1px solid rgba(0, 204, 102, 0.2) !important;
+  background: #060604 !important;
+  animation: crt-open 0.4s ease-out both;
+  box-shadow: 0 0 8px rgba(0, 204, 102, 0.04), 0 20px 60px rgba(0, 0, 0, 0.5) !important;
+  position: relative;
+  overflow: clip;
+}
+
+/* Corner brackets */
+.db-modal-upload::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 0 0 / var(--nerv-cb-size) var(--nerv-cb-weight) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 0 var(--nerv-cb-weight) / var(--nerv-cb-weight) calc(var(--nerv-cb-size) - var(--nerv-cb-weight)) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 100% 0 / var(--nerv-cb-size) var(--nerv-cb-weight) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 100% var(--nerv-cb-weight) / var(--nerv-cb-weight) calc(var(--nerv-cb-size) - var(--nerv-cb-weight)) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 0 100% / var(--nerv-cb-size) var(--nerv-cb-weight) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 0 calc(100% - var(--nerv-cb-weight)) / var(--nerv-cb-weight) calc(var(--nerv-cb-size) - var(--nerv-cb-weight)) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 100% 100% / var(--nerv-cb-size) var(--nerv-cb-weight) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 100% calc(100% - var(--nerv-cb-weight)) / var(--nerv-cb-weight) calc(var(--nerv-cb-size) - var(--nerv-cb-weight)) no-repeat;
+}
+
+/* Top highlight + bottom dim line */
+.db-modal-upload::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: rgba(0, 204, 102, 0.25);
+  z-index: 2;
+}
+
+/* Inner border frame */
+.db-modal-upload > .nerv-inner {
+  position: absolute;
+  inset: 3px;
+  border: 1px solid rgba(0, 204, 102, 0.07);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Header — NERV panel header pattern */
+.db-modal-upload .db-modal-header {
+  padding: 6px 14px 5px;
+  border-bottom: 1px solid rgba(0, 204, 102, 0.1);
+  background: rgba(0, 204, 102, 0.02);
+}
+
+.db-modal-upload .db-modal-header h2 {
+  font-family: var(--font-heading);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--nerv-o);
+}
+
+.db-modal-upload .db-modal-close:hover {
+  color: rgba(192, 32, 35, 0.7);
+  text-shadow: 0 0 8px rgba(192, 32, 35, 0.4);
 }
 
 .db-upload-controls {
@@ -1441,7 +1571,7 @@
   flex-direction: column;
   gap: 12px;
   padding-bottom: 16px;
-  border-bottom: 1px solid var(--accent-glow-06);
+  border-bottom: 1px solid rgba(0, 204, 102, 0.08);
   margin-bottom: 16px;
 }
 
@@ -1453,10 +1583,12 @@
 }
 
 .db-upload-target-label {
-  font-size: 0.72rem;
-  color: var(--text-secondary);
+  font-family: var(--font-stamp);
+  font-size: 11px;
+  color: var(--nerv-o);
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 1.5px;
+  font-weight: 700;
   flex-shrink: 0;
 }
 
@@ -1466,13 +1598,14 @@
   gap: 6px;
 }
 
+/* Source pills — NERV angular clip */
 .db-source-pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 5px 12px;
   border: 1px solid var(--border-accent);
-  border-radius: 16px;
+  border-radius: 0;
   background: transparent;
   color: var(--text-secondary);
   font-size: 0.72rem;
@@ -1480,11 +1613,11 @@
   transition: all 0.15s ease;
   font-family: inherit;
   white-space: nowrap;
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
 }
 
 .db-source-pill svg {
-  flex-shrink: 0;
-  opacity: 0.7;
+  display: none;
 }
 
 .db-source-pill:hover {
@@ -1494,10 +1627,6 @@
 
 .db-source-pill.active {
   font-weight: 600;
-}
-
-.db-source-pill.active svg {
-  opacity: 1;
 }
 
 .db-source-pill:disabled:not(.active) {
@@ -1510,7 +1639,7 @@
   color: var(--text-secondary);
 }
 
-/* ─── Audited toggle ────────────────────────────────────────────────────── */
+/* ─── Audited toggle — NERV angular ─────────────────────────────────────── */
 .db-upload-audited-toggle {
   display: inline-flex;
   align-items: center;
@@ -1518,7 +1647,7 @@
   margin-right: auto;
   padding: 4px 10px;
   border: 1px solid var(--border-accent);
-  border-radius: 14px;
+  border-radius: 0;
   background: transparent;
   color: var(--text-secondary);
   font-size: 0.72rem;
@@ -1526,6 +1655,7 @@
   transition: all 0.15s ease;
   font-family: inherit;
   white-space: nowrap;
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
 }
 
 .db-upload-audited-toggle:hover {
@@ -1548,6 +1678,25 @@
   50% { border-color: rgba(251, 191, 36, 0.6); box-shadow: 0 0 6px rgba(251, 191, 36, 0.15); }
 }
 
+/* LED toggle indicator */
+.db-toggle-led {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+.db-toggle-led.on {
+  background: var(--nerv-g);
+  box-shadow: 0 0 4px var(--nerv-g), 0 0 8px rgba(0, 204, 102, 0.3);
+}
+.db-toggle-led.off {
+  background: var(--nerv-r);
+  box-shadow: 0 0 4px var(--nerv-r);
+}
+
+/* Legacy toggle check — keep for backward compat */
 .db-toggle-check {
   display: inline-block;
   width: 14px;
@@ -1576,38 +1725,95 @@
   transform: rotate(45deg);
 }
 
-/* ─── Drop zone ─────────────────────────────────────────────────────────── */
+/* ─── Drop zone — NERV double-border + crosshair ────────────────────────── */
 .db-upload-dropzone {
-  border: 2px dashed var(--border-accent);
-  border-radius: 10px;
+  border: 2px solid rgba(0, 204, 102, 0.4);
+  border-radius: 0;
   padding: 28px 16px;
   text-align: center;
   cursor: pointer;
-  transition: all 0.2s ease;
-  background: rgba(255, 255, 255, 0.01);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  background: transparent;
+  position: relative;
+  background-image:
+    linear-gradient(rgba(0, 204, 102, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 204, 102, 0.06) 1px, transparent 1px);
+  background-size: 60px 60px;
+  animation: dropzone-breathe 3s ease-in-out infinite;
+}
+
+@keyframes dropzone-breathe {
+  0%, 100% { border-color: rgba(0, 204, 102, 0.25); }
+  50% { border-color: rgba(0, 204, 102, 0.5); box-shadow: 0 0 12px rgba(0, 204, 102, 0.1); }
+}
+
+/* Corner brackets */
+.db-upload-dropzone::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  --_cb-s: 10px;
+  background:
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 0 0 / var(--_cb-s) var(--nerv-cb-weight) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 0 var(--nerv-cb-weight) / var(--nerv-cb-weight) calc(var(--_cb-s) - var(--nerv-cb-weight)) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 100% 0 / var(--_cb-s) var(--nerv-cb-weight) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 100% var(--nerv-cb-weight) / var(--nerv-cb-weight) calc(var(--_cb-s) - var(--nerv-cb-weight)) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 0 100% / var(--_cb-s) var(--nerv-cb-weight) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 0 calc(100% - var(--nerv-cb-weight)) / var(--nerv-cb-weight) calc(var(--_cb-s) - var(--nerv-cb-weight)) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 100% 100% / var(--_cb-s) var(--nerv-cb-weight) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 100% calc(100% - var(--nerv-cb-weight)) / var(--nerv-cb-weight) calc(var(--_cb-s) - var(--nerv-cb-weight)) no-repeat;
+}
+
+/* Crosshair center lines */
+.db-upload-dropzone::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(rgba(0, 204, 102, 0.12) 1px, transparent 1px) center / 100% 1px no-repeat,
+    linear-gradient(90deg, rgba(0, 204, 102, 0.12) 1px, transparent 1px) center / 1px 100% no-repeat;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Inner border (dbl-border effect) */
+.db-dropzone-inner {
+  position: absolute;
+  inset: 3px;
+  border: 1px solid rgba(0, 204, 102, 0.2);
+  pointer-events: none;
+  z-index: 1;
 }
 
 .db-upload-dropzone:hover {
-  border-color: rgba(255, 255, 255, 0.2);
-  background: var(--accent-glow-03);
+  border-color: rgba(0, 204, 102, 0.5);
+  animation: none;
 }
 
 .db-upload-dropzone.dragover {
-  border-color: var(--accent-primary);
-  background: var(--accent-glow-06);
+  border-color: var(--nerv-g);
+  box-shadow: 0 0 16px rgba(0, 204, 102, 0.2);
+  animation: none;
 }
 
 .db-dropzone-icon {
   font-size: 1.6rem;
-  color: var(--text-secondary);
+  color: var(--nerv-g);
   margin-bottom: 4px;
-  opacity: 0.5;
+  text-shadow: 0 0 8px rgba(0, 204, 102, 0.6), 0 0 18px rgba(0, 204, 102, 0.3);
   font-weight: 300;
+  position: relative;
+  z-index: 3;
 }
 
 .db-dropzone-text {
   font-size: 0.82rem;
   color: var(--text-secondary);
+  font-family: var(--font-ui);
+  position: relative;
+  z-index: 3;
 }
 
 .db-dropzone-hint {
@@ -1615,16 +1821,19 @@
   color: var(--text-secondary);
   opacity: 0.5;
   margin-top: 4px;
+  position: relative;
+  z-index: 3;
 }
 
+/* ─── Summary — NV status blocks ─────────────────────────────────────────── */
 .db-upload-summary {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  background: var(--accent-glow-03);
-  border: 1px solid var(--accent-glow-06);
-  border-radius: 6px;
+  background: rgba(0, 204, 102, 0.02);
+  border: 1px solid rgba(0, 204, 102, 0.1);
+  border-radius: 0;
   margin-bottom: 12px;
 }
 
@@ -1633,14 +1842,70 @@
   font-size: 0.82rem;
   margin-right: auto;
   color: var(--text-secondary);
-  font-family: 'Cascadia Code', 'Fira Code', monospace;
+  font-family: var(--font-ui);
 }
 
+.db-upload-stats-grid {
+  display: flex;
+  gap: 8px;
+}
+
+.db-upload-nv-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 4px 10px;
+  border: 1px solid;
+  min-width: 52px;
+  animation: block-light 0.4s ease-out both;
+}
+
+.db-upload-nv-block.nv-ok {
+  border-color: rgba(0, 204, 102, 0.25);
+  background: rgba(0, 204, 102, 0.06);
+}
+.db-upload-nv-block.nv-warn {
+  border-color: rgba(255, 152, 48, 0.25);
+  background: rgba(255, 152, 48, 0.06);
+  animation-delay: 0.1s;
+}
+.db-upload-nv-block.nv-new {
+  border-color: rgba(0, 204, 102, 0.25);
+  background: rgba(0, 204, 102, 0.06);
+  animation-delay: 0.2s;
+}
+.db-upload-nv-block.nv-fail {
+  border-color: rgba(160, 8, 8, 0.3);
+  background: rgba(160, 8, 8, 0.08);
+  animation-delay: 0.3s;
+}
+
+.db-upload-nv-count {
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  font-weight: 700;
+}
+.db-upload-nv-block.nv-ok .db-upload-nv-count { color: var(--nerv-g); text-shadow: 0 0 6px rgba(0, 204, 102, 0.4); }
+.db-upload-nv-block.nv-warn .db-upload-nv-count { color: var(--nerv-o); text-shadow: 0 0 6px rgba(255, 152, 48, 0.3); }
+.db-upload-nv-block.nv-new .db-upload-nv-count { color: var(--nerv-g); text-shadow: 0 0 6px rgba(0, 204, 102, 0.4); }
+.db-upload-nv-block.nv-fail .db-upload-nv-count { color: var(--nerv-r); text-shadow: 0 0 6px rgba(160, 8, 8, 0.4); }
+
+.db-upload-nv-label {
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--nerv-steel-dim);
+}
+
+/* Legacy stat pills (used by undo preview) */
 .db-upload-stat {
   font-size: 0.75rem;
   padding: 2px 10px;
-  border-radius: 10px;
+  border-radius: 0;
   font-weight: 500;
+  clip-path: polygon(0 0, calc(100% - 4px) 0, 100% 4px, 100% 100%, 4px 100%, 0 calc(100% - 4px));
 }
 
 .db-upload-insert { background: rgba(34, 197, 94, 0.15); color: var(--status-ok); }
@@ -1648,21 +1913,37 @@
 .db-upload-unchanged { background: var(--accent-glow-05); color: var(--text-secondary); }
 .db-upload-error { background: rgba(239, 68, 68, 0.15); color: var(--status-error); }
 
-/* Status pills */
+/* Status stamps (replaces pills) */
 .db-upload-status-pill {
+  font-family: var(--font-stamp);
+  font-size: 14px;
+  font-weight: 800;
+  padding: 2px 10px;
+  letter-spacing: 1.5px;
+  border: 1px solid;
+  text-transform: uppercase;
   display: inline-block;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
+  min-width: 50px;
+  text-align: center;
 }
 
-.db-upload-status-insert { background: rgba(34, 197, 94, 0.2); color: var(--status-ok); }
-.db-upload-status-update { background: rgba(251, 191, 36, 0.2); color: var(--accent-amber); }
-.db-upload-status-error { background: rgba(239, 68, 68, 0.2); color: var(--status-error); }
+.db-upload-status-insert {
+  color: var(--nerv-g);
+  border-color: var(--nerv-gd);
+  text-shadow: 0 0 6px rgba(0, 204, 102, 0.4);
+}
+.db-upload-status-update {
+  color: var(--nerv-o);
+  border-color: var(--nerv-od);
+  text-shadow: 0 0 6px rgba(255, 152, 48, 0.3);
+}
+.db-upload-status-error {
+  color: var(--nerv-r);
+  border-color: var(--nerv-rd);
+  text-shadow: 0 0 6px rgba(160, 8, 8, 0.4);
+}
 
-/* ─── Per-field change breakdown ─────────────────────────────────────────── */
+/* ─── Per-field change breakdown — NERV badges ──────────────────────────── */
 .db-upload-field-breakdown {
   display: flex;
   flex-wrap: wrap;
@@ -1670,75 +1951,97 @@
   margin-bottom: 12px;
 }
 
-.db-field-change-pill {
+.db-field-badge {
+  font-family: var(--font-stamp);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 1px 10px;
+  border: 1px solid;
+  text-transform: uppercase;
+  letter-spacing: 1px;
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 0.72rem;
-  padding: 3px 10px;
-  border-radius: 10px;
-  background: rgba(251, 191, 36, 0.1);
-  color: rgba(251, 191, 36, 0.85);
-  font-weight: 500;
-  text-transform: capitalize;
-}
-
-.db-field-change-pill.db-field-change-clickable {
+  clip-path: polygon(0 0, calc(100% - 4px) 0, 100% 4px, 100% 100%, 4px 100%, 0 calc(100% - 4px));
+  color: var(--nerv-o);
+  border-color: var(--nerv-od);
+  text-shadow: 0 0 4px rgba(255, 152, 48, 0.3);
   cursor: pointer;
   transition: background 0.15s, box-shadow 0.15s;
   user-select: none;
 }
 
-.db-field-change-pill.db-field-change-clickable:hover {
-  background: rgba(251, 191, 36, 0.22);
+.db-field-badge:hover {
+  background: rgba(255, 152, 48, 0.1);
 }
 
-.db-field-change-pill.db-field-change-active {
-  background: rgba(251, 191, 36, 0.3);
-  box-shadow: 0 0 0 1.5px rgba(251, 191, 36, 0.6);
+.db-field-badge.db-field-active {
+  background: rgba(255, 152, 48, 0.15);
+  box-shadow: 0 0 8px rgba(255, 152, 48, 0.12), 0 0 20px rgba(255, 152, 48, 0.04), inset 0 0 8px rgba(255, 152, 48, 0.03);
 }
 
-.db-field-change-pill.db-field-change-new {
-  background: rgba(34, 197, 94, 0.1);
-  color: rgba(34, 197, 94, 0.85);
+.db-field-badge.db-field-badge-new {
+  color: var(--nerv-g);
+  border-color: var(--nerv-gd);
+  text-shadow: 0 0 4px rgba(0, 204, 102, 0.4);
 }
 
-.db-field-change-pill.db-field-change-new.db-field-change-clickable:hover {
-  background: rgba(34, 197, 94, 0.22);
+.db-field-badge.db-field-badge-new:hover {
+  background: rgba(0, 204, 102, 0.1);
 }
 
-.db-field-change-pill.db-field-change-new.db-field-change-active {
-  background: rgba(34, 197, 94, 0.3);
-  box-shadow: 0 0 0 1.5px rgba(34, 197, 94, 0.6);
+.db-field-badge.db-field-badge-new.db-field-active {
+  background: rgba(0, 204, 102, 0.15);
+  box-shadow: 0 0 8px rgba(0, 204, 102, 0.12), 0 0 20px rgba(0, 204, 102, 0.04), inset 0 0 8px rgba(0, 204, 102, 0.03);
 }
 
 .db-field-change-count {
-  font-weight: 700;
-  font-size: 0.76rem;
+  font-weight: 800;
+  font-size: 13px;
 }
 
-/* ─── Diff view ──────────────────────────────────────────────────────────── */
+/* ─── Diff view — mini NERV panels ───────────────────────────────────────── */
 .db-upload-diff {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .db-diff-item {
-  border: 1px solid var(--accent-glow-06);
-  border-radius: 8px;
+  border: 1px solid rgba(0, 204, 102, 0.12);
+  border-radius: 0;
   overflow: hidden;
+  position: relative;
+  background: #060604;
 }
 
-.db-diff-item.db-diff-update { border-left: 3px solid var(--accent-amber); }
-.db-diff-item.db-diff-insert { border-left: 3px solid var(--status-ok); }
+/* CHANGED: orange hazard stripe on left */
+.db-diff-item.db-diff-update {
+  border-left: none;
+}
+.db-diff-item.db-diff-update::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: repeating-linear-gradient(-45deg, #FF9830 0 3px, #000 3px 6px);
+  z-index: 2;
+}
+
+/* NEW: green left accent */
+.db-diff-item.db-diff-insert {
+  border-left: 3px solid var(--nerv-g);
+}
 
 .db-diff-header {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
-  background: var(--accent-glow-03);
+  padding: 6px 12px 6px 14px;
+  background: rgba(0, 204, 102, 0.02);
+  border-bottom: 1px solid rgba(0, 204, 102, 0.06);
 }
 
 .db-diff-name {
@@ -1749,11 +2052,12 @@
 .db-diff-count {
   margin-left: auto;
   font-size: 0.72rem;
-  color: var(--text-secondary);
+  color: var(--nerv-steel-dim);
+  font-family: var(--font-ui);
 }
 
 .db-diff-fields {
-  padding: 6px 12px 10px;
+  padding: 6px 12px 10px 14px;
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -1768,7 +2072,7 @@
 }
 
 .db-diff-field {
-  color: var(--text-secondary);
+  color: var(--nerv-steel-dim);
   min-width: 80px;
   flex-shrink: 0;
   font-size: 0.75rem;
@@ -1777,16 +2081,16 @@
 }
 
 .db-diff-old {
-  color: var(--status-error);
+  color: var(--nerv-r);
   text-decoration: line-through;
-  opacity: 0.75;
+  text-shadow: 0 0 8px rgba(160, 8, 8, 0.6), 0 0 18px rgba(160, 8, 8, 0.3);
   word-break: break-word;
   flex: 1;
   min-width: 0;
 }
 
 .db-diff-arrow {
-  color: var(--text-secondary);
+  color: var(--nerv-steel-dim);
   font-size: 0.7rem;
   flex-shrink: 0;
   align-self: flex-start;
@@ -1794,8 +2098,9 @@
 }
 
 .db-diff-new {
-  color: var(--status-ok);
+  color: var(--nerv-g);
   font-weight: 500;
+  text-shadow: 0 0 8px rgba(0, 204, 102, 0.6), 0 0 18px rgba(0, 204, 102, 0.3);
   word-break: break-word;
   flex: 1;
   min-width: 0;
@@ -1804,14 +2109,16 @@
 .db-diff-empty {
   text-align: center;
   padding: 24px 16px;
-  color: var(--text-secondary);
+  color: var(--nerv-steel-dim);
   font-size: 0.85rem;
 }
 
-/* ─── Snapshot notice + footer ───────────────────────────────────────────── */
+/* ─── Snapshot notice + footer — NERV ────────────────────────────────────── */
 .db-modal-upload .db-modal-footer {
   flex-direction: column;
   gap: 12px;
+  border-top: 1px solid rgba(0, 204, 102, 0.1);
+  background: rgba(0, 204, 102, 0.02);
 }
 
 .db-upload-snapshot-notice {
@@ -1821,9 +2128,9 @@
   font-size: 0.78rem;
   color: var(--text-secondary);
   padding: 8px 12px;
-  background: rgba(34, 197, 94, 0.06);
-  border: 1px solid rgba(34, 197, 94, 0.15);
-  border-radius: 6px;
+  background: rgba(0, 204, 102, 0.04);
+  border: 1px solid rgba(0, 204, 102, 0.12);
+  border-radius: 0;
   width: 100%;
 }
 
@@ -1836,7 +2143,6 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
 }
 
 .db-modal-footer-toggles .db-upload-audited-toggle {
@@ -1848,6 +2154,45 @@
   align-items: center;
   gap: 10px;
   width: 100%;
+}
+
+/* NERV footer buttons */
+.db-modal-upload .db-btn {
+  border-radius: 0;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+}
+
+.db-modal-upload .db-btn-commit {
+  background: transparent;
+  color: var(--nerv-g);
+  border-color: var(--nerv-gd);
+  text-shadow: 0 0 8px rgba(0, 204, 102, 0.6);
+}
+
+.db-modal-upload .db-btn-commit:hover:not(:disabled) {
+  background: rgba(0, 204, 102, 0.08);
+  box-shadow: 0 0 8px rgba(0, 204, 102, 0.12), 0 0 20px rgba(0, 204, 102, 0.04);
+}
+
+.db-modal-upload .db-btn-warn {
+  background: transparent;
+  color: var(--nerv-o);
+  border-color: var(--nerv-od);
+  position: relative;
+  overflow: hidden;
+}
+.db-modal-upload .db-btn-warn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(-45deg, rgba(255, 152, 48, 0.08) 0 16px, transparent 16px 32px);
+  z-index: 0;
+}
+.db-modal-upload .db-btn-warn > * { position: relative; z-index: 1; }
+
+.db-modal-upload .db-btn-cancel {
+  border-color: rgba(200, 200, 192, 0.15);
+  color: var(--nerv-steel-dim);
 }
 
 /* ─── DB Snapshots (undo history) ────────────────────────────────────────── */
@@ -2062,28 +2407,33 @@
 }
 
 .db-snapshot-type {
-  font-size: 0.65rem;
-  font-weight: 600;
+  font-family: var(--font-stamp);
+  font-size: 10px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 2px 6px;
-  border-radius: 4px;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 0;
   flex-shrink: 0;
+  border: 1px solid;
 }
 
 .db-snapshot-type-edit {
-  background: rgba(96, 165, 250, 0.15);
-  color: var(--accent-blue);
+  color: var(--nerv-c);
+  border-color: var(--nerv-cd);
+  background: rgba(32, 240, 255, 0.06);
 }
 
 .db-snapshot-type-upload {
-  background: rgba(34, 197, 94, 0.15);
-  color: var(--status-ok);
+  color: var(--nerv-g);
+  border-color: var(--nerv-gd);
+  background: rgba(0, 204, 102, 0.06);
 }
 
 .db-snapshot-type-manual {
-  background: rgba(251, 191, 36, 0.15);
-  color: var(--accent-amber);
+  color: var(--nerv-o);
+  border-color: var(--nerv-od);
+  background: rgba(255, 152, 48, 0.06);
 }
 
 .db-snapshot-preview-meta {
@@ -2505,24 +2855,45 @@
   opacity: 1;
 }
 
+/* ─── Version cards — mini NERV panels ────────────────────────────────────── */
 .db-version-card {
   flex-shrink: 0;
   min-width: 180px;
   max-width: 280px;
   padding: 8px 12px;
-  border: 1px solid var(--border-accent);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(0, 204, 102, 0.15);
+  border-radius: 0;
+  background: #060604;
   cursor: pointer;
   transition: all 0.15s ease;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  position: relative;
+}
+
+/* Corner brackets on version cards (small 8px) */
+.db-version-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  --_cb-s: 8px;
+  background:
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 0 0 / var(--_cb-s) var(--nerv-cb-weight) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 0 var(--nerv-cb-weight) / var(--nerv-cb-weight) calc(var(--_cb-s) - var(--nerv-cb-weight)) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 100% 0 / var(--_cb-s) var(--nerv-cb-weight) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 100% var(--nerv-cb-weight) / var(--nerv-cb-weight) calc(var(--_cb-s) - var(--nerv-cb-weight)) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 0 100% / var(--_cb-s) var(--nerv-cb-weight) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 0 calc(100% - var(--nerv-cb-weight)) / var(--nerv-cb-weight) calc(var(--_cb-s) - var(--nerv-cb-weight)) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 100% 100% / var(--_cb-s) var(--nerv-cb-weight) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 100% calc(100% - var(--nerv-cb-weight)) / var(--nerv-cb-weight) calc(var(--_cb-s) - var(--nerv-cb-weight)) no-repeat;
 }
 
 .db-version-card:hover {
-  background: var(--accent-glow-05);
-  border-color: var(--accent-glow-15);
+  background: rgba(0, 204, 102, 0.04);
+  border-color: rgba(0, 204, 102, 0.25);
 }
 
 .db-version-card-create {
@@ -2532,14 +2903,16 @@
   justify-content: center;
   font-size: 1.4rem;
   font-weight: 300;
-  color: var(--text-secondary);
-  border-style: dashed;
+  color: var(--nerv-g);
+  text-shadow: 0 0 8px rgba(0, 204, 102, 0.6);
+  border-style: solid;
+  border-color: rgba(0, 204, 102, 0.3);
 }
 
 .db-version-card-create:hover {
-  color: var(--status-ok);
-  border-color: var(--status-ok);
-  background: rgba(34, 197, 94, 0.08);
+  color: var(--nerv-g);
+  border-color: var(--nerv-g);
+  background: rgba(0, 204, 102, 0.08);
 }
 
 .db-version-card-create:disabled {
@@ -2548,8 +2921,9 @@
 }
 
 .db-version-card.active {
-  border-color: var(--accent-primary);
-  background: var(--accent-glow-06);
+  border-color: var(--nerv-g);
+  background: rgba(0, 204, 102, 0.06);
+  box-shadow: 0 0 8px rgba(0, 204, 102, 0.12), 0 0 20px rgba(0, 204, 102, 0.04);
 }
 
 .db-version-card-top {
@@ -2559,27 +2933,32 @@
 }
 
 .db-version-card-badge {
-  font-size: 0.58rem;
+  font-family: var(--font-stamp);
+  font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 1px 5px;
-  border-radius: 3px;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 0;
   flex-shrink: 0;
+  border: 1px solid;
 }
 
 .db-version-live {
-  background: rgba(34, 197, 94, 0.2);
-  color: var(--status-ok);
+  color: var(--nerv-g);
+  border-color: var(--nerv-gd);
+  background: rgba(0, 204, 102, 0.08);
 }
 
 .db-version-pinned {
-  background: rgba(251, 191, 36, 0.2);
-  color: var(--accent-amber);
+  color: var(--nerv-c);
+  border-color: var(--nerv-cd);
+  background: rgba(32, 240, 255, 0.08);
 }
 
 .db-version-card-title {
-  font-size: 0.78rem;
+  font-family: var(--font-heading);
+  font-size: 0.68rem;
   font-weight: 500;
   color: var(--text-primary);
   white-space: nowrap;
@@ -2932,27 +3311,63 @@
   }
 }
 
-/* Toast notification */
+/* ─── Toast notification — NERV panel ────────────────────────────────────── */
 .db-toast {
   position: fixed;
   top: 24px;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--surface-raised);
+  background: #060604;
   color: var(--text-primary);
-  border: 1px solid var(--brand-primary);
-  border-radius: 8px;
+  border: 1px solid rgba(0, 204, 102, 0.3);
+  border-radius: 0;
   padding: 10px 20px;
   font-size: 0.9rem;
   z-index: 9999;
   cursor: pointer;
-  animation: db-toast-in 0.25s ease-out, db-toast-out 0.4s 3.5s ease-in forwards;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  animation: boot-in 0.5s ease-out both, db-toast-out 0.4s 3.5s ease-in forwards;
+  box-shadow: 0 0 8px rgba(0, 204, 102, 0.04), 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
-@keyframes db-toast-in {
-  from { opacity: 0; transform: translateX(-50%) translateY(-12px); }
-  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+/* Corner brackets on toast */
+.db-toast::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  --_cb-s: 10px;
+  background:
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 0 0 / var(--_cb-s) var(--nerv-cb-weight) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 0 var(--nerv-cb-weight) / var(--nerv-cb-weight) calc(var(--_cb-s) - var(--nerv-cb-weight)) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 100% 0 / var(--_cb-s) var(--nerv-cb-weight) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 100% var(--nerv-cb-weight) / var(--nerv-cb-weight) calc(var(--_cb-s) - var(--nerv-cb-weight)) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 0 100% / var(--_cb-s) var(--nerv-cb-weight) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 0 calc(100% - var(--nerv-cb-weight)) / var(--nerv-cb-weight) calc(var(--_cb-s) - var(--nerv-cb-weight)) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 100% 100% / var(--_cb-s) var(--nerv-cb-weight) no-repeat,
+    linear-gradient(var(--nerv-cb-color), var(--nerv-cb-color)) 100% calc(100% - var(--nerv-cb-weight)) / var(--nerv-cb-weight) calc(var(--_cb-s) - var(--nerv-cb-weight)) no-repeat;
+}
+
+/* LED dot in toast */
+.db-toast-led {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: middle;
+  background: var(--nerv-g);
+  box-shadow: 0 0 4px var(--nerv-g), 0 0 8px rgba(0, 204, 102, 0.3);
+}
+
+/* Error toast variant */
+.db-toast.db-toast-error {
+  border-color: rgba(160, 8, 8, 0.4);
+  animation: boot-in 0.5s ease-out both, warning-flash 1.5s 0.5s ease-in-out 3, db-toast-out 0.4s 3.5s ease-in forwards;
+}
+.db-toast.db-toast-error .db-toast-led {
+  background: var(--nerv-r);
+  box-shadow: 0 0 4px var(--nerv-r);
 }
 
 @keyframes db-toast-out {

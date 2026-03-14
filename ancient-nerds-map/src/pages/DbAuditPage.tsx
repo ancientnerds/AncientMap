@@ -1294,7 +1294,7 @@ export default function DbAuditPage() {
     <div className="db-page">
       {/* Toast notification */}
       {statusMsg && (
-        <div className="db-toast" onClick={() => setStatusMsg('')}>{statusMsg}</div>
+        <div className="db-toast" onClick={() => setStatusMsg('')}><span className="db-toast-led" />{statusMsg}</div>
       )}
       {/* Header */}
       <PageHeader
@@ -2110,8 +2110,9 @@ export default function DbAuditPage() {
       {showUploadModal && (
         <div className="db-modal-overlay" onClick={() => !uploading && setShowUploadModal(false)}>
           <div className="db-modal db-modal-upload" onClick={e => e.stopPropagation()}>
+            <div className="nerv-inner" />
             <div className="db-modal-header">
-              <h2>Upload Sites</h2>
+              <h2>UPLOAD SITES</h2>
               <button className="db-modal-close" onClick={() => !uploading && setShowUploadModal(false)}>&times;</button>
             </div>
             <div className="db-modal-body">
@@ -2132,7 +2133,7 @@ export default function DbAuditPage() {
                         disabled={!!uploadFileName}
                         title={uploadFileName ? 'Clear the file first to change target' : `Upload to ${cfg.name}`}
                       >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+                        <span className="led" style={{ background: cfg.color, boxShadow: uploadTarget === id ? `0 0 4px ${cfg.color}` : 'none' }} />
                         {cfg.name}
                       </button>
                     ))}
@@ -2147,6 +2148,7 @@ export default function DbAuditPage() {
                     onDrop={handleUploadDrop}
                     onClick={() => document.getElementById('upload-file-input')?.click()}
                   >
+                    <div className="db-dropzone-inner" />
                     <input id="upload-file-input" type="file" accept=".csv,.json,.geojson" onChange={handleUploadFile} style={{ display: 'none' }} />
                     <div className="db-dropzone-icon">+</div>
                     <div className="db-dropzone-text">Drop file here or click to browse</div>
@@ -2157,17 +2159,32 @@ export default function DbAuditPage() {
 
               {uploadParsed.length > 0 && (
                 <>
+                  {/* NV status block summary */}
                   <div className="db-upload-summary">
                     <span className="db-upload-file">{uploadFileName}</span>
-                    <span className="db-upload-stat db-upload-unchanged">{uploadParsed.filter(p => p._status === 'update' && (!p._changedFields || p._changedFields.length === 0)).length} unchanged</span>
-                    <span className="db-upload-stat db-upload-update">{uploadParsed.filter(p => p._status === 'update' && p._changedFields && p._changedFields.length > 0).length} changed</span>
-                    <span className="db-upload-stat db-upload-insert">{uploadParsed.filter(p => p._status === 'insert').length} new</span>
-                    {uploadParsed.filter(p => p._status === 'error').length > 0 && (
-                      <span className="db-upload-stat db-upload-error">{uploadParsed.filter(p => p._status === 'error').length} errors</span>
-                    )}
+                    <div className="db-upload-stats-grid">
+                      <span className="db-upload-nv-block nv-ok">
+                        <span className="db-upload-nv-count digit-roll">{uploadParsed.filter(p => p._status === 'update' && (!p._changedFields || p._changedFields.length === 0)).length}</span>
+                        <span className="db-upload-nv-label">UNCHANGED</span>
+                      </span>
+                      <span className="db-upload-nv-block nv-warn">
+                        <span className="db-upload-nv-count digit-roll">{uploadParsed.filter(p => p._status === 'update' && p._changedFields && p._changedFields.length > 0).length}</span>
+                        <span className="db-upload-nv-label">CHANGED</span>
+                      </span>
+                      <span className="db-upload-nv-block nv-new">
+                        <span className="db-upload-nv-count digit-roll">{uploadParsed.filter(p => p._status === 'insert').length}</span>
+                        <span className="db-upload-nv-label">NEW</span>
+                      </span>
+                      {uploadParsed.filter(p => p._status === 'error').length > 0 && (
+                        <span className="db-upload-nv-block nv-fail">
+                          <span className="db-upload-nv-count digit-roll">{uploadParsed.filter(p => p._status === 'error').length}</span>
+                          <span className="db-upload-nv-label">ERRORS</span>
+                        </span>
+                      )}
+                    </div>
                   </div>
 
-                  {/* Per-field change breakdown */}
+                  {/* Per-field change breakdown — NERV badges */}
                   {(() => {
                     const fieldCounts: Record<string, number> = {}
                     for (const p of uploadParsed) {
@@ -2185,7 +2202,7 @@ export default function DbAuditPage() {
                         {entries.map(([field, count]) => (
                           <span
                             key={field}
-                            className={`db-field-change-pill db-field-change-clickable ${uploadFieldFilter === field ? 'db-field-change-active' : ''}`}
+                            className={`db-field-badge ${uploadFieldFilter === field ? 'db-field-active' : ''}`}
                             onClick={() => setUploadFieldFilter(prev => prev === field ? null : field)}
                           >
                             <span className="db-field-change-count">{count}</span>
@@ -2194,7 +2211,7 @@ export default function DbAuditPage() {
                         ))}
                         {newCount > 0 && (
                           <span
-                            className={`db-field-change-pill db-field-change-new db-field-change-clickable ${uploadFieldFilter === '_new' ? 'db-field-change-active' : ''}`}
+                            className={`db-field-badge db-field-badge-new ${uploadFieldFilter === '_new' ? 'db-field-active' : ''}`}
                             onClick={() => setUploadFieldFilter(prev => prev === '_new' ? null : '_new')}
                           >
                             <span className="db-field-change-count">{newCount}</span>
@@ -2205,7 +2222,7 @@ export default function DbAuditPage() {
                     )
                   })()}
 
-                  {/* Diff view — only show sites with actual changes or inserts */}
+                  {/* Diff view — mini NERV panels */}
                   <div className="db-upload-diff">
                     {uploadParsed
                       .filter(p => {
@@ -2218,7 +2235,7 @@ export default function DbAuditPage() {
                         <div key={i} className={`db-diff-item db-diff-${p._status}`}>
                           <div className="db-diff-header">
                             <span className={`db-upload-status-pill db-upload-status-${p._status}`}>
-                              {p._status === 'insert' ? 'NEW' : 'CHANGED'}
+                              {p._status === 'insert' ? 'NEW' : 'CAUTION'}
                             </span>
                             <span className="db-diff-name">{p.name}</span>
                             {p._changedFields && (
@@ -2229,7 +2246,6 @@ export default function DbAuditPage() {
                             <div className="db-diff-fields">
                               {(uploadFieldFilter && uploadFieldFilter !== '_new' ? p._changedFields.filter(f => f === uploadFieldFilter) : p._changedFields).map(field => {
                                 const label = field.replace(/_/g, ' ')
-                                // Enrichment arrays: show count badge instead of stringified JSON
                                 if (field === 'description_citations') {
                                   const count = p.description_citations?.length ?? 0
                                   return (
@@ -2281,7 +2297,23 @@ export default function DbAuditPage() {
               )}
             </div>
             {uploading && (
-              <div className="db-upload-progress">
+              <div className={`db-upload-progress ${
+                uploadProgress.phase.includes('snapshot') || uploadProgress.phase.includes('Snapshot') ? 'phase-snapshot' :
+                uploadProgress.phase.includes('Rebuilding') || uploadProgress.phase.includes('audited') ? 'phase-rebuild' :
+                ''
+              }`}>
+                <div className="db-upload-progress-phase">
+                  <span className={`db-upload-status-pill ${
+                    uploadProgress.phase.includes('snapshot') || uploadProgress.phase.includes('Snapshot') ? 'db-upload-status-update' :
+                    uploadProgress.phase.includes('Rebuilding') ? 'db-upload-status-update' :
+                    'db-upload-status-insert'
+                  }`}>
+                    {uploadProgress.phase.includes('snapshot') || uploadProgress.phase.includes('Snapshot') ? 'SNAPSHOT' :
+                     uploadProgress.phase.includes('Rebuilding') ? 'REBUILD' :
+                     uploadProgress.phase.includes('audited') ? 'AUDIT' :
+                     'UPLOAD'}
+                  </span>
+                </div>
                 <div className="db-upload-progress-bar-track">
                   <div
                     className="db-upload-progress-bar-fill"
@@ -2289,11 +2321,23 @@ export default function DbAuditPage() {
                   />
                 </div>
                 <div className="db-upload-progress-text">
-                  {uploadProgress.sent} / {uploadProgress.total} sites
+                  <span className="digit-roll" key={uploadProgress.sent}>{uploadProgress.sent}</span>
+                  {' / '}
+                  {uploadProgress.total}
                 </div>
                 <div className="db-upload-progress-sub">
                   {uploadProgress.phase}
                 </div>
+                {uploadProgress.total > 0 && (
+                  <div className="db-upload-progress-chunks">
+                    {Array.from({ length: Math.ceil(uploadProgress.total / 10) }, (_, i) => {
+                      const chunkEnd = (i + 1) * 10
+                      const isDone = uploadProgress.sent >= chunkEnd
+                      const isActive = uploadProgress.sent >= i * 10 && uploadProgress.sent < chunkEnd
+                      return <div key={i} className={`db-upload-chunk ${isDone ? 'done' : isActive ? 'active' : ''}`} />
+                    })}
+                  </div>
+                )}
               </div>
             )}
             <div className="db-modal-footer">
@@ -2303,7 +2347,7 @@ export default function DbAuditPage() {
                   onClick={() => setUploadCreateSnapshot(!uploadCreateSnapshot)}
                   title="Create a snapshot of the current database state before applying changes. This allows you to roll back."
                 >
-                  <span className={`db-toggle-check ${uploadCreateSnapshot ? 'checked' : ''}`} />
+                  <span className={`db-toggle-led ${uploadCreateSnapshot ? 'on' : 'off'}`} />
                   Create snapshot
                 </button>
                 <button
@@ -2311,14 +2355,14 @@ export default function DbAuditPage() {
                   onClick={() => setUploadMarkAudited(!uploadMarkAudited)}
                   title="Mark all sites in this source as audited after upload. Enable this if you've reviewed the full database, not just the uploaded sites."
                 >
-                  <span className={`db-toggle-check ${uploadMarkAudited ? 'checked' : ''}`} />
+                  <span className={`db-toggle-led ${uploadMarkAudited ? 'on' : 'off'}`} />
                   Mark all as audited
                 </button>
               </div>
               <div className="db-modal-footer-buttons">
                 <button className="db-btn db-btn-cancel" onClick={() => { setShowUploadModal(false); setUploadParsed([]); setUploadFileName(''); setUploadMarkAudited(false); setUploadCreateSnapshot(true); setUploadFieldFilter(null) }} disabled={uploading}>Cancel</button>
                 <button className={`db-btn ${uploadCreateSnapshot ? 'db-btn-commit' : 'db-btn-warn'}`} onClick={commitUpload} disabled={uploading || uploadParsed.filter(p => p._status !== 'error').length === 0} title={uploadCreateSnapshot ? 'Creates a snapshot of current state, then applies all changes' : 'No snapshot — changes cannot be rolled back!'}>
-                  {uploading ? 'Applying...' : uploadCreateSnapshot ? 'Snapshot & Apply' : 'Apply Without Snapshot'}
+                  <span>{uploading ? 'Applying...' : uploadCreateSnapshot ? 'Snapshot & Apply' : 'Apply Without Snapshot'}</span>
                 </button>
               </div>
             </div>
@@ -2330,8 +2374,9 @@ export default function DbAuditPage() {
       {snapshotPreview && (
         <div className="db-modal-overlay" onClick={() => !snapshotPreviewLoading && setSnapshotPreview(null)}>
           <div className="db-modal db-modal-upload" onClick={e => e.stopPropagation()}>
+            <div className="nerv-inner" />
             <div className="db-modal-header">
-              <h2>Undo Preview</h2>
+              <h2>UNDO PREVIEW</h2>
               {sourceFilter !== 'all' && (
                 <span className="db-snapshot-source-badge" style={{ borderColor: SOURCE_CONFIG[sourceFilter]?.color, background: SOURCE_CONFIG[sourceFilter]?.color + '15' }}>
                   <span className="db-snapshot-source-dot" style={{ background: SOURCE_CONFIG[sourceFilter]?.color }} />
@@ -2401,8 +2446,9 @@ export default function DbAuditPage() {
       {historyModal && (
         <div className="db-modal-overlay" onClick={() => setHistoryModal(null)}>
           <div className="db-modal db-modal-upload" onClick={e => e.stopPropagation()}>
+            <div className="nerv-inner" />
             <div className="db-modal-header">
-              <h2>{historyLoading ? 'Loading...' : 'Edit History'} &mdash; {historyModal.siteName}</h2>
+              <h2>{historyLoading ? 'LOADING...' : 'EDIT HISTORY'} &mdash; {historyModal.siteName}</h2>
               <button className="db-modal-close" onClick={() => setHistoryModal(null)}>&times;</button>
             </div>
             <div className="db-modal-body">
