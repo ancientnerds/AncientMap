@@ -835,7 +835,7 @@ async def export_file_snapshot_endpoint(
         return {"snapshot_key": snapshot_key}
     except Exception as e:
         logger.error("Snapshot export failed: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Snapshot export failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Snapshot export failed: {e}") from e
 
 
 @router.get("/snapshots/{snapshot_id}/preview")
