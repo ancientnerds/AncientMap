@@ -246,9 +246,17 @@ class StaticExporter:
                     cs.card_description,
                     cs.best_wiki_url,
                     cs.source_language,
-                    us.raw_data
+                    us.raw_data,
+                    wi.filename AS hero_filename
                 FROM unified_sites us
                 LEFT JOIN card_stats cs ON cs.site_id = us.id
+                LEFT JOIN LATERAL (
+                    SELECT filename
+                    FROM wiki_images
+                    WHERE site_id = us.id
+                    ORDER BY is_hero DESC, is_lead DESC, sort_order
+                    LIMIT 1
+                ) wi ON true
                 ORDER BY us.source_id, us.name
             """)
             )
@@ -277,8 +285,11 @@ class StaticExporter:
                     site["c"] = row.country  # country
                 if row.description:
                     site["d"] = row.description[:500]  # description (truncated)
-                if row.thumbnail_url:
-                    site["im"] = row.thumbnail_url  # image
+                if row.hero_filename:
+                    sid_short = str(row.id).replace("-", "")[:8]
+                    site["im"] = f"/data/images/wiki/{sid_short}/{row.hero_filename}"
+                elif row.thumbnail_url:
+                    site["im"] = row.thumbnail_url  # fallback to legacy thumbnail
                 if row.source_url:
                     site["u"] = row.source_url  # source URL
                 if row.card_description:
