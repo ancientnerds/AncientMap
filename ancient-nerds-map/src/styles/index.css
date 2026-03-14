@@ -14407,12 +14407,12 @@ body.news-feed-open .empire-borders-window {
   object-fit: cover;
 }
 
-/* Images rendered inside markdown (e.g. YouTube thumbnails from transcript search) */
+/* Images rendered inside markdown (e.g. site photos, YouTube thumbnails) */
 .lyra-chat-msg-text img {
-  max-width: 280px;
+  max-width: 100%;
   border-radius: 6px;
   border: 1px solid var(--border-accent);
-  margin: 4px 0;
+  margin: 8px 0;
   display: block;
 }
 
