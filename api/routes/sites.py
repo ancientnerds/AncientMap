@@ -872,6 +872,82 @@ async def restore_snapshot_endpoint(
     }
 
 
+@router.post("/snapshots/restore-all-uploads")
+async def restore_all_upload_snapshots(
+    _user: DiscordUser = Depends(require_founder),
+    db: Session = Depends(get_db),
+):
+    """Restore ALL sites from today's upload snapshots in one transaction.
+
+    Collects old_data from every snapshot_row linked to today's upload-type
+    snapshots, keeps earliest snapshot per site (= pre-upload state), and
+    writes the original values back. Use this to undo a broken bulk upload
+    that was split across many chunked snapshots.
+    """
+    snap_rows = db.execute(
+        text("""
+            SELECT DISTINCT ON (sr.site_id)
+                sr.site_id::text AS site_id, sr.old_data
+            FROM snapshot_rows sr
+            JOIN db_snapshots ds ON ds.id = sr.snapshot_id
+            WHERE ds.snapshot_type = 'upload'
+              AND ds.created_at >= CURRENT_DATE
+            ORDER BY sr.site_id, ds.created_at ASC
+        """)
+    ).fetchall()
+
+    if not snap_rows:
+        raise HTTPException(status_code=404, detail="No upload snapshots found today")
+
+    count = 0
+    for row in snap_rows:
+        data = row.old_data
+        db.execute(
+            text("""
+                UPDATE unified_sites SET
+                    name = :name, name_normalized = :name_normalized,
+                    lat = :lat, lon = :lon,
+                    geom = ST_SetSRID(ST_MakePoint(:lon, :lat), 4326),
+                    site_type = :site_type, period_start = :period_start,
+                    period_end = :period_end, period_name = :period_name,
+                    country = :country, description = :description,
+                    thumbnail_url = :thumbnail_url, source_url = :source_url,
+                    edited_by = :edited_by, updated_at = NOW()
+                WHERE id::text = :site_id
+            """),
+            {
+                "site_id": data["id"],
+                "name": data.get("name"),
+                "name_normalized": data.get("name_normalized"),
+                "lat": data.get("lat"),
+                "lon": data.get("lon"),
+                "site_type": data.get("site_type"),
+                "period_start": data.get("period_start"),
+                "period_end": data.get("period_end"),
+                "period_name": data.get("period_name"),
+                "country": data.get("country"),
+                "description": data.get("description"),
+                "thumbnail_url": data.get("thumbnail_url"),
+                "source_url": data.get("source_url"),
+                "edited_by": data.get("edited_by", "initial"),
+            },
+        )
+        count += 1
+
+    db.commit()
+    cache_delete_pattern("sites:*")
+
+    global _static_sites_cache
+    _static_sites_cache = None
+
+    logger.info(
+        "Bulk-restored %d sites from today's upload snapshots (by %s)",
+        count,
+        _user.username,
+    )
+    return {"restored": count}
+
+
 @router.get("/{site_id}/history")
 async def get_site_edit_history(
     site_id: str,

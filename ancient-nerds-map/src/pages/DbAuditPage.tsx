@@ -1009,7 +1009,24 @@ export default function DbAuditPage() {
       let totalUpdated = 0
       const allErrors: { row: number; name: string; error: string }[] = []
 
-      // Send snapshot only with the first chunk
+      // Create ONE snapshot of ALL affected sites before any uploads
+      if (uploadCreateSnapshot) {
+        setUploadProgress({ sent: 0, total, phase: 'Creating snapshot of current state...' })
+        try {
+          const snapRes = await fetch(`${config.api.baseUrl}/sites/snapshots/create?source_id=${uploadTarget}&description=${encodeURIComponent(`Before upload (${total} sites)`)}`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+          })
+          if (!snapRes.ok) {
+            const data = await snapRes.json().catch(() => ({}))
+            allErrors.push({ row: 0, name: 'SNAPSHOT', error: `Snapshot failed: ${data.detail || snapRes.status}` })
+          }
+        } catch (e) {
+          allErrors.push({ row: 0, name: 'SNAPSHOT', error: `Snapshot failed: ${e}` })
+        }
+      }
+
+      // Upload in chunks (no per-chunk snapshots — already snapshotted above)
       const chunks: typeof allSites[] = []
       for (let i = 0; i < total; i += CHUNK_SIZE) {
         chunks.push(allSites.slice(i, i + CHUNK_SIZE))
@@ -1020,9 +1037,7 @@ export default function DbAuditPage() {
         setUploadProgress({
           sent: ci * CHUNK_SIZE,
           total,
-          phase: ci === 0 && uploadCreateSnapshot
-            ? `Creating snapshot + uploading batch ${ci + 1}/${chunks.length}`
-            : `Uploading batch ${ci + 1}/${chunks.length}`,
+          phase: `Uploading batch ${ci + 1}/${chunks.length}`,
         })
 
         const res = await fetch(`${config.api.baseUrl}/sites/batch-upload`, {
@@ -1031,7 +1046,7 @@ export default function DbAuditPage() {
           body: JSON.stringify({
             sites: chunks[ci],
             target_source: uploadTarget,
-            create_snapshot: ci === 0 && uploadCreateSnapshot,  // snapshot only on first chunk
+            create_snapshot: false,  // snapshot already created above
           }),
         })
         if (!res.ok) {
