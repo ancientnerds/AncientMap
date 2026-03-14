@@ -1650,7 +1650,8 @@ async def run_agent_stream(
         for _synth_attempt in range(3):
             try:
                 # Run synthesis with heartbeat — emit status every 8s so the client
-                # knows the connection is alive during the 10-30s Mercury call (R3)
+                # knows the connection is alive during the 10-30s Mercury call (R3).
+                # Uses asyncio.wait (not wait_for+shield) to avoid cancellation issues.
                 _synth_task = asyncio.create_task(
                     backend_impl.generate(
                         synthesis_msgs,
@@ -1659,9 +1660,8 @@ async def run_agent_stream(
                     )
                 )
                 while not _synth_task.done():
-                    try:
-                        await asyncio.wait_for(asyncio.shield(_synth_task), timeout=8.0)
-                    except TimeoutError:
+                    done, _ = await asyncio.wait({_synth_task}, timeout=8.0)
+                    if not done:
                         if not _heartbeat_sent:
                             yield {"type": "status", "content": "Synthesizing answer..."}
                             _heartbeat_sent = True
@@ -1672,12 +1672,22 @@ async def run_agent_stream(
                 total_input_tokens += _synth_result["usage"]["input"]
                 total_output_tokens += _synth_result["usage"]["output"]
 
-                text_out, so_data, _off_topic = _parse_structured_output(_synth_result["content"])
+                raw_content = _synth_result["content"]
+                text_out, so_data, _off_topic = _parse_structured_output(raw_content)
                 if so_data is not None:
                     _structured_output = so_data
                 if text_out.strip():
                     yield {"type": "diffusion", "content": text_out}
-                _synthesis_ok = True
+                    _synthesis_ok = True
+                else:
+                    # Mercury returned valid JSON but empty text — treat as retryable
+                    print(
+                        f"[SYNTHESIS] Empty text on attempt {_synth_attempt + 1}: {raw_content[:500]}",
+                        flush=True,
+                    )
+                    if _synth_attempt < 2:
+                        await asyncio.sleep(1.5)
+                        continue
                 break
             except Exception as exc:
                 _synth_last_err = exc
@@ -1704,6 +1714,33 @@ async def run_agent_stream(
                     f"Phase 2 synthesis failed after {_synth_attempt + 1} attempts: {exc}"
                 )
                 break
+
+        # Last resort: if structured output failed 3 times, try once WITHOUT schema.
+        # A plain-text answer is infinitely better than a database dump.
+        if not _synthesis_ok:
+            print(
+                f"[SYNTHESIS] Structured output failed {3 if _synth_last_err else 0}x, "
+                f"trying plain text (no schema)...",
+                flush=True,
+            )
+            try:
+                _plain_result = await backend_impl.generate(
+                    synthesis_msgs,
+                    response_format=None,  # No schema — just plain text
+                    max_tokens=8192,
+                )
+                total_input_tokens += _plain_result["usage"]["input"]
+                total_output_tokens += _plain_result["usage"]["output"]
+                _plain_text = clean_response_text(_plain_result["content"])
+                if _plain_text.strip():
+                    yield {"type": "diffusion", "content": _plain_text}
+                    _synthesis_ok = True
+                    print("[SYNTHESIS] Plain text fallback succeeded", flush=True)
+            except Exception as exc:
+                print(
+                    f"[SYNTHESIS] Plain text fallback also failed: {type(exc).__name__}: {exc}",
+                    flush=True,
+                )
 
         if not _synthesis_ok:
             _fb = _build_fallback_response(message, all_sites, all_news)
