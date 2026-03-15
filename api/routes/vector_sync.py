@@ -231,7 +231,7 @@ async def vector_reindex(
         raise HTTPException(status_code=409, detail="Reindex already running")
 
     # Build CLI args — run one or both backends
-    backends = [body.backend] if body.backend else ["voyage", "local"]
+    backends = [body.backend] if body.backend else ["voyage"]
     cmds = []
     for be in backends:
         cmd = [sys.executable, "scripts/build_lyra_index.py", "--backend", be]
@@ -318,10 +318,9 @@ async def schedule_nightly_reindex():
                 logger.info("[VECTOR-SYNC] Nightly reindex skipped — already running")
                 continue
 
-            logger.info("[VECTOR-SYNC] Starting nightly auto-reindex (both backends)")
+            logger.info("[VECTOR-SYNC] Starting nightly auto-reindex (voyage backend)")
             cmds = [
                 [sys.executable, "scripts/build_lyra_index.py", "--backend", "voyage"],
-                [sys.executable, "scripts/build_lyra_index.py", "--backend", "local"],
             ]
             _reindex_state["running"] = True
             _reindex_state["started_at"] = datetime.now(UTC).isoformat()
