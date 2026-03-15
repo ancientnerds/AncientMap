@@ -22,7 +22,6 @@ INSTRUCTION: Results are archaeological sites. For each site you reference in yo
 - Map: marker="sN", name=result.name, id=result.id (the UUID)
 - If you mention coordinates, create «cN» with lat/lon from the result
 - If result has a country, you may create «fN» with country name and ISO code
-- ONLY use site IDs from these results. NEVER fabricate UUIDs.
 - Use site data as-is. Do NOT add descriptions, dates, or details not present in these results.
 """,
     "get_site_details": """
@@ -32,7 +31,6 @@ INSTRUCTION: Detailed site data. Create a «sN» marker for this site:
 - If result has content_links with YouTube URLs, create «vN» video markers (not «lN»)
 - If result has alternate_names, mention them in text
 - Create «fN» for the country
-- NEVER fabricate URLs or sources not in this result.
 """,
     "search_news": """
 INSTRUCTION: News items from YouTube archaeology channels. For each news item you mention:
@@ -41,15 +39,13 @@ INSTRUCTION: News items from YouTube archaeology channels. For each news item yo
 - Each «vN» MUST reference a DIFFERENT video_id. Do NOT create multiple entries for the same video.
 - Do NOT create «lN» links for the same video — the «vN» marker already embeds the video.
 - If result mentions a site_mentioned, create «sN» only if you also have the site's UUID from another tool
-- NEVER fabricate video_ids. Only use video_ids from these results.
-- Reference these news items by channel and headline. Do NOT fabricate news not in these results.
+- Reference these news items by channel and headline.
 """,
     "get_empire_data": """
 INSTRUCTION: Seshat historical polity data. Create an «eN» marker:
 - Map: marker="eN", name=polity name, polity_id=the empire_id used in the query
 - Mention key facts (period, capital, warfare tech, economy) in your text
 - If polity has coordinates for its capital, create «cN»
-- NEVER fabricate data not in this result.
 """,
     "vector_search": """
 INSTRUCTION: Semantic search results. The collection searched determines what markers to create:
@@ -72,13 +68,11 @@ INSTRUCTION: Lyra-discovered archaeological sites. For each discovery you mentio
 INSTRUCTION: List of YouTube archaeology channels. For each channel you mention:
 - Create «lN» links using the youtube_url from each result
 - Map: marker="lN", text=channel name, url=result.youtube_url
-- NEVER fabricate channel URLs. Only use URLs from these results.
 """,
     "get_site_images": """
 INSTRUCTION: Wikipedia/Wikimedia images for a site. For each image you want to show:
 - Create «iN» marker and matching images[] entry
 - Map: marker="iN", title=result.title, original_url=result.original_url, author=result.author, license=result.license
-- ONLY use original_url from these results. NEVER fabricate image URLs.
 - Include attribution (author + license) for each image.
 """,
     "search_transcripts": """
@@ -87,7 +81,7 @@ INSTRUCTION: Video transcript excerpts with timestamps. For each transcript pass
 - Map: marker="vN", channel=result channel, video_id=result video_id, timestamp_seconds=start_seconds
 - Quote relevant text from the passage in your response
 - Do NOT create «lN» links for the same video — the «vN» marker already embeds the video.
-- Quote directly where relevant. Attribute each claim to its source (channel name + video title). Do NOT add information not present in these transcripts.
+- Quote directly where relevant. Attribute each claim to its source (channel name + video title).
 """,
     "search_articles": """
 INSTRUCTION: Weekly digest article passages. For each article passage:
@@ -100,7 +94,6 @@ INSTRUCTION: Empire search results from Seshat data. For each empire you referen
 - Create «eN» marker: marker="eN", name=empire name, polity_id=result polity_id
 - For detailed data, you can call get_empire_data(polity_id)
 - If result has wikipedia_url, create «lN» with that URL
-- NEVER fabricate polity IDs not in these results.
 """,
 }
 
