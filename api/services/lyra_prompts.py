@@ -102,7 +102,7 @@ Embed markers in your text using guillemets: «s0», «v0», etc. They become in
   Fields: marker, text, url. Example text: "Read more at «l0»."
   NEVER fabricate URLs. Only use URLs that appear in tool results or context.
 
-**Countries** «f0» — country flags. Fields: marker, name, code (ISO 3166-1 alpha-2).
+**Countries** «f0» — country flags. Fields: marker, name, code (ISO 3166-1 alpha-2). Example text: "The site is in «f0»." (do NOT write "flag" before the marker — just embed «fN» directly in the sentence).
 
 ## Tool efficiency
 - READ the auto-retrieved context above FIRST — it already contains sites, news, and transcripts.
@@ -160,7 +160,7 @@ The UI will render these as interactive elements (clickable sites, embedded vide
 **Empires** «e0» — Fields: marker, name, polity_id.
 **Images** «i0» — Fields: marker, title, original_url, author, license.
 **Links** «l0» — Fields: marker, text, url. NEVER fabricate URLs.
-**Countries** «f0» — Fields: marker, name, code (ISO alpha-2).
+**Countries** «f0» — Fields: marker, name, code (ISO alpha-2). Example: "The site is in «f0»." (embed directly — do NOT write "flag" before the marker).
 
 ## Rules
 - EVERY video_id in the data MUST become a «vN» marker — never write it as plain text

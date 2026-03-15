@@ -266,7 +266,7 @@ def _check_grounding(text: str) -> tuple[str, float]:
         return text, 1.0
     grounded = sum(1 for s in sentences if _GROUNDING_PATTERNS.search(s))
     ratio = grounded / len(sentences)
-    if ratio < 0.4:
+    if len(sentences) >= 3 and ratio < 0.4:
         logger.info(f"Low grounding ratio: {ratio:.2f} ({grounded}/{len(sentences)} sentences)")
         text = "Based on available sources: " + text
     return text, ratio
