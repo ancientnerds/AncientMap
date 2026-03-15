@@ -1439,7 +1439,7 @@ async def run_agent_stream(
                     # Anthropic: don't pass output_config when tools are offered —
                     # Haiku returns empty content when tools + output_config are combined.
                     # Mercury: always pass response_format (unchanged behaviour).
-                    _p1_rformat = LYRA_RESPONSE_SCHEMA
+                    _p1_rformat: dict | None = LYRA_RESPONSE_SCHEMA
                     if ctx.backend_type == "anthropic" and _offer_tools:
                         _p1_rformat = None
                     result = await backend_impl.generate(

@@ -843,7 +843,7 @@ def get_backend(
         elif backend_type == "anthropic":
             from pipeline.lyra.config import get_max_tokens
 
-            api_key = os.getenv("LYRA_ANTHROPIC_API_KEY") or os.getenv("LYRA_API_KEY", "")
+            api_key = os.getenv("LYRA_ANTHROPIC_API_KEY") or os.getenv("LYRA_API_KEY") or ""
             _backends[key] = AnthropicBackend(
                 model=model_name,
                 api_key=api_key,
