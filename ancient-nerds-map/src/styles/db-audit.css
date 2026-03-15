@@ -2858,8 +2858,8 @@
 /* ─── Version cards — mini NERV panels ────────────────────────────────────── */
 .db-version-card {
   flex-shrink: 0;
-  min-width: 180px;
-  max-width: 280px;
+  min-width: 160px;
+  max-width: 200px;
   padding: 8px 12px;
   border: 1px solid rgba(0, 204, 102, 0.15);
   border-radius: 0;
@@ -2978,8 +2978,32 @@
   line-height: 1.3;
 }
 
-.db-version-card-actions {
-  margin-top: 4px;
+.db-version-card-pin {
+  position: absolute;
+  bottom: 5px;
+  right: 7px;
+  font-size: 0.55rem;
+  font-family: var(--font-stamp);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 1px 4px;
+  background: rgba(0, 204, 102, 0.1);
+  border: 1px solid rgba(0, 204, 102, 0.35);
+  color: var(--nerv-g);
+  cursor: pointer;
+  line-height: 1.5;
+  opacity: 0.75;
+  z-index: 6;
+}
+.db-version-card-pin:hover {
+  opacity: 1;
+  background: rgba(0, 204, 102, 0.2);
+}
+.db-version-card-pin.pinned {
+  color: var(--nerv-c);
+  border-color: rgba(32, 240, 255, 0.35);
+  background: rgba(32, 240, 255, 0.08);
 }
 
 .db-pin-indicator {

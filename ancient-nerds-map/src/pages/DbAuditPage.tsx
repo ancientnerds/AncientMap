@@ -1506,17 +1506,14 @@ export default function DbAuditPage() {
                     {s.sites.toLocaleString()} sites{sourceSummary ? ` (${sourceSummary})` : ''}
                   </div>
                   {isActive && isFounder && (
-                    <div className="db-version-card-actions" onClick={e => e.stopPropagation()}>
-                      {isPinned ? (
-                        <button className="db-pin-btn db-pin-btn-active" onClick={() => { for (const sid of Object.keys(SOURCE_CONFIG)) handleSetPin(sid, null) }} disabled={pinLoading != null}>
-                          {pinLoading ? '...' : 'Unpin'}
-                        </button>
-                      ) : (
-                        <button className="db-pin-btn" onClick={() => { for (const sid of Object.keys(SOURCE_CONFIG)) handleSetPin(sid, s.date) }} disabled={pinLoading != null}>
-                          {pinLoading ? '...' : 'Set as Public'}
-                        </button>
-                      )}
-                    </div>
+                    <button
+                      className={`db-version-card-pin${isPinned ? ' pinned' : ''}`}
+                      onClick={e => { e.stopPropagation(); for (const sid of Object.keys(SOURCE_CONFIG)) handleSetPin(sid, isPinned ? null : s.date) }}
+                      disabled={pinLoading != null}
+                      title={isPinned ? 'Unpin from public' : 'Set as public'}
+                    >
+                      {pinLoading ? '·' : isPinned ? 'Unpin' : 'Set public'}
+                    </button>
                   )}
                 </div>
               )
