@@ -223,7 +223,7 @@ def search_sites(
         site_type: Filter by site type (e.g. 'settlement', 'temple', 'burial').
         limit: Maximum results to return (default 10, max 25).
     """
-    query = (query or "")[:500]
+    query = (query or "")[:500].strip()
     limit = min(limit, 25)
     conditions = ["1=1"]
     params: dict = {"limit": limit}

@@ -2453,8 +2453,8 @@ def claim_achievement_reward(
     if not a_def:
         raise ValueError("Unknown achievement")
 
-    # Lock user row
-    session.query(DiscordUser).filter(DiscordUser.id == user.id).with_for_update().first()
+    # Lock and refresh user row (identity map: this also refreshes `user.credits`)
+    user = session.query(DiscordUser).filter(DiscordUser.id == user.id).with_for_update().first()
 
     # Grant credits
     if a_def["reward_credits"] > 0:

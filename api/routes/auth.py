@@ -691,7 +691,8 @@ async def admin_list_users(
     with get_session() as session:
         query = session.query(DiscordUser)
         if q:
-            query = query.filter(DiscordUser.username.ilike(f"%{q}%"))
+            q_safe = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            query = query.filter(DiscordUser.username.ilike(f"%{q_safe}%", escape="\\"))
         if role:
             role_ids = [r.strip() for r in role.split(",") if r.strip()]
             if role_ids:

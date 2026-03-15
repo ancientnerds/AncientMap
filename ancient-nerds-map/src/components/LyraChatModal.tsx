@@ -443,7 +443,8 @@ export default function LyraChatModal({
           </button>
         )
       }
-      // Normal link
+      // Normal link — only allow http/https to block javascript: protocol XSS
+      if (!href?.startsWith('http://') && !href?.startsWith('https://')) return <span>{children}</span>
       return <a {...props} href={href} target="_blank" rel="noopener noreferrer">{children}</a>
     },
     img: ({ src, alt, ...props }: React.ImgHTMLAttributes<HTMLImageElement>) => {

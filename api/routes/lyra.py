@@ -228,6 +228,7 @@ def _stream_response_with_credits(
 
     async def generate():
         done_fired = False
+        new_achievements: list = []
         try:
             from api.services.lyra_agent import run_agent_stream
 

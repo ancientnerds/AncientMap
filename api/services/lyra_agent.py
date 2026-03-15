@@ -48,6 +48,7 @@ from api.services.lyra_tools import (
     LLM_MODEL,
     TOOLS,
     _decompose_query,
+    _escape_ilike,
     _hybrid_search,
     _is_vague_query,
     _reorder_by_relevance,
@@ -595,11 +596,6 @@ def _is_valid_uuid(val: str) -> bool:
         return True
     except (ValueError, AttributeError):
         return False
-
-
-def _escape_ilike(val: str) -> str:
-    """Escape LIKE metacharacters for safe ILIKE patterns."""
-    return val.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def _get_related_news(
