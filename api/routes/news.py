@@ -501,7 +501,7 @@ async def article_citations(article_id: int, db: Session = Depends(get_db)):
     video_ids = list({vid for _, vid, _ in parsed})
     items = (
         db.query(NewsItem)
-        .filter(NewsItem.video_id.in_(video_ids), NewsItem.post_text.isnot(None))
+        .filter(NewsItem.video_id.in_(video_ids))
         .options(
             joinedload(NewsItem.video).joinedload(NewsVideo.channel),
             joinedload(NewsItem.site),
