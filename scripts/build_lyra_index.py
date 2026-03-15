@@ -155,7 +155,7 @@ def index_sites(client: QdrantClient, embeddings, sparse_model, rebuild: bool = 
         FROM unified_sites us
         LEFT JOIN unified_site_names usn ON usn.site_id = us.id
         LEFT JOIN site_content_links scl ON scl.site_id = us.id
-        WHERE us.source_id = 'ancient_nerds'
+        WHERE us.description IS NOT NULL AND LENGTH(us.description) > 20
         GROUP BY us.id
         ORDER BY us.id
     """
@@ -465,7 +465,6 @@ def index_transcripts(client: QdrantClient, embeddings, sparse_model, rebuild: b
         FROM news_videos nv
         JOIN news_channels nc ON nv.channel_id = nc.id
         WHERE nv.transcript_text IS NOT NULL
-          AND nv.status IN ('transcribed', 'summarized')
         ORDER BY nv.published_at DESC
     """
 
