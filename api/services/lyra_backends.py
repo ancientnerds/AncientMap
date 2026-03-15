@@ -610,7 +610,9 @@ class AnthropicBackend:
         """Convert Mercury/OpenAI json_schema format to Anthropic output_config."""
         # Input:  {"type": "json_schema", "json_schema": {"name": ..., "strict": True, "schema": {...}}}
         # Output: {"format": {"type": "json_schema", "schema": {...}}}
-        return {"format": {"type": "json_schema", "schema": response_format["json_schema"]["schema"]}}
+        return {
+            "format": {"type": "json_schema", "schema": response_format["json_schema"]["schema"]}
+        }
 
     async def generate(
         self,

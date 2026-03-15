@@ -1402,7 +1402,11 @@ async def run_agent_stream(
 
         # If tools are cut off and we already have tool results, skip straight
         # to Phase 2 synthesis — no point calling Mercury just to discard the result
-        if not _offer_tools and tool_calls_made > 0 and ctx.backend_type in ("mercury", "anthropic"):
+        if (
+            not _offer_tools
+            and tool_calls_made > 0
+            and ctx.backend_type in ("mercury", "anthropic")
+        ):
             yield {
                 "type": "pipeline",
                 "stage": "llm_round",
