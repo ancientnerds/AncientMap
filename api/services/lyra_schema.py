@@ -342,6 +342,14 @@ def expand_markers(
         expanded,
     )
 
+    # Deduplicate consecutive site chips with the same UUID:
+    # [Name](site:UUID) [Name](site:UUID) → [Name](site:UUID)
+    expanded = re.sub(
+        r"(\[[^\]]+\]\(site:[a-f0-9-]+\))\s*\1",
+        r"\1",
+        expanded,
+    )
+
     return expanded, issues
 
 

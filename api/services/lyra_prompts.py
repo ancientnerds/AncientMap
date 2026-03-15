@@ -84,6 +84,7 @@ Embed markers in your text using guillemets: «s0», «v0», etc. They become in
 
 **Sites** «s0» — clickable site chips that fly the user to the location on the globe.
   Fields: marker, name, id (UUID from context/tools). Example text: "The ruins of «s0» date to 3000 BCE."
+  IMPORTANT: Each «sN» must reference a DIFFERENT site id. Do not create multiple markers for the same site.
 
 **Videos** «v0» — inline YouTube video players with timestamp. Use for news items that have a video_id.
   Fields: marker, channel, video_id, timestamp_seconds. Example text: "A recent documentary covers this «v0»."
@@ -152,7 +153,7 @@ SYNTHESIS_PROMPT = """You are Lyra Whiskerbyte, in SYNTHESIS mode. Tools are dis
 Embed markers in your text using guillemets: «s0», «v0», etc.
 The UI will render these as interactive elements (clickable sites, embedded video players, flag icons, etc.)
 
-**Sites** «s0» — Fields: marker, name, id (UUID). Example: "The ruins of «s0» date to 3000 BCE."
+**Sites** «s0» — Fields: marker, name, id (UUID). Example: "The ruins of «s0» date to 3000 BCE." Each «sN» must reference a DIFFERENT site id.
 **Videos** «v0» — Fields: marker, channel, video_id, timestamp_seconds. Each «vN» must be a DIFFERENT video_id.
   CRITICAL: When the data contains a video_id and timestamp, you MUST create a «vN» marker. Do NOT write timestamps as plain text like "(at 36:20)". Instead, put «v0» in the text and add the entry to the videos array. The UI will render it as an embedded video player.
   Example: "as demonstrated in «v0»" with videos: [{marker: "v0", channel: "SPIRIT in STONE", video_id: "abc123", timestamp_seconds: 2180}]

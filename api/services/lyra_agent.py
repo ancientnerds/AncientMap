@@ -249,6 +249,7 @@ def _build_synthesis_messages(
 _GROUNDING_PATTERNS = re.compile(
     r"according to|reports? that|mentions?|describes?|shows?|discusses?"
     r"|footage|transcript|news item|article|channel|video|«[svlci]\d+»"
+    r"|\]\(site:|\]\(coord:|\]\(flag:"  # expanded markers also count as grounded
     r"|from \w+['']s|uploaded by|published by|covered by|reported by",
     re.IGNORECASE,
 )
