@@ -2005,7 +2005,9 @@ async def run_agent_stream(
                     )
                     _fallback_msgs[0] = SystemMessage(content=SYNTHESIS_FALLBACK_PROMPT)
                     _plain_result = await backend_impl.generate(
-                        _fallback_msgs, response_format=None, max_tokens=8192,
+                        _fallback_msgs,
+                        response_format=None,
+                        max_tokens=8192,
                     )
                     total_input_tokens += _plain_result["usage"]["input"]
                     total_output_tokens += _plain_result["usage"]["output"]
@@ -2080,7 +2082,9 @@ async def run_agent_stream(
                     )
                     _fallback_msgs[0] = SystemMessage(content=SYNTHESIS_FALLBACK_PROMPT)
                     _plain_result = await backend_impl.generate(
-                        _fallback_msgs, response_format=None, max_tokens=8192,
+                        _fallback_msgs,
+                        response_format=None,
+                        max_tokens=8192,
                     )
                     total_input_tokens += _plain_result["usage"]["input"]
                     total_output_tokens += _plain_result["usage"]["output"]
@@ -2172,7 +2176,9 @@ async def run_agent_stream(
                             if not done:
                                 yield {
                                     "type": "status",
-                                    "content": "Still working..." if _p2_hb else "Adding citations...",
+                                    "content": "Still working..."
+                                    if _p2_hb
+                                    else "Adding citations...",
                                 }
                                 _p2_hb = True
                         result = _p2_task.result()
