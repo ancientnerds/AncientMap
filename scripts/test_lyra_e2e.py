@@ -35,17 +35,11 @@ async def run_test(query: str, debug: bool = False, json_output: bool = False):
     t0 = time.monotonic()
     events = []
 
-    from api.services.lyra_router import RequestContext, set_request_context
+    from api.services.lyra_router import RequestContext, set_request_context, route_request
 
-    # Force Mercury backend
-    ctx = RequestContext(
-        backend_type="mercury",
-        model_tier="premium",
-        model_name="mercury-2",
-        supports_tools=True,
-        supports_thinking=False,
-        embedding_backend="voyage",
-    )
+    # Use the real router so LYRA_LLM_BACKEND env var is respected
+    backend = os.getenv("LYRA_LLM_BACKEND", "mercury")
+    ctx = route_request(backend, query)
     set_request_context(ctx)
 
     async for event in run_agent_stream(

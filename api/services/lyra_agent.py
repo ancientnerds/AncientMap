@@ -255,8 +255,8 @@ def _build_synthesis_messages(
 # Patterns that indicate a sentence is grounded (cites a source)
 _GROUNDING_PATTERNS = re.compile(
     r"according to|reports? that|mentions?|describes?|shows?|discusses?"
-    r"|footage|transcript|news item|article|channel|video|«[svlci]\d+»"
-    r"|\]\(site:|\]\(coord:|\]\(flag:"  # expanded markers also count as grounded
+    r"|footage|transcript|news item|article|channel|video|«[svlcie]\d+»"
+    r"|\]\(site:|\]\(coord:|\]\(flag:|\]\(empire:|\]\(video:"  # expanded markers
     r"|from \w+['']s|uploaded by|published by|covered by|reported by",
     re.IGNORECASE,
 )
@@ -265,8 +265,8 @@ _GROUNDING_PATTERNS = re.compile(
 def _check_grounding(text: str) -> tuple[str, float]:
     """Check what fraction of sentences cite a source.
 
-    Returns (possibly-prefixed text, grounding_ratio).
-    If ratio < 0.4, prepends a grounding disclaimer.
+    Returns (text unchanged, grounding_ratio).
+    Logs a warning when ratio is low — does NOT modify the text.
     """
     # Split into sentences (rough but effective)
     sentences = [s.strip() for s in re.split(r"[.!?]+", text) if len(s.strip()) > 20]
@@ -276,12 +276,12 @@ def _check_grounding(text: str) -> tuple[str, float]:
     ratio = grounded / len(sentences)
     if len(sentences) >= 3 and ratio < 0.4:
         logger.info(f"Low grounding ratio: {ratio:.2f} ({grounded}/{len(sentences)} sentences)")
-        text = "Based on available sources: " + text
     return text, ratio
 
 
 def _parse_structured_output(
     raw_content: str,
+    check_on_topic: bool = True,
 ) -> tuple[str, dict[str, Any] | None, bool]:
     """Parse structured JSON from Mercury and return (text, structured_data, off_topic).
 
@@ -289,10 +289,14 @@ def _parse_structured_output(
         text: The cleaned, marker-expanded text to emit.
         structured_data: Non-text fields (sites, videos, coords, etc.) or None.
         off_topic: Whether the response was flagged off-topic.
+
+    Args:
+        check_on_topic: If False, ignore on_topic=false in the JSON (used for
+            Pass 2 annotation mode, which should never trigger deflection).
     """
     parsed = json.loads(raw_content)
 
-    if not parsed.get("on_topic", True):
+    if check_on_topic and not parsed.get("on_topic", True):
         return (
             (
                 "🏺 That's not really my area! I'm all about ancient ruins, "
@@ -519,10 +523,15 @@ def _auto_retrieve(
                     seen_transcript_keys.add(key)
                     transcript_chunks.append(r)
 
+    # Minimum relevance to include in LLM context (prevents hallucination from garbage results).
+    # site_results / news_results are still returned in full for map/sidebar highlighting.
+    _MIN_RELEVANCE = 0.5
+
     # Format site results
-    if site_results:
+    sites_for_context = [r for r in site_results if r.get("relevance", 1.0) >= _MIN_RELEVANCE]
+    if sites_for_context:
         lines = []
-        for r in site_results:
+        for r in sites_for_context:
             name = r.get("name", "?")
             site_id = r.get("id", "")
             period = r.get("period_name", "")
@@ -540,9 +549,10 @@ def _auto_retrieve(
         )
 
     # Format news results
-    if news_results:
+    news_for_context = [r for r in news_results if r.get("relevance", 1.0) >= _MIN_RELEVANCE]
+    if news_for_context:
         lines = []
-        for r in news_results:
+        for r in news_for_context:
             headline = r.get("headline", "?")
             channel = r.get("channel", "")
             desc = r.get("description", r.get("summary", ""))[:150]
@@ -553,6 +563,7 @@ def _auto_retrieve(
         context_parts.append("### Related News (semantic)\n" + "\n".join(lines))
 
     # Format transcript results
+    transcript_chunks = [r for r in transcript_chunks if r.get("relevance", 1.0) >= _MIN_RELEVANCE]
     if transcript_chunks:
         transcript_chunks = _semantic_dedup(transcript_chunks, text_key="text_preview")
         lines = []
@@ -1497,13 +1508,49 @@ async def run_agent_stream(
                 else:
                     # No tools used at all (simple query) — emit Phase 1 response
                     if ctx.backend_type == "anthropic" and _offer_tools:
-                        # Haiku decided not to use tools. Re-call WITHOUT tools +
-                        # WITH output_config to get proper structured output (site
-                        # markers, on_topic, chips). Can't combine both in one call.
+                        # Haiku decided not to use tools. Use first call's clean text
+                        # as prose, then run marker injection (same as Pass 2 in
+                        # synthesis path) to get structured output. This avoids
+                        # "Based on available sources:" which Haiku adds when it
+                        # sees retrieved context + output_config in the same call.
+                        _first_prose = clean_response_text(result["content"])
                         try:
+                            _simple_entities = json.dumps(
+                                {
+                                    "sites": [
+                                        {
+                                            "id": s.get("id", ""),
+                                            "name": s.get("name", ""),
+                                            "lat": s.get("lat"),
+                                            "lon": s.get("lon"),
+                                            "country": s.get("country"),
+                                        }
+                                        for s in (all_sites or [])
+                                        if s.get("id")
+                                    ],
+                                    "videos": [
+                                        {
+                                            "video_id": n["video_id"],
+                                            "channel": n.get("channel", ""),
+                                            "timestamp_seconds": n.get("timestamp_seconds", 0),
+                                        }
+                                        for n in (all_news or [])
+                                        if n.get("video_id")
+                                    ],
+                                    "empires": [],
+                                    "images": [],
+                                    "links": [],
+                                },
+                                ensure_ascii=False,
+                            )
+                            _injection_msgs = build_marker_injection_messages(
+                                prose=_first_prose,
+                                user_question=message,
+                                entities_json=_simple_entities,
+                                context_prompt=context_prompt,
+                            )
                             _so_result = await backend_impl.generate(
-                                messages,
-                                tools=None,
+                                _injection_msgs,
                                 response_format=LYRA_RESPONSE_SCHEMA,
                                 max_tokens=8192,
                             )
@@ -1516,11 +1563,11 @@ async def run_agent_stream(
                                 if so_data is not None:
                                     _structured_output = so_data
                             except Exception as e:
-                                logger.warning(f"Anthropic structured output parse failed: {e}")
-                                collected_content = clean_response_text(_so_result["content"])
+                                logger.warning(f"Anthropic marker injection parse failed: {e}")
+                                collected_content = _first_prose
                         except Exception as e:
-                            logger.warning(f"Anthropic structured output re-call failed: {e}")
-                            collected_content = clean_response_text(result["content"])
+                            logger.warning(f"Anthropic marker injection failed: {e}")
+                            collected_content = _first_prose
                     elif ctx.backend_type == "anthropic":
                         # No tools were offered (edge case) — use plain text
                         collected_content = clean_response_text(result["content"])
@@ -1543,7 +1590,11 @@ async def run_agent_stream(
                                 collected_content = clean_response_text(raw)
                     # Emit clean text directly (no diffusion simulation)
                     if collected_content.strip():
-                        collected_content, _grounding = _check_grounding(collected_content)
+                        # Only apply grounding check when tools were actually used
+                        # (i.e., factual data was retrieved). For pure conversational
+                        # responses (no tools), there are no citations to check.
+                        if tool_calls_made > 0:
+                            collected_content, _grounding = _check_grounding(collected_content)
                         _text_emitted = True
                         yield {"type": "diffusion", "content": collected_content}
         else:
@@ -1923,11 +1974,13 @@ async def run_agent_stream(
         for _p1_attempt in range(3):
             try:
                 if ctx.backend_type == "anthropic":
-                    # Citations path: plain text + automatic source attribution
+                    # Regular generation — PROSE_PROMPT instructions guide source
+                    # attribution. citations=True caused meta-commentary ("Looking at
+                    # the retrieved data...", "transcript passages recovered don't
+                    # contain...") which breaks Lyra's persona.
                     _p1_task = asyncio.create_task(
                         backend_impl.generate(
                             prose_msgs,
-                            citations=True,
                             max_tokens=4096,
                         )
                     )
@@ -1945,7 +1998,7 @@ async def run_agent_stream(
                     total_output_tokens += result["usage"]["output"]
                     _prose_text = result["content"].strip()
                     if not _prose_text:
-                        raise ValueError("Empty citations response from Anthropic")
+                        raise ValueError("Empty Pass 1 response from Anthropic")
                     break
                 else:
                     # Mercury path: structured output with LYRA_PROSE_SCHEMA
@@ -2100,7 +2153,10 @@ async def run_agent_stream(
                     result = _p2_task.result()
                     total_input_tokens += result["usage"]["input"]
                     total_output_tokens += result["usage"]["output"]
-                    text_out, so_data, _ = _parse_structured_output(result["content"])
+                    # Pass 2 is annotation mode — never deflect based on on_topic
+                    text_out, so_data, _ = _parse_structured_output(
+                        result["content"], check_on_topic=False
+                    )
                     if so_data is not None and _valid_video_ids:
                         text_out, so_data = _filter_hallucinated_videos(
                             text_out, so_data, _valid_video_ids
