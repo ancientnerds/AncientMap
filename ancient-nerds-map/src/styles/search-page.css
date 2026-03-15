@@ -27,13 +27,13 @@
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  background: var(--surface-raised);
-  border: 1px solid var(--border-accent);
-  border-radius: 8px;
+  /* NERV panel — bg/border/corners come from panel.css */
+  position: relative;
 }
 
 .search-bar-icon {
   flex-shrink: 0;
+  color: var(--nerv-g, #00cc66);
   opacity: 0.5;
 }
 
@@ -54,55 +54,97 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  background: var(--accent-glow-10);
-  border: none;
-  border-radius: 50%;
-  color: var(--text-secondary);
+  width: 20px;
+  height: 20px;
+  background: rgba(0, 204, 102, 0.06);
+  border: 1px solid rgba(0, 204, 102, 0.15);
+  color: var(--nerv-steel-dim, #888880);
   cursor: pointer;
   padding: 0;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  clip-path: polygon(0 0, calc(100% - 3px) 0, 100% 3px, 100% 100%, 3px 100%, 0 calc(100% - 3px));
 }
 
 .search-bar-clear:hover {
-  background: var(--accent-glow-20);
-  color: var(--text-primary);
+  background: rgba(0, 204, 102, 0.12);
+  border-color: rgba(0, 204, 102, 0.35);
+  color: var(--nerv-g, #00cc66);
+}
+
+/* Random — action button, not a toggle */
+.search-bar-random-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: transparent;
+  border: 1px solid rgba(255, 152, 48, 0.25);
+  color: var(--nerv-o, #FF9830);
+  font-family: var(--font-stamp, 'Saira Extra Condensed', sans-serif);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  clip-path: polygon(0 0, calc(100% - 4px) 0, 100% 4px, 100% 100%, 4px 100%, 0 calc(100% - 4px));
+}
+
+.search-bar-random-btn:hover {
+  border-color: rgba(255, 152, 48, 0.6);
+  background: rgba(255, 152, 48, 0.06);
+  color: #ffb060;
+}
+
+.search-bar-random-btn:active {
+  background: rgba(255, 152, 48, 0.12);
+}
+
+.search-bar-random-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 .search-bar-filter-btn {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
+  padding: 5px 10px;
   margin-left: auto;
-  background: var(--accent-glow-10);
-  border: 1px solid var(--accent-glow-20);
-  border-radius: 6px;
-  color: var(--text-secondary);
-  font-size: 0.8rem;
+  background: transparent;
+  border: 1px solid rgba(0, 204, 102, 0.2);
+  color: var(--nerv-steel-dim, #888880);
+  font-family: var(--font-stamp, 'Saira Extra Condensed', sans-serif);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
   flex-shrink: 0;
+  clip-path: polygon(0 0, calc(100% - 4px) 0, 100% 4px, 100% 100%, 4px 100%, 0 calc(100% - 4px));
 }
 
 .search-bar-filter-btn:hover {
-  background: var(--accent-glow-20);
+  border-color: rgba(0, 204, 102, 0.4);
+  color: var(--nerv-g, #00cc66);
+  background: rgba(0, 204, 102, 0.04);
 }
 
 .search-bar-filter-btn.active {
-  background: var(--accent-glow-25);
-  border-color: var(--accent-primary);
-  color: var(--accent-primary);
-  box-shadow: 0 0 8px var(--accent-glow-20);
+  border-color: var(--nerv-g, #00cc66);
+  color: var(--nerv-g, #00cc66);
+  background: rgba(0, 204, 102, 0.06);
+  box-shadow: 0 0 8px rgba(0, 204, 102, 0.15);
 }
 
 .search-bar-filter-btn.has-filters::after {
   content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent-primary);
+  width: 5px;
+  height: 5px;
+  background: var(--nerv-g, #00cc66);
+  box-shadow: 0 0 4px rgba(0, 204, 102, 0.8);
 }
 
 /* Filters panel */
@@ -110,11 +152,27 @@
   margin-bottom: 16px;
 }
 
-/* Results count */
+/* Results count — NERV stamp style */
 .search-results-count {
-  padding: 8px 0;
-  font-size: 0.85rem;
-  color: var(--text-secondary);
+  padding: 6px 0;
+  font-family: var(--font-stamp, 'Saira Extra Condensed', sans-serif);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--nerv-o, #FF9830);
+}
+
+/* Loading bar wrapper — centers NervLoadingBar on the page */
+.search-loading-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+.search-loading-wrap .nerv-lb {
+  width: 100%;
+  max-width: 480px;
 }
 
 /* Empty state / prompt */
@@ -128,10 +186,17 @@
   text-align: center;
 }
 
+.search-prompt svg {
+  color: var(--nerv-g, #00cc66);
+  opacity: 0.15;
+}
+
 .search-prompt p {
-  color: var(--text-secondary);
-  font-size: 0.9rem;
+  color: var(--nerv-steel-dim, #888880);
+  font-size: 0.85rem;
   max-width: 400px;
+  font-family: var(--font-body);
+  letter-spacing: 0.3px;
 }
 
 /* Card grid */
@@ -145,12 +210,31 @@
   margin-bottom: 16px;
 }
 
-/* Random chip -- glow on hover when already active (re-shuffle) */
-.search-bar-inner .news-page-chip.active:hover {
-  background: var(--accent-glow-25);
-  border-color: var(--brand-primary-hover);
-  color: var(--brand-primary-hover);
-  box-shadow: 0 0 12px var(--accent-glow-30);
+/* Chips inside search bar — override pill to NERV chamfered style */
+.search-bar-inner .news-page-chip {
+  border-radius: 0;
+  clip-path: polygon(0 0, calc(100% - 4px) 0, 100% 4px, 100% 100%, 4px 100%, 0 calc(100% - 4px));
+  font-family: var(--font-stamp, 'Saira Extra Condensed', sans-serif);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  border-color: rgba(0, 204, 102, 0.2);
+  color: var(--nerv-steel-dim, #888880);
+}
+
+.search-bar-inner .news-page-chip:hover {
+  border-color: rgba(0, 204, 102, 0.4);
+  color: var(--nerv-g, #00cc66);
+  background: rgba(0, 204, 102, 0.04);
+}
+
+.search-bar-inner .news-page-chip.active {
+  border-color: var(--nerv-g, #00cc66);
+  color: var(--nerv-g, #00cc66);
+  background: rgba(0, 204, 102, 0.08);
+  box-shadow: 0 0 8px rgba(0, 204, 102, 0.15);
+  font-weight: 700;
 }
 
 /* Load more button */
@@ -184,14 +268,12 @@
     padding: 8px 12px;
   }
 
-  /* Force input to fill first row so buttons wrap to second row */
   .search-bar-inner .search-bar-input {
     flex-basis: 0;
     min-width: 60%;
     font-size: 0.95rem;
   }
 
-  /* Action buttons -- second row, pushed right */
   .search-bar-inner .search-bar-filter-btn {
     margin-left: auto;
   }
@@ -201,7 +283,7 @@
   }
 
   .search-bar-filter-btn {
-    padding: 6px;
+    padding: 5px 8px;
   }
 
   .search-prompt {

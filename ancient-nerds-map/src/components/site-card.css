@@ -1,19 +1,17 @@
 .site-card {
-  background: var(--surface-deep);
-  border: 1px solid var(--border-accent);
-  border-radius: 8px;
+  /* bg/border/corner-brackets come from panel.css */
+  position: relative;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
   text-decoration: none;
   color: inherit;
 }
 
 .site-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 1px var(--accent-glow-25);
+  border-color: rgba(0, 204, 102, 0.45);
+  box-shadow: 0 0 16px rgba(0, 204, 102, 0.12), 0 4px 24px rgba(0, 0, 0, 0.5);
 }
 
 .site-card:focus-visible {
@@ -90,7 +88,7 @@
   z-index: 1;
 }
 
-/* Vignette -- smooth blend from hero into card body */
+/* Vignette -- smooth blend from hero into NERV panel bg */
 .site-card-vignette {
   position: absolute;
   bottom: 0;
@@ -99,10 +97,10 @@
   height: 110px;
   background: linear-gradient(
     to bottom,
-    rgba(0, 15, 20, 0) 0%,
-    rgba(0, 15, 20, 0.3) 30%,
-    rgba(0, 15, 20, 0.7) 60%,
-    var(--surface-deep) 100%
+    rgba(0, 20, 25, 0) 0%,
+    rgba(0, 20, 25, 0.35) 30%,
+    rgba(0, 20, 25, 0.75) 60%,
+    rgba(0, 20, 25, 0.92) 100%
   );
   z-index: 2;
   pointer-events: none;
@@ -246,16 +244,17 @@
   border-top: 1px solid var(--accent-glow-12);
 }
 
-/* Source badge -- pill-shaped, matching news card style */
+/* Source badge -- chamfered NERV stamp */
 .site-card-source {
   font-size: 9px;
   padding: 2px 8px;
   border: 1px solid;
-  border-radius: 14px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  font-weight: 500;
+  font-weight: 700;
+  font-family: var(--font-stamp, 'Saira Extra Condensed', sans-serif);
   white-space: nowrap;
+  clip-path: polygon(0 0, calc(100% - 3px) 0, 100% 3px, 100% 100%, 3px 100%, 0 calc(100% - 3px));
 }
 
 .site-card-action-link,

@@ -1,11 +1,9 @@
 .search-filters {
+  /* bg/border/corner-brackets come from panel.css */
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  background: var(--surface-raised);
-  border: 1px solid var(--border-accent);
-  border-radius: 8px;
-  overflow: hidden;
 }
 
 .sf-section-header {
@@ -16,19 +14,23 @@
   padding: 10px 14px;
   background: none;
   border: none;
-  color: var(--text-primary);
-  font-size: 0.85rem;
-  font-weight: 500;
+  color: var(--nerv-o, #FF9830);
+  font-family: var(--font-stamp, 'Saira Extra Condensed', sans-serif);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
 
 .sf-section-header:hover {
-  background: var(--accent-glow-04);
+  background: rgba(0, 204, 102, 0.04);
+  color: var(--nerv-g, #00cc66);
 }
 
 .sf-section + .sf-section {
-  border-top: 1px solid var(--accent-glow-06);
+  border-top: 1px solid rgba(0, 204, 102, 0.1);
 }
 
 .sf-section-body {
@@ -52,20 +54,21 @@
   width: 100%;
   padding: 6px 10px;
   margin-bottom: 8px;
-  background: var(--btn-secondary-bg);
-  border: 1px solid var(--border-default);
-  border-radius: 4px;
+  background: rgba(0, 20, 25, 0.5);
+  border: 1px solid rgba(0, 204, 102, 0.15);
   color: var(--text-primary);
   font-size: 0.8rem;
   outline: none;
+  clip-path: polygon(0 0, calc(100% - 4px) 0, 100% 4px, 100% 100%, 4px 100%, 0 calc(100% - 4px));
 }
 
 .sf-country-search:focus {
-  border-color: var(--border-accent-strong);
+  border-color: rgba(0, 204, 102, 0.4);
+  box-shadow: 0 0 6px rgba(0, 204, 102, 0.1);
 }
 
 .sf-country-search::placeholder {
-  color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.25);
 }
 
 /* Age labels below slider */

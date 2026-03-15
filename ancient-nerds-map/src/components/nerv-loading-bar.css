@@ -1,0 +1,137 @@
+/* NervLoadingBar — bg/border/corner-brackets from panel.css (.nerv-lb) */
+
+.nerv-lb {
+  position: relative;
+  padding: 14px 18px 12px;
+  min-width: 240px;
+}
+
+/* Inner inset border */
+.nerv-lb-inner {
+  position: absolute;
+  inset: 3px;
+  border: 1px solid rgba(0, 204, 102, 0.07);
+  pointer-events: none;
+}
+
+/* Header row: stamp + counter + pct */
+.nerv-lb-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.nerv-lb-stamp {
+  font-family: var(--font-stamp, 'Saira Extra Condensed', sans-serif);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--nerv-o, #FF9830);
+  border: 1px solid rgba(255, 152, 48, 0.3);
+  padding: 2px 10px;
+  text-shadow: 0 0 8px rgba(255, 152, 48, 0.35);
+}
+
+.nerv-lb-counter {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--nerv-g, #00cc66);
+  text-shadow: 0 0 8px rgba(0, 204, 102, 0.5);
+  font-variant-numeric: tabular-nums;
+}
+
+.nerv-lb-pct {
+  margin-left: auto;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  color: rgba(0, 204, 102, 0.55);
+}
+
+/* Track */
+.nerv-lb-track {
+  width: 100%;
+  height: 20px;
+  background: #080e0a;
+  border: 1px solid rgba(0, 204, 102, 0.15);
+  overflow: hidden;
+  position: relative;
+}
+
+/* Determinate fill */
+.nerv-lb-fill {
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  transition: width 0.5s ease-in-out;
+}
+
+.nerv-lb-fill::after {
+  content: '';
+  position: absolute;
+  inset: -50px;
+  background: repeating-linear-gradient(
+    -45deg,
+    #00cc66 0 16px,
+    #004d26 16px 32px
+  );
+  animation: stripe-march 1.2s linear infinite;
+  will-change: transform;
+}
+
+/* Indeterminate: full-width dimmer stripes */
+.nerv-lb-track--indet .nerv-lb-fill {
+  width: 100%;
+}
+
+.nerv-lb-track--indet .nerv-lb-fill::after {
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(0, 204, 102, 0.28) 0 16px,
+    rgba(0, 15, 8, 0.7) 16px 32px
+  );
+  animation: stripe-march 2s linear infinite;
+}
+
+/* Label centered inside the track */
+.nerv-lb-track-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-stamp, 'Saira Extra Condensed', sans-serif);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 0 8px rgba(0, 0, 0, 1), 0 1px 4px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* LEDs */
+.nerv-lb-leds {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+  justify-content: center;
+}
+
+.nerv-lb-led {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  transition: background 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.nerv-lb-led--on {
+  background: var(--nerv-g, #00cc66);
+  border-color: var(--nerv-g, #00cc66);
+  box-shadow: 0 0 5px rgba(0, 204, 102, 0.8);
+}

@@ -5159,17 +5159,12 @@ a.popup-window-btn {
   flex-shrink: 0;
 }
 
-/* Indeterminate fill — sweeps and loops */
-@keyframes loading-bar-sweep {
-  0%   { width: 0%;    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
-  70%  { width: 100%;  animation-timing-function: steps(1, end); }
-  100% { width: 100%; }
-}
 .loading-bar-fill {
   height: 100%;
   position: relative;
   overflow: hidden;
-  animation: loading-bar-sweep 6s linear infinite;
+  width: 0%;
+  transition: width 0.8s ease-in-out;
 }
 .loading-bar-fill::after {
   content: '';

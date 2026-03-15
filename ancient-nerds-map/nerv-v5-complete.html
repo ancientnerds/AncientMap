@@ -1653,6 +1653,116 @@ body::before{
   </div>
 </div>
 
+<!-- ═══════════ 10 NERV-LB (Loading Bar) ═══════════ -->
+<div style="font-family:var(--fh);font-size:9px;color:var(--o);text-transform:uppercase;letter-spacing:2px;margin:24px 0 8px;text-shadow:0 0 6px var(--og)">NervLoadingBar — Reusable component · NervLoadingBar.tsx</div>
+<div class="g3" style="margin-bottom:16px;gap:16px;align-items:start">
+
+  <!-- Indeterminate variant -->
+  <div>
+    <div style="font-size:8px;color:var(--o);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Indeterminate (no progress prop)</div>
+    <div class="p" style="padding:14px 18px 12px">
+      <div class="p-inner"></div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <span style="font-family:var(--font-stamp);font-size:13px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--o);border:1px solid rgba(255,152,48,0.3);padding:2px 10px;text-shadow:0 0 8px rgba(255,152,48,0.35)">RANDOM</span>
+      </div>
+      <div style="width:100%;height:20px;background:#080e0a;border:1px solid rgba(0,204,102,0.15);overflow:hidden;position:relative">
+        <div style="width:100%;height:100%;position:relative;overflow:hidden">
+          <div style="position:absolute;inset:-50px;background:repeating-linear-gradient(-45deg,rgba(0,204,102,0.28) 0 16px,rgba(0,15,8,0.7) 16px 32px);animation:stripe-march 2s linear infinite;will-change:transform"></div>
+        </div>
+        <span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--font-stamp);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,0.85);text-shadow:0 0 8px #000,0 1px 4px #000;z-index:2">FETCHING SITES</span>
+      </div>
+    </div>
+    <div style="font-size:8px;color:var(--steel-dim);margin-top:6px">props: label="RANDOM" sublabel="FETCHING SITES"</div>
+  </div>
+
+  <!-- Determinate variant -->
+  <div>
+    <div style="font-size:8px;color:var(--o);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Determinate (progress=0–100, live LEDs)</div>
+    <div class="p" style="padding:14px 18px 12px" id="nlb-demo">
+      <div class="p-inner"></div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <span style="font-family:var(--font-stamp);font-size:13px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--o);border:1px solid rgba(255,152,48,0.3);padding:2px 10px;text-shadow:0 0 8px rgba(255,152,48,0.35)">LOADING</span>
+        <span style="margin-left:auto;font-family:var(--fm);font-size:11px;color:rgba(0,204,102,0.55)" id="nlb-pct">0%</span>
+      </div>
+      <div style="width:100%;height:20px;background:#080e0a;border:1px solid rgba(0,204,102,0.15);overflow:hidden;position:relative">
+        <div id="nlb-fill" style="height:100%;width:0%;position:relative;overflow:hidden;transition:width 0.5s ease-in-out">
+          <div style="position:absolute;inset:-50px;background:repeating-linear-gradient(-45deg,#00cc66 0 16px,#004d26 16px 32px);animation:stripe-march 1.2s linear infinite;will-change:transform"></div>
+        </div>
+        <span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--font-stamp);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,0.85);text-shadow:0 0 8px #000,0 1px 4px #000;z-index:2">FETCHING ARCHAEOLOGICAL SITES</span>
+      </div>
+      <div style="display:flex;gap:4px;margin-top:6px;justify-content:center" id="nlb-leds">
+        <div class="upload-demo-led" id="nlb-l1"></div>
+        <div class="upload-demo-led" id="nlb-l2"></div>
+        <div class="upload-demo-led" id="nlb-l3"></div>
+        <div class="upload-demo-led" id="nlb-l4"></div>
+        <div class="upload-demo-led" id="nlb-l5"></div>
+        <div class="upload-demo-led" id="nlb-l6"></div>
+        <div class="upload-demo-led" id="nlb-l7"></div>
+      </div>
+    </div>
+    <div style="font-size:8px;color:var(--steel-dim);margin-top:6px">props: label="LOADING" sublabel="FETCHING ARCHAEOLOGICAL SITES" progress={0–100}</div>
+  </div>
+
+  <!-- Usage reference -->
+  <div>
+    <div style="font-size:8px;color:var(--o);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">React usage</div>
+    <div class="p" style="padding:14px 18px">
+      <div class="p-inner"></div>
+      <pre style="font-family:var(--fm);font-size:10px;color:var(--g);line-height:1.6;margin:0;white-space:pre-wrap">&lt;NervLoadingBar
+  label="LOADING"
+  sublabel="FETCHING SITES"
+  progress={loadingProgress}
+/&gt;
+
+&lt;!-- indeterminate --&gt;
+&lt;NervLoadingBar
+  label="RANDOM"
+  sublabel="FETCHING SITES"
+/&gt;
+
+&lt;!-- with counter --&gt;
+&lt;NervLoadingBar
+  label="UPLOADING"
+  counter="47 / 200 sites"
+  progress={progress}
+/&gt;</pre>
+    </div>
+    <div style="font-size:8px;color:var(--steel-dim);margin-top:6px">import &#123; NervLoadingBar &#125; from '../components/NervLoadingBar'</div>
+  </div>
+
+</div>
+<script>
+;(function(){
+  const fill = document.getElementById('nlb-fill')
+  const pct  = document.getElementById('nlb-pct')
+  const leds = [1,2,3,4,5,6,7].map(i => document.getElementById('nlb-l'+i))
+  if (!fill || !pct) return
+  const dur = 8000, steps = [0,14,28,42,57,71,85,100]
+  const seg = dur / (steps.length - 1)
+  let start
+  function tick(ts) {
+    if (!start) start = ts
+    const elapsed = (ts - start) % dur
+    const i = Math.min(Math.floor(elapsed / seg), steps.length - 2)
+    const t = (elapsed - i * seg) / seg
+    const v = Math.round(steps[i] + (steps[i+1] - steps[i]) * t)
+    fill.style.width = v + '%'
+    pct.textContent  = v + '%'
+    leds.forEach((led, li) => {
+      const threshold = ((li + 1) / 7) * 100
+      if (led) {
+        const on = v >= threshold
+        led.style.background  = on ? 'var(--g)' : '#1a1a1a'
+        led.style.boxShadow   = on ? '0 0 5px rgba(0,204,102,0.8)' : 'none'
+        led.style.borderColor = on ? 'var(--g)' : '#2a2a2a'
+      }
+    })
+    requestAnimationFrame(tick)
+  }
+  requestAnimationFrame(tick)
+})()
+</script>
+
 <!-- ═══════════ FOOTER ═══════════ -->
 <div class="foot">
   <div class="ct"></div><div class="ctr"></div><div class="cbl"></div><div class="cbr"></div>

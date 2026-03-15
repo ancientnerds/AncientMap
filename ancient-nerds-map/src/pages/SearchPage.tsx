@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import PageHeader from '../components/layout/PageHeader'
+import { NervLoadingBar } from '../components/NervLoadingBar'
 import { SiteCard, ViewOnGlobeLink } from '../components/SiteCard'
 import { SearchFilters } from '../components/SearchFilters'
 import { SitePopupOverlay } from '../components/SitePopupOverlay'
@@ -25,6 +26,7 @@ export default function SearchPage() {
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [selectedSite, setSelectedSite] = useState<SiteData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [loadingProgress, setLoadingProgress] = useState(5)
 
   const [sourcesMeta, setSourcesMeta] = useState<Record<string, SourceMeta>>({})
   const [loadedSourceIds, setLoadedSourceIds] = useState<Set<string>>(new Set())
@@ -33,11 +35,22 @@ export default function SearchPage() {
   const [randomSites, setRandomSites] = useState<SiteData[]>([])
   const randomPoolRef = useRef<SiteData[]>([])
   const [randomVisible, setRandomVisible] = useState(0)
+  const [randomLoading, setRandomLoading] = useState(false)
+
+  // Crawl progress while fetching (5 → 70 while isLoading)
+  useEffect(() => {
+    if (!isLoading) return
+    const interval = setInterval(() => {
+      setLoadingProgress(p => Math.min(p + 1, 70))
+    }, 120)
+    return () => clearInterval(interval)
+  }, [isLoading])
 
   // Load default source on mount
   useEffect(() => {
     async function loadData() {
       const data = await fetchSites()
+      setLoadingProgress(85)
       setSites(data)
 
       const sources = DataStore.getSources()
@@ -56,6 +69,7 @@ export default function SearchPage() {
       const defaultIds = getDefaultEnabledSourceIds()
       setSelectedSources(defaultIds)
       setLoadedSourceIds(new Set(defaultIds))
+      setLoadingProgress(100)
       setIsLoading(false)
     }
     loadData()
@@ -159,6 +173,7 @@ export default function SearchPage() {
   }, [selectedSources])
 
   const fetchApiRandom = useCallback(async () => {
+    setRandomLoading(true)
     try {
       const res = await fetch(`${config.api.baseUrl}/sites/random?limit=200`)
       if (!res.ok) return
@@ -180,6 +195,7 @@ export default function SearchPage() {
       setRandomSites(parsed.slice(0, 50))
       setRandomVisible(50)
     } catch { /* ignore */ }
+    setRandomLoading(false)
   }, [])
 
   const handleRandom = useCallback(() => {
@@ -245,7 +261,7 @@ export default function SearchPage() {
               All sources
             </button>
             <button
-              className={`news-page-chip${randomSites.length > 0 ? ' active' : ''}`}
+              className="search-bar-random-btn"
               onClick={handleRandom}
               disabled={isLoading}
               title="Show random sites"
@@ -293,7 +309,17 @@ export default function SearchPage() {
           </div>
         )}
 
-        {isLoading && <div className="search-prompt"><p>Loading sites...</p></div>}
+        {isLoading && (
+          <div className="search-loading-wrap">
+            <NervLoadingBar label="LOADING" sublabel="FETCHING ARCHAEOLOGICAL SITES" progress={loadingProgress} />
+          </div>
+        )}
+
+        {randomLoading && (
+          <div className="search-loading-wrap">
+            <NervLoadingBar label="RANDOM" sublabel="FETCHING SITES" />
+          </div>
+        )}
 
         {search.searchResults.length > 0 && (
           <div className="search-card-grid">

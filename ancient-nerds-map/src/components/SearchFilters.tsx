@@ -102,7 +102,7 @@ export function SearchFilters({
         <div className="age-range-slider">
           <div className="age-range-track" />
           <input
-            className="age-slider"
+            className="age-slider age-slider-min"
             type="range"
             min={-5000}
             max={1500}
@@ -114,7 +114,7 @@ export function SearchFilters({
             }}
           />
           <input
-            className="age-slider"
+            className="age-slider age-slider-max"
             type="range"
             min={-5000}
             max={1500}

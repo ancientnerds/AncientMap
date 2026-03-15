@@ -176,6 +176,7 @@ function AppContent() {
   const [overlayFading, setOverlayFading] = useState(false) // Controls fade-out animation
   const [overlayRendered, setOverlayRendered] = useState(true) // Controls DOM presence after fade
   const [loadingStatus, setLoadingStatus] = useState('Initializing...') // Dynamic loading message
+  const [loadingProgress, setLoadingProgress] = useState(5) // 0-100 for progress bar
   const [downloadSpeed, setDownloadSpeed] = useState<string>('') // Download speed display
   const [downloadedMB, setDownloadedMB] = useState<number>(0) // Total MB downloaded
   const loadingStatusTimeoutRef = useRef<number | null>(null)
@@ -731,6 +732,7 @@ function AppContent() {
 
       // Fetch sites and sources in parallel with location
       updateLoadingStatus('Loading archaeological sites...')
+      setLoadingProgress(20)
       let data: SiteData[] = []
       try {
         data = await fetchSites()
@@ -763,6 +765,7 @@ function AppContent() {
       const allSourceIds = DataStore.getSources().map(s => s.id)
 
       updateLoadingStatus('Preparing globe view...')
+      setLoadingProgress(50)
 
       const uniqueCategories = [...new Set(data.map(s => s.category).filter(Boolean))].sort()
       setCategories(uniqueCategories)
@@ -787,6 +790,7 @@ function AppContent() {
 
       // NOW show the globe (default source is loaded)
       setIsLoading(false)
+      setLoadingProgress(65)
       // Note: Additional sources are NOT loaded automatically - user must click "Load Sources" button
     }
     loadData()
@@ -1539,6 +1543,15 @@ function AppContent() {
     setFilteredSites(result)
   }, [sites, selectedSources, selectedCategories, categoriesFromActiveSources, selectedCountries, countriesFromActiveSources, debouncedSearchQuery, searchAllSources, ageRange, applyFiltersToSearch, searchWithinProximity, proximityCenter, proximityRadius, searchWithinEmpires, visibleEmpireIds, empireSliderYears, empirePolygons, listFrozenSiteIds])
 
+  // Crawl progress bar from 65→90% while globe layers are loading (unknown duration)
+  useEffect(() => {
+    if (isLoading || layersReady) return
+    const interval = setInterval(() => {
+      setLoadingProgress(p => Math.min(p + 1, 90))
+    }, 400)
+    return () => clearInterval(interval)
+  }, [isLoading, layersReady])
+
   // Handle loading overlay fade-out transition with minimum display time
   const loadingComplete = !isLoading && layersReady
   useEffect(() => {
@@ -1676,7 +1689,7 @@ function AppContent() {
               {downloadSpeed && <span className="loading-bar-speed">{downloadSpeed}</span>}
             </div>
             <div className="loading-bar-track">
-              <div className="loading-bar-fill" />
+              <div className="loading-bar-fill" style={{ width: `${loadingProgress}%` }} />
             </div>
             <div className="loading-bar-leds">
               {[1,2,3,4,5,6,7].map(i => (
@@ -1756,6 +1769,7 @@ function AppContent() {
         initialPosition={initialNav?.coords ?? userLocation}
         onLayersReady={() => {
           updateLoadingStatus('Map layers ready!')
+          setLoadingProgress(100)
           setLayersReady(true)
         }}
         onContributeClick={() => setShowContributeModal(true)}

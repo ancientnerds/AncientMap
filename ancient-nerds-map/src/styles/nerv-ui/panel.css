@@ -55,7 +55,11 @@ body.satellite-mode {
 .hamburger-dropdown,
 .site-count,
 .split-card,
-.tool-card {
+.tool-card,
+.nerv-lb,
+.search-bar-inner,
+.search-filters,
+.site-card {
   background: var(--nerv-panel-bg);
   backdrop-filter: blur(var(--nerv-panel-blur));
   -webkit-backdrop-filter: blur(var(--nerv-panel-blur));
@@ -120,7 +124,11 @@ body.satellite-mode {
 .api-card::before,
 .account-card::before,
 .split-card::before,
-.tool-card::before {
+.tool-card::before,
+.nerv-lb::before,
+.search-bar-inner::before,
+.search-filters::before,
+.site-card::before {
   content: '';
   position: absolute;
   inset: 0;
