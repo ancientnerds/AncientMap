@@ -2823,9 +2823,13 @@
 .db-version-cards {
   display: flex;
   gap: 8px;
-  overflow: hidden;
+  overflow-x: auto;
   flex: 1;
   min-width: 0;
+  scrollbar-width: none;
+}
+.db-version-cards::-webkit-scrollbar {
+  display: none;
 }
 
 /* Scroll-arrow wrapper — shared by version-cards and stats */
