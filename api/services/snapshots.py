@@ -562,8 +562,11 @@ def export_file_snapshot(db: Session) -> str:
     manifest_path = SNAPSHOTS_DIR / "manifest.json"
     manifest: dict = {"snapshots": []}
     if manifest_path.exists():
-        with open(manifest_path, encoding="utf-8") as f:
-            manifest = json.load(f)
+        try:
+            with open(manifest_path, encoding="utf-8") as f:
+                manifest = json.load(f)
+        except (json.JSONDecodeError, ValueError):
+            pass  # Treat corrupt/empty manifest as missing
 
     snapshots = manifest["snapshots"]
     snapshots.append(
