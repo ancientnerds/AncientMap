@@ -368,6 +368,15 @@ def expand_markers(
         expanded,
     )
 
+    # Fix wrapped markers: [Name](type:id)Name[Name](type:id) → [Name](type:id)
+    # Happens when annotation mode surrounds the entity with «eN»entity«eN».
+    for proto in ("empire", "site", "flag", "lyra-video"):
+        expanded = re.sub(
+            rf"(\[[^\]]+\]\({proto}:[^)]+\))[^\[]+\1",
+            r"\1",
+            expanded,
+        )
+
     return expanded, issues
 
 
