@@ -1369,16 +1369,6 @@ export default function DbAuditPage() {
                       </div>
                     )
                   })}
-                  {qdrantStatus.empires && qdrantStatus.empires.empire_count > 0 && (
-                    <div className="db-qdrant-row">
-                      <span className="db-qdrant-col-name">empire borders</span>
-                      <span className="db-qdrant-counts">
-                        <span title="Empires">{qdrantStatus.empires.empire_count}</span>
-                        <span className="db-qdrant-sep">/</span>
-                        <span title="Boundary snapshots">{qdrantStatus.empires.boundary_count.toLocaleString()}</span>
-                      </span>
-                    </div>
-                  )}
                   {qdrantStatus.reindex.last_completed_at ? (
                     <div className="db-qdrant-meta">
                       Last indexed {formatRelativeDate(qdrantStatus.reindex.last_completed_at)}
