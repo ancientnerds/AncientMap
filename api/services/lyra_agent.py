@@ -32,9 +32,11 @@ from sqlalchemy import text
 from api.services.lyra_backends import get_backend
 from api.services.lyra_prompts import (
     LYRA_SYSTEM_PROMPT,
+    PROSE_PROMPT,
     SYNTHESIS_FALLBACK_PROMPT,
     SYNTHESIS_PROMPT,
     _build_context_prompt,
+    build_marker_injection_messages,
 )
 from api.services.lyra_router import (
     RequestContext,
@@ -42,7 +44,12 @@ from api.services.lyra_router import (
     route_request,
     set_request_context,
 )
-from api.services.lyra_schema import LYRA_RESPONSE_SCHEMA, clean_response_text, expand_markers
+from api.services.lyra_schema import (
+    LYRA_PROSE_SCHEMA,
+    LYRA_RESPONSE_SCHEMA,
+    clean_response_text,
+    expand_markers,
+)
 from api.services.lyra_tool_prompts import wrap_tool_result
 from api.services.lyra_tools import (
     LLM_MODEL,
@@ -1859,108 +1866,74 @@ async def run_agent_stream(
         }
         _t_synthesis = time.monotonic()
 
-        synthesis_msgs = _build_synthesis_messages(
+        # ── PASS 1: Prose ──────────────────────────────────────────────────
+        # Ask Mercury to write grounded prose only — no markers, no JSON arrays.
+        # Separating prose from annotation eliminates the root cause of polity_id
+        # leaks, footer flags, and skipped video markers.
+        yield {"type": "status", "content": "Writing answer..."}
+
+        prose_msgs = _build_synthesis_messages(
             message, raw_tool_results, context_prompt, retrieved_context
         )
+        prose_msgs[0] = SystemMessage(content=PROSE_PROMPT)
+
+        _prose_text: str | None = None
+        _p1_off_topic = False
         _synthesis_ok = False
-        _synth_last_err: Exception | None = None
-        _heartbeat_sent = False
-        for _synth_attempt in range(3):
+
+        for _p1_attempt in range(3):
             try:
-                # Run synthesis with heartbeat — emit status every 8s so the client
-                # knows the connection is alive during the 10-30s Mercury call (R3).
-                # Uses asyncio.wait (not wait_for+shield) to avoid cancellation issues.
-                _synth_task = asyncio.create_task(
+                _p1_task = asyncio.create_task(
                     backend_impl.generate(
-                        synthesis_msgs,
-                        response_format=LYRA_RESPONSE_SCHEMA,
-                        max_tokens=16384,
+                        prose_msgs,
+                        response_format=LYRA_PROSE_SCHEMA,
+                        max_tokens=4096,
                     )
                 )
-                while not _synth_task.done():
-                    done, _ = await asyncio.wait({_synth_task}, timeout=8.0)
+                _p1_hb = False
+                while not _p1_task.done():
+                    done, _ = await asyncio.wait({_p1_task}, timeout=8.0)
                     if not done:
-                        if not _heartbeat_sent:
-                            yield {"type": "status", "content": "Synthesizing answer..."}
-                            _heartbeat_sent = True
-                        else:
-                            yield {"type": "status", "content": "Still working..."}
-
-                _synth_result = _synth_task.result()
-                total_input_tokens += _synth_result["usage"]["input"]
-                total_output_tokens += _synth_result["usage"]["output"]
-
-                raw_content = _synth_result["content"]
-                text_out, so_data, _off_topic = _parse_structured_output(raw_content)
-                # Filter hallucinated videos — only keep video_ids from retrieved data
-                if so_data is not None and _valid_video_ids:
-                    text_out, so_data = _filter_hallucinated_videos(
-                        text_out, so_data, _valid_video_ids
+                        yield {
+                            "type": "status",
+                            "content": "Still working..." if _p1_hb else "Writing answer...",
+                        }
+                        _p1_hb = True
+                result = _p1_task.result()
+                total_input_tokens += result["usage"]["input"]
+                total_output_tokens += result["usage"]["output"]
+                parsed = json.loads(result["content"])
+                if not parsed.get("on_topic", True):
+                    _p1_off_topic = True
+                    _prose_text = (
+                        "🏺 That's not really my area! I'm all about ancient ruins, "
+                        "lost civilizations, and archaeological discoveries. "
+                        "What do you want to dig into?"
                     )
-                if so_data is not None:
-                    _structured_output = so_data
-                if text_out.strip():
-                    # Faithfulness gate: check grounding ratio
-                    text_out, _grounding = _check_grounding(text_out)
-                    yield {"type": "diffusion", "content": text_out}
-                    _synthesis_ok = True
-                else:
-                    # Mercury returned valid JSON but empty text — treat as retryable
-                    print(
-                        f"[SYNTHESIS] Empty text on attempt {_synth_attempt + 1}: {raw_content[:500]}",
-                        flush=True,
-                    )
-                    if _synth_attempt < 2:
-                        await asyncio.sleep(1.5)
-                        continue
-                break
+                    break
+                _prose_text = parsed.get("text", "").strip()
+                if _prose_text:
+                    break
             except Exception as exc:
-                _synth_last_err = exc
-                err_msg = str(exc).lower()
-                is_retryable = (
-                    isinstance(exc, (asyncio.TimeoutError, TimeoutError))
-                    or "empty content" in err_msg
-                    or "truncated" in err_msg
-                    or "content_filter" in err_msg
-                    or "content policy" in err_msg
-                    or "400" in err_msg
-                )
-                if _synth_attempt < 2 and is_retryable:
-                    logger.warning(
-                        f"Phase 2 synthesis transient error (attempt {_synth_attempt + 1}/3): {exc}"
-                    )
-                    await asyncio.sleep(1.5)
-                    continue
-                print(
-                    f"[SYNTHESIS] Phase 2 failed: {type(exc).__name__}: {exc}",
-                    flush=True,
-                )
-                logger.warning(
-                    f"Phase 2 synthesis failed after {_synth_attempt + 1} attempts: {exc}"
-                )
-                break
+                print(f"[P1] attempt {_p1_attempt + 1} failed: {exc}", flush=True)
+            if _p1_attempt < 2:
+                await asyncio.sleep(1.5)
 
-        # Last resort: if structured output failed, try WITHOUT schema + simpler prompt.
-        # The full SYNTHESIS_PROMPT with marker instructions overwhelms Mercury —
-        # it returns "I don't have that info" even when data is present.
-        # Use SYNTHESIS_FALLBACK_PROMPT (shorter, no markers) for plain text.
-        if not _synthesis_ok:
-            print(
-                f"[SYNTHESIS] Structured output failed {3 if _synth_last_err else 0}x, "
-                f"trying plain text with simplified prompt...",
-                flush=True,
-            )
+        if _p1_off_topic and _prose_text:
+            yield {"type": "diffusion", "content": _prose_text}
+            _synthesis_ok = True
+
+        elif not _prose_text:
+            # Pass 1 total failure → SYNTHESIS_FALLBACK_PROMPT plain-text call
+            print("[SYNTHESIS] P1 failed, trying plain text with simplified prompt...", flush=True)
             try:
-                # Rebuild messages with the simpler fallback prompt
                 _fallback_msgs = _build_synthesis_messages(
                     message, raw_tool_results, context_prompt, retrieved_context
                 )
-                # Replace the first message (SYNTHESIS_PROMPT) with the simpler one
                 _fallback_msgs[0] = SystemMessage(content=SYNTHESIS_FALLBACK_PROMPT)
-
                 _plain_result = await backend_impl.generate(
                     _fallback_msgs,
-                    response_format=None,  # No schema — just plain text
+                    response_format=None,
                     max_tokens=8192,
                 )
                 total_input_tokens += _plain_result["usage"]["input"]
@@ -1975,6 +1948,115 @@ async def run_agent_stream(
                     f"[SYNTHESIS] Plain text fallback also failed: {type(exc).__name__}: {exc}",
                     flush=True,
                 )
+
+        else:
+            # ── PASS 2: Marker injection ────────────────────────────────────
+            # Give Mercury the approved prose + an entities catalogue and ask it
+            # to annotate only — no new facts, just insert «sN»/«vN»/«eN» etc.
+            yield {"type": "status", "content": "Adding citations..."}
+
+            # Build compact entities catalogue from already-collected pipeline data
+            _entities: dict = {
+                "sites": [
+                    {
+                        "id": s["id"],
+                        "name": s["name"],
+                        "lat": s.get("lat"),
+                        "lon": s.get("lon"),
+                        "country": s.get("country"),
+                    }
+                    for s in (all_sites or [])
+                    if s.get("id")
+                ],
+                "videos": [
+                    {
+                        "video_id": n["video_id"],
+                        "channel": n.get("channel", ""),
+                        "timestamp_seconds": n.get("timestamp_seconds", 0),
+                    }
+                    for n in (all_news or [])
+                    if n.get("video_id")
+                ],
+                "empires": [],
+                "images": [],
+                "links": [],
+            }
+            for _raw in raw_tool_results:
+                _tool_name = _raw.split("]", 1)[0].lstrip("[")
+                try:
+                    _payload = json.loads(_raw.split("] ", 1)[1][:4000])
+                except (json.JSONDecodeError, ValueError, IndexError):
+                    continue
+                if _tool_name in ("get_empire_data", "search_empires"):
+                    items = _payload if isinstance(_payload, list) else [_payload]
+                    for item in items:
+                        if item.get("polity_id"):
+                            _entities["empires"].append(
+                                {"polity_id": item["polity_id"], "name": item.get("name", "")}
+                            )
+                elif _tool_name == "get_site_images":
+                    if isinstance(_payload, list):
+                        _entities["images"].extend(_payload[:5])
+                elif _tool_name == "list_channels":
+                    if isinstance(_payload, list):
+                        for ch in _payload[:10]:
+                            if ch.get("youtube_url"):
+                                _entities["links"].append(
+                                    {"text": ch.get("name", ""), "url": ch["youtube_url"]}
+                                )
+            _entities_json = json.dumps(_entities, ensure_ascii=False)
+
+            injection_msgs = build_marker_injection_messages(
+                prose=_prose_text,
+                user_question=message,
+                entities_json=_entities_json,
+                context_prompt=context_prompt,
+            )
+
+            for _p2_attempt in range(3):
+                try:
+                    _p2_task = asyncio.create_task(
+                        backend_impl.generate(
+                            injection_msgs,
+                            response_format=LYRA_RESPONSE_SCHEMA,
+                            max_tokens=8192,
+                        )
+                    )
+                    _p2_hb = False
+                    while not _p2_task.done():
+                        done, _ = await asyncio.wait({_p2_task}, timeout=8.0)
+                        if not done:
+                            yield {
+                                "type": "status",
+                                "content": "Still working..." if _p2_hb else "Adding citations...",
+                            }
+                            _p2_hb = True
+                    result = _p2_task.result()
+                    total_input_tokens += result["usage"]["input"]
+                    total_output_tokens += result["usage"]["output"]
+                    text_out, so_data, _ = _parse_structured_output(result["content"])
+                    if so_data is not None and _valid_video_ids:
+                        text_out, so_data = _filter_hallucinated_videos(
+                            text_out, so_data, _valid_video_ids
+                        )
+                    if so_data is not None:
+                        _structured_output = so_data
+                    if text_out.strip():
+                        text_out, _ = _check_grounding(text_out)
+                        yield {"type": "diffusion", "content": text_out}
+                        _synthesis_ok = True
+                        break
+                except Exception as exc:
+                    print(f"[P2] attempt {_p2_attempt + 1} failed: {exc}", flush=True)
+                if _p2_attempt < 2:
+                    await asyncio.sleep(1.5)
+
+            if not _synthesis_ok:
+                # Pass 2 total failure — emit Pass 1 prose (correct content, no markers)
+                _prose_text, _ = _check_grounding(_prose_text)
+                yield {"type": "diffusion", "content": _prose_text}
+                _synthesis_ok = True
+                print("[SYNTHESIS] P2 failed, emitting P1 prose", flush=True)
 
         if not _synthesis_ok:
             _fb = _build_fallback_response(message, all_sites, all_news)

@@ -152,6 +152,24 @@ LYRA_RESPONSE_SCHEMA = {
 }
 
 
+LYRA_PROSE_SCHEMA = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "LyraProse",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "on_topic": {"type": "boolean"},
+                "text": {"type": "string"},
+            },
+            "required": ["on_topic", "text"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+
 # ---------------------------------------------------------------------------
 # Marker expansion — resolve guillemet markers into frontend markdown links
 # ---------------------------------------------------------------------------

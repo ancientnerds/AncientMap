@@ -1666,14 +1666,26 @@ function AppContent() {
             <div className="loading-spinner" />
             <img src={BRAND_ASSETS.logo} alt="Ancient Nerds" className="loading-logo" />
           </div>
-          <div className="loading-text">{layersReady ? 'READY' : loadingStatus.toUpperCase()}</div>
-          {(downloadSpeed || downloadedMB > 0) && (
-            <div className="loading-speed">
-              {downloadSpeed && <span>{downloadSpeed}</span>}
-              {downloadedMB > 0.1 && <span className="loading-total">{downloadedMB.toFixed(1)} MB</span>}
+          <div className="loading-info-bar">
+            <div className="loading-info-inner" />
+            <div className="loading-ct" /><div className="loading-ctr" />
+            <div className="loading-cbl" /><div className="loading-cbr" />
+            <div className="loading-bar-header">
+              <span className="loading-bar-stamp">{layersReady ? 'READY' : 'LOADING'}</span>
+              {downloadedMB > 0.1 && <span className="loading-bar-counter">{downloadedMB.toFixed(1)} MB</span>}
+              {downloadSpeed && <span className="loading-bar-speed">{downloadSpeed}</span>}
             </div>
-          )}
-          <div className="loading-hint">For best performance, enable hardware acceleration in your browser</div>
+            <div className="loading-bar-track">
+              <div className="loading-bar-fill" />
+            </div>
+            <div className="loading-bar-leds">
+              {[1,2,3,4,5,6,7].map(i => (
+                <div key={i} className={`loading-bar-led led-${i}`} />
+              ))}
+            </div>
+            <div className="loading-text">{layersReady ? 'ALL SYSTEMS NOMINAL' : loadingStatus.toUpperCase()}</div>
+            <div className="loading-hint">For best performance, enable hardware acceleration in your browser</div>
+          </div>
         </div>
       )}
       {/* Loading cursor overlay for site detail loading */}
