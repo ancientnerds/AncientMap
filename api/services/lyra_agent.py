@@ -1402,7 +1402,7 @@ async def run_agent_stream(
 
         # If tools are cut off and we already have tool results, skip straight
         # to Phase 2 synthesis — no point calling Mercury just to discard the result
-        if not _offer_tools and tool_calls_made > 0 and ctx.backend_type == "mercury":
+        if not _offer_tools and tool_calls_made > 0 and ctx.backend_type in ("mercury", "anthropic"):
             yield {
                 "type": "pipeline",
                 "stage": "llm_round",
@@ -1424,18 +1424,24 @@ async def run_agent_stream(
         collected_content = ""
         tool_calls = []
 
-        # Mercury: single non-streaming call with tools + structured output
-        if ctx.backend_type == "mercury":
+        # Mercury/Anthropic: single non-streaming call with tools + structured output
+        if ctx.backend_type in ("mercury", "anthropic"):
             # Retry up to 2 times for transient Mercury errors
             # (empty content, content_filter_error / 400)
             result = None  # type: ignore[assignment, no-redef]
             _mercury_last_err: Exception | None = None
             for _attempt in range(3):
                 try:
+                    # Anthropic: don't pass output_config when tools are offered —
+                    # Haiku returns empty content when tools + output_config are combined.
+                    # Mercury: always pass response_format (unchanged behaviour).
+                    _p1_rformat = LYRA_RESPONSE_SCHEMA
+                    if ctx.backend_type == "anthropic" and _offer_tools:
+                        _p1_rformat = None
                     result = await backend_impl.generate(
                         messages,
                         tools=TOOLS if _offer_tools else None,
-                        response_format=LYRA_RESPONSE_SCHEMA,
+                        response_format=_p1_rformat,
                         max_tokens=16384,
                     )
                     break
@@ -1486,22 +1492,26 @@ async def run_agent_stream(
                     collected_content = ""
                 else:
                     # No tools used at all (simple query) — emit Phase 1 response
-                    try:
-                        collected_content, so_data, _off_topic = _parse_structured_output(
-                            result["content"]
-                        )
-                        if so_data is not None:
-                            _structured_output = so_data
-                    except Exception as e:
-                        logger.warning(f"Structured output parse failed: {e}")
-                        raw = result["content"]
-                        text_match = re.search(r'"text"\s*:\s*"((?:[^"\\]|\\.)*)"', raw)
-                        if text_match:
-                            collected_content = clean_response_text(
-                                text_match.group(1).replace("\\n", "\n").replace('\\"', '"')
+                    if ctx.backend_type == "anthropic":
+                        # Anthropic returns plain text (no structured output in tool-offer rounds)
+                        collected_content = clean_response_text(result["content"])
+                    else:
+                        try:
+                            collected_content, so_data, _off_topic = _parse_structured_output(
+                                result["content"]
                             )
-                        else:
-                            collected_content = clean_response_text(raw)
+                            if so_data is not None:
+                                _structured_output = so_data
+                        except Exception as e:
+                            logger.warning(f"Structured output parse failed: {e}")
+                            raw = result["content"]
+                            text_match = re.search(r'"text"\s*:\s*"((?:[^"\\]|\\.)*)"', raw)
+                            if text_match:
+                                collected_content = clean_response_text(
+                                    text_match.group(1).replace("\\n", "\n").replace('\\"', '"')
+                                )
+                            else:
+                                collected_content = clean_response_text(raw)
                     # Emit clean text directly (no diffusion simulation)
                     if collected_content.strip():
                         collected_content, _grounding = _check_grounding(collected_content)
@@ -1547,7 +1557,7 @@ async def run_agent_stream(
 
         # For Ollama streaming, the preamble text (e.g. "I'll search for...") was
         # streamed as tokens. Re-emit it as a status event.
-        if collected_content.strip() and ctx.backend_type != "mercury":
+        if collected_content.strip() and ctx.backend_type not in ("mercury", "anthropic"):
             yield {"type": "status", "content": collected_content.strip()}
 
         # Execute tool calls
@@ -1883,37 +1893,64 @@ async def run_agent_stream(
 
         for _p1_attempt in range(3):
             try:
-                _p1_task = asyncio.create_task(
-                    backend_impl.generate(
-                        prose_msgs,
-                        response_format=LYRA_PROSE_SCHEMA,
-                        max_tokens=4096,
+                if ctx.backend_type == "anthropic":
+                    # Citations path: plain text + automatic source attribution
+                    _p1_task = asyncio.create_task(
+                        backend_impl.generate(
+                            prose_msgs,
+                            citations=True,
+                            max_tokens=4096,
+                        )
                     )
-                )
-                _p1_hb = False
-                while not _p1_task.done():
-                    done, _ = await asyncio.wait({_p1_task}, timeout=8.0)
-                    if not done:
-                        yield {
-                            "type": "status",
-                            "content": "Still working..." if _p1_hb else "Writing answer...",
-                        }
-                        _p1_hb = True
-                result = _p1_task.result()
-                total_input_tokens += result["usage"]["input"]
-                total_output_tokens += result["usage"]["output"]
-                parsed = json.loads(result["content"])
-                if not parsed.get("on_topic", True):
-                    _p1_off_topic = True
-                    _prose_text = (
-                        "🏺 That's not really my area! I'm all about ancient ruins, "
-                        "lost civilizations, and archaeological discoveries. "
-                        "What do you want to dig into?"
+                    _p1_hb = False
+                    while not _p1_task.done():
+                        done, _ = await asyncio.wait({_p1_task}, timeout=8.0)
+                        if not done:
+                            yield {
+                                "type": "status",
+                                "content": "Still working..." if _p1_hb else "Writing answer...",
+                            }
+                            _p1_hb = True
+                    result = _p1_task.result()
+                    total_input_tokens += result["usage"]["input"]
+                    total_output_tokens += result["usage"]["output"]
+                    _prose_text = result["content"].strip()
+                    if not _prose_text:
+                        raise ValueError("Empty citations response from Anthropic")
+                    break
+                else:
+                    # Mercury path: structured output with LYRA_PROSE_SCHEMA
+                    _p1_task = asyncio.create_task(
+                        backend_impl.generate(
+                            prose_msgs,
+                            response_format=LYRA_PROSE_SCHEMA,
+                            max_tokens=4096,
+                        )
                     )
-                    break
-                _prose_text = parsed.get("text", "").strip()
-                if _prose_text:
-                    break
+                    _p1_hb = False
+                    while not _p1_task.done():
+                        done, _ = await asyncio.wait({_p1_task}, timeout=8.0)
+                        if not done:
+                            yield {
+                                "type": "status",
+                                "content": "Still working..." if _p1_hb else "Writing answer...",
+                            }
+                            _p1_hb = True
+                    result = _p1_task.result()
+                    total_input_tokens += result["usage"]["input"]
+                    total_output_tokens += result["usage"]["output"]
+                    parsed = json.loads(result["content"])
+                    if not parsed.get("on_topic", True):
+                        _p1_off_topic = True
+                        _prose_text = (
+                            "🏺 That's not really my area! I'm all about ancient ruins, "
+                            "lost civilizations, and archaeological discoveries. "
+                            "What do you want to dig into?"
+                        )
+                        break
+                    _prose_text = parsed.get("text", "").strip()
+                    if _prose_text:
+                        break
             except Exception as exc:
                 print(f"[P1] attempt {_p1_attempt + 1} failed: {exc}", flush=True)
             if _p1_attempt < 2:

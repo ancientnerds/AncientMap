@@ -30,6 +30,7 @@ qdrant-client>=1.7.0
 fastembed>=0.4.0
 voyageai>=0.3
 openai>=1.30.0
+anthropic>=0.50.0
 
 # --- Image processing ---
 Pillow>=10.0.0
