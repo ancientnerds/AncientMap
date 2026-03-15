@@ -1496,8 +1496,33 @@ async def run_agent_stream(
                     collected_content = ""
                 else:
                     # No tools used at all (simple query) — emit Phase 1 response
-                    if ctx.backend_type == "anthropic":
-                        # Anthropic returns plain text (no structured output in tool-offer rounds)
+                    if ctx.backend_type == "anthropic" and _offer_tools:
+                        # Haiku decided not to use tools. Re-call WITHOUT tools +
+                        # WITH output_config to get proper structured output (site
+                        # markers, on_topic, chips). Can't combine both in one call.
+                        try:
+                            _so_result = await backend_impl.generate(
+                                messages,
+                                tools=None,
+                                response_format=LYRA_RESPONSE_SCHEMA,
+                                max_tokens=8192,
+                            )
+                            total_input_tokens += _so_result["usage"]["input"]
+                            total_output_tokens += _so_result["usage"]["output"]
+                            try:
+                                collected_content, so_data, _off_topic = _parse_structured_output(
+                                    _so_result["content"]
+                                )
+                                if so_data is not None:
+                                    _structured_output = so_data
+                            except Exception as e:
+                                logger.warning(f"Anthropic structured output parse failed: {e}")
+                                collected_content = clean_response_text(_so_result["content"])
+                        except Exception as e:
+                            logger.warning(f"Anthropic structured output re-call failed: {e}")
+                            collected_content = clean_response_text(result["content"])
+                    elif ctx.backend_type == "anthropic":
+                        # No tools were offered (edge case) — use plain text
                         collected_content = clean_response_text(result["content"])
                     else:
                         try:
