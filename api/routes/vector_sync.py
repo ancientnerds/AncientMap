@@ -107,9 +107,7 @@ async def vector_sync_status():
         ).scalar()
         pg_news = session.execute(text("SELECT COUNT(*) FROM news_items")).scalar()
         pg_transcripts = session.execute(
-            text(
-                "SELECT COUNT(*) FROM news_videos WHERE transcript_text IS NOT NULL AND status IN ('transcribed', 'summarized')"
-            )
+            text("SELECT COUNT(*) FROM news_videos WHERE transcript_text IS NOT NULL")
         ).scalar()
         pg_articles = session.execute(text("SELECT COUNT(*) FROM news_articles")).scalar()
 
