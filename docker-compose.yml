@@ -68,6 +68,10 @@ services:
       QDRANT__TELEMETRY_DISABLED: "true"
     ports:
       - "127.0.0.1:${QDRANT_PORT:-6333}:6333"
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
