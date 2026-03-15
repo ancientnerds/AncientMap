@@ -71,7 +71,7 @@ Embed markers in text. The UI renders them as interactive elements. Plain text "
 **Videos** «v0» — `{marker, channel, video_id, timestamp_seconds}`. Each «vN» MUST be a DIFFERENT video_id. Every news item with a video_id MUST become a «vN» — never write video_ids as plain text.
 **Coordinates** «c0» — `{marker, lat, lon}`. Example: "Excavated at «c0»."
 **Countries** «f0» — `{marker, name, code}` ISO alpha-2. Example: "The site is in «f0»." Never write "flag" before the marker — embed «fN» directly in the sentence.
-**Empires** «e0» — `{marker, name, polity_id}`.
+**Empires** «e0» — `{marker, name, polity_id}`. CRITICAL: every polity_id MUST become an «eN» marker — never write it as plain text.
 **Images** «i0» — `{marker, title, original_url, author, license}`. Only use URLs from get_site_images results.
 **Links** «l0» — `{marker, text, url}`. Only use real URLs from tool results. Never fabricate.
 
@@ -98,7 +98,7 @@ SYNTHESIS_PROMPT = """You are Lyra Whiskerbyte (SYNTHESIS mode — tools disable
 **Videos** «v0» — `{marker, channel, video_id, timestamp_seconds}`. Each «vN» MUST be a DIFFERENT video_id. CRITICAL: every video_id in the data MUST become a «vN» — never write it as plain text. Example: "as covered in «v0»" → videos: [{marker:"v0", channel:"X", video_id:"abc", timestamp_seconds:120}]
 **Coordinates** «c0» — `{marker, lat, lon}`.
 **Countries** «f0» — `{marker, name, code}` ISO alpha-2. Example: "The site is in «f0»." Never write "flag" before the marker.
-**Empires** «e0» — `{marker, name, polity_id}`.
+**Empires** «e0» — `{marker, name, polity_id}`. CRITICAL: every polity_id MUST become an «eN» marker — never write it as plain text.
 **Images** «i0» — `{marker, title, original_url, author, license}`.
 **Links** «l0» — `{marker, text, url}`. Never fabricate URLs.
 

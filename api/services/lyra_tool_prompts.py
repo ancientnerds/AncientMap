@@ -44,6 +44,7 @@ INSTRUCTION: News items from YouTube archaeology channels. For each news item yo
     "get_empire_data": """
 INSTRUCTION: Seshat historical polity data. Create an «eN» marker:
 - Map: marker="eN", name=polity name, polity_id=the empire_id used in the query
+- CRITICAL: every polity_id MUST become an «eN» marker — never write the polity_id as plain text in prose.
 - Mention key facts (period, capital, warfare tech, economy) in your text
 - If polity has coordinates for its capital, create «cN»
 """,
@@ -92,6 +93,7 @@ INSTRUCTION: Weekly digest article passages. For each article passage:
     "search_empires": """
 INSTRUCTION: Empire search results from Seshat data. For each empire you reference:
 - Create «eN» marker: marker="eN", name=empire name, polity_id=result polity_id
+- CRITICAL: every polity_id MUST become an «eN» marker — never write the polity_id as plain text in prose.
 - For detailed data, you can call get_empire_data(polity_id)
 - If result has wikipedia_url, create «lN» with that URL
 """,
