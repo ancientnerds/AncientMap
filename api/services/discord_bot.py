@@ -379,7 +379,15 @@ class LyraBot(discord.Client):
 
     async def on_message(self, message: discord.Message):
         """Handle DMs and thread follow-ups."""
-        if message.author == self.user or message.author.bot:
+        if message.author == self.user:
+            # Self-delete any sign-in error the bot itself just sent
+            if message.content.startswith(_SIGNIN_ERROR_PREFIX):
+                try:
+                    await message.delete()
+                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                    pass
+            return
+        if message.author.bot:
             return
 
         # Deduplicate: discord.py can replay events on gateway reconnects
