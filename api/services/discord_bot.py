@@ -52,16 +52,17 @@ def _clean_for_discord(text: str) -> str:
     - site:UUID                    → ancientnerds.com site link
     - flag:CC / coord:... / empire:... → plain text
     """
-    # [label](lyra-video:VIDEO_ID:SECONDS) → [label](https://youtube.com/watch?v=ID&t=Ss)
+    # [label](lyra-video:VIDEO_ID:SECONDS) → [label](<https://youtube.com/watch?v=ID&t=Ss>)
+    # Angle brackets suppress Discord's link preview embed
     text = re.sub(
         r"\[([^\]]+)\]\(lyra-video:([A-Za-z0-9_-]+):(\d+)\)",
-        lambda m: f"[{m.group(1)}](https://youtube.com/watch?v={m.group(2)}&t={m.group(3)}s)",
+        lambda m: f"[{m.group(1)}](<https://youtube.com/watch?v={m.group(2)}&t={m.group(3)}s>)",
         text,
     )
-    # [label](site:UUID) → [label](https://ancientnerds.com/site.html?id=UUID)
+    # [label](site:UUID) → [label](<https://ancientnerds.com/site.html?id=UUID>)
     text = re.sub(
         r"\[([^\]]+)\]\(site:([^)]+)\)",
-        lambda m: f"[{m.group(1)}](https://ancientnerds.com/site.html?id={m.group(2)})",
+        lambda m: f"[{m.group(1)}](<https://ancientnerds.com/site.html?id={m.group(2)}>)",
         text,
     )
     # [label](flag:XX) / [label](coord:...) / [label](empire:...) → plain label
@@ -339,6 +340,17 @@ class LyraBot(discord.Client):
         """Handle a DM with conversation history."""
         discord_id = str(message.author.id)
 
+        # Look up guild membership to get roles for auto-registration
+        member: discord.Member | None = None
+        guild = self.get_guild(int(DISCORD_GUILD_ID))
+        if guild:
+            try:
+                member = guild.get_member(message.author.id) or await guild.fetch_member(
+                    message.author.id
+                )
+            except (discord.NotFound, discord.HTTPException):
+                pass
+
         async with message.channel.typing():
             try:
                 history = await _build_history(message.channel, current_msg=message)
@@ -346,6 +358,7 @@ class LyraBot(discord.Client):
                     discord_id,
                     message.content,
                     history=history,
+                    member=member,
                 )
                 for chunk in _split_response(text):
                     await message.reply(chunk)
