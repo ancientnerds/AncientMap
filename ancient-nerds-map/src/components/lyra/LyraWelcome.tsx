@@ -22,7 +22,7 @@ interface PromptCategory {
 const CURATED_PROMPTS: Record<LyraContextType, PromptCategory[]> = {
   global: [
     { label: 'Explore Sites', prompts: ['Find underwater ruins in the Mediterranean', 'What are the oldest known cities in the world?'] },
-    { label: 'Recent Discoveries', prompts: ["What has Lyra discovered on her radar this week?", 'What are YouTubers saying about the Antikythera mechanism?'] },
+    { label: 'Recent Discoveries', prompts: ["What has Lyra discovered on her radar this week?", 'Are there any theories about polygonal masonry being cast rather than carved?'] },
     { label: 'Empires & Wars', prompts: ['Compare the military tech of Rome and the Mongol Empire', 'What was the economy of the Aztec Empire like?'] },
     { label: 'Deep Dives', prompts: ['Show me photos of Pompeii', 'What channels does Lyra monitor?'] },
   ],
