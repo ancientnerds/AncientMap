@@ -1188,8 +1188,19 @@ async def run_agent_stream(
         },
     }
 
+    # Greeting / pure conversational messages — skip retrieval entirely
+    _GREETING_RE = re.compile(
+        r"^(hi+|hey+|hello+|howdy|hiya|sup|what'?s up|yo|greetings|good\s+(morning|afternoon|evening|day))[\s!?.]*$",
+        re.IGNORECASE,
+    )
+    _is_greeting = bool(_GREETING_RE.match(message.strip())) and not history
+
     # Empire context: skip retrieval (empire data comes from tools/context builder)
-    skip_retrieval = context_type == "empire"
+    skip_retrieval = context_type == "empire" or _is_greeting
+
+    # Emit early status so user sees feedback immediately, before the 8-12s retrieval wait
+    if not skip_retrieval:
+        yield {"type": "status", "content": "Searching..."}
 
     if not skip_retrieval:
         auto_site_results: list[dict] = []
@@ -1540,7 +1551,7 @@ async def run_agent_stream(
     }
 
     tool_calls_made = 0
-    max_tool_rounds = 5
+    max_tool_rounds = 1 if _is_greeting else 5
     _round = -1  # initialized before loop for Phase 2 round numbering
     tool_calls: list[dict[str, str | int | None]] = []
     # Capture structured output for frontend debug panel
@@ -1553,6 +1564,10 @@ async def run_agent_stream(
     _executed_tool_cache: dict[str, str] = {}
 
     for _round in range(max_tool_rounds):
+        # After retrieval completes, let the user know we're processing
+        if _round == 0 and not skip_retrieval:
+            yield {"type": "status", "content": "Thinking..."}
+
         # Inject round awareness so the LLM knows how many rounds remain
         if _round >= 1 and tool_calls_made > 0:
             remaining = max_tool_rounds - _round
@@ -1604,8 +1619,11 @@ async def run_agent_stream(
                 )
 
         # Hard tool cutoff: after round 3 or 3+ tool calls, stop offering tools
-        # entirely so the LLM MUST answer (prompt-level enforcement is unreliable)
-        _offer_tools = ctx.supports_tools and _round < 3 and tool_calls_made < 3
+        # entirely so the LLM MUST answer (prompt-level enforcement is unreliable).
+        # Also skip tools for greetings — no retrieval needed.
+        _offer_tools = (
+            ctx.supports_tools and _round < 3 and tool_calls_made < 3 and not _is_greeting
+        )
 
         # If tools are cut off and we already have tool results, skip straight
         # to Phase 2 synthesis — no point making an extra LLM call to discard the result

@@ -377,9 +377,11 @@ def expand_markers(
 
     # Fix wrapped markers: [Name](type:id)Name[Name](type:id) → [Name](type:id)
     # Happens when annotation mode surrounds the entity with «eN»entity«eN».
+    # Only collapse when the text between the two links is exactly the display name
+    # (avoids eating prose when the same site is mentioned twice legitimately).
     for proto in ("empire", "site", "flag", "lyra-video"):
         expanded = re.sub(
-            rf"(\[[^\]]+\]\({proto}:[^)]+\))[^\[]+\1",
+            rf"(\[([^\]]+)\]\({proto}:[^)]+\))\s*\2\s*\1",
             r"\1",
             expanded,
         )
