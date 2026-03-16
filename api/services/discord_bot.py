@@ -335,6 +335,8 @@ class LyraBot(discord.Client):
         intents.members = True
         super().__init__(intents=intents)
         self.tree = app_commands.CommandTree(self)
+        # Dedup set: prevents double-processing the same message on gateway reconnects
+        self._processed_ids: set[int] = set()
 
     async def setup_hook(self):
         """Register slash commands on startup."""
@@ -350,6 +352,13 @@ class LyraBot(discord.Client):
         """Handle DMs and thread follow-ups."""
         if message.author == self.user or message.author.bot:
             return
+
+        # Deduplicate: discord.py can replay events on gateway reconnects
+        if message.id in self._processed_ids:
+            return
+        self._processed_ids.add(message.id)
+        if len(self._processed_ids) > 500:
+            self._processed_ids.clear()
 
         # --- Thread follow-ups (threads created by /ask) ---
         if isinstance(message.channel, discord.Thread):
