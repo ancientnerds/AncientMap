@@ -49,7 +49,7 @@ def _clean_for_discord(text: str) -> str:
     """Convert internal Lyra markers to Discord-friendly format.
 
     - lyra-video:VIDEO_ID:SECONDS  → YouTube URL
-    - site:UUID                    → plain text (name already in link label)
+    - site:UUID                    → ancientnerds.com site link
     - flag:CC / coord:... / empire:... → plain text
     """
     # [label](lyra-video:VIDEO_ID:SECONDS) → [label](https://youtube.com/watch?v=ID&t=Ss)
@@ -58,8 +58,14 @@ def _clean_for_discord(text: str) -> str:
         lambda m: f"[{m.group(1)}](https://youtube.com/watch?v={m.group(2)}&t={m.group(3)}s)",
         text,
     )
-    # [label](site:UUID) / [label](flag:XX) / [label](coord:...) / [label](empire:...) → label
-    text = re.sub(r"\[([^\]]+)\]\((site|flag|coord|empire):[^\)]+\)", r"\1", text)
+    # [label](site:UUID) → [label](https://ancientnerds.com/site.html?id=UUID)
+    text = re.sub(
+        r"\[([^\]]+)\]\(site:([^)]+)\)",
+        lambda m: f"[{m.group(1)}](https://ancientnerds.com/site.html?id={m.group(2)})",
+        text,
+    )
+    # [label](flag:XX) / [label](coord:...) / [label](empire:...) → plain label
+    text = re.sub(r"\[([^\]]+)\]\((flag|coord|empire):[^\)]+\)", r"\1", text)
     return text
 
 
@@ -266,22 +272,12 @@ async def _handle_ask(
             )
             session.commit()
 
-    # Only surface sites that are explicitly cited in the response text (site:UUID markers).
-    # This prevents background-retrieved sites (e.g. name-matched on "Lyra") from
-    # showing up as "Referenced Sites" when the LLM didn't actually mention them.
-    if full_text and all_sites:
-        cited_ids = set(re.findall(r"\(site:([^)]+)\)", full_text))
-        if cited_ids:
-            all_sites = [s for s in all_sites if s.get("id") in cited_ids]
-        else:
-            all_sites = []
-
     response_text = (
         _clean_for_discord(full_text)
         if full_text
         else "I wasn't able to generate a response. Please try again."
     )
-    return response_text, all_sites
+    return response_text, []
 
 
 async def _send_response(
