@@ -388,9 +388,7 @@ def _get_bot() -> LyraBot:
         await interaction.response.defer(thinking=True)
 
         try:
-            text, sites = await _handle_ask(
-                discord_id, question, member=interaction.user
-            )
+            text, sites = await _handle_ask(discord_id, question, member=interaction.user)
 
             # Try to create a thread for the conversation
             display_name = interaction.user.display_name
