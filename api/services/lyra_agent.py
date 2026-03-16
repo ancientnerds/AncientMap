@@ -1552,10 +1552,11 @@ async def run_agent_stream(
             _last_err: Exception | None = None
             for _attempt in range(3):
                 try:
-                    # Don't pass output_config when tools are offered —
+                    # Anthropic: don't pass output_config when tools are offered —
                     # Haiku returns empty content when tools + output_config are combined.
+                    # Mercury: always pass response_format.
                     _p1_rformat: dict | None = LYRA_RESPONSE_SCHEMA
-                    if _offer_tools:
+                    if ctx.backend_type == "anthropic" and _offer_tools:
                         _p1_rformat = None
                     result = await backend_impl.generate(
                         messages,
@@ -1611,7 +1612,7 @@ async def run_agent_stream(
                     collected_content = ""
                 else:
                     # No tools used at all (simple query) — emit Phase 1 response
-                    if _offer_tools:
+                    if ctx.backend_type == "anthropic" and _offer_tools:
                         # Haiku chose not to use tools — do a single synthesis call
                         # with output_config directly. Marker injection (two-pass) was
                         # ~40% unreliable: Haiku ignored annotation instructions and
@@ -1639,8 +1640,17 @@ async def run_agent_stream(
                             logger.warning(f"Simple synthesis failed: {e}")
                             collected_content = clean_response_text(result["content"])
                     else:
-                        # No tools were offered (edge case) — use plain text
-                        collected_content = clean_response_text(result["content"])
+                        # Mercury (always structured) or Anthropic without tools offered:
+                        # response_format was sent, parse structured output directly.
+                        try:
+                            collected_content, so_data, _off_topic = _parse_structured_output(
+                                result["content"]
+                            )
+                            if so_data is not None:
+                                _structured_output = so_data
+                        except Exception as e:
+                            logger.warning(f"Structured output parse failed: {e}")
+                            collected_content = clean_response_text(result["content"])
                     # Emit clean text directly (no diffusion simulation)
                     if collected_content.strip():
                         # Only apply grounding check when tools were actually used
@@ -2034,136 +2044,134 @@ async def run_agent_stream(
         # Phase 2: two-stage synthesis (prose + marker injection)
         # Stage 1: PROSE_PROMPT + LYRA_PROSE_SCHEMA → plain prose JSON
         # Stage 2: Marker injection → annotated JSON with «s0», «v0» markers
-        if True:
-            _s1_prose: str | None = None
-            _s1_off_topic = False
+        # Both Mercury and Anthropic use this same path — backend_impl handles differences.
+        _s1_prose: str | None = None
+        _s1_off_topic = False
 
-            stage1_msgs = _build_synthesis_messages(
-                message, raw_tool_results, context_prompt, retrieved_context
+        stage1_msgs = _build_synthesis_messages(
+            message, raw_tool_results, context_prompt, retrieved_context
+        )
+        stage1_msgs[0] = SystemMessage(content=PROSE_PROMPT)
+
+        for _s1_attempt in range(3):
+            try:
+                _s1_task = asyncio.create_task(
+                    backend_impl.generate(
+                        stage1_msgs,
+                        response_format=LYRA_PROSE_SCHEMA,
+                        max_tokens=4096,
+                    )
+                )
+                _s1_hb = False
+                while not _s1_task.done():
+                    done, _ = await asyncio.wait({_s1_task}, timeout=8.0)
+                    if not done:
+                        yield {
+                            "type": "status",
+                            "content": "Still working..." if _s1_hb else "Writing answer...",
+                        }
+                        _s1_hb = True
+                _s1_result = _s1_task.result()
+                total_input_tokens += _s1_result["usage"]["input"]
+                total_output_tokens += _s1_result["usage"]["output"]
+                _s1_parsed = json.loads(_s1_result["content"])
+                if not _s1_parsed.get("on_topic", True):
+                    _s1_off_topic = True
+                    _s1_prose = (
+                        "🏺 That's not really my area! I'm all about ancient ruins, "
+                        "lost civilizations, and archaeological discoveries. "
+                        "What do you want to dig into?"
+                    )
+                    break
+                _s1_prose = _s1_parsed.get("text", "").strip()
+                if _s1_prose:
+                    break
+            except Exception as exc:
+                print(f"[S1] attempt {_s1_attempt + 1} failed: {exc}", flush=True)
+            if _s1_attempt < 2:
+                await asyncio.sleep(1.5)
+
+        if _s1_off_topic and _s1_prose:
+            yield {"type": "diffusion", "content": _s1_prose}
+            _synthesis_ok = True
+
+        elif not _s1_prose:
+            # Stage 1 total failure → plain text fallback
+            print("[S1] failed entirely, trying plain text...", flush=True)
+            try:
+                _fb_msgs = _build_synthesis_messages(
+                    message, raw_tool_results, context_prompt, retrieved_context
+                )
+                _fb_msgs[0] = SystemMessage(content=SYNTHESIS_FALLBACK_PROMPT)
+                _fb_result = await backend_impl.generate(
+                    _fb_msgs, response_format=None, max_tokens=8192
+                )
+                total_input_tokens += _fb_result["usage"]["input"]
+                total_output_tokens += _fb_result["usage"]["output"]
+                _s1_prose = clean_response_text(_fb_result["content"])
+            except Exception as exc:
+                print(f"[S1] plain text fallback failed: {exc}", flush=True)
+
+        if _s1_prose and not _s1_off_topic:
+            # Stage 2: Marker injection
+            yield {"type": "status", "content": "Adding citations..."}
+            _entities_json = _build_entities_catalogue(
+                all_sites, all_news, all_transcripts, raw_tool_results
             )
-            stage1_msgs[0] = SystemMessage(content=PROSE_PROMPT)
+            injection_msgs = build_marker_injection_messages(
+                prose=_s1_prose,
+                user_question=message,
+                entities_json=_entities_json,
+                context_prompt=context_prompt,
+            )
 
-            for _s1_attempt in range(3):
+            for _s2_attempt in range(3):
                 try:
-                    _s1_task = asyncio.create_task(
+                    _s2_task = asyncio.create_task(
                         backend_impl.generate(
-                            stage1_msgs,
-                            response_format=LYRA_PROSE_SCHEMA,
-                            max_tokens=4096,
+                            injection_msgs,
+                            response_format=LYRA_RESPONSE_SCHEMA,
+                            max_tokens=8192,
                         )
                     )
-                    _s1_hb = False
-                    while not _s1_task.done():
-                        done, _ = await asyncio.wait({_s1_task}, timeout=8.0)
+                    _s2_hb = False
+                    while not _s2_task.done():
+                        done, _ = await asyncio.wait({_s2_task}, timeout=8.0)
                         if not done:
                             yield {
                                 "type": "status",
-                                "content": "Still working..." if _s1_hb else "Writing answer...",
+                                "content": "Still working..." if _s2_hb else "Adding citations...",
                             }
-                            _s1_hb = True
-                    _s1_result = _s1_task.result()
-                    total_input_tokens += _s1_result["usage"]["input"]
-                    total_output_tokens += _s1_result["usage"]["output"]
-                    _s1_parsed = json.loads(_s1_result["content"])
-                    if not _s1_parsed.get("on_topic", True):
-                        _s1_off_topic = True
-                        _s1_prose = (
-                            "🏺 That's not really my area! I'm all about ancient ruins, "
-                            "lost civilizations, and archaeological discoveries. "
-                            "What do you want to dig into?"
+                            _s2_hb = True
+                    result = _s2_task.result()
+                    total_input_tokens += result["usage"]["input"]
+                    total_output_tokens += result["usage"]["output"]
+                    # Stage 2 is annotation mode — never deflect based on on_topic
+                    text_out, so_data, _ = _parse_structured_output(
+                        result["content"], check_on_topic=False
+                    )
+                    if so_data is not None and _valid_video_ids:
+                        text_out, so_data = _filter_hallucinated_videos(
+                            text_out, so_data, _valid_video_ids
                         )
-                        break
-                    _s1_prose = _s1_parsed.get("text", "").strip()
-                    if _s1_prose:
+                    if so_data is not None:
+                        _structured_output = so_data
+                    if text_out.strip():
+                        text_out, _ = _check_grounding(text_out)
+                        yield {"type": "diffusion", "content": text_out}
+                        _synthesis_ok = True
                         break
                 except Exception as exc:
-                    print(f"[S1] attempt {_s1_attempt + 1} failed: {exc}", flush=True)
-                if _s1_attempt < 2:
+                    print(f"[S2] attempt {_s2_attempt + 1} failed: {exc}", flush=True)
+                if _s2_attempt < 2:
                     await asyncio.sleep(1.5)
 
-            if _s1_off_topic and _s1_prose:
+            if not _synthesis_ok:
+                # Stage 2 failed — emit Stage 1 prose (grounded content, no markers)
+                _s1_prose, _ = _check_grounding(_s1_prose)
                 yield {"type": "diffusion", "content": _s1_prose}
                 _synthesis_ok = True
-
-            elif not _s1_prose:
-                # Stage 1 total failure → plain text fallback
-                print("[S1] failed entirely, trying plain text...", flush=True)
-                try:
-                    _fb_msgs = _build_synthesis_messages(
-                        message, raw_tool_results, context_prompt, retrieved_context
-                    )
-                    _fb_msgs[0] = SystemMessage(content=SYNTHESIS_FALLBACK_PROMPT)
-                    _fb_result = await backend_impl.generate(
-                        _fb_msgs, response_format=None, max_tokens=8192
-                    )
-                    total_input_tokens += _fb_result["usage"]["input"]
-                    total_output_tokens += _fb_result["usage"]["output"]
-                    _s1_prose = clean_response_text(_fb_result["content"])
-                except Exception as exc:
-                    print(f"[S1] plain text fallback failed: {exc}", flush=True)
-
-            if _s1_prose and not _s1_off_topic:
-                # Stage 2: Marker injection
-                yield {"type": "status", "content": "Adding citations..."}
-                _entities_json = _build_entities_catalogue(
-                    all_sites, all_news, all_transcripts, raw_tool_results
-                )
-                injection_msgs = build_marker_injection_messages(
-                    prose=_s1_prose,
-                    user_question=message,
-                    entities_json=_entities_json,
-                    context_prompt=context_prompt,
-                )
-
-                for _s2_attempt in range(3):
-                    try:
-                        _s2_task = asyncio.create_task(
-                            backend_impl.generate(
-                                injection_msgs,
-                                response_format=LYRA_RESPONSE_SCHEMA,
-                                max_tokens=8192,
-                            )
-                        )
-                        _s2_hb = False
-                        while not _s2_task.done():
-                            done, _ = await asyncio.wait({_s2_task}, timeout=8.0)
-                            if not done:
-                                yield {
-                                    "type": "status",
-                                    "content": "Still working..."
-                                    if _s2_hb
-                                    else "Adding citations...",
-                                }
-                                _s2_hb = True
-                        result = _s2_task.result()
-                        total_input_tokens += result["usage"]["input"]
-                        total_output_tokens += result["usage"]["output"]
-                        # Stage 2 is annotation mode — never deflect based on on_topic
-                        text_out, so_data, _ = _parse_structured_output(
-                            result["content"], check_on_topic=False
-                        )
-                        if so_data is not None and _valid_video_ids:
-                            text_out, so_data = _filter_hallucinated_videos(
-                                text_out, so_data, _valid_video_ids
-                            )
-                        if so_data is not None:
-                            _structured_output = so_data
-                        if text_out.strip():
-                            text_out, _ = _check_grounding(text_out)
-                            yield {"type": "diffusion", "content": text_out}
-                            _synthesis_ok = True
-                            break
-                    except Exception as exc:
-                        print(f"[S2] attempt {_s2_attempt + 1} failed: {exc}", flush=True)
-                    if _s2_attempt < 2:
-                        await asyncio.sleep(1.5)
-
-                if not _synthesis_ok:
-                    # Stage 2 failed — emit Stage 1 prose (grounded content, no markers)
-                    _s1_prose, _ = _check_grounding(_s1_prose)
-                    yield {"type": "diffusion", "content": _s1_prose}
-                    _synthesis_ok = True
-                    print("[SYNTHESIS] S2 failed, emitting S1 prose", flush=True)
+                print("[SYNTHESIS] S2 failed, emitting S1 prose", flush=True)
 
         if not _synthesis_ok:
             _fb = _build_fallback_response(message, all_sites, all_news)
