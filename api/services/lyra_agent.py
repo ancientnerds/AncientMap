@@ -314,25 +314,27 @@ def _build_synthesis_messages(
     if context_prompt:
         msgs.append(SystemMessage(content=context_prompt))
 
+    # Inject source index as a SystemMessage so it is visible as an instruction
+    # but NOT inside the document body passed to the Citations API.
+    if raw_tool_results:
+        source_chunks = _extract_source_chunks(raw_tool_results)
+        if source_chunks:
+            lines = [f"## Retrieved Sources ({len(source_chunks)} found)"]
+            for i, ch in enumerate(source_chunks, 1):
+                lines.append(f"{i}. {ch['title']}")
+            msgs.append(SystemMessage(content="\n".join(lines)))
+
     user_parts: list[str] = []
 
     if retrieved_context:
         user_parts.append(retrieved_context)
 
     if raw_tool_results:
-        # Build explicit source index so the LLM enumerates every entry
-        source_chunks = _extract_source_chunks(raw_tool_results)
-        if source_chunks:
-            lines = [f"## Retrieved Sources ({len(source_chunks)} found)"]
-            for i, ch in enumerate(source_chunks, 1):
-                lines.append(f"{i}. {ch['title']}")
-            user_parts.append("\n".join(lines))
-
         wrapped = [{"text": r} for r in raw_tool_results]
         deduped = _semantic_dedup(wrapped, text_key="text")
         reordered = _reorder_by_relevance(deduped)
         data_block = "\n---\n".join(r["text"][:8000] for r in reordered)
-        user_parts.append(f"## Full Retrieved Data\n\n{data_block}")
+        user_parts.append(f"## Retrieved Data\n\n{data_block}")
 
     user_parts.append(f"## Question\n{user_question}")
     msgs.append(HumanMessage(content="\n\n".join(user_parts)))
