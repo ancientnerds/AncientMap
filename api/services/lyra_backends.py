@@ -4,7 +4,7 @@ Unified LLM backend abstraction for Lyra.
 All backends normalize output to the same StreamEvent dicts:
   {"type": "reasoning", "text": str}
   {"type": "content", "text": str}          — standard append-mode tokens
-  {"type": "diffusion", "text": str}        — full-text replacement (Mercury diffusing mode)
+  {"type": "diffusion", "text": str}        — full-text replacement
   {"type": "tool_call_chunk", "index": int, "id": str|None, "name": str|None, "args": str}
   {"type": "usage", "input": int, "output": int}
 """
@@ -248,7 +248,7 @@ class OllamaBackend:
                         }
 
     async def complete(self, messages: list, response_format: dict | None = None) -> dict:
-        """Not supported for Ollama backend — structured output is Mercury-only."""
+        """Not supported for Ollama backend."""
         raise NotImplementedError("OllamaBackend does not support complete()")
 
     async def generate(
@@ -260,256 +260,8 @@ class OllamaBackend:
         tool_choice: str | None = None,
         citations: bool = False,
     ) -> dict:
-        """Not supported for Ollama backend — Mercury-only."""
+        """Not supported for Ollama backend."""
         raise NotImplementedError("OllamaBackend does not support generate()")
-
-
-# ---------------------------------------------------------------------------
-# MercuryBackend — Inception Labs Mercury 2 via OpenAI-compatible SDK
-# ---------------------------------------------------------------------------
-
-
-class MercuryBackend:
-    """Uses openai.AsyncOpenAI for Mercury 2 cloud streaming."""
-
-    def __init__(
-        self,
-        model: str,
-        api_key: str,
-        base_url: str,
-        max_tokens: int,
-    ):
-        self.model = model
-        self.api_key = api_key
-        self.base_url = base_url
-        self.max_tokens = max_tokens
-        self._client = None
-        self._client_key: str = ""
-
-    def _get_client(self):
-        from openai import AsyncOpenAI
-
-        from pipeline.lyra.config import get_api_key
-
-        current_key = get_api_key()
-        if self._client is None or self._client_key != current_key:
-            self._client = AsyncOpenAI(
-                base_url=self.base_url,
-                api_key=current_key,
-                timeout=120.0,
-                max_retries=5,
-            )
-            self._client_key = current_key
-        return self._client
-
-    async def stream(
-        self, messages: list[BaseMessage], tools: list, enable_thinking: bool = True
-    ) -> AsyncIterator[dict]:
-        """Stream from Mercury via OpenAI SDK, yielding StreamEvent dicts."""
-        client = self._get_client()
-
-        openai_messages = _langchain_messages_to_openai(messages)
-        openai_tools = _langchain_tools_to_openai(tools) if tools else None
-
-        create_kwargs: dict = {
-            "model": self.model,
-            "messages": openai_messages,
-            "max_tokens": self.max_tokens,
-            "stream": True,
-            "stream_options": {"include_usage": True},
-            "reasoning_effort": "high",
-            "extra_body": {"diffusing": True},
-        }
-        if openai_tools:
-            create_kwargs["tools"] = openai_tools
-
-        stream = await client.chat.completions.create(**create_kwargs)
-
-        # Accumulate tool call chunks by index
-        tool_calls: dict[int, dict] = {}
-
-        async for chunk in stream:
-            if not chunk.choices and chunk.usage:
-                yield {
-                    "type": "usage",
-                    "input": chunk.usage.prompt_tokens or 0,
-                    "output": chunk.usage.completion_tokens or 0,
-                }
-                continue
-
-            if not chunk.choices:
-                continue
-
-            delta = chunk.choices[0].delta
-
-            # Content tokens (diffusion mode: each chunk is a full replacement)
-            if delta.content:
-                yield {"type": "diffusion", "text": delta.content}
-
-            # Tool call chunks
-            if delta.tool_calls:
-                for tc_chunk in delta.tool_calls:
-                    idx = tc_chunk.index
-                    entry = tool_calls.setdefault(idx, {"id": None, "name": None, "args": ""})
-                    if tc_chunk.id:
-                        entry["id"] = tc_chunk.id
-                    if tc_chunk.function and tc_chunk.function.name:
-                        entry["name"] = tc_chunk.function.name
-                    if tc_chunk.function and tc_chunk.function.arguments:
-                        entry["args"] += tc_chunk.function.arguments
-
-            # On finish: yield finalized tool calls
-            finish = chunk.choices[0].finish_reason
-            if finish == "tool_calls" and tool_calls:
-                for idx, tc_data in sorted(tool_calls.items()):
-                    yield {
-                        "type": "tool_call_chunk",
-                        "index": idx,
-                        "id": tc_data["id"],
-                        "name": tc_data["name"],
-                        "args": tc_data["args"],
-                    }
-                tool_calls.clear()
-
-    async def generate(
-        self,
-        messages: list,
-        tools: list | None = None,
-        response_format: dict | None = None,
-        max_tokens: int | None = None,
-        tool_choice: str | None = None,
-        citations: bool = False,
-    ) -> dict:
-        """Single non-streaming call that handles tools + structured output.
-
-        Returns {"content": str, "tool_calls": list, "usage": dict}.
-        When response_format is set and no tool calls, content is the raw
-        structured JSON string (caller parses it).
-
-        Args:
-            max_tokens: Override instance max_tokens. Structured output calls
-                should cap at 4096 (reasoning_effort="high" shares the budget).
-            tool_choice: "none" to prevent tool calls, "auto" (default), etc.
-        """
-        import asyncio as _aio
-
-        client = self._get_client()
-        openai_messages = _langchain_messages_to_openai(messages)
-
-        create_kwargs: dict = {
-            "model": self.model,
-            "messages": openai_messages,
-            "max_tokens": max_tokens or self.max_tokens,
-            "stream": False,
-            "reasoning_effort": "high",
-        }
-        if tools:
-            create_kwargs["tools"] = _langchain_tools_to_openai(tools)
-            if tool_choice:
-                create_kwargs["tool_choice"] = tool_choice
-        if response_format:
-            create_kwargs["response_format"] = response_format
-
-        async def _call() -> dict:
-            resp = await _aio.wait_for(
-                client.chat.completions.create(**create_kwargs), timeout=60.0
-            )
-
-            choice = resp.choices[0]
-            message = choice.message
-            content = message.content or ""
-            finish_reason = choice.finish_reason
-
-            logger.debug(
-                f"Mercury generate: finish_reason={finish_reason}, "
-                f"content_len={len(content)}, "
-                f"tokens={resp.usage.completion_tokens if resp.usage else '?'}"
-            )
-
-            # When no tools were requested, Mercury may still return
-            # tool_calls if the message history contains tool call patterns.
-            # Ignore spurious tool_calls — only content matters.
-            effective_tool_calls = message.tool_calls if tools else None
-
-            # Guard: Mercury sometimes returns empty content on rate limits
-            # or overloaded state. Raise explicitly so callers can retry.
-            if not content.strip() and not effective_tool_calls:
-                raise ValueError(
-                    f"Mercury returned empty content "
-                    f"(finish_reason={finish_reason}, "
-                    f"spurious_tool_calls={bool(message.tool_calls)}) — "
-                    "likely rate-limited or overloaded"
-                )
-
-            # Guard: if Mercury stopped due to length, the JSON is truncated
-            # and will fail to parse. Raise explicitly so callers can retry.
-            if finish_reason == "length" and response_format:
-                raise ValueError(
-                    f"Mercury response truncated (finish_reason=length, "
-                    f"{len(content)} chars, "
-                    f"{resp.usage.completion_tokens if resp.usage else '?'} tokens) — "
-                    "hit max_tokens limit"
-                )
-
-            result: dict = {
-                "content": content,
-                "tool_calls": [],
-                "usage": {
-                    "input": (resp.usage.prompt_tokens or 0) if resp.usage else 0,
-                    "output": (resp.usage.completion_tokens or 0) if resp.usage else 0,
-                },
-            }
-            if effective_tool_calls:
-                for tc in effective_tool_calls:
-                    result["tool_calls"].append(
-                        {
-                            "id": tc.id,
-                            "name": tc.function.name,
-                            "args": tc.function.arguments,
-                        }
-                    )
-            return result
-
-        return await _call()
-
-    async def complete(self, messages: list, response_format: dict | None = None) -> dict:
-        """Non-streaming structured output only (used by judge scorer).
-
-        Returns parsed JSON dict when response_format is json_schema.
-        """
-        import asyncio as _aio
-
-        client = self._get_client()
-        openai_messages = _langchain_messages_to_openai(messages)
-
-        create_kwargs: dict = {
-            "model": self.model,
-            "messages": openai_messages,
-            "max_tokens": 4096,
-            "stream": False,
-            "reasoning_effort": "high",
-            "temperature": 0.1,
-        }
-        if response_format:
-            create_kwargs["response_format"] = response_format
-
-        async def _call(effort: str = "high") -> dict:
-            kw = {**create_kwargs, "reasoning_effort": effort}
-            resp = await _aio.wait_for(client.chat.completions.create(**kw), timeout=30.0)
-            content = resp.choices[0].message.content or "{}"
-            parsed = json.loads(content)
-            text = parsed.get("text", "")
-            if response_format and not text.strip():
-                raise ValueError("Structured output returned empty text")
-            if "sites" in parsed:
-                parsed["sites"] = [s for s in parsed["sites"] if s.get("id", "").strip()]
-            return parsed
-
-        try:
-            return await _call("high")
-        except TimeoutError:
-            logger.warning("complete() timed out with effort=high, retrying with medium")
-            return await _call("medium")
 
 
 # ---------------------------------------------------------------------------
@@ -604,7 +356,7 @@ class AnthropicBackend:
         ]
 
     def _to_output_config(self, response_format: dict) -> dict:
-        """Convert Mercury/OpenAI json_schema format to Anthropic output_config."""
+        """Convert OpenAI json_schema format to Anthropic output_config."""
         # Input:  {"type": "json_schema", "json_schema": {"name": ..., "strict": True, "schema": {...}}}
         # Output: {"format": {"type": "json_schema", "schema": {...}}}
         return {
@@ -817,9 +569,8 @@ def get_backend(
     """Get or create a backend instance for the given model.
 
     Args:
-        model_name: The model to use (e.g. "qwen3.5:4b", "mercury-2", "claude-haiku-4-5").
-        backend_type: "local" for OllamaBackend, "mercury" for MercuryBackend,
-                      "anthropic" for AnthropicBackend.
+        model_name: The model to use (e.g. "qwen3.5:4b", "claude-haiku-4-5-20251001").
+        backend_type: "local" for OllamaBackend, anything else for AnthropicBackend.
         num_ctx: Override context window size (local only). Defaults to LYRA_OLLAMA_NUM_CTX env.
         max_tokens: Override max output tokens (local only). Defaults to 1024.
         base_url: Override base URL (local only). Bypasses LYRA_OLLAMA_BASE_URL.
@@ -838,7 +589,7 @@ def get_backend(
                 num_ctx=ctx,
             )
             logger.info(f"Created OllamaBackend for {model_name} at {url}")
-        elif backend_type == "anthropic":
+        else:
             from pipeline.lyra.config import get_max_tokens
 
             api_key = os.getenv("LYRA_ANTHROPIC_API_KEY") or os.getenv("LYRA_API_KEY") or ""
@@ -848,17 +599,4 @@ def get_backend(
                 max_tokens=max_tokens or get_max_tokens(),
             )
             logger.info(f"Created AnthropicBackend for {model_name}")
-        else:
-            from pipeline.lyra.config import get_api_key, get_max_tokens
-
-            mercury_url = os.getenv("LYRA_BASE_URL", "") or os.getenv(
-                "LYRA_ANTHROPIC_BASE_URL", "https://api.inceptionlabs.ai/v1"
-            )
-            _backends[key] = MercuryBackend(
-                model=model_name,
-                api_key=get_api_key(),
-                base_url=mercury_url,
-                max_tokens=get_max_tokens(),
-            )
-            logger.info(f"Created MercuryBackend for {model_name}")
     return _backends[key]

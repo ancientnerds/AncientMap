@@ -421,7 +421,7 @@ def _process_single(
             # Alias mismatch guard — three tiers:
             #   >= 0.8  → auto-accept (names match closely)
             #   <  0.3  → auto-reject (clearly different sites)
-            #   0.3–0.8 → Mercury LLM sanity check (shared words
+            #   0.3–0.8 → LLM sanity check (shared words
             #              like "tepe", "caves", "temple" inflate
             #              trigram similarity between different sites)
             # Short names (< 4 chars) always route to LLM — trigram
@@ -907,7 +907,7 @@ def _verify_alias_match(
     *,
     db_country: str | None = None,
 ) -> bool:
-    """Quick Mercury check: is the alias match correct?
+    """Quick LLM check: is the alias match correct?
 
     Called when name_similarity is in the ambiguous zone (0.3–0.8) where
     shared words (tepe, caves, temple) inflate trigram similarity between

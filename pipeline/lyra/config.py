@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 # Unified error type — callers catch this instead of SDK-specific errors
 # ---------------------------------------------------------------------------
 class LyraAPIError(Exception):
-    """Wraps OpenAI SDK errors for uniform caller handling."""
+    """Wraps LLM SDK errors for uniform caller handling."""
 
     pass
 
@@ -80,22 +80,20 @@ class LyraSettings(BaseSettings):
         extra="ignore",
     )
 
-    # LLM API (OpenAI-compatible — Mercury 2 by Inception Labs)
-    api_key: str = ""
-    free_api_keys: str = ""  # Unused — kept for .env compat
-    base_url: str = "https://api.inceptionlabs.ai/v1"
+    # LLM API (Anthropic)
+    anthropic_api_key: str = ""
     temperature_min: float = 0.0
-    model_summarize: str = "mercury-2"
-    model_post: str = "mercury-2"
-    model_verify: str = "mercury-2"
-    model_article: str = "mercury-2"
-    model_identify: str = "mercury-2"
-    model_identify_escalation: str = "mercury-2"
-    model_rescore: str = "mercury-2"
-    model_relevance: str = "mercury-2"
+    model_summarize: str = "claude-haiku-4-5-20251001"
+    model_post: str = "claude-haiku-4-5-20251001"
+    model_verify: str = "claude-haiku-4-5-20251001"
+    model_article: str = "claude-haiku-4-5-20251001"
+    model_identify: str = "claude-haiku-4-5-20251001"
+    model_identify_escalation: str = "claude-haiku-4-5-20251001"
+    model_rescore: str = "claude-haiku-4-5-20251001"
+    model_relevance: str = "claude-haiku-4-5-20251001"
 
-    # Max output tokens per LLM call (32000 = Mercury 2 model max)
-    max_tokens: int = 32000
+    # Max output tokens per LLM call
+    max_tokens: int = 8192
 
     # Site identification settings
     min_score_for_promotion: int = 55
@@ -131,8 +129,8 @@ class LyraSettings(BaseSettings):
     # YouTube Data API key (for video metadata — no cookies/OAuth needed)
     youtube_api_key: str = ""
 
-    # LLM backend: "mercury" (default, OpenAI-compatible cloud) or "ollama" (local)
-    llm_backend: str = "mercury"
+    # LLM backend: "anthropic" (default) or "ollama" (local)
+    llm_backend: str = "anthropic"
 
     # Ollama endpoint (OpenAI-compatible API, used when llm_backend="ollama")
     ollama_base_url: str = ""
@@ -141,11 +139,11 @@ class LyraSettings(BaseSettings):
 
     @classmethod
     def _resolve_env_fallbacks(cls) -> None:
-        """Set env vars from legacy LYRA_ANTHROPIC_* names if new ones aren't set."""
-        if not os.getenv("LYRA_API_KEY") and os.getenv("LYRA_ANTHROPIC_API_KEY"):
-            os.environ["LYRA_API_KEY"] = os.environ["LYRA_ANTHROPIC_API_KEY"]
-        if not os.getenv("LYRA_BASE_URL") and os.getenv("LYRA_ANTHROPIC_BASE_URL"):
-            os.environ["LYRA_BASE_URL"] = os.environ["LYRA_ANTHROPIC_BASE_URL"]
+        """Normalize legacy env var names before settings load."""
+        # LYRA_API_KEY was the legacy Mercury key name; map it to LYRA_ANTHROPIC_API_KEY
+        # so existing deployments keep working if they only set the old name.
+        if not os.getenv("LYRA_ANTHROPIC_API_KEY") and os.getenv("LYRA_API_KEY"):
+            os.environ["LYRA_ANTHROPIC_API_KEY"] = os.environ["LYRA_API_KEY"]
 
 
 _cached_settings: LyraSettings | None = None
@@ -175,8 +173,8 @@ def get_max_tokens() -> int:
 
 
 def get_api_key() -> str:
-    """Return the configured API key."""
-    return _get_settings().api_key
+    """Return the configured Anthropic API key."""
+    return _get_settings().anthropic_api_key
 
 
 # Backwards-compat aliases
@@ -190,30 +188,24 @@ def mark_api_key_exhausted() -> str:
 
 
 # ---------------------------------------------------------------------------
-# OpenAI clients (Mercury cloud + Ollama local)
+# Anthropic client (pipeline — synchronous calls from orchestrator/workers)
 # ---------------------------------------------------------------------------
-_cached_mercury_client = None
-_cached_mercury_key: str = ""
+_cached_anthropic_client = None
+_cached_anthropic_key: str = ""
 _cached_ollama_client = None
 _cached_ollama_key: str = ""
 
 
-def _get_mercury_client(api_key: str, base_url: str):
-    """Return a cached OpenAI client for the given key + URL."""
-    global _cached_mercury_client, _cached_mercury_key
+def _get_anthropic_client(api_key: str):
+    """Return a cached synchronous Anthropic client."""
+    global _cached_anthropic_client, _cached_anthropic_key
 
-    from openai import OpenAI
+    import anthropic
 
-    cache_key = f"{api_key}:{base_url}"
-    if _cached_mercury_client is None or _cached_mercury_key != cache_key:
-        _cached_mercury_client = OpenAI(
-            base_url=base_url,
-            api_key=api_key,
-            timeout=120.0,
-            max_retries=5,
-        )
-        _cached_mercury_key = cache_key
-    return _cached_mercury_client
+    if _cached_anthropic_client is None or _cached_anthropic_key != api_key:
+        _cached_anthropic_client = anthropic.Anthropic(api_key=api_key, timeout=120.0)
+        _cached_anthropic_key = api_key
+    return _cached_anthropic_client
 
 
 def _get_ollama_client(settings: LyraSettings):
@@ -234,24 +226,86 @@ def _get_ollama_client(settings: LyraSettings):
     return _cached_ollama_client
 
 
-def _call_openai_api(
+def _call_anthropic_api(
     settings: LyraSettings,
     *,
     prefill: str | None = None,
-    is_ollama: bool = False,
-    reasoning_effort: str | None = None,
     **kwargs,
 ) -> NormalizedResponse:
-    """Translate kwargs to OpenAI format and call the Mercury/Ollama backend."""
-    if is_ollama:
-        client = _get_ollama_client(settings)
-    else:
-        client = _get_mercury_client(settings.api_key, settings.base_url)
+    """Call Anthropic API synchronously and return a NormalizedResponse."""
+    client = _get_anthropic_client(settings.anthropic_api_key)
 
-    # Build OpenAI messages from system + user/assistant messages
+    # Extract system blocks
+    system_blocks = kwargs.pop("system", None)
+    system_text = ""
+    if system_blocks:
+        if isinstance(system_blocks, str):
+            system_text = system_blocks
+        elif isinstance(system_blocks, list):
+            system_text = "\n\n".join(
+                b["text"] if isinstance(b, dict) else str(b) for b in system_blocks
+            )
+
+    # Build messages list
     messages: list[dict] = []
+    for msg in kwargs.pop("messages", []):
+        messages.append({"role": msg["role"], "content": msg["content"]})
 
-    # System blocks → single system message (strip cache_control)
+    # Handle prefill — append as assistant message
+    if prefill:
+        messages.append({"role": "assistant", "content": prefill})
+
+    # Drop unsupported params
+    kwargs.pop("thinking", None)
+    kwargs.pop("tool_choice", None)
+    kwargs.pop("tools", None)
+    kwargs.pop("reasoning_effort", None)
+
+    model = kwargs.pop("model", settings.model_summarize)
+    max_tokens = kwargs.pop("max_tokens", settings.max_tokens)
+    temperature = kwargs.pop("temperature", None)
+
+    create_kwargs: dict = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+    }
+    if system_text:
+        create_kwargs["system"] = system_text
+    if temperature is not None:
+        create_kwargs["temperature"] = max(settings.temperature_min, temperature)
+
+    response = client.messages.create(**create_kwargs)
+    return _normalize_anthropic_response(response)
+
+
+def _normalize_anthropic_response(response) -> NormalizedResponse:
+    """Wrap Anthropic Messages response into NormalizedResponse."""
+    text = "".join(b.text for b in response.content if hasattr(b, "text") and b.type == "text")
+    stop_reason = "max_tokens" if response.stop_reason == "max_tokens" else "end_turn"
+    return NormalizedResponse(
+        content=[TextBlock(text=text)],
+        stop_reason=stop_reason,
+        model=response.model or "",
+        usage={
+            "input_tokens": response.usage.input_tokens if response.usage else 0,
+            "output_tokens": response.usage.output_tokens if response.usage else 0,
+        },
+    )
+
+
+def _call_ollama_api(
+    settings: LyraSettings,
+    *,
+    prefill: str | None = None,
+    **kwargs,
+) -> NormalizedResponse:
+    """Call Ollama via OpenAI-compatible SDK and return a NormalizedResponse."""
+    from openai import OpenAI
+
+    client = _get_ollama_client(settings)
+
+    messages: list[dict] = []
     system_blocks = kwargs.pop("system", None)
     if system_blocks:
         if isinstance(system_blocks, str):
@@ -262,82 +316,30 @@ def _call_openai_api(
             )
             messages.append({"role": "system", "content": system_text})
 
-    # User/assistant messages
     for msg in kwargs.pop("messages", []):
         messages.append({"role": msg["role"], "content": msg["content"]})
 
-    # Translate legacy thinking param → reasoning_effort
-    thinking = kwargs.pop("thinking", None)
-    reasoning_effort_from_thinking = None
-    if thinking and isinstance(thinking, dict) and thinking.get("type") == "enabled":
-        reasoning_effort_from_thinking = "high"
-
-    # Drop unsupported params
+    kwargs.pop("thinking", None)
     kwargs.pop("tool_choice", None)
     kwargs.pop("tools", None)
+    kwargs.pop("reasoning_effort", None)
+    kwargs.pop("temperature", None)
 
-    # Merge explicit reasoning_effort with thinking-derived value
-    effective_effort = reasoning_effort or reasoning_effort_from_thinking
-
-    # Handle response_format (native pass-through)
-    response_format = kwargs.pop("response_format", None)
-
-    # Handle prefill
-    if prefill == "{" and not response_format:
-        # Use json_object mode + system instruction for JSON prefills
-        response_format = {"type": "json_object"}
-        # Add instruction if not already present
-        if messages and messages[0]["role"] == "system":
-            if "json" not in messages[0]["content"].lower():
-                messages[0]["content"] += "\n\nRespond with valid JSON only."
-        else:
-            messages.insert(0, {"role": "system", "content": "Respond with valid JSON only."})
-    elif prefill and prefill != "{":
-        # Non-JSON prefill (like "Q") — add as system instruction
-        if messages and messages[0]["role"] == "system":
-            messages[0]["content"] += f"\n\nStart your response with: {prefill}"
-        else:
-            messages.insert(
-                0, {"role": "system", "content": f"Start your response with: {prefill}"}
-            )
-
-    if is_ollama:
-        # Ollama: override model and cap max_tokens
-        model = settings.ollama_model
-        max_tokens = min(kwargs.pop("max_tokens", 4096), 4096)
-        kwargs.pop("model", None)
-        kwargs.pop("temperature", None)  # Let Ollama use default
-    else:
-        # Mercury: use the model from kwargs (caller passes settings.model_*) with full max_tokens
-        model = kwargs.pop("model", "mercury-2")
-        max_tokens = kwargs.pop("max_tokens", settings.max_tokens)
-        temperature = kwargs.pop("temperature", None)
+    model = settings.ollama_model
+    kwargs.pop("model", None)
+    max_tokens = min(kwargs.pop("max_tokens", 4096), 4096)
 
     create_kwargs: dict = {
         "model": model,
         "messages": messages,
         "max_tokens": max_tokens,
     }
-    if not is_ollama and temperature is not None:
-        create_kwargs["temperature"] = max(settings.temperature_min, temperature)
-    if response_format:
-        create_kwargs["response_format"] = response_format
-    if not is_ollama and effective_effort:
-        create_kwargs["reasoning_effort"] = effective_effort
 
     response = client.chat.completions.create(**create_kwargs)
-    return _normalize_openai_response(response)
-
-
-def _normalize_openai_response(response) -> NormalizedResponse:
-    """Wrap OpenAI ChatCompletion into NormalizedResponse."""
     choice = response.choices[0] if response.choices else None
     text = choice.message.content or "" if choice else ""
-
-    # Map OpenAI finish_reason to stop_reason
     finish = choice.finish_reason if choice else "stop"
     stop_reason = "max_tokens" if finish == "length" else "end_turn"
-
     return NormalizedResponse(
         content=[TextBlock(text=text)],
         stop_reason=stop_reason,
@@ -377,25 +379,20 @@ def call_api(
     reasoning_effort: str | None = None,
     **kwargs,
 ) -> NormalizedResponse:
-    """Unified LLM call — dispatches to Mercury (cloud) or Ollama (local).
+    """Unified LLM call — dispatches to Anthropic (cloud) or Ollama (local).
 
     Args:
         prefill: Prefix for the response (e.g. "{" for JSON).
-        reasoning_effort: Mercury reasoning level — "instant", "low", "medium", or "high".
-            Also derived from legacy thinking={"type": "enabled"} → "high".
+        reasoning_effort: Ignored — kept for call-site compat.
         **kwargs: model, max_tokens, messages, system, temperature, response_format, etc.
     """
     settings = _get_settings()
 
     is_ollama = settings.llm_backend == "ollama"
     try:
-        return _call_openai_api(
-            settings,
-            prefill=prefill,
-            is_ollama=is_ollama,
-            reasoning_effort=reasoning_effort,
-            **kwargs,
-        )
+        if is_ollama:
+            return _call_ollama_api(settings, prefill=prefill, **kwargs)
+        return _call_anthropic_api(settings, prefill=prefill, **kwargs)
     except Exception as e:
-        backend_name = "Ollama" if is_ollama else "Mercury"
+        backend_name = "Ollama" if is_ollama else "Anthropic"
         raise LyraAPIError(f"{backend_name} API error: {e}") from e

@@ -1,7 +1,7 @@
 """
 Lyra structured output schema and marker expansion.
 
-Mercury supports `response_format: json_schema` for guaranteed structured JSON.
+Anthropic supports `output_config: json_schema` for guaranteed structured JSON.
 The LLM places guillemet markers (e.g. «s0», «c0») in its text and fills
 corresponding arrays. expand_markers() resolves these into the markdown link
 syntax the frontend already handles.
@@ -13,7 +13,7 @@ import re
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# JSON Schema for Mercury structured output (OpenAI json_schema format)
+# JSON Schema for Anthropic structured output
 # ---------------------------------------------------------------------------
 
 LYRA_RESPONSE_SCHEMA = {
@@ -346,7 +346,7 @@ def expand_markers(
     issues.extend(validate_structured_response(parsed, expanded))
 
     # Strip any remaining unresolved guillemet markers from final text
-    # (Mercury sometimes outputs markers without matching array entries)
+    # (LLM sometimes outputs markers without matching array entries)
     cleaned = _MARKER_RE.sub("", expanded)
     if cleaned != expanded:
         # Collapse whitespace from removed markers

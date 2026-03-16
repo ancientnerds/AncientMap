@@ -5,7 +5,7 @@ Lyra Whiskerbyte is an archaeological agent who monitors YouTube channels,
 extracts transcripts, and can chat about any of the 750K+ sites in the database.
 
 Two model tiers:
-  - premium (Mercury 2) — paid, credit-based, highest quality
+  - premium (Anthropic Haiku) — cloud, tools + structured output
   - heavy (Qwen3.5 2B, think=on) — queries, thinking + tools + retrieval
 All messages get full tools and structured output (no trivial mode).
 """
@@ -174,9 +174,8 @@ def _build_fallback_response(
 ) -> str:
     """Build a text response from retrieved data when the LLM fails.
 
-    This is the last-resort safety net — 100% reliable because it
-    doesn't depend on Mercury.  Produces a useful answer from whatever
-    the retrieval pipeline already gathered.
+    Last-resort safety net — produces a useful answer from whatever
+    the retrieval pipeline already gathered without calling the LLM.
     """
     parts: list[str] = []
 
@@ -220,7 +219,6 @@ def _build_synthesis_messages(
 
     Clean slate: SYNTHESIS_PROMPT + consolidated data + user question.
     IMPORTANT: All retrieved data goes in the HumanMessage, not SystemMessages.
-    Mercury ignores data in system messages but reliably uses data in user messages.
     """
     msgs: list[BaseMessage] = [SystemMessage(content=SYNTHESIS_PROMPT)]
 
@@ -229,7 +227,6 @@ def _build_synthesis_messages(
         msgs.append(SystemMessage(content=context_prompt))
 
     # Build the user message: data + question combined
-    # Mercury reliably uses data when it's in the HumanMessage
     user_parts: list[str] = []
 
     if retrieved_context:
@@ -352,7 +349,7 @@ def _parse_structured_output(
     raw_content: str,
     check_on_topic: bool = True,
 ) -> tuple[str, dict[str, Any] | None, bool]:
-    """Parse structured JSON from Mercury and return (text, structured_data, off_topic).
+    """Parse structured JSON and return (text, structured_data, off_topic).
 
     Returns:
         text: The cleaned, marker-expanded text to emit.
@@ -411,9 +408,7 @@ def _filter_hallucinated_videos(
 ) -> tuple[str, dict | None]:
     """Remove videos from structured output that weren't in retrieved data.
 
-    Mercury sometimes cites valid video_ids but fabricates what the video is about
-    (e.g., an Egypt video cited as Peru content). This whitelist approach strips any
-    video whose ID didn't appear in auto-retrieve, news, or tool results.
+    Strips any video whose ID didn't appear in auto-retrieve, news, or tool results.
     """
     if not structured or not structured.get("videos") or not valid_video_ids:
         return text, structured
@@ -872,55 +867,74 @@ class NewsFilters(BaseModel):
     min_year: int | None = None
 
 
-_filter_llm = None
-
-
-def _get_filter_llm():
-    """Get a cached structured LLM for news filter extraction.
-
-    Uses with_structured_output() which sends tool definitions to the API,
-    forcing the model to return valid JSON matching the NewsFilters schema.
-    """
-    global _filter_llm
-    if _filter_llm is None:
-        from langchain_openai import ChatOpenAI
-
-        api_key = os.getenv("LYRA_API_KEY") or os.getenv("LYRA_ANTHROPIC_API_KEY")
-        base_url = os.getenv("LYRA_BASE_URL") or os.getenv(
-            "LYRA_ANTHROPIC_BASE_URL", "https://api.inceptionlabs.ai/v1"
-        )
-        _filter_llm = ChatOpenAI(
-            model=LLM_MODEL,
-            max_tokens=get_max_tokens(),
-            temperature=0.0,
-            api_key=api_key,
-            base_url=base_url,
-            model_kwargs={"reasoning_effort": "high"},
-        ).with_structured_output(NewsFilters)
-    return _filter_llm
+_NEWS_FILTERS_SCHEMA = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "NewsFilters",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "site_names": {"type": ["array", "null"], "items": {"type": "string"}},
+                "country": {"type": ["string", "null"]},
+                "category": {"type": ["string", "null"]},
+                "period": {"type": ["string", "null"]},
+                "site_type": {"type": ["string", "null"]},
+                "channel": {"type": ["string", "null"]},
+                "min_significance": {"type": ["integer", "null"]},
+                "max_year": {"type": ["integer", "null"]},
+                "min_year": {"type": ["integer", "null"]},
+            },
+            "required": [
+                "site_names",
+                "country",
+                "category",
+                "period",
+                "site_type",
+                "channel",
+                "min_significance",
+                "max_year",
+                "min_year",
+            ],
+            "additionalProperties": False,
+        },
+    },
+}
 
 
 async def _extract_news_filters(query: str) -> dict:
     """Use the LLM to extract structured news filters from the user's query.
 
     Returns a dict of filter kwargs suitable for _get_related_news().
-    Uses tool calling via with_structured_output() for guaranteed valid JSON.
+    Uses Anthropic structured output for guaranteed valid JSON.
     """
-    llm = _get_filter_llm()
     from datetime import datetime
+
+    from api.services.lyra_router import get_request_context
+
+    try:
+        ctx = get_request_context()
+        backend_type = ctx.backend_type
+        model_name = ctx.model_name
+    except LookupError:
+        backend_type = "anthropic"
+        model_name = LLM_MODEL
 
     prompt = _NEWS_FILTER_EXTRACTION_PROMPT_TEMPLATE.replace(
         "{current_year}", str(datetime.now().year)
     )
     try:
-        result = await llm.ainvoke(
+        backend_impl = get_backend(model_name, backend_type)
+        result = await backend_impl.generate(
             [
                 SystemMessage(content=prompt),
                 HumanMessage(content=query),
-            ]
+            ],
+            response_format=_NEWS_FILTERS_SCHEMA,
+            max_tokens=512,
+            tool_choice="none",
         )
-        # Handle both Pydantic model and raw dict (proxy may return dict)
-        raw = result if isinstance(result, dict) else result.model_dump()
+        raw = json.loads(result["content"])
         return {k: v for k, v in raw.items() if v is not None}
     except Exception:
         logger.warning(f"Failed to extract news filters for query: {query}")
@@ -1053,7 +1067,7 @@ async def run_agent_stream(
     Run the Lyra agent and stream results.
 
     Args:
-        ctx: RequestContext from route_request(). If None, defaults to Mercury premium.
+        ctx: RequestContext from route_request(). If None, defaults to Anthropic premium.
 
     Yields dicts with:
       {"type": "token", "content": "..."}
@@ -1118,10 +1132,10 @@ async def run_agent_stream(
         auto_site_results: list[dict] = []
         auto_news_results: list[dict] = []
 
-        # Run decomposition + filter extraction in parallel (both async Mercury calls),
+        # Run decomposition + filter extraction in parallel,
         # then pass sub-queries to _auto_retrieve() in a thread.
         use_filter_extraction = ctx.backend_type != "local"
-        # Skip decomposition for simple queries — saves 1-3s + Mercury tokens.
+        # Skip decomposition for simple queries — saves 1-3s + tokens.
         # Decompose when conjunctions/comparisons suggest multiple sub-topics,
         # OR when the query is vague/exploratory and needs expansion.
         _needs_decomp = any(
@@ -1148,7 +1162,7 @@ async def run_agent_stream(
             }
         _t_phase1 = time.monotonic()
 
-        # Phase 0: decompose query + extract filters in parallel (both async Mercury calls)
+        # Phase 0: decompose query + extract filters in parallel
         sub_queries: list[str] = [message]
         filters_or_exc: Any = {}
 
@@ -1521,7 +1535,7 @@ async def run_agent_stream(
         _offer_tools = ctx.supports_tools and _round < 3 and tool_calls_made < 3
 
         # If tools are cut off and we already have tool results, skip straight
-        # to Phase 2 synthesis — no point calling Mercury just to discard the result
+        # to Phase 2 synthesis — no point making an extra LLM call to discard the result
         if not _offer_tools and tool_calls_made > 0 and ctx.backend_type != "local":
             yield {
                 "type": "pipeline",
@@ -1552,11 +1566,10 @@ async def run_agent_stream(
             _last_err: Exception | None = None
             for _attempt in range(3):
                 try:
-                    # Anthropic: don't pass output_config when tools are offered —
+                    # Don't pass output_config when tools are offered —
                     # Haiku returns empty content when tools + output_config are combined.
-                    # Mercury: always pass response_format.
                     _p1_rformat: dict | None = LYRA_RESPONSE_SCHEMA
-                    if ctx.backend_type == "anthropic" and _offer_tools:
+                    if _offer_tools:
                         _p1_rformat = None
                     result = await backend_impl.generate(
                         messages,
@@ -1612,7 +1625,7 @@ async def run_agent_stream(
                     collected_content = ""
                 else:
                     # No tools used at all (simple query) — emit Phase 1 response
-                    if ctx.backend_type == "anthropic" and _offer_tools:
+                    if _offer_tools:
                         # Haiku chose not to use tools — do a single synthesis call
                         # with output_config directly. Marker injection (two-pass) was
                         # ~40% unreliable: Haiku ignored annotation instructions and
@@ -1640,8 +1653,8 @@ async def run_agent_stream(
                             logger.warning(f"Simple synthesis failed: {e}")
                             collected_content = clean_response_text(result["content"])
                     else:
-                        # Mercury (always structured) or Anthropic without tools offered:
-                        # response_format was sent, parse structured output directly.
+                        # Tools were not offered: response_format was sent,
+                        # parse structured output directly.
                         try:
                             collected_content, so_data, _off_topic = _parse_structured_output(
                                 result["content"]
@@ -1992,18 +2005,16 @@ async def run_agent_stream(
         if len(all_news) > news_before:
             yield {"type": "news", "news": all_news}
 
-    # PHASE 2: SYNTHESIS (Mercury only)
+    # PHASE 2: SYNTHESIS
     # Run a dedicated synthesis round when tools were used — the LLM gets a
     # clean context (SYNTHESIS_PROMPT + consolidated data + user question)
     # instead of the messy AIMessage/ToolMessage history from Phase 1.
     #
     # For Ollama, Phase 1 already streams tokens directly to the client so
-    # _text_emitted is True and Phase 2 is skipped. Ollama handles messy
-    # history better than Mercury and the text is already sent.
+    # _text_emitted is True and Phase 2 is skipped.
     if tool_calls_made > 0 and not _text_emitted:
         # Build video_id whitelist from ALL retrieved data — used to filter hallucinated videos.
-        # Mercury sometimes cites valid video_ids with fabricated narratives (e.g., Egypt video
-        # cited as being about Peru). Only video_ids that appeared in retrieved data are allowed.
+        # Only video_ids that appeared in retrieved data are allowed.
         for n in all_news:
             vid = n.get("video_id")
             if vid:
@@ -2044,7 +2055,7 @@ async def run_agent_stream(
         # Phase 2: two-stage synthesis (prose + marker injection)
         # Stage 1: PROSE_PROMPT + LYRA_PROSE_SCHEMA → plain prose JSON
         # Stage 2: Marker injection → annotated JSON with «s0», «v0» markers
-        # Both Mercury and Anthropic use this same path — backend_impl handles differences.
+        # backend_impl handles Anthropic vs local differences.
         _s1_prose: str | None = None
         _s1_off_topic = False
 

@@ -1,9 +1,9 @@
 """Deep site research agent for Lyra radar.
 
 Multi-step research protocol for sites not found via DB fuzzy search:
-1. Mercury pre-research (generate search terms + prior knowledge)
+1. LLM pre-research (generate search terms + prior knowledge)
 2. Multi-source API search (Wikidata, Wikipedia, GeoNames)
-3. Mercury candidate selection (if ambiguous)
+3. LLM candidate selection (if ambiguous)
 """
 
 from __future__ import annotations
@@ -97,15 +97,15 @@ def research_site(
 ) -> ResearchResult:
     """Multi-step research agent protocol.
 
-    1. Mercury pre-research (generate search terms + prior knowledge)
+    1. LLM pre-research (generate search terms + prior knowledge)
     2. Multi-source API search (Wikidata, Wikipedia, GeoNames)
-    3. Mercury candidate selection (if ambiguous)
+    3. LLM candidate selection (if ambiguous)
 
     Always returns a ResearchResult (never None).
     """
     result = ResearchResult()
 
-    # Step 1: Mercury pre-research
+    # Step 1: LLM pre-research
     result.pre_research = _pre_research(name, settings, facts, video_contexts)
 
     # Build search names: original + AI-generated alternatives
@@ -159,7 +159,7 @@ def _pre_research(
     facts: list[str],
     video_contexts: list[dict],
 ) -> dict | None:
-    """Ask Mercury what it knows about this site."""
+    """Ask LLM what it knows about this site."""
     prompt_template = (PROMPT_DIR / "pre_research.txt").read_text(encoding="utf-8")
 
     facts_text = "\n".join(f"- {f}" for f in facts[:20]) if facts else "(none)"
@@ -439,7 +439,7 @@ def _select_best_candidate(
     pre_research: dict | None,
     all_candidates: dict[str, list[dict]],
 ) -> dict | None:
-    """Ask Mercury to pick the best candidate from multi-source results."""
+    """Ask LLM to pick the best candidate from multi-source results."""
     # Build formatted candidates string with transliteration similarity
     formatted_parts = []
     candidate_index = {}

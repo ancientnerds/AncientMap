@@ -97,37 +97,34 @@ def _is_vague_query(query: str) -> bool:
 async def _decompose_query(query: str, *, vague: bool = False) -> list[str]:
     """Split complex queries into 1-3 independent search sub-queries.
 
-    Uses Mercury with a tiny prompt. Returns the original query unchanged
+    Uses Haiku with a tiny prompt. Returns the original query unchanged
     for simple/focused questions (no extra cost).
 
     When vague=True, uses an exploratory prompt that generates concrete
     sub-queries from vague questions like "anything interesting lately?".
     """
-    from openai import AsyncOpenAI
+    import anthropic as _anthropic
 
-    api_key = os.getenv("LYRA_API_KEY") or os.getenv("LYRA_ANTHROPIC_API_KEY")
-    base_url = os.getenv("LYRA_BASE_URL") or os.getenv(
-        "LYRA_ANTHROPIC_BASE_URL", "https://api.inceptionlabs.ai/v1"
-    )
+    api_key = os.getenv("LYRA_ANTHROPIC_API_KEY")
     if not api_key:
         return [query]
 
     try:
-        client = AsyncOpenAI(api_key=api_key, base_url=base_url)
-        completion = await client.chat.completions.create(  # type: ignore[call-overload]
+        client = _anthropic.AsyncAnthropic(api_key=api_key, timeout=30.0)
+        resp = await client.messages.create(
             model=LLM_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": _DECOMPOSE_VAGUE_SYSTEM if vague else _DECOMPOSE_SYSTEM,
-                },
-                {"role": "user", "content": query},
-            ],
+            system=_DECOMPOSE_VAGUE_SYSTEM if vague else _DECOMPOSE_SYSTEM,
+            messages=[{"role": "user", "content": query}],
             max_tokens=256,
             temperature=0.1,
-            response_format=_DECOMPOSE_SCHEMA,
+            output_config={
+                "format": {
+                    "type": "json_schema",
+                    "schema": _DECOMPOSE_SCHEMA["json_schema"]["schema"],
+                }
+            },
         )
-        raw = completion.choices[0].message.content or ""
+        raw = "".join(b.text for b in resp.content if hasattr(b, "text") and b.type == "text")
         if not raw.strip():
             return [query]
         parsed = json.loads(raw)
@@ -150,7 +147,7 @@ def _escape_ilike(value: str) -> str:
 # Configuration
 # ---------------------------------------------------------------------------
 
-LLM_MODEL = os.getenv("LYRA_LLM_MODEL", "mercury-2")
+LLM_MODEL = os.getenv("LYRA_LLM_MODEL", "claude-haiku-4-5-20251001")
 
 # Per-request backend: set via contextvars by lyra_agent before each request.
 # "voyage" (default) uses Voyage embeddings + original collections.
