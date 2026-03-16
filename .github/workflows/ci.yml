@@ -220,11 +220,13 @@ jobs:
                 rm -rf ancient-nerds-map/dist-new
                 exit 1
               fi
-              # Atomic swap: old dist stays until new one is verified
-              rm -rf ancient-nerds-map/dist-old 2>/dev/null || true
-              mv ancient-nerds-map/dist ancient-nerds-map/dist-old 2>/dev/null || true
+              # Atomic swap using timestamp so dist-old never conflicts
+              # (stale dist-old from root-owned build would block mv dist dist-old)
+              SWAP_TS=$(date +%s)
+              rm -rf ancient-nerds-map/dist/dist-new 2>/dev/null || true
+              mv ancient-nerds-map/dist "ancient-nerds-map/dist-old-$SWAP_TS" 2>/dev/null || true
               mv ancient-nerds-map/dist-new ancient-nerds-map/dist
-              rm -rf ancient-nerds-map/dist-old 2>/dev/null || true
+              find ancient-nerds-map -maxdepth 1 -name 'dist-old*' -exec rm -rf {} + 2>/dev/null || true
               echo "    Frontend built and swapped successfully"
             else
               echo "==> Frontend unchanged, skipping build"
