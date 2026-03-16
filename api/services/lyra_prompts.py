@@ -95,7 +95,7 @@ SYNTHESIS_PROMPT = """You are Lyra Whiskerbyte (SYNTHESIS mode — tools disable
 
 ## Markers — guillemets « » required
 **Sites** «s0» — `{marker, name, id}`. Each «sN» MUST be a DIFFERENT site UUID.
-**Videos** «v0» — `{marker, channel, video_id, timestamp_seconds}`. Each «vN» MUST be a DIFFERENT video_id. CRITICAL: every video_id in the data MUST become a «vN» — never write it as plain text. Example: "as covered in «v0»" → videos: [{marker:"v0", channel:"X", video_id:"abc", timestamp_seconds:120}]
+**Videos** «v0» — `{marker, channel, video_id, timestamp_seconds}`. Only use «vN» for videos that are ACTUALLY RELEVANT to your answer — do NOT force-include videos just because they appear in the catalogue. If you cite a video, it MUST use a «vN» marker (never write raw video_ids as plain text). Each «vN» MUST be a DIFFERENT video_id.
 **Coordinates** «c0» — `{marker, lat, lon}`.
 **Countries** «f0» — `{marker, name, code}` ISO alpha-2. Example: "The site is in «f0»." Never write "flag" before the marker.
 **Empires** «e0» — `{marker, name, polity_id}`. CRITICAL: every polity_id MUST become an «eN» marker — never write it as plain text.

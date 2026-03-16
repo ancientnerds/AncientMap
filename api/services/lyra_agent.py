@@ -1275,7 +1275,7 @@ async def run_agent_stream(
                     seen_vids[vid] = n
             if seen_vids:
                 catalogue_lines = [
-                    "### Video Marker Catalogue — use «vN» for each, NEVER raw YouTube URLs",
+                    "### Video Marker Catalogue — use «vN» ONLY for videos relevant to the answer, NEVER raw YouTube URLs",
                 ]
                 for i, (vid, n) in enumerate(seen_vids.items()):
                     ts = n.get("timestamp_seconds") or 0
