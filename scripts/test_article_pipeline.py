@@ -66,23 +66,29 @@ def run_summarize(videos: list, settings) -> list[str]:
 
 def score_items(video_ids: list[str], session, settings) -> int:
     """Score significance for news items from the given videos."""
-    from pipeline.database import NewsItem
+    from pipeline.database import NewsChannel, NewsItem, NewsVideo
     from pipeline.lyra.significance_scorer import _rescore_item, _load_prompt
 
     prompt = _load_prompt()
     total = 0
     for vid_id in video_ids:
+        video = session.get(NewsVideo, vid_id)
+        if not video:
+            continue
+        ch = session.get(NewsChannel, video.channel_id)
+        channel_name = ch.name if ch else video.channel_id
+
         items = (
             session.query(NewsItem)
             .filter(NewsItem.video_id == vid_id, NewsItem.significance.is_(None))
             .all()
         )
         for item in items:
-            score = _rescore_item(item, prompt, settings)
-            if score is not None:
-                item.significance = score
+            result = _rescore_item(item, video, channel_name, prompt, settings)
+            if result is not None:
+                item.significance = max(1, min(10, result["significance"]))
                 total += 1
-                logger.info(f"  scored [{score}] {item.headline[:60]}")
+                logger.info(f"  scored [{item.significance}] {item.headline[:60]}")
     session.flush()
     return total
 
