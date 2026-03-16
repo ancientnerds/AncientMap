@@ -2131,13 +2131,22 @@ async def run_agent_stream(
 
         for _s1_attempt in range(3):
             try:
-                _s1_task = asyncio.create_task(
-                    backend_impl.generate(
-                        stage1_msgs,
-                        response_format=LYRA_PROSE_SCHEMA,
-                        max_tokens=4096,
+                if citations:
+                    _s1_task = asyncio.create_task(
+                        backend_impl.generate(
+                            stage1_msgs,
+                            citations=True,
+                            max_tokens=4096,
+                        )
                     )
-                )
+                else:
+                    _s1_task = asyncio.create_task(
+                        backend_impl.generate(
+                            stage1_msgs,
+                            response_format=LYRA_PROSE_SCHEMA,
+                            max_tokens=4096,
+                        )
+                    )
                 _s1_hb = False
                 while not _s1_task.done():
                     done, _ = await asyncio.wait({_s1_task}, timeout=8.0)
@@ -2150,16 +2159,30 @@ async def run_agent_stream(
                 _s1_result = _s1_task.result()
                 total_input_tokens += _s1_result["usage"]["input"]
                 total_output_tokens += _s1_result["usage"]["output"]
-                _s1_parsed = json.loads(_s1_result["content"])
-                if not _s1_parsed.get("on_topic", True):
-                    _s1_off_topic = True
-                    _s1_prose = (
-                        "🏺 That's not really my area! I'm all about ancient ruins, "
-                        "lost civilizations, and archaeological discoveries. "
-                        "What do you want to dig into?"
-                    )
-                    break
-                _s1_prose = _s1_parsed.get("text", "").strip()
+
+                if citations:
+                    raw_text = _s1_result["content"].strip()
+                    if raw_text == "[OFF_TOPIC]" or raw_text.startswith("[OFF_TOPIC]"):
+                        _s1_off_topic = True
+                        _s1_prose = (
+                            "🏺 That's not really my area! I'm all about ancient ruins, "
+                            "lost civilizations, and archaeological discoveries. "
+                            "What do you want to dig into?"
+                        )
+                        break
+                    _s1_prose = raw_text
+                else:
+                    _s1_parsed = json.loads(_s1_result["content"])
+                    if not _s1_parsed.get("on_topic", True):
+                        _s1_off_topic = True
+                        _s1_prose = (
+                            "🏺 That's not really my area! I'm all about ancient ruins, "
+                            "lost civilizations, and archaeological discoveries. "
+                            "What do you want to dig into?"
+                        )
+                        break
+                    _s1_prose = _s1_parsed.get("text", "").strip()
+
                 if _s1_prose:
                     break
             except Exception as exc:
