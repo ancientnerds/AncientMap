@@ -1,4 +1,4 @@
-import type { LyraContextType } from '../../types/ai'
+import type { LyraContextType } from '../../types/ai' // v2
 
 interface LyraWelcomeProps {
   mode: 'modal' | 'page'
