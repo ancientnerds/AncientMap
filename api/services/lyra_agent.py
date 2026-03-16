@@ -1190,7 +1190,8 @@ async def run_agent_stream(
 
     # Greeting / pure conversational messages — skip retrieval entirely
     _GREETING_RE = re.compile(
-        r"^(hi+|hey+|hello+|howdy|hiya|sup|what'?s up|yo|greetings|good\s+(morning|afternoon|evening|day))[\s!?.]*$",
+        r"^(hi+|hey+|hello+|howdy|hiya|sup|what'?s up|yo|greetings|good\s+(morning|afternoon|evening|day))"
+        r"[\s,]*(?:lyra\b)?[\s!?.]*$",
         re.IGNORECASE,
     )
     _is_greeting = bool(_GREETING_RE.match(message.strip())) and not history

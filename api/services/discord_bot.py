@@ -106,11 +106,15 @@ def _build_sites_embed(sites: list[dict]) -> discord.Embed:
     lines = []
     for s in sites[:10]:  # cap at 10 to avoid embed limits
         name = s.get("name", "Unknown")
+        site_id = s.get("id", "")
         period = s.get("period_name", "")
         country = s.get("country", "")
         parts = [p for p in (period, country) if p]
         detail = f" ({', '.join(parts)})" if parts else ""
-        lines.append(f"**{name}**{detail}")
+        if site_id:
+            lines.append(f"**[{name}](https://ancientnerds.com/site.html?id={site_id})**{detail}")
+        else:
+            lines.append(f"**{name}**{detail}")
     embed.description = "\n".join(lines)
     embed.set_footer(text="ancientnerds.com")
     return embed
@@ -261,6 +265,16 @@ async def _handle_ask(
                 )
             )
             session.commit()
+
+    # Only surface sites that are explicitly cited in the response text (site:UUID markers).
+    # This prevents background-retrieved sites (e.g. name-matched on "Lyra") from
+    # showing up as "Referenced Sites" when the LLM didn't actually mention them.
+    if full_text and all_sites:
+        cited_ids = set(re.findall(r"\(site:([^)]+)\)", full_text))
+        if cited_ids:
+            all_sites = [s for s in all_sites if s.get("id") in cited_ids]
+        else:
+            all_sites = []
 
     response_text = (
         _clean_for_discord(full_text)
