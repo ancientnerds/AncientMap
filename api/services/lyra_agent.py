@@ -1270,7 +1270,7 @@ async def run_agent_stream(
                     seen_auto_t_vids.add(vid)
             # Extend all_articles (deduped by article_id)
             seen_auto_art_ids: set[int] = {
-                a.get("article_id") for a in all_articles if a.get("article_id") is not None
+                int(a["article_id"]) for a in all_articles if a.get("article_id") is not None
             }
             for a in auto_article_results:
                 aid = a.get("article_id")
@@ -1949,7 +1949,7 @@ async def run_agent_stream(
                         )
                         total_voyage_tokens += _art_vt
                         _seen_arts: set[int] = {
-                            a.get("article_id")
+                            int(a["article_id"])
                             for a in all_articles
                             if a.get("article_id") is not None
                         }
