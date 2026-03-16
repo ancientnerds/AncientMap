@@ -2010,11 +2010,12 @@ async def run_agent_stream(
         _synthesis_ok = False
 
         if ctx.backend_type == "anthropic":
-            # ── Anthropic: 2-stage (Citations API prose + marker injection) ──
-            # Stage 1: Citations API → hallucination-free prose (no markers/JSON)
+            # ── Anthropic: 2-stage (prose + marker injection) ───────────────
+            # Stage 1: PROSE_PROMPT + LYRA_PROSE_SCHEMA → plain prose JSON
             # Stage 2: Marker injection → annotated JSON with «s0», «v0» markers
-            # Mirrors Mercury two-pass but with stronger Stage 1 grounding.
+            # Mirrors Mercury two-pass exactly.
             _s1_prose: str | None = None
+            _s1_off_topic = False
 
             stage1_msgs = _build_synthesis_messages(
                 message, raw_tool_results, context_prompt, retrieved_context
@@ -2026,7 +2027,7 @@ async def run_agent_stream(
                     _s1_task = asyncio.create_task(
                         backend_impl.generate(
                             stage1_msgs,
-                            citations=True,
+                            response_format=LYRA_PROSE_SCHEMA,
                             max_tokens=4096,
                         )
                     )
@@ -2042,7 +2043,16 @@ async def run_agent_stream(
                     _s1_result = _s1_task.result()
                     total_input_tokens += _s1_result["usage"]["input"]
                     total_output_tokens += _s1_result["usage"]["output"]
-                    _s1_prose = _strip_citation_refs(_s1_result["content"])
+                    _s1_parsed = json.loads(_s1_result["content"])
+                    if not _s1_parsed.get("on_topic", True):
+                        _s1_off_topic = True
+                        _s1_prose = (
+                            "🏺 That's not really my area! I'm all about ancient ruins, "
+                            "lost civilizations, and archaeological discoveries. "
+                            "What do you want to dig into?"
+                        )
+                        break
+                    _s1_prose = _s1_parsed.get("text", "").strip()
                     if _s1_prose:
                         break
                 except Exception as exc:
@@ -2050,7 +2060,11 @@ async def run_agent_stream(
                 if _s1_attempt < 2:
                     await asyncio.sleep(1.5)
 
-            if not _s1_prose:
+            if _s1_off_topic and _s1_prose:
+                yield {"type": "diffusion", "content": _s1_prose}
+                _synthesis_ok = True
+
+            elif not _s1_prose:
                 # Stage 1 total failure → plain text fallback
                 print("[S1] failed entirely, trying plain text...", flush=True)
                 try:
@@ -2067,7 +2081,7 @@ async def run_agent_stream(
                 except Exception as exc:
                     print(f"[S1] plain text fallback failed: {exc}", flush=True)
 
-            if _s1_prose:
+            if _s1_prose and not _s1_off_topic:
                 # Stage 2: Marker injection
                 yield {"type": "status", "content": "Adding citations..."}
                 _entities_json = _build_entities_catalogue(all_sites, all_news, raw_tool_results)
