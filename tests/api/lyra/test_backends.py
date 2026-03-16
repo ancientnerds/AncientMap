@@ -136,10 +136,10 @@ class TestOllamaBackend:
         )
         assert backend.num_ctx == 8192
 
-    def test_lazy_client_creation(self):
+    def test_no_cached_client(self):
+        # OllamaBackend uses httpx directly in stream(); no persistent client attribute
         backend = OllamaBackend(model="test", base_url="http://localhost", api_key="")
-        assert backend._client is None
-        # Client only created on first use
+        assert not hasattr(backend, "_client")
 
 
 # ---------------------------------------------------------------------------
@@ -150,19 +150,16 @@ class TestOllamaBackend:
 class TestAnthropicBackend:
     def test_init(self):
         backend = AnthropicBackend(
-            model="MiniMax-M2.5",
+            model="claude-haiku-4-5-20251001",
             api_key="test-key",
-            base_url="https://api.minimax.io/anthropic",
             max_tokens=8192,
         )
-        assert backend.model == "MiniMax-M2.5"
+        assert backend.model == "claude-haiku-4-5-20251001"
         assert backend.max_tokens == 8192
 
-    def test_lazy_llm_creation(self):
-        backend = AnthropicBackend(
-            model="test", api_key="key", base_url="https://example.com", max_tokens=4096
-        )
-        assert backend._llm is None
+    def test_client_created_on_init(self):
+        backend = AnthropicBackend(model="test", api_key="key", max_tokens=4096)
+        assert backend._client is not None
 
 
 # ---------------------------------------------------------------------------
@@ -181,8 +178,8 @@ class TestGetBackend:
         backend = get_backend("qwen3.5:4b", "local")
         assert isinstance(backend, OllamaBackend)
 
-    def test_creates_anthropic_for_minimax(self):
-        backend = get_backend("MiniMax-M2.5", "minimax")
+    def test_creates_anthropic_for_anthropic(self):
+        backend = get_backend("claude-haiku-4-5-20251001", "anthropic")
         assert isinstance(backend, AnthropicBackend)
 
     def test_caches_backends(self):
