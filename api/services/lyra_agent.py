@@ -2132,6 +2132,18 @@ async def run_agent_stream(
         )
         stage1_msgs[0] = SystemMessage(content=PROSE_PROMPT)
 
+        # Prepend last 2 conversation turns so Stage 1 understands follow-up questions
+        if history:
+            prior: list[BaseMessage] = []
+            for msg in history[-4:]:
+                role = msg.get("role", "")
+                content = str(msg.get("content", ""))[:500]
+                if role == "user":
+                    prior.append(HumanMessage(content=content))
+                elif role == "assistant":
+                    prior.append(AIMessage(content=content))
+            stage1_msgs[1:1] = prior
+
         for _s1_attempt in range(3):
             try:
                 if citations:
