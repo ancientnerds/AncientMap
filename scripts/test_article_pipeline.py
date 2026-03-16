@@ -25,22 +25,22 @@ TEST_CHANNEL_NAME = "Ancient Nerds Test Channel"
 
 TEST_VIDEOS = [
     {
-        "id": "TEST_VID_EXCAVATION01",
+        "id": "TEST_VID_EXC01",
         "title": "New Excavations at Jericho Reveal 10,000-Year-Old Ritual Complex",
         "category": "excavation",
     },
     {
-        "id": "TEST_VID_ARTIFACT01",
+        "id": "TEST_VID_ART01",
         "title": "Bronze Age Sword Hoard Discovered in Danish Bog — 37 Weapons Perfectly Preserved",
         "category": "artifact",
     },
     {
-        "id": "TEST_VID_DATING01",
+        "id": "TEST_VID_DAT01",
         "title": "Radiocarbon Dates Rewrite Stonehenge Timeline — Bluestones Older Than Thought",
         "category": "dating",
     },
     {
-        "id": "TEST_VID_ARCHITECTURE01",
+        "id": "TEST_VID_ARCH01",
         "title": "LiDAR Survey Uncovers Lost Mayan City Beneath Guatemalan Jungle",
         "category": "architecture",
     },
@@ -48,7 +48,7 @@ TEST_VIDEOS = [
 
 TEST_ITEMS = [
     {
-        "video_id": "TEST_VID_EXCAVATION01",
+        "video_id": "TEST_VID_EXC01",
         "headline": "10,000-Year-Old Ritual Complex Found at Jericho",
         "summary": (
             "Archaeologists excavating at Tell es-Sultan (ancient Jericho) have uncovered "
@@ -69,7 +69,7 @@ TEST_ITEMS = [
         "site_name_extracted": "Tell es-Sultan",
     },
     {
-        "video_id": "TEST_VID_ARTIFACT01",
+        "video_id": "TEST_VID_ART01",
         "headline": "37 Bronze Age Swords Pulled from Danish Bog in Pristine Condition",
         "summary": (
             "A peat-cutting operation in Jutland, Denmark, has yielded a hoard of 37 bronze "
@@ -91,7 +91,7 @@ TEST_ITEMS = [
         "site_name_extracted": "Jutland bog, Denmark",
     },
     {
-        "video_id": "TEST_VID_DATING01",
+        "video_id": "TEST_VID_DAT01",
         "headline": "New Dates Push Stonehenge Bluestones Back 500 Years",
         "summary": (
             "A reanalysis of sediment cores and charred bone fragments from beneath the "
@@ -114,7 +114,7 @@ TEST_ITEMS = [
         "site_name_extracted": "Stonehenge",
     },
     {
-        "video_id": "TEST_VID_ARCHITECTURE01",
+        "video_id": "TEST_VID_ARCH01",
         "headline": "LiDAR Reveals 40km² Lost Maya City Hidden in Guatemalan Forest",
         "summary": (
             "A high-resolution airborne LiDAR survey of the Petén Basin in Guatemala has "
