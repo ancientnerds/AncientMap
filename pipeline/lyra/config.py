@@ -275,6 +275,13 @@ def _call_anthropic_api(
                     messages[i]["content"] = content_blocks
                 break
 
+    # If caller requested json_schema output, use prefill to enforce valid JSON.
+    # Anthropic doesn't support response_format natively; prefill '{"' forces the
+    # model to open a JSON object with a double-quoted key.
+    response_format = kwargs.pop("response_format", None)
+    if response_format and response_format.get("type") == "json_schema" and not prefill:
+        prefill = '{"'
+
     # Handle prefill — append as assistant message
     if prefill:
         messages.append({"role": "assistant", "content": prefill})
