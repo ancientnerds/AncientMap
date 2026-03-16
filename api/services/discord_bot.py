@@ -347,6 +347,21 @@ class LyraBot(discord.Client):
 
     async def on_ready(self):
         print(f"[DISCORD] Bot ready as {self.user} (ID: {self.user.id})", flush=True)
+        import asyncio
+
+        asyncio.create_task(self._purge_all_signin_errors())
+
+    async def _purge_all_signin_errors(self) -> None:
+        """On startup, delete all stale sign-in error messages from every bot-owned thread."""
+        guild = self.get_guild(int(DISCORD_GUILD_ID))
+        if not guild:
+            return
+        count = 0
+        for thread in guild.threads:
+            if thread.owner_id == self.user.id:
+                await _purge_signin_errors(thread)
+                count += 1
+        print(f"[DISCORD] Purged sign-in errors across {count} threads", flush=True)
 
     async def on_message(self, message: discord.Message):
         """Handle DMs and thread follow-ups."""
