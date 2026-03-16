@@ -703,7 +703,7 @@ export default function LyraChatModal({
       context_id: contextId,
       context_year: contextYear,
       history,
-      backend: 'mercury',
+      backend: 'anthropic',
     }
 
     const controller = new AbortController()

@@ -81,8 +81,8 @@ class LyraChatRequest(BaseModel):
     )
     backend: str = Field(
         default="anthropic",
-        pattern=r"^(anthropic)$",
-        description="AI backend: anthropic (cloud)",
+        max_length=32,
+        description="AI backend (ignored — always routes to Anthropic cloud)",
     )
     citations: bool = Field(
         default=True,
