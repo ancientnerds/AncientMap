@@ -425,6 +425,8 @@ class LyraBot(discord.Client):
                 except (discord.NotFound, discord.HTTPException):
                     pass
 
+        # Purge stale sign-in errors before responding so users never see them
+        await _purge_signin_errors(message.channel)
         async with message.channel.typing():
             try:
                 history = await _build_history(message.channel, current_msg=message)
@@ -435,8 +437,6 @@ class LyraBot(discord.Client):
                     member=member,
                 )
                 await _send_response(message.channel, text, sites)
-                # Clean up any stale sign-in error messages left by earlier bot invocations
-                await _purge_signin_errors(message.channel)
             except ValueError as e:
                 await message.channel.send(str(e))
             except Exception:
