@@ -145,7 +145,32 @@ _TOOL_HINTS = {
         "2. get_site_details — get detailed information\n"
         "3. get_site_images — get visual context\n"
     ),
+    "channel": (
+        "## Suggested tool order for this query\n"
+        "The user is asking about content from a SPECIFIC YOUTUBE CHANNEL. Prioritize:\n"
+        "1. vector_search(collection='transcripts', channel='[exact channel name]') — REQUIRED first call\n"
+        "2. search_news — for any news items from that channel\n"
+        "Auto-retrieved context does NOT have channel-targeted results — you must tool-call.\n"
+    ),
 }
+
+
+_CHANNEL_QUERY_WORDS = frozenset(
+    {
+        "said",
+        "talked",
+        "covered",
+        "discussed",
+        "mentioned",
+        "showed",
+        "explained",
+        "channel",
+        "video",
+        "episode",
+        "timestamp",
+        "timestamps",
+    }
+)
 
 
 def _classify_intent(query: str) -> str:
@@ -154,10 +179,12 @@ def _classify_intent(query: str) -> str:
     # Check compare first (most specific)
     if words & _INTENT_COMPARE_WORDS:
         return "compare"
-    # Check for proper nouns (named entities) → specific query
+    # Channel-specific query: proper noun + channel-verb → transcript search
     has_named_entity = any(
         w[0].isupper() and i > 0 for i, w in enumerate(query.split()) if w and w[0].isalpha()
     )
+    if has_named_entity and words & _CHANNEL_QUERY_WORDS:
+        return "channel"
     if has_named_entity:
         return "specific"
     if words & _INTENT_NEWS_WORDS:
