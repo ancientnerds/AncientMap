@@ -127,6 +127,22 @@ def _build_sites_embed(sites: list[dict]) -> discord.Embed:
     return embed
 
 
+_SIGNIN_ERROR_PREFIX = "You need to sign in at"
+
+
+async def _purge_signin_errors(channel: discord.abc.Messageable) -> None:
+    """Delete any stale sign-in error messages the bot previously sent to this channel."""
+    try:
+        async for msg in channel.history(limit=50):
+            if msg.author.bot and msg.content.startswith(_SIGNIN_ERROR_PREFIX):
+                try:
+                    await msg.delete()
+                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                    pass
+    except (discord.Forbidden, discord.HTTPException):
+        pass
+
+
 # ---------------------------------------------------------------------------
 # Core ask logic
 # ---------------------------------------------------------------------------
@@ -410,6 +426,8 @@ class LyraBot(discord.Client):
                     member=member,
                 )
                 await _send_response(message.channel, text, sites)
+                # Clean up any stale sign-in error messages left by earlier bot invocations
+                await _purge_signin_errors(message.channel)
             except ValueError as e:
                 await message.channel.send(str(e))
             except Exception:
