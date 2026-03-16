@@ -185,6 +185,10 @@ async def _handle_ask(
                 flush=True,
             )
             if member is None:
+                print(
+                    f"[LYRA_AUTH_FAIL] discord_id={discord_id} not in DB and member=None — raising sign-in error",
+                    flush=True,
+                )
                 raise ValueError(
                     "You need to sign in at [ancientnerds.com](https://ancientnerds.com/account.html) first."
                 )
@@ -453,7 +457,12 @@ class LyraBot(discord.Client):
                 )
                 await _send_response(message.channel, text, sites)
             except ValueError as e:
-                await message.channel.send(str(e))
+                error_text = str(e)
+                print(
+                    f"[LYRA_THREAD_ERR] discord_id={discord_id} channel={message.channel.id} error={error_text!r}",
+                    flush=True,
+                )
+                await message.channel.send(error_text)
             except Exception:
                 logger.exception(f"Thread handler error for {discord_id}")
                 await message.channel.send("Something went wrong. Please try again later.")
