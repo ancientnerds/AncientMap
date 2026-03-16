@@ -10,6 +10,7 @@ import logging
 import os
 import re
 from pathlib import Path
+from typing import cast
 
 from langchain_core.tools import tool
 from sqlalchemy import text
@@ -120,7 +121,7 @@ async def _decompose_query(query: str, *, vague: bool = False) -> list[str]:
             output_config={
                 "format": {
                     "type": "json_schema",
-                    "schema": _DECOMPOSE_SCHEMA["json_schema"]["schema"],
+                    "schema": cast(dict, _DECOMPOSE_SCHEMA["json_schema"])["schema"],
                 }
             },
         )
