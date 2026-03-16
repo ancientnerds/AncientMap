@@ -7,6 +7,7 @@ Started as an asyncio task within the FastAPI lifespan.
 
 import logging
 import os
+import re
 import time
 from math import ceil
 
@@ -42,6 +43,24 @@ def _account_age_seconds(discord_id: str) -> float:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _clean_for_discord(text: str) -> str:
+    """Convert internal Lyra markers to Discord-friendly format.
+
+    - lyra-video:VIDEO_ID:SECONDS  → YouTube URL
+    - site:UUID                    → plain text (name already in link label)
+    - flag:CC / coord:... / empire:... → plain text
+    """
+    # [label](lyra-video:VIDEO_ID:SECONDS) → [label](https://youtube.com/watch?v=ID&t=Ss)
+    text = re.sub(
+        r"\[([^\]]+)\]\(lyra-video:([A-Za-z0-9_-]+):(\d+)\)",
+        lambda m: f"[{m.group(1)}](https://youtube.com/watch?v={m.group(2)}&t={m.group(3)}s)",
+        text,
+    )
+    # [label](site:UUID) / [label](flag:XX) / [label](coord:...) / [label](empire:...) → label
+    text = re.sub(r"\[([^\]]+)\]\((site|flag|coord|empire):[^\)]+\)", r"\1", text)
+    return text
 
 
 def _split_response(text: str, limit: int = 1900) -> list[str]:
@@ -173,9 +192,9 @@ async def _handle_ask(
             context_id=None,
             context_year=None,
         ):
-            event_type = chunk.get("type", "token")
-            if event_type == "token":
-                full_text += chunk.get("content", "")
+            event_type = chunk.get("type", "")
+            if event_type == "diffusion":
+                full_text = chunk.get("content", "")
             elif event_type == "sites":
                 all_sites.extend(chunk.get("sites", []))
             elif event_type == "done":
@@ -225,7 +244,11 @@ async def _handle_ask(
             )
             session.commit()
 
-    response_text = full_text or "I wasn't able to generate a response. Please try again."
+    response_text = (
+        _clean_for_discord(full_text)
+        if full_text
+        else "I wasn't able to generate a response. Please try again."
+    )
     return response_text, all_sites
 
 
