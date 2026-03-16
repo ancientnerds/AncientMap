@@ -323,7 +323,9 @@ def _verify_article(
             temperature=0.0,
             reasoning_effort="high",
             system=instructions,
-            messages=[{"role": "user", "content": "Verify the article draft against the source facts."}],
+            messages=[
+                {"role": "user", "content": "Verify the article draft against the source facts."}
+            ],
             documents=documents,
             prefill="[CHANGES]\n",
         )

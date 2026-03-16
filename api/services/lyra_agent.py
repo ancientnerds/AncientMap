@@ -313,9 +313,10 @@ def _build_entities_catalogue(
             entry: dict = {
                 "video_id": vid,
                 "channel": item.get("channel", ""),
-                "timestamp_seconds": item.get("timestamp_seconds")
-                or item.get("start_seconds", 0),
-                "headline": (item.get("headline") or item.get("video_title") or "") if citations else "",
+                "timestamp_seconds": item.get("timestamp_seconds") or item.get("start_seconds", 0),
+                "headline": (item.get("headline") or item.get("video_title") or "")
+                if citations
+                else "",
             }
             videos.append(entry)
             seen_vids.add(vid)
@@ -324,7 +325,7 @@ def _build_entities_catalogue(
     # Deduplicated articles section
     seen_arts: set[int] = set()
     articles = []
-    for a in (all_articles or []):
+    for a in all_articles or []:
         aid = a.get("article_id")
         if aid is not None and aid not in seen_arts:
             articles.append(
@@ -1268,7 +1269,9 @@ async def run_agent_stream(
                     all_transcripts.append(t)
                     seen_auto_t_vids.add(vid)
             # Extend all_articles (deduped by article_id)
-            seen_auto_art_ids: set[int] = {a.get("article_id") for a in all_articles if a.get("article_id") is not None}
+            seen_auto_art_ids: set[int] = {
+                a.get("article_id") for a in all_articles if a.get("article_id") is not None
+            }
             for a in auto_article_results:
                 aid = a.get("article_id")
                 if aid is not None and aid not in seen_auto_art_ids:
