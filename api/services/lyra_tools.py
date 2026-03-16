@@ -1158,61 +1158,6 @@ def _format_payload_for_rerank(payload: dict) -> str:
 
 
 @tool
-def search_transcripts(
-    query: str,
-    channel: str | None = None,
-    limit: int = 5,
-) -> str:
-    """Search video transcript passages for specific discussions, quotes, or mentions.
-
-    Use when users ask what a creator said, want quotes, or ask about discussions in videos.
-    Returns excerpts with YouTube deep-link timestamps, video_ids, and channel names for
-    creating video markers.
-
-    Args:
-        query: What to search for in transcripts.
-        channel: Filter by channel name (optional).
-        limit: Max results (default 5, max 10).
-    """
-    query = (query or "").strip()[:500]
-    limit = min(limit, 10)
-    if not query:
-        return "No query provided. Please specify what to search for in transcripts."
-
-    # Use hybrid search on transcripts collection
-    items, _vt = _hybrid_search(query, collection="transcripts", limit=limit, channel=channel)
-    if not items:
-        return "No transcript passages found matching the search."
-
-    # Format as markdown with YouTube deep links
-    lines = [f"Found {len(items)} transcript passage{'s' if len(items) != 1 else ''}:\n"]
-    for i, item in enumerate(items, 1):
-        video_id = item.get("video_id", "")
-        video_title = item.get("video_title", "Unknown video")
-        ch = item.get("channel", "")
-        start = int(item.get("start_seconds", 0))
-        preview = item.get("text_preview", "")
-
-        # Format timestamp as MM:SS
-        mins, secs = divmod(start, 60)
-        ts_str = f"{mins}:{secs:02d}"
-
-        yt_link = f"https://youtu.be/{video_id}?t={start}" if video_id else ""
-        thumb = f"https://img.youtube.com/vi/{video_id}/mqdefault.jpg" if video_id else ""
-
-        lines.append(f'{i}. **{ch}** — "{video_title}" (at {ts_str})')
-        if thumb:
-            lines.append(f"   ![thumbnail]({thumb})")
-        if preview:
-            lines.append(f"   > {preview}")
-        if yt_link:
-            lines.append(f"   Watch: {yt_link}")
-        lines.append("")
-
-    return "\n".join(lines)
-
-
-@tool
 def search_articles(
     query: str,
     limit: int = 5,
@@ -1331,7 +1276,6 @@ TOOLS = [
     search_radar,
     list_channels,
     get_site_images,
-    search_transcripts,
     search_articles,
     search_empires,
 ]

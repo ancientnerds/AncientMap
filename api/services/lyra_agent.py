@@ -121,14 +121,14 @@ _TOOL_HINTS = {
         "This looks like a NEWS/UPDATES query. Prioritize:\n"
         "1. search_news — for recent discoveries and headlines\n"
         "2. search_articles — for weekly digest analysis\n"
-        "3. search_transcripts — for expert discussions\n"
+        "3. vector_search(collection='transcripts') — for expert discussions\n"
         "Avoid: search_sites (unless you need site details for context)\n"
     ),
     "explore": (
         "## Suggested tool order for this query\n"
         "This looks like an EXPLORATORY query. Prioritize:\n"
         "1. vector_search — for semantically relevant content\n"
-        "2. search_transcripts — for expert discussions\n"
+        "2. vector_search(collection='transcripts') — for expert discussions\n"
         "3. search_articles — for in-depth analysis\n"
         "Avoid: search_sites (unless you need site details for context)\n"
     ),
@@ -261,13 +261,6 @@ _GROUNDING_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 
-_CITATION_REF_RE = re.compile(r"\[\d+\]")
-
-
-def _strip_citation_refs(text: str) -> str:
-    return _CITATION_REF_RE.sub("", text).strip()
-
-
 def _check_grounding(text: str) -> tuple[str, float]:
     """Check what fraction of sentences cite a source.
 
@@ -288,6 +281,7 @@ def _check_grounding(text: str) -> tuple[str, float]:
 def _build_entities_catalogue(
     all_sites: list[dict],
     all_news: list[dict],
+    all_transcripts: list[dict],
     raw_tool_results: list[str],
 ) -> str:
     """Build compact entities catalogue JSON from pipeline-collected data."""
@@ -303,21 +297,29 @@ def _build_entities_catalogue(
             for s in (all_sites or [])
             if s.get("id")
         ],
-        "videos": [
-            {
-                "video_id": n["video_id"],
-                "channel": n.get("channel", ""),
-                "timestamp_seconds": n.get("timestamp_seconds", 0),
-            }
-            for n in (all_news or [])
-            if n.get("video_id")
-        ],
+        "videos": [],
         "empires": [],
         "images": [],
         "links": [],
     }
+
+    # Deduplicated union of all_news + all_transcripts
+    seen_vids: set[str] = set()
+    videos = []
+    for item in [*(all_news or []), *(all_transcripts or [])]:
+        vid = item.get("video_id")
+        if vid and vid not in seen_vids:
+            videos.append({
+                "video_id": vid,
+                "channel": item.get("channel", ""),
+                "timestamp_seconds": item.get("timestamp_seconds") or item.get("start_seconds", 0),
+            })
+            seen_vids.add(vid)
+    _entities["videos"] = videos
+
     for _raw in raw_tool_results:
         _tool_name = _raw.split("]", 1)[0].lstrip("[")
+
         try:
             _payload = json.loads(_raw.split("] ", 1)[1][:4000])
         except (json.JSONDecodeError, ValueError, IndexError):
@@ -339,21 +341,6 @@ def _build_entities_catalogue(
                         _entities["links"].append(
                             {"text": ch.get("name", ""), "url": ch["youtube_url"]}
                         )
-        elif _tool_name in ("vector_search", "search_transcripts"):
-            # Transcript chunks from Qdrant — extract video metadata for Stage 2
-            existing_ids = {v["video_id"] for v in _entities["videos"]}
-            items = _payload if isinstance(_payload, list) else []
-            for item in items:
-                vid = item.get("video_id")
-                if vid and vid not in existing_ids and item.get("channel"):
-                    _entities["videos"].append(
-                        {
-                            "video_id": vid,
-                            "channel": item["channel"],
-                            "timestamp_seconds": item.get("start_seconds", 0),
-                        }
-                    )
-                    existing_ids.add(vid)
     return json.dumps(_entities, ensure_ascii=False)
 
 
@@ -524,7 +511,7 @@ async def _stream_with_heartbeat(
 
 def _auto_retrieve(
     queries: list[str], context_type: str
-) -> tuple[str, list[dict], list[dict], float | None, int]:
+) -> tuple[str, list[dict], list[dict], float | None, int, list[dict]]:
     """Run automatic hybrid retrieval BEFORE the LLM sees the message.
 
     Searches Qdrant collections on every sub-query (from decomposition):
@@ -540,7 +527,7 @@ def _auto_retrieve(
     Returns:
         Tuple of (formatted context string, list of site result dicts for map highlighting,
         list of news result dicts for sidebar cards, average relevance score or None,
-        total Voyage tokens used).
+        total Voyage tokens used, list of transcript chunk dicts).
     """
     from concurrent.futures import ThreadPoolExecutor
 
@@ -658,7 +645,7 @@ def _auto_retrieve(
         context_parts.append("### Transcript Passages\n" + "\n".join(lines))
 
     if not context_parts:
-        return "", [], [], None, total_voyage_tokens
+        return "", [], [], None, total_voyage_tokens, []
 
     # Semantic dedup: remove near-duplicate results across retrieval sources
     site_results = _semantic_dedup(site_results, text_key="description")
@@ -676,7 +663,7 @@ def _auto_retrieve(
         + "\n\n".join(context_parts)
         + "\n"
     )
-    return context_str, site_results, news_results, avg_relevance, total_voyage_tokens
+    return context_str, site_results, news_results, avg_relevance, total_voyage_tokens, transcript_chunks
 
 
 # ---------------------------------------------------------------------------
@@ -1065,7 +1052,7 @@ async def run_agent_stream(
     """
     # Build context if not provided (backwards compat)
     if ctx is None:
-        ctx = route_request("mercury", message)
+        ctx = route_request("anthropic", message)
 
     # Set contextvars for the pipeline (so _hybrid_search uses the right backend)
     set_request_context(ctx)
@@ -1084,6 +1071,7 @@ async def run_agent_stream(
     retrieved_context = ""
     all_sites: list[dict] = []
     all_news: list[dict] = []
+    all_transcripts: list[dict] = []
     radar_names: set[str] = set()
     avg_relevance: float | None = None
     # Whitelist of video_ids from retrieved data — used to filter hallucinated videos
@@ -1202,10 +1190,17 @@ async def run_agent_stream(
                 "meta": None,
             }
         else:
-            retrieved_context, auto_site_results, auto_news_results, avg_relevance, vt = (
+            retrieved_context, auto_site_results, auto_news_results, avg_relevance, vt, auto_transcript_results = (
                 auto_result_or_exc
             )
             total_voyage_tokens += vt
+            # Extend all_transcripts (deduped by video_id)
+            seen_auto_t_vids: set[str] = {t.get("video_id", "") for t in all_transcripts}
+            for t in auto_transcript_results:
+                vid = t.get("video_id")
+                if vid and vid not in seen_auto_t_vids:
+                    all_transcripts.append(t)
+                    seen_auto_t_vids.add(vid)
             yield {
                 "type": "pipeline",
                 "stage": "auto_retrieve",
@@ -1514,7 +1509,7 @@ async def run_agent_stream(
         if (
             not _offer_tools
             and tool_calls_made > 0
-            and ctx.backend_type in ("mercury", "anthropic")
+            and ctx.backend_type != "local"
         ):
             yield {
                 "type": "pipeline",
@@ -1537,19 +1532,18 @@ async def run_agent_stream(
         collected_content = ""
         tool_calls = []
 
-        # Mercury/Anthropic: single non-streaming call with tools + structured output
-        if ctx.backend_type in ("mercury", "anthropic"):
-            # Retry up to 2 times for transient Mercury errors
+        # Anthropic: single non-streaming call with tools + structured output
+        if ctx.backend_type != "local":
+            # Retry up to 2 times for transient errors
             # (empty content, content_filter_error / 400)
             result = None  # type: ignore[assignment, no-redef]
-            _mercury_last_err: Exception | None = None
+            _last_err: Exception | None = None
             for _attempt in range(3):
                 try:
-                    # Anthropic: don't pass output_config when tools are offered —
+                    # Don't pass output_config when tools are offered —
                     # Haiku returns empty content when tools + output_config are combined.
-                    # Mercury: always pass response_format (unchanged behaviour).
                     _p1_rformat: dict | None = LYRA_RESPONSE_SCHEMA
-                    if ctx.backend_type == "anthropic" and _offer_tools:
+                    if _offer_tools:
                         _p1_rformat = None
                     result = await backend_impl.generate(
                         messages,
@@ -1559,7 +1553,7 @@ async def run_agent_stream(
                     )
                     break
                 except Exception as exc:
-                    _mercury_last_err = exc
+                    _last_err = exc
                     err_msg = str(exc).lower()
                     is_retryable = (
                         isinstance(exc, (asyncio.TimeoutError, TimeoutError))
@@ -1570,7 +1564,7 @@ async def run_agent_stream(
                         or "400" in err_msg
                     )
                     if _attempt < 2 and is_retryable:
-                        logger.warning(f"Mercury transient error (attempt {_attempt + 1}/3): {exc}")
+                        logger.warning(f"Transient LLM error (attempt {_attempt + 1}/3): {exc}")
                         await asyncio.sleep(1.5)
                         continue
                     if is_retryable:
@@ -1579,7 +1573,7 @@ async def run_agent_stream(
                     raise
 
             if result is None:
-                logger.error(f"Mercury failed after 3 attempts: {_mercury_last_err}")
+                logger.error(f"LLM call failed after 3 attempts: {_last_err}")
                 _fb = _build_fallback_response(message, all_sites, all_news)
                 yield {"type": "diffusion", "content": _fb}
                 break
@@ -1605,7 +1599,7 @@ async def run_agent_stream(
                     collected_content = ""
                 else:
                     # No tools used at all (simple query) — emit Phase 1 response
-                    if ctx.backend_type == "anthropic" and _offer_tools:
+                    if _offer_tools:
                         # Haiku chose not to use tools — do a single synthesis call
                         # with output_config directly. Marker injection (two-pass) was
                         # ~40% unreliable: Haiku ignored annotation instructions and
@@ -1630,28 +1624,11 @@ async def run_agent_stream(
                             if so_data is not None:
                                 _structured_output = so_data
                         except Exception as e:
-                            logger.warning(f"Anthropic simple synthesis failed: {e}")
+                            logger.warning(f"Simple synthesis failed: {e}")
                             collected_content = clean_response_text(result["content"])
-                    elif ctx.backend_type == "anthropic":
+                    else:
                         # No tools were offered (edge case) — use plain text
                         collected_content = clean_response_text(result["content"])
-                    else:
-                        try:
-                            collected_content, so_data, _off_topic = _parse_structured_output(
-                                result["content"]
-                            )
-                            if so_data is not None:
-                                _structured_output = so_data
-                        except Exception as e:
-                            logger.warning(f"Structured output parse failed: {e}")
-                            raw = result["content"]
-                            text_match = re.search(r'"text"\s*:\s*"((?:[^"\\]|\\.)*)"', raw)
-                            if text_match:
-                                collected_content = clean_response_text(
-                                    text_match.group(1).replace("\\n", "\n").replace('\\"', '"')
-                                )
-                            else:
-                                collected_content = clean_response_text(raw)
                     # Emit clean text directly (no diffusion simulation)
                     if collected_content.strip():
                         # Only apply grounding check when tools were actually used
@@ -1701,7 +1678,7 @@ async def run_agent_stream(
 
         # For Ollama streaming, the preamble text (e.g. "I'll search for...") was
         # streamed as tokens. Re-emit it as a status event.
-        if collected_content.strip() and ctx.backend_type not in ("mercury", "anthropic"):
+        if collected_content.strip() and ctx.backend_type == "local":
             yield {"type": "status", "content": collected_content.strip()}
 
         # Execute tool calls
@@ -1864,6 +1841,21 @@ async def run_agent_stream(
                                 all_news.append(news_entry)
                                 existing_keys.add(key)
 
+                # Extract transcript chunks from vector_search(collection="transcripts")
+                if (
+                    _parsed is not None
+                    and tc["name"] == "vector_search"
+                    and isinstance(tool_args, dict)
+                    and tool_args.get("collection") == "transcripts"
+                ):
+                    if isinstance(_parsed, list):
+                        seen_t_vids: set[str] = {t.get("video_id", "") for t in all_transcripts}
+                        for item in _parsed:
+                            vid = item.get("video_id")
+                            if vid and vid not in seen_t_vids:
+                                all_transcripts.append(item)
+                                seen_t_vids.add(vid)
+
                 wrapped = wrap_tool_result(str(tc["name"]), result)
                 messages.append(ToolMessage(content=wrapped, tool_call_id=str(tc["id"])))
 
@@ -1994,14 +1986,17 @@ async def run_agent_stream(
             vid = n.get("video_id")
             if vid:
                 _valid_video_ids.add(vid)
+        for t in all_transcripts:
+            vid = t.get("video_id")
+            if vid:
+                _valid_video_ids.add(vid)
         # Extract video_ids from retrieved context ([youtube: VIDEO_ID] markers)
         for m in re.finditer(r"\[youtube:\s*([^\]]+)\]", retrieved_context):
             _valid_video_ids.add(m.group(1).strip())
-        # Extract video_ids from raw tool results (JSON "video_id": "..." fields)
+        # Extract video_ids from raw tool results (JSON fields)
         for raw in raw_tool_results:
             for m in re.finditer(r'"video_id":\s*"([^"]+)"', raw):
                 _valid_video_ids.add(m.group(1))
-            # Also catch video_id in transcript tool format
             for m in re.finditer(r"video_id:\s*([A-Za-z0-9_-]{11})", raw):
                 _valid_video_ids.add(m.group(1))
 
@@ -2024,11 +2019,10 @@ async def run_agent_stream(
 
         _synthesis_ok = False
 
-        if ctx.backend_type == "anthropic":
-            # ── Anthropic: 2-stage (prose + marker injection) ───────────────
-            # Stage 1: PROSE_PROMPT + LYRA_PROSE_SCHEMA → plain prose JSON
-            # Stage 2: Marker injection → annotated JSON with «s0», «v0» markers
-            # Mirrors Mercury two-pass exactly.
+        # Phase 2: two-stage synthesis (prose + marker injection)
+        # Stage 1: PROSE_PROMPT + LYRA_PROSE_SCHEMA → plain prose JSON
+        # Stage 2: Marker injection → annotated JSON with «s0», «v0» markers
+        if True:
             _s1_prose: str | None = None
             _s1_off_topic = False
 
@@ -2099,7 +2093,7 @@ async def run_agent_stream(
             if _s1_prose and not _s1_off_topic:
                 # Stage 2: Marker injection
                 yield {"type": "status", "content": "Adding citations..."}
-                _entities_json = _build_entities_catalogue(all_sites, all_news, raw_tool_results)
+                _entities_json = _build_entities_catalogue(all_sites, all_news, all_transcripts, raw_tool_results)
                 injection_msgs = build_marker_injection_messages(
                     prose=_s1_prose,
                     user_question=message,
@@ -2156,150 +2150,6 @@ async def run_agent_stream(
                     yield {"type": "diffusion", "content": _s1_prose}
                     _synthesis_ok = True
                     print("[SYNTHESIS] S2 failed, emitting S1 prose", flush=True)
-
-        else:
-            # ── Mercury / other: two-pass (prose + marker injection) ────────
-            # Pass 1: PROSE_PROMPT → plain prose, no markers
-            # Pass 2: MARKER_INJECTION_PROMPT + entities catalogue → annotated JSON
-            prose_msgs = _build_synthesis_messages(
-                message, raw_tool_results, context_prompt, retrieved_context
-            )
-            prose_msgs[0] = SystemMessage(content=PROSE_PROMPT)
-
-            _prose_text: str | None = None
-            _p1_off_topic = False
-
-            for _p1_attempt in range(3):
-                try:
-                    _p1_task = asyncio.create_task(
-                        backend_impl.generate(
-                            prose_msgs,
-                            response_format=LYRA_PROSE_SCHEMA,
-                            max_tokens=4096,
-                        )
-                    )
-                    _p1_hb = False
-                    while not _p1_task.done():
-                        done, _ = await asyncio.wait({_p1_task}, timeout=8.0)
-                        if not done:
-                            yield {
-                                "type": "status",
-                                "content": "Still working..." if _p1_hb else "Writing answer...",
-                            }
-                            _p1_hb = True
-                    result = _p1_task.result()
-                    total_input_tokens += result["usage"]["input"]
-                    total_output_tokens += result["usage"]["output"]
-                    parsed = json.loads(result["content"])
-                    if not parsed.get("on_topic", True):
-                        _p1_off_topic = True
-                        _prose_text = (
-                            "🏺 That's not really my area! I'm all about ancient ruins, "
-                            "lost civilizations, and archaeological discoveries. "
-                            "What do you want to dig into?"
-                        )
-                        break
-                    _prose_text = parsed.get("text", "").strip()
-                    if _prose_text:
-                        break
-                except Exception as exc:
-                    print(f"[P1] attempt {_p1_attempt + 1} failed: {exc}", flush=True)
-                if _p1_attempt < 2:
-                    await asyncio.sleep(1.5)
-
-            if _p1_off_topic and _prose_text:
-                yield {"type": "diffusion", "content": _prose_text}
-                _synthesis_ok = True
-
-            elif not _prose_text:
-                # Pass 1 total failure → plain-text fallback
-                print("[SYNTHESIS] P1 failed, trying plain text...", flush=True)
-                try:
-                    _fallback_msgs = _build_synthesis_messages(
-                        message, raw_tool_results, context_prompt, retrieved_context
-                    )
-                    _fallback_msgs[0] = SystemMessage(content=SYNTHESIS_FALLBACK_PROMPT)
-                    _plain_result = await backend_impl.generate(
-                        _fallback_msgs,
-                        response_format=None,
-                        max_tokens=8192,
-                    )
-                    total_input_tokens += _plain_result["usage"]["input"]
-                    total_output_tokens += _plain_result["usage"]["output"]
-                    _plain_text = clean_response_text(_plain_result["content"])
-                    if _plain_text.strip():
-                        yield {"type": "diffusion", "content": _plain_text}
-                        _synthesis_ok = True
-                        print("[SYNTHESIS] Plain text fallback succeeded", flush=True)
-                except Exception as exc:
-                    print(
-                        f"[SYNTHESIS] Plain text fallback also failed: {type(exc).__name__}: {exc}",
-                        flush=True,
-                    )
-
-            else:
-                # ── PASS 2: Marker injection ────────────────────────────────
-                yield {"type": "status", "content": "Adding citations..."}
-
-                # Build compact entities catalogue from already-collected pipeline data
-                _entities_json = _build_entities_catalogue(all_sites, all_news, raw_tool_results)
-
-                injection_msgs = build_marker_injection_messages(
-                    prose=_prose_text,
-                    user_question=message,
-                    entities_json=_entities_json,
-                    context_prompt=context_prompt,
-                )
-
-                for _p2_attempt in range(3):
-                    try:
-                        _p2_task = asyncio.create_task(
-                            backend_impl.generate(
-                                injection_msgs,
-                                response_format=LYRA_RESPONSE_SCHEMA,
-                                max_tokens=8192,
-                            )
-                        )
-                        _p2_hb = False
-                        while not _p2_task.done():
-                            done, _ = await asyncio.wait({_p2_task}, timeout=8.0)
-                            if not done:
-                                yield {
-                                    "type": "status",
-                                    "content": "Still working..."
-                                    if _p2_hb
-                                    else "Adding citations...",
-                                }
-                                _p2_hb = True
-                        result = _p2_task.result()
-                        total_input_tokens += result["usage"]["input"]
-                        total_output_tokens += result["usage"]["output"]
-                        # Pass 2 is annotation mode — never deflect based on on_topic
-                        text_out, so_data, _ = _parse_structured_output(
-                            result["content"], check_on_topic=False
-                        )
-                        if so_data is not None and _valid_video_ids:
-                            text_out, so_data = _filter_hallucinated_videos(
-                                text_out, so_data, _valid_video_ids
-                            )
-                        if so_data is not None:
-                            _structured_output = so_data
-                        if text_out.strip():
-                            text_out, _ = _check_grounding(text_out)
-                            yield {"type": "diffusion", "content": text_out}
-                            _synthesis_ok = True
-                            break
-                    except Exception as exc:
-                        print(f"[P2] attempt {_p2_attempt + 1} failed: {exc}", flush=True)
-                    if _p2_attempt < 2:
-                        await asyncio.sleep(1.5)
-
-                if not _synthesis_ok:
-                    # Pass 2 total failure — emit Pass 1 prose (correct content, no markers)
-                    _prose_text, _ = _check_grounding(_prose_text)
-                    yield {"type": "diffusion", "content": _prose_text}
-                    _synthesis_ok = True
-                    print("[SYNTHESIS] P2 failed, emitting P1 prose", flush=True)
 
         if not _synthesis_ok:
             _fb = _build_fallback_response(message, all_sites, all_news)
