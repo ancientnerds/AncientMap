@@ -280,7 +280,7 @@ def _call_anthropic_api(
     # model to open a JSON object with a double-quoted key.
     response_format = kwargs.pop("response_format", None)
     if response_format and response_format.get("type") == "json_schema" and not prefill:
-        prefill = '{"'
+        prefill = "{"
 
     # Handle prefill — append as assistant message
     if prefill:
