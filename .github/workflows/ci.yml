@@ -203,8 +203,9 @@ jobs:
             # are now git-tracked in public/data/ — no copy step needed.
             # nginx serves /data/ directly from public/data/.
 
-            # Rebuild frontend if files changed OR dist is missing key assets
-            if echo "$CHANGED" | grep -q "^ancient-nerds-map/" || [ ! -f ancient-nerds-map/dist/an-logo.svg ]; then
+            # Rebuild frontend if files changed, dist is missing, or dist was built from a different commit
+            DIST_COMMIT=$(cat ancient-nerds-map/dist/.built-commit 2>/dev/null || echo "unknown")
+            if echo "$CHANGED" | grep -q "^ancient-nerds-map/" || [ ! -f ancient-nerds-map/dist/an-logo.svg ] || [ "$DIST_COMMIT" != "$AFTER" ]; then
               echo "==> Building frontend..."
               # Clean stale node_modules if root-owned
               rm -rf "ancient-nerds-map/node_modules" 2>/dev/null || {
@@ -227,7 +228,8 @@ jobs:
               mv ancient-nerds-map/dist "ancient-nerds-map/dist-old-$SWAP_TS" 2>/dev/null || true
               mv ancient-nerds-map/dist-new ancient-nerds-map/dist
               find ancient-nerds-map -maxdepth 1 -name 'dist-old*' -exec rm -rf {} + 2>/dev/null || true
-              echo "    Frontend built and swapped successfully"
+              echo "$AFTER" > ancient-nerds-map/dist/.built-commit
+              echo "    Frontend built and swapped successfully (commit: $AFTER)"
             else
               echo "==> Frontend unchanged, skipping build"
             fi
