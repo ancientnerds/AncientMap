@@ -126,6 +126,7 @@ async def _handle_ask(
     question: str,
     *,
     history: list[dict] | None = None,
+    member: discord.Member | None = None,
 ) -> tuple[str, list[dict]]:
     """Core ask logic shared by /ask command and DM handler.
 
@@ -152,9 +153,26 @@ async def _handle_ask(
             .first()
         )
         if not user:
-            raise ValueError(
-                "You need to sign in at [ancientnerds.com](https://ancientnerds.com/account.html) first."
+            if member is None:
+                raise ValueError(
+                    "You need to sign in at [ancientnerds.com](https://ancientnerds.com/account.html) first."
+                )
+            # Auto-register: being in the Discord server is authentication.
+            # Use the same role-based credit grant logic as the web OAuth flow.
+            from api.routes.auth import process_credit_grants
+
+            roles = [str(r.id) for r in member.roles if not r.is_default()]
+            user = DiscordUser(
+                discord_id=discord_id,
+                username=member.name,
+                avatar_hash=member.avatar.key if member.avatar else None,
+                roles=roles,
+                credits=0,
             )
+            session.add(user)
+            session.flush()
+            process_credit_grants(session, user)
+            session.commit()
 
         is_unlimited = user.is_unlimited
         user_id = user.id
@@ -340,6 +358,7 @@ class LyraBot(discord.Client):
                     discord_id,
                     message.content,
                     history=history,
+                    member=message.author if isinstance(message.author, discord.Member) else None,
                 )
                 await _send_response(message.channel, text, sites)
             except ValueError as e:
@@ -369,7 +388,9 @@ def _get_bot() -> LyraBot:
         await interaction.response.defer(thinking=True)
 
         try:
-            text, sites = await _handle_ask(discord_id, question)
+            text, sites = await _handle_ask(
+                discord_id, question, member=interaction.user
+            )
 
             # Try to create a thread for the conversation
             display_name = interaction.user.display_name
