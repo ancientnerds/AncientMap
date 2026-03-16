@@ -261,6 +261,7 @@ _GROUNDING_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 
+
 def _check_grounding(text: str) -> tuple[str, float]:
     """Check what fraction of sentences cite a source.
 
@@ -309,11 +310,14 @@ def _build_entities_catalogue(
     for item in [*(all_news or []), *(all_transcripts or [])]:
         vid = item.get("video_id")
         if vid and vid not in seen_vids:
-            videos.append({
-                "video_id": vid,
-                "channel": item.get("channel", ""),
-                "timestamp_seconds": item.get("timestamp_seconds") or item.get("start_seconds", 0),
-            })
+            videos.append(
+                {
+                    "video_id": vid,
+                    "channel": item.get("channel", ""),
+                    "timestamp_seconds": item.get("timestamp_seconds")
+                    or item.get("start_seconds", 0),
+                }
+            )
             seen_vids.add(vid)
     _entities["videos"] = videos
 
@@ -663,7 +667,14 @@ def _auto_retrieve(
         + "\n\n".join(context_parts)
         + "\n"
     )
-    return context_str, site_results, news_results, avg_relevance, total_voyage_tokens, transcript_chunks
+    return (
+        context_str,
+        site_results,
+        news_results,
+        avg_relevance,
+        total_voyage_tokens,
+        transcript_chunks,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1190,9 +1201,14 @@ async def run_agent_stream(
                 "meta": None,
             }
         else:
-            retrieved_context, auto_site_results, auto_news_results, avg_relevance, vt, auto_transcript_results = (
-                auto_result_or_exc
-            )
+            (
+                retrieved_context,
+                auto_site_results,
+                auto_news_results,
+                avg_relevance,
+                vt,
+                auto_transcript_results,
+            ) = auto_result_or_exc
             total_voyage_tokens += vt
             # Extend all_transcripts (deduped by video_id)
             seen_auto_t_vids: set[str] = {t.get("video_id", "") for t in all_transcripts}
@@ -1506,11 +1522,7 @@ async def run_agent_stream(
 
         # If tools are cut off and we already have tool results, skip straight
         # to Phase 2 synthesis — no point calling Mercury just to discard the result
-        if (
-            not _offer_tools
-            and tool_calls_made > 0
-            and ctx.backend_type != "local"
-        ):
+        if not _offer_tools and tool_calls_made > 0 and ctx.backend_type != "local":
             yield {
                 "type": "pipeline",
                 "stage": "llm_round",
@@ -2093,7 +2105,9 @@ async def run_agent_stream(
             if _s1_prose and not _s1_off_topic:
                 # Stage 2: Marker injection
                 yield {"type": "status", "content": "Adding citations..."}
-                _entities_json = _build_entities_catalogue(all_sites, all_news, all_transcripts, raw_tool_results)
+                _entities_json = _build_entities_catalogue(
+                    all_sites, all_news, all_transcripts, raw_tool_results
+                )
                 injection_msgs = build_marker_injection_messages(
                     prose=_s1_prose,
                     user_question=message,
