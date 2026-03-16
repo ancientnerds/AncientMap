@@ -356,15 +356,25 @@ class LyraBot(discord.Client):
         asyncio.create_task(self._purge_all_signin_errors())
 
     async def _purge_all_signin_errors(self) -> None:
-        """On startup, delete all stale sign-in error messages from every bot-owned thread."""
+        """On startup, delete stale sign-in errors from all bot-owned threads (active + archived)."""
         guild = self.get_guild(int(DISCORD_GUILD_ID))
         if not guild:
             return
         count = 0
+        # Active threads
         for thread in guild.threads:
             if thread.owner_id == self.user.id:
                 await _purge_signin_errors(thread)
                 count += 1
+        # Archived threads in every text channel
+        for channel in guild.text_channels:
+            try:
+                async for thread in channel.archived_threads(limit=None):
+                    if thread.owner_id == self.user.id:
+                        await _purge_signin_errors(thread)
+                        count += 1
+            except (discord.Forbidden, discord.HTTPException):
+                pass
         print(f"[DISCORD] Purged sign-in errors across {count} threads", flush=True)
 
     async def on_message(self, message: discord.Message):
