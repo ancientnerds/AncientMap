@@ -56,7 +56,7 @@ def rescore_pending_items(settings: LyraSettings) -> int:
 
     Returns number of items rescored.
     """
-    if not settings.api_key:
+    if not settings.anthropic_api_key:
         logger.error("No LLM API key configured")
         return 0
 

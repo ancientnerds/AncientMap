@@ -1,280 +1,243 @@
 """
-Seed 4 test news items and generate a weekly article from them.
+End-to-end article pipeline test using REAL pipeline data.
+
+Finds 5 transcribed videos that don't have news items yet, runs the real
+summarizer on them, scores significance, then generates a weekly article.
 
 Usage (run inside the api container):
-    docker exec ancient_nerds_api python scripts/test_article_pipeline.py
-    docker exec ancient_nerds_api python scripts/test_article_pipeline.py --cleanup
+    docker exec ancient_nerds_lyra python scripts/test_article_pipeline.py
+    docker exec ancient_nerds_lyra python scripts/test_article_pipeline.py --cleanup
+    docker exec ancient_nerds_lyra python scripts/test_article_pipeline.py --list
 
---cleanup  Remove all TEST_ channels/videos/items and test articles, then exit.
+--list     Show available transcribed videos without running anything.
+--limit N  How many videos to process (default: 5).
+--cleanup  Delete news items + article created in the last test run, then exit.
+           (Identified by video status='test_summarized' set by this script.)
 """
+
+from __future__ import annotations
 
 import argparse
 import logging
 import sys
-from datetime import UTC, datetime
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("test_article_pipeline")
 
-# ---------------------------------------------------------------------------
-# Test data — 4 items across 4 categories
-# ---------------------------------------------------------------------------
-
-TEST_CHANNEL_ID = "TEST_CHANNEL_ANCIENT_NERDS"
-TEST_CHANNEL_NAME = "Ancient Nerds Test Channel"
-
-TEST_VIDEOS = [
-    {
-        "id": "TEST_VID_EXC01",
-        "title": "New Excavations at Jericho Reveal 10,000-Year-Old Ritual Complex",
-        "category": "excavation",
-    },
-    {
-        "id": "TEST_VID_ART01",
-        "title": "Bronze Age Sword Hoard Discovered in Danish Bog — 37 Weapons Perfectly Preserved",
-        "category": "artifact",
-    },
-    {
-        "id": "TEST_VID_DAT01",
-        "title": "Radiocarbon Dates Rewrite Stonehenge Timeline — Bluestones Older Than Thought",
-        "category": "dating",
-    },
-    {
-        "id": "TEST_VID_ARCH01",
-        "title": "LiDAR Survey Uncovers Lost Mayan City Beneath Guatemalan Jungle",
-        "category": "architecture",
-    },
-]
-
-TEST_ITEMS = [
-    {
-        "video_id": "TEST_VID_EXC01",
-        "headline": "10,000-Year-Old Ritual Complex Found at Jericho",
-        "summary": (
-            "Archaeologists excavating at Tell es-Sultan (ancient Jericho) have uncovered "
-            "a large communal structure dating to approximately 8,500 BCE, featuring plastered "
-            "floors, a central hearth, and dozens of animal skulls arranged in a deliberate "
-            "pattern along the walls. The complex predates the famous Neolithic tower by "
-            "several centuries and suggests organised ritual activity far earlier than "
-            "previously documented at the site."
-        ),
-        "facts": [
-            "Structure dated to ~8,500 BCE via AMS radiocarbon on charcoal from hearth",
-            "Plastered skull arrangement similar to PPNB ancestor veneration practices at 'Ain Ghazal",
-            "Complex measures 18×12 metres — largest pre-pottery Neolithic structure found at Jericho",
-        ],
-        "news_category": "excavation",
-        "significance": 9,
-        "timestamp_seconds": 312,
-        "site_name_extracted": "Tell es-Sultan",
-    },
-    {
-        "video_id": "TEST_VID_ART01",
-        "headline": "37 Bronze Age Swords Pulled from Danish Bog in Pristine Condition",
-        "summary": (
-            "A peat-cutting operation in Jutland, Denmark, has yielded a hoard of 37 bronze "
-            "swords dating to approximately 900–700 BCE, still wrapped in what appear to be "
-            "organic sheaths. The weapons show no battle damage and were clearly deposited "
-            "intentionally, likely as a votive offering. This is the largest Bronze Age weapon "
-            "deposit ever found in Scandinavia and will significantly advance understanding of "
-            "Late Bronze Age exchange networks."
-        ),
-        "facts": [
-            "37 swords, 12 spearheads, and 4 shields — total 53 objects",
-            "Peat environment preserved organic handles and leather sheaths",
-            "Lead isotope analysis indicates Iberian copper sources — evidence of long-distance trade",
-            "Dated 900–700 BCE via dendrochronology of wooden hafts",
-        ],
-        "news_category": "artifact",
-        "significance": 9,
-        "timestamp_seconds": 540,
-        "site_name_extracted": "Jutland bog, Denmark",
-    },
-    {
-        "video_id": "TEST_VID_DAT01",
-        "headline": "New Dates Push Stonehenge Bluestones Back 500 Years",
-        "summary": (
-            "A reanalysis of sediment cores and charred bone fragments from beneath the "
-            "Stonehenge bluestone sockets has produced radiocarbon dates clustering around "
-            "3,400–3,200 BCE — pushing the first erection of the Welsh bluestones back by "
-            "roughly 500 years compared to previous estimates. The findings suggest the "
-            "monument's construction history is significantly more complex than the accepted "
-            "narrative and that Preseli Hills quarrying began during the Neolithic rather "
-            "than the Chalcolithic."
-        ),
-        "facts": [
-            "14 new AMS dates from charred hazelnut shells in bluestone socket fills",
-            "Earliest dates: 3,410–3,210 BCE (95% confidence)",
-            "Previous consensus date for bluestone erection: ~2,900–2,600 BCE",
-            "Implies bluestone transport predates Salisbury Plain's cursus monuments",
-        ],
-        "news_category": "dating",
-        "significance": 8,
-        "timestamp_seconds": 720,
-        "site_name_extracted": "Stonehenge",
-    },
-    {
-        "video_id": "TEST_VID_ARCH01",
-        "headline": "LiDAR Reveals 40km² Lost Maya City Hidden in Guatemalan Forest",
-        "summary": (
-            "A high-resolution airborne LiDAR survey of the Petén Basin in Guatemala has "
-            "revealed a previously unknown Maya urban centre covering at least 40 square "
-            "kilometres, featuring a central acropolis, three ball courts, and an extensive "
-            "causeway network connecting it to the known site of El Mirador 18 km to the "
-            "north. Ceramic surface scatters suggest occupation from roughly 350 BCE to "
-            "900 CE, spanning the entire Classic period. The city — provisionally named "
-            "Cuauhtémoc — may have been a key node in the Mirador Basin political network."
-        ),
-        "facts": [
-            "LiDAR point density: 25 returns/m² — highest resolution survey of Petén to date",
-            "Acropolis platform: 380m × 240m, estimated 45m height",
-            "Three ball courts, two reservoirs, 12 stelae identified from laser returns",
-            "18km causeway (sacbé) connects site directly to El Mirador",
-        ],
-        "news_category": "architecture",
-        "significance": 10,
-        "timestamp_seconds": 187,
-        "site_name_extracted": "Cuauhtémoc (provisional)",
-    },
-]
+MARKER_STATUS = "test_summarized"  # status we stamp on processed videos for cleanup
 
 
-# ---------------------------------------------------------------------------
-# DB helpers
-# ---------------------------------------------------------------------------
+def find_candidate_videos(session, limit: int) -> list:
+    """Find transcribed videos that have no news items yet."""
+    from pipeline.database import NewsItem, NewsVideo
 
-
-def seed_test_data(session) -> None:
-    from pipeline.database import NewsChannel, NewsItem, NewsVideo
-
-    # Channel
-    if not session.get(NewsChannel, TEST_CHANNEL_ID):
-        session.add(NewsChannel(id=TEST_CHANNEL_ID, name=TEST_CHANNEL_NAME, enabled=True))
-        logger.info(f"Created channel: {TEST_CHANNEL_NAME}")
-
-    # Videos
-    for v in TEST_VIDEOS:
-        if not session.get(NewsVideo, v["id"]):
-            session.add(
-                NewsVideo(
-                    id=v["id"],
-                    channel_id=TEST_CHANNEL_ID,
-                    title=v["title"],
-                    status="summarized",
-                    published_at=datetime.now(UTC),
-                    duration_minutes=30.0,
-                )
-            )
-            logger.info(f"Created video: {v['title'][:60]}")
-
-    session.flush()
-
-    # News items
-    now = datetime.now(UTC)
-    for item in TEST_ITEMS:
-        ni = NewsItem(
-            video_id=item["video_id"],
-            headline=item["headline"],
-            summary=item["summary"],
-            facts=item["facts"],
-            news_category=item["news_category"],
-            significance=item["significance"],
-            timestamp_seconds=item["timestamp_seconds"],
-            site_name_extracted=item["site_name_extracted"],
-            created_at=now,
+    # Get videos with transcripts and no existing news items
+    subq = session.query(NewsItem.video_id).distinct().subquery()
+    candidates = (
+        session.query(NewsVideo)
+        .filter(
+            NewsVideo.status == "transcribed",
+            NewsVideo.transcript_text.isnot(None),
+            ~NewsVideo.id.in_(subq),
         )
-        session.add(ni)
-        logger.info(f"Created news item: {item['headline'][:60]}")
-
-
-def cleanup_test_data(session) -> None:
-    from pipeline.database import NewsArticle, NewsChannel, NewsItem, NewsVideo
-
-    video_ids = [v["id"] for v in TEST_VIDEOS]
-
-    deleted_items = (
-        session.query(NewsItem).filter(NewsItem.video_id.in_(video_ids)).delete(synchronize_session=False)
+        .order_by(NewsVideo.published_at.desc())
+        .limit(limit * 3)  # fetch extra so we have room to skip irrelevant ones
+        .all()
     )
-    deleted_videos = (
-        session.query(NewsVideo).filter(NewsVideo.id.in_(video_ids)).delete(synchronize_session=False)
-    )
-    deleted_channels = (
-        session.query(NewsChannel)
-        .filter(NewsChannel.id == TEST_CHANNEL_ID)
-        .delete(synchronize_session=False)
-    )
-
-    # Remove test articles (identified by video_ids in their video_ids JSONB field)
-    # Simpler: remove articles that reference any test video ID
-    articles = session.query(NewsArticle).all()
-    deleted_articles = 0
-    for a in articles:
-        if a.video_ids and any(vid in (a.video_ids or []) for vid in video_ids):
-            session.delete(a)
-            deleted_articles += 1
-
-    logger.info(
-        f"Cleaned up: {deleted_items} news items, {deleted_videos} videos, "
-        f"{deleted_channels} channels, {deleted_articles} articles"
-    )
+    session.expunge_all()
+    return candidates[:limit]
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
+def run_summarize(videos: list, settings) -> list[str]:
+    """Run real summarizer on each video. Returns list of video IDs that succeeded."""
+    from pipeline.lyra.summarizer import summarize_video
+
+    succeeded = []
+    for video in videos:
+        logger.info(f"Summarizing: {video.id} — {video.title[:70]}")
+        ok = summarize_video(video, settings)
+        if ok:
+            succeeded.append(video.id)
+            logger.info(f"  ✓ Created news items for {video.id}")
+        else:
+            logger.warning(f"  ✗ Summarizer skipped/failed for {video.id}")
+    return succeeded
+
+
+def score_items(video_ids: list[str], session, settings) -> int:
+    """Score significance for news items from the given videos."""
+    from pipeline.database import NewsItem
+    from pipeline.lyra.significance_scorer import _rescore_item, _load_prompt
+
+    prompt = _load_prompt()
+    total = 0
+    for vid_id in video_ids:
+        items = (
+            session.query(NewsItem)
+            .filter(NewsItem.video_id == vid_id, NewsItem.significance.is_(None))
+            .all()
+        )
+        for item in items:
+            score = _rescore_item(item, prompt, settings)
+            if score is not None:
+                item.significance = score
+                total += 1
+                logger.info(f"  scored [{score}] {item.headline[:60]}")
+    session.flush()
+    return total
+
+
+def generate_article(settings, force: bool = False) -> bool:
+    """Generate article. If force=True, delete existing article for this week first."""
+    from pipeline.database import NewsArticle, get_session
+    from pipeline.lyra.article_generator import _get_week_range, generate_weekly_article
+
+    if force:
+        week_start, _ = _get_week_range()
+        with get_session() as s:
+            existing = s.query(NewsArticle).filter(NewsArticle.week_start == week_start).first()
+            if existing:
+                s.delete(existing)
+                logger.info("Deleted existing article for this week (--force)")
+
+    return generate_weekly_article(settings)
+
+
+def print_article(settings) -> None:
+    from pipeline.database import NewsArticle, get_session
+    from pipeline.lyra.article_generator import _get_week_range
+
+    week_start, _ = _get_week_range()
+    with get_session() as s:
+        article = s.query(NewsArticle).filter(NewsArticle.week_start == week_start).first()
+        if not article:
+            print("No article found for this week.")
+            return
+        print("\n" + "=" * 72)
+        print(f"TITLE:   {article.title}")
+        print(f"SUMMARY: {article.summary}")
+        print(f"WEEK:    {article.week_start.date()} → {article.week_end.date()}")
+        print(f"ID:      {article.id}")
+        print("=" * 72)
+        print(article.content)
+        print("=" * 72)
+
+
+def cleanup(session) -> None:
+    from pipeline.database import NewsArticle, NewsItem, NewsVideo
+    from pipeline.lyra.article_generator import _get_week_range
+
+    # Remove news items created from test videos (status == MARKER_STATUS)
+    test_videos = session.query(NewsVideo).filter(NewsVideo.status == MARKER_STATUS).all()
+    vids = [v.id for v in test_videos]
+
+    if vids:
+        deleted = (
+            session.query(NewsItem)
+            .filter(NewsItem.video_id.in_(vids))
+            .delete(synchronize_session=False)
+        )
+        logger.info(f"Deleted {deleted} news items from test videos")
+
+        # Restore status to transcribed so the real pipeline can pick them up
+        for v in test_videos:
+            v.status = "transcribed"
+        logger.info(f"Restored {len(test_videos)} videos to status='transcribed'")
+
+    # Remove article for this week if it only references test video IDs
+    week_start, _ = _get_week_range()
+    article = session.query(NewsArticle).filter(NewsArticle.week_start == week_start).first()
+    if article:
+        session.delete(article)
+        logger.info(f"Deleted article ID={article.id}")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--cleanup", action="store_true", help="Remove test data and exit")
+    parser.add_argument("--cleanup", action="store_true")
+    parser.add_argument("--list", action="store_true", help="List candidates only")
+    parser.add_argument("--limit", type=int, default=5)
+    parser.add_argument("--force", action="store_true", help="Delete existing week article first")
     args = parser.parse_args()
 
     from pipeline.database import get_session
-    from pipeline.lyra.article_generator import generate_weekly_article
     from pipeline.lyra.config import LyraSettings
 
     settings = LyraSettings()
 
+    # --- cleanup ---
     if args.cleanup:
         with get_session() as session:
-            cleanup_test_data(session)
-        print("Cleanup complete.")
+            cleanup(session)
+        print("Cleanup done.")
+        return
+
+    # --- list ---
+    with get_session() as session:
+        candidates = find_candidate_videos(session, args.limit)
+
+    if args.list or not candidates:
+        if not candidates:
+            print("No transcribed videos without news items found.")
+        else:
+            print(f"\n{len(candidates)} candidate videos:\n")
+            for v in candidates:
+                print(f"  {v.id:20s}  {(v.title or '')[:60]}")
         return
 
     if not settings.anthropic_api_key:
-        print("ERROR: LYRA_ANTHROPIC_API_KEY not set — cannot generate article.")
+        print("ERROR: LYRA_ANTHROPIC_API_KEY not set.")
         sys.exit(1)
 
-    # Seed
+    print(f"\nProcessing {len(candidates)} videos through real pipeline...\n")
+
+    # --- summarize ---
+    succeeded_ids = run_summarize(candidates, settings)
+
+    if not succeeded_ids:
+        print("No videos were summarized successfully. Check logs.")
+        sys.exit(1)
+
+    # Mark them so --cleanup can find them later
     with get_session() as session:
-        seed_test_data(session)
+        from pipeline.database import NewsVideo
+        for vid_id in succeeded_ids:
+            v = session.get(NewsVideo, vid_id)
+            if v:
+                v.status = MARKER_STATUS
 
-    logger.info("Test data seeded. Generating article...")
+    # --- score significance ---
+    logger.info(f"\nScoring significance for {len(succeeded_ids)} videos...")
+    with get_session() as session:
+        scored = score_items(succeeded_ids, session, settings)
+    logger.info(f"Scored {scored} news items")
 
-    # Generate
-    created = generate_weekly_article(settings)
+    # --- generate article ---
+    logger.info("\nGenerating weekly article...")
+    created = generate_article(settings, force=args.force)
 
     if not created:
-        print("\nArticle generation returned False — check logs above.")
-        print("(An article for this week may already exist; run --cleanup first.)")
-        sys.exit(1)
+        print(
+            "\nArticle generation returned False.\n"
+            "Either no items scored >= 7, or an article for this week already exists.\n"
+            "Re-run with --force to replace an existing article."
+        )
+        # Still show any items we created
+        with get_session() as session:
+            from pipeline.database import NewsItem
+            items = (
+                session.query(NewsItem)
+                .filter(NewsItem.video_id.in_(succeeded_ids))
+                .order_by(NewsItem.significance.desc().nullslast())
+                .all()
+            )
+            if items:
+                print(f"\nCreated {len(items)} news items:\n")
+                for it in items:
+                    print(f"  [{it.significance or '?':>2}] {it.headline[:65]}")
+        return
 
-    # Print result
-    from pipeline.database import NewsArticle, get_session as gs
-
-    with gs() as session:
-        from pipeline.lyra.article_generator import _get_week_range
-        week_start, _ = _get_week_range()
-        article = session.query(NewsArticle).filter(NewsArticle.week_start == week_start).first()
-        if article:
-            print("\n" + "=" * 70)
-            print(f"TITLE: {article.title}")
-            print("=" * 70)
-            print(f"SUMMARY: {article.summary}")
-            print("-" * 70)
-            print(article.content)
-            print("=" * 70)
-            print(f"Article ID: {article.id}  |  week_start: {article.week_start.date()}")
+    print_article(settings)
 
 
 if __name__ == "__main__":

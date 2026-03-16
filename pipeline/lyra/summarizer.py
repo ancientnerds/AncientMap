@@ -231,7 +231,7 @@ def summarize_video(
         logger.warning(f"No transcript for video {video.id}")
         return False
 
-    if not settings.api_key:
+    if not settings.anthropic_api_key:
         logger.error("No LLM API key configured")
         return False
 
