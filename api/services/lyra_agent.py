@@ -236,6 +236,64 @@ def _build_fallback_response(
     return "".join(parts)
 
 
+def _extract_source_chunks(raw_tool_results: list[str]) -> list[dict]:
+    """Parse raw tool results into labeled source metadata for synthesis.
+
+    Deduplicates by video_id in Python so the LLM never sees the same video twice.
+    Returns list of dicts with: title, channel, headline, video_id, content.
+    """
+    chunks: list[dict] = []
+    seen_video_ids: set[str] = set()
+
+    for raw in raw_tool_results:
+        sep = raw.find("] ")
+        if sep < 0:
+            continue
+        try:
+            items = json.loads(raw[sep + 2 :])
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if not isinstance(items, list):
+            continue
+
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+
+            video_id = item.get("video_id") or ""
+            if video_id and video_id in seen_video_ids:
+                continue
+            if video_id:
+                seen_video_ids.add(video_id)
+
+            channel = item.get("channel") or ""
+            headline = item.get("headline") or item.get("video_title") or ""
+            content = item.get("text_preview") or item.get("summary") or item.get("text") or ""
+            ts = item.get("timestamp_seconds")
+
+            if not channel and not content:
+                continue
+
+            label = channel
+            if headline:
+                label = f'{channel} — "{headline}"'
+            if ts is not None:
+                mm, ss = divmod(int(ts), 60)
+                label += f" @ {mm}:{ss:02d}"
+
+            chunks.append(
+                {
+                    "title": label,
+                    "channel": channel,
+                    "headline": headline,
+                    "video_id": video_id,
+                    "content": content[:2000],
+                }
+            )
+
+    return chunks
+
+
 def _build_synthesis_messages(
     user_question: str,
     raw_tool_results: list[str],
@@ -246,25 +304,35 @@ def _build_synthesis_messages(
 
     Clean slate: SYNTHESIS_PROMPT + consolidated data + user question.
     IMPORTANT: All retrieved data goes in the HumanMessage, not SystemMessages.
+
+    A numbered ## Retrieved Sources list is prepended when tool results contain
+    video/transcript data. This gives the LLM an explicit index to enumerate —
+    deduplication by video_id happens here in Python, not via prompt instruction.
     """
     msgs: list[BaseMessage] = [SystemMessage(content=SYNTHESIS_PROMPT)]
 
-    # Add context prompt (site/empire/news context) if any
     if context_prompt:
         msgs.append(SystemMessage(content=context_prompt))
 
-    # Build the user message: data + question combined
     user_parts: list[str] = []
 
     if retrieved_context:
         user_parts.append(retrieved_context)
 
     if raw_tool_results:
+        # Build explicit source index so the LLM enumerates every entry
+        source_chunks = _extract_source_chunks(raw_tool_results)
+        if source_chunks:
+            lines = [f"## Retrieved Sources ({len(source_chunks)} found)"]
+            for i, ch in enumerate(source_chunks, 1):
+                lines.append(f"{i}. {ch['title']}")
+            user_parts.append("\n".join(lines))
+
         wrapped = [{"text": r} for r in raw_tool_results]
         deduped = _semantic_dedup(wrapped, text_key="text")
         reordered = _reorder_by_relevance(deduped)
         data_block = "\n---\n".join(r["text"][:8000] for r in reordered)
-        user_parts.append(f"## Retrieved Data\n\n{data_block}")
+        user_parts.append(f"## Full Retrieved Data\n\n{data_block}")
 
     user_parts.append(f"## Question\n{user_question}")
     msgs.append(HumanMessage(content="\n\n".join(user_parts)))
