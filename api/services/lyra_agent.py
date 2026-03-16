@@ -263,7 +263,7 @@ def _build_synthesis_messages(
         wrapped = [{"text": r} for r in raw_tool_results]
         deduped = _semantic_dedup(wrapped, text_key="text")
         reordered = _reorder_by_relevance(deduped)
-        data_block = "\n---\n".join(r["text"][:3000] for r in reordered)
+        data_block = "\n---\n".join(r["text"][:8000] for r in reordered)
         user_parts.append(f"## Retrieved Data\n\n{data_block}")
 
     user_parts.append(f"## Question\n{user_question}")
@@ -1893,7 +1893,7 @@ async def run_agent_stream(
                 tool_calls_made += 1
 
                 # Collect raw result for Phase 2 synthesis
-                raw_tool_results.append(f"[{tc['name']}] {result[:3000]}")
+                raw_tool_results.append(f"[{tc['name']}] {result[:8000]}")
 
                 # Parse once — reuse for site extraction, news extraction, and pipeline panel
                 _parsed: Any = None
