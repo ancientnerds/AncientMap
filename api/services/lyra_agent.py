@@ -280,7 +280,9 @@ def _build_entities_catalogue(
     all_sites: list[dict],
     all_news: list[dict],
     all_transcripts: list[dict],
+    all_articles: list[dict],
     raw_tool_results: list[str],
+    citations: bool = True,
 ) -> str:
     """Build compact entities catalogue JSON from pipeline-collected data."""
     _entities: dict = {
@@ -296,6 +298,7 @@ def _build_entities_catalogue(
             if s.get("id")
         ],
         "videos": [],
+        "articles": [],
         "empires": [],
         "images": [],
         "links": [],
@@ -307,16 +310,34 @@ def _build_entities_catalogue(
     for item in [*(all_news or []), *(all_transcripts or [])]:
         vid = item.get("video_id")
         if vid and vid not in seen_vids:
-            videos.append(
-                {
-                    "video_id": vid,
-                    "channel": item.get("channel", ""),
-                    "timestamp_seconds": item.get("timestamp_seconds")
-                    or item.get("start_seconds", 0),
-                }
-            )
+            entry: dict = {
+                "video_id": vid,
+                "channel": item.get("channel", ""),
+                "timestamp_seconds": item.get("timestamp_seconds")
+                or item.get("start_seconds", 0),
+                "headline": (item.get("headline") or item.get("video_title") or "") if citations else "",
+            }
+            videos.append(entry)
             seen_vids.add(vid)
     _entities["videos"] = videos
+
+    # Deduplicated articles section
+    seen_arts: set[int] = set()
+    articles = []
+    for a in (all_articles or []):
+        aid = a.get("article_id")
+        if aid is not None and aid not in seen_arts:
+            articles.append(
+                {
+                    "article_id": aid,
+                    "title": a.get("title", ""),
+                    "summary": (a.get("summary") or "")[:200],
+                    "week": f"{(a.get('week_start') or '')[:10]} – {(a.get('week_end') or '')[:10]}",
+                    "url": f"/articles.html#{aid}",
+                }
+            )
+            seen_arts.add(aid)
+    _entities["articles"] = articles
 
     for _raw in raw_tool_results:
         _tool_name = _raw.split("]", 1)[0].lstrip("[")
@@ -510,13 +531,14 @@ async def _stream_with_heartbeat(
 
 def _auto_retrieve(
     queries: list[str], context_type: str
-) -> tuple[str, list[dict], list[dict], float | None, int, list[dict]]:
+) -> tuple[str, list[dict], list[dict], float | None, int, list[dict], list[dict]]:
     """Run automatic hybrid retrieval BEFORE the LLM sees the message.
 
     Searches Qdrant collections on every sub-query (from decomposition):
     - Sites collection (limit=5) for archaeological site context + map highlighting
     - News collection (limit=3) for semantically relevant news items
     - Transcripts collection (limit=3) for relevant transcript passages
+    - Articles collection (limit=3) for relevant weekly digest articles
 
     All searches run in parallel via ThreadPoolExecutor for speed.
 
@@ -526,7 +548,7 @@ def _auto_retrieve(
     Returns:
         Tuple of (formatted context string, list of site result dicts for map highlighting,
         list of news result dicts for sidebar cards, average relevance score or None,
-        total Voyage tokens used, list of transcript chunk dicts).
+        total Voyage tokens used, list of transcript chunk dicts, list of article chunk dicts).
     """
     from concurrent.futures import ThreadPoolExecutor
 
@@ -546,6 +568,8 @@ def _auto_retrieve(
         search_tasks.append(("news", sub_q, news_limit))
     for sub_q in queries:
         search_tasks.append(("transcripts", sub_q, 3))
+    for sub_q in queries:
+        search_tasks.append(("articles", sub_q, 3))
 
     # Execute all Qdrant searches in parallel (was sequential: 200-500ms each)
     def _do_search(task: tuple[str, str, int]) -> tuple[str, list[dict], int]:
@@ -560,7 +584,9 @@ def _auto_retrieve(
     seen_site_ids: set[str] = set()
     seen_news_keys: set[str] = set()
     seen_transcript_keys: set[str] = set()
+    seen_article_ids: set[int] = set()
     transcript_chunks: list[dict] = []
+    article_chunks: list[dict] = []
 
     for coll, results, vt in search_results:
         total_voyage_tokens += vt
@@ -586,6 +612,12 @@ def _auto_retrieve(
                 if key not in seen_transcript_keys:
                     seen_transcript_keys.add(key)
                     transcript_chunks.append(r)
+        elif coll == "articles":
+            for r in results:
+                aid = r.get("article_id")
+                if aid is not None and aid not in seen_article_ids:
+                    seen_article_ids.add(aid)
+                    article_chunks.append(r)
 
     # Minimum relevance to include in LLM context (prevents hallucination from garbage results).
     # site_results / news_results are still returned in full for map/sidebar highlighting.
@@ -644,7 +676,7 @@ def _auto_retrieve(
         context_parts.append("### Transcript Passages\n" + "\n".join(lines))
 
     if not context_parts:
-        return "", [], [], None, total_voyage_tokens, []
+        return "", [], [], None, total_voyage_tokens, [], article_chunks
 
     # Semantic dedup: remove near-duplicate results across retrieval sources
     site_results = _semantic_dedup(site_results, text_key="description")
@@ -669,6 +701,7 @@ def _auto_retrieve(
         avg_relevance,
         total_voyage_tokens,
         transcript_chunks,
+        article_chunks,
     )
 
 
@@ -1057,6 +1090,7 @@ async def run_agent_stream(
     context_type: str = "global",
     context_id: str | None = None,
     context_year: int | None = None,
+    citations: bool = True,
     ctx: RequestContext | None = None,
     system_prompt: str | None = None,
     num_ctx: int | None = None,
@@ -1097,6 +1131,7 @@ async def run_agent_stream(
     all_sites: list[dict] = []
     all_news: list[dict] = []
     all_transcripts: list[dict] = []
+    all_articles: list[dict] = []
     radar_names: set[str] = set()
     avg_relevance: float | None = None
     # Whitelist of video_ids from retrieved data — used to filter hallucinated videos
@@ -1222,6 +1257,7 @@ async def run_agent_stream(
                 avg_relevance,
                 vt,
                 auto_transcript_results,
+                auto_article_results,
             ) = auto_result_or_exc
             total_voyage_tokens += vt
             # Extend all_transcripts (deduped by video_id)
@@ -1231,6 +1267,13 @@ async def run_agent_stream(
                 if vid and vid not in seen_auto_t_vids:
                     all_transcripts.append(t)
                     seen_auto_t_vids.add(vid)
+            # Extend all_articles (deduped by article_id)
+            seen_auto_art_ids: set[int] = {a.get("article_id") for a in all_articles if a.get("article_id") is not None}
+            for a in auto_article_results:
+                aid = a.get("article_id")
+                if aid is not None and aid not in seen_auto_art_ids:
+                    all_articles.append(a)
+                    seen_auto_art_ids.add(aid)
             yield {
                 "type": "pipeline",
                 "stage": "auto_retrieve",
@@ -1891,6 +1934,28 @@ async def run_agent_stream(
                                 all_transcripts.append(item)
                                 seen_t_vids.add(vid)
 
+                # Extract article data from search_articles tool
+                # search_articles returns formatted text (not JSON), so we re-search Qdrant
+                # with the same query to get structured article dicts for all_articles.
+                if tc["name"] == "search_articles" and isinstance(tool_args, dict):
+                    _art_query = tool_args.get("query", "")
+                    _art_limit = min(int(tool_args.get("limit", 5)), 10)
+                    if _art_query:
+                        _art_items, _art_vt = _hybrid_search(
+                            _art_query, collection="articles", limit=_art_limit
+                        )
+                        total_voyage_tokens += _art_vt
+                        _seen_arts: set[int] = {
+                            a.get("article_id")
+                            for a in all_articles
+                            if a.get("article_id") is not None
+                        }
+                        for _a in _art_items:
+                            _aid = _a.get("article_id")
+                            if _aid is not None and _aid not in _seen_arts:
+                                all_articles.append(_a)
+                                _seen_arts.add(_aid)
+
                 wrapped = wrap_tool_result(str(tc["name"]), result)
                 messages.append(ToolMessage(content=wrapped, tool_call_id=str(tc["id"])))
 
@@ -2127,7 +2192,7 @@ async def run_agent_stream(
             # Stage 2: Marker injection
             yield {"type": "status", "content": "Adding citations..."}
             _entities_json = _build_entities_catalogue(
-                all_sites, all_news, all_transcripts, raw_tool_results
+                all_sites, all_news, all_transcripts, all_articles, raw_tool_results, citations
             )
             injection_msgs = build_marker_injection_messages(
                 prose=_s1_prose,

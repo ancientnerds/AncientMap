@@ -62,7 +62,7 @@ LYRA_RESPONSE_SCHEMA = {
                 },
                 "videos": {
                     "type": "array",
-                    "description": "Array of YouTube videos referenced in text. Each «vN» marker MUST have an entry. Fields: marker (e.g. 'v0'), channel (channel name), video_id (YouTube ID from tool results — NEVER fabricate), timestamp_seconds (integer, 0 if unknown). Each entry MUST reference a DIFFERENT video_id.",
+                    "description": "Array of YouTube videos referenced in text. Each «vN» marker MUST have an entry. Fields: marker (e.g. 'v0'), channel (channel name), video_id (YouTube ID from tool results — NEVER fabricate), timestamp_seconds (integer, 0 if unknown), headline (specific video title from catalogue, null if absent). Each entry MUST reference a DIFFERENT video_id.",
                     "items": {
                         "type": "object",
                         "properties": {
@@ -70,8 +70,9 @@ LYRA_RESPONSE_SCHEMA = {
                             "channel": {"type": "string"},
                             "video_id": {"type": "string"},
                             "timestamp_seconds": {"type": "integer"},
+                            "headline": {"anyOf": [{"type": "string"}, {"type": "null"}]},
                         },
-                        "required": ["marker", "channel", "video_id", "timestamp_seconds"],
+                        "required": ["marker", "channel", "video_id", "timestamp_seconds", "headline"],
                         "additionalProperties": False,
                     },
                 },

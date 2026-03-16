@@ -2,7 +2,7 @@
 Lyra Chat API Routes.
 
 Endpoints:
-- POST /lyra/chat         — Discord OAuth login required, Mercury cloud only
+- POST /lyra/chat         — Discord OAuth login required, Anthropic cloud (Haiku)
 - GET  /lyra/queue-status — Queue length, inference status
 """
 
@@ -80,9 +80,13 @@ class LyraChatRequest(BaseModel):
         default=None, max_length=50, description="Conversation history [{role, content}]"
     )
     backend: str = Field(
-        default="mercury",
-        pattern=r"^(mercury)$",
-        description="AI backend: mercury (cloud)",
+        default="anthropic",
+        pattern=r"^(anthropic)$",
+        description="AI backend: anthropic (cloud)",
+    )
+    citations: bool = Field(
+        default=True,
+        description="Whether to include specific video headlines and article titles in citations",
     )
 
 
@@ -94,7 +98,7 @@ class LyraChatRequest(BaseModel):
 @router.post("/chat")
 async def lyra_chat(request: LyraChatRequest, req: Request):
     """
-    Chat with Lyra. Requires Discord login. Mercury cloud backend only.
+    Chat with Lyra. Requires Discord login. Anthropic cloud (Haiku) backend only.
 
     Returns SSE stream with token, sites, done events.
     """
@@ -103,7 +107,7 @@ async def lyra_chat(request: LyraChatRequest, req: Request):
 
     user = get_current_user(req)
 
-    # Route request to Mercury cloud
+    # Route request to Anthropic cloud
     ctx = route_request(request.backend, request.message)
 
     return _handle_cloud_backend(request, user, ctx)
@@ -121,7 +125,7 @@ async def queue_status(req: Request):
 
 
 def _handle_cloud_backend(request: LyraChatRequest, user, ctx: RequestContext) -> StreamingResponse:
-    """Credit-based flow for Mercury cloud."""
+    """Credit-based flow for Anthropic cloud."""
     with get_db_session() as session:
         db_user = session.query(DBUser).filter(DBUser.id == user.id).with_for_update().first()
         if not db_user:
@@ -136,6 +140,7 @@ def _handle_cloud_backend(request: LyraChatRequest, user, ctx: RequestContext) -
                 context_type=request.context_type,
                 context_id=request.context_id,
                 context_year=request.context_year,
+                citations=request.citations,
                 ctx=ctx,
             )
 
@@ -163,6 +168,7 @@ def _handle_cloud_backend(request: LyraChatRequest, user, ctx: RequestContext) -
         context_type=request.context_type,
         context_id=request.context_id,
         context_year=request.context_year,
+        citations=request.citations,
         ctx=ctx,
     )
 
@@ -174,6 +180,7 @@ def _stream_response(
     context_type: str,
     context_id: str | None,
     context_year: int | None,
+    citations: bool = True,
     ctx: RequestContext | None = None,
 ) -> StreamingResponse:
     """Create an SSE streaming response from the Lyra agent (no credits tracking)."""
@@ -189,6 +196,7 @@ def _stream_response(
                 context_type=context_type,
                 context_id=context_id,
                 context_year=context_year,
+                citations=citations,
                 ctx=ctx,
             ):
                 event_type = chunk.get("type", "token")
@@ -218,6 +226,7 @@ def _stream_response_with_credits(
     context_type: str,
     context_id: str | None,
     context_year: int | None,
+    citations: bool = True,
     ctx: RequestContext | None = None,
 ) -> StreamingResponse:
     """Create an SSE streaming response with atomic credit reconciliation on completion.
@@ -239,6 +248,7 @@ def _stream_response_with_credits(
                 context_type=context_type,
                 context_id=context_id,
                 context_year=context_year,
+                citations=citations,
                 ctx=ctx,
             ):
                 event_type = chunk.get("type", "token")
