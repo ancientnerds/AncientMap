@@ -230,6 +230,7 @@ def _call_anthropic_api(
     settings: LyraSettings,
     *,
     prefill: str | None = None,
+    documents: list[dict] | None = None,
     **kwargs,
 ) -> NormalizedResponse:
     """Call Anthropic API synchronously and return a NormalizedResponse."""
@@ -250,6 +251,29 @@ def _call_anthropic_api(
     messages: list[dict] = []
     for msg in kwargs.pop("messages", []):
         messages.append({"role": msg["role"], "content": msg["content"]})
+
+    # If caller provided source documents, wrap last user message as content blocks
+    if documents:
+        for i in range(len(messages) - 1, -1, -1):
+            if messages[i]["role"] == "user":
+                question_text = messages[i]["content"]
+                if isinstance(question_text, str):
+                    content_blocks: list[dict] = [
+                        {
+                            "type": "document",
+                            "source": {
+                                "type": "text",
+                                "media_type": "text/plain",
+                                "data": doc["data"],
+                            },
+                            "title": doc.get("title", "Source"),
+                            "citations": {"enabled": True},
+                        }
+                        for doc in documents
+                    ]
+                    content_blocks.append({"type": "text", "text": question_text})
+                    messages[i]["content"] = content_blocks
+                break
 
     # Handle prefill — append as assistant message
     if prefill:
@@ -377,6 +401,7 @@ def call_api(
     *,
     prefill: str | None = None,
     reasoning_effort: str | None = None,
+    documents: list[dict] | None = None,
     **kwargs,
 ) -> NormalizedResponse:
     """Unified LLM call — dispatches to Anthropic (cloud) or Ollama (local).
@@ -384,6 +409,8 @@ def call_api(
     Args:
         prefill: Prefix for the response (e.g. "{" for JSON).
         reasoning_effort: Ignored — kept for call-site compat.
+        documents: Optional list of source documents to pass as Anthropic content blocks.
+            Each dict has shape {"title": str, "data": str}. Anthropic only.
         **kwargs: model, max_tokens, messages, system, temperature, response_format, etc.
     """
     settings = _get_settings()
@@ -392,7 +419,7 @@ def call_api(
     try:
         if is_ollama:
             return _call_ollama_api(settings, prefill=prefill, **kwargs)
-        return _call_anthropic_api(settings, prefill=prefill, **kwargs)
+        return _call_anthropic_api(settings, prefill=prefill, documents=documents, **kwargs)
     except Exception as e:
         backend_name = "Ollama" if is_ollama else "Anthropic"
         raise LyraAPIError(f"{backend_name} API error: {e}") from e
