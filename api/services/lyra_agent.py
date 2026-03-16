@@ -339,6 +339,21 @@ def _build_entities_catalogue(
                         _entities["links"].append(
                             {"text": ch.get("name", ""), "url": ch["youtube_url"]}
                         )
+        elif _tool_name in ("vector_search", "search_transcripts"):
+            # Transcript chunks from Qdrant — extract video metadata for Stage 2
+            existing_ids = {v["video_id"] for v in _entities["videos"]}
+            items = _payload if isinstance(_payload, list) else []
+            for item in items:
+                vid = item.get("video_id")
+                if vid and vid not in existing_ids and item.get("channel"):
+                    _entities["videos"].append(
+                        {
+                            "video_id": vid,
+                            "channel": item["channel"],
+                            "timestamp_seconds": item.get("start_seconds", 0),
+                        }
+                    )
+                    existing_ids.add(vid)
     return json.dumps(_entities, ensure_ascii=False)
 
 
