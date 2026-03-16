@@ -96,7 +96,7 @@ SYNTHESIS_PROMPT = """You are Lyra Whiskerbyte (SYNTHESIS mode — tools disable
 ## Markers — guillemets « » required
 **Sites** «s0» — `{marker, name, id}`. Each «sN» MUST be a DIFFERENT site UUID.
 **Videos** «v0» — `{marker, channel, video_id, timestamp_seconds}`. Only use «vN» for videos that are ACTUALLY RELEVANT to your answer — do NOT force-include videos just because they appear in the catalogue. If you cite a video, it MUST use a «vN» marker (never write raw video_ids as plain text). Each «vN» MUST be a DIFFERENT video_id.
-**Coordinates** «c0» — `{marker, lat, lon}`.
+**Coordinates** «c0» — `{marker, lat, lon}`. Only use when the prose explicitly refers to a specific unnamed geographic point (e.g. "Excavated at «c0»"). Do NOT use for sites that already have a «sN» marker — «sN» already pins the site on the map.
 **Countries** «f0» — `{marker, name, code}` ISO alpha-2. Example: "The site is in «f0»." Never write "flag" before the marker.
 **Empires** «e0» — `{marker, name, polity_id}`. CRITICAL: every polity_id MUST become an «eN» marker — never write it as plain text.
 **Images** «i0» — `{marker, title, original_url, author, license}`.
