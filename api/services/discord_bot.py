@@ -374,6 +374,21 @@ class LyraBot(discord.Client):
         """Handle a follow-up message in a bot-created thread."""
         discord_id = str(message.author.id)
 
+        # Resolve to Member (needed for auto-registration role lookup).
+        # message.author may be a plain User if the member isn't in cache.
+        member: discord.Member | None = (
+            message.author if isinstance(message.author, discord.Member) else None
+        )
+        if member is None:
+            guild = self.get_guild(int(DISCORD_GUILD_ID))
+            if guild:
+                try:
+                    member = guild.get_member(message.author.id) or await guild.fetch_member(
+                        message.author.id
+                    )
+                except (discord.NotFound, discord.HTTPException):
+                    pass
+
         async with message.channel.typing():
             try:
                 history = await _build_history(message.channel, current_msg=message)
@@ -381,7 +396,7 @@ class LyraBot(discord.Client):
                     discord_id,
                     message.content,
                     history=history,
-                    member=message.author if isinstance(message.author, discord.Member) else None,
+                    member=member,
                 )
                 await _send_response(message.channel, text, sites)
             except ValueError as e:
