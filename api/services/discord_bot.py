@@ -164,6 +164,10 @@ async def _handle_ask(
             .first()
         )
         if not user:
+            print(
+                f"[LYRA_AUTH] {discord_id} not in DB — member={'None' if member is None else member.name}",
+                flush=True,
+            )
             if member is None:
                 raise ValueError(
                     "You need to sign in at [ancientnerds.com](https://ancientnerds.com/account.html) first."
@@ -173,6 +177,10 @@ async def _handle_ask(
             from api.routes.auth import process_credit_grants
 
             roles = [str(r.id) for r in member.roles if not r.is_default()]
+            print(
+                f"[LYRA_AUTH] Auto-registering {discord_id} ({member.name}) with {len(roles)} roles",
+                flush=True,
+            )
             user = DiscordUser(
                 discord_id=discord_id,
                 username=member.name,
@@ -184,6 +192,9 @@ async def _handle_ask(
             session.flush()
             process_credit_grants(session, user)
             session.commit()
+            print(f"[LYRA_AUTH] Registered {discord_id}, credits={user.credits}", flush=True)
+        else:
+            print(f"[LYRA_AUTH] {discord_id} found in DB, credits={user.credits}", flush=True)
 
         is_unlimited = user.is_unlimited
         user_id = user.id
