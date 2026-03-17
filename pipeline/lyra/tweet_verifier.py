@@ -63,16 +63,15 @@ def verify_single_post(
     if not item.post_text:
         return None
 
-    # If no timestamp, use first 3000 chars of transcript as context
-    if not item.timestamp_range:
-        segment = transcript_text[:3000] if transcript_text else None
-    else:
+    # Extract transcript around the timestamp, fall back to start of transcript
+    if item.timestamp_range:
         segment = extract_transcript_segment(transcript_text, item.timestamp_range)
+    else:
+        segment = None
+    if not segment and transcript_text:
+        segment = transcript_text[:3000]
     if not segment:
-        logger.warning(
-            f"Skipping item {item.id}: no transcript segment "
-            f"(timestamp_range={item.timestamp_range!r}, has_transcript={bool(transcript_text)})"
-        )
+        logger.warning(f"Skipping item {item.id}: no transcript text available")
         return None
 
     if system_prompt is None:
