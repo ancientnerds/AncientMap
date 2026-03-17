@@ -209,7 +209,7 @@ def identify_and_enrich_sites(settings: LyraSettings) -> int:
 
     Returns number of sites processed.
     """
-    if not settings.api_key:
+    if not settings.anthropic_api_key:
         logger.warning("No LLM API key — skipping site identification")
         return 0
 

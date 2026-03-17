@@ -132,7 +132,7 @@ def verify_video_posts(
     if not video.transcript_text:
         return 0
 
-    if not settings.api_key:
+    if not settings.anthropic_api_key:
         return 0
     if system_prompt is None:
         system_prompt = _load_prompt()

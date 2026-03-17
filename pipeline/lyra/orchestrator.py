@@ -1541,6 +1541,12 @@ def _run_migrations(engine) -> None:
         """)
         )
 
+        # Delete broken article #7 (2026-03-16 week, saved with empty body
+        # before pipeline was fixed). Will be regenerated next Sunday cycle.
+        conn.execute(
+            text("DELETE FROM news_articles WHERE id = 7")
+        )
+
         conn.commit()
 
 

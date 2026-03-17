@@ -58,7 +58,7 @@ def generate_posts_for_video(
     if not video.summary_json:
         return 0
 
-    if not settings.api_key:
+    if not settings.anthropic_api_key:
         logger.error("No LLM API key configured")
         return 0
 

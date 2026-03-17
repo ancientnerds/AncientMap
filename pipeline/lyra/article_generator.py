@@ -99,6 +99,7 @@ def _collect_article_items(
             NewsItem.created_at >= week_start,
             NewsItem.created_at <= week_end,
             NewsItem.significance.isnot(None),
+            NewsItem.post_text.isnot(None),
         )
         .order_by(NewsItem.significance.desc())
         .all()
@@ -572,6 +573,10 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
         # Editorial coherence pass
         logger.info("Polishing article for coherence")
         polished_body = _polish_article(verified_body, settings)
+
+        if len(polished_body) < 200:
+            logger.error("Polished article body too short (%d chars), aborting", len(polished_body))
+            return False
 
         # Generate headline + TLDR
         logger.info("Generating headline and TLDR")
