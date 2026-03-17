@@ -1,6 +1,6 @@
 # Lyra News Pipeline
 
-Fully-automated AI-powered archaeological news discovery system. Runs on a 1-hour cycle inside the `ancient_nerds_lyra` Docker container. Transforms raw YouTube video content into curated Radar cards through 11 sequential stages.
+Fully-automated AI-powered archaeological news discovery system. Runs on a 1-hour cycle inside the `ancient_nerds_lyra` Docker container. Transforms raw YouTube video content into curated Radar cards through 11 sequential stages, plus a weekly article digest.
 
 ---
 
@@ -45,7 +45,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    YT["YouTube RSS\n(39 channels)"] -->|transcripts| NV[(news_videos)]
+    YT["YouTube RSS\n(40 channels)"] -->|transcripts| NV[(news_videos)]
     NV -->|Haiku summarize| NI[(news_items)]
     NI -->|exact/spaceless match| US[(unified_sites\nunified_site_names)]
     NI -->|unmatched names| UC[(user_contributions\nsource='lyra')]
@@ -63,6 +63,8 @@ flowchart TD
 
     SCORE -->|"score >= 55\n+ coords"| PROMOTE["Promote to\nunified_sites\n(source='lyra')"]
     SCORE -->|"score < 55"| KEEP["status='enriched'\n(Radar card)"]
+
+    NI -->|"weekly (Sunday)\nSonnet article"| NA[(news_articles)]
 ```
 
 ---
@@ -71,7 +73,7 @@ flowchart TD
 
 ### 1. Fetch (`transcript_fetcher.py`)
 
-Fetches recent videos from 35 seed YouTube archaeology channels via RSS. Downloads transcripts (youtube-transcript-api, optional Webshare proxy) and metadata (yt-dlp). Skips videos < 5 minutes.
+Fetches recent videos from 40 seed YouTube archaeology channels via RSS. Downloads transcripts (youtube-transcript-api, optional Webshare proxy) and metadata (yt-dlp). Skips videos < 5 minutes.
 
 - **Reads:** `news_channels` (enabled only)
 - **Writes:** `news_videos` (status=`transcribed` or `failed`)
@@ -154,7 +156,7 @@ Soft-deletes semantic duplicates. Feature extraction: numbers, words > 3 chars, 
 
 ### 9. Screenshots (`screenshot_extractor.py`)
 
-Extracts one frame per news item at the post timestamp. Two-step: yt-dlp downloads 3s clip (max 480p), ffmpeg extracts WebP frame (q75). 4 parallel workers, 3 retries with proxy rotation.
+Extracts one frame per news item at the post timestamp. Two-step: yt-dlp downloads 3s clip (max 480p), ffmpeg extracts WebP frame (q75). 3 retries via Webshare auto-rotating proxy.
 
 - **Reads:** `news_items.timestamp_seconds`
 - **Writes:** `news_items.screenshot_url` -> `public/data/news/screenshots/{video_id}_{ts}.webp`
@@ -223,6 +225,19 @@ flowchart TD
 
 Promotion threshold: **55** (requires coords + passes date cutoff).
 
+### Weekly Article (`article_generator.py`)
+
+Generates a magazine-quality weekly digest from the top-scoring news items. Runs Sunday evenings (20:00 UTC). Items are grouped by `news_category`, assigned monotonic citation numbers `[N]`, and processed through 4 LLM steps:
+
+1. **Write body** (Sonnet 4.6, 64k max tokens) — all section payloads passed as plain text with `[N]` citation numbers. Model writes inline `[N]` references naturally.
+2. **Verify** (Sonnet 4.6, adaptive thinking, 64k max tokens) — fact-checks article against source facts. Outputs `[START_VERIFIED]...[END_VERIFIED]` markers around corrected article.
+3. **Polish** (Sonnet 4.6, 64k max tokens) — editorial coherence pass. Smooths transitions, unifies tone. No source documents.
+4. **Headline + TLDR** (Sonnet 4.6, structured output) — generates headline and summary from the polished body.
+
+- **Reads:** `news_items` (significance >= 7 preferred, min 5 items), `news_videos`, `news_channels`
+- **Writes:** `news_articles` (title, content, summary, week_start, week_end, video_ids)
+- **Guard:** Skips if article for this week already exists (use `--force` in test script to override)
+
 ---
 
 ## Database Tables
@@ -235,7 +250,18 @@ erDiagram
     user_contributions }o--o| unified_sites : "promoted_site_id"
     unified_sites ||--o{ unified_site_names : "site_id"
     unified_sites }o--|| source_meta : "source_id"
+    news_items }o--o| news_articles : "video_ids[]"
 
+    news_articles {
+        uuid id PK
+        string title
+        text content
+        string summary
+        datetime week_start
+        datetime week_end
+        string[] video_ids
+        datetime published_at
+    }
     news_channels {
         string id PK "YouTube channel_id"
         string name
@@ -256,12 +282,17 @@ erDiagram
         uuid id PK
         string video_id FK
         string headline
+        string summary
         string[] facts
         string site_name_extracted
         uuid site_id FK "nullable"
         string post_text
+        int significance "1-10"
+        string news_category
+        string speculative_tag "nullable"
         string screenshot_url
         int timestamp_seconds
+        timestamp verified_at
     }
     user_contributions {
         uuid id PK
@@ -370,12 +401,13 @@ Article generation steps (write, verify, polish) use plain text output — they 
 
 ### `fill_contrib_from_site()` (`site_matcher.py`)
 
-Canonical fill-if-missing function used by both matcher and identifier. Copies **10 fields** from a `UnifiedSite` into a `UserContribution`:
+Canonical fill-if-missing function used by both matcher and identifier. Copies up to **10 fields** from a `UnifiedSite` into a `UserContribution`:
 
 ```
 country, site_type, period_name, period_start,
 lat, lon, description, thumbnail_url,
-wikipedia_url (from site.source_url)
+wikipedia_url (from site.source_url if wikipedia.org),
+wikidata_id (from site.source_url if wikidata.org)
 ```
 
 Called from 3 locations:
@@ -397,10 +429,10 @@ PostGIS reverse geocoding: lat/lon -> country name. Fallback when Wikidata/AI do
 
 ```mermaid
 flowchart TD
-    BOOT["Container Start"] --> MIG["Auto-migrations\n(ALTER TABLE for new columns)"]
-    MIG --> SEED["Seed source_meta\n+ news_channels"]
-    SEED --> RESET["Versioned resets\n(v4-v15 + named resets)"]
-    RESET --> LOOP["Main Loop"]
+    BOOT["Container Start"] --> TABLES["create_all_tables()"]
+    TABLES --> MIG["_run_migrations()\n(schema + versioned resets)"]
+    MIG --> SEED["seed_channels()\n+ seed_lyra_source()\n+ seed community source"]
+    SEED --> LOOP["Main Loop"]
 
     LOOP --> CHECK{"Elapsed\n>= 3600s?"}
     CHECK -->|yes| RUN["run_pipeline()\n11 stages in order"]
@@ -418,10 +450,11 @@ flowchart TD
 ```
 
 The orchestrator runs `main()` which:
-1. Applies auto-migrations (new columns, indexes, table renames)
-2. Seeds `source_meta` ('lyra') and `news_channels` (39 YouTube channels)
-3. Applies versioned resets (v4-v15 + named resets) to re-queue items when prompts/logic change
-4. Enters infinite loop: run pipeline every hour, generate article weekly, heartbeat after each cycle
+1. `create_all_tables()` — ensures all SQLAlchemy models exist
+2. `_run_migrations()` — schema migrations (new columns, indexes) + versioned resets (v4-v16 + named resets) to re-queue items when prompts/logic change
+3. `seed_channels()` — 40 YouTube archaeology channels
+4. `seed_lyra_source()` + seed `ancient_nerds_community` source
+5. Enters infinite loop: run pipeline every hour, generate article weekly, heartbeat after each cycle
 
 ---
 
@@ -485,7 +518,7 @@ flowchart LR
 
 ### Lyra RAG Tools
 
-11 tools are available to the agent, mapped to collections:
+10 tools are available to the agent, mapped to collections:
 
 | Tool | Collection | Description |
 |------|-----------|-------------|
@@ -493,11 +526,10 @@ flowchart LR
 | `get_site_details` | — (SQL) | Full site info by UUID or name |
 | `search_news` | — (SQL) | Recent news by keyword, channel, days_back |
 | `get_empire_data` | — (JSON) | Full Seshat polity data by ID |
-| `vector_search` | any | Deep-dive hybrid search with metadata filters |
+| `vector_search` | any | Deep-dive hybrid search with metadata filters (including transcripts via collection="transcripts") |
 | `search_radar` | — (SQL) | Lyra's auto-discovered sites |
 | `list_channels` | — (SQL) | Monitored YouTube channels |
 | `get_site_images` | — (SQL) | Wikimedia Commons images for a site (returns pre-formatted markdown with attribution links to Commons) |
-| `search_transcripts` | transcripts | Hybrid search on transcript chunks with YouTube deep links |
 | `search_articles` | articles | Hybrid search on weekly digest article chunks |
 | `search_empires` | empires | Hybrid search on Seshat polity data |
 
