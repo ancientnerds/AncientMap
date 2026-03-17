@@ -340,8 +340,8 @@ def _verify_article(
     try:
         response = call_api(
             model=settings.model_article_verify,
-            max_tokens=16000,
-            thinking={"type": "enabled", "budget_tokens": 5000},
+            max_tokens=32000,
+            thinking={"type": "enabled", "budget_tokens": 8000},
             system=instructions,
             messages=[
                 {"role": "user", "content": "Verify the article draft against the source facts."}
@@ -575,14 +575,20 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
 
         # Fact-check with extended thinking
         logger.info("Verifying article against source facts (extended thinking)")
+        logger.info("Draft body length: %d chars", len(draft_body))
         verified_body = _verify_article(draft_body, facts_by_citation, settings)
+        logger.info("Verified body length: %d chars", len(verified_body))
 
         # Editorial coherence pass
         logger.info("Polishing article for coherence")
         polished_body = _polish_article(verified_body, settings)
 
         if len(polished_body) < 200:
-            logger.error("Polished article body too short (%d chars), aborting", len(polished_body))
+            logger.error(
+                "Polished article body too short (%d chars), aborting. First 200 chars: %s",
+                len(polished_body),
+                polished_body[:200],
+            )
             return False
 
         # Generate headline + TLDR
