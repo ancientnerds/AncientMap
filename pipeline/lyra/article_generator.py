@@ -267,42 +267,50 @@ def _build_speculative_payload(items: list[dict]) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _write_section(
-    payload: str,
-    is_speculative: bool,
+def _write_article_body(
+    sections: list[dict],
+    speculative: list[dict],
     settings: LyraSettings,
-    section_label: str = "",
 ) -> str:
-    """Call LLM to write one section of the article."""
+    """Write the complete article body in a single LLM call.
+
+    All section payloads are passed as separate documents so the model
+    has full context and can write coherent transitions between sections.
+    """
     instructions = _load_prompt("article_body.txt")
 
-    tone_instruction = ""
-    if is_speculative:
-        tone_instruction = (
-            "Use a curious, open tone: 'An intriguing if unproven theory...' — "
-            "lean toward entertainment value, let the reader decide. "
-            "Not skeptical, not credulous."
-        )
+    # Build one document per section
+    documents: list[dict] = []
+    section_order: list[str] = []
+    for section in sections:
+        payload = _build_section_payload(section)
+        label = f"## {section['label']}"
+        documents.append({"title": label, "data": payload})
+        section_order.append(label)
 
-    heading = section_label or "## Section"
-    user_message = heading
-    if tone_instruction:
-        user_message += f"\n\nTone: {tone_instruction}"
-    user_message += "\n\nWrite this section using the source document."
+    if speculative:
+        payload = _build_speculative_payload(speculative)
+        documents.append({"title": "## Beyond the Mainstream", "data": payload})
+        section_order.append("## Beyond the Mainstream")
 
-    documents = [{"title": heading, "data": payload}]
+    section_list = "\n".join(f"  {i+1}. {s}" for i, s in enumerate(section_order))
+    user_message = (
+        f"Write the complete weekly archaeological digest.\n\n"
+        f"Sections in order:\n{section_list}\n\n"
+        f"Write all sections in this exact order. Each section uses facts "
+        f"from its corresponding source document only."
+    )
 
     try:
         response = call_api(
             model=settings.model_article,
             max_tokens=settings.max_tokens,
-            reasoning_effort="medium",
             system=instructions,
             messages=[{"role": "user", "content": user_message}],
             documents=documents,
         )
     except LyraAPIError as e:
-        logger.warning(f"Article section API error: {e}")
+        logger.error(f"Article body API error: {e}")
         return ""
     text = next((b.text for b in response.content if hasattr(b, "text")), "")
     return text.strip()
@@ -330,18 +338,16 @@ def _verify_article(
     try:
         response = call_api(
             model=settings.model_verify,
-            max_tokens=settings.max_tokens,
-            temperature=0.0,
-            reasoning_effort="high",
+            max_tokens=16000,
+            thinking={"type": "enabled", "budget_tokens": 5000},
             system=instructions,
             messages=[
                 {"role": "user", "content": "Verify the article draft against the source facts."}
             ],
             documents=documents,
-            prefill="[CHANGES]\n",
         )
     except LyraAPIError as e:
-        logger.warning(f"Article verification API error: {e}")
+        logger.error(f"Article verification API error: {e}")
         return full_body
     text = next((b.text for b in response.content if hasattr(b, "text")), "")
 
@@ -457,26 +463,44 @@ def _format_sources(sources: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _polish_article(
+    verified_body: str,
+    settings: LyraSettings,
+) -> str:
+    """Final editorial coherence pass — smooth transitions, unify tone."""
+    instructions = _load_prompt("article_polish.txt")
+
+    documents = [{"title": "Article Draft", "data": verified_body}]
+
+    try:
+        response = call_api(
+            model=settings.model_article,
+            max_tokens=settings.max_tokens,
+            system=instructions,
+            messages=[
+                {"role": "user", "content": "Polish this article for flow and tone consistency."}
+            ],
+            documents=documents,
+        )
+    except LyraAPIError as e:
+        logger.warning(f"Article polish API error: {e}")
+        return verified_body
+    text = next((b.text for b in response.content if hasattr(b, "text")), "")
+    return text.strip() or verified_body
+
+
 def _assemble_article(
     tldr: str,
-    sections_md: list[str],
-    speculative_md: str | None,
+    body: str,
     sources_md: str,
 ) -> str:
-    """Combine TLDR + section bodies + speculative section + sources."""
+    """Combine TLDR + article body + sources footer."""
     parts: list[str] = []
 
     if tldr:
         parts.append(f"*{tldr}*")
 
-    parts.extend(sections_md)
-
-    if speculative_md:
-        disclaimer = (
-            "> *The following covers theories from outside mainstream archaeology. "
-            "Included for completeness — evaluate critically.*"
-        )
-        parts.append(f"{disclaimer}\n\n{speculative_md}")
+    parts.append(body)
 
     # Sources footer
     parts.append(f"### Sources\n\n{sources_md}")
@@ -530,64 +554,34 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
             item["citation"]: item.get("facts", []) for item in all_items if item.get("facts")
         }
 
-        # Write each section via LLM
-        section_texts: list[str] = []
-        for section in sections:
-            payload = _build_section_payload(section)
-            logger.info(f"Writing section: {section['label']} ({len(section['items'])} items)")
-            text = _write_section(
-                payload,
-                is_speculative=False,
-                settings=settings,
-                section_label=f"## {section['label']}",
-            )
-            section_texts.append(text)
-
-        # Write speculative section if any
-        speculative_text = None
+        # Write complete article body in a single LLM call
+        section_labels = [s["label"] for s in sections]
         if speculative:
-            payload = _build_speculative_payload(speculative)
-            logger.info(f"Writing speculative section ({len(speculative)} items)")
-            speculative_text = _write_section(
-                payload,
-                is_speculative=True,
-                settings=settings,
-                section_label="## Beyond the Mainstream",
-            )
+            section_labels.append("Beyond the Mainstream")
+        logger.info(f"Writing article body: {', '.join(section_labels)}")
+        draft_body = _write_article_body(sections, speculative, settings)
 
-        # Assemble pre-verification body
-        pre_body = "\n\n---\n\n".join(section_texts)
-        if speculative_text:
-            pre_body += "\n\n---\n\n" + speculative_text
+        if not draft_body:
+            logger.error("Article body generation returned empty")
+            return False
 
-        # Fact-check full article
-        logger.info("Verifying article against source facts")
-        verified_body = _verify_article(pre_body, facts_by_citation, settings)
+        # Fact-check with extended thinking
+        logger.info("Verifying article against source facts (extended thinking)")
+        verified_body = _verify_article(draft_body, facts_by_citation, settings)
 
-        # Split verified body back into sections (by --- separator)
-        verified_parts = [p.strip() for p in verified_body.split("\n---\n") if p.strip()]
-
-        # Re-separate mainstream sections vs speculative
-        # The speculative section starts with "> *The following..." or "## Beyond"
-        verified_sections = []
-        verified_speculative = None
-        for part in verified_parts:
-            if part.startswith("## Beyond") or "Beyond the Mainstream" in part[:50]:
-                verified_speculative = part
-            else:
-                verified_sections.append(part)
+        # Editorial coherence pass
+        logger.info("Polishing article for coherence")
+        polished_body = _polish_article(verified_body, settings)
 
         # Generate headline + TLDR
         logger.info("Generating headline and TLDR")
-        headline, tldr = _generate_headline_tldr(verified_body, settings)
+        headline, tldr = _generate_headline_tldr(polished_body, settings)
 
         # Format sources
         sources_md = _format_sources(sources)
 
         # Assemble final markdown
-        article_content = _assemble_article(
-            tldr, verified_sections, verified_speculative, sources_md
-        )
+        article_content = _assemble_article(tldr, polished_body, sources_md)
 
         # Collect unique video IDs
         video_ids = list({item["video_id"] for item in all_items})

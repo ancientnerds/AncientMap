@@ -275,19 +275,9 @@ def _call_anthropic_api(
                     messages[i]["content"] = content_blocks
                 break
 
-    # If caller requested json_schema output, use prefill to enforce valid JSON.
-    # Anthropic doesn't support response_format natively; prefill '{"' forces the
-    # model to open a JSON object with a double-quoted key.
+    # Extract all non-standard params before building create_kwargs
     response_format = kwargs.pop("response_format", None)
-    if response_format and response_format.get("type") == "json_schema" and not prefill:
-        prefill = "{"
-
-    # Handle prefill — append as assistant message
-    if prefill:
-        messages.append({"role": "assistant", "content": prefill})
-
-    # Drop unsupported params
-    kwargs.pop("thinking", None)
+    thinking_config = kwargs.pop("thinking", None)
     kwargs.pop("tool_choice", None)
     kwargs.pop("tools", None)
     kwargs.pop("reasoning_effort", None)
@@ -296,6 +286,20 @@ def _call_anthropic_api(
     max_tokens = kwargs.pop("max_tokens", settings.max_tokens)
     temperature = kwargs.pop("temperature", None)
 
+    # Extended thinking is incompatible with prefill and temperature
+    if thinking_config is not None:
+        prefill = None
+
+    # If caller requested json_schema output, use prefill to enforce valid JSON.
+    # Anthropic doesn't support response_format natively; prefill '{' forces the
+    # model to open a JSON object with double-quoted keys.
+    if response_format and response_format.get("type") == "json_schema" and not prefill:
+        prefill = "{"
+
+    # Handle prefill — append as assistant message
+    if prefill:
+        messages.append({"role": "assistant", "content": prefill})
+
     create_kwargs: dict = {
         "model": model,
         "messages": messages,
@@ -303,7 +307,11 @@ def _call_anthropic_api(
     }
     if system_text:
         create_kwargs["system"] = system_text
-    if temperature is not None:
+
+    if thinking_config is not None:
+        create_kwargs["thinking"] = thinking_config
+        # Temperature must be omitted when thinking is enabled
+    elif temperature is not None:
         create_kwargs["temperature"] = max(settings.temperature_min, temperature)
 
     response = client.messages.create(**create_kwargs)
