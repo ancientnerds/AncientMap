@@ -72,10 +72,15 @@ IDENTIFY_SITE_SCHEMA = {
     "properties": {
         "is_site": {"type": "boolean"},
         "site_name": {"type": "string"},
-        "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
+        "confidence": {
+            "anyOf": [
+                {"type": "string", "enum": ["high", "medium", "low"]},
+                {"type": "null"},
+            ],
+        },
         "reasoning": {"type": "string"},
     },
-    "required": ["is_site", "site_name", "reasoning"],
+    "required": ["is_site", "site_name", "confidence", "reasoning"],
     "additionalProperties": False,
 }
 

@@ -38,11 +38,10 @@ SUMMARY_SCHEMA = {
     "properties": {
         "key_topics": {
             "type": "array",
-            "maxItems": 20,
             "items": {
                 "type": "object",
                 "properties": {
-                    "headline": {"type": "string", "maxLength": 100},
+                    "headline": {"type": "string"},
                     "timestamp_range": {"type": "string"},
                     "facts": {"type": "array", "items": {"type": "string"}},
                     "primary_site": {

@@ -29,14 +29,23 @@ PRE_RESEARCH_SCHEMA = {
     "properties": {
         "alternative_names": {"type": "array", "items": {"type": "string"}},
         "country": {"type": "string"},
-        "region": {"type": "string"},
-        "approximate_period": {"type": "string"},
-        "site_type": {"type": "string"},
-        "brief_description": {"type": "string"},
+        "region": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "approximate_period": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "site_type": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "brief_description": {"anyOf": [{"type": "string"}, {"type": "null"}]},
         "well_known": {"type": "boolean"},
-        "search_strategy": {"type": "string"},
+        "search_strategy": {"anyOf": [{"type": "string"}, {"type": "null"}]},
     },
-    "required": ["alternative_names", "country", "well_known"],
+    "required": [
+        "alternative_names",
+        "country",
+        "region",
+        "approximate_period",
+        "site_type",
+        "brief_description",
+        "well_known",
+        "search_strategy",
+    ],
     "additionalProperties": False,
 }
 
@@ -44,11 +53,11 @@ RESEARCH_SYNTHESIS_SCHEMA = {
     "type": "object",
     "properties": {
         "source": {"type": "string", "enum": ["wikidata", "wikipedia", "geonames", "none"]},
-        "id": {"type": "string"},
+        "id": {"anyOf": [{"type": "string"}, {"type": "null"}]},
         "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
         "reasoning": {"type": "string"},
     },
-    "required": ["source", "confidence", "reasoning"],
+    "required": ["source", "id", "confidence", "reasoning"],
     "additionalProperties": False,
 }
 

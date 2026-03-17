@@ -41,7 +41,7 @@ RESCORE_SCHEMA = {
         },
         "reason": {"type": "string"},
     },
-    "required": ["significance", "news_category", "reason"],
+    "required": ["significance", "news_category", "speculative_tag", "reason"],
     "additionalProperties": False,
 }
 

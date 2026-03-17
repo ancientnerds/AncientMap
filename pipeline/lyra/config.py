@@ -325,7 +325,6 @@ def _call_anthropic_api(
         create_kwargs["output_config"] = {
             "format": {
                 "type": "json_schema",
-                "name": js.get("name", "response"),
                 "schema": js["schema"],
             }
         }
