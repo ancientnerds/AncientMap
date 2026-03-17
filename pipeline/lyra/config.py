@@ -115,6 +115,7 @@ class LyraSettings(BaseSettings):
     model_identify_escalation: str = "claude-haiku-4-5-20251001"
     model_rescore: str = "claude-haiku-4-5-20251001"
     model_relevance: str = "claude-haiku-4-5-20251001"
+    model_cluster: str = "claude-sonnet-4-6"
 
     # Max output tokens per LLM call
     max_tokens: int = 8192

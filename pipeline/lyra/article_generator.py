@@ -18,6 +18,7 @@ from pipeline.lyra.config import (
     LyraAPIError,
     LyraSettings,
     call_api,
+    parse_json_response,
 )
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,24 @@ CATEGORY_LABELS = {
 CATEGORY_ORDER = list(CATEGORY_LABELS.keys())
 
 MAX_ITEMS = 25
+SAME_VIDEO_PENALTY = 3
+SAME_CATEGORY_PENALTY = 1
+
+CLUSTER_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "clusters": {
+            "type": "array",
+            "items": {
+                "type": "array",
+                "items": {"type": "integer"},
+            },
+        },
+        "reasoning": {"type": "string"},
+    },
+    "required": ["clusters", "reasoning"],
+    "additionalProperties": False,
+}
 
 HEADLINE_SCHEMA = {
     "type": "object",
@@ -75,6 +94,119 @@ def _fmt_timestamp(seconds: int | None) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Step 0: Cluster related items via LLM
+# ---------------------------------------------------------------------------
+
+
+def _cluster_related_items(
+    items: list[dict],
+    settings: LyraSettings,
+) -> list[dict]:
+    """Group items covering the same discovery via LLM, merge facts into winners.
+
+    Returns a new list with runner-ups removed and winners enriched with
+    merged_sources containing unique facts from corroborating channels.
+    """
+    if len(items) < 2:
+        return items
+
+    # Build numbered list for the LLM
+    item_lines = []
+    for idx, item in enumerate(items):
+        summary = (item.get("summary") or "")[:100]
+        site = item.get("site_name") or "unknown"
+        cat = item.get("news_category") or "general"
+        item_lines.append(
+            f'{idx}: "{item["headline"]}" — {summary}... '
+            f"(site: {site}, cat: {cat})"
+        )
+
+    instructions = _load_prompt("article_cluster.txt")
+    user_message = (
+        "Identify clusters among these archaeological news items:\n\n"
+        + "\n".join(item_lines)
+    )
+
+    try:
+        response = call_api(
+            model=settings.model_cluster,
+            max_tokens=2048,
+            temperature=0.0,
+            system=instructions,
+            messages=[{"role": "user", "content": user_message}],
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "ArticleClusters",
+                    "strict": True,
+                    "schema": CLUSTER_SCHEMA,
+                },
+            },
+        )
+        result = parse_json_response(response.text)
+    except (LyraAPIError, Exception) as e:
+        logger.warning(f"Clustering LLM call failed, skipping: {e}")
+        return items
+
+    clusters = result.get("clusters", [])
+    reasoning = result.get("reasoning", "")
+    if clusters:
+        logger.info(f"Clustering found {len(clusters)} groups: {reasoning}")
+
+    # Track which indices are consumed as runner-ups
+    runner_indices: set[int] = set()
+
+    for cluster in clusters:
+        # Validate indices
+        valid = [i for i in cluster if 0 <= i < len(items)]
+        if len(valid) < 2:
+            continue
+
+        # Sort by significance desc — winner is first
+        valid.sort(key=lambda i: items[i].get("significance", 0), reverse=True)
+        winner_idx = valid[0]
+        winner = items[winner_idx]
+
+        # Collect unique facts from runner-ups
+        winner_facts_lower = {f.lower() for f in (winner.get("facts") or [])}
+        merged_sources = []
+
+        for runner_idx in valid[1:]:
+            runner = items[runner_idx]
+            unique_facts = [
+                f
+                for f in (runner.get("facts") or [])
+                if f.lower() not in winner_facts_lower
+            ]
+            if unique_facts:
+                merged_sources.append(
+                    {
+                        "facts": unique_facts,
+                        "video_id": runner["video_id"],
+                        "video_title": runner["video_title"],
+                        "channel_name": runner["channel_name"],
+                        "timestamp_seconds": runner["timestamp_seconds"],
+                    }
+                )
+                # Add to known facts so later runners don't duplicate
+                winner_facts_lower.update(f.lower() for f in unique_facts)
+            runner_indices.add(runner_idx)
+
+        if merged_sources:
+            winner["merged_sources"] = merged_sources
+            # Boost significance for multi-source corroboration, cap at 10
+            winner["significance"] = min(
+                10, (winner.get("significance") or 0) + 1
+            )
+            logger.info(
+                f"Merged {len(merged_sources)} sources into: {winner['headline']}"
+            )
+
+    # Return winners + singletons (exclude runner-ups)
+    return [item for idx, item in enumerate(items) if idx not in runner_indices]
+
+
+# ---------------------------------------------------------------------------
 # Step 1: Collect items from the database
 # ---------------------------------------------------------------------------
 
@@ -83,6 +215,7 @@ def _collect_article_items(
     week_start: datetime,
     week_end: datetime,
     session,
+    settings: LyraSettings,
     min_items: int = 5,
 ) -> list[dict]:
     """Query top NewsItems for the week, ordered by significance.
@@ -123,14 +256,37 @@ def _collect_article_items(
             }
         )
 
-    # Take high-significance items first, then fill up to min_items from the rest
-    high = [i for i in items if i["significance"] >= 7]
-    if len(high) < min_items:
-        remaining = [i for i in items if i["significance"] < 7]
-        high.extend(remaining[: min_items - len(high)])
+    # Cluster related items before diversity selection
+    items = _cluster_related_items(items, settings)
 
-    # Cap at MAX_ITEMS (already sorted by significance desc)
-    return high[:MAX_ITEMS]
+    # Greedy selection with diversity penalties: each repeat from the same
+    # video or same category reduces effective significance so fresh sources
+    # and fresh topics rise in the ranking.
+    selected: list[dict] = []
+    video_counts: dict[str, int] = {}
+    category_counts: dict[str, int] = {}
+
+    while items and len(selected) < MAX_ITEMS:
+        for item in items:
+            vid_penalty = SAME_VIDEO_PENALTY * video_counts.get(item["video_id"], 0)
+            cat_penalty = SAME_CATEGORY_PENALTY * category_counts.get(item["news_category"] or "general", 0)
+            item["_eff"] = item["significance"] - vid_penalty - cat_penalty
+
+        items.sort(key=lambda x: x["_eff"], reverse=True)
+        best = items.pop(0)
+
+        if best["_eff"] < 1 and len(selected) >= min_items:
+            break
+
+        selected.append(best)
+        video_counts[best["video_id"]] = video_counts.get(best["video_id"], 0) + 1
+        cat = best["news_category"] or "general"
+        category_counts[cat] = category_counts.get(cat, 0) + 1
+
+    for item in selected:
+        item.pop("_eff", None)
+
+    return selected
 
 
 # ---------------------------------------------------------------------------
@@ -191,6 +347,21 @@ def _group_and_cite(
                 }
             )
             citation += 1
+
+            # Assign citations for merged corroborating sources
+            for ms in item.get("merged_sources", []):
+                ms["citation"] = citation
+                sources.append(
+                    {
+                        "citation": citation,
+                        "channel_name": ms["channel_name"],
+                        "video_title": ms["video_title"],
+                        "video_id": ms["video_id"],
+                        "timestamp_seconds": ms["timestamp_seconds"],
+                    }
+                )
+                citation += 1
+
         label = CATEGORY_LABELS.get(cat, "In Brief")
         sections.append({"category": cat, "label": label, "items": cat_items})
 
@@ -207,6 +378,19 @@ def _group_and_cite(
             }
         )
         citation += 1
+
+        for ms in item.get("merged_sources", []):
+            ms["citation"] = citation
+            sources.append(
+                {
+                    "citation": citation,
+                    "channel_name": ms["channel_name"],
+                    "video_title": ms["video_title"],
+                    "video_id": ms["video_id"],
+                    "timestamp_seconds": ms["timestamp_seconds"],
+                }
+            )
+            citation += 1
 
     return sections, speculative, sources
 
@@ -231,6 +415,13 @@ def _build_section_payload(section: dict) -> str:
         if item.get("facts"):
             lines.append("Key facts:")
             for fact in item["facts"]:
+                lines.append(f"  - {fact}")
+
+        for ms in item.get("merged_sources", []):
+            lines.append(
+                f"Corroborated by [{ms['citation']}] ({ms['channel_name']}):"
+            )
+            for fact in ms["facts"]:
                 lines.append(f"  - {fact}")
 
         if item.get("screenshot_url"):
@@ -543,7 +734,7 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
             return False
 
     with get_session() as session:
-        items = _collect_article_items(week_start, week_end, session)
+        items = _collect_article_items(week_start, week_end, session, settings)
 
         if not items:
             logger.info("No significant items this week for article")
@@ -554,11 +745,15 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
         # Group and assign citations
         sections, speculative, sources = _group_and_cite(items)
 
-        # Build facts lookup for verification
+        # Build facts lookup for verification (including merged sources)
         all_items = [i for s in sections for i in s["items"]] + speculative
-        facts_by_citation = {
-            item["citation"]: item.get("facts", []) for item in all_items if item.get("facts")
-        }
+        facts_by_citation: dict[int, list[str]] = {}
+        for item in all_items:
+            if item.get("facts"):
+                facts_by_citation[item["citation"]] = item["facts"]
+            for ms in item.get("merged_sources", []):
+                if ms.get("facts"):
+                    facts_by_citation[ms["citation"]] = ms["facts"]
 
         # Write complete article body in a single LLM call
         section_labels = [s["label"] for s in sections]
