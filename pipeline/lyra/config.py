@@ -108,9 +108,9 @@ class LyraSettings(BaseSettings):
     temperature_min: float = 0.0
     model_summarize: str = "claude-haiku-4-5-20251001"
     model_post: str = "claude-sonnet-4-6"
-    model_verify: str = "claude-sonnet-4-6"
-    model_article: str = "claude-sonnet-4-6"
-    model_article_verify: str = "claude-sonnet-4-6"
+    model_verify: str = "claude-opus-4-6"
+    model_article: str = "claude-opus-4-6"
+    model_article_verify: str = "claude-opus-4-6"
     model_identify: str = "claude-haiku-4-5-20251001"
     model_identify_escalation: str = "claude-haiku-4-5-20251001"
     model_rescore: str = "claude-haiku-4-5-20251001"
