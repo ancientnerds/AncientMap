@@ -13,7 +13,6 @@ from pipeline.lyra.config import (
     LyraSettings,
     _get_settings,
     call_api,
-    parse_prefilled_json,
 )
 from pipeline.lyra.transcript_fetcher import extract_transcript_segment, parse_timestamp_to_seconds
 
@@ -113,7 +112,7 @@ def verify_single_post(
         logger.warning(f"Empty verification response for item {item.id}")
         return None
     try:
-        return parse_prefilled_json(text_block)
+        return json.loads(text_block)
     except (json.JSONDecodeError, KeyError, ValueError):
         logger.warning("Failed to parse verification result for item %s", item.id)
         return None

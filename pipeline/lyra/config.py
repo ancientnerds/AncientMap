@@ -25,9 +25,22 @@ class LyraAPIError(Exception):
 # Normalized response — common shape for all backends
 # ---------------------------------------------------------------------------
 @dataclass
+class Citation:
+    """A single citation pointer into a source document."""
+
+    cited_text: str = ""
+    document_index: int = 0
+    document_title: str = ""
+    start_char_index: int = 0
+    end_char_index: int = 0
+    type: str = "char_location"
+
+
+@dataclass
 class TextBlock:
     type: str = "text"
     text: str = ""
+    citations: list[Citation] = field(default_factory=list)
 
 
 @dataclass
@@ -85,8 +98,9 @@ class LyraSettings(BaseSettings):
     temperature_min: float = 0.0
     model_summarize: str = "claude-haiku-4-5-20251001"
     model_post: str = "claude-haiku-4-5-20251001"
-    model_verify: str = "claude-sonnet-4-5-20251022"
+    model_verify: str = "claude-haiku-4-5-20251001"
     model_article: str = "claude-sonnet-4-5-20251022"
+    model_article_verify: str = "claude-sonnet-4-5-20251022"
     model_identify: str = "claude-haiku-4-5-20251001"
     model_identify_escalation: str = "claude-haiku-4-5-20251001"
     model_rescore: str = "claude-haiku-4-5-20251001"
@@ -290,11 +304,11 @@ def _call_anthropic_api(
     if thinking_config is not None:
         prefill = None
 
-    # If caller requested json_schema output, use prefill to enforce valid JSON.
-    # Anthropic doesn't support response_format natively; prefill '{' forces the
-    # model to open a JSON object with double-quoted keys.
-    if response_format and response_format.get("type") == "json_schema" and not prefill:
-        prefill = "{"
+    # Native structured output: API guarantees valid JSON matching schema.
+    # Replaces the old "{" prefill hack that caused parse failures.
+    use_structured_output = response_format and response_format.get("type") == "json_schema"
+    if use_structured_output:
+        prefill = None  # structured output is incompatible with prefill
 
     # Handle prefill — append as assistant message
     if prefill:
@@ -305,6 +319,16 @@ def _call_anthropic_api(
         "messages": messages,
         "max_tokens": max_tokens,
     }
+
+    if use_structured_output:
+        js = response_format["json_schema"]
+        create_kwargs["output_config"] = {
+            "format": {
+                "type": "json_schema",
+                "name": js.get("name", "response"),
+                "schema": js["schema"],
+            }
+        }
     if system_text:
         create_kwargs["system"] = system_text
 
@@ -320,10 +344,27 @@ def _call_anthropic_api(
 
 def _normalize_anthropic_response(response) -> NormalizedResponse:
     """Wrap Anthropic Messages response into NormalizedResponse."""
-    text = "".join(b.text for b in response.content if hasattr(b, "text") and b.type == "text")
+    blocks = []
+    for b in response.content:
+        if hasattr(b, "text") and b.type == "text":
+            cites = []
+            if hasattr(b, "citations") and b.citations:
+                for c in b.citations:
+                    cites.append(
+                        Citation(
+                            cited_text=getattr(c, "cited_text", ""),
+                            document_index=getattr(c, "document_index", 0),
+                            document_title=getattr(c, "document_title", ""),
+                            start_char_index=getattr(c, "start_char_index", 0),
+                            end_char_index=getattr(c, "end_char_index", 0),
+                            type=getattr(c, "type", "char_location"),
+                        )
+                    )
+            blocks.append(TextBlock(text=b.text, citations=cites))
+
     stop_reason = "max_tokens" if response.stop_reason == "max_tokens" else "end_turn"
     return NormalizedResponse(
-        content=[TextBlock(text=text)],
+        content=blocks,
         stop_reason=stop_reason,
         model=response.model or "",
         usage={

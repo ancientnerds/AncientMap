@@ -11,7 +11,6 @@ from pipeline.lyra.config import (
     LyraAPIError,
     LyraSettings,
     call_api,
-    parse_prefilled_json,
 )
 
 logger = logging.getLogger(__name__)
@@ -133,7 +132,7 @@ def generate_posts_for_video(
         logger.warning(f"Empty response content for {video.id}")
         return 0
     try:
-        posts_data = parse_prefilled_json(text_block).get("posts", [])
+        posts_data = json.loads(text_block).get("posts", [])
     except (json.JSONDecodeError, KeyError, ValueError) as e:
         logger.warning(f"Failed to parse post generation JSON for {video.id}: {e}")
         return 0

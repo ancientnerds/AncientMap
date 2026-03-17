@@ -14,7 +14,6 @@ from pipeline.lyra.config import (
     LyraAPIError,
     LyraSettings,
     call_api,
-    parse_prefilled_json,
 )
 from pipeline.lyra.transcript_fetcher import extract_transcript_segment, parse_timestamp_to_seconds
 
@@ -166,7 +165,7 @@ def _check_relevance(
         return None
 
     try:
-        result = parse_prefilled_json(text_block)
+        result = json.loads(text_block)
     except (json.JSONDecodeError, KeyError, ValueError) as e:
         logger.warning(f"Relevance gate: bad JSON for {video.id}: {e}")
         return None
@@ -296,7 +295,7 @@ def summarize_video(
         logger.warning(f"Empty response content for {video.id}")
         return False
     try:
-        summary_data = parse_prefilled_json(text_block)
+        summary_data = json.loads(text_block)
     except (json.JSONDecodeError, KeyError, ValueError) as e:
         logger.warning(f"Failed to parse summary JSON for {video.id}: {e}")
         return False

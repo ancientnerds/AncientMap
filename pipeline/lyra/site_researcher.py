@@ -14,7 +14,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from pipeline.lyra.config import LyraAPIError, LyraSettings, call_api, parse_prefilled_json
+from pipeline.lyra.config import LyraAPIError, LyraSettings, call_api
 from pipeline.utils.http import fetch_with_retry
 from pipeline.utils.text import normalize_transliteration
 
@@ -179,7 +179,14 @@ def _pre_research(
             reasoning_effort="high",
             messages=[{"role": "user", "content": prompt}],
             system=PRE_RESEARCH_SYSTEM,
-            prefill="{",
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "PreResearch",
+                    "strict": True,
+                    "schema": PRE_RESEARCH_SCHEMA,
+                },
+            },
         )
     except LyraAPIError as e:
         logger.warning(f"  [{name}] Pre-research API error: {e}")
@@ -188,7 +195,7 @@ def _pre_research(
     for block in response.content:
         if hasattr(block, "text") and block.text:
             try:
-                result = parse_prefilled_json(block.text)
+                result = json.loads(block.text)
                 logger.info(
                     f"  [{name}] Pre-research: country={result.get('country')}, "
                     f"well_known={result.get('well_known')}, "
@@ -521,7 +528,7 @@ def _select_best_candidate(
     for block in response.content:
         if hasattr(block, "text") and block.text:
             try:
-                result = parse_prefilled_json(block.text)
+                result = json.loads(block.text)
             except (json.JSONDecodeError, KeyError, ValueError) as e:
                 logger.warning(f"  [{name}] Research synthesis parse error: {e}")
                 return None

@@ -33,7 +33,6 @@ from pipeline.lyra.config import (
     LyraSettings,
     _get_settings,
     call_api,
-    parse_prefilled_json,
 )
 from pipeline.lyra.site_matcher import fill_contrib_from_site
 from pipeline.lyra.site_researcher import research_site
@@ -728,7 +727,7 @@ def _call_ai(
                 logger.warning(f"Empty text block from AI (model={model})")
                 return None
             try:
-                return parse_prefilled_json(block.text)
+                return json.loads(block.text)
             except json.JSONDecodeError:
                 logger.warning(f"Non-JSON AI response (model={model}): {block.text[:200]}")
                 return None
@@ -1537,7 +1536,7 @@ def _escalate_to_review_model(
     for block in response.content:
         if hasattr(block, "text") and block.text:
             try:
-                result = parse_prefilled_json(block.text)
+                result = json.loads(block.text)
             except (json.JSONDecodeError, KeyError, ValueError):
                 logger.warning("Failed to parse review model escalation response")
                 return None

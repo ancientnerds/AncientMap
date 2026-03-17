@@ -19,7 +19,6 @@ from pipeline.lyra.config import (
     LyraAPIError,
     LyraSettings,
     call_api,
-    parse_prefilled_json,
 )
 
 logger = logging.getLogger(__name__)
@@ -202,7 +201,7 @@ def _rescore_item(
         )
         return None
     try:
-        return parse_prefilled_json(text_block)
+        return json.loads(text_block)
     except (json.JSONDecodeError, KeyError, ValueError) as e:
         logger.warning(f"Bad rescore JSON for item {item.id}: {e}")
         return None

@@ -18,7 +18,6 @@ from pipeline.lyra.config import (
     LyraAPIError,
     LyraSettings,
     call_api,
-    parse_prefilled_json,
 )
 
 logger = logging.getLogger(__name__)
@@ -275,12 +274,13 @@ def _write_article_body(
 ) -> str:
     """Write the complete article body in a single LLM call.
 
-    All section payloads are passed as separate documents so the model
-    has full context and can write coherent transitions between sections.
+    Each section is passed as a custom content document with individual
+    fact blocks, enabling citations that point to specific facts rather
+    than character offsets in a blob of text.
     """
     instructions = _load_prompt("article_body.txt")
 
-    # Build one document per section
+    # Build one custom content document per section
     documents: list[dict] = []
     section_order: list[str] = []
     for section in sections:
@@ -299,7 +299,8 @@ def _write_article_body(
         f"Write the complete weekly archaeological digest.\n\n"
         f"Sections in order:\n{section_list}\n\n"
         f"Write all sections in this exact order. Each section uses facts "
-        f"from its corresponding source document only."
+        f"from its corresponding source document only. "
+        f"Cite your sources using the citation numbers from each document."
     )
 
     try:
@@ -338,7 +339,7 @@ def _verify_article(
 
     try:
         response = call_api(
-            model=settings.model_verify,
+            model=settings.model_article_verify,
             max_tokens=16000,
             thinking={"type": "enabled", "budget_tokens": 5000},
             system=instructions,
@@ -428,7 +429,7 @@ def _generate_headline_tldr(
     text = next((b.text for b in response.content if hasattr(b, "text")), "")
 
     try:
-        result = parse_prefilled_json(text)
+        result = json.loads(text)
         headline = result.get("headline", "").strip()
         tldr = result.get("tldr", "").strip()
     except (json.JSONDecodeError, KeyError, ValueError):
@@ -468,10 +469,11 @@ def _polish_article(
     verified_body: str,
     settings: LyraSettings,
 ) -> str:
-    """Final editorial coherence pass — smooth transitions, unify tone."""
-    instructions = _load_prompt("article_polish.txt")
+    """Final editorial coherence pass — smooth transitions, unify tone.
 
-    documents = [{"title": "Article Draft", "data": verified_body}]
+    No documents/citations needed — this is pure editorial smoothing.
+    """
+    instructions = _load_prompt("article_polish.txt")
 
     try:
         response = call_api(
@@ -479,9 +481,14 @@ def _polish_article(
             max_tokens=settings.max_tokens,
             system=instructions,
             messages=[
-                {"role": "user", "content": "Polish this article for flow and tone consistency."}
+                {
+                    "role": "user",
+                    "content": (
+                        "Polish this article for flow and tone consistency.\n\n"
+                        f"<article>\n{verified_body}\n</article>"
+                    ),
+                }
             ],
-            documents=documents,
         )
     except LyraAPIError as e:
         logger.warning(f"Article polish API error: {e}")
