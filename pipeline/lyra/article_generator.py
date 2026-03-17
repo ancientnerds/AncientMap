@@ -306,7 +306,7 @@ def _write_article_body(
     try:
         response = call_api(
             model=settings.model_article,
-            max_tokens=settings.max_tokens,
+            max_tokens=64000,
             system=instructions,
             messages=[{"role": "user", "content": user_message}],
             documents=documents,
@@ -340,8 +340,8 @@ def _verify_article(
     try:
         response = call_api(
             model=settings.model_article_verify,
-            max_tokens=32000,
-            thinking={"type": "enabled", "budget_tokens": 8000},
+            max_tokens=64000,
+            thinking={"type": "adaptive"},
             system=instructions,
             messages=[
                 {"role": "user", "content": "Verify the article draft against the source facts."}
@@ -478,7 +478,7 @@ def _polish_article(
     try:
         response = call_api(
             model=settings.model_article,
-            max_tokens=settings.max_tokens,
+            max_tokens=64000,
             system=instructions,
             messages=[
                 {
