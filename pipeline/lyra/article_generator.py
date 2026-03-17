@@ -116,15 +116,11 @@ def _cluster_related_items(
         summary = (item.get("summary") or "")[:100]
         site = item.get("site_name") or "unknown"
         cat = item.get("news_category") or "general"
-        item_lines.append(
-            f'{idx}: "{item["headline"]}" — {summary}... '
-            f"(site: {site}, cat: {cat})"
-        )
+        item_lines.append(f'{idx}: "{item["headline"]}" — {summary}... (site: {site}, cat: {cat})')
 
     instructions = _load_prompt("article_cluster.txt")
-    user_message = (
-        "Identify clusters among these archaeological news items:\n\n"
-        + "\n".join(item_lines)
+    user_message = "Identify clusters among these archaeological news items:\n\n" + "\n".join(
+        item_lines
     )
 
     try:
@@ -174,9 +170,7 @@ def _cluster_related_items(
         for runner_idx in valid[1:]:
             runner = items[runner_idx]
             unique_facts = [
-                f
-                for f in (runner.get("facts") or [])
-                if f.lower() not in winner_facts_lower
+                f for f in (runner.get("facts") or []) if f.lower() not in winner_facts_lower
             ]
             if unique_facts:
                 merged_sources.append(
@@ -195,12 +189,8 @@ def _cluster_related_items(
         if merged_sources:
             winner["merged_sources"] = merged_sources
             # Boost significance for multi-source corroboration, cap at 10
-            winner["significance"] = min(
-                10, (winner.get("significance") or 0) + 1
-            )
-            logger.info(
-                f"Merged {len(merged_sources)} sources into: {winner['headline']}"
-            )
+            winner["significance"] = min(10, (winner.get("significance") or 0) + 1)
+            logger.info(f"Merged {len(merged_sources)} sources into: {winner['headline']}")
 
     # Return winners + singletons (exclude runner-ups)
     return [item for idx, item in enumerate(items) if idx not in runner_indices]
@@ -269,7 +259,9 @@ def _collect_article_items(
     while items and len(selected) < MAX_ITEMS:
         for item in items:
             vid_penalty = SAME_VIDEO_PENALTY * video_counts.get(item["video_id"], 0)
-            cat_penalty = SAME_CATEGORY_PENALTY * category_counts.get(item["news_category"] or "general", 0)
+            cat_penalty = SAME_CATEGORY_PENALTY * category_counts.get(
+                item["news_category"] or "general", 0
+            )
             item["_eff"] = item["significance"] - vid_penalty - cat_penalty
 
         items.sort(key=lambda x: x["_eff"], reverse=True)
@@ -418,9 +410,7 @@ def _build_section_payload(section: dict) -> str:
                 lines.append(f"  - {fact}")
 
         for ms in item.get("merged_sources", []):
-            lines.append(
-                f"Corroborated by [{ms['citation']}] ({ms['channel_name']}):"
-            )
+            lines.append(f"Corroborated by [{ms['citation']}] ({ms['channel_name']}):")
             for fact in ms["facts"]:
                 lines.append(f"  - {fact}")
 
