@@ -37,7 +37,7 @@ flowchart LR
 | 9. Screenshots | `screenshot_extractor.py` | `extract_screenshots()` | - | - |
 | 10. Backfill | `transcript_fetcher.py` | `backfill_video_descriptions()` | - | - |
 | 11. Identify | `site_identifier.py` | `identify_and_enrich_sites()` | Haiku 4.5 | Structured output |
-| Weekly Article | `article_generator.py` | `generate_weekly_article()` | Sonnet 4.6 | Plain text (write/verify/polish) + structured output (headline) |
+| Weekly Article | `article_generator.py` | `generate_weekly_article()` | Sonnet 4.6 | Structured output (cluster) + plain text (write/verify/polish) + structured output (headline) |
 
 ---
 
@@ -227,12 +227,21 @@ Promotion threshold: **55** (requires coords + passes date cutoff).
 
 ### Weekly Article (`article_generator.py`)
 
-Generates a magazine-quality weekly digest from the top-scoring news items. Runs Sunday evenings (20:00 UTC). Items are grouped by `news_category`, assigned monotonic citation numbers `[N]`, and processed through 4 LLM steps:
+Generates a magazine-quality weekly digest from the top-scoring news items. Runs Sunday evenings (20:00 UTC). The pipeline has 6 steps:
 
-1. **Write body** (Sonnet 4.6, 64k max tokens) — all section payloads passed as plain text with `[N]` citation numbers. Model writes inline `[N]` references naturally.
-2. **Verify** (Sonnet 4.6, adaptive thinking, 64k max tokens) — fact-checks article against source facts. Outputs `[START_VERIFIED]...[END_VERIFIED]` markers around corrected article.
-3. **Polish** (Sonnet 4.6, 64k max tokens) — editorial coherence pass. Smooths transitions, unifies tone. No source documents.
-4. **Headline + TLDR** (Sonnet 4.6, structured output) — generates headline and summary from the polished body.
+**0. Cluster** (Sonnet 4.6, structured output) — LLM groups items covering the same discovery/event (`prompts/article_cluster.txt`). For each cluster: highest-significance item wins, unique facts from runner-ups merge into its `merged_sources`, winner gets +1 significance boost (capped at 10), runner-ups are removed from the pool. This collapses 3 items about the same excavation into 1 richer item with multi-source citations. Falls back to no clustering on LLM failure.
+
+**1. Select** — Diversity-penalized greedy selection (max 25 items). Repeats from the same video or category get significance penalties so fresh sources rise.
+
+**2. Group & cite** — Items grouped by `news_category`, assigned monotonic citation numbers `[N]`. Merged sources from clustering also get their own citation numbers, so a clustered item might be `[3]` with corroborating sources `[4]` and `[5]`.
+
+**3. Write body** (Sonnet 4.6, 64k max tokens) — all section payloads passed as plain text with `[N]` citation numbers. Clustered items include "Corroborated by [N] (channel):" blocks with their unique facts, so the model naturally cites both primary and corroborating sources.
+
+**4. Verify** (Sonnet 4.6, adaptive thinking, 64k max tokens) — fact-checks article against source facts (including merged source facts). Outputs `[START_VERIFIED]...[END_VERIFIED]` markers around corrected article.
+
+**5. Polish** (Sonnet 4.6, 64k max tokens) — editorial coherence pass. Smooths transitions, unifies tone. No source documents.
+
+**6. Headline + TLDR** (Sonnet 4.6, structured output) — generates headline and summary from the polished body.
 
 - **Reads:** `news_items` (significance >= 7 preferred, min 5 items), `news_videos`, `news_channels`
 - **Writes:** `news_articles` (title, content, summary, week_start, week_end, video_ids)
@@ -393,7 +402,7 @@ erDiagram
 
 The pipeline uses Anthropic's native structured output (`output_config.format` with `json_schema`) for all steps that need guaranteed valid JSON. The `call_api()` helper in `config.py` converts the caller's `response_format` parameter to Anthropic's `output_config` format transparently. All JSON schemas comply with Anthropic's requirements: every property is in `required`, nullable fields use `anyOf` with `null`, and `additionalProperties: false` is set on all objects.
 
-Article generation steps (write, verify, polish) use plain text output — they need the model to write inline `[N]` citation markers which structured output cannot enforce. The headline step uses structured output for its JSON response.
+Article generation steps (write, verify, polish) use plain text output — they need the model to write inline `[N]` citation markers which structured output cannot enforce. The clustering step and headline step use structured output for their JSON responses.
 
 ---
 
