@@ -293,7 +293,7 @@ def _write_article_body(
         documents.append({"title": "## Beyond the Mainstream", "data": payload})
         section_order.append("## Beyond the Mainstream")
 
-    section_list = "\n".join(f"  {i+1}. {s}" for i, s in enumerate(section_order))
+    section_list = "\n".join(f"  {i + 1}. {s}" for i, s in enumerate(section_order))
     user_message = (
         f"Write the complete weekly archaeological digest.\n\n"
         f"Sections in order:\n{section_list}\n\n"
