@@ -24,19 +24,20 @@ flowchart LR
     CB --> HB[Heartbeat]
 ```
 
-| Stage | File | Entry Point | AI Model |
-|-------|------|-------------|----------|
-| 1. Fetch | `transcript_fetcher.py` | `fetch_new_videos()` | - |
-| 2. Retry | `transcript_fetcher.py` | `retry_failed_videos()` | - |
-| 3. Summarize | `summarizer.py` | `summarize_pending_videos()` | Mercury 2 |
-| 4. Match | `site_matcher.py` | `match_sites_for_pending_items()` | - |
-| 5. Posts | `tweet_generator.py` | `generate_pending_posts()` | Mercury 2 |
-| 6. Verify | `tweet_verifier.py` | `verify_pending_posts()` | Mercury 2 |
-| 7. Rescore | `significance_scorer.py` | `rescore_pending_items()` | Mercury 2 |
-| 8. Dedup | `tweet_deduplicator.py` | `deduplicate_posts()` | - |
-| 9. Screenshots | `screenshot_extractor.py` | `extract_screenshots()` | - |
-| 10. Backfill | `transcript_fetcher.py` | `backfill_video_descriptions()` | - |
-| 11. Identify | `site_identifier.py` | `identify_and_enrich_sites()` | Mercury 2 |
+| Stage | File | Entry Point | AI Model | Output Mode |
+|-------|------|-------------|----------|-------------|
+| 1. Fetch | `transcript_fetcher.py` | `fetch_new_videos()` | - | - |
+| 2. Retry | `transcript_fetcher.py` | `retry_failed_videos()` | - | - |
+| 3. Summarize | `summarizer.py` | `summarize_pending_videos()` | Haiku 4.5 | Structured output |
+| 4. Match | `site_matcher.py` | `match_sites_for_pending_items()` | - | - |
+| 5. Posts | `tweet_generator.py` | `generate_pending_posts()` | Sonnet 4.6 | Structured output |
+| 6. Verify | `tweet_verifier.py` | `verify_pending_posts()` | Sonnet 4.6 | Structured output + adaptive thinking |
+| 7. Rescore | `significance_scorer.py` | `rescore_pending_items()` | Haiku 4.5 | Structured output |
+| 8. Dedup | `tweet_deduplicator.py` | `deduplicate_posts()` | - | - |
+| 9. Screenshots | `screenshot_extractor.py` | `extract_screenshots()` | - | - |
+| 10. Backfill | `transcript_fetcher.py` | `backfill_video_descriptions()` | - | - |
+| 11. Identify | `site_identifier.py` | `identify_and_enrich_sites()` | Haiku 4.5 | Structured output |
+| Weekly Article | `article_generator.py` | `generate_weekly_article()` | Sonnet 4.6 | Plain text (write/verify/polish) + structured output (headline) |
 
 ---
 
@@ -45,11 +46,11 @@ flowchart LR
 ```mermaid
 flowchart TD
     YT["YouTube RSS\n(39 channels)"] -->|transcripts| NV[(news_videos)]
-    NV -->|Mercury summarize| NI[(news_items)]
+    NV -->|Haiku summarize| NI[(news_items)]
     NI -->|exact/spaceless match| US[(unified_sites\nunified_site_names)]
     NI -->|unmatched names| UC[(user_contributions\nsource='lyra')]
 
-    UC -->|Mercury identify| DB{"DB fuzzy\nsearch\n(pg_trgm)"}
+    UC -->|Haiku identify| DB{"DB fuzzy\nsearch\n(pg_trgm)"}
     DB -->|match found| BRANCH{"AN/promoted\nor external?"}
     DB -->|no match| WD["Wikidata API"]
 
@@ -57,7 +58,7 @@ flowchart TD
     BRANCH -->|external| ENRICHED["status='enriched'\nmerge all sources\n(Radar card)"]
 
     WD -->|entity found| WP["Wikipedia API\n(summary + lead)"]
-    WP -->|Mercury extract| SCORE["Score 0-100"]
+    WP -->|Haiku extract| SCORE["Score 0-100"]
     DB -->|no match, no Wikidata| SCORE
 
     SCORE -->|"score >= 55\n+ coords"| PROMOTE["Promote to\nunified_sites\n(source='lyra')"]
@@ -86,11 +87,11 @@ Re-attempts transcript downloads for videos that failed in previous cycles (prox
 
 ### 3. Summarize (`summarizer.py`)
 
-Sends full transcript to Mercury 2. Extracts 2-8 key archaeological topics per video (scaled by duration).
+Sends full transcript to Haiku 4.5 with structured output. Extracts 2-8 key archaeological topics per video (scaled by duration). Includes a relevance gate that skips non-archaeology videos.
 
 - **Reads:** `news_videos` (status=`transcribed`)
 - **Writes:** `news_items` (headline, facts[], site_name_extracted), `news_videos.summary_json`
-- **Model:** Mercury 2 (`prompts/summary.txt`)
+- **Model:** Haiku 4.5 (`prompts/summary.txt`, `prompts/relevance_gate.txt`)
 
 ### 4. Match (`site_matcher.py`)
 
@@ -120,32 +121,29 @@ flowchart TD
 
 ### 5. Posts (`tweet_generator.py`)
 
-Generates short-form news feed posts (max 170 chars) from news items via Mercury 2. One post per item. Includes timestamp attribution and recency note. Significance scoring and categorization are handled by the separate rescore step (5b).
+Generates short-form news feed posts from news items via Sonnet 4.6 with structured output. One post per item. Includes timestamp attribution and recency note. Significance scoring and categorization are handled by the separate rescore step.
 
 - **Reads:** `news_items`, `news_videos.summary_json`
 - **Writes:** `news_items.post_text`
-- **Model:** Mercury 2 (`prompts/tweet_template.txt`)
-- **Security:** Shared API client pool, prompt caching (ephemeral)
+- **Model:** Sonnet 4.6 (`prompts/tweet_template.txt`)
 
 ### 6. Verify (`tweet_verifier.py`)
 
-Fact-checks posts against the transcript segment around the timestamp (+/-10s). Verdict: VERIFY_AS_IS / MODIFY / REJECT.
+Fact-checks posts against the transcript using Sonnet 4.6 with adaptive thinking and structured output. Extracts transcript segment around the timestamp (+/-10s buffer); falls back to first 3000 chars if segment extraction fails. Verdict: VERIFY_AS_IS / MODIFY / REJECT.
 
 - **Reads:** `news_items.post_text`, `news_videos.transcript_text`
 - **Writes:** `news_items.post_text` (modifications), `news_items.timestamp_seconds` (refinements)
 - **Deletes:** rejected items (post_text set to NULL)
-- **Model:** Mercury 2 (`prompts/verify_tweets.txt`)
-- **Security:** Prompt injection guard on transcript segment
+- **Model:** Sonnet 4.6 with adaptive thinking (`prompts/verify_tweets.txt`)
 
 ### 7. Rescore (`significance_scorer.py`)
 
-Independent re-scoring of each verified item's significance (1-10) and category assignment. Items scored 1 (not archaeology) have their post_text set to NULL, removing them from the feed. This step was separated from post generation to avoid wasting tokens on scores the LLM generates poorly alongside creative writing.
+Independent re-scoring of each verified item's significance (1-10) and category assignment using Haiku 4.5 with structured output. Items scored 1 (not archaeology) have their post_text set to NULL, removing them from the feed. This step was separated from post generation to avoid wasting tokens on scores the LLM generates poorly alongside creative writing.
 
 - **Reads:** `news_items` (verified videos), `news_videos`
-- **Writes:** `news_items.significance`, `news_items.news_category`, `news_items.post_text` (NULL for score=1)
+- **Writes:** `news_items.significance`, `news_items.news_category`, `news_items.speculative_tag`, `news_items.post_text` (NULL for score=1)
 - **Video status:** `verified` → `rescored`
-- **Model:** Mercury 2 (`prompts/rescore_significance.txt`)
-- **Security:** Shared API client pool, prompt caching, injection guard
+- **Model:** Haiku 4.5 (`prompts/rescore_significance.txt`)
 
 ### 8. Dedup (`tweet_deduplicator.py`)
 
@@ -176,7 +174,7 @@ The core AI discovery engine. Processes up to 20 candidates per cycle.
 flowchart TD
     START["user_contributions\n(pending/enriched/rejected)"] --> HASH{"Facts hash\nchanged?"}
     HASH -->|no| SKIP["Skip\n(already processed)"]
-    HASH -->|yes| AI["Mercury: identify site\n(name + confidence)"]
+    HASH -->|yes| AI["Haiku: identify site\n(name + confidence)"]
 
     AI --> SITE{"is_site?"}
     SITE -->|false| NAS["status=\n'not_a_site'"]
@@ -355,14 +353,16 @@ erDiagram
 | youtube-transcript-api | Fetch | Download video captions |
 | yt-dlp | Fetch, Screenshots, Backfill | Video metadata + frame extraction |
 | ffmpeg | Screenshots | Extract WebP frame from clip |
-| Mercury 2 (via Anthropic SDK) | Summarize, Verify, Rescore, Identify, Extract Metadata, Pick Entity, Posts | AI processing + creative generation |
+| Anthropic API (Haiku 4.5) | Summarize, Rescore, Identify | High-volume extraction + scoring |
+| Anthropic API (Sonnet 4.6) | Posts, Verify, Article (write/verify/polish/headline) | Quality-critical writing + reasoning |
 | Wikidata | Identify | Entity search + claims (coords, dates) |
+| Wikipedia REST | Identify | Page summary + lead section |
 
 ### Structured Output
 
-Mercury 2 supports `response_format: json_schema` with `strict: true` for reliable structured output. All pipeline LLM calls use this instead of the legacy assistant prefill pattern. The `call_api()` helper in `config.py` handles schema enforcement transparently.
+The pipeline uses Anthropic's native structured output (`output_config.format` with `json_schema`) for all steps that need guaranteed valid JSON. The `call_api()` helper in `config.py` converts the caller's `response_format` parameter to Anthropic's `output_config` format transparently. All JSON schemas comply with Anthropic's requirements: every property is in `required`, nullable fields use `anyOf` with `null`, and `additionalProperties: false` is set on all objects.
 
-| Wikipedia REST | Identify | Page summary + lead section |
+Article generation steps (write, verify, polish) use plain text output — they need the model to write inline `[N]` citation markers which structured output cannot enforce. The headline step uses structured output for its JSON response.
 
 ---
 
@@ -501,13 +501,13 @@ flowchart LR
 | `search_articles` | articles | Hybrid search on weekly digest article chunks |
 | `search_empires` | empires | Hybrid search on Seshat polity data |
 
-Auto-retrieve runs before the LLM on every query. For complex multi-part queries (e.g. "compare Göbekli Tepe and Stonehenge"), Mercury decomposes the query into 1-3 sub-queries first (`_decompose_query()`), then runs hybrid search per sub-query on sites (top 5) + news (top 3). Results are merged by ID, semantically deduped (token Jaccard ≥ 0.7), and reordered for lost-in-the-middle mitigation (most relevant at start and end of context). The remaining collections (transcripts, articles, empires) are available via tool calls.
+Auto-retrieve runs before the LLM on every query. For complex multi-part queries (e.g. "compare Göbekli Tepe and Stonehenge"), the agent decomposes the query into 1-3 sub-queries first (`_decompose_query()`), then runs hybrid search per sub-query on sites (top 5) + news (top 3). Results are merged by ID, semantically deduped (token Jaccard ≥ 0.7), and reordered for lost-in-the-middle mitigation (most relevant at start and end of context). The remaining collections (transcripts, articles, empires) are available via tool calls.
 
 ---
 
 ## Lyra Chat — Architecture
 
-The Lyra chat agent uses Mercury 2 (by Inception Labs) as its cloud backend.
+The Lyra chat agent uses Anthropic Haiku 4.5 as its cloud backend, with the Anthropic citations API for grounded RAG responses.
 
 ### Intent Classification
 
@@ -517,9 +517,9 @@ An LLM-powered intent classifier (`_classify_intent` in `lyra_agent.py`) categor
 
 | Backend | Model | Use Case |
 |---------|-------|----------|
-| **Mercury** | Mercury 2 | All chat requests — streaming, structured output, tool calling |
+| **Anthropic** | Haiku 4.5 | All chat requests — streaming, structured output, tool calling, citations |
 
-The backend is restricted to `"mercury"` in the API schema. A local Ollama backend (`lyra_queue.py`, `lyra_backends.py`) exists in the codebase but is not currently wired into the chat flow.
+A local Ollama backend (`lyra_queue.py`, `lyra_backends.py`) exists in the codebase but is not currently wired into the chat flow.
 
 ### Unified Backend Abstraction
 
@@ -529,11 +529,13 @@ All backends implement the same `LLMBackend.stream()` protocol, yielding 4 event
 - `tool_call_chunk` — streaming tool call arguments
 - `usage` — token counts
 
-This replaces the previous dual-path streaming logic (separate code for OpenAI SDK vs LangChain).
+### Structured Output (Chat Responses)
 
-### Mercury Structured Output (Chat Responses)
+Anthropic Haiku uses structured output to guarantee well-formed references in Lyra's responses. Instead of fragile regex enrichment on free-form markdown, the LLM outputs structured JSON with guillemet markers.
 
-Mercury (cloud backend) uses `response_format: json_schema` to guarantee well-formed references in Lyra's responses. Instead of fragile regex enrichment on free-form markdown, the LLM outputs structured JSON with guillemet markers.
+### Citations (RAG Grounding)
+
+The chat agent uses Anthropic's citations API for RAG synthesis. Retrieved data is passed as a document block with `citations: {"enabled": True}`, and the API returns exact text pointers into the source material. This ensures every claim is grounded in actual retrieved data. Citations are incompatible with structured output, so the agent uses them only for the prose synthesis step (not the structured marker extraction step).
 
 **Schema** (`api/services/lyra_schema.py`):
 
@@ -560,24 +562,19 @@ LyraResponse {
 - `«fN»` → `[name](flag:code)` — country flag chips
 
 **Two injection points** in `lyra_agent.py`:
-1. **Normal final response** (~line 885): After streaming completes with no tool calls, calls `MercuryBackend.complete()` with `LYRA_RESPONSE_SCHEMA`, runs `expand_markers()`, emits as diffusion replacement.
+1. **Normal final response** (~line 885): After streaming completes with no tool calls, calls `AnthropicBackend.complete()` with `LYRA_RESPONSE_SCHEMA`, runs `expand_markers()`, emits as diffusion replacement.
 2. **Forced final response** (~line 1177): When max tool rounds exhausted, same structured output flow.
 
 Both points have fallback paths that strip unresolved guillemet markers if `complete()` fails.
 
-**Key parameters for `MercuryBackend.complete()`:**
-- `max_tokens=4096` (capped — `reasoning_effort="high"` shares the budget with completion tokens)
-- `temperature=0.1` (deterministic for data extraction)
-- `stream=False` (structured output requires non-streaming)
-
 ### Test Suite (`scripts/test_lyra_quality.py`)
 
-Comprehensive quality validation: 65 tests across 19 categories, combining 19 structural checks with a Mercury LLM judge and faithfulness evaluation.
+Comprehensive quality validation: 65 tests across 19 categories, combining 19 structural checks with an LLM judge and faithfulness evaluation.
 
 **Structural checks** (deterministic): site link format, coordinate ranges, UUID validity, video citations, empire links, image format, country flags, bare UUID detection, marker resolution, conciseness, tool invocations, hallucinated IDs.
 
 **Post-processing** (`_filter_hallucinated_videos`): After structured output expansion, videos not found in the news DB are stripped. The filter removes the entire sentence containing the video link (not just the link itself) to prevent dangling text like "watch ." or "As shown in , the temple...".
 
-**LLM judge** (Mercury structured output): relevance score (0-10), site linking, source citations, conciseness, accuracy, marker usage, overall pass/fail. Uses `response_format: json_schema` for guaranteed valid JSON scoring.
+**LLM judge** (structured output): relevance score (0-10), site linking, source citations, conciseness, accuracy, marker usage, overall pass/fail. Uses structured output for guaranteed valid JSON scoring.
 
-**Faithfulness scoring** (Mercury structured output): Extracts every factual claim from the response, checks whether each is supported/unsupported/contradicted by retrieved context. Calculates faithfulness_score = supported / total claims. Tests fail if score < 0.8 (configurable per test). Only runs with the full judge (not `--no-judge`). 5 faithfulness test cases covering site queries, transcript attribution, news grounding, comparisons, and source descriptions.
+**Faithfulness scoring** (structured output): Extracts every factual claim from the response, checks whether each is supported/unsupported/contradicted by retrieved context. Calculates faithfulness_score = supported / total claims. Tests fail if score < 0.8 (configurable per test). Only runs with the full judge (not `--no-judge`). 5 faithfulness test cases covering site queries, transcript attribution, news grounding, comparisons, and source descriptions.
