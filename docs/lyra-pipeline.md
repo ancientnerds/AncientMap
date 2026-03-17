@@ -31,13 +31,13 @@ flowchart LR
 | 3. Summarize | `summarizer.py` | `summarize_pending_videos()` | Haiku 4.5 | Structured output |
 | 4. Match | `site_matcher.py` | `match_sites_for_pending_items()` | - | - |
 | 5. Posts | `tweet_generator.py` | `generate_pending_posts()` | Sonnet 4.6 | Structured output |
-| 6. Verify | `tweet_verifier.py` | `verify_pending_posts()` | Sonnet 4.6 | Structured output + adaptive thinking |
+| 6. Verify | `tweet_verifier.py` | `verify_pending_posts()` | Opus 4.6 | Structured output + adaptive thinking |
 | 7. Rescore | `significance_scorer.py` | `rescore_pending_items()` | Haiku 4.5 | Structured output |
 | 8. Dedup | `tweet_deduplicator.py` | `deduplicate_posts()` | - | - |
 | 9. Screenshots | `screenshot_extractor.py` | `extract_screenshots()` | - | - |
 | 10. Backfill | `transcript_fetcher.py` | `backfill_video_descriptions()` | - | - |
 | 11. Identify | `site_identifier.py` | `identify_and_enrich_sites()` | Haiku 4.5 | Structured output |
-| Weekly Article | `article_generator.py` | `generate_weekly_article()` | Sonnet 4.6 | Structured output (cluster) + plain text (write/verify/polish) + structured output (headline) |
+| Weekly Article | `article_generator.py` | `generate_weekly_article()` | Sonnet 4.6 (cluster) / Opus 4.6 (write/verify/polish/headline) | Structured output (cluster) + adaptive thinking (write/verify/polish) + structured output (headline) |
 
 ---
 
@@ -131,12 +131,12 @@ Generates short-form news feed posts from news items via Sonnet 4.6 with structu
 
 ### 6. Verify (`tweet_verifier.py`)
 
-Fact-checks posts against the transcript using Sonnet 4.6 with adaptive thinking and structured output. Extracts transcript segment around the timestamp (+/-10s buffer); falls back to first 3000 chars if segment extraction fails. Verdict: VERIFY_AS_IS / MODIFY / REJECT.
+Fact-checks posts against the transcript using Opus 4.6 with adaptive thinking and structured output. Extracts transcript segment around the timestamp (+/-10s buffer); falls back to first 3000 chars if segment extraction fails. Verdict: VERIFY_AS_IS / MODIFY / REJECT.
 
 - **Reads:** `news_items.post_text`, `news_videos.transcript_text`
 - **Writes:** `news_items.post_text` (modifications), `news_items.timestamp_seconds` (refinements)
 - **Deletes:** rejected items (post_text set to NULL)
-- **Model:** Sonnet 4.6 with adaptive thinking (`prompts/verify_tweets.txt`)
+- **Model:** Opus 4.6 with adaptive thinking (`prompts/verify_tweets.txt`)
 
 ### 7. Rescore (`significance_scorer.py`)
 
@@ -235,13 +235,15 @@ Generates a magazine-quality weekly digest from the top-scoring news items. Runs
 
 **2. Group & cite** — Items grouped by `news_category`, assigned monotonic citation numbers `[N]`. Merged sources from clustering also get their own citation numbers, so a clustered item might be `[3]` with corroborating sources `[4]` and `[5]`.
 
-**3. Write body** (Sonnet 4.6, 64k max tokens) — all section payloads passed as plain text with `[N]` citation numbers. Clustered items include "Corroborated by [N] (channel):" blocks with their unique facts, so the model naturally cites both primary and corroborating sources.
+**3. Write body** (Opus 4.6, adaptive thinking, 128k max tokens) — all section payloads passed as plain text with `[N]` citation numbers. Clustered items include "Corroborated by [N] (channel):" blocks with their unique facts. The prompt requires every `[N]` in the source material to appear in the article.
 
-**4. Verify** (Sonnet 4.6, adaptive thinking, 64k max tokens) — fact-checks article against source facts (including merged source facts). Outputs `[START_VERIFIED]...[END_VERIFIED]` markers around corrected article.
+**4. Verify** (Opus 4.6, adaptive thinking, 128k max tokens) — fact-checks article against source facts (including merged source facts). Outputs `[START_VERIFIED]...[END_VERIFIED]` markers around corrected article.
 
-**5. Polish** (Sonnet 4.6, 64k max tokens) — editorial coherence pass. Smooths transitions, unifies tone. No source documents.
+**5. Polish** (Opus 4.6, adaptive thinking, 128k max tokens) — editorial coherence pass. Smooths transitions, unifies tone. No source documents.
 
-**6. Headline + TLDR** (Sonnet 4.6, structured output) — generates headline and summary from the polished body.
+**5b. Citation cleanup** — scans the polished body for actually-used `[N]` references, removes uncited sources from the footer, and renumbers sequentially. Safety net for any corroborating sources the LLM didn't integrate despite the prompt instruction.
+
+**6. Headline + TLDR** (Opus 4.6, structured output) — generates headline and summary from the polished body.
 
 - **Reads:** `news_items` (significance >= 7 preferred, min 5 items), `news_videos`, `news_channels`
 - **Writes:** `news_articles` (title, content, summary, week_start, week_end, video_ids)
@@ -394,7 +396,8 @@ erDiagram
 | yt-dlp | Fetch, Screenshots, Backfill | Video metadata + frame extraction |
 | ffmpeg | Screenshots | Extract WebP frame from clip |
 | Anthropic API (Haiku 4.5) | Summarize, Rescore, Identify | High-volume extraction + scoring |
-| Anthropic API (Sonnet 4.6) | Posts, Verify, Article (write/verify/polish/headline) | Quality-critical writing + reasoning |
+| Anthropic API (Sonnet 4.6) | Posts, Article (cluster) | Quality-critical writing |
+| Anthropic API (Opus 4.6) | Verify, Article (write/verify/polish/headline) | Highest-quality reasoning + writing |
 | Wikidata | Identify | Entity search + claims (coords, dates) |
 | Wikipedia REST | Identify | Page summary + lead section |
 
