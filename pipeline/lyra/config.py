@@ -52,6 +52,16 @@ class NormalizedResponse:
     model: str = ""
     usage: dict = field(default_factory=dict)
 
+    @property
+    def text(self) -> str:
+        """Join all text blocks into a single string.
+
+        Citations split responses into many small fragments — this
+        reassembles them into the full text for callers that don't
+        need per-block citation data.
+        """
+        return "".join(b.text for b in self.content if b.type == "text")
+
 
 VALID_CATEGORIES = {
     "excavation",

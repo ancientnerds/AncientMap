@@ -106,7 +106,7 @@ def verify_single_post(
         logger.warning(f"Verification API error for item {item.id}: {e}")
         return None
 
-    text_block = next((b.text for b in response.content if hasattr(b, "text")), None)
+    text_block = response.text or None
     if not text_block:
         logger.warning(f"Empty verification response for item {item.id}")
         return None

@@ -314,7 +314,7 @@ def _write_article_body(
     except LyraAPIError as e:
         logger.error(f"Article body API error: {e}")
         return ""
-    text = next((b.text for b in response.content if hasattr(b, "text")), "")
+    text = response.text
     return text.strip()
 
 
@@ -351,7 +351,7 @@ def _verify_article(
     except LyraAPIError as e:
         logger.error(f"Article verification API error: {e}")
         return full_body
-    text = next((b.text for b in response.content if hasattr(b, "text")), "")
+    text = response.text
 
     # Prompt order: [CHANGES]...[/CHANGES] then [START_VERIFIED]...[END_VERIFIED]
     # Extract the verified article between the markers.
@@ -426,7 +426,7 @@ def _generate_headline_tldr(
     except LyraAPIError as e:
         logger.warning(f"Headline generation API error: {e}")
         return "Weekly Archaeological Digest", ""
-    text = next((b.text for b in response.content if hasattr(b, "text")), "")
+    text = response.text
 
     try:
         result = json.loads(text)
@@ -493,7 +493,7 @@ def _polish_article(
     except LyraAPIError as e:
         logger.warning(f"Article polish API error: {e}")
         return verified_body
-    text = next((b.text for b in response.content if hasattr(b, "text")), "")
+    text = response.text
     return text.strip() or verified_body
 
 

@@ -192,7 +192,7 @@ def _rescore_item(
         logger.warning(f"Rescore API error for item {item.id}: {e}")
         return None
 
-    text_block = next((b.text for b in response.content if hasattr(b, "text")), None)
+    text_block = response.text or None
     if not text_block:
         logger.warning(
             f"Empty rescore response for item {item.id}: "

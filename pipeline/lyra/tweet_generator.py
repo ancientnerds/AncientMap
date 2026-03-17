@@ -127,7 +127,7 @@ def generate_posts_for_video(
         logger.error(f"Post generation API error for {video.id}: {e}")
         return 0
 
-    text_block = next((b.text for b in response.content if hasattr(b, "text")), None)
+    text_block = response.text or None
     if not text_block:
         logger.warning(f"Empty response content for {video.id}")
         return 0
