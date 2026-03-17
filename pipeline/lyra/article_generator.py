@@ -84,8 +84,13 @@ def _collect_article_items(
     week_start: datetime,
     week_end: datetime,
     session,
+    min_items: int = 5,
 ) -> list[dict]:
-    """Query NewsItems (joined with video/channel) for the week, significance >= 7."""
+    """Query top NewsItems for the week, ordered by significance.
+
+    Prefers items scored >= 7, but always includes at least `min_items`
+    top stories so the article is never empty when scored items exist.
+    """
     rows = (
         session.query(NewsItem, NewsVideo, NewsChannel)
         .join(NewsVideo, NewsItem.video_id == NewsVideo.id)
@@ -93,7 +98,7 @@ def _collect_article_items(
         .filter(
             NewsItem.created_at >= week_start,
             NewsItem.created_at <= week_end,
-            NewsItem.significance >= 7,
+            NewsItem.significance.isnot(None),
         )
         .order_by(NewsItem.significance.desc())
         .all()
@@ -118,8 +123,14 @@ def _collect_article_items(
             }
         )
 
+    # Take high-significance items first, then fill up to min_items from the rest
+    high = [i for i in items if i["significance"] >= 7]
+    if len(high) < min_items:
+        remaining = [i for i in items if i["significance"] < 7]
+        high.extend(remaining[: min_items - len(high)])
+
     # Cap at MAX_ITEMS (already sorted by significance desc)
-    return items[:MAX_ITEMS]
+    return high[:MAX_ITEMS]
 
 
 # ---------------------------------------------------------------------------
