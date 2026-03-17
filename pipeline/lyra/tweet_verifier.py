@@ -89,8 +89,7 @@ def verify_single_post(
         response = call_api(
             model=model,
             max_tokens=_max_tokens,
-            temperature=0.0,
-            reasoning_effort="medium",
+            thinking={"type": "adaptive"},
             system=system_prompt,
             messages=[{"role": "user", "content": user_content}],
             response_format={

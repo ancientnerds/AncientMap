@@ -107,8 +107,8 @@ class LyraSettings(BaseSettings):
     anthropic_api_key: str = ""
     temperature_min: float = 0.0
     model_summarize: str = "claude-haiku-4-5-20251001"
-    model_post: str = "claude-haiku-4-5-20251001"
-    model_verify: str = "claude-haiku-4-5-20251001"
+    model_post: str = "claude-sonnet-4-6"
+    model_verify: str = "claude-sonnet-4-6"
     model_article: str = "claude-sonnet-4-6"
     model_article_verify: str = "claude-sonnet-4-6"
     model_identify: str = "claude-haiku-4-5-20251001"
