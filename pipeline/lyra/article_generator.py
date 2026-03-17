@@ -274,33 +274,34 @@ def _write_article_body(
 ) -> str:
     """Write the complete article body in a single LLM call.
 
-    Each section is passed as a custom content document with individual
-    fact blocks, enabling citations that point to specific facts rather
-    than character offsets in a blob of text.
+    Section payloads are passed as plain text in the user message so the
+    model sees the [N] citation numbers and writes them inline naturally.
+    (The citations API feature returns metadata instead of inline markers,
+    which is wrong for article writing.)
     """
     instructions = _load_prompt("article_body.txt")
 
-    # Build one custom content document per section
-    documents: list[dict] = []
+    # Build section payloads as plain text
+    all_payloads: list[str] = []
     section_order: list[str] = []
     for section in sections:
         payload = _build_section_payload(section)
-        label = f"## {section['label']}"
-        documents.append({"title": label, "data": payload})
-        section_order.append(label)
+        all_payloads.append(payload)
+        section_order.append(f"## {section['label']}")
 
     if speculative:
         payload = _build_speculative_payload(speculative)
-        documents.append({"title": "## Beyond the Mainstream", "data": payload})
+        all_payloads.append(payload)
         section_order.append("## Beyond the Mainstream")
 
     section_list = "\n".join(f"  {i + 1}. {s}" for i, s in enumerate(section_order))
+    source_material = "\n\n".join(all_payloads)
     user_message = (
         f"Write the complete weekly archaeological digest.\n\n"
         f"Sections in order:\n{section_list}\n\n"
         f"Write all sections in this exact order. Each section uses facts "
-        f"from its corresponding source document only. "
-        f"Cite your sources using the citation numbers from each document."
+        f"from its corresponding source material only.\n\n"
+        f"<source_material>\n{source_material}\n</source_material>"
     )
 
     try:
@@ -309,7 +310,6 @@ def _write_article_body(
             max_tokens=64000,
             system=instructions,
             messages=[{"role": "user", "content": user_message}],
-            documents=documents,
         )
     except LyraAPIError as e:
         logger.error(f"Article body API error: {e}")
@@ -332,10 +332,11 @@ def _verify_article(
         for f in facts:
             facts_block += f"  - {f}\n"
 
-    documents = [
-        {"title": "Article Draft", "data": full_body},
-        {"title": "Source Facts by Citation", "data": facts_block.strip()},
-    ]
+    user_content = (
+        "Verify the article draft against the source facts.\n\n"
+        "<article_draft>\n" + full_body + "\n</article_draft>\n\n"
+        "<source_facts>\n" + facts_block.strip() + "\n</source_facts>"
+    )
 
     try:
         response = call_api(
@@ -343,10 +344,7 @@ def _verify_article(
             max_tokens=64000,
             thinking={"type": "adaptive"},
             system=instructions,
-            messages=[
-                {"role": "user", "content": "Verify the article draft against the source facts."}
-            ],
-            documents=documents,
+            messages=[{"role": "user", "content": user_content}],
         )
     except LyraAPIError as e:
         logger.error(f"Article verification API error: {e}")
