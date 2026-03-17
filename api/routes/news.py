@@ -5,18 +5,31 @@ Serves Lyra pipeline news items, channels, articles, and stats.
 """
 
 import logging
+import os
 import re
+from collections import deque
 from datetime import UTC, datetime
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from sqlalchemy import distinct, func, text
 from sqlalchemy.orm import Session, joinedload
 
 from api.cache import cache_get, cache_set
-from pipeline.database import NewsArticle, NewsChannel, NewsItem, NewsVideo, UnifiedSite, get_db
+from pipeline.database import (
+    NewsArticle,
+    NewsChannel,
+    NewsItem,
+    NewsVideo,
+    UnifiedSite,
+    get_db,
+)
 from pipeline.utils.country_lookup import country_name_variants, normalize_country
 from pipeline.utils.text import PERIOD_BUCKETS, categorize_period
+
+LYRA_LOG_PATH = Path("/app/logs/ancient_nerds_lyra.log")
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -672,3 +685,45 @@ async def get_lyra_status(db: Session = Depends(get_db)):
 
     cache_set(cache_key, result.model_dump(), ttl=60)  # 1 min cache
     return result
+
+
+@router.get("/logs", response_class=PlainTextResponse)
+async def get_lyra_logs(
+    request: Request,
+    lines: int = Query(default=100, ge=1, le=2000),
+    search: str = Query(default="", max_length=200),
+):
+    """Return the last N lines from the Lyra pipeline log file.
+
+    Protected by LYRA_ADMIN_KEY — pass as ?key= or Authorization: Bearer header.
+    """
+    admin_key = os.environ.get("LYRA_ADMIN_KEY", "")
+    provided = request.query_params.get("key", "") or (
+        request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+    )
+    if not admin_key or provided != admin_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+    if not LYRA_LOG_PATH.exists():
+        raise HTTPException(status_code=404, detail="Log file not found")
+
+    # Read last N lines efficiently
+    with open(LYRA_LOG_PATH, "rb") as f:
+        # Seek from end to find enough newlines
+        try:
+            f.seek(0, 2)
+            size = f.tell()
+            # Read at most 512KB from the tail
+            read_size = min(size, 512 * 1024)
+            f.seek(size - read_size)
+            tail = f.read().decode("utf-8", errors="replace")
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail="Failed to read log file") from exc
+
+    all_lines = tail.splitlines()
+    result = all_lines[-lines:]
+
+    if search:
+        search_lower = search.lower()
+        result = [ln for ln in result if search_lower in ln.lower()]
+
+    return "\n".join(result)
