@@ -722,7 +722,18 @@ async def get_pipeline_status(
         pipeline_name = "lyra"
         # Filter to relevant step group
         if pipeline == "news":
-            step_keys = {"fetch", "retry", "summarize", "match", "posts", "verify", "rescore", "dedup", "screenshots", "backfill"}
+            step_keys = {
+                "fetch",
+                "retry",
+                "summarize",
+                "match",
+                "posts",
+                "verify",
+                "rescore",
+                "dedup",
+                "screenshots",
+                "backfill",
+            }
         else:  # radar
             step_keys = {"identify"}
 
@@ -759,7 +770,9 @@ async def get_pipeline_status(
         is_online = age_seconds < max_age
 
         # Filter steps and extract total_elapsed
-        total_elapsed = raw_step_data.get("_total_elapsed") if isinstance(raw_step_data, dict) else None
+        total_elapsed = (
+            raw_step_data.get("_total_elapsed") if isinstance(raw_step_data, dict) else None
+        )
         steps = {}
         if isinstance(raw_step_data, dict):
             for k, v in raw_step_data.items():
