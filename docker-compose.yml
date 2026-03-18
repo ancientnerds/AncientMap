@@ -145,6 +145,7 @@ services:
       POSTGRES_HOST: db
     volumes:
       - ./public/data/news:/app/public/data/news
+      - ./logs:/app/logs
     depends_on:
       db:
         condition: service_healthy

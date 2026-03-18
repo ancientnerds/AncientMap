@@ -13,8 +13,10 @@ Local dev usage:
 import argparse
 import concurrent.futures
 import logging
+import logging.handlers
 import sys
 import time
+from pathlib import Path
 
 from sqlalchemy import text
 
@@ -150,13 +152,20 @@ _cycle_count = 0
 
 def setup_logging() -> None:
     """Configure logging for the Lyra pipeline."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-        ],
+    log_format = "%(asctime)s [%(name)s] %(levelname)s: %(message)s"
+    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stdout)]
+
+    # Write to file so the API /news/logs endpoint can read it
+    log_dir = Path("/app/logs")
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "ancient_nerds_lyra.log"
+    file_handler = logging.handlers.RotatingFileHandler(
+        log_file, maxBytes=10 * 1024 * 1024, backupCount=3, encoding="utf-8"
     )
+    file_handler.setFormatter(logging.Formatter(log_format))
+    handlers.append(file_handler)
+
+    logging.basicConfig(level=logging.INFO, format=log_format, handlers=handlers)
     # Quiet down noisy libraries
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("anthropic").setLevel(logging.WARNING)
