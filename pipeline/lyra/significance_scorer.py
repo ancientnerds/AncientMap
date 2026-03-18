@@ -83,15 +83,17 @@ def rescore_pending_items(settings: LyraSettings) -> int:
                 .filter(
                     NewsItem.video_id == video.id,
                     NewsItem.post_text.isnot(None),
+                    NewsItem.significance.is_(None),  # Skip already-rescored items
                 )
                 .all()
             )
 
             if not items:
-                # No items to rescore — mark video as rescored
+                # All items already rescored (or none to score) — transition video
                 v = session.get(NewsVideo, video.id)
                 if v:
                     v.status = "rescored"
+                    logger.info(f"Video {video.id}: all items already rescored, transitioning to 'rescored'")
                 continue
 
             # Load channel name (video is detached, so query directly)

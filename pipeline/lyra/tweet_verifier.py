@@ -61,7 +61,7 @@ def verify_single_post(
     Returns verification result dict or None on failure.
     """
     if not item.post_text:
-        return None
+        return {"verification_level": "SKIP", "reason": "no_post_text"}
 
     # Extract transcript around the timestamp, fall back to start of transcript
     if item.timestamp_range:
@@ -71,8 +71,8 @@ def verify_single_post(
     if not segment and transcript_text:
         segment = transcript_text[:3000]
     if not segment:
-        logger.warning(f"Skipping item {item.id}: no transcript text available")
-        return None
+        logger.warning(f"Item {item.id}: no transcript segment, marking as unverifiable")
+        return {"verification_level": "SKIP", "reason": "no_transcript_segment"}
 
     if system_prompt is None:
         system_prompt = _load_prompt()
@@ -170,6 +170,13 @@ def verify_video_posts(
                 continue
 
             level = result.get("verification_level", "")
+
+            if level == "SKIP":
+                # Deterministic failure — mark verified to prevent infinite retry
+                item.verified_at = datetime.now(UTC)
+                logger.info(f"Auto-verified item {item.id}: {result.get('reason', 'unverifiable')}")
+                verified += 1
+                continue
 
             if level == "REJECT":
                 item.post_text = None
