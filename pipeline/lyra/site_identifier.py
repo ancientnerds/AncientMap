@@ -939,7 +939,7 @@ def _verify_alias_match(
         schema=ALIAS_CHECK_SCHEMA,
         schema_name="AliasCheck",
         reasoning_effort="low",
-        max_tokens=200,
+        max_tokens=1024,
     )
     if not result:
         # LLM failed — reject the match to be safe
@@ -1010,7 +1010,7 @@ def _verify_db_match(
         schema=MATCH_VERIFY_SCHEMA,
         schema_name="MatchVerify",
         reasoning_effort="low",
-        max_tokens=200,
+        max_tokens=1024,
     )
     if not result:
         logger.warning(f"  [{contribution_name}] Match verify LLM failed, rejecting")
