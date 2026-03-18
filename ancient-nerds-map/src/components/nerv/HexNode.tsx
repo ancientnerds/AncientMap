@@ -57,9 +57,11 @@ export default function HexNode({ config, state, stepData, isSelected, onClick }
     >
       <div className="hx-brd" />
       {state === 'run' && <DashOverlay />}
-      {config.ragPhase && <div className={`hx-rag hx-rag-${config.ragPhase}`}>{config.ragPhase}</div>}
       <div className="hx-fill">
-        <div className="hx-ico">{config.icon}</div>
+        <div className="hx-ico-row">
+          <div className="hx-ico">{config.icon}</div>
+          {config.ragPhase && <div className={`hx-rag hx-rag-${config.ragPhase}`}>{config.ragPhase}</div>}
+        </div>
         <div className="hx-nm">{config.label}</div>
         {runTimer
           ? <div className="hx-meta hx-meta-run">{runTimer}</div>

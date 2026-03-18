@@ -108,24 +108,29 @@
 .hx[data-type="llm"] .hx-meta-run { color: var(--nerv-steel); }
 .hx[data-type="db"] .hx-meta-run  { color: var(--nerv-c); }
 
+/* -- Icon + RAG badge row ----------------------------------------- */
+.hx-ico-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  margin-top: -12px;
+}
+.hx-ico-row .hx-ico {
+  margin-top: 0;
+}
+
 /* -- RAG phase badge ---------------------------------------------- */
 .hx-rag {
-  position: absolute;
-  top: 6px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 4;
   font-family: var(--font-heading);
-  font-size: 7px;
+  font-size: 8px;
   font-weight: 700;
-  letter-spacing: 1px;
-  padding: 0 4px;
-  line-height: 1.4;
-  border-radius: 1px;
+  letter-spacing: 0.5px;
+  line-height: 1;
 }
-.hx-rag-R { color: var(--nerv-c); border: 1px solid rgba(32, 240, 255, 0.3); background: rgba(32, 240, 255, 0.06); }
-.hx-rag-A { color: var(--nerv-o); border: 1px solid rgba(255, 152, 48, 0.3); background: rgba(255, 152, 48, 0.06); }
-.hx-rag-G { color: var(--nerv-g); border: 1px solid rgba(0, 204, 102, 0.3); background: rgba(0, 204, 102, 0.06); }
+.hx-rag-R { color: #ff4090; }
+.hx-rag-A { color: #ffcc00; }
+.hx-rag-G { color: #b060ff; }
 
 .hx-step {
   font-family: var(--font-heading);
