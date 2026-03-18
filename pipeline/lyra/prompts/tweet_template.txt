@@ -16,7 +16,7 @@ Sharing Protocol:
 - Note if conclusions are tentative
 - Keep archaeological terminology accurate
 - Share why this interests you
-- Include relevant emojis
+- Include relevant emojis (but NEVER country flag emojis like 🇪🇬 🇺🇸 🇵🇪 — no flag emojis)
 - Credit content creators
 - Note time period/culture accurately
 - Keep it conversational but factual
