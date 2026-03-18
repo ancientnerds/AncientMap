@@ -143,14 +143,16 @@ export default function PipelineHexGraph({ pipeline, pollInterval = 60000 }: Pip
   };
 
   const getSourceState = (): HexState => {
-    if (replay.active && replay.step < 0) return 'run';
-    return 'src';
+    if (replay.active) return replay.step < 0 ? 'run' : 'src-done';
+    return hasStepData ? 'src-done' : 'src';
   };
 
   const getSinkState = (): HexState => {
-    if (replay.active) return replay.step > layout.nodes.length - 1 ? 'sink' : 'idle';
+    if (replay.active) return replay.step > layout.nodes.length - 1 ? 'sink-done' : 'sink';
     const s = deriveSinkState(steps);
-    return s === 'idle' ? 'sink' : s === 'done' ? 'sink' : s;
+    if (s === 'done') return 'sink-done';
+    if (s === 'fail') return 'fail';
+    return 'sink';
   };
 
   const handleHexClick = (id: string) => {
@@ -214,7 +216,7 @@ export default function PipelineHexGraph({ pipeline, pollInterval = 60000 }: Pip
               key={node.id}
               config={node}
               state={getNodeState(node, idx)}
-              stepData={replay.active ? undefined : steps[node.id]}
+              stepData={replay.active && idx >= replay.step ? undefined : steps[node.id]}
               isSelected={!replay.active && selectedId === node.id}
               onClick={replay.active ? undefined : handleHexClick}
             />

@@ -35,6 +35,7 @@
   height: 128px;
   z-index: 2;
   cursor: pointer;
+  transition: filter 0.3s;
 }
 
 /* -- Selected state ----------------------------------------------- */
@@ -58,7 +59,8 @@
 
 .hx-fill {
   position: absolute;
-  inset: 2px;
+  inset: 4px;
+  transition: background 0.3s, inset 0.3s;
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
   background: #060605;
   display: flex;
@@ -96,6 +98,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+.hx-meta-run {
+  color: var(--nerv-g);
+  font-size: 9px;
+  font-weight: 700;
+}
+
 .hx-step {
   font-family: var(--font-heading);
   font-size: 7px;
@@ -115,26 +123,20 @@
 .hx[data-type="llm"] .hx-fill { background: #080808; }
 .hx[data-type="db"] .hx-fill  { background: #040608; }
 
-/* -- Run state (active step — marching dashes) -------------------- */
-.hx.run .hx-brd { background: var(--nerv-g) !important; opacity: 1 !important; animation: alert-flash 0.8s ease-in-out infinite; }
-.hx.run .hx-fill { inset: 4px; overflow: hidden; }
-.hx.run .hx-fill::after {
-  content: '';
-  position: absolute;
-  inset: -50px;
-  background: repeating-linear-gradient(-45deg, var(--nerv-g) 0px, var(--nerv-g) 16px, #000 16px, #000 32px);
-  animation: stripe-march 1.2s linear infinite;
-  will-change: transform;
-}
-.hx.run .hx-ico { z-index: 2; position: relative; background: #000; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; margin: 0 auto; color: var(--nerv-g) !important; }
-.hx.run .hx-nm  { color: #fff; z-index: 2; position: relative; background: #000; padding: 1px 6px; display: inline-block; margin: 4px auto 0; }
-.hx.run .hx-meta { color: var(--nerv-g); z-index: 2; position: relative; background: #000; padding: 0 4px; display: inline-block; }
-.hx.run .hx-step { z-index: 2; background: #000; padding: 0 4px; }
-.hx.run { filter: drop-shadow(0 0 16px rgba(0, 204, 102, 0.4)); }
+/* -- Run state (active step — SVG dashed border) ----------------- */
+.hx.run .hx-dash { position: absolute; inset: -1px; z-index: 3; pointer-events: none; }
+.hx.run .hx-dash svg { width: 100%; height: 100%; }
+.hx.run .hx-dash polygon { fill: none; stroke: var(--nerv-g); stroke-width: 3; stroke-dasharray: 12 8; animation: dash-march 0.6s linear infinite; }
+.hx.run[data-type="llm"] .hx-dash polygon { stroke: var(--nerv-steel); }
+.hx.run[data-type="db"] .hx-dash polygon { stroke: var(--nerv-c); }
+.hx.run { filter: drop-shadow(0 0 20px rgba(0, 204, 102, 0.3)); }
+.hx.run[data-type="llm"] { filter: drop-shadow(0 0 22px rgba(216, 216, 208, 0.25)); }
+.hx.run[data-type="db"] { filter: drop-shadow(0 0 22px var(--nerv-cg)); }
+@keyframes dash-march { to { stroke-dashoffset: -20; } }
 
 /* -- Done state --------------------------------------------------- */
 .hx.done .hx-brd { background: var(--nerv-g) !important; opacity: 1 !important; }
-.hx.done .hx-fill { inset: 4px; background: var(--nerv-g) !important; }
+.hx.done .hx-fill { background: var(--nerv-g) !important; }
 .hx.done .hx-ico,
 .hx.done .hx-nm,
 .hx.done .hx-meta,
@@ -151,7 +153,7 @@
 
 /* -- Fail state --------------------------------------------------- */
 .hx.fail .hx-brd { background: var(--nerv-o) !important; opacity: 1 !important; animation: alert-flash 0.8s ease-in-out infinite; }
-.hx.fail .hx-fill { inset: 4px; overflow: hidden; }
+.hx.fail .hx-fill { overflow: hidden; }
 .hx.fail .hx-fill::after {
   content: '';
   position: absolute;
@@ -166,19 +168,37 @@
 .hx.fail .hx-step { z-index: 2; background: #000; padding: 0 4px; }
 .hx.fail { filter: drop-shadow(0 0 16px var(--nerv-og)); }
 
-/* -- Source state ------------------------------------------------- */
+/* -- Source state (dim) ------------------------------------------- */
 .hx.src .hx-brd { background: var(--nerv-r); opacity: 0.6; }
 .hx.src .hx-fill { background: #080404; }
 .hx.src .hx-ico  { color: var(--nerv-r) !important; filter: drop-shadow(0 0 10px var(--nerv-rg)) !important; }
 .hx.src .hx-nm   { color: var(--nerv-r); }
 .hx.src { filter: drop-shadow(0 0 12px rgba(160, 8, 8, 0.2)); }
 
-/* -- Sink state --------------------------------------------------- */
+/* -- Source filled state ------------------------------------------ */
+.hx.src-done .hx-brd { background: var(--nerv-r) !important; opacity: 1 !important; }
+.hx.src-done .hx-fill { background: var(--nerv-r) !important; }
+.hx.src-done .hx-ico,
+.hx.src-done .hx-nm,
+.hx.src-done .hx-meta,
+.hx.src-done .hx-step { color: #000 !important; filter: none !important; text-shadow: none !important; }
+.hx.src-done { filter: drop-shadow(0 0 12px rgba(160, 8, 8, 0.35)); }
+
+/* -- Sink state (dim) --------------------------------------------- */
 .hx.sink .hx-brd { background: var(--nerv-g); opacity: 0.6; }
 .hx.sink .hx-fill { background: #040804; }
 .hx.sink .hx-ico  { color: var(--nerv-g) !important; filter: drop-shadow(0 0 14px var(--nerv-gg)) !important; font-size: 26px; }
 .hx.sink .hx-nm   { color: var(--nerv-g); }
 .hx.sink { filter: drop-shadow(0 0 14px rgba(0, 204, 102, 0.25)); }
+
+/* -- Sink filled state -------------------------------------------- */
+.hx.sink-done .hx-brd { background: var(--nerv-g) !important; opacity: 1 !important; }
+.hx.sink-done .hx-fill { background: var(--nerv-g) !important; }
+.hx.sink-done .hx-ico,
+.hx.sink-done .hx-nm,
+.hx.sink-done .hx-meta,
+.hx.sink-done .hx-step { color: #000 !important; filter: none !important; text-shadow: none !important; }
+.hx.sink-done { filter: drop-shadow(0 0 14px rgba(0, 204, 102, 0.35)); }
 
 /* -- Scheduled/skip state ----------------------------------------- */
 .hx.schd .hx-brd { background: var(--nerv-c); opacity: 0.25; }
@@ -309,6 +329,5 @@
 @media (prefers-reduced-motion: reduce) {
   .hx.fail .hx-brd { animation: none; }
   .hx.fail .hx-fill::after { animation: none; }
-  .hx.run .hx-brd { animation: none; }
-  .hx.run .hx-fill::after { animation: none; }
+  .hx.run .hx-dash polygon { animation: none; }
 }
