@@ -143,7 +143,7 @@ class LyraStatusResponse(BaseModel):
 class PipelineStepData(BaseModel):
     count: int
     elapsed: float
-    status: str  # "done", "fail", "skip"
+    status: str  # "done", "fail", "skip", "run"
     error: str | None = None
 
 

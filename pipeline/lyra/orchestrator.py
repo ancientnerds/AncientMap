@@ -256,6 +256,55 @@ def _log_cycle_summary(
     logger.info("\n".join(lines))
 
 
+def _build_step_data(
+    step_results: dict[str, tuple[int, float, str | None]],
+    running_step: str | None = None,
+) -> dict:
+    """Build the step_data dict from accumulated results."""
+    step_data: dict = {}
+    for name in STEP_ORDER:
+        if name == running_step:
+            step_data[name] = {"count": 0, "elapsed": 0, "status": "run"}
+        elif name in step_results:
+            count, elapsed, error = step_results[name]
+            step_data[name] = {
+                "count": count,
+                "elapsed": round(elapsed, 1),
+                "status": "fail" if count < 0 else "done",
+                "error": error,
+            }
+        elif name in STEP_INTERVALS and _cycle_count % STEP_INTERVALS[name] != 0:
+            step_data[name] = {"count": 0, "elapsed": 0, "status": "skip"}
+    return step_data
+
+
+def _write_step_heartbeat(
+    step_results: dict[str, tuple[int, float, str | None]],
+    running_step: str,
+    cycle_start: float,
+) -> None:
+    """Write incremental step data to heartbeat so the frontend sees live progress."""
+    from pipeline.database import engine
+
+    step_data = _build_step_data(step_results, running_step=running_step)
+    step_data["_total_elapsed"] = round(time.time() - cycle_start, 1)
+    try:
+        with engine.connect() as conn:
+            conn.execute(
+                text("""
+                    UPDATE pipeline_heartbeats
+                    SET last_heartbeat = NOW(),
+                        status = 'ok',
+                        step_data = CAST(:step_data AS jsonb)
+                    WHERE pipeline_name = 'lyra'
+                """),
+                {"step_data": json.dumps(step_data)},
+            )
+            conn.commit()
+    except Exception:
+        logger.debug("Failed to write incremental heartbeat", exc_info=True)
+
+
 def run_pipeline(
     settings: LyraSettings, only_step: str | None = None, only_group: str | None = None
 ) -> dict | None:
@@ -269,7 +318,7 @@ def run_pipeline(
     seed_channels()
 
     cycle_start = time.time()
-    step_results: dict[str, tuple[int, float]] = {}
+    step_results: dict[str, tuple[int, float, str | None]] = {}
 
     if only_step:
         steps_to_run = [only_step]
@@ -294,6 +343,9 @@ def run_pipeline(
             if _cycle_count % interval != 0:
                 continue
 
+        # Mark step as running and write incremental progress
+        _write_step_heartbeat(step_results, step_name, cycle_start)
+
         try:
             result, elapsed = _run_step(step_name, settings)
             step_results[step_name] = (result, elapsed, None)
@@ -307,18 +359,7 @@ def run_pipeline(
     total_elapsed = time.time() - cycle_start
     _log_cycle_summary(step_results, total_elapsed)
 
-    step_data = {}
-    for name in STEP_ORDER:
-        if name in step_results:
-            count, elapsed, error = step_results[name]
-            step_data[name] = {
-                "count": count,
-                "elapsed": round(elapsed, 1),
-                "status": "fail" if count < 0 else "done",
-                "error": error,
-            }
-        elif name in STEP_INTERVALS and _cycle_count % STEP_INTERVALS[name] != 0:
-            step_data[name] = {"count": 0, "elapsed": 0, "status": "skip"}
+    step_data = _build_step_data(step_results)
     step_data["_total_elapsed"] = round(total_elapsed, 1)
     return step_data
 

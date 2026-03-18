@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 export interface StepData {
   count: number;
   elapsed: number;
-  status: 'done' | 'fail' | 'skip';
+  status: 'done' | 'fail' | 'skip' | 'run';
   error?: string;
 }
 

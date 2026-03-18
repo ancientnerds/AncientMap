@@ -741,6 +741,28 @@ def _assemble_article(
 # ---------------------------------------------------------------------------
 
 
+def _write_article_heartbeat(step_data: dict, running_step: str, t0_total: float) -> None:
+    """Write incremental article pipeline heartbeat for live hex graph updates."""
+    data = dict(step_data)
+    data[running_step] = {"count": 0, "elapsed": 0, "status": "run"}
+    data["_total_elapsed"] = round(time.time() - t0_total, 1)
+    try:
+        with db_engine.connect() as conn:
+            conn.execute(
+                sa_text("""
+                    UPDATE pipeline_heartbeats
+                    SET last_heartbeat = NOW(),
+                        status = 'ok',
+                        step_data = CAST(:step_data AS jsonb)
+                    WHERE pipeline_name = 'lyra-article'
+                """),
+                {"step_data": json.dumps(data)},
+            )
+            conn.commit()
+    except Exception:
+        logger.debug("Failed to write article heartbeat", exc_info=True)
+
+
 def generate_weekly_article(settings: LyraSettings) -> bool:
     """Generate a weekly article from this week's NewsItems.
 
@@ -769,6 +791,7 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
 
     with get_session() as session:
         # -- collect --
+        _write_article_heartbeat(step_data, "collect", t0_total)
         t0 = time.time()
         items = _collect_article_items(week_start, week_end, session, settings)
         step_data["collect"] = {
@@ -797,6 +820,7 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
                     facts_by_citation[ms["citation"]] = ms["facts"]
 
         # -- write --
+        _write_article_heartbeat(step_data, "write", t0_total)
         section_labels = [s["label"] for s in sections]
         if speculative:
             section_labels.append("Beyond the Mainstream")
@@ -814,6 +838,7 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
             return False
 
         # -- verify --
+        _write_article_heartbeat(step_data, "verify", t0_total)
         logger.info("Verifying article against source facts (extended thinking)")
         logger.info("Draft body length: %d chars", len(draft_body))
         t0 = time.time()
@@ -826,6 +851,7 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
         logger.info("Verified body length: %d chars", len(verified_body))
 
         # -- polish --
+        _write_article_heartbeat(step_data, "polish", t0_total)
         logger.info("Polishing article for coherence")
         t0 = time.time()
         polished_body = _polish_article(verified_body, settings)
@@ -847,6 +873,7 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
         polished_body, sources = _cleanup_citations(polished_body, sources)
 
         # -- headline --
+        _write_article_heartbeat(step_data, "headline", t0_total)
         logger.info("Generating headline and TLDR")
         t0 = time.time()
         headline, tldr = _generate_headline_tldr(polished_body, settings)

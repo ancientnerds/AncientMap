@@ -115,6 +115,23 @@
 .hx[data-type="llm"] .hx-fill { background: #080808; }
 .hx[data-type="db"] .hx-fill  { background: #040608; }
 
+/* -- Run state (active step — marching dashes) -------------------- */
+.hx.run .hx-brd { background: var(--nerv-g) !important; opacity: 1 !important; animation: alert-flash 0.8s ease-in-out infinite; }
+.hx.run .hx-fill { inset: 4px; overflow: hidden; }
+.hx.run .hx-fill::after {
+  content: '';
+  position: absolute;
+  inset: -50px;
+  background: repeating-linear-gradient(-45deg, var(--nerv-g) 0px, var(--nerv-g) 16px, #000 16px, #000 32px);
+  animation: stripe-march 1.2s linear infinite;
+  will-change: transform;
+}
+.hx.run .hx-ico { z-index: 2; position: relative; background: #000; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; margin: 0 auto; color: var(--nerv-g) !important; }
+.hx.run .hx-nm  { color: #fff; z-index: 2; position: relative; background: #000; padding: 1px 6px; display: inline-block; margin: 4px auto 0; }
+.hx.run .hx-meta { color: var(--nerv-g); z-index: 2; position: relative; background: #000; padding: 0 4px; display: inline-block; }
+.hx.run .hx-step { z-index: 2; background: #000; padding: 0 4px; }
+.hx.run { filter: drop-shadow(0 0 16px rgba(0, 204, 102, 0.4)); }
+
 /* -- Done state --------------------------------------------------- */
 .hx.done .hx-brd { background: var(--nerv-g) !important; opacity: 1 !important; }
 .hx.done .hx-fill { inset: 4px; background: var(--nerv-g) !important; }
@@ -268,4 +285,6 @@
 @media (prefers-reduced-motion: reduce) {
   .hx.fail .hx-brd { animation: none; }
   .hx.fail .hx-fill::after { animation: none; }
+  .hx.run .hx-brd { animation: none; }
+  .hx.run .hx-fill::after { animation: none; }
 }

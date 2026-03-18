@@ -1,4 +1,4 @@
-export type HexState = 'done' | 'run' | 'fail' | 'schd' | 'skip' | 'src' | 'sink' | 'idle';
+export type HexState = 'done' | 'run' | 'fail' | 'schd' | 'src' | 'sink' | 'idle';
 export type HexDataType = 'llm' | 'db';
 
 export interface HexNodeConfig {

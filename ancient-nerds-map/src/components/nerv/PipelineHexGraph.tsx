@@ -14,8 +14,21 @@ interface PipelineHexGraphProps {
 
 function resolveState(stepData?: StepData): HexState {
   if (!stepData) return 'idle';
+  if (stepData.status === 'run') return 'run';
   if (stepData.status === 'fail') return 'fail';
   if (stepData.status === 'skip') return 'schd';
+  return 'done';
+}
+
+function deriveSourceState(steps: Record<string, StepData>): HexState {
+  return Object.keys(steps).length === 0 ? 'idle' : 'done';
+}
+
+function deriveSinkState(steps: Record<string, StepData>): HexState {
+  const vals = Object.values(steps);
+  if (vals.length === 0) return 'idle';
+  if (vals.some(s => s.status === 'run')) return 'idle'; // not done yet
+  if (vals.some(s => s.status === 'fail')) return 'fail';
   return 'done';
 }
 
@@ -96,7 +109,7 @@ export default function PipelineHexGraph({ pipeline, pollInterval = 60000 }: Pip
         <div className="measurement-grid" />
         <div className="hive" style={{ maxWidth: layout.hiveWidth, minHeight: layout.hiveHeight }}>
           {/* Source node */}
-          <HexNode config={layout.sourceNode} state="src" />
+          <HexNode config={layout.sourceNode} state={deriveSourceState(steps) === 'idle' ? 'src' : 'done'} />
 
           {/* Pipeline step nodes */}
           {layout.nodes.map((node) => (
@@ -111,9 +124,10 @@ export default function PipelineHexGraph({ pipeline, pollInterval = 60000 }: Pip
           ))}
 
           {/* Sink nodes */}
-          {layout.sinkNodes.map((node) => (
-            <HexNode key={node.id} config={node} state="sink" />
-          ))}
+          {layout.sinkNodes.map((node) => {
+            const sinkState = deriveSinkState(steps);
+            return <HexNode key={node.id} config={node} state={sinkState === 'idle' ? 'sink' : sinkState} />;
+          })}
         </div>
       </div>
 
