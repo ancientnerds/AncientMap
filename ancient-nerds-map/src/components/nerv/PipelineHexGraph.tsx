@@ -260,6 +260,12 @@ export default function PipelineHexGraph({ pipeline, pollInterval = 60000 }: Pip
         <div className="phg-legend-item">
           <span style={{ color: 'var(--nerv-c)' }}>&#9632;</span> DB
         </div>
+        {hasStepData && layout.nodes.some(n => n.ragPhase) && <>
+          <div className="phg-legend-sep" />
+          <div className="phg-legend-item"><span style={{ color: 'var(--nerv-c)' }}>R</span> Retrieval</div>
+          <div className="phg-legend-item"><span style={{ color: 'var(--nerv-o)' }}>A</span> Augment</div>
+          <div className="phg-legend-item"><span style={{ color: 'var(--nerv-g)' }}>G</span> Generate</div>
+        </>}
       </div>
     </div>
   );
