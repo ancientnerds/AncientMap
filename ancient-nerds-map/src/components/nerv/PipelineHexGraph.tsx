@@ -122,9 +122,10 @@ function useHiveScale(hiveWidth: number) {
     const el = containerRef.current;
     if (!el) return;
     const update = () => {
-      const available = el.clientWidth - 32; // account for padding
-      const s = Math.min(1, available / (hiveWidth + 110)); // +110 for hex width overhang
-      setScale(Math.round(s * 100) / 100); // avoid sub-pixel jitter
+      const available = el.clientWidth;
+      const needed = hiveWidth + 110; // +110 for last hex width
+      if (available >= needed) { setScale(1); return; }
+      setScale(Math.round((available / needed) * 100) / 100);
     };
     update();
     const ro = new ResizeObserver(update);
