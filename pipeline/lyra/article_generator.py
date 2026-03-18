@@ -884,7 +884,7 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
             conn.execute(
                 sa_text("""
                     INSERT INTO pipeline_heartbeats (pipeline_name, last_heartbeat, status, last_error, step_data)
-                    VALUES ('lyra-article', NOW(), :status, :error, :step_data::jsonb)
+                    VALUES ('lyra-article', NOW(), :status, :error, CAST(:step_data AS jsonb))
                     ON CONFLICT (pipeline_name) DO UPDATE SET
                         last_heartbeat = NOW(),
                         status = EXCLUDED.status,
