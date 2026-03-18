@@ -1,6 +1,6 @@
-import { type ReactNode, useState, useEffect, lazy, Suspense } from 'react'
-import { config } from '../../config'
+import { type ReactNode, useState, lazy, Suspense } from 'react'
 import { BRAND_NAME, BRAND_ASSETS } from '../../constants/brand'
+import { usePipelineStatus } from '../nerv/usePipelineStatus'
 import HamburgerNav from './HamburgerNav'
 import './page-header.css'
 
@@ -16,19 +16,8 @@ interface PageHeaderProps {
 }
 
 function LiveIndicator({ onClick }: { onClick?: () => void }) {
-  const [online, setOnline] = useState(false)
-
-  useEffect(() => {
-    const check = () => {
-      fetch(`${config.api.baseUrl}/news/lyra-status`)
-        .then(r => r.ok ? r.json() : null)
-        .then(d => setOnline(d ? d.status === 'online' : false))
-        .catch(() => setOnline(false))
-    }
-    check()
-    const id = setInterval(check, 60_000)
-    return () => clearInterval(id)
-  }, [])
+  const { data } = usePipelineStatus('news')
+  const online = data?.status === 'online'
 
   return (
     <div

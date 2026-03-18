@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { config } from '../config'
 import { DataStore } from '../data/DataStore'
+import { usePipelineStatus } from './nerv/usePipelineStatus'
 import type { NewsItemData, NewsFeedResponse } from '../types/news'
 import NewsCard from './news/NewsCard'
 import './news/news-cards.css'
@@ -62,18 +63,10 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
     return () => { document.body.classList.remove('news-feed-open') }
   }, [])
 
+  const { data: pipelineData } = usePipelineStatus('news')
   useEffect(() => {
-    const controller = new AbortController()
-    const check = () => {
-      fetch(`${config.api.baseUrl}/news/lyra-status`, { signal: controller.signal })
-        .then(r => r.ok ? r.json() : null)
-        .then(d => setOnline(d ? d.status === 'online' : false))
-        .catch(() => setOnline(false))
-    }
-    check()
-    const id = setInterval(check, 60_000)
-    return () => { clearInterval(id); controller.abort() }
-  }, [])
+    setOnline(pipelineData?.status === 'online')
+  }, [pipelineData])
 
   const loadMore = () => {
     if (hasMore && !loading) {
