@@ -222,6 +222,30 @@
   font-weight: 700;
 }
 
+.phg-replay-btn {
+  background: none;
+  border: 1px solid rgba(0, 204, 102, 0.3);
+  color: var(--nerv-g);
+  font-size: 10px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-family: var(--font-heading);
+  letter-spacing: 1px;
+  line-height: 1;
+}
+.phg-replay-btn:hover {
+  border-color: var(--nerv-g);
+  background: rgba(0, 204, 102, 0.08);
+}
+.phg-replay-btn.replaying {
+  color: var(--nerv-o);
+  border-color: rgba(255, 152, 48, 0.3);
+}
+.phg-replay-btn.replaying:hover {
+  border-color: var(--nerv-o);
+  background: rgba(255, 152, 48, 0.08);
+}
+
 .phg-error {
   color: var(--nerv-r);
   font-size: 9px;
