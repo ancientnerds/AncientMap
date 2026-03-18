@@ -199,7 +199,9 @@ def _run_step(step_name: str, settings: LyraSettings) -> tuple[int, float]:
     return result, elapsed
 
 
-def _log_cycle_summary(step_results: dict[str, tuple[int, float]], total_elapsed: float) -> None:
+def _log_cycle_summary(
+    step_results: dict[str, tuple[int, float, str | None]], total_elapsed: float
+) -> None:
     """Log a summary of what happened in this cycle."""
     from pipeline.database import engine
 
@@ -224,7 +226,7 @@ def _log_cycle_summary(step_results: dict[str, tuple[int, float]], total_elapsed
     # Step timings
     for name in STEP_ORDER:
         if name in step_results:
-            count, elapsed = step_results[name]
+            count, elapsed, _err = step_results[name]
             if count < 0:
                 lines.append(f"  {name:<12} FAILED")
             else:
@@ -1651,7 +1653,7 @@ def main() -> None:
             conn.execute(
                 text("""
                 INSERT INTO pipeline_heartbeats (pipeline_name, last_heartbeat, status, last_error, step_data)
-                VALUES ('lyra', NOW(), :status, :error, :step_data::jsonb)
+                VALUES ('lyra', NOW(), :status, :error, CAST(:step_data AS jsonb))
                 ON CONFLICT (pipeline_name) DO UPDATE SET
                     last_heartbeat = NOW(),
                     status = EXCLUDED.status,
@@ -1696,7 +1698,7 @@ def main() -> None:
                     conn.execute(
                         text("""
                         INSERT INTO pipeline_heartbeats (pipeline_name, last_heartbeat, status, last_error, step_data)
-                        VALUES ('lyra', NOW(), :status, :error, :step_data::jsonb)
+                        VALUES ('lyra', NOW(), :status, :error, CAST(:step_data AS jsonb))
                         ON CONFLICT (pipeline_name) DO UPDATE SET
                             last_heartbeat = NOW(),
                             status = EXCLUDED.status,
