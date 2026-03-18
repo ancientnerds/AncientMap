@@ -20,10 +20,6 @@ function resolveState(stepData?: StepData): HexState {
   return 'done';
 }
 
-function deriveSourceState(steps: Record<string, StepData>): HexState {
-  return Object.keys(steps).length === 0 ? 'idle' : 'done';
-}
-
 function deriveSinkState(steps: Record<string, StepData>): HexState {
   const vals = Object.values(steps);
   if (vals.length === 0) return 'idle';
@@ -147,14 +143,14 @@ export default function PipelineHexGraph({ pipeline, pollInterval = 60000 }: Pip
   };
 
   const getSourceState = (): HexState => {
-    if (replay.active) return replay.step >= 0 ? 'done' : 'run';
-    return deriveSourceState(steps) === 'idle' ? 'src' : 'done';
+    if (replay.active && replay.step < 0) return 'run';
+    return 'src';
   };
 
   const getSinkState = (): HexState => {
-    if (replay.active) return replay.step > layout.nodes.length - 1 ? 'done' : 'idle';
+    if (replay.active) return replay.step > layout.nodes.length - 1 ? 'sink' : 'idle';
     const s = deriveSinkState(steps);
-    return s === 'idle' ? 'sink' : s;
+    return s === 'idle' ? 'sink' : s === 'done' ? 'sink' : s;
   };
 
   const handleHexClick = (id: string) => {
