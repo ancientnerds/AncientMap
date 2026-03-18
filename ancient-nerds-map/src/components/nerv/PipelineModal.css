@@ -21,7 +21,7 @@
 .pipeline-modal {
   position: relative;
   width: 100%;
-  max-width: 560px;
+  max-width: 720px;
   overflow: hidden;
   background: var(--surface-page, #0a0a0a);
   border: 1px solid var(--nerv-g-dim, rgba(0, 204, 102, 0.2));
