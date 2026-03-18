@@ -45,8 +45,8 @@ export const NEWS_LAYOUT: HexLayoutConfig = {
     // Row 2 — left to right
     { id: 'rescore', label: 'Rescore', icon: '\u21C5', dataType: 'db', stepNumber: '07', position: { left: 0, top: 196 }, ragPhase: 'A' },
     { id: 'dedup', label: 'Dedup', icon: '\u2298', dataType: 'db', stepNumber: '08', position: { left: 112, top: 196 }, ragPhase: 'A' },
-    { id: 'screenshots', label: 'Screens', icon: '\u2B1A', dataType: 'db', stepNumber: '09', position: { left: 224, top: 196 } },
-    { id: 'backfill', label: 'Backfill', icon: '\u21BA', dataType: 'db', stepNumber: '10', position: { left: 336, top: 196 } },
+    { id: 'screenshots', label: 'Screens', icon: '\u2B1A', dataType: 'db', stepNumber: '09', position: { left: 224, top: 196 }, ragPhase: 'A' },
+    { id: 'backfill', label: 'Backfill', icon: '\u21BA', dataType: 'db', stepNumber: '10', position: { left: 336, top: 196 }, ragPhase: 'A' },
   ],
 };
 

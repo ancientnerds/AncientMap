@@ -123,11 +123,13 @@
 /* -- RAG phase badge ---------------------------------------------- */
 .hx-rag {
   font-family: var(--font-heading);
-  font-size: 10px;
+  font-size: 7px;
   font-weight: 700;
   letter-spacing: 0.5px;
   line-height: 1;
-  text-shadow: 0 0 3px #000, 0 0 6px #000, 0 0 1px #000;
+  padding: 1px 3px;
+  background: #000;
+  border-radius: 1px;
 }
 .hx-rag-R { color: #ff2080; }
 .hx-rag-A { color: #ff8800; }
