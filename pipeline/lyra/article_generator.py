@@ -16,8 +16,10 @@ from pipeline.database import (
     NewsChannel,
     NewsItem,
     NewsVideo,
-    engine as db_engine,
     get_session,
+)
+from pipeline.database import (
+    engine as db_engine,
 )
 from pipeline.lyra.config import (
     LyraAPIError,
