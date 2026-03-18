@@ -93,7 +93,9 @@ def rescore_pending_items(settings: LyraSettings) -> int:
                 v = session.get(NewsVideo, video.id)
                 if v:
                     v.status = "rescored"
-                    logger.info(f"Video {video.id}: all items already rescored, transitioning to 'rescored'")
+                    logger.info(
+                        f"Video {video.id}: all items already rescored, transitioning to 'rescored'"
+                    )
                 continue
 
             # Load channel name (video is detached, so query directly)
