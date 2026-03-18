@@ -356,12 +356,7 @@
 
 /* -- Responsive --------------------------------------------------- */
 @media (max-width: 600px) {
-  .hive { transform: scale(0.75); transform-origin: top center; }
   .pipeline { padding: 16px; }
-}
-
-@media (max-width: 400px) {
-  .hive { transform: scale(0.6); transform-origin: top center; }
 }
 
 /* -- Reduced motion ----------------------------------------------- */

@@ -113,10 +113,33 @@ function useReplay(nodes: HexNodeConfig[], steps: Record<string, StepData>) {
   return { replay, start, stop };
 }
 
+// -- Auto-scale hive to fit container --
+function useHiveScale(hiveWidth: number) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => {
+      const available = el.clientWidth - 32; // account for padding
+      const s = Math.min(1, available / (hiveWidth + 110)); // +110 for hex width overhang
+      setScale(Math.round(s * 100) / 100); // avoid sub-pixel jitter
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [hiveWidth]);
+
+  return { containerRef, scale };
+}
+
 export default function PipelineHexGraph({ pipeline, pollInterval = 60000 }: PipelineHexGraphProps) {
   const layout = LAYOUTS[pipeline];
   const { data, error, loading } = usePipelineStatus(pipeline, pollInterval);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { containerRef, scale } = useHiveScale(layout.hiveWidth);
 
   // Reset selection on pipeline tab change
   useEffect(() => setSelectedId(null), [pipeline]);
@@ -204,9 +227,15 @@ export default function PipelineHexGraph({ pipeline, pollInterval = 60000 }: Pip
       )}
 
       {/* Hex hive */}
-      <div className="pipeline">
+      <div className="pipeline" ref={containerRef}>
         <div className="measurement-grid" />
-        <div className="hive" style={{ maxWidth: layout.hiveWidth, minHeight: layout.hiveHeight }}>
+        <div className="hive" style={{
+          maxWidth: layout.hiveWidth,
+          minHeight: layout.hiveHeight,
+          transform: scale < 1 ? `scale(${scale})` : undefined,
+          transformOrigin: 'top center',
+          height: scale < 1 ? (layout.hiveHeight + 128) * scale : undefined,
+        }}>
           {/* Source node */}
           <HexNode config={layout.sourceNode} state={getSourceState()} />
 

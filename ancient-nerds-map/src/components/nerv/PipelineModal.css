@@ -106,8 +106,5 @@
     padding: 8px;
   }
 
-  /* Override the global hive scale — keep hexes full size, let modal scroll */
-  .pipeline-modal-body .hive {
-    transform: none;
-  }
+  /* Auto-scale handles hive sizing now */
 }
