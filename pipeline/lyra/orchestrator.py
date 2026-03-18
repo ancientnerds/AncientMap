@@ -12,6 +12,7 @@ Local dev usage:
 
 import argparse
 import concurrent.futures
+import json
 import logging
 import logging.handlers
 import sys
@@ -255,7 +256,7 @@ def _log_cycle_summary(step_results: dict[str, tuple[int, float]], total_elapsed
 
 def run_pipeline(
     settings: LyraSettings, only_step: str | None = None, only_group: str | None = None
-) -> None:
+) -> dict | None:
     """Run one full pipeline cycle, a single step, or a named group of steps."""
     global _cycle_count
 
@@ -293,16 +294,31 @@ def run_pipeline(
 
         try:
             result, elapsed = _run_step(step_name, settings)
-            step_results[step_name] = (result, elapsed)
+            step_results[step_name] = (result, elapsed, None)
             _, _, _, desc_template = STEPS[step_name]
             desc = desc_template.format(n=result)
             logger.info(f"  {step_name}: {desc} ({elapsed:.1f}s)")
-        except Exception:
+        except Exception as exc:
             logger.exception(f"  {step_name}: FAILED — continuing to next step")
-            step_results[step_name] = (-1, 0.0)
+            step_results[step_name] = (-1, 0.0, str(exc)[:500])
 
     total_elapsed = time.time() - cycle_start
     _log_cycle_summary(step_results, total_elapsed)
+
+    step_data = {}
+    for name in STEP_ORDER:
+        if name in step_results:
+            count, elapsed, error = step_results[name]
+            step_data[name] = {
+                "count": count,
+                "elapsed": round(elapsed, 1),
+                "status": "fail" if count < 0 else "done",
+                "error": error,
+            }
+        elif name in STEP_INTERVALS and _cycle_count % STEP_INTERVALS[name] != 0:
+            step_data[name] = {"count": 0, "elapsed": 0, "status": "skip"}
+    step_data["_total_elapsed"] = round(total_elapsed, 1)
+    return step_data
 
 
 def _run_migrations(engine) -> None:
@@ -1554,6 +1570,11 @@ def _run_migrations(engine) -> None:
         # before pipeline was fixed). Will be regenerated next Sunday cycle.
         conn.execute(text("DELETE FROM news_articles WHERE id = 7"))
 
+        # Add step_data column to heartbeats for per-step timing persistence
+        conn.execute(
+            text("ALTER TABLE pipeline_heartbeats ADD COLUMN IF NOT EXISTS step_data JSONB")
+        )
+
         conn.commit()
 
 
@@ -1615,8 +1636,9 @@ def main() -> None:
     if args.once or args.step or args.group:
         cycle_status = "ok"
         cycle_error = None
+        step_data = None
         try:
-            run_pipeline(settings, only_step=args.step, only_group=args.group)
+            step_data = run_pipeline(settings, only_step=args.step, only_group=args.group)
         except Exception as exc:
             logger.exception("Pipeline cycle failed")
             cycle_status = "error"
@@ -1628,14 +1650,19 @@ def main() -> None:
         with engine.connect() as conn:
             conn.execute(
                 text("""
-                INSERT INTO pipeline_heartbeats (pipeline_name, last_heartbeat, status, last_error)
-                VALUES ('lyra', NOW(), :status, :error)
+                INSERT INTO pipeline_heartbeats (pipeline_name, last_heartbeat, status, last_error, step_data)
+                VALUES ('lyra', NOW(), :status, :error, :step_data::jsonb)
                 ON CONFLICT (pipeline_name) DO UPDATE SET
                     last_heartbeat = NOW(),
                     status = EXCLUDED.status,
-                    last_error = EXCLUDED.last_error
+                    last_error = EXCLUDED.last_error,
+                    step_data = EXCLUDED.step_data
             """),
-                {"status": cycle_status, "error": cycle_error},
+                {
+                    "status": cycle_status,
+                    "error": cycle_error,
+                    "step_data": json.dumps(step_data) if step_data else None,
+                },
             )
             conn.commit()
         return
@@ -1652,8 +1679,9 @@ def main() -> None:
         if now - last_pipeline_run >= CYCLE_INTERVAL:
             cycle_status = "ok"
             cycle_error = None
+            step_data = None
             try:
-                run_pipeline(settings)
+                step_data = run_pipeline(settings)
             except Exception as exc:
                 logger.exception("Pipeline cycle failed")
                 cycle_status = "error"
@@ -1667,14 +1695,19 @@ def main() -> None:
                 with engine.connect() as conn:
                     conn.execute(
                         text("""
-                        INSERT INTO pipeline_heartbeats (pipeline_name, last_heartbeat, status, last_error)
-                        VALUES ('lyra', NOW(), :status, :error)
+                        INSERT INTO pipeline_heartbeats (pipeline_name, last_heartbeat, status, last_error, step_data)
+                        VALUES ('lyra', NOW(), :status, :error, :step_data::jsonb)
                         ON CONFLICT (pipeline_name) DO UPDATE SET
                             last_heartbeat = NOW(),
                             status = EXCLUDED.status,
-                            last_error = EXCLUDED.last_error
+                            last_error = EXCLUDED.last_error,
+                            step_data = EXCLUDED.step_data
                     """),
-                        {"status": cycle_status, "error": cycle_error},
+                        {
+                            "status": cycle_status,
+                            "error": cycle_error,
+                            "step_data": json.dumps(step_data) if step_data else None,
+                        },
                     )
                     conn.commit()
             except Exception:

@@ -1,0 +1,271 @@
+/* ===================================================================
+   Pipeline Hex Graph -- NERV operations dashboard
+   Ported from nerv-v5-complete.html mockup section 09
+   =================================================================== */
+
+/* -- Pipeline container ------------------------------------------- */
+.pipeline {
+  position: relative;
+  width: 100%;
+  background: #030303;
+  border: 2px solid rgba(0, 204, 102, 0.25);
+  padding: 30px;
+  box-shadow: inset 0 0 80px rgba(0, 204, 102, 0.02), 0 0 20px rgba(0, 204, 102, 0.04);
+  contain: layout style paint;
+}
+.pipeline .measurement-grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.2;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* -- Hive grid ---------------------------------------------------- */
+.hive {
+  position: relative;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* -- Hex node ----------------------------------------------------- */
+.hx {
+  position: absolute;
+  width: 110px;
+  height: 128px;
+  z-index: 2;
+  cursor: pointer;
+}
+
+/* -- Selected state ----------------------------------------------- */
+.hx.selected {
+  z-index: 10;
+  filter: drop-shadow(0 0 18px rgba(0, 204, 102, 0.6)) !important;
+}
+.hx.selected .hx-brd {
+  background: var(--nerv-g) !important;
+  opacity: 0.8 !important;
+}
+
+.hx-brd {
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  background: var(--nerv-steel-dim);
+  opacity: 0.12;
+  transition: all 0.3s;
+}
+
+.hx-fill {
+  position: absolute;
+  inset: 2px;
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  background: #060605;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 6px;
+}
+
+.hx-ico {
+  font-size: 22px;
+  line-height: 1;
+  filter: drop-shadow(0 0 6px currentColor);
+  margin-top: -12px;
+  color: var(--nerv-steel-dim);
+}
+
+.hx-nm {
+  font-family: var(--font-heading);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--nerv-steel-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transform: scaleX(0.82);
+  line-height: 1.1;
+  margin-top: 10px;
+}
+
+.hx-meta {
+  font-size: 7px;
+  color: rgba(136, 136, 128, 0.4);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hx-step {
+  font-family: var(--font-heading);
+  font-size: 7px;
+  font-weight: 700;
+  color: rgba(136, 136, 128, 0.25);
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%) scaleX(0.85);
+}
+
+/* -- Data-type variants ------------------------------------------- */
+.hx[data-type="llm"] .hx-ico { color: var(--nerv-steel); filter: drop-shadow(0 0 8px rgba(216, 216, 208, 0.3)); }
+.hx[data-type="db"] .hx-ico  { color: var(--nerv-c); filter: drop-shadow(0 0 8px var(--nerv-cg)); }
+.hx[data-type="llm"] .hx-brd { background: var(--nerv-steel-dim); }
+.hx[data-type="db"] .hx-brd  { background: var(--nerv-cd); }
+.hx[data-type="llm"] .hx-fill { background: #080808; }
+.hx[data-type="db"] .hx-fill  { background: #040608; }
+
+/* -- Done state --------------------------------------------------- */
+.hx.done .hx-brd { background: var(--nerv-g) !important; opacity: 1 !important; }
+.hx.done .hx-fill { inset: 4px; background: var(--nerv-g) !important; }
+.hx.done .hx-ico,
+.hx.done .hx-nm,
+.hx.done .hx-meta,
+.hx.done .hx-step { color: #000 !important; filter: none !important; text-shadow: none !important; }
+.hx.done { filter: drop-shadow(0 0 12px rgba(0, 204, 102, 0.25)); }
+/* Done + LLM type -> steel/white fill */
+.hx.done[data-type="llm"] .hx-fill { background: var(--nerv-steel) !important; }
+.hx.done[data-type="llm"] .hx-brd  { background: var(--nerv-steel) !important; }
+.hx.done[data-type="llm"] { filter: drop-shadow(0 0 12px rgba(216, 216, 208, 0.25)); }
+/* Done + DB type -> cyan fill */
+.hx.done[data-type="db"] .hx-fill { background: var(--nerv-c) !important; }
+.hx.done[data-type="db"] .hx-brd  { background: var(--nerv-c) !important; }
+.hx.done[data-type="db"] { filter: drop-shadow(0 0 12px rgba(32, 240, 255, 0.25)); }
+
+/* -- Fail state --------------------------------------------------- */
+.hx.fail .hx-brd { background: var(--nerv-o) !important; opacity: 1 !important; animation: alert-flash 0.8s ease-in-out infinite; }
+.hx.fail .hx-fill { inset: 4px; overflow: hidden; }
+.hx.fail .hx-fill::after {
+  content: '';
+  position: absolute;
+  inset: -50px;
+  background: repeating-linear-gradient(-45deg, var(--nerv-o) 0px, var(--nerv-o) 16px, #000 16px, #000 32px);
+  animation: stripe-march 1.2s linear infinite;
+  will-change: transform;
+}
+.hx.fail .hx-ico { z-index: 2; position: relative; background: #000; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; margin: 0 auto; }
+.hx.fail .hx-nm  { color: #fff; z-index: 2; position: relative; background: #000; padding: 1px 6px; display: inline-block; margin: 4px auto 0; }
+.hx.fail .hx-meta { color: #ff4040; z-index: 2; position: relative; background: #000; padding: 0 4px; display: inline-block; }
+.hx.fail .hx-step { z-index: 2; background: #000; padding: 0 4px; }
+.hx.fail { filter: drop-shadow(0 0 16px var(--nerv-og)); }
+
+/* -- Source state ------------------------------------------------- */
+.hx.src .hx-brd { background: var(--nerv-r); opacity: 0.6; }
+.hx.src .hx-fill { background: #080404; }
+.hx.src .hx-ico  { color: var(--nerv-r) !important; filter: drop-shadow(0 0 10px var(--nerv-rg)) !important; }
+.hx.src .hx-nm   { color: var(--nerv-r); }
+.hx.src { filter: drop-shadow(0 0 12px rgba(160, 8, 8, 0.2)); }
+
+/* -- Sink state --------------------------------------------------- */
+.hx.sink .hx-brd { background: var(--nerv-g); opacity: 0.6; }
+.hx.sink .hx-fill { background: #040804; }
+.hx.sink .hx-ico  { color: var(--nerv-g) !important; filter: drop-shadow(0 0 14px var(--nerv-gg)) !important; font-size: 26px; }
+.hx.sink .hx-nm   { color: var(--nerv-g); }
+.hx.sink { filter: drop-shadow(0 0 14px rgba(0, 204, 102, 0.25)); }
+
+/* -- Scheduled/skip state ----------------------------------------- */
+.hx.schd .hx-brd { background: var(--nerv-c); opacity: 0.25; }
+.hx.schd .hx-fill { background: #040608; }
+.hx.schd .hx-ico  { color: var(--nerv-c) !important; filter: drop-shadow(0 0 6px var(--nerv-cg)) !important; }
+.hx.schd .hx-nm   { color: var(--nerv-cd); }
+
+/* -- Graph shell -------------------------------------------------- */
+.phg {
+  width: 100%;
+}
+
+.phg-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  font-family: var(--font-heading);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--nerv-steel-dim);
+  margin-bottom: 12px;
+}
+
+.phg-status {
+  font-weight: 700;
+  color: var(--nerv-steel);
+}
+
+.phg-ts {
+  color: var(--nerv-gd);
+  font-family: var(--font-ui);
+  font-size: 9px;
+  letter-spacing: 0;
+}
+
+.phg-elapsed {
+  margin-left: auto;
+  color: var(--nerv-o);
+  font-weight: 700;
+}
+
+.phg-error {
+  color: var(--nerv-r);
+  font-size: 9px;
+}
+
+/* -- Countdown ---------------------------------------------------- */
+.phg-countdown {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px 8px;
+  font-family: var(--font-heading);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.phg-countdown-label {
+  color: var(--nerv-steel-dim);
+}
+
+.phg-countdown-value {
+  color: var(--nerv-c);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* -- Legend -------------------------------------------------------- */
+.phg-legend {
+  display: flex;
+  gap: 16px;
+  padding: 12px 0 0;
+  font-size: 9px;
+  color: var(--nerv-steel-dim);
+  font-family: var(--font-ui);
+}
+
+.phg-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.phg-legend-hex {
+  width: 10px;
+  height: 12px;
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
+
+/* -- Responsive --------------------------------------------------- */
+@media (max-width: 600px) {
+  .hive { transform: scale(0.75); transform-origin: top center; }
+  .pipeline { padding: 16px; }
+}
+
+@media (max-width: 400px) {
+  .hive { transform: scale(0.6); transform-origin: top center; }
+}
+
+/* -- Reduced motion ----------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .hx.fail .hx-brd { animation: none; }
+  .hx.fail .hx-fill::after { animation: none; }
+}

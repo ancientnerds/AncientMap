@@ -81,6 +81,7 @@ export default defineConfig({
         news: resolve(__dirname, 'news.html'),
         radar: resolve(__dirname, 'radar.html'),
         lyra: resolve(__dirname, 'lyra.html'),
+        lyraOps: resolve(__dirname, 'lyra-ops.html'),
         db: resolve(__dirname, 'db.html'),
         articles: resolve(__dirname, 'articles.html'),
         account: resolve(__dirname, 'account.html'),

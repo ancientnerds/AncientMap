@@ -1,0 +1,113 @@
+/* ===================================================================
+   Pipeline Modal — overlay for hex graph
+   =================================================================== */
+
+.pipeline-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: pipeline-modal-fade 0.15s ease-out;
+}
+
+@keyframes pipeline-modal-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.pipeline-modal {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  overflow: hidden;
+  background: var(--surface-page, #0a0a0a);
+  border: 1px solid var(--nerv-g-dim, rgba(0, 204, 102, 0.2));
+  box-shadow: 0 0 40px rgba(0, 204, 102, 0.06), 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+/* -- Close button -------------------------------------------------- */
+.pipeline-modal-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 10;
+  background: none;
+  border: none;
+  color: var(--text-secondary, #888);
+  cursor: pointer;
+  padding: 12px;
+  line-height: 1;
+}
+.pipeline-modal-close:hover {
+  color: var(--text-primary, #fff);
+}
+
+/* -- Tabs ---------------------------------------------------------- */
+.pipeline-modal-tabs {
+  display: flex;
+  border-bottom: 1px solid rgba(0, 204, 102, 0.15);
+  padding: 0 16px;
+}
+
+.pipeline-modal-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 10px 16px;
+  font-family: var(--font-heading);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--nerv-steel-dim, rgba(136, 136, 128, 0.5));
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.pipeline-modal-tab:hover {
+  color: var(--nerv-steel, #d8d8d0);
+}
+.pipeline-modal-tab.active {
+  color: var(--nerv-g, #0c6);
+  border-bottom-color: var(--nerv-g, #0c6);
+}
+
+/* -- Body ---------------------------------------------------------- */
+.pipeline-modal-body {
+  padding: 16px;
+}
+
+/* Scale hive inside modal on smaller viewports */
+.pipeline-modal-body .pipeline {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  padding: 16px;
+}
+
+/* -- Mobile -------------------------------------------------------- */
+@media (max-width: 600px) {
+  .pipeline-modal {
+    position: fixed;
+    inset: 0;
+    max-width: none;
+    overflow-y: auto;
+    overflow-x: hidden;
+    border: none;
+  }
+
+  .pipeline-modal-body {
+    padding: 8px;
+  }
+
+  .pipeline-modal-body .pipeline {
+    padding: 8px;
+  }
+
+  /* Override the global hive scale — keep hexes full size, let modal scroll */
+  .pipeline-modal-body .hive {
+    transform: none;
+  }
+}

@@ -140,6 +140,22 @@ class LyraStatusResponse(BaseModel):
     last_cycle_ok: bool = False
 
 
+class PipelineStepData(BaseModel):
+    count: int
+    elapsed: float
+    status: str  # "done", "fail", "skip"
+    error: str | None = None
+
+
+class PipelineStatusResponse(BaseModel):
+    pipeline: str
+    status: str  # "online", "offline"
+    last_heartbeat: str | None
+    last_cycle_ok: bool
+    total_elapsed: float | None
+    steps: dict[str, PipelineStepData]
+
+
 class NewsFilterSiteOption(BaseModel):
     id: str
     name: str
@@ -684,6 +700,91 @@ async def get_lyra_status(db: Session = Depends(get_db)):
         )
 
     cache_set(cache_key, result.model_dump(), ttl=60)  # 1 min cache
+    return result
+
+
+@router.get("/pipeline-status", response_model=PipelineStatusResponse)
+async def get_pipeline_status(
+    pipeline: str = Query("news", pattern="^(news|radar|article)$"),
+    db: Session = Depends(get_db),
+):
+    """Get pipeline step-level status for the ops dashboard."""
+    cache_key = f"news:pipeline-status:{pipeline}"
+    cached = cache_get(cache_key)
+    if cached:
+        return cached
+
+    # Determine which heartbeat row and which step keys to include
+    if pipeline == "article":
+        pipeline_name = "lyra-article"
+        step_keys = None  # Include all steps
+    else:
+        pipeline_name = "lyra"
+        # Filter to relevant step group
+        if pipeline == "news":
+            step_keys = {"fetch", "retry", "summarize", "match", "posts", "verify", "rescore", "dedup", "screenshots", "backfill"}
+        else:  # radar
+            step_keys = {"identify"}
+
+    try:
+        row = db.execute(
+            text(
+                "SELECT last_heartbeat, status, last_error, step_data FROM pipeline_heartbeats WHERE pipeline_name = :name"
+            ),
+            {"name": pipeline_name},
+        ).fetchone()
+    except Exception as exc:
+        db.rollback()
+        logger.warning(f"Pipeline status query failed: {exc}")
+        row = None
+
+    if not row:
+        result = PipelineStatusResponse(
+            pipeline=pipeline,
+            status="offline",
+            last_heartbeat=None,
+            last_cycle_ok=False,
+            total_elapsed=None,
+            steps={},
+        )
+    else:
+        last_hb = row[0]
+        cycle_status = row[1]
+        raw_step_data = row[3] or {}
+
+        age_seconds = (datetime.now(UTC) - last_hb).total_seconds()
+        # Online if heartbeat within 2 hours (news pipeline runs hourly)
+        # Article pipeline runs weekly, so use 8 days
+        max_age = 691200 if pipeline == "article" else 7200
+        is_online = age_seconds < max_age
+
+        # Filter steps and extract total_elapsed
+        total_elapsed = raw_step_data.get("_total_elapsed") if isinstance(raw_step_data, dict) else None
+        steps = {}
+        if isinstance(raw_step_data, dict):
+            for k, v in raw_step_data.items():
+                if k.startswith("_"):
+                    continue
+                if step_keys is not None and k not in step_keys:
+                    continue
+                if isinstance(v, dict):
+                    steps[k] = PipelineStepData(
+                        count=v.get("count", 0),
+                        elapsed=v.get("elapsed", 0),
+                        status=v.get("status", "done"),
+                        error=v.get("error"),
+                    )
+
+        result = PipelineStatusResponse(
+            pipeline=pipeline,
+            status="online" if is_online else "offline",
+            last_heartbeat=last_hb.isoformat(),
+            last_cycle_ok=(cycle_status == "ok"),
+            total_elapsed=total_elapsed,
+            steps=steps,
+        )
+
+    cache_set(cache_key, result.model_dump(), ttl=30)
     return result
 
 

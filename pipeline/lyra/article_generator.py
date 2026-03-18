@@ -5,14 +5,18 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
+from sqlalchemy import text as sa_text
 
 from pipeline.database import (
     NewsArticle,
     NewsChannel,
     NewsItem,
     NewsVideo,
+    engine as db_engine,
     get_session,
 )
 from pipeline.lyra.config import (
@@ -744,6 +748,9 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
         logger.error("No LLM API key configured")
         return False
 
+    t0_total = time.time()
+    step_data: dict = {}
+
     week_start, week_end = _get_week_range()
 
     with get_session() as session:
@@ -759,7 +766,14 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
             return False
 
     with get_session() as session:
+        # -- collect --
+        t0 = time.time()
         items = _collect_article_items(week_start, week_end, session, settings)
+        step_data["collect"] = {
+            "count": len(items),
+            "elapsed": round(time.time() - t0, 1),
+            "status": "done" if items else "fail",
+        }
 
         if not items:
             logger.info("No significant items this week for article")
@@ -780,26 +794,44 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
                 if ms.get("facts"):
                     facts_by_citation[ms["citation"]] = ms["facts"]
 
-        # Write complete article body in a single LLM call
+        # -- write --
         section_labels = [s["label"] for s in sections]
         if speculative:
             section_labels.append("Beyond the Mainstream")
         logger.info(f"Writing article body: {', '.join(section_labels)}")
+        t0 = time.time()
         draft_body = _write_article_body(sections, speculative, settings)
+        step_data["write"] = {
+            "count": len(draft_body),
+            "elapsed": round(time.time() - t0, 1),
+            "status": "done" if draft_body else "fail",
+        }
 
         if not draft_body:
             logger.error("Article body generation returned empty")
             return False
 
-        # Fact-check with extended thinking
+        # -- verify --
         logger.info("Verifying article against source facts (extended thinking)")
         logger.info("Draft body length: %d chars", len(draft_body))
+        t0 = time.time()
         verified_body = _verify_article(draft_body, facts_by_citation, settings)
+        step_data["verify"] = {
+            "count": len(verified_body),
+            "elapsed": round(time.time() - t0, 1),
+            "status": "done" if verified_body else "fail",
+        }
         logger.info("Verified body length: %d chars", len(verified_body))
 
-        # Editorial coherence pass
+        # -- polish --
         logger.info("Polishing article for coherence")
+        t0 = time.time()
         polished_body = _polish_article(verified_body, settings)
+        step_data["polish"] = {
+            "count": len(polished_body),
+            "elapsed": round(time.time() - t0, 1),
+            "status": "done" if len(polished_body) >= 200 else "fail",
+        }
 
         if len(polished_body) < 200:
             logger.error(
@@ -812,9 +844,16 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
         # Remove uncited sources, renumber citations
         polished_body, sources = _cleanup_citations(polished_body, sources)
 
-        # Generate headline + TLDR
+        # -- headline --
         logger.info("Generating headline and TLDR")
+        t0 = time.time()
         headline, tldr = _generate_headline_tldr(polished_body, settings)
+        is_fallback = headline == "Weekly Archaeological Digest"
+        step_data["headline"] = {
+            "count": 0 if is_fallback else 1,
+            "elapsed": round(time.time() - t0, 1),
+            "status": "done" if not is_fallback else "fail",
+        }
 
         # Format sources
         sources_md = _format_sources(sources)
@@ -835,6 +874,30 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
             published_at=datetime.now(UTC),
         )
         session.add(article)
+
+    # Write heartbeat
+    step_data["_total_elapsed"] = round(time.time() - t0_total, 1)
+    try:
+        with db_engine.connect() as conn:
+            conn.execute(
+                sa_text("""
+                    INSERT INTO pipeline_heartbeats (pipeline_name, last_heartbeat, status, last_error, step_data)
+                    VALUES ('lyra-article', NOW(), :status, :error, :step_data::jsonb)
+                    ON CONFLICT (pipeline_name) DO UPDATE SET
+                        last_heartbeat = NOW(),
+                        status = EXCLUDED.status,
+                        last_error = EXCLUDED.last_error,
+                        step_data = EXCLUDED.step_data
+                """),
+                {
+                    "status": "ok",
+                    "error": None,
+                    "step_data": json.dumps(step_data),
+                },
+            )
+            conn.commit()
+    except Exception:
+        logger.warning("Failed to write article heartbeat", exc_info=True)
 
     logger.info(f"Generated weekly article: {headline}")
     return True
