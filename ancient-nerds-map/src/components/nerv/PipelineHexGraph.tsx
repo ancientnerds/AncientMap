@@ -143,7 +143,7 @@ export default function PipelineHexGraph({ pipeline, pollInterval = 60000 }: Pip
   };
 
   const getSourceState = (): HexState => {
-    if (replay.active) return replay.step < 0 ? 'run' : 'src-done';
+    if (replay.active) return 'src-done';
     return hasStepData ? 'src-done' : 'src';
   };
 
