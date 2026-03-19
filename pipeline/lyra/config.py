@@ -340,7 +340,13 @@ def _call_anthropic_api(
             }
         }
     if system_text:
-        create_kwargs["system"] = system_text
+        create_kwargs["system"] = [
+            {
+                "type": "text",
+                "text": system_text,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ]
 
     if thinking_config is not None:
         create_kwargs["thinking"] = thinking_config
