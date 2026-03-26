@@ -725,6 +725,46 @@ _RERANK_INSTRUCTIONS = {
     ),
 }
 
+_THEORY_RERANK_INSTRUCTIONS = {
+    "sites": (
+        "Prioritize archaeological sites associated with construction theories, "
+        "alternative building methods, or debated construction techniques. "
+        "Rank sites with documented engineering mysteries or contested origins higher."
+    ),
+    "news": (
+        "Prioritize news items discussing alternative theories, construction methods, "
+        "fringe hypotheses, or debates about ancient techniques. Rank items with "
+        "specific claims about how things were built higher than general discovery news."
+    ),
+    "transcripts": (
+        "Prioritize transcript passages that discuss theories, hypotheses, alternative "
+        "explanations, or debates about ancient construction, materials, or techniques. "
+        "Rank passages with specific arguments, evidence discussion, or expert opinions "
+        "higher than passing mentions."
+    ),
+    "articles": (
+        "Prioritize article sections covering theories, debates, alternative explanations, "
+        "or construction method analysis. Rank sections with substantive argumentation higher."
+    ),
+    "empires": _RERANK_INSTRUCTIONS["empires"],
+}
+
+_THEORY_KEYWORDS = frozenset({
+    "theory", "theories", "hypothesis", "hypotheses", "how", "why",
+    "built", "build", "construct", "construction", "method", "technique",
+    "cast", "casting", "carved", "carving", "geopolymer", "concrete",
+    "transport", "moved", "lifted", "fringe", "alternative", "mystery",
+    "unexplained", "debate", "controversial", "impossible", "advanced",
+    "lost", "forgotten", "ancient technology", "precision",
+})
+
+
+def _is_theory_query(query: str) -> bool:
+    """Detect theory/hypothesis questions that benefit from theory-aware reranking."""
+    words = set(query.lower().split())
+    return len(words & _THEORY_KEYWORDS) >= 2
+
+
 # English function words — present in virtually all English queries.
 # ASCII heuristic fails for German/French (few accented chars) and
 # English queries with Turkish site names (Göbekli Tepe).
@@ -898,7 +938,11 @@ def _hybrid_search_inner(
     # Per Voyage docs: prepend instructions to the query for rerank-2.5-lite
     reranker = get_reranker(backend=backend)
     docs = [_format_payload_for_rerank(hit.payload) for hit in scored_points]
-    instruction = _RERANK_INSTRUCTIONS.get(collection, "")
+    # Use theory-aware rerank instructions for hypothesis/construction questions
+    instructions = (
+        _THEORY_RERANK_INSTRUCTIONS if _is_theory_query(query) else _RERANK_INSTRUCTIONS
+    )
+    instruction = instructions.get(collection, "")
     rerank_query = f"{instruction}\n{query}" if instruction else query
     reranked = reranker.rerank(rerank_query, docs, model=RERANK_MODEL, top_k=limit)
     voyage_tokens += getattr(reranked, "total_tokens", 0) or 0
