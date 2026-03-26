@@ -749,14 +749,43 @@ _THEORY_RERANK_INSTRUCTIONS = {
     "empires": _RERANK_INSTRUCTIONS["empires"],
 }
 
-_THEORY_KEYWORDS = frozenset({
-    "theory", "theories", "hypothesis", "hypotheses", "how", "why",
-    "built", "build", "construct", "construction", "method", "technique",
-    "cast", "casting", "carved", "carving", "geopolymer", "concrete",
-    "transport", "moved", "lifted", "fringe", "alternative", "mystery",
-    "unexplained", "debate", "controversial", "impossible", "advanced",
-    "lost", "forgotten", "ancient technology", "precision",
-})
+_THEORY_KEYWORDS = frozenset(
+    {
+        "theory",
+        "theories",
+        "hypothesis",
+        "hypotheses",
+        "how",
+        "why",
+        "built",
+        "build",
+        "construct",
+        "construction",
+        "method",
+        "technique",
+        "cast",
+        "casting",
+        "carved",
+        "carving",
+        "geopolymer",
+        "concrete",
+        "transport",
+        "moved",
+        "lifted",
+        "fringe",
+        "alternative",
+        "mystery",
+        "unexplained",
+        "debate",
+        "controversial",
+        "impossible",
+        "advanced",
+        "lost",
+        "forgotten",
+        "ancient technology",
+        "precision",
+    }
+)
 
 
 def _is_theory_query(query: str) -> bool:
@@ -768,19 +797,92 @@ def _is_theory_query(query: str) -> bool:
 # English function words — present in virtually all English queries.
 # ASCII heuristic fails for German/French (few accented chars) and
 # English queries with Turkish site names (Göbekli Tepe).
-_EN_STOPWORDS = frozenset({
-    "the", "a", "an", "is", "are", "was", "were", "be", "been",
-    "have", "has", "had", "do", "does", "did", "will", "would",
-    "could", "should", "may", "might", "can", "shall",
-    "i", "you", "he", "she", "it", "we", "they", "my", "your",
-    "what", "which", "who", "whom", "where", "when", "why", "how",
-    "that", "this", "these", "those", "there", "here",
-    "about", "from", "with", "without", "between", "through",
-    "any", "some", "all", "each", "every", "both", "few", "more",
-    "other", "such", "only", "same", "than", "too", "very",
-    "not", "no", "nor", "but", "or", "and", "if", "so",
-    "of", "in", "to", "for", "on", "at", "by",
-})
+_EN_STOPWORDS = frozenset(
+    {
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "can",
+        "shall",
+        "i",
+        "you",
+        "he",
+        "she",
+        "it",
+        "we",
+        "they",
+        "my",
+        "your",
+        "what",
+        "which",
+        "who",
+        "whom",
+        "where",
+        "when",
+        "why",
+        "how",
+        "that",
+        "this",
+        "these",
+        "those",
+        "there",
+        "here",
+        "about",
+        "from",
+        "with",
+        "without",
+        "between",
+        "through",
+        "any",
+        "some",
+        "all",
+        "each",
+        "every",
+        "both",
+        "few",
+        "more",
+        "other",
+        "such",
+        "only",
+        "same",
+        "than",
+        "too",
+        "very",
+        "not",
+        "no",
+        "nor",
+        "but",
+        "or",
+        "and",
+        "if",
+        "so",
+        "of",
+        "in",
+        "to",
+        "for",
+        "on",
+        "at",
+        "by",
+    }
+)
 
 
 def _is_likely_english(text: str) -> bool:
@@ -900,7 +1002,9 @@ def _hybrid_search_inner(
     # handles cross-language retrieval natively. Empty BM25 results dilute RRF fusion.
     if _is_likely_english(query):
         prefetch.append(
-            models.Prefetch(query=sparse_vec, using="bm25", limit=prefetch_limit, filter=query_filter)
+            models.Prefetch(
+                query=sparse_vec, using="bm25", limit=prefetch_limit, filter=query_filter
+            )
         )
 
     if len(prefetch) > 1:
@@ -939,9 +1043,7 @@ def _hybrid_search_inner(
     reranker = get_reranker(backend=backend)
     docs = [_format_payload_for_rerank(hit.payload) for hit in scored_points]
     # Use theory-aware rerank instructions for hypothesis/construction questions
-    instructions = (
-        _THEORY_RERANK_INSTRUCTIONS if _is_theory_query(query) else _RERANK_INSTRUCTIONS
-    )
+    instructions = _THEORY_RERANK_INSTRUCTIONS if _is_theory_query(query) else _RERANK_INSTRUCTIONS
     instruction = instructions.get(collection, "")
     rerank_query = f"{instruction}\n{query}" if instruction else query
     reranked = reranker.rerank(rerank_query, docs, model=RERANK_MODEL, top_k=limit)

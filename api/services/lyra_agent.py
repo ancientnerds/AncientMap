@@ -805,7 +805,7 @@ def _auto_retrieve(
             aid = r.get("article_id", "")
             week = r.get("week_start", "")
             preview = r.get("text_preview", "")[:500]
-            line = f'- **{title}** (article_id: {aid}, week: {week})'
+            line = f"- **{title}** (article_id: {aid}, week: {week})"
             if preview:
                 line += f"\n  > {preview}"
             lines.append(line)
@@ -2333,9 +2333,8 @@ async def run_agent_stream(
 
                 if citations:
                     raw_text = _s1_result["content"].strip()
-                    if (
-                        not _skip_off_topic
-                        and (raw_text == "[OFF_TOPIC]" or raw_text.startswith("[OFF_TOPIC]"))
+                    if not _skip_off_topic and (
+                        raw_text == "[OFF_TOPIC]" or raw_text.startswith("[OFF_TOPIC]")
                     ):
                         _s1_off_topic = True
                         _s1_prose = (
@@ -2352,7 +2351,7 @@ async def run_agent_stream(
                             f"Off-topic override: LLM returned [OFF_TOPIC] but "
                             f"{tool_calls_made} tool calls already proved relevance"
                         )
-                        raw_text = raw_text[len("[OFF_TOPIC]"):].strip()
+                        raw_text = raw_text[len("[OFF_TOPIC]") :].strip()
                     _s1_prose = raw_text if raw_text else None
                 else:
                     _s1_parsed = json.loads(_s1_result["content"])
