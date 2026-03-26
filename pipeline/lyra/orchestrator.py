@@ -1761,8 +1761,7 @@ def main() -> None:
 
         # Weekly article generation (with retry limit)
         if should_generate_article():
-            from datetime import datetime, UTC
-            current_week = datetime.now(UTC).strftime("%Y-W%W")
+            current_week = time.strftime("%Y-W%W", time.gmtime())
             if current_week != article_week_tracked:
                 article_attempts = 0
                 article_week_tracked = current_week
