@@ -43,18 +43,25 @@ _DECOMPOSE_SCHEMA = {
     },
 }
 
-_DECOMPOSE_SYSTEM = (
-    "You are a search query decomposer. Given a user question about archaeology, "
-    "split it into 1-3 independent search queries. If the question is already "
-    "focused on a single topic, return it unchanged as a single-element array. "
-    "Never add topics the user didn't ask about."
+_EXPAND_SYSTEM = (
+    "You are a search query expander for an archaeology knowledge base. "
+    "Given a user question, generate 2-3 alternative phrasings that would match "
+    "different relevant documents. Include:\n"
+    "1. The original question (or a cleaned-up version)\n"
+    "2. A rephrasing using synonyms or related terms\n"
+    "3. A more specific or concrete version if applicable\n"
+    "Always keep all variants about the SAME topic — never introduce new topics. "
+    "For non-English queries, generate English variants (the database is in English). "
+    "Return as a JSON array of query strings."
 )
 
-_DECOMPOSE_VAGUE_SYSTEM = (
-    "You are a search query decomposer. The user asked a vague/exploratory question "
-    "about archaeology. Generate 2-3 specific, searchable sub-queries that would "
-    "surface genuinely interesting results. Focus on: recent discoveries, unusual "
-    "findings, controversial debates. Return as a JSON array of query strings."
+_EXPAND_VAGUE_SYSTEM = (
+    "You are a search query expander for an archaeology knowledge base. "
+    "The user asked a vague/exploratory question. Generate 2-3 specific, "
+    "searchable query variants that would surface interesting results. "
+    "Focus on: recent discoveries, unusual findings, controversial debates. "
+    "For non-English queries, generate English variants (the database is in English). "
+    "Return as a JSON array of query strings."
 )
 
 # Vague/exploratory query detection
@@ -95,14 +102,17 @@ def _is_vague_query(query: str) -> bool:
     return bool(set(words) & _VAGUE_TERMS)
 
 
-async def _decompose_query(query: str, *, vague: bool = False) -> list[str]:
-    """Split complex queries into 1-3 independent search sub-queries.
+async def _expand_query(query: str, *, vague: bool = False) -> list[str]:
+    """Generate 2-3 query variants to explore different phrasings.
 
-    Uses Haiku with a tiny prompt. Returns the original query unchanged
-    for simple/focused questions (no extra cost).
+    Uses Haiku with a tiny prompt. Always returns the original query
+    as the first variant, plus 1-2 alternative phrasings.
 
-    When vague=True, uses an exploratory prompt that generates concrete
-    sub-queries from vague questions like "anything interesting lately?".
+    For non-English queries, generates English variants since the
+    database content is in English. This also provides BM25 matches
+    that the original non-English query would miss.
+
+    When vague=True, generates concrete sub-queries from exploratory questions.
     """
     import anthropic as _anthropic
 
@@ -114,7 +124,7 @@ async def _decompose_query(query: str, *, vague: bool = False) -> list[str]:
         client = _anthropic.AsyncAnthropic(api_key=api_key, timeout=30.0)
         resp = await client.messages.create(
             model=LLM_MODEL,
-            system=_DECOMPOSE_VAGUE_SYSTEM if vague else _DECOMPOSE_SYSTEM,
+            system=_EXPAND_VAGUE_SYSTEM if vague else _EXPAND_SYSTEM,
             messages=[{"role": "user", "content": query}],
             max_tokens=256,
             temperature=0.1,

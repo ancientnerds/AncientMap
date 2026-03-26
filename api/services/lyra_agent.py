@@ -54,8 +54,8 @@ from api.services.lyra_tool_prompts import wrap_tool_result
 from api.services.lyra_tools import (
     LLM_MODEL,
     TOOLS,
-    _decompose_query,
     _escape_ilike,
+    _expand_query,
     _hybrid_search,
     _is_vague_query,
     _reorder_by_relevance,
@@ -667,7 +667,7 @@ def _auto_retrieve(
     All searches run in parallel via ThreadPoolExecutor for speed.
 
     Args:
-        queries: List of sub-queries (from _decompose_query). Usually 1, up to 3.
+        queries: List of sub-queries (from _expand_query). Usually 1, up to 3.
 
     Returns:
         Tuple of (formatted context string, list of site result dicts for map highlighting,
@@ -1318,15 +1318,12 @@ async def run_agent_stream(
         # Run decomposition + filter extraction in parallel,
         # then pass sub-queries to _auto_retrieve() in a thread.
         use_filter_extraction = ctx.backend_type != "local"
-        # Skip decomposition for simple queries — saves 1-3s + tokens.
-        # Decompose when conjunctions/comparisons suggest multiple sub-topics,
-        # OR when the query is vague/exploratory and needs expansion.
-        _needs_decomp = any(
-            w in message.lower()
-            for w in (" and ", " or ", " vs ", " versus ", " compare", " compared to ")
-        )
+        # Multi-query expansion: generate 2-3 query variants to explore
+        # different phrasings. Always enabled for cloud backend — the LLM call
+        # costs ~200 tokens and runs in parallel with filter extraction.
+        # Skipped for local backend (no Anthropic API key).
         _is_vague = _is_vague_query(message)
-        use_decomposition = ctx.backend_type != "local" and (_needs_decomp or _is_vague)
+        use_expansion = ctx.backend_type != "local"
 
         yield {
             "type": "pipeline",
@@ -1349,9 +1346,9 @@ async def run_agent_stream(
         sub_queries: list[str] = [message]
         filters_or_exc: Any = {}
 
-        if use_decomposition and use_filter_extraction:
+        if use_expansion and use_filter_extraction:
             decomp_raw, filter_raw = await asyncio.gather(
-                _decompose_query(message, vague=_is_vague),
+                _expand_query(message, vague=_is_vague),
                 _extract_news_filters(message),
                 return_exceptions=True,
             )
@@ -1364,9 +1361,9 @@ async def run_agent_stream(
                         f"Decomposed query into {len(sub_queries)} sub-queries: {sub_queries}"
                     )
             filters_or_exc = filter_raw
-        elif use_decomposition:
+        elif use_expansion:
             try:
-                sub_queries = await _decompose_query(message, vague=_is_vague)
+                sub_queries = await _expand_query(message, vague=_is_vague)
                 if len(sub_queries) > 1:
                     logger.info(
                         f"Decomposed query into {len(sub_queries)} sub-queries: {sub_queries}"
