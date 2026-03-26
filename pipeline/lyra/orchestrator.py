@@ -1771,17 +1771,21 @@ def main() -> None:
                 try:
                     success = generate_weekly_article(settings)
                     if success:
-                        logger.info("Article generated successfully on attempt %d", article_attempts)
+                        logger.info(
+                            "Article generated successfully on attempt %d", article_attempts
+                        )
                         article_attempts = MAX_ARTICLE_ATTEMPTS  # stop retrying
                     else:
                         logger.warning(
                             "Article generation returned False (attempt %d/%d)",
-                            article_attempts, MAX_ARTICLE_ATTEMPTS,
+                            article_attempts,
+                            MAX_ARTICLE_ATTEMPTS,
                         )
                 except Exception:
                     logger.exception(
                         "Article generation failed with exception (attempt %d/%d)",
-                        article_attempts, MAX_ARTICLE_ATTEMPTS,
+                        article_attempts,
+                        MAX_ARTICLE_ATTEMPTS,
                     )
 
         # Sleep before next check

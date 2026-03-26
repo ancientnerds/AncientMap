@@ -357,6 +357,7 @@ def _call_anthropic_api(
 
     if timeout is not None:
         import httpx
+
         create_kwargs["timeout"] = httpx.Timeout(timeout, connect=30.0)
 
     response = client.messages.create(**create_kwargs)

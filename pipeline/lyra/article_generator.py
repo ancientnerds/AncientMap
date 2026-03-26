@@ -772,9 +772,7 @@ def _write_article_heartbeat(step_data: dict, running_step: str, t0_total: float
         logger.debug("Failed to write article heartbeat", exc_info=True)
 
 
-def _write_final_heartbeat(
-    step_data: dict, t0_total: float, *, error: str | None = None
-) -> None:
+def _write_final_heartbeat(step_data: dict, t0_total: float, *, error: str | None = None) -> None:
     """Write the final article heartbeat with success or failure status."""
     step_data["_total_elapsed"] = round(time.time() - t0_total, 1)
     try:
