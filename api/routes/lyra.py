@@ -88,6 +88,10 @@ class LyraChatRequest(BaseModel):
         default=True,
         description="Whether to include specific video headlines and article titles in citations",
     )
+    web_search: bool = Field(
+        default=False,
+        description="Enable Anthropic server-side web search (costs extra credits)",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -141,6 +145,7 @@ def _handle_cloud_backend(request: LyraChatRequest, user, ctx: RequestContext) -
                 context_id=request.context_id,
                 context_year=request.context_year,
                 citations=request.citations,
+                web_search=request.web_search,
                 ctx=ctx,
             )
 
@@ -169,6 +174,7 @@ def _handle_cloud_backend(request: LyraChatRequest, user, ctx: RequestContext) -
         context_id=request.context_id,
         context_year=request.context_year,
         citations=request.citations,
+        web_search=request.web_search,
         ctx=ctx,
     )
 
@@ -181,6 +187,7 @@ def _stream_response(
     context_id: str | None,
     context_year: int | None,
     citations: bool = True,
+    web_search: bool = False,
     ctx: RequestContext | None = None,
 ) -> StreamingResponse:
     """Create an SSE streaming response from the Lyra agent (no credits tracking)."""
@@ -198,6 +205,7 @@ def _stream_response(
                 context_year=context_year,
                 citations=citations,
                 ctx=ctx,
+                web_search=web_search,
             ):
                 event_type = chunk.get("type", "token")
                 yield f"event: {event_type}\ndata: {json.dumps(chunk)}\n\n"
@@ -227,6 +235,7 @@ def _stream_response_with_credits(
     context_id: str | None,
     context_year: int | None,
     citations: bool = True,
+    web_search: bool = False,
     ctx: RequestContext | None = None,
 ) -> StreamingResponse:
     """Create an SSE streaming response with atomic credit reconciliation on completion.
@@ -250,6 +259,7 @@ def _stream_response_with_credits(
                 context_year=context_year,
                 citations=citations,
                 ctx=ctx,
+                web_search=web_search,
             ):
                 event_type = chunk.get("type", "token")
 
@@ -260,7 +270,11 @@ def _stream_response_with_credits(
                     input_tokens = tokens.get("input", 0)
                     output_tokens = tokens.get("output", 0)
                     voyage_tokens = tokens.get("voyage", 0)
-                    credits_used = max(1, ceil((input_tokens + output_tokens) / 100))
+                    web_search_reqs = tokens.get("web_search_requests", 0)
+                    # Base cost from tokens + surcharge for web searches (+2 credits each)
+                    credits_used = max(1, ceil((input_tokens + output_tokens) / 100)) + (
+                        web_search_reqs * 2
+                    )
 
                     # Collect tool metadata from done event for achievement context
                     tool_meta = {}
@@ -281,6 +295,7 @@ def _stream_response_with_credits(
                         input_tokens=input_tokens,
                         output_tokens=output_tokens,
                         voyage_tokens=voyage_tokens,
+                        web_search_requests=web_search_reqs,
                         credits_used=credits_used,
                         context_type=context_type,
                         has_images=bool(images),
@@ -333,7 +348,8 @@ def _reconcile_credits(
     input_tokens: int,
     output_tokens: int,
     voyage_tokens: int,
-    credits_used: int,
+    web_search_requests: int = 0,
+    credits_used: int = 1,
     context_type: str = "global",
     has_images: bool = False,
     tool_metadata: dict | None = None,
@@ -365,6 +381,7 @@ def _reconcile_credits(
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
                 voyage_tokens=voyage_tokens,
+                web_search_requests=web_search_requests,
                 credits_used=credits_used,
             )
         )

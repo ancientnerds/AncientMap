@@ -1170,6 +1170,7 @@ class TokenUsageLog(Base):
     input_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
     output_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
     voyage_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    web_search_requests: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     credits_used: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 

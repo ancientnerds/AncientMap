@@ -62,7 +62,7 @@ export interface LyraMessage {
   timestamp: Date
   isStreaming?: boolean
   confidence?: number | null
-  tokens?: { input: number; output: number; voyage?: number }
+  tokens?: { input: number; output: number; voyage?: number; web_search_requests?: number }
   discoveries?: { newCount: number; total: number }
   pipelineTrace?: PipelineTrace
   structuredOutput?: StructuredOutput
@@ -93,6 +93,7 @@ export interface LyraChatRequest {
   context_year?: number
   turnstile_token: string
   history?: { role: string; content: string }[]
+  web_search?: boolean
 }
 
 /**
@@ -127,7 +128,7 @@ export interface SSEDoneEvent {
     tool_calls?: number
     sites_found?: number
     avg_relevance?: number | null
-    tokens?: { input: number; output: number; voyage?: number }
+    tokens?: { input: number; output: number; voyage?: number; web_search_requests?: number }
   }
 }
 

@@ -1232,6 +1232,7 @@ async def run_agent_stream(
     num_ctx: int | None = None,
     max_tokens: int | None = None,
     base_url: str | None = None,
+    web_search: bool = False,
 ) -> AsyncIterator[dict]:
     """
     Run the Lyra agent and stream results.
@@ -1275,6 +1276,7 @@ async def run_agent_stream(
     total_input_tokens = 0
     total_output_tokens = 0
     total_voyage_tokens = 0
+    total_web_search_requests = 0
     logger.info(
         f"Lyra chat: model={ctx.model_name}, tier={ctx.model_tier}, "
         f"context_type={context_type}, context_id={context_id}"
@@ -1773,6 +1775,7 @@ async def run_agent_stream(
                         tools=TOOLS if _offer_tools else None,
                         response_format=_p1_rformat,
                         max_tokens=16384,
+                        web_search=web_search,
                     )
                     break
                 except Exception as exc:
@@ -1803,6 +1806,7 @@ async def run_agent_stream(
 
             total_input_tokens += result["usage"]["input"]
             total_output_tokens += result["usage"]["output"]
+            total_web_search_requests += result["usage"].get("web_search_requests", 0)
 
             if result["tool_calls"]:
                 # Model wants to call tools — parse tool_calls
@@ -2496,6 +2500,7 @@ async def run_agent_stream(
                 "input": total_input_tokens,
                 "output": total_output_tokens,
                 "voyage": total_voyage_tokens,
+                "web_search_requests": total_web_search_requests,
             },
             "site_ids_found": site_ids_found,
             "countries_found": countries_found,

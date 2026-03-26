@@ -48,6 +48,7 @@ class LLMBackend(Protocol):
         max_tokens: int | None = None,
         tool_choice: str | None = None,
         citations: bool = False,
+        web_search: bool = False,
     ) -> dict: ...
 
 
@@ -259,6 +260,7 @@ class OllamaBackend:
         max_tokens: int | None = None,
         tool_choice: str | None = None,
         citations: bool = False,
+        web_search: bool = False,
     ) -> dict:
         """Not supported for Ollama backend."""
         raise NotImplementedError("OllamaBackend does not support generate()")
@@ -371,11 +373,13 @@ class AnthropicBackend:
         max_tokens: int | None = None,
         tool_choice: str | None = None,
         citations: bool = False,
+        web_search: bool = False,
     ) -> dict:
         """Single non-streaming call. Returns {"content", "tool_calls", "usage"}.
 
         citations=True: wraps last user message as document + question block for
         automatic source attribution (Pass 1 prose). Incompatible with response_format.
+        web_search=True: adds Anthropic server-side web search tool to the request.
         """
         system_text, anthropic_msgs = self._to_anthropic_messages(messages)
 
@@ -432,6 +436,7 @@ class AnthropicBackend:
                 "usage": {
                     "input": resp.usage.input_tokens if resp.usage else 0,
                     "output": resp.usage.output_tokens if resp.usage else 0,
+                    "web_search_requests": 0,
                 },
             }
 
@@ -439,6 +444,17 @@ class AnthropicBackend:
         anthropic_tools = self._to_anthropic_tools(
             _langchain_tools_to_openai(tools) if tools else None
         )
+
+        # Append server-side web search tool when enabled
+        if web_search:
+            anthropic_tools.append(
+                {
+                    "type": "web_search_20250305",
+                    "name": "web_search",
+                    "max_uses": 3,
+                }
+            )
+
         create_kwargs = {
             "model": self.model,
             "messages": anthropic_msgs,
@@ -457,7 +473,29 @@ class AnthropicBackend:
         if response_format:
             create_kwargs["output_config"] = self._to_output_config(response_format)
 
-        resp = await self._client.messages.create(**create_kwargs)
+        # Continuation loop for server-side tools (web search may trigger pause_turn)
+        total_input = 0
+        total_output = 0
+        total_web_search = 0
+        max_continuations = 3
+        resp = None
+
+        for _ in range(max_continuations + 1):
+            resp = await self._client.messages.create(**create_kwargs)
+
+            total_input += resp.usage.input_tokens if resp.usage else 0
+            total_output += resp.usage.output_tokens if resp.usage else 0
+            if resp.usage and resp.usage.server_tool_use:
+                total_web_search += resp.usage.server_tool_use.web_search_requests
+
+            if resp.stop_reason != "pause_turn":
+                break
+
+            # Feed response back as assistant message for continuation
+            create_kwargs["messages"] = [
+                *create_kwargs["messages"],
+                {"role": "assistant", "content": resp.content},
+            ]
 
         tool_calls_out: list[dict] = []
         text_out = ""
@@ -475,13 +513,16 @@ class AnthropicBackend:
                     )
                 elif block.type == "text":
                     text_out += block.text
+                # server_tool_use and web_search_tool_result blocks are
+                # handled server-side by Anthropic — skip them
 
         return {
             "content": text_out,
             "tool_calls": tool_calls_out,
             "usage": {
-                "input": resp.usage.input_tokens if resp.usage else 0,
-                "output": resp.usage.output_tokens if resp.usage else 0,
+                "input": total_input,
+                "output": total_output,
+                "web_search_requests": total_web_search,
             },
         }
 

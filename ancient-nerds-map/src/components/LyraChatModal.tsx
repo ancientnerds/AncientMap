@@ -304,6 +304,7 @@ export default function LyraChatModal({
   const [isUnlimited, setIsUnlimited] = useState(false)
   const [totalDiscoveries, setTotalDiscoveries] = useState(() => getDiscoveryCount())
   const [chatStreak, setChatStreak] = useState<number>(0)
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false)
   const isAuthenticated = !!authToken
 
   const focusTrapRef = useFocusTrap(isOpen && mode === 'modal')
@@ -704,6 +705,7 @@ export default function LyraChatModal({
       context_year: contextYear,
       history,
       backend: 'anthropic',
+      web_search: webSearchEnabled,
     }
 
     const controller = new AbortController()
@@ -1520,6 +1522,20 @@ export default function LyraChatModal({
 
             {/* Input area */}
             <div className="lyra-chat-input-area">
+              <div className="lyra-chat-input-toggles">
+                <button
+                  className={`lyra-web-search-toggle${webSearchEnabled ? ' active' : ''}`}
+                  onClick={() => setWebSearchEnabled(prev => !prev)}
+                  title={webSearchEnabled ? 'Web search enabled (costs extra credits)' : 'Enable web search'}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                  Web
+                  {webSearchEnabled && <span className="lyra-web-search-cost">+credits</span>}
+                </button>
+              </div>
               <div className="lyra-chat-input-row">
                 <textarea
                   ref={inputRef}

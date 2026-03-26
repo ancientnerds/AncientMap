@@ -111,6 +111,8 @@ async def lifespan(app: FastAPI):
                     UNIQUE (site_id, content_source, content_id);
             EXCEPTION WHEN duplicate_object THEN NULL;
             END $$""",
+            # Ensure token_usage_logs has web_search_requests column
+            "ALTER TABLE token_usage_logs ADD COLUMN IF NOT EXISTS web_search_requests INTEGER NOT NULL DEFAULT 0",
             # Strip orphaned [N] citation markers from sites lacking citation metadata
             "UPDATE unified_sites SET description = regexp_replace(description, '\\s*\\[\\d+\\]', '', 'g') WHERE description ~ '\\[\\d+\\]' AND NOT jsonb_exists(COALESCE(raw_data, '{}'), 'description_citations')",
         ]
