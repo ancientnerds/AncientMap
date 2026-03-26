@@ -84,6 +84,7 @@ def ensure_collection(client: QdrantClient, name: str, vector_size: int):
             sparse_vectors_config={
                 "bm25": SparseVectorParams(modifier=Modifier.IDF),
             },
+            on_disk_payload=True,
         )
         logger.info(f"Created collection '{name}' (dense={vector_size}, sparse=bm25)")
     else:
@@ -533,7 +534,7 @@ def index_transcripts(client: QdrantClient, embeddings, sparse_model, rebuild: b
                         "end_seconds": c["end_seconds"],
                         "chunk_index": c["chunk_index"],
                         "published_at": c["published_at"],
-                        "text_preview": c["text"][:200],
+                        "text_preview": c["text"][:2000],
                         "content_hash": c["content_hash"],
                     },
                 )
@@ -689,7 +690,7 @@ def index_articles(client: QdrantClient, embeddings, sparse_model, rebuild: bool
                         "week_start": c["week_start"],
                         "week_end": c["week_end"],
                         "published_at": c["published_at"],
-                        "text_preview": c["text"][:300],
+                        "text_preview": c["text"][:2000],
                         "content_hash": c["content_hash"],
                     },
                 )

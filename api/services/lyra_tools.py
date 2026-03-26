@@ -1139,11 +1139,11 @@ def _format_payload_for_rerank(payload: dict) -> str:
     if payload.get("country"):
         parts.append(f"Country: {payload['country']}")
     if payload.get("description"):
-        parts.append(payload["description"][:300])
+        parts.append(payload["description"][:500])
     if payload.get("summary"):
-        parts.append(payload["summary"][:300])
+        parts.append(payload["summary"][:500])
     if payload.get("text_preview"):
-        parts.append(payload["text_preview"][:300])
+        parts.append(payload["text_preview"][:1500])
     if payload.get("channel"):
         parts.append(f"Channel: {payload['channel']}")
     if payload.get("polity_id"):
