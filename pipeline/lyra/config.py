@@ -256,6 +256,7 @@ def _call_anthropic_api(
     *,
     prefill: str | None = None,
     documents: list[dict] | None = None,
+    timeout: float | None = None,
     **kwargs,
 ) -> NormalizedResponse:
     """Call Anthropic API synchronously and return a NormalizedResponse."""
@@ -353,6 +354,10 @@ def _call_anthropic_api(
         # Temperature must be omitted when thinking is enabled
     elif temperature is not None:
         create_kwargs["temperature"] = max(settings.temperature_min, temperature)
+
+    if timeout is not None:
+        import httpx
+        create_kwargs["timeout"] = httpx.Timeout(timeout, connect=30.0)
 
     response = client.messages.create(**create_kwargs)
     return _normalize_anthropic_response(response)
@@ -474,6 +479,7 @@ def call_api(
     prefill: str | None = None,
     reasoning_effort: str | None = None,
     documents: list[dict] | None = None,
+    timeout: float | None = None,
     **kwargs,
 ) -> NormalizedResponse:
     """Unified LLM call — dispatches to Anthropic (cloud) or Ollama (local).
@@ -483,6 +489,7 @@ def call_api(
         reasoning_effort: Ignored — kept for call-site compat.
         documents: Optional list of source documents to pass as Anthropic content blocks.
             Each dict has shape {"title": str, "data": str}. Anthropic only.
+        timeout: Per-request timeout in seconds. Overrides client default (120s).
         **kwargs: model, max_tokens, messages, system, temperature, response_format, etc.
     """
     settings = _get_settings()
@@ -491,7 +498,9 @@ def call_api(
     try:
         if is_ollama:
             return _call_ollama_api(settings, prefill=prefill, **kwargs)
-        return _call_anthropic_api(settings, prefill=prefill, documents=documents, **kwargs)
+        return _call_anthropic_api(
+            settings, prefill=prefill, documents=documents, timeout=timeout, **kwargs
+        )
     except Exception as e:
         backend_name = "Ollama" if is_ollama else "Anthropic"
         raise LyraAPIError(f"{backend_name} API error: {e}") from e

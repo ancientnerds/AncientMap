@@ -9,6 +9,12 @@ import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+# Article LLM calls use Opus with extended thinking and can run for several
+# minutes.  The default client timeout (120s) is too short and caused the
+# March 22 2026 outage — every 60s retry burned tokens then timed out,
+# looping for 4 hours ($20 wasted).  10 minutes is generous but safe.
+ARTICLE_TIMEOUT = 600.0  # seconds
+
 from sqlalchemy import text as sa_text
 
 from pipeline.database import (
@@ -497,6 +503,7 @@ def _write_article_body(
             model=settings.model_article,
             max_tokens=128000,
             thinking={"type": "adaptive"},
+            timeout=ARTICLE_TIMEOUT,
             system=instructions,
             messages=[{"role": "user", "content": user_message}],
         )
@@ -532,6 +539,7 @@ def _verify_article(
             model=settings.model_article_verify,
             max_tokens=128000,
             thinking={"type": "adaptive"},
+            timeout=ARTICLE_TIMEOUT,
             system=instructions,
             messages=[{"role": "user", "content": user_content}],
         )
@@ -699,6 +707,7 @@ def _polish_article(
             model=settings.model_article,
             max_tokens=128000,
             thinking={"type": "adaptive"},
+            timeout=ARTICLE_TIMEOUT,
             system=instructions,
             messages=[
                 {
@@ -763,8 +772,44 @@ def _write_article_heartbeat(step_data: dict, running_step: str, t0_total: float
         logger.debug("Failed to write article heartbeat", exc_info=True)
 
 
-def generate_weekly_article(settings: LyraSettings) -> bool:
+def _write_final_heartbeat(
+    step_data: dict, t0_total: float, *, error: str | None = None
+) -> None:
+    """Write the final article heartbeat with success or failure status."""
+    step_data["_total_elapsed"] = round(time.time() - t0_total, 1)
+    try:
+        with db_engine.connect() as conn:
+            conn.execute(
+                sa_text("""
+                    INSERT INTO pipeline_heartbeats (pipeline_name, last_heartbeat, status, last_error, step_data)
+                    VALUES ('lyra-article', NOW(), :status, :error, CAST(:step_data AS jsonb))
+                    ON CONFLICT (pipeline_name) DO UPDATE SET
+                        last_heartbeat = NOW(),
+                        status = EXCLUDED.status,
+                        last_error = EXCLUDED.last_error,
+                        step_data = EXCLUDED.step_data
+                """),
+                {
+                    "status": "error" if error else "ok",
+                    "error": error,
+                    "step_data": json.dumps(step_data),
+                },
+            )
+            conn.commit()
+    except Exception:
+        logger.warning("Failed to write article heartbeat", exc_info=True)
+
+
+def generate_weekly_article(
+    settings: LyraSettings,
+    *,
+    week_override: tuple[datetime, datetime] | None = None,
+) -> bool:
     """Generate a weekly article from this week's NewsItems.
+
+    Args:
+        settings: Pipeline settings.
+        week_override: Optional (week_start, week_end) to generate for a past week.
 
     Returns True if an article was created.
     """
@@ -775,7 +820,10 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
     t0_total = time.time()
     step_data: dict = {}
 
-    week_start, week_end = _get_week_range()
+    if week_override:
+        week_start, week_end = week_override
+    else:
+        week_start, week_end = _get_week_range()
 
     with get_session() as session:
         existing = (
@@ -802,6 +850,7 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
 
         if not items:
             logger.info("No significant items this week for article")
+            _write_final_heartbeat(step_data, t0_total, error="No significant items")
             return False
 
         logger.info(f"Collected {len(items)} items for article generation")
@@ -835,6 +884,7 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
 
         if not draft_body:
             logger.error("Article body generation returned empty")
+            _write_final_heartbeat(step_data, t0_total, error="Write step returned empty")
             return False
 
         # -- verify --
@@ -862,11 +912,13 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
         }
 
         if len(polished_body) < 200:
+            error_msg = f"Polished body too short ({len(polished_body)} chars)"
             logger.error(
                 "Polished article body too short (%d chars), aborting. First 200 chars: %s",
                 len(polished_body),
                 polished_body[:200],
             )
+            _write_final_heartbeat(step_data, t0_total, error=error_msg)
             return False
 
         # Remove uncited sources, renumber citations
@@ -904,30 +956,7 @@ def generate_weekly_article(settings: LyraSettings) -> bool:
         )
         session.add(article)
 
-    # Write heartbeat
-    step_data["_total_elapsed"] = round(time.time() - t0_total, 1)
-    try:
-        with db_engine.connect() as conn:
-            conn.execute(
-                sa_text("""
-                    INSERT INTO pipeline_heartbeats (pipeline_name, last_heartbeat, status, last_error, step_data)
-                    VALUES ('lyra-article', NOW(), :status, :error, CAST(:step_data AS jsonb))
-                    ON CONFLICT (pipeline_name) DO UPDATE SET
-                        last_heartbeat = NOW(),
-                        status = EXCLUDED.status,
-                        last_error = EXCLUDED.last_error,
-                        step_data = EXCLUDED.step_data
-                """),
-                {
-                    "status": "ok",
-                    "error": None,
-                    "step_data": json.dumps(step_data),
-                },
-            )
-            conn.commit()
-    except Exception:
-        logger.warning("Failed to write article heartbeat", exc_info=True)
-
+    _write_final_heartbeat(step_data, t0_total)
     logger.info(f"Generated weekly article: {headline}")
     return True
 

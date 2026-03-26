@@ -26,6 +26,7 @@ from pipeline.lyra.config import LyraSettings
 logger = logging.getLogger(__name__)
 
 CYCLE_INTERVAL = 3600  # 1 hour between pipeline runs
+MAX_ARTICLE_ATTEMPTS = 3  # Stop retrying after 3 failures per week
 
 
 def _bust_radar_cache():
@@ -1714,6 +1715,8 @@ def main() -> None:
     from pipeline.lyra.article_generator import generate_weekly_article, should_generate_article
 
     last_pipeline_run = 0.0
+    article_attempts = 0
+    article_week_tracked: str | None = None  # ISO date of the week we're tracking
 
     while True:
         now = time.time()
@@ -1756,12 +1759,31 @@ def main() -> None:
             except Exception:
                 logger.exception("Failed to write heartbeat")
 
-        # Weekly article generation
+        # Weekly article generation (with retry limit)
         if should_generate_article():
-            try:
-                generate_weekly_article(settings)
-            except Exception:
-                logger.exception("Article generation failed")
+            from datetime import datetime, UTC
+            current_week = datetime.now(UTC).strftime("%Y-W%W")
+            if current_week != article_week_tracked:
+                article_attempts = 0
+                article_week_tracked = current_week
+
+            if article_attempts < MAX_ARTICLE_ATTEMPTS:
+                article_attempts += 1
+                try:
+                    success = generate_weekly_article(settings)
+                    if success:
+                        logger.info("Article generated successfully on attempt %d", article_attempts)
+                        article_attempts = MAX_ARTICLE_ATTEMPTS  # stop retrying
+                    else:
+                        logger.warning(
+                            "Article generation returned False (attempt %d/%d)",
+                            article_attempts, MAX_ARTICLE_ATTEMPTS,
+                        )
+                except Exception:
+                    logger.exception(
+                        "Article generation failed with exception (attempt %d/%d)",
+                        article_attempts, MAX_ARTICLE_ATTEMPTS,
+                    )
 
         # Sleep before next check
         time.sleep(60)  # Check every minute
