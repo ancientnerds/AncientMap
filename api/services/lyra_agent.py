@@ -627,6 +627,32 @@ async def _stream_with_heartbeat(
 # ---------------------------------------------------------------------------
 
 
+def _apply_relevance_filter(
+    results: list[dict],
+    min_ratio: float = 0.4,
+    min_absolute: float = 0.15,
+) -> list[dict]:
+    """Filter results using relative threshold — keeps results within min_ratio of the top score.
+
+    SOTA: Voyage reranker scores are poorly calibrated for absolute thresholds
+    (scores cluster around 0.5 regardless of relevance). Relative thresholds
+    adapt per-query. A result scoring 0.3 when the top scores 0.35 is fine;
+    a result scoring 0.3 when the top scores 0.9 is noise.
+
+    Args:
+        results: List of dicts with 'relevance' key (Voyage reranker score).
+        min_ratio: Keep results scoring >= top_score * min_ratio. Default 0.4.
+        min_absolute: Absolute floor — never include results below this. Default 0.15.
+    """
+    if not results:
+        return results
+    top_score = max(r.get("relevance", 0) for r in results)
+    if top_score <= 0:
+        return results
+    threshold = max(top_score * min_ratio, min_absolute)
+    return [r for r in results if r.get("relevance", 0) >= threshold]
+
+
 def _auto_retrieve(
     queries: list[str], context_type: str
 ) -> tuple[str, list[dict], list[dict], float | None, int, list[dict], list[dict]]:
@@ -717,12 +743,8 @@ def _auto_retrieve(
                     seen_article_ids.add(aid)
                     article_chunks.append(r)
 
-    # Minimum relevance to include in LLM context (prevents hallucination from garbage results).
-    # site_results / news_results are still returned in full for map/sidebar highlighting.
-    _MIN_RELEVANCE = 0.5
-
     # Format site results
-    sites_for_context = [r for r in site_results if r.get("relevance", 1.0) >= _MIN_RELEVANCE]
+    sites_for_context = _apply_relevance_filter(site_results)
     if sites_for_context:
         lines = []
         for r in sites_for_context:
@@ -743,7 +765,7 @@ def _auto_retrieve(
         )
 
     # Format news results
-    news_for_context = [r for r in news_results if r.get("relevance", 1.0) >= _MIN_RELEVANCE]
+    news_for_context = _apply_relevance_filter(news_results)
     if news_for_context:
         lines = []
         for r in news_for_context:
@@ -757,7 +779,7 @@ def _auto_retrieve(
         context_parts.append("### Related News (semantic)\n" + "\n".join(lines))
 
     # Format transcript results
-    transcript_chunks = [r for r in transcript_chunks if r.get("relevance", 1.0) >= _MIN_RELEVANCE]
+    transcript_chunks = _apply_relevance_filter(transcript_chunks)
     if transcript_chunks:
         transcript_chunks = _semantic_dedup(transcript_chunks, text_key="text_preview")
         lines = []
