@@ -804,8 +804,10 @@ def _hybrid_search_inner(
     query_filter = models.Filter(must=conditions) if conditions else None  # type: ignore[arg-type]
 
     # Step 3: Hybrid query \u2014 prefetch dense + BM25, fuse with RRF
-    # M1: Scale prefetch to 3\u00d7 limit (was always 20). For limit=5, prefetch 15 not 20.
-    prefetch_limit = min(limit * 3, 20)
+    # SOTA: 10:1 prefetch-to-final ratio, cap at 100 (was 3x, cap 20).
+    # Wider pool lets the reranker rescue relevant results that dense or BM25
+    # alone ranked lower. Cost: negligible — Qdrant prefetch is <10ms per method.
+    prefetch_limit = min(limit * 10, 100)
     prefetch = []
     if dense_vec is not None:
         prefetch.append(
