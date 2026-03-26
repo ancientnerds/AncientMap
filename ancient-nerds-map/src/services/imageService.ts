@@ -97,6 +97,7 @@ export async function fetchSiteImages(
     if (options.siteId) {
       const local = await fetchLocalImages(options.siteId)
       if (local && local.length > 0) {
+        local.sort((a, b) => (b.isLeadImage ? 1 : 0) - (a.isLeadImage ? 1 : 0))
         return { wikipedia: local, europeana: [] }
       }
     }

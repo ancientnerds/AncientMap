@@ -162,7 +162,7 @@ async def get_wiki_images(site_id: str, db: Session = Depends(get_db)):
             source_type, width, height, site_id
         FROM wiki_images
         WHERE site_id = :site_id
-        ORDER BY sort_order
+        ORDER BY is_hero DESC, is_lead DESC, sort_order
     """),
         {"site_id": site_id},
     )

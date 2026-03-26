@@ -118,8 +118,18 @@ export function useGalleryData({
     [sketchfabItems]
   )
 
-  const heroImage = wikiImages[0] || null
-  const heroImageSrc = heroImage?.full || thumbnailUrl || photoItems[0]?.full
+  const wikiHero = wikiImages[0] || null
+  // Curated thumbnail (card image) takes priority to avoid hero swap on popup open
+  const heroImageSrc = thumbnailUrl || wikiHero?.full || photoItems[0]?.full
+  // Only attach wiki metadata when the displayed hero is actually from wiki images
+  const heroImage = (!thumbnailUrl && wikiHero) ? {
+    thumb: wikiHero.thumb,
+    full: wikiHero.full,
+    title: wikiHero.title,
+    photographer: wikiHero.photographer,
+    wikimediaUrl: wikiHero.wikimediaUrl,
+    license: wikiHero.license,
+  } : null
 
   return {
     activeGalleryTab, setActiveGalleryTab,
@@ -136,14 +146,7 @@ export function useGalleryData({
     isLoadingPapers: tiered.tier4Loading,
     isLoadingWebcams,
     isLoading: tiered.isLoading,
-    heroImage: heroImage ? {
-      thumb: heroImage.thumb,
-      full: heroImage.full,
-      title: heroImage.title,
-      photographer: heroImage.photographer,
-      wikimediaUrl: heroImage.wikimediaUrl,
-      license: heroImage.license,
-    } : null,
+    heroImage,
     heroImageSrc,
     sketchfabModels,
     sourcesSearched: tiered.sourcesSearched,
