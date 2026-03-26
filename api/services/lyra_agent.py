@@ -795,6 +795,22 @@ def _auto_retrieve(
             lines.append(line)
         context_parts.append("### Transcript Passages\n" + "\n".join(lines))
 
+    # Format article results (same pattern as transcripts)
+    article_chunks = _apply_relevance_filter(article_chunks)
+    if article_chunks:
+        article_chunks = _semantic_dedup(article_chunks, text_key="text_preview")
+        lines = []
+        for r in article_chunks:
+            title = r.get("title", "")
+            aid = r.get("article_id", "")
+            week = r.get("week_start", "")
+            preview = r.get("text_preview", "")[:500]
+            line = f'- **{title}** (article_id: {aid}, week: {week})'
+            if preview:
+                line += f"\n  > {preview}"
+            lines.append(line)
+        context_parts.append("### Weekly Articles\n" + "\n".join(lines))
+
     if not context_parts:
         return "", [], [], None, total_voyage_tokens, [], article_chunks
 
