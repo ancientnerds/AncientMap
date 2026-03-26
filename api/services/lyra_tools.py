@@ -715,6 +715,36 @@ _RERANK_INSTRUCTIONS = {
     ),
 }
 
+# English function words — present in virtually all English queries.
+# ASCII heuristic fails for German/French (few accented chars) and
+# English queries with Turkish site names (Göbekli Tepe).
+_EN_STOPWORDS = frozenset({
+    "the", "a", "an", "is", "are", "was", "were", "be", "been",
+    "have", "has", "had", "do", "does", "did", "will", "would",
+    "could", "should", "may", "might", "can", "shall",
+    "i", "you", "he", "she", "it", "we", "they", "my", "your",
+    "what", "which", "who", "whom", "where", "when", "why", "how",
+    "that", "this", "these", "those", "there", "here",
+    "about", "from", "with", "without", "between", "through",
+    "any", "some", "all", "each", "every", "both", "few", "more",
+    "other", "such", "only", "same", "than", "too", "very",
+    "not", "no", "nor", "but", "or", "and", "if", "so",
+    "of", "in", "to", "for", "on", "at", "by",
+})
+
+
+def _is_likely_english(text: str) -> bool:
+    """Fast heuristic: returns True if text is likely English.
+
+    Uses stopword presence — English text almost always contains common
+    function words (the, is, are, what, about, etc.). More reliable than
+    ASCII ratio for European languages sharing the Latin alphabet.
+    """
+    words = set(text.lower().split())
+    if len(words) < 3:
+        return True  # Too short to tell, assume English
+    return bool(words & _EN_STOPWORDS)
+
 
 def _hybrid_search(
     query: str,
@@ -815,25 +845,39 @@ def _hybrid_search_inner(
                 query=dense_vec, using="dense", limit=prefetch_limit, filter=query_filter
             )
         )
-    prefetch.append(
-        models.Prefetch(query=sparse_vec, using="bm25", limit=prefetch_limit, filter=query_filter)
-    )
+    # Skip BM25 for non-English queries — BM25 tokenizes keywords that won't match
+    # English-indexed documents. Dense embedding (Voyage-4) is multilingual and
+    # handles cross-language retrieval natively. Empty BM25 results dilute RRF fusion.
+    if _is_likely_english(query):
+        prefetch.append(
+            models.Prefetch(query=sparse_vec, using="bm25", limit=prefetch_limit, filter=query_filter)
+        )
 
-    if dense_vec is not None:
+    if len(prefetch) > 1:
+        # Hybrid: dense + BM25 fused with RRF
         results = client.query_points(
             collection_name=qdrant_collection,
             prefetch=prefetch,
             query=models.FusionQuery(fusion=models.Fusion.RRF),
             limit=prefetch_limit,
         )
+    elif dense_vec is not None:
+        # Dense-only (non-English query or BM25 skipped)
+        results = client.query_points(
+            collection_name=qdrant_collection,
+            query=dense_vec,
+            using="dense",
+            limit=prefetch_limit,
+            query_filter=query_filter,
+        )
     else:
         # BM25-only fallback (embedding failed)
         results = client.query_points(
             collection_name=qdrant_collection,
-            prefetch=prefetch,
             query=sparse_vec,
             using="bm25",
             limit=prefetch_limit,
+            query_filter=query_filter,
         )
 
     scored_points = results.points
