@@ -2649,7 +2649,9 @@ async def run_agent_stream(
                             }
                             text_out = re.sub(
                                 r"«l(\d+)»",
-                                lambda m: f"[{_cite_map.get('l' + m.group(1), int(m.group(1)) + 1)}]",
+                                lambda m: (
+                                    f"[{_cite_map.get('l' + m.group(1), int(m.group(1)) + 1)}]"
+                                ),
                                 text_out,
                             )
                             # Inject web citations into structured output
