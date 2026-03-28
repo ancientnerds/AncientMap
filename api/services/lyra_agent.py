@@ -1154,6 +1154,7 @@ def _build_messages(
     model_tier: str = "heavy",
     system_prompt: str | None = None,
     prebuilt_context_prompt: str | None = None,
+    web_search: bool = False,
 ) -> list[BaseMessage]:
     """Build the message list for the LLM."""
     if system_prompt:
@@ -1173,10 +1174,42 @@ def _build_messages(
         tool_hint = _TOOL_HINTS.get(intent, "")
         if tool_hint:
             tool_hint = "\n\n" + tool_hint
+
+        # When web search is enabled, inject instructions so the model knows
+        # it has a web_search tool and should actually use it.
+        web_search_hint = ""
+        if web_search:
+            today = time.strftime("%Y-%m-%d")
+            web_search_hint = (
+                f"\n\n## Web Search — MANDATORY (enabled by user)\n"
+                f"Today's date is {today}. The user clicked the web search button "
+                f"because they want LIVE internet results.\n"
+                f"You MUST call the `web_search` tool as your FIRST tool call. "
+                f"This is non-negotiable — the user is paying extra for web results.\n"
+                f"After web search, you may also call database tools to supplement.\n"
+                f"Cite web sources using «l0» link markers with URLs from results.\n"
+            )
+            # Replace tool hints to put web_search first
+            if tool_hint:
+                tool_hint = (
+                    "\n\n## Tool order for this query (web search enabled)\n"
+                    "1. **web_search** — MANDATORY first call (user enabled web search)\n"
+                    + tool_hint.replace("\n\n## Suggested tool order for this query\n", "")
+                    .replace("1. ", "2. ")
+                    .replace("2. ", "3. ", 1)
+                    .replace("3. ", "4. ", 1)
+                )
+
         if context_type == "empire":
-            system_text = LYRA_SYSTEM_PROMPT + tool_hint + retrieved_context + context_prompt
+            system_text = (
+                LYRA_SYSTEM_PROMPT + web_search_hint + tool_hint
+                + retrieved_context + context_prompt
+            )
         else:
-            system_text = LYRA_SYSTEM_PROMPT + tool_hint + context_prompt + retrieved_context
+            system_text = (
+                LYRA_SYSTEM_PROMPT + web_search_hint + tool_hint
+                + context_prompt + retrieved_context
+            )
     messages: list[BaseMessage] = [SystemMessage(content=system_text)]
 
     # Add conversation history (validated: role whitelist + content length cap)
@@ -1633,6 +1666,7 @@ async def run_agent_stream(
         model_tier=ctx.model_tier,
         system_prompt=system_prompt,
         prebuilt_context_prompt=context_prompt,
+        web_search=web_search,
     )
     yield {
         "type": "pipeline",
@@ -1770,9 +1804,17 @@ async def run_agent_stream(
                     _p1_rformat: dict | None = LYRA_RESPONSE_SCHEMA
                     if _offer_tools:
                         _p1_rformat = None
+                    # On the first round with web_search enabled, give the
+                    # model ONLY the web_search tool (no database tools) so
+                    # it actually searches the web. Mixing server + client
+                    # tools causes the API to skip the server tool execution.
+                    # Database tools become available from round 1 onward.
+                    _ws_only = web_search and _round == 0 and _offer_tools
+                    if _ws_only:
+                        logger.info("Round 0 web_search: offering ONLY web_search tool")
                     result = await backend_impl.generate(
                         messages,
-                        tools=TOOLS if _offer_tools else None,
+                        tools=TOOLS if (_offer_tools and not _ws_only) else None,
                         response_format=_p1_rformat,
                         max_tokens=16384,
                         web_search=web_search,

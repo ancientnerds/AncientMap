@@ -470,6 +470,9 @@ class AnthropicBackend:
                 create_kwargs["tool_choice"] = {"type": "any"}
             elif tool_choice == "none":
                 create_kwargs["tool_choice"] = {"type": "none"}
+            elif tool_choice:
+                # Force a specific tool by name (e.g. "web_search")
+                create_kwargs["tool_choice"] = {"type": "tool", "name": tool_choice}
         if response_format:
             create_kwargs["output_config"] = self._to_output_config(response_format)
 
