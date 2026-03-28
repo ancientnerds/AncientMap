@@ -541,14 +541,14 @@ def _build_entities_catalogue(
             r'\[(\d+)\] (.+?) — (https?://\S+)(?:\n\s+Content: "(.+?)")?',
             _raw,
         ):
-            entry: dict = {
+            ws_entry: dict = {
                 "citation": int(m.group(1)),
                 "text": m.group(2),
                 "url": m.group(3),
             }
             if m.group(4):
-                entry["snippet"] = m.group(4)
-            _web_sources.append(entry)
+                ws_entry["snippet"] = m.group(4)
+            _web_sources.append(ws_entry)
     if _web_sources:
         _entities["web_sources"] = _web_sources
 
