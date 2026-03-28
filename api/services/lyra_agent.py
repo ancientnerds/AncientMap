@@ -2074,9 +2074,9 @@ async def run_agent_stream(
                 # Each span maps a text fragment to its source URL.
                 # Format: "Claim text. [Source: Title]\n"
                 # This lets synthesis see WHICH claim came from WHICH source.
-                _url_to_num: dict[str, int] = {}
-                for i, c in enumerate(_web_cites[:10]):
-                    _url_to_num[c["url"]] = i + 1
+                _url_to_num: dict[str, int] = {
+                    c["url"]: i + 1 for i, c in enumerate(_web_cites[:10])
+                }
 
                 if _web_spans:
                     # Group spans by URL, build cited text
