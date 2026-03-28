@@ -1540,7 +1540,8 @@ export default function LyraChatModal({
 
             {/* Input area */}
             <div className="lyra-chat-input-area">
-              <div className="lyra-chat-input-toggles">
+              {/* Web search toggle — disabled pending citation accuracy fix */}
+              <div className="lyra-chat-input-toggles" style={{ display: 'none' }}>
                 <button
                   className={`lyra-web-search-toggle${webSearchEnabled ? ' active' : ''}`}
                   onClick={() => setWebSearchEnabled(prev => !prev)}
