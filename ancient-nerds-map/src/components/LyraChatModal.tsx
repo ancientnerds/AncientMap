@@ -1527,6 +1527,7 @@ export default function LyraChatModal({
                 <button
                   className={`lyra-web-search-toggle${webSearchEnabled ? ' active' : ''}`}
                   onClick={() => setWebSearchEnabled(prev => !prev)}
+                  onMouseDown={(e) => e.preventDefault()}
                   title={webSearchEnabled ? 'Web search enabled (costs extra credits)' : 'Enable web search'}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
