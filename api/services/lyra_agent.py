@@ -1315,6 +1315,8 @@ async def run_agent_stream(
     if ctx is None:
         ctx = route_request("anthropic", message)
 
+    print(f"[run_agent_stream] web_search={web_search}", flush=True)
+
     # Set contextvars for the pipeline (so _hybrid_search uses the right backend)
     set_request_context(ctx)
 
@@ -1496,6 +1498,7 @@ async def run_agent_stream(
                 "meta": {
                     "sites_count": len(auto_site_results),
                     "news_count": len(auto_news_results),
+                    "web_search": web_search,
                     "voyage_tokens": vt,
                 },
             }
