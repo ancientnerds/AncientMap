@@ -218,6 +218,9 @@ export default function PipelinePanel({ trace, isLive, onClose }: PipelinePanelP
   const totalResults = rounds.reduce((sum, r) =>
     sum + r.tools.reduce((ts, t) => ts + (t.resultLen ?? 0), 0), 0
   )
+  const totalWebSearches = rounds.reduce((sum, r) =>
+    sum + r.tools.filter(t => t.name === 'web_search').reduce((ws, t) => ws + (t.resultLen ?? 0), 0), 0
+  )
 
   // Retrieval section overall status
   const retrievalStatus: PipelineNodeStatus =
@@ -247,6 +250,7 @@ export default function PipelinePanel({ trace, isLive, onClose }: PipelinePanelP
   const pgSources = sourceViews.filter(s => s.def.backend === 'PostgreSQL')
   const qdSources = sourceViews.filter(s => s.def.backend === 'Qdrant')
   const sesSources = sourceViews.filter(s => s.def.backend === 'Seshat')
+  const anthropicSources = sourceViews.filter(s => s.def.backend === 'Anthropic')
 
   // Auto-scroll
   useEffect(() => {
@@ -368,6 +372,16 @@ export default function PipelinePanel({ trace, isLive, onClose }: PipelinePanelP
                     </div>
                   ))}
                 </div>
+                {anthropicSources.length > 0 && (
+                  <div className="lp-source-col">
+                    <div className="lp-source-hdr">Anthropic</div>
+                    {anthropicSources.map(s => (
+                      <div key={s.def.name} className={`lp-source-item ${statusClass(s.status)}`}>
+                        {statusIcon(s.status)} {s.def.label}{s.callCount > 0 ? ` (${s.callCount})` : ''}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -491,6 +505,7 @@ export default function PipelinePanel({ trace, isLive, onClose }: PipelinePanelP
               {totalTokens != null && <span>{totalTokens.toLocaleString()} tok</span>}
               {totalToolCalls > 0 && <span>{totalToolCalls} tool{totalToolCalls !== 1 ? 's' : ''}</span>}
               {totalResults > 0 && <span>{totalResults} result{totalResults !== 1 ? 's' : ''}</span>}
+              {totalWebSearches > 0 && <span>{totalWebSearches} web search{totalWebSearches !== 1 ? 'es' : ''}</span>}
             </div>
           </div>
         )}

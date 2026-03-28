@@ -1366,6 +1366,7 @@ export default function LyraChatModal({
                                   <span className="lyra-chat-tokens">
                                     LLM: {msg.tokens.input + msg.tokens.output}
                                     {(msg.tokens.voyage ?? 0) > 0 && ` · Embed: ${msg.tokens.voyage}`}
+                                    {(msg.tokens.web_search_requests ?? 0) > 0 && ` · Web: ${msg.tokens.web_search_requests}`}
                                   </span>
                                   {msg.pipelineTrace && (() => {
                                     const totalMs = msg.pipelineTrace.nodes

@@ -1848,7 +1848,23 @@ async def run_agent_stream(
 
             total_input_tokens += result["usage"]["input"]
             total_output_tokens += result["usage"]["output"]
-            total_web_search_requests += result["usage"].get("web_search_requests", 0)
+            _ws_reqs = result["usage"].get("web_search_requests", 0)
+            total_web_search_requests += _ws_reqs
+
+            # Emit synthetic pipeline event for web search so the frontend
+            # can display it in the RAG pipeline panel alongside DB tools.
+            if _ws_reqs > 0:
+                yield {
+                    "type": "pipeline",
+                    "stage": "tool_call",
+                    "status": "done",
+                    "duration_ms": int((time.monotonic() - _t_round) * 1000),
+                    "meta": {
+                        "tool": "web_search",
+                        "result_len": _ws_reqs,
+                        "args": {"queries": _ws_reqs},
+                    },
+                }
 
             if result["tool_calls"]:
                 # Model wants to call tools — parse tool_calls

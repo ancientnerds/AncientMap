@@ -67,6 +67,8 @@ export const TOOL_REGISTRY: ToolDef[] = [
   { name: 'search_empires',      label: 'search_empires',      backend: 'Qdrant' },
   // Seshat tools
   { name: 'get_empire_data', label: 'get_empire_data', backend: 'Seshat' },
+  // Anthropic server-side tools
+  { name: 'web_search', label: 'web_search', backend: 'Anthropic' },
 ]
 
 /**
