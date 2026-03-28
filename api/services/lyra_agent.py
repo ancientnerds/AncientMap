@@ -1187,7 +1187,15 @@ def _build_messages(
                 f"You MUST call the `web_search` tool as your FIRST tool call. "
                 f"This is non-negotiable — the user is paying extra for web results.\n"
                 f"After web search, you may also call database tools to supplement.\n"
-                f"Cite web sources using «l0» link markers with URLs from results.\n"
+                f"\n### Web citation rule\n"
+                f"You MUST cite web search results using «lN» link markers. "
+                f"For every web source you reference, add a «lN» marker in your text "
+                f"AND a matching entry in the `links` array with the source URL.\n"
+                f'Example: "New tombs found at Saqqara «l0»" with '
+                f'links: [{{"marker": "l0", "text": "Live Science", '
+                f'"url": "https://..."}}]\n'
+                f"The user enabled web search to see web links — a response with "
+                f"zero «lN» markers means web search was wasted.\n"
             )
             # Replace tool hints to put web_search first
             if tool_hint:
@@ -1808,14 +1816,18 @@ async def run_agent_stream(
                     # Don't pass output_config when tools are offered —
                     # Haiku returns empty content when tools + output_config are combined.
                     _p1_rformat: dict | None = LYRA_RESPONSE_SCHEMA
-                    if _offer_tools:
-                        _p1_rformat = None
                     # On the first round with web_search enabled, give the
                     # model ONLY the web_search tool (no database tools) so
                     # it actually searches the web. Mixing server + client
                     # tools causes the API to skip the server tool execution.
                     # Database tools become available from round 1 onward.
                     _ws_only = web_search and _round == 0 and _offer_tools
+                    if _offer_tools and not _ws_only:
+                        # Haiku returns empty content when client tools +
+                        # output_config are combined — disable structured
+                        # output when database tools are offered. Web-search-
+                        # only rounds are safe: no client tools.
+                        _p1_rformat = None
                     if _ws_only:
                         logger.info("Round 0 web_search: offering ONLY web_search tool")
                     result = await backend_impl.generate(
@@ -1890,7 +1902,7 @@ async def run_agent_stream(
                     collected_content = ""
                 else:
                     # No tools used at all (simple query) — emit Phase 1 response
-                    if _offer_tools:
+                    if _offer_tools and not _ws_only:
                         # Haiku chose not to use tools — do a single synthesis call
                         # with output_config directly. Marker injection (two-pass) was
                         # ~40% unreliable: Haiku ignored annotation instructions and
