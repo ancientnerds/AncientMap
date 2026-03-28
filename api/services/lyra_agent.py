@@ -2085,7 +2085,7 @@ async def run_agent_stream(
                         url = span.get("url", "")
                         title = span.get("title", "")
                         cited = span.get("cited_text", "")
-                        n = _url_to_num.get(url, 0)
+                        n: int = _url_to_num.get(url, 0)
                         if cited and n:
                             _cited_chunks.append(f"{cited} [Source {n}: {title}]")
                     if _cited_chunks:
