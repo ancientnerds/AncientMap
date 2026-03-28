@@ -502,7 +502,9 @@ class AnthropicBackend:
 
         tool_calls_out: list[dict] = []
         text_out = ""
-        web_citations: list[dict] = []
+        web_citations: list[dict] = []  # unique URLs from web search results
+        web_cited_spans: list[dict] = []  # text spans with their source URLs
+        _seen_urls: set[str] = set()
         for block in resp.content:
             if hasattr(block, "type"):
                 if block.type == "tool_use":
@@ -516,30 +518,50 @@ class AnthropicBackend:
                         }
                     )
                 elif block.type == "text":
+                    _text_start = len(text_out)
                     text_out += block.text
+                    # Extract citation spans from text blocks
+                    # (web search auto-cites each text span)
+                    for cite in getattr(block, "citations", None) or []:
+                        _cite_type = getattr(cite, "type", "")
+                        if _cite_type == "web_search_result_location":
+                            _url = getattr(cite, "url", "")
+                            _title = getattr(cite, "title", "")
+                            _cited_text = getattr(cite, "cited_text", "")
+                            if _url:
+                                web_cited_spans.append(
+                                    {
+                                        "url": _url,
+                                        "title": _title,
+                                        "cited_text": _cited_text,
+                                        "start": _text_start,
+                                    }
+                                )
+                                if _url not in _seen_urls:
+                                    web_citations.append(
+                                        {"title": _title, "url": _url, "snippet": _cited_text[:200]}
+                                    )
+                                    _seen_urls.add(_url)
                 elif block.type == "web_search_tool_result":
-                    # Extract URLs + text snippets from web search results
+                    # Extract URLs from web search results (fallback)
                     for item in getattr(block, "content", []):
                         if getattr(item, "type", None) == "web_search_result":
-                            snippet = (
-                                getattr(item, "page_content", "")
-                                or getattr(item, "content", "")
-                                or getattr(item, "snippet", "")
-                                or getattr(item, "text", "")
-                                or getattr(item, "description", "")
-                            )
-                            web_citations.append(
-                                {
-                                    "title": getattr(item, "title", ""),
-                                    "url": getattr(item, "url", ""),
-                                    "snippet": str(snippet)[:300] if snippet else "",
-                                }
-                            )
+                            _url = getattr(item, "url", "")
+                            if _url and _url not in _seen_urls:
+                                web_citations.append(
+                                    {
+                                        "title": getattr(item, "title", ""),
+                                        "url": _url,
+                                        "snippet": "",
+                                    }
+                                )
+                                _seen_urls.add(_url)
 
         return {
             "content": text_out,
             "tool_calls": tool_calls_out,
             "web_citations": web_citations,
+            "web_cited_spans": web_cited_spans,
             "usage": {
                 "input": total_input,
                 "output": total_output,

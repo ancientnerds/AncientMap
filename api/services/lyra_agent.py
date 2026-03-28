@@ -2068,8 +2068,32 @@ async def run_agent_stream(
                 # round where database tools are available.
                 _web_text = clean_response_text(result["content"])
                 _web_cites = result.get("web_citations", [])
+                _web_spans = result.get("web_cited_spans", [])
 
-                # Build source URLs block
+                # Build cited web context using Anthropic's citation spans.
+                # Each span maps a text fragment to its source URL.
+                # Format: "Claim text. [Source: Title]\n"
+                # This lets synthesis see WHICH claim came from WHICH source.
+                _url_to_num: dict[str, int] = {}
+                for i, c in enumerate(_web_cites[:10]):
+                    _url_to_num[c["url"]] = i + 1
+
+                if _web_spans:
+                    # Group spans by URL, build cited text
+                    _cited_chunks: list[str] = []
+                    for span in _web_spans:
+                        url = span.get("url", "")
+                        title = span.get("title", "")
+                        cited = span.get("cited_text", "")
+                        n = _url_to_num.get(url, 0)
+                        if cited and n:
+                            _cited_chunks.append(f"{cited} [Source {n}: {title}]")
+                    if _cited_chunks:
+                        _web_text = "\n".join(_cited_chunks[:30])
+                        logger.info(
+                            "Web search: %d cited spans from Citations API", len(_cited_chunks)
+                        )
+
                 _cite_block = ""
                 if _web_cites:
                     _cite_lines = [
@@ -2078,10 +2102,8 @@ async def run_agent_stream(
                     ]
                     _cite_block = "\n\n### Source URLs\n" + "\n".join(_cite_lines)
                 _ws_context = _web_text[:6000] + _cite_block
-                raw_tool_results.insert(
-                    0,
-                    f"[web_search] {_ws_context}",
-                )
+                # Append at END so database results come first (preserves video markers)
+                raw_tool_results.append(f"[web_search] {_ws_context}")
                 tool_calls_made += 1  # count web search as a tool call
                 messages.append(
                     SystemMessage(
@@ -2732,106 +2754,37 @@ async def run_agent_stream(
                         # Strip «lN» guillemet markers
                         text_out = re.sub(r"«l\d+»", "", text_out)
 
-                        # Sonnet citation pass: Haiku can't write [N] inline,
-                        # so we use one Sonnet call to insert them. Sonnet sees
-                        # the prose + numbered web sources and adds [N] after
-                        # matching sentences. ~3s, ~$0.003 per call.
-                        _ws_sources = _extract_web_sources(raw_tool_results)
-                        if _ws_sources:
-                            try:
-                                yield {"type": "status", "content": "Verifying sources..."}
-                                _sonnet = get_backend("claude-sonnet-4-6", "anthropic")
-                                _src_block = "\n".join(
-                                    f"[{s['citation']}] {s['text']}" for s in _ws_sources
-                                )
-                                # Strip video markdown links to plain text so
-                                # Sonnet focuses on inserting [N] rather than
-                                # being paralyzed by complex markdown.
-                                _plain = re.sub(
-                                    r"\[([^\]]*▶[^\]]*)\]\([^)]+\)",
-                                    r"(VIDEO: \1)",
-                                    text_out,
-                                )
-                                # Also strip site/flag/coord links
-                                _plain = re.sub(
-                                    r"\[([^\]]+)\]\((site|flag|coord|empire):[^)]+\)",
-                                    r"\1",
-                                    _plain,
-                                )
-                                _ws_findings = "\n".join(
-                                    r.split("] ", 1)[1][:2000]
-                                    for r in raw_tool_results
-                                    if r.startswith("[web_search")
-                                )
-                                _cite_result = await _sonnet.generate(
-                                    [
-                                        SystemMessage(
-                                            content=(
-                                                "Insert [N] web citation numbers into the text. "
-                                                "The 'Web findings' section shows what came from web search. "
-                                                "Any sentence in the text that states a fact from those findings "
-                                                "gets [N] inserted right after the period. N = source number "
-                                                "from the Sources list. If unsure which source, use the first "
-                                                "relevant one. Skip lines with (VIDEO:). "
-                                                "Return ONLY the modified text."
-                                            )
-                                        ),
-                                        HumanMessage(
-                                            content=(
-                                                f"## Sources\n{_src_block}\n\n"
-                                                f"## Web findings\n{_ws_findings}\n\n"
-                                                f"## Text\n{_plain}"
-                                            )
-                                        ),
-                                    ],
-                                    max_tokens=4096,
-                                )
-                                total_input_tokens += _cite_result["usage"]["input"]
-                                total_output_tokens += _cite_result["usage"]["output"]
-                                _cited = _cite_result["content"].strip()
-                                _n_cites = len(re.findall(r"\[\d+\]", _cited))
-                                if _n_cites == 0:
-                                    logger.info("Sonnet citation pass: no citations inserted")
-                                logger.info(
-                                    "Sonnet output: %d [N] found, %d chars (orig %d)",
-                                    _n_cites,
-                                    len(_cited),
-                                    len(text_out),
-                                )
-                                if _cited and _n_cites > 0 and len(_cited) > len(text_out) * 0.5:
-                                    # Restore video markdown links that were
-                                    # stripped to (VIDEO: ...) for Sonnet
-                                    _vid_links = re.findall(
-                                        r"\[([^\]]*▶[^\]]*)\]\([^)]+\)", text_out
-                                    )
-                                    for vl in _vid_links:
-                                        # Find the original full link
-                                        _orig = re.search(
-                                            re.escape(f"[{vl}]") + r"\([^)]+\)",
-                                            text_out,
-                                        )
-                                        if _orig:
-                                            _cited = _cited.replace(f"(VIDEO: {vl})", _orig.group())
-                                    text_out = _cited
-                            except Exception as exc:
-                                logger.warning("Sonnet citation pass failed: %s", exc)
+                        # Convert [Source N: Title] tags (from Citations API
+                        # cited spans) to [N] inline. Also strip stray tags.
+                        text_out = re.sub(
+                            r"\s*\[Source (\d+):[^\]]*\]",
+                            r" [\1]",
+                            text_out,
+                        )
 
                         # Inject web citations into Sources panel
-                        if _ws_sources and so_data is not None:
-                            # Only keep sources actually cited in text
+                        _ws_sources = _extract_web_sources(raw_tool_results)
+                        if _ws_sources:
+                            # Find which [N] are used in text
                             _used = {
                                 int(n) for n in re.findall(r"(?<!\[)\[(\d+)\](?!\()", text_out)
                             }
-                            so_data["links"] = [
-                                {
-                                    "citation": src.get("citation", i + 1),
-                                    "text": src["text"],
-                                    "url": src["url"],
-                                }
-                                for i, src in enumerate(_ws_sources)
-                                if src.get("citation", i + 1) in _used or not _used
-                            ]
-                            _structured_output = so_data
+                            logger.info(
+                                "Web citations: %d sources, %d [N] used in text",
+                                len(_ws_sources),
+                                len(_used),
+                            )
+                            if so_data is not None:
+                                so_data["links"] = [
+                                    {
+                                        "citation": src.get("citation", i + 1),
+                                        "text": src["text"],
+                                        "url": src["url"],
+                                    }
+                                    for i, src in enumerate(_ws_sources)
+                                    if src.get("citation", i + 1) in _used or not _used
+                                ]
+                                _structured_output = so_data
 
                         yield {"type": "diffusion", "content": text_out}
                         _synthesis_ok = True
