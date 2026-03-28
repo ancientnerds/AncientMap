@@ -2039,6 +2039,9 @@ async def run_agent_stream(
             # Emit synthetic pipeline event for web search so the frontend
             # can display it in the RAG pipeline panel alongside DB tools.
             if _ws_reqs > 0:
+                _ws_preview = ", ".join(
+                    c.get("title", "")[:60] for c in result.get("web_citations", [])[:5]
+                )
                 yield {
                     "type": "pipeline",
                     "stage": "tool_call",
@@ -2048,6 +2051,7 @@ async def run_agent_stream(
                         "tool": "web_search",
                         "result_len": _ws_reqs,
                         "args": {"queries": _ws_reqs},
+                        "result_preview": _ws_preview or None,
                     },
                 }
 
@@ -2775,14 +2779,30 @@ async def run_agent_stream(
                                 len(_used),
                             )
                             if so_data is not None:
+                                # Filter to cited sources only
+                                _kept = [
+                                    src
+                                    for i, src in enumerate(_ws_sources)
+                                    if src.get("citation", i + 1) in _used or not _used
+                                ]
+                                # Renumber sequentially [1][3][5] → [1][2][3]
+                                _old_to_new: dict[int, int] = {}
+                                for new_num, src in enumerate(_kept, 1):
+                                    old_num = src.get("citation", new_num)
+                                    if old_num != new_num:
+                                        _old_to_new[old_num] = new_num
+                                    src["citation"] = new_num
+                                for old_num in sorted(_old_to_new, reverse=True):
+                                    text_out = text_out.replace(
+                                        f"[{old_num}]", f"[{_old_to_new[old_num]}]"
+                                    )
                                 so_data["links"] = [
                                     {
-                                        "citation": src.get("citation", i + 1),
+                                        "citation": src["citation"],
                                         "text": src["text"],
                                         "url": src["url"],
                                     }
-                                    for i, src in enumerate(_ws_sources)
-                                    if src.get("citation", i + 1) in _used or not _used
+                                    for src in _kept
                                 ]
                                 _structured_output = so_data
 
