@@ -1851,15 +1851,26 @@ async def run_agent_stream(
                         _p1_rformat = None
                     if _ws_only:
                         logger.info("Round 0 web_search: offering ONLY web_search tool")
+                    # Only offer web_search on round 0 (the dedicated web
+                    # round). On later rounds, only database tools so the
+                    # model can't skip them in favor of web_search again.
+                    _pass_web = web_search and _round == 0
                     result = await backend_impl.generate(
                         messages,
                         tools=TOOLS if (_offer_tools and not _ws_only) else None,
                         response_format=_p1_rformat,
                         max_tokens=16384,
-                        web_search=web_search,
-                        # Force web_search on the web-only round. No client
-                        # tools are present so tool_choice works cleanly.
-                        tool_choice="web_search" if _ws_only else None,
+                        web_search=_pass_web,
+                        # Round 0: force web_search call.
+                        # Round 1 after web search: force "any" so the model
+                        # MUST call at least one database tool.
+                        tool_choice=(
+                            "web_search"
+                            if _ws_only
+                            else "any"
+                            if (web_search and _round == 1 and _offer_tools)
+                            else None
+                        ),
                     )
                     break
                 except Exception as exc:
@@ -2037,8 +2048,9 @@ async def run_agent_stream(
                     total_input_tokens += ev["input"]
                     total_output_tokens += ev["output"]
 
-        # If no tool calls, we're done
-        if not tool_calls:
+        # If no tool calls, we're done — UNLESS this was the web-search-only
+        # round, in which case we need to continue to the DB tools round.
+        if not tool_calls and not _ws_only:
             _round_tokens = total_input_tokens + total_output_tokens - _round_tokens_before
             yield {
                 "type": "pipeline",
