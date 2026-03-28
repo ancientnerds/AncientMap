@@ -354,25 +354,17 @@ def _build_synthesis_messages(
             for i, ch in enumerate(source_chunks, 1):
                 source_lines.append(f"{i}. {ch['title']}")
 
-    # Web sources — numbered with content snippets so the model can
-    # correctly assign [N] citations inline. Same approach as article
-    # pipeline: model sees "### [1] headline\ncontent" and naturally
-    # writes [1] in the prose next to matching claims.
+    # Web sources — merged INTO Retrieved Sources so PROSE_PROMPT
+    # treats them the same as database sources ("write one bullet per
+    # numbered entry — cover every source in the list").
     web_sources = _extract_web_sources(raw_tool_results)
     if web_sources:
+        if not source_lines:
+            source_lines.append("## Retrieved Sources")
         source_lines.append("")
-        source_lines.append("## Web Sources (cite with [N] inline)")
-        source_lines.append(
-            "For EVERY claim sourced from the web, write [N] IMMEDIATELY "
-            "after the sentence. Example: 'A carnyx was found in Norfolk [1].'"
-        )
+        source_lines.append("Web search results (cover these too):")
         for ws in web_sources:
-            n = ws["citation"]
-            snippet = ws["snippet"][:200] if ws.get("snippet") else ""
-            source_lines.append(f"### [{n}] {ws['text']}")
-            if snippet:
-                source_lines.append(f"Content: {snippet}")
-            source_lines.append(f"URL: {ws['url']}")
+            source_lines.append(f"- WEB: {ws['text']}")
 
     if source_lines:
         msgs.append(SystemMessage(content="\n".join(source_lines)))
@@ -383,33 +375,14 @@ def _build_synthesis_messages(
         user_parts.append(retrieved_context)
 
     if raw_tool_results:
-        # Filter out web_search raw results — they're handled separately
-        _db_results = [r for r in raw_tool_results if not r.startswith("[web_search")]
-        if _db_results:
-            wrapped = [{"text": r} for r in _db_results]
-            deduped = _semantic_dedup(wrapped, text_key="text")
-            reordered = _reorder_by_relevance(deduped)
-            data_block = "\n---\n".join(r["text"][:8000] for r in reordered)
-            user_parts.append(f"## Retrieved Data\n\n{data_block}")
-
-        # Web sources: numbered with content, inline in the HumanMessage
-        # so the model can't miss them. Same approach as article pipeline:
-        # model sees "### [1] headline\ncontent" and writes [1] naturally.
-        _ws = _extract_web_sources(raw_tool_results)
-        if _ws:
-            ws_lines = [
-                "## Web Sources — CITE EACH with [N] after the sentence",
-                "RULE: Write [N] immediately after every claim from these sources.",
-                "",
-            ]
-            for src in _ws:
-                n = src["citation"]
-                snippet = src.get("snippet", "")[:200]
-                ws_lines.append(f"### [{n}] {src['text']}")
-                if snippet:
-                    ws_lines.append(snippet)
-                ws_lines.append("")
-            user_parts.append("\n".join(ws_lines))
+        # Include ALL tool results (web + database) in one data block.
+        # Previously web data was separated, causing PROSE_PROMPT to
+        # ignore it. Now it's mixed in with database results.
+        wrapped = [{"text": r} for r in raw_tool_results]
+        deduped = _semantic_dedup(wrapped, text_key="text")
+        reordered = _reorder_by_relevance(deduped)
+        data_block = "\n---\n".join(r["text"][:8000] for r in reordered)
+        user_parts.append(f"## Retrieved Data\n\n{data_block}")
 
     user_parts.append(f"## Question\n{user_question}")
     msgs.append(HumanMessage(content="\n\n".join(user_parts)))
@@ -1477,8 +1450,6 @@ async def run_agent_stream(
     # Build context if not provided (backwards compat)
     if ctx is None:
         ctx = route_request("anthropic", message)
-
-    print(f"[run_agent_stream] web_search={web_search}", flush=True)
 
     # Set contextvars for the pipeline (so _hybrid_search uses the right backend)
     set_request_context(ctx)
@@ -2820,18 +2791,7 @@ async def run_agent_stream(
                                 _cited = _cite_result["content"].strip()
                                 _n_cites = len(re.findall(r"\[\d+\]", _cited))
                                 if _n_cites == 0:
-                                    _ws_findings = "\n".join(
-                                        r.split("] ", 1)[1][:300]
-                                        for r in raw_tool_results
-                                        if r.startswith("[web_search")
-                                    )
-                                    print(f"[SONNET-FINDINGS] {_ws_findings[:200]}", flush=True)
-                                    print(f"[SONNET-TEXT] {text_out[:200]}", flush=True)
-                                    print(f"[SONNET-OUT] {_cited[:200]}", flush=True)
-                                    print(
-                                        f"[SONNET] 0 cites. web_findings={len(_ws_findings)}c text={len(text_out)}c",
-                                        flush=True,
-                                    )
+                                    logger.info("Sonnet citation pass: no citations inserted")
                                 logger.info(
                                     "Sonnet output: %d [N] found, %d chars (orig %d)",
                                     _n_cites,
