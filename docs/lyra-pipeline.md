@@ -530,7 +530,7 @@ flowchart LR
 
 ### Lyra RAG Tools
 
-10 tools are available to the agent, mapped to collections:
+12 tools are available to the agent, mapped to collections:
 
 | Tool | Collection | Description |
 |------|-----------|-------------|
@@ -544,6 +544,8 @@ flowchart LR
 | `get_site_images` | — (SQL) | Wikimedia Commons images for a site (returns pre-formatted markdown with attribution links to Commons) |
 | `search_articles` | articles | Hybrid search on weekly digest article chunks |
 | `search_empires` | empires | Hybrid search on Seshat polity data |
+| `search_transcripts` | transcripts | Hybrid search on YouTube transcript chunks |
+| `web_search` | — (Anthropic) | Live internet search via Anthropic's server-side web search tool (`web_search_20250305`). User-toggled, costs +2 credits per search. On round 0, only `web_search` is offered (no DB tools) to prevent server/client tool conflicts. Results are cited as `«l0»` link markers with source URLs. Max 3 searches per request. |
 
 Auto-retrieve runs before the LLM on every query. For complex multi-part queries (e.g. "compare Göbekli Tepe and Stonehenge"), the agent decomposes the query into 1-3 sub-queries first (`_decompose_query()`), then runs hybrid search per sub-query on sites (top 5) + news (top 3). Results are merged by ID, semantically deduped (token Jaccard ≥ 0.7), and reordered for lost-in-the-middle mitigation (most relevant at start and end of context). The remaining collections (transcripts, articles, empires) are available via tool calls.
 

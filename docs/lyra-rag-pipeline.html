@@ -1370,8 +1370,14 @@ ESCALATION_SCHEMA:
           <div class="node-title" style="font-size: 12px;">search_empires <span class="badge badge-new">new</span></div>
           <div class="node-desc">Find empires by attributes (warfare, economy, region)</div>
         </div>
+        <div class="node node-tool" style="border: 1px dashed var(--green);">
+          <div class="node-title" style="font-size: 12px;">web_search <span class="badge badge-new">new</span></div>
+          <div class="node-desc">Anthropic server-side web search · user-toggled · +2 credits/search</div>
+        </div>
+      </div>
+      <div class="split-3" style="opacity: 0.8;">
         <div class="node node-tool" style="opacity: 0.3;">
-          <div class="node-title" style="font-size: 12px; color: var(--dim);">11 tools total</div>
+          <div class="node-title" style="font-size: 12px; color: var(--dim);">12 tools total</div>
           <div class="node-desc">Extensible via @tool decorator</div>
         </div>
       </div>
@@ -1392,7 +1398,7 @@ ESCALATION_SCHEMA:
         <div class="node-desc">
           After streaming completes, a non-streaming <code>complete()</code> call with <code>response_format: LYRA_RESPONSE_SCHEMA</code>
           produces guaranteed structured JSON. <code>expand_markers()</code> resolves guillemet markers
-          (&laquo;s0&raquo;, &laquo;v0&raquo;, &laquo;e0&raquo;, etc.) into frontend markdown links.<br>
+          (&laquo;s0&raquo;, &laquo;v0&raquo;, &laquo;e0&raquo;, &laquo;l0&raquo;, etc.) into frontend markdown links.<br>
           <strong>Two injection points:</strong> Point 1 (normal final) + Point 2 (forced when max tool rounds exhausted).<br>
           <strong>Fallback:</strong> If <code>complete()</code> fails, keeps streamed text with markers stripped.<br>
           <em style="color: var(--dim); font-size: 11px;">Parameters: reasoning_effort="high", temperature=0.1, max_tokens=4096 (capped).</em>
