@@ -22,6 +22,7 @@ interface UsageEntry {
   input_tokens: number
   output_tokens: number
   voyage_tokens: number
+  web_search_requests: number
   credits_used: number
   created_at: string
 }
@@ -1007,6 +1008,7 @@ export default function AccountPage() {
                               <th>Date</th>
                               <th>Input</th>
                               <th>Output</th>
+                              <th>Web</th>
                               <th>Credits</th>
                             </tr>
                           </thead>
@@ -1016,6 +1018,7 @@ export default function AccountPage() {
                                 <td>{new Date(u.created_at).toLocaleDateString()}</td>
                                 <td>{u.input_tokens.toLocaleString()}</td>
                                 <td>{u.output_tokens.toLocaleString()}</td>
+                                <td>{u.web_search_requests > 0 ? u.web_search_requests : ''}</td>
                                 <td className="account-credits-negative">-{u.credits_used}</td>
                               </tr>
                             ))}

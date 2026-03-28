@@ -619,6 +619,7 @@ async def get_credits(user: DiscordUser = Depends(get_current_user)):
                 "input_tokens": u.input_tokens,
                 "output_tokens": u.output_tokens,
                 "voyage_tokens": u.voyage_tokens,
+                "web_search_requests": u.web_search_requests,
                 "credits_used": u.credits_used,
                 "created_at": u.created_at.isoformat(),
             }
