@@ -2106,8 +2106,10 @@ async def run_agent_stream(
                     ]
                     _cite_block = "\n\n### Source URLs\n" + "\n".join(_cite_lines)
                 _ws_context = _web_text[:6000] + _cite_block
-                # Append at END so database results come first (preserves video markers)
-                raw_tool_results.append(f"[web_search] {_ws_context}")
+                # Insert at position 0 so synthesis sees web data first.
+                # The [Source N: Title] tags survive into the prose because
+                # they're embedded in the source data, not instructions.
+                raw_tool_results.insert(0, f"[web_search] {_ws_context}")
                 tool_calls_made += 1  # count web search as a tool call
                 messages.append(
                     SystemMessage(
