@@ -1211,7 +1211,7 @@ def _build_messages(
                 f"Today's date is {today}. The user enabled live web search.\n"
                 f"Web search results will be provided as context alongside your "
                 f"database tools. Use BOTH sources to build a comprehensive answer:\n"
-                f"- Cite web sources with «lN» link markers (text + URL)\n"
+                f"- Cite web sources as plain markdown links: [Source Title](https://url)\n"
                 f"- Cite database sources with «vN» video markers, «sN» site markers, etc.\n"
                 f"A good response combines fresh web info with our transcript/video database.\n"
             )
@@ -1854,6 +1854,9 @@ async def run_agent_stream(
                         response_format=_p1_rformat,
                         max_tokens=16384,
                         web_search=web_search,
+                        # Force web_search on the web-only round. No client
+                        # tools are present so tool_choice works cleanly.
+                        tool_choice="web_search" if _ws_only else None,
                     )
                     break
                 except Exception as exc:
@@ -1913,7 +1916,7 @@ async def run_agent_stream(
                         }
                     )
                 collected_content = result["content"]
-            elif _ws_only and _ws_reqs > 0:
+            elif _ws_only:
                 # Web-search-only round completed — don't answer yet.
                 # Capture web results as context and continue to the next
                 # round where database tools are available. The final
@@ -1931,7 +1934,7 @@ async def run_agent_stream(
                 _ws_context = _web_text[:6000] + _cite_block
                 raw_tool_results.insert(
                     0,
-                    f"[web_search — CITE THESE with «lN» link markers] {_ws_context}",
+                    f"[web_search] {_ws_context}",
                 )
                 tool_calls_made += 1  # count web search as a tool call
                 messages.append(
@@ -1939,9 +1942,13 @@ async def run_agent_stream(
                         content=(
                             "## Web search results (already retrieved)\n"
                             "Use these web results AND your database tools below "
-                            "to build a comprehensive answer. Cite web sources "
-                            "with «lN» link markers AND database sources with "
-                            "«vN» video markers.\n\n" + _ws_context
+                            "to build a comprehensive answer.\n"
+                            "- For web sources: cite as plain markdown links "
+                            "[Source Title](https://url) using the Source URLs below.\n"
+                            "- For database sources: use «vN» video markers, "
+                            "«sN» site markers as usual.\n"
+                            "EVERY claim must have a source — either a web link "
+                            "or a database marker.\n\n" + _ws_context
                         )
                     )
                 )
@@ -2600,14 +2607,39 @@ async def run_agent_stream(
                                     content=(
                                         "CRITICAL: Your previous response lacked "
                                         "citations. EVERY factual claim MUST have a "
-                                        "marker: «vN» for videos, «sN» for sites, "
-                                        "«lN» for web links. Use the entities and "
-                                        "source URLs provided. A response with zero "
-                                        "markers is unacceptable."
+                                        "source: «vN» for videos, «sN» for sites, "
+                                        "or [Source](https://url) for web links. "
+                                        "Use the entities catalogue and source URLs. "
+                                        "A response with zero citations is unacceptable."
                                     )
                                 )
                             )
                             continue  # retry S2
+
+                        # Resolve unresolved «lN» markers using web
+                        # citations from the entities catalogue. Haiku
+                        # often puts «lN» in text but leaves the links
+                        # array empty, so expand_markers can't resolve them.
+                        if total_web_search_requests > 0:
+                            _web_links = json.loads(_entities_json).get("links", [])
+                            if _web_links:
+
+                                def _resolve_web_link(m: re.Match) -> str:
+                                    idx = int(m.group(1))
+                                    if idx < len(_web_links):
+                                        lnk = _web_links[idx]
+                                        return f"[{lnk['text']}]({lnk['url']})"
+                                    return m.group(0)
+
+                                text_out = re.sub(r"«l(\d+)»", _resolve_web_link, text_out)
+
+                                # Fallback: if no web links in text after
+                                # marker resolution, append sources footer.
+                                if not re.search(r"\]\(https?://", text_out):
+                                    _src_lines = [
+                                        f"[{lnk['text']}]({lnk['url']})" for lnk in _web_links[:5]
+                                    ]
+                                    text_out += "\n\n**Sources:** " + " · ".join(_src_lines)
 
                         yield {"type": "diffusion", "content": text_out}
                         _synthesis_ok = True
