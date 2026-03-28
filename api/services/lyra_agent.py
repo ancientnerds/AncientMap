@@ -294,6 +294,32 @@ def _extract_source_chunks(raw_tool_results: list[str]) -> list[dict]:
     return chunks
 
 
+def _extract_web_sources(raw_tool_results: list[str]) -> list[dict]:
+    """Extract numbered web citations from raw_tool_results.
+
+    Returns list of {citation, text, url, snippet} dicts.
+    """
+    sources: list[str] = []
+    for raw in raw_tool_results:
+        if raw.startswith("[web_search"):
+            sources.append(raw)
+
+    results: list[dict] = []
+    for raw in sources:
+        for m in re.finditer(
+            r'\[(\d+)\] (.+?) — (https?://\S+)(?:\n\s+Content: "(.+?)")?',
+            raw,
+        ):
+            entry = {
+                "citation": int(m.group(1)),
+                "text": m.group(2),
+                "url": m.group(3),
+                "snippet": m.group(4) or "",
+            }
+            results.append(entry)
+    return results
+
+
 def _build_synthesis_messages(
     user_question: str,
     raw_tool_results: list[str],
@@ -308,6 +334,10 @@ def _build_synthesis_messages(
     A numbered ## Retrieved Sources list is prepended when tool results contain
     video/transcript data. This gives the LLM an explicit index to enumerate —
     deduplication by video_id happens here in Python, not via prompt instruction.
+
+    Web sources are injected as numbered [N] entries with content snippets
+    so the model can correctly assign inline [N] citations (article pipeline
+    approach — LLM sees the content, writes [N] naturally).
     """
     msgs: list[BaseMessage] = [SystemMessage(content=SYNTHESIS_PROMPT)]
 
@@ -316,13 +346,36 @@ def _build_synthesis_messages(
 
     # Inject source index as a SystemMessage so it is visible as an instruction
     # but NOT inside the document body passed to the Citations API.
+    source_lines: list[str] = []
     if raw_tool_results:
         source_chunks = _extract_source_chunks(raw_tool_results)
         if source_chunks:
-            lines = [f"## Retrieved Sources ({len(source_chunks)} found)"]
+            source_lines.append(f"## Retrieved Sources ({len(source_chunks)} found)")
             for i, ch in enumerate(source_chunks, 1):
-                lines.append(f"{i}. {ch['title']}")
-            msgs.append(SystemMessage(content="\n".join(lines)))
+                source_lines.append(f"{i}. {ch['title']}")
+
+    # Web sources — numbered with content snippets so the model can
+    # correctly assign [N] citations inline. Same approach as article
+    # pipeline: model sees "### [1] headline\ncontent" and naturally
+    # writes [1] in the prose next to matching claims.
+    web_sources = _extract_web_sources(raw_tool_results)
+    if web_sources:
+        source_lines.append("")
+        source_lines.append("## Web Sources (cite with [N] inline)")
+        source_lines.append(
+            "For EVERY claim sourced from the web, write [N] IMMEDIATELY "
+            "after the sentence. Example: 'A carnyx was found in Norfolk [1].'"
+        )
+        for ws in web_sources:
+            n = ws["citation"]
+            snippet = ws["snippet"][:200] if ws.get("snippet") else ""
+            source_lines.append(f"### [{n}] {ws['text']}")
+            if snippet:
+                source_lines.append(f"Content: {snippet}")
+            source_lines.append(f"URL: {ws['url']}")
+
+    if source_lines:
+        msgs.append(SystemMessage(content="\n".join(source_lines)))
 
     user_parts: list[str] = []
 
@@ -330,11 +383,33 @@ def _build_synthesis_messages(
         user_parts.append(retrieved_context)
 
     if raw_tool_results:
-        wrapped = [{"text": r} for r in raw_tool_results]
-        deduped = _semantic_dedup(wrapped, text_key="text")
-        reordered = _reorder_by_relevance(deduped)
-        data_block = "\n---\n".join(r["text"][:8000] for r in reordered)
-        user_parts.append(f"## Retrieved Data\n\n{data_block}")
+        # Filter out web_search raw results — they're handled separately
+        _db_results = [r for r in raw_tool_results if not r.startswith("[web_search")]
+        if _db_results:
+            wrapped = [{"text": r} for r in _db_results]
+            deduped = _semantic_dedup(wrapped, text_key="text")
+            reordered = _reorder_by_relevance(deduped)
+            data_block = "\n---\n".join(r["text"][:8000] for r in reordered)
+            user_parts.append(f"## Retrieved Data\n\n{data_block}")
+
+        # Web sources: numbered with content, inline in the HumanMessage
+        # so the model can't miss them. Same approach as article pipeline:
+        # model sees "### [1] headline\ncontent" and writes [1] naturally.
+        _ws = _extract_web_sources(raw_tool_results)
+        if _ws:
+            ws_lines = [
+                "## Web Sources — CITE EACH with [N] after the sentence",
+                "RULE: Write [N] immediately after every claim from these sources.",
+                "",
+            ]
+            for src in _ws:
+                n = src["citation"]
+                snippet = src.get("snippet", "")[:200]
+                ws_lines.append(f"### [{n}] {src['text']}")
+                if snippet:
+                    ws_lines.append(snippet)
+                ws_lines.append("")
+            user_parts.append("\n".join(ws_lines))
 
     user_parts.append(f"## Question\n{user_question}")
     msgs.append(HumanMessage(content="\n\n".join(user_parts)))
@@ -390,54 +465,76 @@ def _count_markers(text: str) -> dict[str, int]:
     return counts
 
 
-def _rematch_web_citations(text: str, web_sources: list[dict]) -> str:
-    """Re-match [N] citations to the correct web source by content overlap.
+def _inject_web_citations(text: str, web_sources: list[dict]) -> tuple[str, list[dict]]:
+    """Inject [N] citations into prose by matching web source snippets.
 
-    The model assigns [N] by guessing from titles alone. This function
-    compares each sentence containing [N] against the snippet text of
-    each web source and reassigns to the best match.
+    Haiku refuses to write [N] despite instructions, so we do it in code:
+    1. Extract keywords from each source snippet
+    2. Find sentences in prose that match those keywords
+    3. Insert [N] after the first matching sentence per source
+    4. Renumber sequentially
+
+    This is deterministic — no LLM guessing, just content matching.
     """
-    # Build keyword sets from snippets
-    source_keywords: list[set[str]] = []
+    if not web_sources or not text.strip():
+        return text, []
+
+    # Build keyword sets per source from snippets
+    source_keywords: list[tuple[dict, set[str]]] = []
     for src in web_sources:
         snippet = (src.get("snippet", "") + " " + src.get("text", "")).lower()
         words = set(re.findall(r"\w{4,}", snippet))
-        source_keywords.append(words)
+        if words:
+            source_keywords.append((src, words))
 
     if not source_keywords:
-        return text
+        return text, []
 
-    # Find all [N] markers and their surrounding sentence
-    cite_positions = list(re.finditer(r"(?<!\[)\[(\d+)\](?!\()", text))
-    if not cite_positions:
-        return text
+    # Split prose into sentences with their positions
+    sentence_spans: list[tuple[int, int, set[str]]] = []
+    for m in re.finditer(r"[^.!?\n]+[.!?]", text):
+        sent_words = set(re.findall(r"\w{4,}", m.group().lower()))
+        sentence_spans.append((m.start(), m.end(), sent_words))
 
-    # For each [N], extract ~100 chars before it as context
-    replacements: list[tuple[int, int, str]] = []
-    for m in cite_positions:
-        old_n = int(m.group(1))
-        start = max(0, m.start() - 120)
-        context = text[start : m.start()].lower()
-        ctx_words = set(re.findall(r"\w{4,}", context))
+    if not sentence_spans:
+        return text, []
 
-        # Score each source by keyword overlap
-        best_score = 0
-        best_idx = old_n - 1  # default: keep original
-        for idx, kw_set in enumerate(source_keywords):
-            score = len(ctx_words & kw_set)
+    # Match each source to its best sentence
+    used: list[tuple[int, dict]] = []  # (insert_position, source)
+    matched_sources: set[int] = set()
+
+    for src, kw_set in source_keywords:
+        best_pos = -1
+        best_score = 2  # minimum 3 keyword matches required
+        for _start, end, sent_words in sentence_spans:
+            score = len(kw_set & sent_words)
             if score > best_score:
                 best_score = score
-                best_idx = idx
+                best_pos = end
+        if best_pos >= 0 and src["citation"] not in matched_sources:
+            used.append((best_pos, src))
+            matched_sources.add(src["citation"])
 
-        new_n = web_sources[best_idx].get("citation", best_idx + 1)
-        if new_n != old_n:
-            replacements.append((m.start(), m.end(), f"[{new_n}]"))
+    if not used:
+        return text, []
 
-    # Apply replacements in reverse order to preserve positions
-    for start, end, new_text in reversed(replacements):
-        text = text[:start] + new_text + text[end:]
+    # Insert citations (reverse order to preserve positions)
+    used.sort(key=lambda x: x[0], reverse=True)
+    for pos, src in used:
+        text = text[:pos] + f" [{src['citation']}]" + text[pos:]
 
-    return text
+    # Collect used sources and renumber sequentially
+    kept = [src for _, src in sorted(used, key=lambda x: x[0])]
+    old_to_new: dict[int, int] = {}
+    for new_num, src in enumerate(kept, 1):
+        old_num = src["citation"]
+        if old_num != new_num:
+            old_to_new[old_num] = new_num
+        src["citation"] = new_num
+    for old_num in sorted(old_to_new.keys(), reverse=True):
+        text = text.replace(f"[{old_num}]", f"[{old_to_new[old_num]}]")
+
+    return text, kept
 
 
 def _build_entities_catalogue(
@@ -1274,12 +1371,12 @@ def _build_messages(
             web_search_hint = (
                 f"\n\n## Web Search (enabled by user)\n"
                 f"Today's date is {today}. The user enabled live web search.\n"
-                f"Web search results will be provided as context alongside your "
-                f"database tools. Use BOTH sources to build a comprehensive answer:\n"
-                f"- Cite web sources with numbered references [1], [2], etc. "
-                f"matching the numbered Source URLs list.\n"
-                f"- Cite database sources with «vN» video markers, «sN» site markers, etc.\n"
-                f"A good response combines fresh web info with our transcript/video database.\n"
+                f"When summarizing web search results, write [N] after EVERY "
+                f"claim to indicate which search result it came from. The search "
+                f"results are numbered — match your [N] to the result number.\n"
+                f"Example: 'A carnyx was found in Norfolk [1]. Göbekli Tepe "
+                f"survey revealed a new building [2].'\n"
+                f"After web search, database tools will also be available.\n"
             )
             # Replace tool hints to put web_search first
             if tool_hint:
@@ -1910,10 +2007,8 @@ async def run_agent_stream(
                     # Database tools become available from round 1 onward.
                     _ws_only = web_search and _round == 0 and _offer_tools
                     if _offer_tools:
-                        # Haiku returns empty content when client tools +
-                        # output_config are combined. Web-search-only rounds
-                        # also skip structured output — we just collect the
-                        # web results as context, not the final answer.
+                        # Haiku returns empty content when tools (client or
+                        # server) + output_config are combined.
                         _p1_rformat = None
                     if _ws_only:
                         logger.info("Round 0 web_search: offering ONLY web_search tool")
@@ -1999,23 +2094,18 @@ async def run_agent_stream(
             elif _ws_only:
                 # Web-search-only round completed — don't answer yet.
                 # Capture web results as context and continue to the next
-                # round where database tools are available. The final
-                # synthesis will combine web + database results.
+                # round where database tools are available.
                 _web_text = clean_response_text(result["content"])
-                # Build web citations block with actual URLs for synthesis
                 _web_cites = result.get("web_citations", [])
+
+                # Build source URLs block
                 _cite_block = ""
                 if _web_cites:
-                    _cite_lines = []
-                    for i, c in enumerate(_web_cites[:10]):
-                        snippet = c.get("snippet", "")[:150]
-                        _cite_lines.append(
-                            f"[{i + 1}] {c['title']} — {c['url']}"
-                            + (f'\n    Content: "{snippet}..."' if snippet else "")
-                        )
-                    _cite_block = "\n\n### Source URLs (cite as [1], [2], etc.)\n" + "\n".join(
-                        _cite_lines
-                    )
+                    _cite_lines = [
+                        f"[{i + 1}] {c['title']} — {c['url']}"
+                        for i, c in enumerate(_web_cites[:10])
+                    ]
+                    _cite_block = "\n\n### Source URLs\n" + "\n".join(_cite_lines)
                 _ws_context = _web_text[:6000] + _cite_block
                 raw_tool_results.insert(
                     0,
@@ -2666,84 +2756,26 @@ async def run_agent_stream(
                     if so_data is not None:
                         _structured_output = so_data
                     if text_out.strip():
-                        text_out, _grounding_ratio = _check_grounding(text_out)
-                        _markers = _count_markers(text_out)
-                        _has_web = total_web_search_requests > 0
-                        _has_web_cites = _markers.get("l", 0) > 0
-                        _total_cites = sum(_markers.values())
+                        text_out, _ = _check_grounding(text_out)
 
-                        # Grounding gate: retry once if citations are
-                        # missing. Only fires on the first S2 attempt.
-                        if _s2_attempt == 0 and (
-                            (_has_web and not _has_web_cites)
-                            or (_total_cites == 0 and tool_calls_made > 0)
-                            or (_grounding_ratio < 0.25 and tool_calls_made > 0)
-                        ):
-                            logger.info(
-                                "Grounding gate: retry (web=%s web_cites=%d "
-                                "total_cites=%d ratio=%.2f)",
-                                _has_web,
-                                _markers.get("l", 0),
-                                _total_cites,
-                                _grounding_ratio,
-                            )
-                            # Append citation enforcement to injection msgs
-                            injection_msgs.append(
-                                SystemMessage(
-                                    content=(
-                                        "CRITICAL: Your previous response lacked "
-                                        "citations. EVERY factual claim MUST have a "
-                                        "source: «vN» for videos, «sN» for sites, "
-                                        "or [N] for numbered web sources. "
-                                        "Use the entities catalogue and source URLs. "
-                                        "A response with zero citations is unacceptable."
-                                    )
-                                )
-                            )
-                            continue  # retry S2
-
-                        # Convert any «lN» markers to [N] and strip stray ones
-                        _ws_sources = json.loads(_entities_json).get("web_sources", [])
-                        if _ws_sources:
-                            _cite_map = {
-                                f"l{i}": src.get("citation", i + 1)
-                                for i, src in enumerate(_ws_sources)
-                            }
-                            text_out = re.sub(
-                                r"«l(\d+)»",
-                                lambda m: (
-                                    f"[{_cite_map.get('l' + m.group(1), int(m.group(1)) + 1)}]"
-                                ),
-                                text_out,
-                            )
-                            # Content-based citation matching: the model
-                            # assigns [N] numbers by guessing. We re-match
-                            # each [N] to the correct source by checking
-                            # which snippet has the most keyword overlap
-                            # with the sentence containing [N].
-                            _snippets_available = any(s.get("snippet") for s in _ws_sources)
-                            if _snippets_available:
-                                text_out = _rematch_web_citations(text_out, _ws_sources)
-
-                            # Inject web citations into structured output
-                            # for the frontend Sources panel — only include
-                            # citations actually used in text
-                            _used_cites = {
-                                int(n) for n in re.findall(r"(?<!\[)\[(\d+)\](?!\()", text_out)
-                            }
-                            if so_data is not None:
-                                so_data["links"] = [
-                                    {
-                                        "citation": src.get("citation", i + 1),
-                                        "text": src["text"],
-                                        "url": src["url"],
-                                    }
-                                    for i, src in enumerate(_ws_sources)
-                                    if src.get("citation", i + 1) in _used_cites or not _used_cites
-                                ]
-                                _structured_output = so_data
-                        # Strip any remaining «lN» markers
+                        # Strip «lN» guillemet markers
                         text_out = re.sub(r"«l\d+»", "", text_out)
+
+                        # Show ALL web sources in the Sources panel.
+                        # Inline [N] citations are not possible with Haiku
+                        # (refuses to write them + Anthropic encrypts page
+                        # content so we can't match claims to sources).
+                        _ws_sources = _extract_web_sources(raw_tool_results)
+                        if _ws_sources and so_data is not None:
+                            so_data["links"] = [
+                                {
+                                    "citation": src.get("citation", i + 1),
+                                    "text": src["text"],
+                                    "url": src["url"],
+                                }
+                                for i, src in enumerate(_ws_sources)
+                            ]
+                            _structured_output = so_data
 
                         yield {"type": "diffusion", "content": text_out}
                         _synthesis_ok = True

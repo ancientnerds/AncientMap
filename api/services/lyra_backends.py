@@ -521,11 +521,18 @@ class AnthropicBackend:
                     # Extract URLs + text snippets from web search results
                     for item in getattr(block, "content", []):
                         if getattr(item, "type", None) == "web_search_result":
+                            snippet = (
+                                getattr(item, "page_content", "")
+                                or getattr(item, "content", "")
+                                or getattr(item, "snippet", "")
+                                or getattr(item, "text", "")
+                                or getattr(item, "description", "")
+                            )
                             web_citations.append(
                                 {
                                     "title": getattr(item, "title", ""),
                                     "url": getattr(item, "url", ""),
-                                    "snippet": getattr(item, "page_content", "")[:300],
+                                    "snippet": str(snippet)[:300] if snippet else "",
                                 }
                             )
 
