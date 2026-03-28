@@ -373,6 +373,23 @@ def _check_grounding(text: str) -> tuple[str, float]:
     return text, ratio
 
 
+def _count_markers(text: str) -> dict[str, int]:
+    """Count guillemet markers by type in the text."""
+    counts: dict[str, int] = {}
+    for m in re.finditer(r"«([a-z])\d+»", text):
+        prefix = m.group(1)
+        counts[prefix] = counts.get(prefix, 0) + 1
+    # Also count expanded markers (post expand_markers)
+    for m in re.finditer(r"\]\((site|lyra-video|flag|empire|coord):", text):
+        tag_map = {"site": "s", "lyra-video": "v", "flag": "f", "empire": "e", "coord": "c"}
+        prefix = tag_map.get(m.group(1), "?")
+        counts[prefix] = counts.get(prefix, 0) + 1
+    # Count plain links (web citations) as "l" markers
+    for _m in re.finditer(r"\]\(https?://", text):
+        counts["l"] = counts.get("l", 0) + 1
+    return counts
+
+
 def _build_entities_catalogue(
     all_sites: list[dict],
     all_news: list[dict],
@@ -461,6 +478,15 @@ def _build_entities_catalogue(
                         _entities["links"].append(
                             {"text": ch.get("name", ""), "url": ch["youtube_url"]}
                         )
+
+    # Extract web search citations from raw_tool_results.
+    # These are formatted as markdown links: - [title](url)
+    for _raw in raw_tool_results:
+        if not _raw.startswith("[web_search"):
+            continue
+        for m in re.finditer(r"- \[([^\]]+)\]\((https?://[^)]+)\)", _raw):
+            _entities["links"].append({"text": m.group(1), "url": m.group(2)})
+
     return json.dumps(_entities, ensure_ascii=False)
 
 
@@ -2547,7 +2573,42 @@ async def run_agent_stream(
                     if so_data is not None:
                         _structured_output = so_data
                     if text_out.strip():
-                        text_out, _ = _check_grounding(text_out)
+                        text_out, _grounding_ratio = _check_grounding(text_out)
+                        _markers = _count_markers(text_out)
+                        _has_web = total_web_search_requests > 0
+                        _has_web_cites = _markers.get("l", 0) > 0
+                        _total_cites = sum(_markers.values())
+
+                        # Grounding gate: retry once if citations are
+                        # missing. Only fires on the first S2 attempt.
+                        if _s2_attempt == 0 and (
+                            (_has_web and not _has_web_cites)
+                            or (_total_cites == 0 and tool_calls_made > 0)
+                            or (_grounding_ratio < 0.25 and tool_calls_made > 0)
+                        ):
+                            logger.info(
+                                "Grounding gate: retry (web=%s web_cites=%d "
+                                "total_cites=%d ratio=%.2f)",
+                                _has_web,
+                                _markers.get("l", 0),
+                                _total_cites,
+                                _grounding_ratio,
+                            )
+                            # Append citation enforcement to injection msgs
+                            injection_msgs.append(
+                                SystemMessage(
+                                    content=(
+                                        "CRITICAL: Your previous response lacked "
+                                        "citations. EVERY factual claim MUST have a "
+                                        "marker: «vN» for videos, «sN» for sites, "
+                                        "«lN» for web links. Use the entities and "
+                                        "source URLs provided. A response with zero "
+                                        "markers is unacceptable."
+                                    )
+                                )
+                            )
+                            continue  # retry S2
+
                         yield {"type": "diffusion", "content": text_out}
                         _synthesis_ok = True
                         break
