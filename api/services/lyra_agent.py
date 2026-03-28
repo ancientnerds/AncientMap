@@ -1202,13 +1202,19 @@ def _build_messages(
 
         if context_type == "empire":
             system_text = (
-                LYRA_SYSTEM_PROMPT + web_search_hint + tool_hint
-                + retrieved_context + context_prompt
+                LYRA_SYSTEM_PROMPT
+                + web_search_hint
+                + tool_hint
+                + retrieved_context
+                + context_prompt
             )
         else:
             system_text = (
-                LYRA_SYSTEM_PROMPT + web_search_hint + tool_hint
-                + context_prompt + retrieved_context
+                LYRA_SYSTEM_PROMPT
+                + web_search_hint
+                + tool_hint
+                + context_prompt
+                + retrieved_context
             )
     messages: list[BaseMessage] = [SystemMessage(content=system_text)]
 
