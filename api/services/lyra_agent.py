@@ -1181,21 +1181,13 @@ def _build_messages(
         if web_search:
             today = time.strftime("%Y-%m-%d")
             web_search_hint = (
-                f"\n\n## Web Search — MANDATORY (enabled by user)\n"
-                f"Today's date is {today}. The user clicked the web search button "
-                f"because they want LIVE internet results.\n"
-                f"You MUST call the `web_search` tool as your FIRST tool call. "
-                f"This is non-negotiable — the user is paying extra for web results.\n"
-                f"After web search, you may also call database tools to supplement.\n"
-                f"\n### Web citation rule\n"
-                f"You MUST cite web search results using «lN» link markers. "
-                f"For every web source you reference, add a «lN» marker in your text "
-                f"AND a matching entry in the `links` array with the source URL.\n"
-                f'Example: "New tombs found at Saqqara «l0»" with '
-                f'links: [{{"marker": "l0", "text": "Live Science", '
-                f'"url": "https://..."}}]\n'
-                f"The user enabled web search to see web links — a response with "
-                f"zero «lN» markers means web search was wasted.\n"
+                f"\n\n## Web Search (enabled by user)\n"
+                f"Today's date is {today}. The user enabled live web search.\n"
+                f"Web search results will be provided as context alongside your "
+                f"database tools. Use BOTH sources to build a comprehensive answer:\n"
+                f"- Cite web sources with «lN» link markers (text + URL)\n"
+                f"- Cite database sources with «vN» video markers, «sN» site markers, etc.\n"
+                f"A good response combines fresh web info with our transcript/video database.\n"
             )
             # Replace tool hints to put web_search first
             if tool_hint:
@@ -1822,11 +1814,11 @@ async def run_agent_stream(
                     # tools causes the API to skip the server tool execution.
                     # Database tools become available from round 1 onward.
                     _ws_only = web_search and _round == 0 and _offer_tools
-                    if _offer_tools and not _ws_only:
+                    if _offer_tools:
                         # Haiku returns empty content when client tools +
-                        # output_config are combined — disable structured
-                        # output when database tools are offered. Web-search-
-                        # only rounds are safe: no client tools.
+                        # output_config are combined. Web-search-only rounds
+                        # also skip structured output — we just collect the
+                        # web results as context, not the final answer.
                         _p1_rformat = None
                     if _ws_only:
                         logger.info("Round 0 web_search: offering ONLY web_search tool")
@@ -1895,6 +1887,43 @@ async def run_agent_stream(
                         }
                     )
                 collected_content = result["content"]
+            elif _ws_only and _ws_reqs > 0:
+                # Web-search-only round completed — don't answer yet.
+                # Capture web results as context and continue to the next
+                # round where database tools are available. The final
+                # synthesis will combine web + database results.
+                _web_text = clean_response_text(result["content"])
+                # Build web citations block with actual URLs for synthesis
+                _web_cites = result.get("web_citations", [])
+                _cite_block = ""
+                if _web_cites:
+                    _cite_lines = [f"- [{c['title']}]({c['url']})" for c in _web_cites[:10]]
+                    _cite_block = (
+                        "\n\n### Source URLs (use these for «lN» link markers)\n"
+                        + "\n".join(_cite_lines)
+                    )
+                _ws_context = _web_text[:6000] + _cite_block
+                raw_tool_results.insert(
+                    0,
+                    f"[web_search — CITE THESE with «lN» link markers] {_ws_context}",
+                )
+                tool_calls_made += 1  # count web search as a tool call
+                messages.append(
+                    SystemMessage(
+                        content=(
+                            "## Web search results (already retrieved)\n"
+                            "Use these web results AND your database tools below "
+                            "to build a comprehensive answer. Cite web sources "
+                            "with «lN» link markers AND database sources with "
+                            "«vN» video markers.\n\n" + _ws_context
+                        )
+                    )
+                )
+                logger.info(
+                    "Web search round done (%d chars, %d citations), continuing to DB tools round",
+                    len(_web_text),
+                    len(_web_cites),
+                )
             else:
                 # No tool calls — LLM wants to answer directly
                 if tool_calls_made > 0:
@@ -1902,7 +1931,7 @@ async def run_agent_stream(
                     collected_content = ""
                 else:
                     # No tools used at all (simple query) — emit Phase 1 response
-                    if _offer_tools and not _ws_only:
+                    if _offer_tools:
                         # Haiku chose not to use tools — do a single synthesis call
                         # with output_config directly. Marker injection (two-pass) was
                         # ~40% unreliable: Haiku ignored annotation instructions and

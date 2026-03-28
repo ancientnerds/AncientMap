@@ -502,6 +502,7 @@ class AnthropicBackend:
 
         tool_calls_out: list[dict] = []
         text_out = ""
+        web_citations: list[dict] = []
         for block in resp.content:
             if hasattr(block, "type"):
                 if block.type == "tool_use":
@@ -516,12 +517,21 @@ class AnthropicBackend:
                     )
                 elif block.type == "text":
                     text_out += block.text
-                # server_tool_use and web_search_tool_result blocks are
-                # handled server-side by Anthropic — skip them
+                elif block.type == "web_search_tool_result":
+                    # Extract URLs from web search results for citation
+                    for item in getattr(block, "content", []):
+                        if getattr(item, "type", None) == "web_search_result":
+                            web_citations.append(
+                                {
+                                    "title": getattr(item, "title", ""),
+                                    "url": getattr(item, "url", ""),
+                                }
+                            )
 
         return {
             "content": text_out,
             "tool_calls": tool_calls_out,
+            "web_citations": web_citations,
             "usage": {
                 "input": total_input,
                 "output": total_output,
