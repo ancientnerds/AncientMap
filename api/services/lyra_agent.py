@@ -390,6 +390,56 @@ def _count_markers(text: str) -> dict[str, int]:
     return counts
 
 
+def _rematch_web_citations(text: str, web_sources: list[dict]) -> str:
+    """Re-match [N] citations to the correct web source by content overlap.
+
+    The model assigns [N] by guessing from titles alone. This function
+    compares each sentence containing [N] against the snippet text of
+    each web source and reassigns to the best match.
+    """
+    # Build keyword sets from snippets
+    source_keywords: list[set[str]] = []
+    for src in web_sources:
+        snippet = (src.get("snippet", "") + " " + src.get("text", "")).lower()
+        words = set(re.findall(r"\w{4,}", snippet))
+        source_keywords.append(words)
+
+    if not source_keywords:
+        return text
+
+    # Find all [N] markers and their surrounding sentence
+    cite_positions = list(re.finditer(r"(?<!\[)\[(\d+)\](?!\()", text))
+    if not cite_positions:
+        return text
+
+    # For each [N], extract ~100 chars before it as context
+    replacements: list[tuple[int, int, str]] = []
+    for m in cite_positions:
+        old_n = int(m.group(1))
+        start = max(0, m.start() - 120)
+        context = text[start : m.start()].lower()
+        ctx_words = set(re.findall(r"\w{4,}", context))
+
+        # Score each source by keyword overlap
+        best_score = 0
+        best_idx = old_n - 1  # default: keep original
+        for idx, kw_set in enumerate(source_keywords):
+            score = len(ctx_words & kw_set)
+            if score > best_score:
+                best_score = score
+                best_idx = idx
+
+        new_n = web_sources[best_idx].get("citation", best_idx + 1)
+        if new_n != old_n:
+            replacements.append((m.start(), m.end(), f"[{new_n}]"))
+
+    # Apply replacements in reverse order to preserve positions
+    for start, end, new_text in reversed(replacements):
+        text = text[:start] + new_text + text[end:]
+
+    return text
+
+
 def _build_entities_catalogue(
     all_sites: list[dict],
     all_news: list[dict],
@@ -486,10 +536,19 @@ def _build_entities_catalogue(
     for _raw in raw_tool_results:
         if not _raw.startswith("[web_search"):
             continue
-        for m in re.finditer(r"\[(\d+)\] (.+?) — (https?://\S+)", _raw):
-            _web_sources.append(
-                {"citation": int(m.group(1)), "text": m.group(2), "url": m.group(3)}
-            )
+        # Match: [N] Title — URL\n    Content: "snippet..."
+        for m in re.finditer(
+            r'\[(\d+)\] (.+?) — (https?://\S+)(?:\n\s+Content: "(.+?)")?',
+            _raw,
+        ):
+            entry: dict = {
+                "citation": int(m.group(1)),
+                "text": m.group(2),
+                "url": m.group(3),
+            }
+            if m.group(4):
+                entry["snippet"] = m.group(4)
+            _web_sources.append(entry)
     if _web_sources:
         _entities["web_sources"] = _web_sources
 
@@ -1947,10 +2006,13 @@ async def run_agent_stream(
                 _web_cites = result.get("web_citations", [])
                 _cite_block = ""
                 if _web_cites:
-                    _cite_lines = [
-                        f"[{i + 1}] {c['title']} — {c['url']}"
-                        for i, c in enumerate(_web_cites[:10])
-                    ]
+                    _cite_lines = []
+                    for i, c in enumerate(_web_cites[:10]):
+                        snippet = c.get("snippet", "")[:150]
+                        _cite_lines.append(
+                            f"[{i + 1}] {c['title']} — {c['url']}"
+                            + (f'\n    Content: "{snippet}..."' if snippet else "")
+                        )
                     _cite_block = "\n\n### Source URLs (cite as [1], [2], etc.)\n" + "\n".join(
                         _cite_lines
                     )
@@ -2654,8 +2716,21 @@ async def run_agent_stream(
                                 ),
                                 text_out,
                             )
+                            # Content-based citation matching: the model
+                            # assigns [N] numbers by guessing. We re-match
+                            # each [N] to the correct source by checking
+                            # which snippet has the most keyword overlap
+                            # with the sentence containing [N].
+                            _snippets_available = any(s.get("snippet") for s in _ws_sources)
+                            if _snippets_available:
+                                text_out = _rematch_web_citations(text_out, _ws_sources)
+
                             # Inject web citations into structured output
-                            # for the frontend Sources panel
+                            # for the frontend Sources panel — only include
+                            # citations actually used in text
+                            _used_cites = {
+                                int(n) for n in re.findall(r"(?<!\[)\[(\d+)\](?!\()", text_out)
+                            }
                             if so_data is not None:
                                 so_data["links"] = [
                                     {
@@ -2664,6 +2739,7 @@ async def run_agent_stream(
                                         "url": src["url"],
                                     }
                                     for i, src in enumerate(_ws_sources)
+                                    if src.get("citation", i + 1) in _used_cites or not _used_cites
                                 ]
                                 _structured_output = so_data
                         # Strip any remaining «lN» markers

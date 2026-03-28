@@ -518,13 +518,14 @@ class AnthropicBackend:
                 elif block.type == "text":
                     text_out += block.text
                 elif block.type == "web_search_tool_result":
-                    # Extract URLs from web search results for citation
+                    # Extract URLs + text snippets from web search results
                     for item in getattr(block, "content", []):
                         if getattr(item, "type", None) == "web_search_result":
                             web_citations.append(
                                 {
                                     "title": getattr(item, "title", ""),
                                     "url": getattr(item, "url", ""),
+                                    "snippet": getattr(item, "page_content", "")[:300],
                                 }
                             )
 
