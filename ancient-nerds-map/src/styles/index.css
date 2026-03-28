@@ -14531,6 +14531,20 @@ body.news-feed-open .empire-borders-window {
   border-top-right-radius: 2px;
 }
 
+/* Inline web citation links [1] [2] — superscript style */
+.lyra-citation-link {
+  font-size: 11px;
+  vertical-align: super;
+  line-height: 0;
+  color: var(--accent-primary);
+  text-decoration: none;
+  padding: 0 1px;
+  cursor: pointer;
+}
+.lyra-citation-link:hover {
+  text-decoration: underline;
+}
+
 /* Image in messages */
 .lyra-chat-msg-images {
   display: flex;

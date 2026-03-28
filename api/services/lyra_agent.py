@@ -479,13 +479,19 @@ def _build_entities_catalogue(
                             {"text": ch.get("name", ""), "url": ch["youtube_url"]}
                         )
 
-    # Extract web search citations from raw_tool_results.
-    # These are formatted as markdown links: - [title](url)
+    # Extract numbered web search citations from raw_tool_results.
+    # Stored separately as web_sources (NOT in links) to prevent the
+    # model from using «lN» guillemet markers for them — we want [N].
+    _web_sources = []
     for _raw in raw_tool_results:
         if not _raw.startswith("[web_search"):
             continue
-        for m in re.finditer(r"- \[([^\]]+)\]\((https?://[^)]+)\)", _raw):
-            _entities["links"].append({"text": m.group(1), "url": m.group(2)})
+        for m in re.finditer(r"\[(\d+)\] (.+?) — (https?://\S+)", _raw):
+            _web_sources.append(
+                {"citation": int(m.group(1)), "text": m.group(2), "url": m.group(3)}
+            )
+    if _web_sources:
+        _entities["web_sources"] = _web_sources
 
     return json.dumps(_entities, ensure_ascii=False)
 
@@ -1211,7 +1217,8 @@ def _build_messages(
                 f"Today's date is {today}. The user enabled live web search.\n"
                 f"Web search results will be provided as context alongside your "
                 f"database tools. Use BOTH sources to build a comprehensive answer:\n"
-                f"- Cite web sources as plain markdown links: [Source Title](https://url)\n"
+                f"- Cite web sources with numbered references [1], [2], etc. "
+                f"matching the numbered Source URLs list.\n"
                 f"- Cite database sources with «vN» video markers, «sN» site markers, etc.\n"
                 f"A good response combines fresh web info with our transcript/video database.\n"
             )
@@ -1940,10 +1947,12 @@ async def run_agent_stream(
                 _web_cites = result.get("web_citations", [])
                 _cite_block = ""
                 if _web_cites:
-                    _cite_lines = [f"- [{c['title']}]({c['url']})" for c in _web_cites[:10]]
-                    _cite_block = (
-                        "\n\n### Source URLs (use these for «lN» link markers)\n"
-                        + "\n".join(_cite_lines)
+                    _cite_lines = [
+                        f"[{i + 1}] {c['title']} — {c['url']}"
+                        for i, c in enumerate(_web_cites[:10])
+                    ]
+                    _cite_block = "\n\n### Source URLs (cite as [1], [2], etc.)\n" + "\n".join(
+                        _cite_lines
                     )
                 _ws_context = _web_text[:6000] + _cite_block
                 raw_tool_results.insert(
@@ -1957,12 +1966,12 @@ async def run_agent_stream(
                             "## Web search results (already retrieved)\n"
                             "Use these web results AND your database tools below "
                             "to build a comprehensive answer.\n"
-                            "- For web sources: cite as plain markdown links "
-                            "[Source Title](https://url) using the Source URLs below.\n"
+                            "- For web sources: cite with numbered references "
+                            "[1], [2], etc. matching the Source URLs list below.\n"
                             "- For database sources: use «vN» video markers, "
                             "«sN» site markers as usual.\n"
-                            "EVERY claim must have a source — either a web link "
-                            "or a database marker.\n\n" + _ws_context
+                            "EVERY claim must have a source — either a [N] web "
+                            "citation or a database marker.\n\n" + _ws_context
                         )
                     )
                 )
@@ -2623,7 +2632,7 @@ async def run_agent_stream(
                                         "CRITICAL: Your previous response lacked "
                                         "citations. EVERY factual claim MUST have a "
                                         "source: «vN» for videos, «sN» for sites, "
-                                        "or [Source](https://url) for web links. "
+                                        "or [N] for numbered web sources. "
                                         "Use the entities catalogue and source URLs. "
                                         "A response with zero citations is unacceptable."
                                     )
@@ -2631,30 +2640,32 @@ async def run_agent_stream(
                             )
                             continue  # retry S2
 
-                        # Resolve unresolved «lN» markers using web
-                        # citations from the entities catalogue. Haiku
-                        # often puts «lN» in text but leaves the links
-                        # array empty, so expand_markers can't resolve them.
-                        if total_web_search_requests > 0:
-                            _web_links = json.loads(_entities_json).get("links", [])
-                            if _web_links:
-
-                                def _resolve_web_link(m: re.Match) -> str:
-                                    idx = int(m.group(1))
-                                    if idx < len(_web_links):
-                                        lnk = _web_links[idx]
-                                        return f"[{lnk['text']}]({lnk['url']})"
-                                    return m.group(0)
-
-                                text_out = re.sub(r"«l(\d+)»", _resolve_web_link, text_out)
-
-                                # Fallback: if no web links in text after
-                                # marker resolution, append sources footer.
-                                if not re.search(r"\]\(https?://", text_out):
-                                    _src_lines = [
-                                        f"[{lnk['text']}]({lnk['url']})" for lnk in _web_links[:5]
-                                    ]
-                                    text_out += "\n\n**Sources:** " + " · ".join(_src_lines)
+                        # Convert any «lN» markers to [N] and strip stray ones
+                        _ws_sources = json.loads(_entities_json).get("web_sources", [])
+                        if _ws_sources:
+                            _cite_map = {
+                                f"l{i}": src.get("citation", i + 1)
+                                for i, src in enumerate(_ws_sources)
+                            }
+                            text_out = re.sub(
+                                r"«l(\d+)»",
+                                lambda m: f"[{_cite_map.get('l' + m.group(1), int(m.group(1)) + 1)}]",
+                                text_out,
+                            )
+                            # Inject web citations into structured output
+                            # for the frontend Sources panel
+                            if so_data is not None:
+                                so_data["links"] = [
+                                    {
+                                        "citation": src.get("citation", i + 1),
+                                        "text": src["text"],
+                                        "url": src["url"],
+                                    }
+                                    for i, src in enumerate(_ws_sources)
+                                ]
+                                _structured_output = so_data
+                        # Strip any remaining «lN» markers
+                        text_out = re.sub(r"«l\d+»", "", text_out)
 
                         yield {"type": "diffusion", "content": text_out}
                         _synthesis_ok = True

@@ -446,6 +446,11 @@ export default function LyraChatModal({
       }
       // Normal link — only allow http/https to block javascript: protocol XSS
       if (!href?.startsWith('http://') && !href?.startsWith('https://')) return <span>{children}</span>
+      // Web citation link: [N] → superscript style
+      const textContent = Array.isArray(children) ? children.join('') : String(children ?? '')
+      if (/^\[\d+\]$/.test(textContent)) {
+        return <a className="lyra-citation-link" href={href} target="_blank" rel="noopener noreferrer" title={href}>{textContent}</a>
+      }
       return <a {...props} href={href} target="_blank" rel="noopener noreferrer">{children}</a>
     },
     img: ({ src, alt, ...props }: React.ImgHTMLAttributes<HTMLImageElement>) => {
@@ -1216,7 +1221,19 @@ export default function LyraChatModal({
                               {msg.role === 'assistant' ? (
                                 <div className="lyra-chat-msg-text">
                                   <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents} urlTransform={lyraUrlTransform}>
-                                    {enrichLyraContent(msg.content)}
+                                    {(() => {
+                                      let text = enrichLyraContent(msg.content)
+                                      // Convert [N] web citations to clickable links
+                                      const links = msg.structuredOutput?.links as Array<{ citation?: number; text?: string; url?: string }> | undefined
+                                      if (links?.length) {
+                                        const urlMap = new Map(links.map(l => [l.citation ?? 0, l.url ?? '']))
+                                        text = text.replace(/(?<!\[)\[(\d+)\](?!\()/g, (_m, n) => {
+                                          const url = urlMap.get(Number(n))
+                                          return url ? `[\\[${n}\\]](${url})` : `[${n}]`
+                                        })
+                                      }
+                                      return text
+                                    })()}
                                   </ReactMarkdown>
                                 </div>
                               ) : (
@@ -1337,10 +1354,10 @@ export default function LyraChatModal({
                                     ) : null}
                                     {msg.structuredOutput.links?.length ? (
                                       <div className="lyra-so-section">
-                                        <div className="lyra-so-label">Links</div>
+                                        <div className="lyra-so-label">Sources</div>
                                         {msg.structuredOutput.links.map((l, i) => (
                                           <div key={i} className="lyra-so-item">
-                                            <span className="lyra-so-marker">{l.marker}</span>
+                                            <span className="lyra-so-marker">[{String((l as Record<string, unknown>).citation ?? l.marker)}]</span>
                                             <a className="lyra-so-link" href={lyraUrlTransform(l.url)} target="_blank" rel="noopener noreferrer">{l.text}</a>
                                           </div>
                                         ))}
