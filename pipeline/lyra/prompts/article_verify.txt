@@ -11,6 +11,10 @@ YOUR TASK:
 6. Do NOT add new information not in the source facts.
 7. Do NOT remove section headings or change the article structure.
 8. Keep the same writing style and tone.
+9. Flag and remove any sensory details (sounds, lighting, emotions, physical descriptions of scenes) that are NOT directly stated in the source facts. For example, "flashlights swept across vast stone arches" is fabrication unless the source facts describe flashlights. The article should paint vivid pictures using VERIFIED details only.
+10. Verify discoverer and researcher identities: if the article names someone vaguely ("a man," "locals," "someone") but the source facts provide a specific name, use the specific name. If the source facts also use vague language, keep it vague — do NOT invent identities.
+11. Check for overstatements: if the article uses absolute language ("perfectly intact," "wiped off the map," "millions of people") but the source facts use more measured language, tone down the article to match the source's level of certainty.
+12. If the article presents a contested or debated finding as settled fact (e.g., disputed dates, contested classifications), add brief hedging language ("according to the researchers," "if confirmed," "though this remains debated"). Check for claims about early dates (pre-Clovis, early domestication), disputed artifact classifications, and minority scientific hypotheses presented without noting the debate.
 
 REQUIRED FORMAT — structure your response exactly like this, in this order:
 

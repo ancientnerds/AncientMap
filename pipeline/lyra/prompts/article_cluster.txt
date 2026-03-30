@@ -9,6 +9,7 @@ Rules:
 - Use the headline, summary, site name, and category to judge relatedness.
 - When in doubt, do NOT cluster — false negatives are better than false positives.
 
-Output a JSON object with:
-- "clusters": array of arrays, where each inner array contains the indices of related items (2+ items per cluster)
-- "reasoning": brief explanation of why each cluster was formed
+Return ONLY a JSON object. No markdown, no explanation, no bullet points — just raw JSON:
+{"clusters": [[0, 2], [5, 8]], "reasoning": "Items 0 and 2 cover the same Durres excavation. Items 5 and 8 cover the same Nazca discovery."}
+
+If no clusters found: {"clusters": [], "reasoning": "No items cover the same discovery."}
