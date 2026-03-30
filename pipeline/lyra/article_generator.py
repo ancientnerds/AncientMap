@@ -33,6 +33,7 @@ from pipeline.lyra.config import (
     call_api,
     parse_json_response,
 )
+from pipeline.lyra.web_research import WebSearchResult, get_web_research_backend
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,57 @@ CATEGORY_ORDER = list(CATEGORY_LABELS.keys())
 MAX_ITEMS = 25
 SAME_VIDEO_PENALTY = 3
 SAME_CATEGORY_PENALTY = 1
+
+# Source tier system — calibrates LLM confidence language per channel.
+# Tier 1: Credentialed archaeologists / academic channels
+# Tier 2: Established educational (default for unlisted channels)
+# Tier 3: Entertainment / alternative history — claims need hedging
+TIER_1_CHANNELS: set[str] = {
+    "Archaeologist Ed Barnhart",
+    "Inside Archaeology",
+    "Stefan Milo",
+    "The Prehistory Guys",
+    "toldinstone",
+    "The Historian's Craft",
+    "World of Antiquity",
+}
+
+TIER_3_CHANNELS: set[str] = {
+    "Anyextee",
+    "Brien Foerster",
+    "Bright Insight",
+    "Brothers of the Serpent",
+    "Dark5 Ancient Mysteries",
+    "Funny Olde World",
+    "GeoCosmic REX",
+    "History for GRANITE",
+    "Institute for Natural Philosophy",
+    "Luke Caverns",
+    "Matthew LaCroix",
+    "PraveenMohan",
+    "SPIRIT in STONE",
+    "The Randall Carlson",
+    "Timeless with Fred Snyder",
+    "UnchartedX",
+    "Universe Inside You",
+    "Wandering Wolf",
+}
+
+
+def _get_channel_tier(channel_name: str) -> int:
+    """Return source tier (1-3) for a YouTube channel."""
+    if channel_name in TIER_1_CHANNELS:
+        return 1
+    if channel_name in TIER_3_CHANNELS:
+        return 3
+    return 2
+
+
+TIER_LABELS = {
+    1: "academic/professional",
+    2: "educational",
+    3: "entertainment/alternative — verify claims independently",
+}
 
 CLUSTER_SCHEMA = {
     "type": "object",
@@ -411,8 +463,11 @@ def _build_section_payload(section: dict) -> str:
     lines.append("")
 
     for item in section["items"]:
+        tier = _get_channel_tier(item["channel_name"])
+        tier_label = TIER_LABELS[tier]
         lines.append(f"### [{item['citation']}] {item['headline']}")
         lines.append(f"Significance: {item.get('significance', '?')}/10")
+        lines.append(f"Tier: {tier} ({tier_label})")
         if item.get("site_name"):
             lines.append(f"Site: {item['site_name']}")
         lines.append(f"Summary: {item['summary']}")
@@ -423,7 +478,12 @@ def _build_section_payload(section: dict) -> str:
                 lines.append(f"  - {fact}")
 
         for ms in item.get("merged_sources", []):
-            lines.append(f"Corroborated by [{ms['citation']}] ({ms['channel_name']}):")
+            ms_tier = _get_channel_tier(ms["channel_name"])
+            ms_tier_label = TIER_LABELS[ms_tier]
+            lines.append(
+                f"Corroborated by [{ms['citation']}] ({ms['channel_name']}, "
+                f"tier {ms_tier}: {ms_tier_label}):"
+            )
             for fact in ms["facts"]:
                 lines.append(f"  - {fact}")
 
@@ -440,8 +500,11 @@ def _build_speculative_payload(items: list[dict]) -> str:
     """Format speculative items for the LLM prompt."""
     lines = ["## Beyond the Mainstream", ""]
     for item in items:
+        tier = _get_channel_tier(item["channel_name"])
+        tier_label = TIER_LABELS[tier]
         lines.append(f"### [{item['citation']}] {item['headline']}")
         lines.append(f"Tag: {item.get('speculative_tag', 'speculative')}")
+        lines.append(f"Tier: {tier} ({tier_label})")
         if item.get("site_name"):
             lines.append(f"Site: {item['site_name']}")
         lines.append(f"Summary: {item['summary']}")
@@ -692,6 +755,34 @@ def _format_sources(sources: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _web_verify_article(
+    verified_body: str,
+    settings: LyraSettings,
+) -> tuple[str, list[WebSearchResult]]:
+    """Web-grounded fact-check via pluggable backend (Anthropic or MiniMax).
+
+    This step catches errors that source-only verification cannot — contested
+    findings presented as fact, wrong dates, misattributed discoveries, and
+    missing controversies.  Runs after the source-consistency verify step.
+
+    Returns (corrected_body, web_citations).
+    """
+    backend = get_web_research_backend(settings)
+    backend_name = type(backend).__name__
+    logger.info(f"Using web verification backend: {backend_name}")
+
+    corrected, web_refs = backend.verify_article(verified_body)
+
+    if len(corrected) < 200:
+        logger.warning(
+            "Web-verified body too short (%d chars), using source-verified body",
+            len(corrected),
+        )
+        return verified_body, []
+
+    return corrected, web_refs
+
+
 def _polish_article(
     verified_body: str,
     settings: LyraSettings,
@@ -726,12 +817,24 @@ def _polish_article(
     return text.strip() or verified_body
 
 
+def _format_web_references(web_citations: list[WebSearchResult]) -> str:
+    """Build numbered markdown list of web references used for verification."""
+    if not web_citations:
+        return ""
+    lines = []
+    for i, ref in enumerate(web_citations, 1):
+        date_str = f" ({ref.date})" if ref.date else ""
+        lines.append(f"{i}. [{ref.title}]({ref.url}){date_str}")
+    return "\n".join(lines)
+
+
 def _assemble_article(
     tldr: str,
     body: str,
     sources_md: str,
+    web_references_md: str = "",
 ) -> str:
-    """Combine TLDR + article body + sources footer."""
+    """Combine TLDR + article body + sources footer + web references."""
     parts: list[str] = []
 
     if tldr:
@@ -740,7 +843,10 @@ def _assemble_article(
     parts.append(body)
 
     # Sources footer
-    parts.append(f"### Sources\n\n{sources_md}")
+    sources_section = f"### Sources\n\n{sources_md}"
+    if web_references_md:
+        sources_section += f"\n\n### Web References\n\n{web_references_md}"
+    parts.append(sources_section)
 
     return "\n\n---\n\n".join(parts)
 
@@ -898,11 +1004,27 @@ def generate_weekly_article(
         }
         logger.info("Verified body length: %d chars", len(verified_body))
 
+        # -- web verify --
+        _write_article_heartbeat(step_data, "web_verify", t0_total)
+        logger.info("Web-grounded fact-check (%s)", settings.article_web_backend)
+        t0 = time.time()
+        web_verified_body, web_citations = _web_verify_article(verified_body, settings)
+        step_data["web_verify"] = {
+            "count": len(web_citations),
+            "elapsed": round(time.time() - t0, 1),
+            "status": "done" if web_verified_body != verified_body else "skip",
+        }
+        logger.info(
+            "Web-verified body length: %d chars, %d web refs",
+            len(web_verified_body),
+            len(web_citations),
+        )
+
         # -- polish --
         _write_article_heartbeat(step_data, "polish", t0_total)
         logger.info("Polishing article for coherence")
         t0 = time.time()
-        polished_body = _polish_article(verified_body, settings)
+        polished_body = _polish_article(web_verified_body, settings)
         step_data["polish"] = {
             "count": len(polished_body),
             "elapsed": round(time.time() - t0, 1),
@@ -936,9 +1058,10 @@ def generate_weekly_article(
 
         # Format sources
         sources_md = _format_sources(sources)
+        web_refs_md = _format_web_references(web_citations)
 
         # Assemble final markdown
-        article_content = _assemble_article(tldr, polished_body, sources_md)
+        article_content = _assemble_article(tldr, polished_body, sources_md, web_refs_md)
 
         # Collect unique video IDs
         video_ids = list({item["video_id"] for item in all_items})
