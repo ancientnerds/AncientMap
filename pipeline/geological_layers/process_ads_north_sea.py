@@ -127,7 +127,9 @@ def download_layer(layer_id: str, layer_cfg: dict) -> Path:
     url = f"{BASE_URL}/{zip_name}"
     logger.info(f"  Downloading {url} ...")
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "AncientMap/1.0 (archaeological research)"})
+        req = urllib.request.Request(
+            url, headers={"User-Agent": "AncientMap/1.0 (archaeological research)"}
+        )
         with urllib.request.urlopen(req) as response, open(dest, "wb") as out:
             out.write(response.read())
         logger.info(f"  Saved: {dest} ({dest.stat().st_size / 1024:.0f} KB)")
@@ -160,7 +162,9 @@ def convert_shapefile(zip_path: Path, layer_id: str) -> dict:
         shp_path = Path(tmp) / shp_name
         gdf = gpd.read_file(shp_path)
 
-    logger.info(f"  CRS: {gdf.crs}, Features: {len(gdf)}, Geometry types: {gdf.geom_type.unique().tolist()}")
+    logger.info(
+        f"  CRS: {gdf.crs}, Features: {len(gdf)}, Geometry types: {gdf.geom_type.unique().tolist()}"
+    )
 
     # Reproject to WGS84 if needed
     if gdf.crs and gdf.crs.to_epsg() != 4326:
@@ -257,7 +261,9 @@ def generate_metadata() -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Convert ADS North Sea geological shapefiles to GeoJSON")
+    parser = argparse.ArgumentParser(
+        description="Convert ADS North Sea geological shapefiles to GeoJSON"
+    )
     parser.add_argument("--no-download", action="store_true", help="Skip download, use cached zips")
     parser.add_argument("--layer", type=str, help="Process only this layer (e.g. palaeochannels)")
     parser.add_argument("--output", type=str, help="Override output directory")
