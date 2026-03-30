@@ -17,6 +17,7 @@ export * from './animationLoop'
 export * from './eventHandlers'
 export * from './sitesRenderer'
 export * from './paleoshorelineLoader'
+export * from './geologicalLayerLoader'
 export * from './measurementRenderer'
 export * from './highlightedSitesRenderer'
 // Site and empire hover utilities

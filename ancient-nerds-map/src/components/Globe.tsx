@@ -10,9 +10,9 @@ import { LAYER_CONFIG, getLayerUrl, type VectorLayerKey, type VectorLayerVisibil
 import { fadeLabelIn, fadeLabelOut } from '../utils/LabelRenderer'
 import { createProximityCircle, createCenterMarker, disposeGroup, disposeSprite } from '../utils/proximityHelpers'
 import { CoordinateDisplay, ScaleBar, ContributePickerHint, HardwareWarning, TooltipOverlay, MapboxOfflineWarning } from './Globe/overlays'
-import { ZoomControls, SocialLinks, OptionsPanel, MapLayersPanel, HistoricalLayersSection, EmpireBordersPanel, HistoricalRoutesPanel } from './Globe/panels'
+import { ZoomControls, SocialLinks, OptionsPanel, MapLayersPanel, HistoricalLayersSection, GeologicalLayersSection, EmpireBordersPanel, HistoricalRoutesPanel } from './Globe/panels'
 import { ScreenshotControls } from './Globe/controls'
-import { useUIState, useLabelVisibility, usePaleoshoreline, useEmpireBorders, useHistoricalRoutes, useMapboxSync, useGlobeRefs, useGlobeZoom, useSiteTooltips, useHighlightedSites, useFlyToAnimation, useSatelliteMode, useContributePicker, useScreenshot, useRotationControl, useFullscreen, useCursorMode, useStarsVisibility, useTextureLoading, useLayersReady, useTooltipHandlers } from '../hooks/globe'
+import { useUIState, useLabelVisibility, usePaleoshoreline, useGeologicalLayers, useEmpireBorders, useHistoricalRoutes, useMapboxSync, useGlobeRefs, useGlobeZoom, useSiteTooltips, useHighlightedSites, useFlyToAnimation, useSatelliteMode, useContributePicker, useScreenshot, useRotationControl, useFullscreen, useCursorMode, useStarsVisibility, useTextureLoading, useLayersReady, useTooltipHandlers } from '../hooks/globe'
 import { useConnectorStatus } from '../hooks/useConnectorStatus'
 import ConnectorStatusModal from './ConnectorStatusModal'
 import { isDemoMode, registerGlobeDemoApi } from '../utils/demoApi'
@@ -74,6 +74,12 @@ import {
   disposePaleoshoreline,
   type PaleoshorelineContext,
 } from './Globe/rendering/paleoshorelineLoader'
+import {
+  loadGeologicalLayer as loadGeologicalLayerImpl,
+  disposeGeologicalLayer as disposeGeologicalLayerImpl,
+  type GeologicalLayerContext,
+} from './Globe/rendering/geologicalLayerLoader'
+import { GEOLOGICAL_LAYER_CONFIG, type GeologicalLayerKey } from '../config/geologicalLayers'
 import {
   renderMeasurements,
   type MeasurementRendererContext,
@@ -207,6 +213,11 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
 
   const paleo = usePaleoshoreline()
   const { seaLevel, sliderSeaLevel, paleoshorelineVisible, replaceCoastlines, isLoadingPaleoshoreline } = paleo
+
+  const geo = useGeologicalLayers()
+  const { geologicalLayers, isLoadingGeological } = geo
+  const [geologicalPanelOpen, setGeologicalPanelOpen] = useState(false)
+  const [geologicalPanelHeight, setGeologicalPanelHeight] = useState(350)
 
   const empires = useEmpireBorders({ onAgeRangeSync, onVisibleEmpiresChange, onEmpireYearsChange, onEmpirePolygonsLoaded })
   const {
@@ -450,6 +461,8 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     frontLineLayers: frontLineLayersRef, backLineLayers: backLineLayersRef,
     paleoshorelineLines: paleoshorelineLinesRef, paleoshorelinePositionsCache: paleoshorelinePositionsCacheRef,
     paleoshorelineLoadId: paleoshorelineLoadIdRef, fadeManager: fadeManagerRef,
+    geologicalLines: geologicalLinesRef, geologicalCache: geologicalCacheRef,
+    geologicalLoadIds: geologicalLoadIdsRef, geologicalGeoJSON: geologicalGeoJSONRef,
     geoLabels: geoLabelsRef, allLabelMeshes: allLabelMeshesRef, cuddleOffsets: cuddleOffsetsRef,
     cuddleAnimations: cuddleAnimationsRef, isPageVisible: isPageVisibleRef, webglContextLost: webglContextLostRef,
     needsLabelReload: needsLabelReloadRef, layerLabels: layerLabelsRef, geoLabelsVisible: geoLabelsVisibleRef,
@@ -1405,6 +1418,18 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     return loadPaleoshorelineImpl(level, ctx)
   }, [latLngTo3DRef, replaceCoastlines, paleo.setIsLoadingPaleoshoreline])
 
+  // Build geological layer context
+  const buildGeologicalCtx = useCallback((): GeologicalLayerContext => ({
+    sceneRef: sceneRef as React.MutableRefObject<{ globe: THREE.Mesh; camera: THREE.PerspectiveCamera } | null>,
+    shaderMaterialsRef,
+    geologicalLinesRef,
+    geologicalCacheRef,
+    geologicalLoadIdsRef,
+    geologicalGeoJSONRef,
+    fadeManagerRef,
+    setIsLoadingGeological: geo.setIsLoadingGeological,
+  }), [geo.setIsLoadingGeological])
+
   // Build GlobeRenderContext for extracted empire renderer functions
   const buildEmpireRenderContext = useCallback((): GlobeRenderContext => ({
     sceneRef,
@@ -2045,6 +2070,24 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     }
   }, [seaLevel, replaceCoastlines, paleoshorelineVisible, loadPaleoshoreline, vectorLayers.coastlines])
 
+  // Load/unload geological layers when visibility changes
+  const prevGeologicalLayers = useRef(geologicalLayers)
+  useEffect(() => {
+    const prev = prevGeologicalLayers.current
+    prevGeologicalLayers.current = geologicalLayers
+    const ctx = buildGeologicalCtx()
+
+    for (const key of Object.keys(geologicalLayers) as Array<keyof typeof geologicalLayers>) {
+      const wasVisible = prev[key]
+      const isVisible = geologicalLayers[key]
+      if (isVisible && !wasVisible) {
+        loadGeologicalLayerImpl(key, ctx)
+      } else if (!isVisible && wasVisible) {
+        disposeGeologicalLayerImpl(key, ctx)
+      }
+    }
+  }, [geologicalLayers, buildGeologicalCtx])
+
   // Load layers when visibility changes (always high detail)
   // NOTE: This runs in parallel with texture and label loading
   useEffect(() => {
@@ -2237,6 +2280,32 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     // loadedEmpires triggers re-run after async GeoJSON fetch completes
   }, [showMapbox, visibleEmpires, empireYears, globalTimelineEnabled, globalTimelineYear, loadedEmpires, empireMetadata])
 
+  // Sync geological layers to Mapbox when zoomed in
+  useEffect(() => {
+    const mapboxService = mapboxServiceRef.current
+    if (!mapboxService?.getIsInitialized()) return
+
+    if (!showMapbox) {
+      mapboxService.clearGeologicalLayers()
+      return
+    }
+
+    // Collect visible geological layers with their GeoJSON
+    const layersData: Array<{ id: string; geojson: any; color: number }> = []
+    for (const key of Object.keys(geologicalLayers) as GeologicalLayerKey[]) {
+      if (!geologicalLayers[key]) continue
+      const geojson = geologicalGeoJSONRef.current[key]
+      if (!geojson?.features?.length) continue
+      layersData.push({ id: key, geojson, color: GEOLOGICAL_LAYER_CONFIG[key].color })
+    }
+
+    if (layersData.length > 0) {
+      mapboxService.setGeologicalLayers(layersData)
+    } else {
+      mapboxService.clearGeologicalLayers()
+    }
+  }, [showMapbox, geologicalLayers, isLoadingGeological])
+
   // Cleanup FadeManager on unmount
   useEffect(() => {
     return () => fadeManagerRef.current.dispose()
@@ -2398,25 +2467,38 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
         isOffline={contextIsOffline}
         cachedLayerIds={cachedLayerIds}
       >
-        {/* Historical Layers Section - nested inside MapLayersPanel */}
+        {/* Historical Layers Section - toggles for geological, empires, routes */}
         <HistoricalLayersSection
-          paleoshorelineVisible={paleoshorelineVisible}
-          onPaleoshorelineToggle={paleo.togglePaleoshoreline}
-          isLoadingPaleoshoreline={isLoadingPaleoshoreline}
-          seaLevel={seaLevel}
-          sliderSeaLevel={sliderSeaLevel}
-          onSeaLevelChange={paleo.setSeaLevel}
-          onSliderSeaLevelChange={paleo.setSliderSeaLevel}
-          replaceCoastlines={replaceCoastlines}
-          onReplaceCoastlinesChange={paleo.setReplaceCoastlines}
+          hasActiveGeologicalLayers={geologicalPanelOpen || paleoshorelineVisible || geo.hasVisibleGeologicalLayers}
+          onGeologicalLayersToggle={() => setGeologicalPanelOpen(prev => !prev)}
           empireBordersWindowOpen={empireBordersWindowOpen}
           hasVisibleEmpires={visibleEmpires.size > 0}
           onEmpireBordersToggle={() => setEmpireBordersWindowOpen(prev => !prev)}
           hasVisibleRoutes={visibleRoutes.size > 0}
           onHistoricalRoutesToggle={() => setRoutesPanelOpen(prev => !prev)}
-          showMapbox={showMapbox}
         />
       </MapLayersPanel>
+
+      {/* Geological Layers Window */}
+      <GeologicalLayersSection
+        isOpen={geologicalPanelOpen}
+        onClose={() => setGeologicalPanelOpen(false)}
+        height={geologicalPanelHeight}
+        onHeightChange={setGeologicalPanelHeight}
+        paleoshorelineVisible={paleoshorelineVisible}
+        onPaleoshorelineToggle={paleo.togglePaleoshoreline}
+        isLoadingPaleoshoreline={isLoadingPaleoshoreline}
+        seaLevel={seaLevel}
+        sliderSeaLevel={sliderSeaLevel}
+        onSeaLevelChange={paleo.setSeaLevel}
+        onSliderSeaLevelChange={paleo.setSliderSeaLevel}
+        replaceCoastlines={replaceCoastlines}
+        onReplaceCoastlinesChange={paleo.setReplaceCoastlines}
+        geologicalLayers={geologicalLayers}
+        onGeologicalLayerToggle={geo.toggleGeologicalLayer}
+        isLoadingGeological={isLoadingGeological}
+        showMapbox={showMapbox}
+      />
 
       {/* Historical Routes Window */}
       <HistoricalRoutesPanel

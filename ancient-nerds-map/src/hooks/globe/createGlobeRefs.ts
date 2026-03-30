@@ -106,6 +106,12 @@ export function useGlobeRefs(): GlobeRefs {
   const paleoshorelineLoadId = useRef<number>(0)
   const coastlinesWereActive = useRef<boolean>(true)
 
+  // ========== Geological Layer Refs ==========
+  const geologicalLines = useRef<Record<string, THREE.Line[]>>({})
+  const geologicalCache = useRef<Map<string, Float32Array>>(new Map())
+  const geologicalLoadIds = useRef<Record<string, number>>({})
+  const geologicalGeoJSON = useRef<Record<string, any>>({})
+
   // ========== Empire Border Refs ==========
   const empireBorderLines = useRef<Record<string, THREE.Line[]>>({})
   const empireLabels = useRef<Record<string, GlobeLabelMesh>>({})
@@ -356,6 +362,12 @@ export function useGlobeRefs(): GlobeRefs {
     paleoshorelinePositionsCache,
     paleoshorelineLoadId,
     coastlinesWereActive,
+
+    // Geological Layer Refs
+    geologicalLines,
+    geologicalCache,
+    geologicalLoadIds,
+    geologicalGeoJSON,
 
     // Empire Border Refs
     empireBorderLines,

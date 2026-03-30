@@ -156,6 +156,12 @@ export interface GlobeRefs {
   paleoshorelineLoadId: React.MutableRefObject<number>
   coastlinesWereActive: React.MutableRefObject<boolean>
 
+  // ========== Geological Layer Refs ==========
+  geologicalLines: React.MutableRefObject<Record<string, THREE.Line[]>>
+  geologicalCache: React.MutableRefObject<Map<string, Float32Array>>
+  geologicalLoadIds: React.MutableRefObject<Record<string, number>>
+  geologicalGeoJSON: React.MutableRefObject<Record<string, any>>
+
   // ========== Empire Border Refs ==========
   empireBorderLines: React.MutableRefObject<Record<string, THREE.Line[]>>
   empireLabels: React.MutableRefObject<Record<string, GlobeLabelMesh>>

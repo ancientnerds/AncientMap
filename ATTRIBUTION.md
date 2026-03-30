@@ -350,4 +350,16 @@ For commercial use of this platform:
 
 ---
 
-*Last updated: February 2026*
+## Geological Layers
+
+### Unpath'd Waters North Sea Palaeolandscape Dataset
+- **Website**: https://doi.org/10.5284/1126107
+- **License**: CC BY 4.0
+- **Citation**: University of Bradford (2025) Digital Data from the Land Beneath the Sea Palaeolandscapes Project (Unpath'd Waters), 2016-2024 [data-set]. York: Archaeology Data Service [distributor]
+- **Data**: North Sea palaeolandscape features, drainage systems, peat deposits, archaeological find zones, borehole locations
+- **Contributors**: Simon Fitch, Rachel Harding (University of Bradford)
+- **Funder**: Arts and Humanities Research Council (AHRC)
+
+---
+
+*Last updated: March 2026*

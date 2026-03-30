@@ -5885,6 +5885,41 @@ a.popup-window-btn {
   border-top: 1px solid var(--accent-glow-20);
 }
 
+/* Geological layer group expand/collapse */
+.geological-group-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 10px;
+  padding: 3px 2px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.geological-group-header:hover {
+  color: var(--text-primary);
+}
+
+.geological-group-active {
+  margin-left: auto;
+  font-size: 9px;
+  color: var(--brand-primary);
+  opacity: 0.7;
+}
+
+.geological-group-content {
+  padding-left: 4px;
+}
+
+/* Geological layers window — offset left of empire borders window */
+.geological-layers-window {
+  right: calc(20px + 548px * var(--hud-scale, 1));
+}
+
 .sea-level-controls {
   margin-top: 8px;
   padding: 8px;

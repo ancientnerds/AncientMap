@@ -492,6 +492,11 @@ export class MapboxGlobeService {
       if (this.currentEmpireBorders.length > 0) {
         this.setEmpireBorders(this.currentEmpireBorders)
       }
+
+      // Restore geological layers if we had any
+      if (this.currentGeologicalLayers.length > 0) {
+        this.setGeologicalLayers(this.currentGeologicalLayers)
+      }
     })
   }
 
@@ -1107,6 +1112,131 @@ export class MapboxGlobeService {
     }
     if (this.map.getSource('empire-borders')) {
       this.map.removeSource('empire-borders')
+    }
+  }
+
+  // =========================================================================
+  // GEOLOGICAL LAYER OVERLAYS
+  // =========================================================================
+
+  private currentGeologicalLayers: Array<{ id: string; geojson: any; color: number }> = []
+
+  /**
+   * Set geological layers to display on the map
+   * Merges all visible geological layers into one FeatureCollection with data-driven styling
+   */
+  setGeologicalLayers(layers: Array<{ id: string; geojson: any; color: number }>): void {
+    this.currentGeologicalLayers = layers.map(l => ({ ...l }))
+
+    if (!this.map || !this.isInitialized) return
+
+    if (layers.length === 0) {
+      this.clearGeologicalLayers()
+      return
+    }
+
+    const allFeatures: GeoJSON.Feature[] = []
+    for (const layer of layers) {
+      const lineColor = hexToRgba(layer.color, 0.9)
+      const fillColor = hexToRgba(layer.color, 0.2)
+
+      for (const feature of (layer.geojson?.features || [])) {
+        if (!feature.geometry) continue
+        allFeatures.push({
+          type: 'Feature',
+          properties: {
+            ...feature.properties,
+            layerId: layer.id,
+            lineColor,
+            fillColor,
+          },
+          geometry: feature.geometry,
+        })
+      }
+    }
+
+    const geojson: GeoJSON.FeatureCollection = {
+      type: 'FeatureCollection',
+      features: allFeatures,
+    }
+
+    const source = this.map.getSource('geological-layers') as mapboxgl.GeoJSONSource
+    if (source) {
+      source.setData(geojson)
+      return
+    }
+
+    this.map.addSource('geological-layers', {
+      type: 'geojson',
+      data: geojson,
+    })
+
+    const beforeLayer = this.map.getLayer('sites-shadow') ? 'sites-shadow' : undefined
+
+    // Fill layer for polygons
+    this.map.addLayer({
+      id: 'geological-fill',
+      type: 'fill',
+      source: 'geological-layers',
+      filter: ['any',
+        ['==', ['geometry-type'], 'Polygon'],
+        ['==', ['geometry-type'], 'MultiPolygon'],
+      ],
+      paint: {
+        'fill-color': ['get', 'fillColor'],
+        'fill-opacity': 1,
+      },
+    }, beforeLayer)
+
+    // Line layer for lines and polygon outlines
+    this.map.addLayer({
+      id: 'geological-line',
+      type: 'line',
+      source: 'geological-layers',
+      paint: {
+        'line-color': ['get', 'lineColor'],
+        'line-width': 1.5,
+        'line-opacity': 1,
+      },
+    }, beforeLayer)
+
+    // Circle layer for points
+    this.map.addLayer({
+      id: 'geological-points',
+      type: 'circle',
+      source: 'geological-layers',
+      filter: ['any',
+        ['==', ['geometry-type'], 'Point'],
+        ['==', ['geometry-type'], 'MultiPoint'],
+      ],
+      paint: {
+        'circle-radius': 4,
+        'circle-color': ['get', 'lineColor'],
+        'circle-stroke-width': 1,
+        'circle-stroke-color': 'rgba(0,0,0,0.5)',
+      },
+    }, beforeLayer)
+  }
+
+  /**
+   * Clear geological layers from the map
+   */
+  clearGeologicalLayers(): void {
+    this.currentGeologicalLayers = []
+
+    if (!this.map) return
+
+    if (this.map.getLayer('geological-points')) {
+      this.map.removeLayer('geological-points')
+    }
+    if (this.map.getLayer('geological-line')) {
+      this.map.removeLayer('geological-line')
+    }
+    if (this.map.getLayer('geological-fill')) {
+      this.map.removeLayer('geological-fill')
+    }
+    if (this.map.getSource('geological-layers')) {
+      this.map.removeSource('geological-layers')
     }
   }
 
