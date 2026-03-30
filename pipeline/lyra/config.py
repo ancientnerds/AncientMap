@@ -568,9 +568,7 @@ def _call_minimax_api(
         stop_reason=stop_reason,
         model=response.model or "",
         usage={
-            "input_tokens": getattr(response.usage, "prompt_tokens", 0)
-            if response.usage
-            else 0,
+            "input_tokens": getattr(response.usage, "prompt_tokens", 0) if response.usage else 0,
             "output_tokens": getattr(response.usage, "completion_tokens", 0)
             if response.usage
             else 0,

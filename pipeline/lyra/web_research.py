@@ -128,9 +128,7 @@ class AnthropicWebResearch(WebResearchBackend):
             return body, []
 
         if response.stop_reason not in ("end_turn", "max_tokens"):
-            logger.warning(
-                "Anthropic web verify stopped unexpectedly (%s)", response.stop_reason
-            )
+            logger.warning("Anthropic web verify stopped unexpectedly (%s)", response.stop_reason)
             return body, []
 
         text = response.text.strip()
@@ -297,9 +295,7 @@ class MiniMaxWebResearch(WebResearchBackend):
         context_lines = []
         for i, r in enumerate(search_results, 1):
             date_str = f" ({r.date})" if r.date else ""
-            context_lines.append(
-                f"{i}. {r.title}{date_str}\n   URL: {r.url}\n   {r.snippet}"
-            )
+            context_lines.append(f"{i}. {r.title}{date_str}\n   URL: {r.url}\n   {r.snippet}")
 
         system = _load_prompt("article_web_verify_section.txt")
         user_message = (
@@ -382,9 +378,7 @@ class MiniMaxWebResearch(WebResearchBackend):
 
     # -- Single section pipeline --
 
-    def _verify_one_section(
-        self, i: int, total: int, section: str
-    ) -> SectionVerification:
+    def _verify_one_section(self, i: int, total: int, section: str) -> SectionVerification:
         """Run the full claim→search→verify pipeline for one section."""
         section_name = section.split("\n", 1)[0][:60]
         logger.info(f"Web-verifying section {i + 1}/{total}: {section_name}")
@@ -416,9 +410,7 @@ class MiniMaxWebResearch(WebResearchBackend):
 
         # Step 3: Verify section
         verification = self._verify_section(section, unique_results)
-        logger.info(
-            f"  [{i + 1}] Done — {len(verification.web_citations)} web refs"
-        )
+        logger.info(f"  [{i + 1}] Done — {len(verification.web_citations)} web refs")
         return verification
 
     # -- Main entry point --
@@ -467,9 +459,7 @@ class MiniMaxWebResearch(WebResearchBackend):
                     seen_urls.add(ref.url)
 
         corrected_body = "\n\n".join(corrected_sections)
-        logger.info(
-            f"Web verification complete: {len(all_citations)} web references collected"
-        )
+        logger.info(f"Web verification complete: {len(all_citations)} web references collected")
         return corrected_body, all_citations
 
 
@@ -484,9 +474,7 @@ def get_web_research_backend(settings: LyraSettings) -> WebResearchBackend:
 
     if backend == "minimax":
         if not settings.minimax_api_key:
-            logger.warning(
-                "MiniMax API key not set, falling back to Anthropic web verify"
-            )
+            logger.warning("MiniMax API key not set, falling back to Anthropic web verify")
             return AnthropicWebResearch(settings)
         return MiniMaxWebResearch(settings)
 
