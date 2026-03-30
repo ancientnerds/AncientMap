@@ -76,8 +76,23 @@ function stripSourcesList(content: string): string {
 }
 
 function firstImageUrl(article: Article): string | null {
-  const m = article.content.match(/!\[.*?\]\((\S+?)\)/)
-  return m ? m[1] : null
+  // Try to find an image whose alt text matches the headline topic
+  const titleWords = article.title.toLowerCase().split(/\s+/).filter(w => w.length > 4)
+  const imagePattern = /!\[([^\]]*)\]\((\S+?)\)/g
+  let bestMatch: string | null = null
+  let bestScore = 0
+  let firstImage: string | null = null
+  let match: RegExpExecArray | null
+  while ((match = imagePattern.exec(article.content)) !== null) {
+    if (!firstImage) firstImage = match[2]
+    const alt = match[1].toLowerCase()
+    const score = titleWords.filter(w => alt.includes(w)).length
+    if (score > bestScore) {
+      bestScore = score
+      bestMatch = match[2]
+    }
+  }
+  return bestMatch || firstImage
 }
 
 function shareUrl(article: Article): string {
