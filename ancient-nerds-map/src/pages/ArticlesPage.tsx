@@ -52,17 +52,58 @@ function formatDateRange(start: string, end: string): string {
 }
 
 /** Convert bare [1] references to clickable anchor links pointing to #sources. */
-function enrichCitations(content: string): string {
-  // Link all [N] citations to the unified #sources section
-  return content.replace(/(?<!\[)\[(\d+)\](?!\()/g, '[$1](#sources)')
+/** Parse the Sources list and return a map of citation number → URL for web sources (non-YouTube). */
+function parseWebCitations(content: string): Map<number, string> {
+  const webCites = new Map<number, string>()
+  const sourcesIdx = content.indexOf('### Sources')
+  if (sourcesIdx === -1) return webCites
+  const sourcesList = content.slice(sourcesIdx)
+  // Match: "N. [title](url)" — extract number and URL
+  const pattern = /^(\d+)\.\s+\[.*?\]\((https?:\/\/\S+?)\)/gm
+  let m: RegExpExecArray | null
+  while ((m = pattern.exec(sourcesList)) !== null) {
+    const num = parseInt(m[1], 10)
+    const url = m[2]
+    // YouTube sources handled by rich attribution — only map non-YouTube URLs
+    if (!url.includes('youtu.be') && !url.includes('youtube.com')) {
+      webCites.set(num, url)
+    }
+  }
+  return webCites
 }
 
-/** Strip the sources numbered list from markdown when rich attribution is used.
- *  Keeps the ### Sources heading (handled by the h3 component) but removes the OL after it. */
-function stripSourcesList(content: string): string {
+function enrichCitations(content: string, webCites: Map<number, string>): string {
+  // Replace [N] with links — web citations get direct URLs, YouTube get #sources
+  return content.replace(/(?<!\[)\[(\d+)\](?!\()/g, (_match, numStr) => {
+    const num = parseInt(numStr, 10)
+    const webUrl = webCites.get(num)
+    if (webUrl) {
+      return `[${num}](${webUrl})`
+    }
+    return `[${num}](#sources)`
+  })
+}
+
+/** Strip the YouTube sources from markdown (rich attribution handles them).
+ *  Keeps web reference entries visible in the rendered output. */
+function stripSourcesList(content: string, webCites: Map<number, string>): string {
   const idx = content.indexOf('### Sources')
   if (idx === -1) return content
   const before = content.slice(0, idx)
+
+  // If there are web references, keep them as a visible list
+  if (webCites.size > 0) {
+    const sourcesList = content.slice(idx)
+    const lines = sourcesList.split('\n')
+    const webLines = lines.filter(line => {
+      const m = line.match(/^(\d+)\./)
+      if (!m) return false
+      return webCites.has(parseInt(m[1], 10))
+    })
+    if (webLines.length > 0) {
+      return before + '### Sources\n\n' + '### Web References\n\n' + webLines.join('\n')
+    }
+  }
   return before + '### Sources'
 }
 
@@ -778,7 +819,11 @@ export default function ArticlesPage() {
               </div>
               <div className="articles-reader-body">
                 <ReactMarkdown components={mdComponents}>
-                  {enrichCitations(hasCitations ? stripSourcesList(selectedArticle.content) : selectedArticle.content)}
+                  {(() => {
+                    const webCites = parseWebCitations(selectedArticle.content)
+                    const body = hasCitations ? stripSourcesList(selectedArticle.content, webCites) : selectedArticle.content
+                    return enrichCitations(body, webCites)
+                  })()}
                 </ReactMarkdown>
               </div>
               <footer className="articles-reader-footer">
