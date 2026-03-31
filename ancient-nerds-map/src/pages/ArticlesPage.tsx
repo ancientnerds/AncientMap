@@ -53,25 +53,16 @@ function formatDateRange(start: string, end: string): string {
 
 /** Convert bare [1] references to clickable anchor links pointing to #sources. */
 function enrichCitations(content: string): string {
-  // Link [1], [2] etc. to YouTube sources
-  let enriched = content.replace(/(?<!\[)\[(\d+)\](?!\()/g, '[$1](#sources)')
-  // Link [a], [b] etc. to web references
-  enriched = enriched.replace(/(?<!\[)\[([a-z]\d*)\](?!\()/g, '[$1](#web-references)')
-  return enriched
+  // Link all [N] citations to the unified #sources section
+  return content.replace(/(?<!\[)\[(\d+)\](?!\()/g, '[$1](#sources)')
 }
 
 /** Strip the sources numbered list from markdown when rich attribution is used.
- *  Keeps the ### Sources heading (handled by the h3 component) but removes the OL after it.
- *  Preserves ### Web References section if present. */
+ *  Keeps the ### Sources heading (handled by the h3 component) but removes the OL after it. */
 function stripSourcesList(content: string): string {
   const idx = content.indexOf('### Sources')
   if (idx === -1) return content
   const before = content.slice(0, idx)
-  // Check for Web References section after Sources
-  const webRefsIdx = content.indexOf('### Web References')
-  if (webRefsIdx !== -1) {
-    return before + '### Sources\n\n' + content.slice(webRefsIdx)
-  }
   return before + '### Sources'
 }
 
@@ -387,9 +378,6 @@ function makeArticleComponents(
           return <SourcesAttribution citationItems={citationItems} />
         }
         return <h3 id="sources">{children}</h3>
-      }
-      if (text === 'Web References') {
-        return <h3 id="web-references">{children}</h3>
       }
       return <h3>{children}</h3>
     },

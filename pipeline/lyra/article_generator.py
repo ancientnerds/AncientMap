@@ -854,22 +854,73 @@ def _polish_article(
     return text.strip() or verified_body
 
 
-def _format_web_references(web_citations: list[WebSearchResult]) -> str:
-    """Build lettered markdown list of web references used for verification.
+def _merge_all_citations(
+    body: str,
+    yt_sources: list[dict],
+    web_citations: list[WebSearchResult],
+) -> tuple[str, list[dict]]:
+    """Merge YouTube [N] and web [a]-[z] citations into one continuous [N] sequence.
 
-    Uses letter prefixes (a, b, c, ...) instead of numbers to avoid
-    confusion with the numbered [N] YouTube source citations.
-    Only includes references with valid URLs.
+    After this step, the article has only [1], [2], [3]... citations, and the
+    unified sources list contains both YouTube and web references in order of
+    first appearance.  Each source dict has 'citation', 'url', 'label' keys.
     """
-    if not web_citations:
-        return ""
+    # Build unified source list: start with YouTube sources (already numbered)
+    unified: list[dict] = []
+    for src in yt_sources:
+        ts = src.get("timestamp_seconds")
+        ts_param = f"?t={ts}" if ts else ""
+        ts_display = f" ({_fmt_timestamp(ts)})" if ts else ""
+        url = f"https://youtu.be/{src['video_id']}{ts_param}"
+        label = f'[{src["channel_name"]} — "{src["video_title"]}"]({url}){ts_display}'
+        unified.append({"citation": src["citation"], "url": url, "label": label})
+
+    next_num = max((s["citation"] for s in unified), default=0) + 1
+
+    # Find all [a]-[z] / [a1]-[a99] markers in body, in order of first appearance
+    letter_markers = []
+    seen_letters: set[str] = set()
+    for m in re.finditer(r"\[([a-z]\d*)\]", body):
+        letter = m.group(1)
+        if letter not in seen_letters:
+            letter_markers.append(letter)
+            seen_letters.add(letter)
+
+    # Map each letter to a web citation and assign a number
+    letter_to_num: dict[str, int] = {}
+    for letter in letter_markers:
+        # Find the web citation for this letter
+        idx = ord(letter[0]) - ord("a")
+        if len(letter) > 1:
+            idx = 26 + int(letter[1:]) - 1
+        if idx < len(web_citations):
+            ref = web_citations[idx]
+            if not ref.url.startswith(("http://", "https://")):
+                continue
+            letter_to_num[letter] = next_num
+            label = f"[{ref.title}]({ref.url})"
+            if ref.date:
+                label += f" ({ref.date})"
+            unified.append({"citation": next_num, "url": ref.url, "label": label})
+            next_num += 1
+
+    # Replace [letter] → [number] in body (largest first to avoid partial matches)
+    for letter in sorted(letter_to_num, key=lambda l: letter_to_num[l], reverse=True):
+        body = body.replace(f"[{letter}]", f"[__CITE_{letter_to_num[letter]}__]")
+    for _letter, num in letter_to_num.items():
+        body = body.replace(f"[__CITE_{num}__]", f"[{num}]")
+
+    logger.info(
+        f"Merged citations: {len(yt_sources)} YouTube + {len(letter_to_num)} web = {len(unified)} total"
+    )
+    return body, unified
+
+
+def _format_all_sources(unified_sources: list[dict]) -> str:
+    """Build numbered markdown list of all sources (YouTube + web)."""
     lines = []
-    for i, ref in enumerate(web_citations):
-        if not ref.url.startswith(("http://", "https://")):
-            continue
-        letter = chr(ord("a") + i) if i < 26 else f"a{i - 25}"
-        date_str = f" ({ref.date})" if ref.date else ""
-        lines.append(f"{letter}. [{ref.title}]({ref.url}){date_str}")
+    for src in unified_sources:
+        lines.append(f"{src['citation']}. {src['label']}")
     return "\n".join(lines)
 
 
@@ -877,21 +928,15 @@ def _assemble_article(
     tldr: str,
     body: str,
     sources_md: str,
-    web_references_md: str = "",
 ) -> str:
-    """Combine TLDR + article body + sources footer + web references."""
+    """Combine TLDR + article body + unified sources footer."""
     parts: list[str] = []
 
     if tldr:
         parts.append(f"*{tldr}*")
 
     parts.append(body)
-
-    # Sources footer
-    sources_section = f"### Sources\n\n{sources_md}"
-    if web_references_md:
-        sources_section += f"\n\n### Web References\n\n{web_references_md}"
-    parts.append(sources_section)
+    parts.append(f"### Sources\n\n{sources_md}")
 
     return "\n\n---\n\n".join(parts)
 
@@ -1090,8 +1135,11 @@ def generate_weekly_article(
             _write_final_heartbeat(step_data, t0_total, error=error_msg)
             return False
 
-        # Remove uncited sources, renumber citations
+        # Remove uncited YouTube sources, renumber to sequential
         polished_body, sources = _cleanup_citations(polished_body, sources)
+
+        # Merge YouTube [N] + web [a]-[z] into unified [1]-[N] sequence
+        polished_body, unified_sources = _merge_all_citations(polished_body, sources, web_citations)
 
         # -- headline --
         _write_article_heartbeat(step_data, "headline", t0_total)
@@ -1105,12 +1153,11 @@ def generate_weekly_article(
             "status": "done" if not is_fallback else "fail",
         }
 
-        # Format sources
-        sources_md = _format_sources(sources)
-        web_refs_md = _format_web_references(web_citations)
+        # Format unified sources
+        sources_md = _format_all_sources(unified_sources)
 
         # Assemble final markdown
-        article_content = _assemble_article(tldr, polished_body, sources_md, web_refs_md)
+        article_content = _assemble_article(tldr, polished_body, sources_md)
 
         # Collect unique video IDs
         video_ids = list({item["video_id"] for item in all_items})
