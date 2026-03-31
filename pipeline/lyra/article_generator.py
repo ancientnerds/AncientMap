@@ -761,63 +761,34 @@ def _format_sources(sources: list[dict]) -> str:
     return "\n".join(lines)
 
 
-MAX_WEB_VERIFY_PASSES = 5
-
-
 def _web_verify_article(
     verified_body: str,
     settings: LyraSettings,
 ) -> tuple[str, list[WebSearchResult]]:
     """Web-grounded fact-check via pluggable backend (Anthropic or MiniMax).
 
-    Runs verification passes until the article is CLEAN — meaning a pass
-    returns zero corrections.  Each pass searches the web and identifies
-    factual issues from a fresh angle.  Stops when clean or after
-    MAX_WEB_VERIFY_PASSES as a safety cap.
+    Runs a single verification pass.  Each section is searched and verified
+    independently, with [wN] markers inserted at correction/confirmation
+    sites.  Returns the corrected body (with [wN] markers) and the ordered
+    list of web citations.
 
-    Returns (corrected_body, all_web_citations).
+    Returns (corrected_body, web_citations).
     """
     backend = get_web_research_backend(settings)
     backend_name = type(backend).__name__
     logger.info(f"Using web verification backend: {backend_name}")
 
-    current_body = verified_body
-    all_web_refs: list[WebSearchResult] = []
-    seen_urls: set[str] = set()
-    passes_run = 0
+    corrected, web_refs = backend.verify_article(verified_body)
 
-    for pass_num in range(1, MAX_WEB_VERIFY_PASSES + 1):
-        passes_run = pass_num
-        logger.info(f"Web verification pass {pass_num}/{MAX_WEB_VERIFY_PASSES}")
+    if len(corrected) < 200:
+        logger.warning(
+            "Web-verified body too short (%d chars), using source-verified body",
+            len(corrected),
+        )
+        return verified_body, []
 
-        corrected, new_refs = backend.verify_article(current_body)
-
-        if len(corrected) < 200:
-            logger.warning(
-                "Pass %d returned too-short body (%d chars), keeping previous",
-                pass_num,
-                len(corrected),
-            )
-            break
-
-        # Collect new web references
-        for ref in new_refs:
-            if ref.url not in seen_urls:
-                all_web_refs.append(ref)
-                seen_urls.add(ref.url)
-
-        # Quality gate: did this pass find anything to correct?
-        if corrected == current_body:
-            logger.info(f"Pass {pass_num}: CLEAN — zero corrections, article verified")
-            break
-
-        logger.info(f"Pass {pass_num}: corrections applied, {len(new_refs)} new web refs")
-        current_body = corrected
-    else:
-        logger.warning(f"Hit safety cap ({MAX_WEB_VERIFY_PASSES} passes) without a clean pass")
-
-    logger.info(f"Web verification done: {passes_run} pass(es), {len(all_web_refs)} total web refs")
-    return current_body, all_web_refs
+    logger.info(f"Web verification done: {len(web_refs)} web refs")
+    return corrected, web_refs
 
 
 def _polish_article(
@@ -859,11 +830,11 @@ def _merge_all_citations(
     yt_sources: list[dict],
     web_citations: list[WebSearchResult],
 ) -> tuple[str, list[dict]]:
-    """Merge YouTube [N] and web [a]-[z] citations into one continuous [N] sequence.
+    """Merge YouTube [N] and web [wN] citations into one continuous [N] sequence.
 
-    After this step, the article has only [1], [2], [3]... citations, and the
-    unified sources list contains both YouTube and web references in order of
-    first appearance.  Each source dict has 'citation', 'url', 'label' keys.
+    Converts [wN] markers (inserted by web verification) into sequential
+    numbers continuing after the last YouTube citation.  Each [wN] maps
+    to exactly one URL via the web_citations list — no collisions.
     """
     # Build unified source list: start with YouTube sources (already numbered)
     unified: list[dict] = []
@@ -877,41 +848,42 @@ def _merge_all_citations(
 
     next_num = max((s["citation"] for s in unified), default=0) + 1
 
-    # Find all [a]-[z] / [a1]-[a99] markers in body, in order of first appearance
-    letter_markers = []
-    seen_letters: set[str] = set()
-    for m in re.finditer(r"\[([a-z]\d*)\]", body):
-        letter = m.group(1)
-        if letter not in seen_letters:
-            letter_markers.append(letter)
-            seen_letters.add(letter)
+    # Find all [wN] markers in body, in order of first appearance
+    w_markers: list[int] = []
+    seen_w: set[int] = set()
+    for m in re.finditer(r"\[w(\d+)\]", body):
+        wn = int(m.group(1))
+        if wn not in seen_w:
+            w_markers.append(wn)
+            seen_w.add(wn)
 
-    # Map each letter to a web citation and assign a number
-    letter_to_num: dict[str, int] = {}
-    for letter in letter_markers:
-        # Find the web citation for this letter
-        idx = ord(letter[0]) - ord("a")
-        if len(letter) > 1:
-            idx = 26 + int(letter[1:]) - 1
-        if idx < len(web_citations):
-            ref = web_citations[idx]
-            if not ref.url.startswith(("http://", "https://")):
-                continue
-            letter_to_num[letter] = next_num
-            label = f"[{ref.title}]({ref.url})"
-            if ref.date:
-                label += f" ({ref.date})"
-            unified.append({"citation": next_num, "url": ref.url, "label": label})
-            next_num += 1
+    # Map each [wN] to its web citation and assign a final number
+    w_to_num: dict[int, int] = {}
+    for wn in w_markers:
+        idx = wn - 1  # [w1] → web_citations[0]
+        if idx < 0 or idx >= len(web_citations):
+            continue
+        ref = web_citations[idx]
+        if not ref.url.startswith(("http://", "https://")):
+            continue
+        w_to_num[wn] = next_num
+        label = f"[{ref.title}]({ref.url})"
+        if ref.date:
+            label += f" ({ref.date})"
+        unified.append({"citation": next_num, "url": ref.url, "label": label})
+        next_num += 1
 
-    # Replace [letter] → [number] in body (largest first to avoid partial matches)
-    for letter in sorted(letter_to_num, key=lambda l: letter_to_num[l], reverse=True):
-        body = body.replace(f"[{letter}]", f"[__CITE_{letter_to_num[letter]}__]")
-    for _letter, num in letter_to_num.items():
-        body = body.replace(f"[__CITE_{num}__]", f"[{num}]")
+    # Replace [wN] → [number] in body (use placeholder to avoid partial matches)
+    for wn in sorted(w_to_num, reverse=True):
+        body = body.replace(f"[w{wn}]", f"[__WCITE_{w_to_num[wn]}__]")
+    for _wn, num in w_to_num.items():
+        body = body.replace(f"[__WCITE_{num}__]", f"[{num}]")
+
+    # Strip any remaining [wN] markers that didn't map to a citation
+    body = re.sub(r"\[w\d+\]", "", body)
 
     logger.info(
-        f"Merged citations: {len(yt_sources)} YouTube + {len(letter_to_num)} web = {len(unified)} total"
+        f"Merged citations: {len(yt_sources)} YouTube + {len(w_to_num)} web = {len(unified)} total"
     )
     return body, unified
 
@@ -1097,9 +1069,8 @@ def generate_weekly_article(
         # -- web verify (convergence loop) --
         _write_article_heartbeat(step_data, "web_verify", t0_total)
         logger.info(
-            "Web-grounded fact-check (%s, up to %d passes)",
+            "Web-grounded fact-check (%s)",
             settings.article_web_backend,
-            MAX_WEB_VERIFY_PASSES,
         )
         t0 = time.time()
         web_verified_body, web_citations = _web_verify_article(verified_body, settings)

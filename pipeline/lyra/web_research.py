@@ -343,8 +343,15 @@ class MiniMaxWebResearch(WebResearchBackend):
                 continue
 
             # Build the replacement — append [wN] marker if we have a valid URL
+            # Filter out unreliable sources (social media, forums)
+            BLOCKED_DOMAINS = ("reddit.com", "instagram.com", "facebook.com", "tiktok.com")
             replacement = replace if not is_confirmation else find
-            if source_url and source_url.startswith(("http://", "https://")):
+            is_reliable = (
+                source_url
+                and source_url.startswith(("http://", "https://"))
+                and not any(d in source_url for d in BLOCKED_DOMAINS)
+            )
+            if is_reliable:
                 if source_url not in seen_urls:
                     marker_num += 1
                     seen_urls[source_url] = marker_num
@@ -449,51 +456,46 @@ class MiniMaxWebResearch(WebResearchBackend):
                     logger.warning(f"Section {idx + 1} verification failed: {e}")
                     results[idx] = SectionVerification(corrected_text=sections[idx])
 
-        # Reassemble in original order, renumbering [wN] → [a], [b], [c] globally.
-        # Each section has its own [w1], [w2] etc. — we assign global letters
-        # so the final article has [a], [b], [c] inline next to YouTube [1], [2].
+        # Reassemble in original order, renumbering section-local [wN] to
+        # globally unique [wN] so each marker maps to exactly one URL.
         corrected_sections: list[str] = []
         all_citations: list[WebSearchResult] = []
-        seen_urls: dict[str, str] = {}  # url → assigned letter
-        global_idx = 0
+        seen_urls: dict[str, int] = {}  # url → global marker number
+        global_w = 0
 
         for i in range(total):
             v = results[i]
             section_text = v.corrected_text
 
-            # Find all [wN] markers in this section, in order of appearance
-            local_markers = re.findall(r"\[w\d+\]", section_text)
-            # Build mapping: each unique [wN] → a global [letter]
+            # Renumber section-local [w1],[w2] to global [wG],[wG+1]
+            local_markers = sorted(
+                set(re.findall(r"\[w(\d+)\]", section_text)),
+                key=int,
+            )
             local_to_global: dict[str, str] = {}
-            for marker in local_markers:
-                if marker in local_to_global:
+            for local_num_str in local_markers:
+                local_idx = int(local_num_str) - 1
+                if local_idx < 0 or local_idx >= len(v.web_citations):
+                    local_to_global[f"[w{local_num_str}]"] = ""
                     continue
-                # Find the web ref for this marker number
-                mn = int(re.search(r"\d+", marker).group())  # type: ignore[union-attr]
-                if mn - 1 < len(v.web_citations):
-                    ref = v.web_citations[mn - 1]
-                    if ref.url in seen_urls:
-                        # Reuse existing letter for same URL
-                        local_to_global[marker] = seen_urls[ref.url]
-                    else:
-                        letter = (
-                            chr(ord("a") + global_idx) if global_idx < 26 else f"a{global_idx - 25}"
-                        )
-                        local_to_global[marker] = f"[{letter}]"
-                        seen_urls[ref.url] = f"[{letter}]"
-                        all_citations.append(ref)
-                        global_idx += 1
+                ref = v.web_citations[local_idx]
+                if ref.url in seen_urls:
+                    # Reuse existing global number for same URL
+                    gn = seen_urls[ref.url]
+                    local_to_global[f"[w{local_num_str}]"] = f"[w{gn}]"
                 else:
-                    local_to_global[marker] = ""  # orphan — strip
+                    global_w += 1
+                    seen_urls[ref.url] = global_w
+                    all_citations.append(ref)
+                    local_to_global[f"[w{local_num_str}]"] = f"[w{global_w}]"
 
-            # Apply renumbering
             for local_marker, global_marker in local_to_global.items():
                 section_text = section_text.replace(local_marker, global_marker)
 
             corrected_sections.append(section_text)
 
         corrected_body = "\n\n".join(corrected_sections)
-        logger.info(f"Web verification complete: {len(all_citations)} inline web citations")
+        logger.info(f"Web verification complete: {len(all_citations)} web citations")
         return corrected_body, all_citations
 
 
