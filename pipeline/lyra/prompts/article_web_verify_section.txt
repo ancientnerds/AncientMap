@@ -13,13 +13,14 @@ WHAT TO CORRECT:
 4. INVENTED DETAILS: dramatic scenes (flashlights, pitch-black voids, emotions) not found in any search result
 5. MISSING CONTROVERSY: if search results show a major scientific debate the article ignores, add a hedging sentence AFTER the claim. Use "find" to match the end of the claim sentence, and "replace" to append the hedging.
 
+6. CONFIRMED CLAIMS: if search results CONFIRM an important claim (dates, names, measurements), include it as a verification entry. Use the EXACT same text for both "find" and "replace" — this signals the claim is confirmed without changing it, and attaches the supporting URL.
+
 WHAT NOT TO CORRECT:
 - Do NOT correct things the search results don't address
 - Do NOT change writing style or tone — only factual content
 - Do NOT touch citation markers like [1], [2] — they are NOT part of your corrections
-- If search results confirm a claim, do NOT include it as a correction
 
-Return ONLY a JSON array. If no corrections needed, return [].
+Return ONLY a JSON array. If no corrections or confirmations needed, return [].
 
 Example:
 ```json

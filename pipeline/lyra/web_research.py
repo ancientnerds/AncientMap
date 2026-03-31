@@ -334,15 +334,16 @@ class MiniMaxWebResearch(WebResearchBackend):
             replace = c.get("replace", "")
             source_url = c.get("source_url", "")
 
-            if not find or not replace or find == replace:
+            if not find or not replace:
                 continue
 
+            is_confirmation = find == replace
             if find not in corrected:
                 logger.debug(f"Correction target not found in text: {find[:60]}")
                 continue
 
             # Build the replacement — append [wN] marker if we have a valid URL
-            replacement = replace
+            replacement = replace if not is_confirmation else find
             if source_url and source_url.startswith(("http://", "https://")):
                 if source_url not in seen_urls:
                     marker_num += 1
@@ -360,15 +361,14 @@ class MiniMaxWebResearch(WebResearchBackend):
                         ref = WebSearchResult(title=domain, url=source_url, snippet="")
                     web_refs.append(ref)
                 mn = seen_urls[source_url]
-                replacement = f"{replace} [w{mn}]"
+                replacement = f"{replacement} [w{mn}]"
 
             corrected = corrected.replace(find, replacement, 1)
-            applied += 1
+            if not is_confirmation:
+                applied += 1
 
-        if applied:
-            logger.info(
-                f"  Applied {applied}/{len(corrections)} corrections, {marker_num} web markers"
-            )
+        if applied or marker_num:
+            logger.info(f"  Applied {applied} corrections + {marker_num} web citations")
 
         return SectionVerification(corrected_text=corrected, web_citations=web_refs)
 
