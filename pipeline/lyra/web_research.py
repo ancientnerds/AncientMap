@@ -317,11 +317,15 @@ class MiniMaxWebResearch(WebResearchBackend):
         if not isinstance(corrections, list) or not corrections:
             return SectionVerification(corrected_text=section_text)
 
-        # Apply corrections to original text and collect web citations
+        # Apply corrections to original text and collect web citations.
+        # When a correction has a valid source URL, we insert a [wN] marker
+        # right after the replacement text.  verify_article() later renumbers
+        # these to global [a], [b], [c] markers.
         corrected = section_text
         web_refs: list[WebSearchResult] = []
-        seen_urls: set[str] = set()
+        seen_urls: dict[str, int] = {}  # url → local marker number
         applied = 0
+        marker_num = 0
 
         for c in corrections:
             if not isinstance(c, dict):
@@ -337,34 +341,34 @@ class MiniMaxWebResearch(WebResearchBackend):
                 logger.debug(f"Correction target not found in text: {find[:60]}")
                 continue
 
-            corrected = corrected.replace(find, replace, 1)
-            applied += 1
-
-            # Collect web citation if URL is valid
+            # Build the replacement — append [wN] marker if we have a valid URL
+            replacement = replace
             if source_url and source_url.startswith(("http://", "https://")):
                 if source_url not in seen_urls:
-                    # Find matching search result for full metadata (title, snippet, date)
+                    marker_num += 1
+                    seen_urls[source_url] = marker_num
+                    # Find matching search result for full metadata
                     ref = None
                     for r in search_results:
                         if r.url == source_url or source_url in r.url:
                             ref = r
                             break
                     if ref is None:
-                        # Extract domain as fallback title — never use M2.7's "reason"
-                        # as a title since it contains commentary, not page titles
                         from urllib.parse import urlparse
 
                         domain = urlparse(source_url).netloc.replace("www.", "")
-                        ref = WebSearchResult(
-                            title=domain,
-                            url=source_url,
-                            snippet="",
-                        )
+                        ref = WebSearchResult(title=domain, url=source_url, snippet="")
                     web_refs.append(ref)
-                    seen_urls.add(source_url)
+                mn = seen_urls[source_url]
+                replacement = f"{replace} [w{mn}]"
+
+            corrected = corrected.replace(find, replacement, 1)
+            applied += 1
 
         if applied:
-            logger.info(f"  Applied {applied}/{len(corrections)} corrections")
+            logger.info(
+                f"  Applied {applied}/{len(corrections)} corrections, {marker_num} web markers"
+            )
 
         return SectionVerification(corrected_text=corrected, web_citations=web_refs)
 
@@ -445,21 +449,51 @@ class MiniMaxWebResearch(WebResearchBackend):
                     logger.warning(f"Section {idx + 1} verification failed: {e}")
                     results[idx] = SectionVerification(corrected_text=sections[idx])
 
-        # Reassemble in original order — corrections already applied to text
+        # Reassemble in original order, renumbering [wN] → [a], [b], [c] globally.
+        # Each section has its own [w1], [w2] etc. — we assign global letters
+        # so the final article has [a], [b], [c] inline next to YouTube [1], [2].
         corrected_sections: list[str] = []
         all_citations: list[WebSearchResult] = []
-        seen_urls: set[str] = set()
+        seen_urls: dict[str, str] = {}  # url → assigned letter
+        global_idx = 0
 
         for i in range(total):
             v = results[i]
-            corrected_sections.append(v.corrected_text)
-            for ref in v.web_citations:
-                if ref.url not in seen_urls:
-                    all_citations.append(ref)
-                    seen_urls.add(ref.url)
+            section_text = v.corrected_text
+
+            # Find all [wN] markers in this section, in order of appearance
+            local_markers = re.findall(r"\[w\d+\]", section_text)
+            # Build mapping: each unique [wN] → a global [letter]
+            local_to_global: dict[str, str] = {}
+            for marker in local_markers:
+                if marker in local_to_global:
+                    continue
+                # Find the web ref for this marker number
+                mn = int(re.search(r"\d+", marker).group())  # type: ignore[union-attr]
+                if mn - 1 < len(v.web_citations):
+                    ref = v.web_citations[mn - 1]
+                    if ref.url in seen_urls:
+                        # Reuse existing letter for same URL
+                        local_to_global[marker] = seen_urls[ref.url]
+                    else:
+                        letter = (
+                            chr(ord("a") + global_idx) if global_idx < 26 else f"a{global_idx - 25}"
+                        )
+                        local_to_global[marker] = f"[{letter}]"
+                        seen_urls[ref.url] = f"[{letter}]"
+                        all_citations.append(ref)
+                        global_idx += 1
+                else:
+                    local_to_global[marker] = ""  # orphan — strip
+
+            # Apply renumbering
+            for local_marker, global_marker in local_to_global.items():
+                section_text = section_text.replace(local_marker, global_marker)
+
+            corrected_sections.append(section_text)
 
         corrected_body = "\n\n".join(corrected_sections)
-        logger.info(f"Web verification complete: {len(all_citations)} web references collected")
+        logger.info(f"Web verification complete: {len(all_citations)} inline web citations")
         return corrected_body, all_citations
 
 
