@@ -22,8 +22,6 @@ Usage:
   python scripts/build_lyra_index.py --collection articles
   python scripts/build_lyra_index.py --collection empires
   python scripts/build_lyra_index.py --rebuild  # wipe and rebuild
-  python scripts/build_lyra_index.py --backend local  # Ollama 768-dim, *_local collections
-  python scripts/build_lyra_index.py --backend voyage  # Voyage 1024-dim (default)
 """
 
 import argparse
@@ -64,8 +62,7 @@ QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
 BATCH_SIZE = 100
 
-# Vector sizes per backend (set by --backend flag, not env var)
-VECTOR_SIZES = {"voyage": 1024, "local": 768}
+VECTOR_SIZE = 1024  # voyage-4-large
 
 
 def get_qdrant() -> QdrantClient:
@@ -904,20 +901,15 @@ def main():
     parser = argparse.ArgumentParser(description="Build Lyra vector index")
     parser.add_argument("--collection", choices=["sites", "news", "transcripts", "articles", "empires"], help="Only index this collection")
     parser.add_argument("--rebuild", action="store_true", help="Wipe and rebuild from scratch")
-    parser.add_argument("--backend", choices=["voyage", "local"], default="voyage", help="Embedding backend: voyage (1024-dim) or local (Ollama, 768-dim)")
     args = parser.parse_args()
 
-    backend = args.backend
-    vector_size = VECTOR_SIZES[backend]
-    suffix = "_local" if backend == "local" else ""
-
-    logger.info(f"Backend: {backend} | vector_size: {vector_size} | collection suffix: '{suffix}'")
+    vector_size = VECTOR_SIZE
 
     client = get_qdrant()
-    embeddings = get_embeddings(usage="index", backend=backend)
+    embeddings = get_embeddings(usage="index")
     sparse_model = get_sparse_model()
 
-    kwargs = {"rebuild": args.rebuild, "vector_size": vector_size, "suffix": suffix}
+    kwargs = {"rebuild": args.rebuild, "vector_size": vector_size, "suffix": ""}
 
     if args.collection is None or args.collection == "sites":
         index_sites(client, embeddings, sparse_model, **kwargs)
@@ -934,7 +926,7 @@ def main():
     if args.collection is None or args.collection == "empires":
         index_empires(client, embeddings, sparse_model, **kwargs)
 
-    logger.info(f"All done! (backend={backend})")
+    logger.info("All done!")
 
 
 if __name__ == "__main__":

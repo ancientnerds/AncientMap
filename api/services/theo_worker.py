@@ -6,20 +6,14 @@ runs the agent pipeline, and saves structured reports to the DB.
 """
 
 import asyncio
-import json
 import logging
-import time
-from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import text
 
 from api.services.theo_config import (
     EFFORT_CONFIG,
-    RESULT_TTL_HOURS,
-    THEO_MAX_TOKENS,
     THEO_PARALLEL_SLOTS,
 )
-from api.services.theo_prompts import THEO_SYSTEM_PROMPT
 from pipeline.database import get_session
 
 logger = logging.getLogger(__name__)
@@ -57,143 +51,6 @@ async def _process_request(request_id: str, question: str, effort: str) -> None:
     raise NotImplementedError(
         "Theo backend not configured — Phase 2 will wire MiniMax M2.7"
     )
-
-    # Track live events for SSE
-    # Evict oldest completed entries if at capacity
-    if len(_live_events) >= _MAX_LIVE_ENTRIES:
-        for rid, events in list(_live_events.items()):
-            if any(e.get("type") in ("done", "error") for e in events):
-                _live_events.pop(rid, None)
-                break
-        else:
-            # All entries are still active — evict oldest anyway
-            oldest = next(iter(_live_events))
-            _live_events.pop(oldest, None)
-    _live_events[request_id] = []
-
-    start_ms = time.monotonic()
-    collected_text: list[str] = []
-    pipeline_trace: list[dict] = []
-    sites_found = 0
-    tools_used = 0
-    total_tokens = 0
-
-    try:
-        # Mark as running
-        with get_session() as session:
-            session.execute(
-                text("UPDATE research_requests SET status = 'running' WHERE id = :id"),
-                {"id": request_id},
-            )
-            session.commit()
-
-        _append_event(request_id, {"type": "status", "content": "Research started"})
-
-        async for event in run_agent_stream(
-            message=question,
-            context_type="global",
-            ctx=ctx,
-            system_prompt=THEO_SYSTEM_PROMPT,
-            num_ctx=THEO_NUM_CTX,
-            max_tokens=THEO_MAX_TOKENS,
-            base_url=THEO_OLLAMA_BASE_URL or None,
-        ):
-            event_type = event.get("type", "")
-
-            if event_type == "token":
-                collected_text.append(event.get("content", ""))
-            elif event_type == "thinking":
-                pass  # Internal reasoning, not included in report
-            elif event_type == "pipeline":
-                pipeline_trace.append(event)
-                if event.get("stage") == "tool_call" and event.get("status") == "done":
-                    tools_used += 1
-            elif event_type == "sites":
-                site_list = event.get("sites", [])
-                sites_found += len(site_list)
-            elif event_type == "done":
-                meta = event.get("metadata", {})
-                total_tokens = meta.get("input_tokens", 0) + meta.get("output_tokens", 0)
-
-            # Forward to SSE listeners
-            _append_event(request_id, event)
-
-            # Respect max rounds for non-auto efforts
-            max_rounds = effort_cfg["max_rounds"]
-            if max_rounds and tools_used >= max_rounds:
-                break
-
-        duration_ms = int((time.monotonic() - start_ms) * 1000)
-        result_text = "".join(collected_text)
-
-        # Build structured result JSON
-        result = {
-            "report": result_text,
-            "sites_found": sites_found,
-            "tools_used": tools_used,
-            "total_tokens": total_tokens,
-            "effort": effort,
-            "duration_ms": duration_ms,
-        }
-
-        now = datetime.now(UTC)
-        with get_session() as session:
-            session.execute(
-                text("""
-                    UPDATE research_requests
-                    SET status = 'completed',
-                        result_json = :result,
-                        pipeline_trace = cast(:trace as jsonb),
-                        sites_found = :sites,
-                        tools_used = :tools,
-                        total_tokens = :tokens,
-                        duration_ms = :duration,
-                        completed_at = :completed,
-                        expires_at = :expires
-                    WHERE id = :id
-                """),
-                {
-                    "id": request_id,
-                    "result": json.dumps(result, ensure_ascii=False),
-                    "trace": json.dumps(pipeline_trace, ensure_ascii=False),
-                    "sites": sites_found,
-                    "tools": tools_used,
-                    "tokens": total_tokens,
-                    "duration": duration_ms,
-                    "completed": now,
-                    "expires": now + timedelta(hours=RESULT_TTL_HOURS),
-                },
-            )
-            session.commit()
-
-        _append_event(request_id, {"type": "done", "status": "completed"})
-        logger.info(
-            f"[THEO] Research {request_id} completed in {duration_ms}ms "
-            f"({sites_found} sites, {tools_used} tools)"
-        )
-
-    except Exception as e:
-        duration_ms = int((time.monotonic() - start_ms) * 1000)
-        logger.error(f"[THEO] Research {request_id} failed: {e}", exc_info=True)
-        with get_session() as session:
-            session.execute(
-                text("""
-                    UPDATE research_requests
-                    SET status = 'failed',
-                        error_message = :err,
-                        duration_ms = :duration,
-                        completed_at = NOW()
-                    WHERE id = :id
-                """),
-                {"id": request_id, "err": str(e)[:2000], "duration": duration_ms},
-            )
-            session.commit()
-        _append_event(request_id, {"type": "error", "error": "Research request failed"})
-
-    finally:
-        # Clean up live events after a delay (let SSE clients finish reading)
-        await asyncio.sleep(600)
-        _live_events.pop(request_id, None)
 
 
 async def _poll_loop() -> None:

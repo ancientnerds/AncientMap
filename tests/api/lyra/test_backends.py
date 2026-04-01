@@ -1,17 +1,13 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Tests for Lyra LLM backend abstraction — OllamaBackend, AnthropicBackend, factory."""
+"""Tests for Lyra LLM backend abstraction — AnthropicBackend, factory."""
 
 import os
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
 
 os.environ.setdefault("TESTING", "true")
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
 from api.services.lyra_backends import (
     AnthropicBackend,
-    OllamaBackend,
     _langchain_messages_to_openai,
     _langchain_tools_to_openai,
     get_backend,
@@ -113,36 +109,6 @@ class TestToolConversion:
 
 
 # ---------------------------------------------------------------------------
-# OllamaBackend
-# ---------------------------------------------------------------------------
-
-
-class TestOllamaBackend:
-    def test_init(self):
-        backend = OllamaBackend(
-            model="qwen3.5:4b",
-            base_url="http://localhost:11434/v1",
-            api_key="test",
-        )
-        assert backend.model == "qwen3.5:4b"
-        assert backend.max_tokens == 4096
-
-    def test_num_ctx(self):
-        backend = OllamaBackend(
-            model="test",
-            base_url="http://localhost",
-            api_key="",
-            num_ctx=8192,
-        )
-        assert backend.num_ctx == 8192
-
-    def test_no_cached_client(self):
-        # OllamaBackend uses httpx directly in stream(); no persistent client attribute
-        backend = OllamaBackend(model="test", base_url="http://localhost", api_key="")
-        assert not hasattr(backend, "_client")
-
-
-# ---------------------------------------------------------------------------
 # AnthropicBackend
 # ---------------------------------------------------------------------------
 
@@ -174,20 +140,16 @@ class TestGetBackend:
 
         lyra_backends._backends.clear()
 
-    def test_creates_ollama_for_local(self):
-        backend = get_backend("qwen3.5:4b", "local")
-        assert isinstance(backend, OllamaBackend)
-
     def test_creates_anthropic_for_anthropic(self):
         backend = get_backend("claude-haiku-4-5-20251001", "anthropic")
         assert isinstance(backend, AnthropicBackend)
 
     def test_caches_backends(self):
-        b1 = get_backend("qwen3.5:4b", "local")
-        b2 = get_backend("qwen3.5:4b", "local")
+        b1 = get_backend("claude-haiku-4-5-20251001", "anthropic")
+        b2 = get_backend("claude-haiku-4-5-20251001", "anthropic")
         assert b1 is b2
 
     def test_different_models_different_backends(self):
-        b1 = get_backend("qwen3.5:4b", "local")
-        b2 = get_backend("qwen3.5:0.8b", "local")
+        b1 = get_backend("claude-haiku-4-5-20251001", "anthropic")
+        b2 = get_backend("claude-sonnet-4-20250514", "anthropic")
         assert b1 is not b2
