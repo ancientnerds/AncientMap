@@ -5,7 +5,7 @@ These tests mock external dependencies (Qdrant, DB, LLM backends) to test
 the pipeline logic in isolation. They verify:
 - Correct pipeline events are emitted for all stages
 - Fast-tier queries skip retrieval (efficiency fix)
-- Local backend skips filter extraction (cost fix)
+- Filter extraction runs for all backends
 - Tool call accumulation and execution
 - Site/news extraction from tool results
 - Error handling in pipeline stages
@@ -30,10 +30,10 @@ from api.services.lyra_router import RequestContext, route_request, set_request_
 
 def _fast_ctx() -> RequestContext:
     return RequestContext(
-        backend_type="local",
+        backend_type="anthropic",
         model_tier="fast",
-        model_name="qwen3.5:0.8b",
-        embedding_backend="local",
+        model_name="claude-haiku-4-5-20251001",
+        embedding_backend="voyage",
         supports_thinking=False,
         supports_tools=True,
     )
@@ -41,10 +41,10 @@ def _fast_ctx() -> RequestContext:
 
 def _heavy_ctx() -> RequestContext:
     return RequestContext(
-        backend_type="local",
+        backend_type="anthropic",
         model_tier="heavy",
-        model_name="qwen3.5:4b",
-        embedding_backend="local",
+        model_name="claude-haiku-4-5-20251001",
+        embedding_backend="voyage",
         supports_thinking=True,
         supports_tools=True,
     )
@@ -52,9 +52,9 @@ def _heavy_ctx() -> RequestContext:
 
 def _premium_ctx() -> RequestContext:
     return RequestContext(
-        backend_type="minimax",
+        backend_type="anthropic",
         model_tier="premium",
-        model_name="MiniMax-M2.5",
+        model_name="claude-haiku-4-5-20251001",
         embedding_backend="voyage",
         supports_thinking=True,
         supports_tools=True,
@@ -69,25 +69,18 @@ async def _collect_events(gen) -> list[dict]:
     return events
 
 
-def _mock_backend_stream(content_text="Hello!", tool_calls=None):
-    """Create a mock backend that yields content events."""
-
-    async def stream(messages, tools):
-        if tool_calls:
-            for tc in tool_calls:
-                yield {
-                    "type": "tool_call_chunk",
-                    "index": tc.get("index", 0),
-                    "id": tc.get("id", "call_1"),
-                    "name": tc.get("name"),
-                    "args": json.dumps(tc.get("args", {})),
-                }
-        else:
-            yield {"type": "content", "text": content_text}
-        yield {"type": "usage", "input": 100, "output": 50}
-
+def _mock_backend_generate(content_text="Hello!", tool_calls=None):
+    """Create a mock backend that returns content via generate()."""
     mock = MagicMock()
-    mock.stream = stream
+
+    async def _generate(*args, **kwargs):
+        return {
+            "content": content_text,
+            "tool_calls": tool_calls or [],
+            "usage": {"input": 100, "output": 50, "web_search_requests": 0},
+        }
+
+    mock.generate = AsyncMock(side_effect=_generate)
     return mock
 
 
@@ -103,7 +96,7 @@ class TestPipelineEvents:
     async def test_fast_tier_skips_retrieval(self):
         """Fast-tier (greetings) should skip retrieval and filter extraction."""
         ctx = _fast_ctx()
-        mock_backend = _mock_backend_stream("Hi there!")
+        mock_backend = _mock_backend_generate("Hi there!")
 
         with (
             patch("api.services.lyra_agent.get_backend", return_value=mock_backend),
@@ -128,16 +121,16 @@ class TestPipelineEvents:
 
     @pytest.mark.asyncio
     async def test_heavy_tier_runs_retrieval(self):
-        """Heavy-tier queries should run retrieval."""
+        """Heavy-tier queries should run retrieval and filter extraction."""
         ctx = _heavy_ctx()
-        mock_backend = _mock_backend_stream("Here are Minoan sites...")
+        mock_backend = _mock_backend_generate("Here are Minoan sites...")
 
         with (
             patch("api.services.lyra_agent.get_backend", return_value=mock_backend),
             patch("api.services.lyra_agent.set_request_context"),
             patch(
                 "api.services.lyra_agent._auto_retrieve",
-                return_value=("context", [], [], 0.8, 100),
+                return_value=("context", [], [], 0.8, 100, [], []),
             ),
             patch(
                 "api.services.lyra_agent._extract_news_filters",
@@ -157,8 +150,9 @@ class TestPipelineEvents:
         assert ("pipeline_init", "done") in stages
         assert ("auto_retrieve", "start") in stages
         assert ("auto_retrieve", "done") in stages
-        # Local backend skips filter extraction
-        assert ("filter_extraction", "skip") in stages
+        # Filter extraction now runs for all backends
+        assert ("filter_extraction", "start") in stages
+        assert ("filter_extraction", "done") in stages
         assert ("news_augmentation", "start") in stages
         assert ("news_augmentation", "done") in stages
         assert ("context_assembly", "done") in stages
@@ -168,16 +162,16 @@ class TestPipelineEvents:
 
     @pytest.mark.asyncio
     async def test_premium_tier_runs_filter_extraction(self):
-        """Premium (MiniMax) tier should run filter extraction."""
+        """Premium tier should run filter extraction."""
         ctx = _premium_ctx()
-        mock_backend = _mock_backend_stream("Here's what I found...")
+        mock_backend = _mock_backend_generate("Here's what I found...")
 
         with (
             patch("api.services.lyra_agent.get_backend", return_value=mock_backend),
             patch("api.services.lyra_agent.set_request_context"),
             patch(
                 "api.services.lyra_agent._auto_retrieve",
-                return_value=("context", [], [], 0.8, 100),
+                return_value=("context", [], [], 0.8, 100, [], []),
             ),
             patch(
                 "api.services.lyra_agent._extract_news_filters",
@@ -200,7 +194,7 @@ class TestPipelineEvents:
     async def test_empire_context_skips_retrieval(self):
         """Empire context should skip retrieval."""
         ctx = _premium_ctx()
-        mock_backend = _mock_backend_stream("The Roman Empire...")
+        mock_backend = _mock_backend_generate("The Roman Empire...")
 
         with (
             patch("api.services.lyra_agent.get_backend", return_value=mock_backend),
@@ -227,7 +221,7 @@ class TestPipelineEvents:
     async def test_pipeline_init_contains_model_info(self):
         """pipeline_init event should contain model configuration."""
         ctx = _heavy_ctx()
-        mock_backend = _mock_backend_stream()
+        mock_backend = _mock_backend_generate()
 
         with (
             patch("api.services.lyra_agent.get_backend", return_value=mock_backend),
@@ -240,11 +234,11 @@ class TestPipelineEvents:
         init_events = [e for e in events if e.get("stage") == "pipeline_init"]
         assert len(init_events) == 1
         meta = init_events[0]["meta"]
-        assert meta["model"] == "qwen3.5:4b"
+        assert meta["model"] == "claude-haiku-4-5-20251001"
         assert meta["tier"] == "heavy"
-        assert meta["backend"] == "local"
-        assert meta["embedding"] == "nomic-embed-text"
-        assert meta["reranker"] == "FlashRank"
+        assert meta["backend"] == "anthropic"
+        assert meta["embedding"] == "Voyage-4"
+        assert meta["reranker"] == "rerank-2.5-lite"
 
 
 # ---------------------------------------------------------------------------
@@ -270,7 +264,7 @@ class TestPipelineCompleteness:
     async def test_all_stages_present_in_fast_path(self):
         """Fast path should emit all stages (some as skip)."""
         ctx = _fast_ctx()
-        mock_backend = _mock_backend_stream()
+        mock_backend = _mock_backend_generate()
 
         with (
             patch("api.services.lyra_agent.get_backend", return_value=mock_backend),
@@ -290,14 +284,14 @@ class TestPipelineCompleteness:
     async def test_all_stages_present_in_heavy_path(self):
         """Heavy path should emit all stages."""
         ctx = _heavy_ctx()
-        mock_backend = _mock_backend_stream()
+        mock_backend = _mock_backend_generate()
 
         with (
             patch("api.services.lyra_agent.get_backend", return_value=mock_backend),
             patch("api.services.lyra_agent.set_request_context"),
             patch(
                 "api.services.lyra_agent._auto_retrieve",
-                return_value=("ctx", [], [], None, 0),
+                return_value=("ctx", [], [], None, 0, [], []),
             ),
             patch(
                 "api.services.lyra_agent._extract_news_filters",
@@ -320,14 +314,14 @@ class TestPipelineCompleteness:
     async def test_every_start_has_done_or_error_or_skip(self):
         """Every stage that emits 'start' should also emit 'done', 'error', or 'skip'."""
         ctx = _heavy_ctx()
-        mock_backend = _mock_backend_stream()
+        mock_backend = _mock_backend_generate()
 
         with (
             patch("api.services.lyra_agent.get_backend", return_value=mock_backend),
             patch("api.services.lyra_agent.set_request_context"),
             patch(
                 "api.services.lyra_agent._auto_retrieve",
-                return_value=("ctx", [], [], None, 0),
+                return_value=("ctx", [], [], None, 0, [], []),
             ),
             patch(
                 "api.services.lyra_agent._extract_news_filters",
@@ -519,7 +513,7 @@ class TestDoneEvent:
     @pytest.mark.asyncio
     async def test_done_event_contains_metadata(self):
         ctx = _fast_ctx()
-        mock_backend = _mock_backend_stream("Hello!")
+        mock_backend = _mock_backend_generate("Hello!")
 
         with (
             patch("api.services.lyra_agent.get_backend", return_value=mock_backend),
@@ -532,8 +526,8 @@ class TestDoneEvent:
         done_events = [e for e in events if e.get("type") == "done"]
         assert len(done_events) == 1
         meta = done_events[0]["metadata"]
-        assert meta["backend"] == "local"
-        assert "fast" in meta["model"]
+        assert meta["backend"] == "anthropic"
+        assert "haiku" in meta["model"]
         assert meta["tool_calls"] == 0
         assert "tokens" in meta
         assert meta["tokens"]["input"] == 100
@@ -568,7 +562,6 @@ class TestVisualizationGaps:
         "list_channels",
         "get_site_images",
         "vector_search",
-        "search_transcripts",
         "search_articles",
         "search_empires",
         "get_empire_data",
