@@ -58,9 +58,7 @@ class VoyageEmbeddings:
 _embeddings: dict[str, VoyageEmbeddings] = {}
 
 
-def get_embeddings(
-    usage: str = "query", backend: str | None = None
-) -> VoyageEmbeddings:
+def get_embeddings(usage: str = "query") -> VoyageEmbeddings:
     """Get Voyage AI embedding model.
 
     Args:
@@ -98,7 +96,7 @@ def get_qdrant_client():
     return _qdrant_client
 
 
-def get_reranker(backend: str | None = None) -> voyageai.Client:
+def get_reranker() -> voyageai.Client:
     """Get Voyage AI reranker client."""
     return _get_voyage_client()
 

@@ -10,10 +10,7 @@ import logging
 
 from sqlalchemy import text
 
-from api.services.theo_config import (
-    EFFORT_CONFIG,
-    THEO_PARALLEL_SLOTS,
-)
+from api.services.theo_config import THEO_PARALLEL_SLOTS
 from pipeline.database import get_session
 
 logger = logging.getLogger(__name__)
@@ -45,12 +42,19 @@ def get_live_events(request_id: str) -> list[dict]:
 
 async def _process_request(request_id: str, question: str, effort: str) -> None:
     """Process a single research request using the Lyra agent pipeline."""
-    effort_cfg = EFFORT_CONFIG.get(effort, EFFORT_CONFIG["auto"])
-
-    # Phase 2 will set backend_type="minimax" and model_name to MiniMax M2.7
-    raise NotImplementedError(
-        "Theo backend not configured — Phase 2 will wire MiniMax M2.7"
-    )
+    # Phase 2 will wire MiniMax M2.7 here. Until then, fail immediately.
+    _msg = "Theo backend not configured — Phase 2 will wire MiniMax M2.7"
+    logger.warning(f"[THEO] {_msg} (request {request_id})")
+    with get_session() as session:
+        session.execute(
+            text("""
+                UPDATE research_requests
+                SET status = 'failed', error_message = :msg, completed_at = NOW()
+                WHERE id = :id
+            """),
+            {"id": request_id, "msg": _msg},
+        )
+        session.commit()
 
 
 async def _poll_loop() -> None:

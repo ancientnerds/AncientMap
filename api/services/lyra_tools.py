@@ -160,19 +160,6 @@ def _escape_ilike(value: str) -> str:
 
 LLM_MODEL = os.getenv("LYRA_LLM_MODEL", "claude-haiku-4-5-20251001")
 
-# Per-request backend: set via contextvars by lyra_agent before each request.
-# "voyage" — uses Voyage embeddings.
-
-
-def _get_embedding_backend() -> str:
-    """Get the embedding backend for the current request from contextvars."""
-    try:
-        from api.services.lyra_router import get_request_context
-
-        return get_request_context().embedding_backend
-    except LookupError:
-        return "voyage"  # Default for non-chat contexts (e.g., indexing)
-
 
 # ---------------------------------------------------------------------------
 # Seshat polity data (loaded once from bundled JSON)
@@ -942,7 +929,6 @@ def _hybrid_search_inner(
         get_sparse_model,
     )
 
-    backend = _get_embedding_backend()
     qdrant_collection = collection
 
     voyage_tokens = 0
@@ -950,7 +936,7 @@ def _hybrid_search_inner(
 
     # Step 1: Embed query \u2014 dense (voyage-4) + sparse (BM25)
     # R2: If Voyage API fails, fall back to BM25-only search
-    embeddings = get_embeddings(usage="query", backend=backend)
+    embeddings = get_embeddings(usage="query")
     dense_vec = None
     try:
         dense_vec = embeddings.embed_query(query)
@@ -1038,7 +1024,7 @@ def _hybrid_search_inner(
 
     # Step 4: Rerank with voyage rerank-2.5-lite \u2192 top K
     # Per Voyage docs: prepend instructions to the query for rerank-2.5-lite
-    reranker = get_reranker(backend=backend)
+    reranker = get_reranker()
     docs = [_format_payload_for_rerank(hit.payload) for hit in scored_points]
     # Use theory-aware rerank instructions for hypothesis/construction questions
     instructions = _THEORY_RERANK_INSTRUCTIONS if _is_theory_query(query) else _RERANK_INSTRUCTIONS

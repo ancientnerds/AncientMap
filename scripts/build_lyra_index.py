@@ -135,8 +135,8 @@ def index_sites(client: QdrantClient, embeddings, sparse_model, rebuild: bool = 
     if rebuild:
         try:
             client.delete_collection(collection)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"Could not delete collection '{collection}': {exc}")
 
     ensure_collection(client, collection, vector_size)
     create_payload_indexes(client, collection, ["country", "period_name", "site_type"])
@@ -257,8 +257,8 @@ def index_news(client: QdrantClient, embeddings, sparse_model, rebuild: bool = F
     if rebuild:
         try:
             client.delete_collection(collection)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"Could not delete collection '{collection}': {exc}")
 
     ensure_collection(client, collection, vector_size)
     create_payload_indexes(client, collection, ["channel", "category"])
@@ -447,8 +447,8 @@ def index_transcripts(client: QdrantClient, embeddings, sparse_model, rebuild: b
     if rebuild:
         try:
             client.delete_collection(collection)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"Could not delete collection '{collection}': {exc}")
 
     ensure_collection(client, collection, vector_size)
     create_payload_indexes(client, collection, ["channel", "video_id"])
@@ -600,8 +600,8 @@ def index_articles(client: QdrantClient, embeddings, sparse_model, rebuild: bool
     if rebuild:
         try:
             client.delete_collection(collection)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"Could not delete collection '{collection}': {exc}")
 
     ensure_collection(client, collection, vector_size)
     create_payload_indexes(client, collection, ["article_id"])
@@ -811,8 +811,8 @@ def index_empires(client: QdrantClient, embeddings, sparse_model, *, rebuild: bo
         try:
             client.delete_collection(collection)
             logger.info(f"Deleted collection '{collection}' for rebuild")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"Could not delete collection '{collection}': {exc}")
 
     ensure_collection(client, collection, vector_size)
     create_payload_indexes(client, collection, ["polity_id", "region"])

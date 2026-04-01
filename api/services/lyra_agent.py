@@ -1434,8 +1434,8 @@ async def run_agent_stream(
             "model": ctx.model_name,
             "tier": ctx.model_tier,
             "backend": ctx.backend_type,
-            "embedding": "Voyage-4" if ctx.embedding_backend == "voyage" else "nomic-embed-text",
-            "reranker": "rerank-2.5-lite" if ctx.embedding_backend == "voyage" else "FlashRank",
+            "embedding": "Voyage-4",
+            "reranker": "rerank-2.5-lite",
             "classification": get_classification_reason(ctx),
         },
     }

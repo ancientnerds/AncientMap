@@ -1,5 +1,5 @@
 """
-Fair FIFO queue for the local (Qwen) backend.
+Fair FIFO queue for Lyra inference requests.
 
 Single queue with configurable parallel inference slots. FIFO ordering
 with real-time position feedback via SSE.

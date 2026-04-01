@@ -46,7 +46,7 @@ def route_request(backend: str, message: str) -> RequestContext:
     """Route to Anthropic cloud LLM. Called once at request start.
 
     Args:
-        backend: Unused, kept for API compat.
+        backend: Unused. TODO: Phase 2 — use for Theo/MiniMax routing.
         message: The user's message text (unused, kept for API compat).
     """
     from api.services.lyra_tools import LLM_MODEL
