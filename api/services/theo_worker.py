@@ -17,9 +17,6 @@ from api.services.theo_config import (
     EFFORT_CONFIG,
     RESULT_TTL_HOURS,
     THEO_MAX_TOKENS,
-    THEO_MODEL,
-    THEO_NUM_CTX,
-    THEO_OLLAMA_BASE_URL,
     THEO_PARALLEL_SLOTS,
 )
 from api.services.theo_prompts import THEO_SYSTEM_PROMPT
@@ -54,17 +51,11 @@ def get_live_events(request_id: str) -> list[dict]:
 
 async def _process_request(request_id: str, question: str, effort: str) -> None:
     """Process a single research request using the Lyra agent pipeline."""
-    from api.services.lyra_agent import run_agent_stream
-    from api.services.lyra_router import RequestContext
-
     effort_cfg = EFFORT_CONFIG.get(effort, EFFORT_CONFIG["auto"])
-    ctx = RequestContext(
-        backend_type="local",
-        model_tier="heavy",
-        model_name=THEO_MODEL,
-        embedding_backend="local",
-        supports_thinking=bool(effort_cfg["thinking"]),
-        supports_tools=True,
+
+    # Phase 2 will set backend_type="minimax" and model_name to MiniMax M2.7
+    raise NotImplementedError(
+        "Theo backend not configured — Phase 2 will wire MiniMax M2.7"
     )
 
     # Track live events for SSE
