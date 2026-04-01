@@ -2008,9 +2008,7 @@ async def run_agent_stream(
             # Each span maps a text fragment to its source URL.
             # Format: "Claim text. [Source: Title]\n"
             # This lets synthesis see WHICH claim came from WHICH source.
-            _url_to_num: dict[str, int] = {
-                c["url"]: i + 1 for i, c in enumerate(_web_cites[:10])
-            }
+            _url_to_num: dict[str, int] = {c["url"]: i + 1 for i, c in enumerate(_web_cites[:10])}
 
             if _web_spans:
                 # Group spans by URL, build cited text
@@ -2024,15 +2022,12 @@ async def run_agent_stream(
                         _cited_chunks.append(f"{cited} [Source {_src_n}: {title}]")
                 if _cited_chunks:
                     _web_text = "\n".join(_cited_chunks[:30])
-                    logger.info(
-                        "Web search: %d cited spans from Citations API", len(_cited_chunks)
-                    )
+                    logger.info("Web search: %d cited spans from Citations API", len(_cited_chunks))
 
             _cite_block = ""
             if _web_cites:
                 _cite_lines = [
-                    f"[{i + 1}] {c['title']} — {c['url']}"
-                    for i, c in enumerate(_web_cites[:10])
+                    f"[{i + 1}] {c['title']} — {c['url']}" for i, c in enumerate(_web_cites[:10])
                 ]
                 _cite_block = "\n\n### Source URLs\n" + "\n".join(_cite_lines)
             _ws_context = _web_text[:6000] + _cite_block
@@ -2133,7 +2128,6 @@ async def run_agent_stream(
                 },
             }
             break
-
 
         # Execute tool calls
         # Add the AI message with tool calls to conversation

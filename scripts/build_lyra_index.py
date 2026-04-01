@@ -128,7 +128,15 @@ def get_existing_hashes(client: QdrantClient, collection: str) -> dict[str, str]
     return existing
 
 
-def index_sites(client: QdrantClient, embeddings, sparse_model, rebuild: bool = False, *, vector_size: int = 1024, suffix: str = ""):
+def index_sites(
+    client: QdrantClient,
+    embeddings,
+    sparse_model,
+    rebuild: bool = False,
+    *,
+    vector_size: int = 1024,
+    suffix: str = "",
+):
     """Index archaeological sites into Qdrant with dense + BM25 vectors."""
     collection = f"sites{suffix}"
 
@@ -198,14 +206,22 @@ def index_sites(client: QdrantClient, embeddings, sparse_model, rebuild: bool = 
             if r.period_name:
                 period_str = r.period_name
                 if r.period_start:
-                    period_str += f" ({r.period_start} BCE)" if r.period_start < 0 else f" ({r.period_start} CE)"
+                    period_str += (
+                        f" ({r.period_start} BCE)"
+                        if r.period_start < 0
+                        else f" ({r.period_start} CE)"
+                    )
                 parts.append(f"Period: {period_str}")
             if r.country:
                 parts.append(f"Country: {r.country}")
             if r.description:
                 parts.append(r.description[:500])
             elif r.raw_data:
-                desc = r.raw_data.get("description") or r.raw_data.get("summary", "") if isinstance(r.raw_data, dict) else ""
+                desc = (
+                    r.raw_data.get("description") or r.raw_data.get("summary", "")
+                    if isinstance(r.raw_data, dict)
+                    else ""
+                )
                 if desc:
                     parts.append(desc[:500])
             if r.content_titles:
@@ -250,7 +266,15 @@ def index_sites(client: QdrantClient, embeddings, sparse_model, rebuild: bool = 
     logger.info(f"Done indexing {total_indexed} sites")
 
 
-def index_news(client: QdrantClient, embeddings, sparse_model, rebuild: bool = False, *, vector_size: int = 1024, suffix: str = ""):
+def index_news(
+    client: QdrantClient,
+    embeddings,
+    sparse_model,
+    rebuild: bool = False,
+    *,
+    vector_size: int = 1024,
+    suffix: str = "",
+):
     """Index news items into Qdrant with dense + BM25 vectors."""
     collection = f"news{suffix}"
 
@@ -368,7 +392,9 @@ def _parse_ts(ts: str) -> int | None:
     return None
 
 
-def _chunk_transcript(transcript_text: str, chunk_size: int = 2000, overlap: int = 500) -> list[dict]:
+def _chunk_transcript(
+    transcript_text: str, chunk_size: int = 2000, overlap: int = 500
+) -> list[dict]:
     """Split timestamped transcript into overlapping chunks.
 
     Each chunk is a dict with keys: text, start_seconds, end_seconds, chunk_index.
@@ -416,12 +442,14 @@ def _chunk_transcript(transcript_text: str, chunk_size: int = 2000, overlap: int
                     start_secs = s
                 end_secs = s
 
-        chunks.append({
-            "text": current_text.strip(),
-            "start_seconds": start_secs or 0,
-            "end_seconds": end_secs or 0,
-            "chunk_index": chunk_idx,
-        })
+        chunks.append(
+            {
+                "text": current_text.strip(),
+                "start_seconds": start_secs or 0,
+                "end_seconds": end_secs or 0,
+                "chunk_index": chunk_idx,
+            }
+        )
         chunk_idx += 1
 
         # Advance start_line, stepping back by overlap chars for overlap
@@ -440,7 +468,15 @@ def _chunk_transcript(transcript_text: str, chunk_size: int = 2000, overlap: int
     return chunks
 
 
-def index_transcripts(client: QdrantClient, embeddings, sparse_model, rebuild: bool = False, *, vector_size: int = 1024, suffix: str = ""):
+def index_transcripts(
+    client: QdrantClient,
+    embeddings,
+    sparse_model,
+    rebuild: bool = False,
+    *,
+    vector_size: int = 1024,
+    suffix: str = "",
+):
     """Index video transcript chunks into Qdrant for semantic search."""
     collection = f"transcripts{suffix}"
 
@@ -483,7 +519,9 @@ def index_transcripts(client: QdrantClient, embeddings, sparse_model, rebuild: b
         chunks = _chunk_transcript(r.transcript_text)
         vh = video_hashes[r.video_id]
         for chunk in chunks:
-            point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"transcript-{r.video_id}-{chunk['chunk_index']}"))
+            point_id = str(
+                uuid.uuid5(uuid.NAMESPACE_DNS, f"transcript-{r.video_id}-{chunk['chunk_index']}")
+            )
             if point_id in existing_hashes and existing_hashes[point_id] == vh:
                 continue
             chunk["point_id"] = point_id
@@ -571,10 +609,12 @@ def _chunk_article(content: str, chunk_size: int = 2000, overlap: int = 400) -> 
             start_para = end_para
             continue
 
-        chunks.append({
-            "text": current_text.strip(),
-            "chunk_index": chunk_idx,
-        })
+        chunks.append(
+            {
+                "text": current_text.strip(),
+                "chunk_index": chunk_idx,
+            }
+        )
         chunk_idx += 1
 
         if end_para >= len(paragraphs):
@@ -593,7 +633,15 @@ def _chunk_article(content: str, chunk_size: int = 2000, overlap: int = 400) -> 
     return chunks
 
 
-def index_articles(client: QdrantClient, embeddings, sparse_model, rebuild: bool = False, *, vector_size: int = 1024, suffix: str = ""):
+def index_articles(
+    client: QdrantClient,
+    embeddings,
+    sparse_model,
+    rebuild: bool = False,
+    *,
+    vector_size: int = 1024,
+    suffix: str = "",
+):
     """Index weekly digest articles into Qdrant for semantic search."""
     collection = f"articles{suffix}"
 
@@ -729,7 +777,14 @@ def _build_empire_text(polity_id: str, p: dict) -> str:
     warfare = p.get("warfare", {})
     if warfare:
         war_parts = []
-        for cat_key in ("fortifications", "projectileWeapons", "handheldWeapons", "armor", "naval", "warfareAnimals"):
+        for cat_key in (
+            "fortifications",
+            "projectileWeapons",
+            "handheldWeapons",
+            "armor",
+            "naval",
+            "warfareAnimals",
+        ):
             cat = warfare.get(cat_key, {})
             if isinstance(cat, dict):
                 items = [k for k, v in cat.items() if v is True]
@@ -747,8 +802,18 @@ def _build_empire_text(polity_id: str, p: dict) -> str:
         econ_parts = []
         if economy.get("scripts"):
             econ_parts.append(f"Scripts: {', '.join(economy['scripts'])}")
-        for feat in ("writingSystem", "coinage", "storedWealth", "longDistanceTrade", "roads",
-                      "irrigationSystems", "markets", "foodStorageSites", "bridges", "canals"):
+        for feat in (
+            "writingSystem",
+            "coinage",
+            "storedWealth",
+            "longDistanceTrade",
+            "roads",
+            "irrigationSystems",
+            "markets",
+            "foodStorageSites",
+            "bridges",
+            "canals",
+        ):
             if economy.get(feat) is True:
                 label = re.sub(r"([A-Z])", r" \1", feat).strip().lower()
                 econ_parts.append(label)
@@ -785,7 +850,15 @@ def _build_empire_text(polity_id: str, p: dict) -> str:
     return " | ".join(parts)
 
 
-def index_empires(client: QdrantClient, embeddings, sparse_model, *, rebuild: bool = False, vector_size: int = 1024, suffix: str = ""):
+def index_empires(
+    client: QdrantClient,
+    embeddings,
+    sparse_model,
+    *,
+    rebuild: bool = False,
+    vector_size: int = 1024,
+    suffix: str = "",
+):
     """Index Seshat polities into the 'empires' collection."""
     collection = f"empires{suffix}"
 
@@ -826,13 +899,15 @@ def index_empires(client: QdrantClient, embeddings, sparse_model, *, rebuild: bo
         if point_id in existing_hashes and existing_hashes[point_id] == h:
             continue
         embed_text = _build_empire_text(polity_id, p)
-        new_points.append({
-            "point_id": point_id,
-            "polity_id": polity_id,
-            "embed_text": embed_text,
-            "polity": p,
-            "content_hash": h,
-        })
+        new_points.append(
+            {
+                "point_id": point_id,
+                "polity_id": polity_id,
+                "embed_text": embed_text,
+                "polity": p,
+                "content_hash": h,
+            }
+        )
 
     logger.info(f"Empires to index (new + changed): {len(new_points)}")
     if not new_points:
@@ -888,18 +963,35 @@ def polity_id_to_region(polity_id: str) -> str:
     """Map a polity ID prefix to a readable region name."""
     prefix = polity_id.split("_")[0] if "_" in polity_id else polity_id
     region_map = {
-        "eg": "Egypt", "iq": "Mesopotamia", "it": "Italy/Rome", "gr": "Greece",
-        "ir": "Persia/Iran", "cn": "China", "in": "India", "tr": "Anatolia/Turkey",
-        "mx": "Mesoamerica", "pe": "South America", "gb": "Britain",
-        "fr": "France/Gaul", "et": "East Africa", "sd": "Sudan/Nubia",
-        "kh": "Southeast Asia", "mn": "Mongolia", "jp": "Japan", "kr": "Korea",
+        "eg": "Egypt",
+        "iq": "Mesopotamia",
+        "it": "Italy/Rome",
+        "gr": "Greece",
+        "ir": "Persia/Iran",
+        "cn": "China",
+        "in": "India",
+        "tr": "Anatolia/Turkey",
+        "mx": "Mesoamerica",
+        "pe": "South America",
+        "gb": "Britain",
+        "fr": "France/Gaul",
+        "et": "East Africa",
+        "sd": "Sudan/Nubia",
+        "kh": "Southeast Asia",
+        "mn": "Mongolia",
+        "jp": "Japan",
+        "kr": "Korea",
     }
     return region_map.get(prefix, "Other")
 
 
 def main():
     parser = argparse.ArgumentParser(description="Build Lyra vector index")
-    parser.add_argument("--collection", choices=["sites", "news", "transcripts", "articles", "empires"], help="Only index this collection")
+    parser.add_argument(
+        "--collection",
+        choices=["sites", "news", "transcripts", "articles", "empires"],
+        help="Only index this collection",
+    )
     parser.add_argument("--rebuild", action="store_true", help="Wipe and rebuild from scratch")
     args = parser.parse_args()
 
