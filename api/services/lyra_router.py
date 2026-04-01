@@ -1,7 +1,7 @@
 """
 Lyra model router — per-request context.
 
-Lyra uses Anthropic (Haiku/Sonnet/Opus). Theo uses local Ollama (configured separately).
+Lyra uses Anthropic (Haiku/Sonnet/Opus). Theo uses MiniMax M2.7 (configured separately).
 """
 
 from contextvars import ContextVar
@@ -16,10 +16,10 @@ from dataclasses import dataclass
 class RequestContext:
     """Immutable per-request context. Passed through the pipeline."""
 
-    backend_type: str  # "anthropic" | "local" (local = Theo only)
+    backend_type: str  # "anthropic" | "minimax"
     model_tier: str  # "premium" | "heavy"
     model_name: str
-    embedding_backend: str  # "voyage" | "local"
+    embedding_backend: str  # "voyage"
     supports_thinking: bool
     supports_tools: bool
 
@@ -64,5 +64,5 @@ def route_request(backend: str, message: str) -> RequestContext:
 def get_classification_reason(ctx: RequestContext) -> str:
     """Human-readable explanation of why a tier was chosen (shown in pipeline UI)."""
     if ctx.model_tier == "heavy":
-        return "Local model \u2192 think=on, tools + retrieval"
+        return "MiniMax M2.7 \u2192 think=on, tools + retrieval"
     return "Premium cloud model"

@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 
 QUEUE_TIMEOUT_SECONDS = 300  # 5 minutes
 MAX_QUEUE_SIZE = 20
-PARALLEL_SLOTS = 2  # ollama OLLAMA_NUM_PARALLEL
+PARALLEL_SLOTS = 2
 
 
 # ---------------------------------------------------------------------------

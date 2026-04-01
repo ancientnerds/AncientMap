@@ -161,8 +161,7 @@ def _escape_ilike(value: str) -> str:
 LLM_MODEL = os.getenv("LYRA_LLM_MODEL", "claude-haiku-4-5-20251001")
 
 # Per-request backend: set via contextvars by lyra_agent before each request.
-# "voyage" (default) uses Voyage embeddings + original collections.
-# "local" uses Ollama embeddings + *_local collections.
+# "voyage" — uses Voyage embeddings.
 
 
 def _get_embedding_backend() -> str:
@@ -944,8 +943,7 @@ def _hybrid_search_inner(
     )
 
     backend = _get_embedding_backend()
-    # Append _local suffix for local backend collections
-    qdrant_collection = f"{collection}_local" if backend == "local" else collection
+    qdrant_collection = collection
 
     voyage_tokens = 0
     client = get_qdrant_client()
