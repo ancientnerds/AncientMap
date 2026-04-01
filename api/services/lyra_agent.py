@@ -6,7 +6,7 @@ extracts transcripts, and can chat about any of the 750K+ sites in the database.
 
 Two model tiers:
   - premium (Anthropic Haiku) — cloud, tools + structured output
-  - heavy (Qwen3.5 2B, think=on) — queries, thinking + tools + retrieval
+  - heavy (MiniMax M2.7, think=on) — deep research, thinking + tools + retrieval
 All messages get full tools and structured output (no trivial mode).
 """
 
@@ -729,61 +729,6 @@ def _filter_hallucinated_videos(
 
 
 # ---------------------------------------------------------------------------
-# Heartbeat wrapper for slow backend streams
-# ---------------------------------------------------------------------------
-
-
-async def _stream_with_heartbeat(
-    backend_impl: Any,
-    messages: list[BaseMessage],
-    tools: list,
-    enable_thinking: bool,
-    interval: float = 10.0,
-) -> AsyncIterator[dict]:
-    """Wrap backend.stream() with periodic heartbeat events.
-
-    During prompt evaluation, Ollama sends nothing for minutes. This wrapper
-    emits {"type": "heartbeat", "elapsed_s": N} events so downstream SSE
-    connections stay alive and the user sees the model is working.
-    """
-    queue: asyncio.Queue[dict | None] = asyncio.Queue()
-    start = time.monotonic()
-    error: BaseException | None = None
-
-    async def _produce() -> None:
-        nonlocal error
-        try:
-            async for ev in backend_impl.stream(messages, tools, enable_thinking):
-                await queue.put(ev)
-        except BaseException as e:
-            error = e
-        finally:
-            await queue.put(None)  # sentinel
-
-    task = asyncio.create_task(_produce())
-    try:
-        while True:
-            try:
-                ev = await asyncio.wait_for(queue.get(), timeout=interval)
-            except TimeoutError:
-                elapsed = int(time.monotonic() - start)
-                yield {"type": "heartbeat", "elapsed_s": elapsed}
-                continue
-            if ev is None:
-                if error is not None:
-                    raise error
-                break
-            yield ev
-    finally:
-        if not task.done():
-            task.cancel()
-            try:
-                await task
-            except (asyncio.CancelledError, Exception):
-                pass
-
-
-# ---------------------------------------------------------------------------
 # Auto-retrieval
 # ---------------------------------------------------------------------------
 
@@ -1430,9 +1375,7 @@ async def run_agent_stream(
     citations: bool = True,
     ctx: RequestContext | None = None,
     system_prompt: str | None = None,
-    num_ctx: int | None = None,
     max_tokens: int | None = None,
-    base_url: str | None = None,
     web_search: bool = False,
 ) -> AsyncIterator[dict]:
     """
@@ -1458,9 +1401,7 @@ async def run_agent_stream(
     backend_impl = get_backend(
         ctx.model_name,
         ctx.backend_type,
-        num_ctx=num_ctx,
         max_tokens=max_tokens,
-        base_url=base_url,
     )
 
     # Auto-retrieve: run hybrid search BEFORE the LLM sees the message
@@ -1520,13 +1461,12 @@ async def run_agent_stream(
 
         # Run decomposition + filter extraction in parallel,
         # then pass sub-queries to _auto_retrieve() in a thread.
-        use_filter_extraction = ctx.backend_type != "local"
+        use_filter_extraction = True
         # Multi-query expansion: generate 2-3 query variants to explore
-        # different phrasings. Always enabled for cloud backend — the LLM call
-        # costs ~200 tokens and runs in parallel with filter extraction.
-        # Skipped for local backend (no Anthropic API key).
+        # different phrasings. Always enabled — the LLM call costs ~200 tokens
+        # and runs in parallel with filter extraction.
         _is_vague = _is_vague_query(message)
-        use_expansion = ctx.backend_type != "local"
+        use_expansion = True
 
         yield {
             "type": "pipeline",
@@ -1656,14 +1596,6 @@ async def run_agent_stream(
                     "duration_ms": _phase1_ms,
                     "meta": {"filters": news_filters},
                 }
-        else:
-            yield {
-                "type": "pipeline",
-                "stage": "filter_extraction",
-                "status": "skip",
-                "duration_ms": None,
-                "meta": {"reason": "local backend"},
-            }
 
         # Extract sites from auto-retrieved results for map highlighting
         # Only include sites with relevance above threshold to avoid irrelevant results
@@ -1938,7 +1870,7 @@ async def run_agent_stream(
 
         # If tools are cut off and we already have tool results, skip straight
         # to Phase 2 synthesis — no point making an extra LLM call to discard the result
-        if not _offer_tools and tool_calls_made > 0 and ctx.backend_type != "local":
+        if not _offer_tools and tool_calls_made > 0:
             yield {
                 "type": "pipeline",
                 "stage": "llm_round",
@@ -1960,253 +1892,230 @@ async def run_agent_stream(
         collected_content = ""
         tool_calls = []
 
-        # Anthropic: single non-streaming call with tools + structured output
-        if ctx.backend_type != "local":
-            # Retry up to 2 times for transient errors
-            # (empty content, content_filter_error / 400)
-            result = None  # type: ignore[assignment, no-redef]
-            _last_err: Exception | None = None
-            for _attempt in range(3):
-                try:
-                    # Don't pass output_config when tools are offered —
-                    # Haiku returns empty content when tools + output_config are combined.
-                    _p1_rformat: dict | None = LYRA_RESPONSE_SCHEMA
-                    # On the first round with web_search enabled, give the
-                    # model ONLY the web_search tool (no database tools) so
-                    # it actually searches the web. Mixing server + client
-                    # tools causes the API to skip the server tool execution.
-                    # Database tools become available from round 1 onward.
-                    _ws_only = web_search and _round == 0 and _offer_tools
-                    if _offer_tools:
-                        # Haiku returns empty content when tools (client or
-                        # server) + output_config are combined.
-                        _p1_rformat = None
-                    if _ws_only:
-                        logger.info("Round 0 web_search: offering ONLY web_search tool")
-                    # Only offer web_search on round 0 (the dedicated web
-                    # round). On later rounds, only database tools so the
-                    # model can't skip them in favor of web_search again.
-                    _pass_web = web_search and _round == 0
-                    result = await backend_impl.generate(
-                        messages,
-                        tools=TOOLS if (_offer_tools and not _ws_only) else None,
-                        response_format=_p1_rformat,
-                        max_tokens=16384,
-                        web_search=_pass_web,
-                        # Round 0: force web_search call.
-                        # Round 1 after web search: force "any" so the model
-                        # MUST call at least one database tool.
-                        tool_choice=(
-                            "web_search"
-                            if _ws_only
-                            else "any"
-                            if (web_search and _round == 1 and _offer_tools)
-                            else None
-                        ),
-                    )
-                    break
-                except Exception as exc:
-                    _last_err = exc
-                    err_msg = str(exc).lower()
-                    is_retryable = (
-                        isinstance(exc, (asyncio.TimeoutError, TimeoutError))
-                        or "empty content" in err_msg
-                        or "truncated" in err_msg
-                        or "content_filter" in err_msg
-                        or "content policy" in err_msg
-                        or "400" in err_msg
-                    )
-                    if _attempt < 2 and is_retryable:
-                        logger.warning(f"Transient LLM error (attempt {_attempt + 1}/3): {exc}")
-                        await asyncio.sleep(1.5)
-                        continue
-                    if is_retryable:
-                        # Exhausted retries on a retryable error — don't crash
-                        break
-                    raise
-
-            if result is None:
-                logger.error(f"LLM call failed after 3 attempts: {_last_err}")
-                _fb = _build_fallback_response(message, all_sites, all_news)
-                yield {"type": "diffusion", "content": _fb}
+        # Retry up to 2 times for transient errors
+        # (empty content, content_filter_error / 400)
+        result = None  # type: ignore[assignment, no-redef]
+        _last_err: Exception | None = None
+        for _attempt in range(3):
+            try:
+                # Don't pass output_config when tools are offered —
+                # Haiku returns empty content when tools + output_config are combined.
+                _p1_rformat: dict | None = LYRA_RESPONSE_SCHEMA
+                # On the first round with web_search enabled, give the
+                # model ONLY the web_search tool (no database tools) so
+                # it actually searches the web. Mixing server + client
+                # tools causes the API to skip the server tool execution.
+                # Database tools become available from round 1 onward.
+                _ws_only = web_search and _round == 0 and _offer_tools
+                if _offer_tools:
+                    # Haiku returns empty content when tools (client or
+                    # server) + output_config are combined.
+                    _p1_rformat = None
+                if _ws_only:
+                    logger.info("Round 0 web_search: offering ONLY web_search tool")
+                # Only offer web_search on round 0 (the dedicated web
+                # round). On later rounds, only database tools so the
+                # model can't skip them in favor of web_search again.
+                _pass_web = web_search and _round == 0
+                result = await backend_impl.generate(
+                    messages,
+                    tools=TOOLS if (_offer_tools and not _ws_only) else None,
+                    response_format=_p1_rformat,
+                    max_tokens=16384,
+                    web_search=_pass_web,
+                    # Round 0: force web_search call.
+                    # Round 1 after web search: force "any" so the model
+                    # MUST call at least one database tool.
+                    tool_choice=(
+                        "web_search"
+                        if _ws_only
+                        else "any"
+                        if (web_search and _round == 1 and _offer_tools)
+                        else None
+                    ),
+                )
                 break
-
-            total_input_tokens += result["usage"]["input"]
-            total_output_tokens += result["usage"]["output"]
-            _ws_reqs = result["usage"].get("web_search_requests", 0)
-            total_web_search_requests += _ws_reqs
-
-            # Emit synthetic pipeline event for web search so the frontend
-            # can display it in the RAG pipeline panel alongside DB tools.
-            if _ws_reqs > 0:
-                _ws_preview = ", ".join(
-                    c.get("title", "")[:60] for c in result.get("web_citations", [])[:5]
+            except Exception as exc:
+                _last_err = exc
+                err_msg = str(exc).lower()
+                is_retryable = (
+                    isinstance(exc, (asyncio.TimeoutError, TimeoutError))
+                    or "empty content" in err_msg
+                    or "truncated" in err_msg
+                    or "content_filter" in err_msg
+                    or "content policy" in err_msg
+                    or "400" in err_msg
                 )
-                yield {
-                    "type": "pipeline",
-                    "stage": "tool_call",
-                    "status": "done",
-                    "duration_ms": int((time.monotonic() - _t_round) * 1000),
-                    "meta": {
-                        "tool": "web_search",
-                        "result_len": _ws_reqs,
-                        "args": {"queries": _ws_reqs},
-                        "result_preview": _ws_preview or None,
-                    },
-                }
+                if _attempt < 2 and is_retryable:
+                    logger.warning(f"Transient LLM error (attempt {_attempt + 1}/3): {exc}")
+                    await asyncio.sleep(1.5)
+                    continue
+                if is_retryable:
+                    # Exhausted retries on a retryable error — don't crash
+                    break
+                raise
 
-            if result["tool_calls"]:
-                # Model wants to call tools — parse tool_calls
-                for tc in result["tool_calls"]:
-                    tool_calls.append(
-                        {
-                            "id": tc["id"],
-                            "name": tc["name"],
-                            "args": tc["args"],
-                        }
+        if result is None:
+            logger.error(f"LLM call failed after 3 attempts: {_last_err}")
+            _fb = _build_fallback_response(message, all_sites, all_news)
+            yield {"type": "diffusion", "content": _fb}
+            break
+
+        total_input_tokens += result["usage"]["input"]
+        total_output_tokens += result["usage"]["output"]
+        _ws_reqs = result["usage"].get("web_search_requests", 0)
+        total_web_search_requests += _ws_reqs
+
+        # Emit synthetic pipeline event for web search so the frontend
+        # can display it in the RAG pipeline panel alongside DB tools.
+        if _ws_reqs > 0:
+            _ws_preview = ", ".join(
+                c.get("title", "")[:60] for c in result.get("web_citations", [])[:5]
+            )
+            yield {
+                "type": "pipeline",
+                "stage": "tool_call",
+                "status": "done",
+                "duration_ms": int((time.monotonic() - _t_round) * 1000),
+                "meta": {
+                    "tool": "web_search",
+                    "result_len": _ws_reqs,
+                    "args": {"queries": _ws_reqs},
+                    "result_preview": _ws_preview or None,
+                },
+            }
+
+        if result["tool_calls"]:
+            # Model wants to call tools — parse tool_calls
+            for tc in result["tool_calls"]:
+                tool_calls.append(
+                    {
+                        "id": tc["id"],
+                        "name": tc["name"],
+                        "args": tc["args"],
+                    }
+                )
+            collected_content = result["content"]
+        elif _ws_only:
+            # Web-search-only round completed — don't answer yet.
+            # Capture web results as context and continue to the next
+            # round where database tools are available.
+            _web_text = clean_response_text(result["content"])
+            _web_cites = result.get("web_citations", [])
+            _web_spans = result.get("web_cited_spans", [])
+
+            # Build cited web context using Anthropic's citation spans.
+            # Each span maps a text fragment to its source URL.
+            # Format: "Claim text. [Source: Title]\n"
+            # This lets synthesis see WHICH claim came from WHICH source.
+            _url_to_num: dict[str, int] = {
+                c["url"]: i + 1 for i, c in enumerate(_web_cites[:10])
+            }
+
+            if _web_spans:
+                # Group spans by URL, build cited text
+                _cited_chunks: list[str] = []
+                for span in _web_spans:
+                    url = span.get("url", "")
+                    title = span.get("title", "")
+                    cited = span.get("cited_text", "")
+                    _src_n = _url_to_num.get(url, 0)
+                    if cited and _src_n:
+                        _cited_chunks.append(f"{cited} [Source {_src_n}: {title}]")
+                if _cited_chunks:
+                    _web_text = "\n".join(_cited_chunks[:30])
+                    logger.info(
+                        "Web search: %d cited spans from Citations API", len(_cited_chunks)
                     )
-                collected_content = result["content"]
-            elif _ws_only:
-                # Web-search-only round completed — don't answer yet.
-                # Capture web results as context and continue to the next
-                # round where database tools are available.
-                _web_text = clean_response_text(result["content"])
-                _web_cites = result.get("web_citations", [])
-                _web_spans = result.get("web_cited_spans", [])
 
-                # Build cited web context using Anthropic's citation spans.
-                # Each span maps a text fragment to its source URL.
-                # Format: "Claim text. [Source: Title]\n"
-                # This lets synthesis see WHICH claim came from WHICH source.
-                _url_to_num: dict[str, int] = {
-                    c["url"]: i + 1 for i, c in enumerate(_web_cites[:10])
-                }
-
-                if _web_spans:
-                    # Group spans by URL, build cited text
-                    _cited_chunks: list[str] = []
-                    for span in _web_spans:
-                        url = span.get("url", "")
-                        title = span.get("title", "")
-                        cited = span.get("cited_text", "")
-                        _src_n = _url_to_num.get(url, 0)
-                        if cited and _src_n:
-                            _cited_chunks.append(f"{cited} [Source {_src_n}: {title}]")
-                    if _cited_chunks:
-                        _web_text = "\n".join(_cited_chunks[:30])
-                        logger.info(
-                            "Web search: %d cited spans from Citations API", len(_cited_chunks)
-                        )
-
-                _cite_block = ""
-                if _web_cites:
-                    _cite_lines = [
-                        f"[{i + 1}] {c['title']} — {c['url']}"
-                        for i, c in enumerate(_web_cites[:10])
-                    ]
-                    _cite_block = "\n\n### Source URLs\n" + "\n".join(_cite_lines)
-                _ws_context = _web_text[:6000] + _cite_block
-                # Insert at position 0 so synthesis sees web data first.
-                # The [Source N: Title] tags survive into the prose because
-                # they're embedded in the source data, not instructions.
-                raw_tool_results.insert(0, f"[web_search] {_ws_context}")
-                tool_calls_made += 1  # count web search as a tool call
-                messages.append(
-                    SystemMessage(
-                        content=(
-                            "## Web search results (already retrieved)\n"
-                            "Use these web results AND your database tools below "
-                            "to build a comprehensive answer.\n"
-                            "- For web sources: cite with numbered references "
-                            "[1], [2], etc. matching the Source URLs list below.\n"
-                            "- For database sources: use «vN» video markers, "
-                            "«sN» site markers as usual.\n"
-                            "EVERY claim must have a source — either a [N] web "
-                            "citation or a database marker.\n\n" + _ws_context
-                        )
+            _cite_block = ""
+            if _web_cites:
+                _cite_lines = [
+                    f"[{i + 1}] {c['title']} — {c['url']}"
+                    for i, c in enumerate(_web_cites[:10])
+                ]
+                _cite_block = "\n\n### Source URLs\n" + "\n".join(_cite_lines)
+            _ws_context = _web_text[:6000] + _cite_block
+            # Insert at position 0 so synthesis sees web data first.
+            # The [Source N: Title] tags survive into the prose because
+            # they're embedded in the source data, not instructions.
+            raw_tool_results.insert(0, f"[web_search] {_ws_context}")
+            tool_calls_made += 1  # count web search as a tool call
+            messages.append(
+                SystemMessage(
+                    content=(
+                        "## Web search results (already retrieved)\n"
+                        "Use these web results AND your database tools below "
+                        "to build a comprehensive answer.\n"
+                        "- For web sources: cite with numbered references "
+                        "[1], [2], etc. matching the Source URLs list below.\n"
+                        "- For database sources: use «vN» video markers, "
+                        "«sN» site markers as usual.\n"
+                        "EVERY claim must have a source — either a [N] web "
+                        "citation or a database marker.\n\n" + _ws_context
                     )
                 )
-                logger.info(
-                    "Web search round done (%d chars, %d citations), continuing to DB tools round",
-                    len(_web_text),
-                    len(_web_cites),
-                )
-            else:
-                # No tool calls — LLM wants to answer directly
-                if tool_calls_made > 0:
-                    # Phase 2 will handle synthesis — discard this text
-                    collected_content = ""
-                else:
-                    # No tools used at all (simple query) — emit Phase 1 response
-                    if _offer_tools:
-                        # Haiku chose not to use tools — do a single synthesis call
-                        # with output_config directly. Marker injection (two-pass) was
-                        # ~40% unreliable: Haiku ignored annotation instructions and
-                        # regenerated prose without markers. Single-pass with
-                        # SYNTHESIS_PROMPT + LYRA_RESPONSE_SCHEMA is 100% reliable.
-                        # raw_tool_results is empty here (no tools called), but
-                        # retrieved_context has auto-fetched sites/news/transcripts.
-                        _simple_synthesis_msgs = _build_synthesis_messages(
-                            message, [], context_prompt, retrieved_context
-                        )
-                        try:
-                            _so_result = await backend_impl.generate(
-                                _simple_synthesis_msgs,
-                                response_format=LYRA_RESPONSE_SCHEMA,
-                                max_tokens=8192,
-                            )
-                            total_input_tokens += _so_result["usage"]["input"]
-                            total_output_tokens += _so_result["usage"]["output"]
-                            collected_content, so_data, _off_topic = _parse_structured_output(
-                                _so_result["content"]
-                            )
-                            if so_data is not None:
-                                _structured_output = so_data
-                        except Exception as e:
-                            logger.warning(f"Simple synthesis failed: {e}")
-                            collected_content = clean_response_text(result["content"])
-                    else:
-                        # Tools were not offered: response_format was sent,
-                        # parse structured output directly.
-                        try:
-                            collected_content, so_data, _off_topic = _parse_structured_output(
-                                result["content"]
-                            )
-                            if so_data is not None:
-                                _structured_output = so_data
-                        except Exception as e:
-                            logger.warning(f"Structured output parse failed: {e}")
-                            collected_content = clean_response_text(result["content"])
-                    # Emit clean text directly (no diffusion simulation)
-                    if collected_content.strip():
-                        # Only apply grounding check when tools were actually used
-                        # (i.e., factual data was retrieved). For pure conversational
-                        # responses (no tools), there are no citations to check.
-                        if tool_calls_made > 0:
-                            collected_content, _grounding = _check_grounding(collected_content)
-                        _text_emitted = True
-                        yield {"type": "diffusion", "content": collected_content}
+            )
+            logger.info(
+                "Web search round done (%d chars, %d citations), continuing to DB tools round",
+                len(_web_text),
+                len(_web_cites),
+            )
         else:
-            # Ollama/local: stream with heartbeat
-            async for ev in _stream_with_heartbeat(
-                backend_impl,
-                messages,
-                TOOLS if _offer_tools else [],
-                enable_thinking=ctx.supports_thinking,
-            ):
-                if ev["type"] == "heartbeat":
-                    yield {"type": "status", "content": f"Processing input ({ev['elapsed_s']}s)..."}
-                elif ev["type"] == "reasoning":
-                    yield {"type": "thinking", "content": ev["text"]}
-                elif ev["type"] == "content":
-                    collected_content += ev["text"]
+            # No tool calls — LLM wants to answer directly
+            if tool_calls_made > 0:
+                # Phase 2 will handle synthesis — discard this text
+                collected_content = ""
+            else:
+                # No tools used at all (simple query) — emit Phase 1 response
+                if _offer_tools:
+                    # Haiku chose not to use tools — do a single synthesis call
+                    # with output_config directly. Marker injection (two-pass) was
+                    # ~40% unreliable: Haiku ignored annotation instructions and
+                    # regenerated prose without markers. Single-pass with
+                    # SYNTHESIS_PROMPT + LYRA_RESPONSE_SCHEMA is 100% reliable.
+                    # raw_tool_results is empty here (no tools called), but
+                    # retrieved_context has auto-fetched sites/news/transcripts.
+                    _simple_synthesis_msgs = _build_synthesis_messages(
+                        message, [], context_prompt, retrieved_context
+                    )
+                    try:
+                        _so_result = await backend_impl.generate(
+                            _simple_synthesis_msgs,
+                            response_format=LYRA_RESPONSE_SCHEMA,
+                            max_tokens=8192,
+                        )
+                        total_input_tokens += _so_result["usage"]["input"]
+                        total_output_tokens += _so_result["usage"]["output"]
+                        collected_content, so_data, _off_topic = _parse_structured_output(
+                            _so_result["content"]
+                        )
+                        if so_data is not None:
+                            _structured_output = so_data
+                    except Exception as e:
+                        logger.warning(f"Simple synthesis failed: {e}")
+                        collected_content = clean_response_text(result["content"])
+                else:
+                    # Tools were not offered: response_format was sent,
+                    # parse structured output directly.
+                    try:
+                        collected_content, so_data, _off_topic = _parse_structured_output(
+                            result["content"]
+                        )
+                        if so_data is not None:
+                            _structured_output = so_data
+                    except Exception as e:
+                        logger.warning(f"Structured output parse failed: {e}")
+                        collected_content = clean_response_text(result["content"])
+                # Emit clean text directly (no diffusion simulation)
+                if collected_content.strip():
+                    # Only apply grounding check when tools were actually used
+                    # (i.e., factual data was retrieved). For pure conversational
+                    # responses (no tools), there are no citations to check.
+                    if tool_calls_made > 0:
+                        collected_content, _grounding = _check_grounding(collected_content)
                     _text_emitted = True
-                    yield {"type": "token", "content": ev["text"]}
-                elif ev["type"] == "tool_call_chunk":
-                    _accumulate_tool_call(tool_calls, ev)
-                elif ev["type"] == "usage":
-                    total_input_tokens += ev["input"]
-                    total_output_tokens += ev["output"]
+                    yield {"type": "diffusion", "content": collected_content}
 
         # If no tool calls, we're done — UNLESS this was the web-search-only
         # round, in which case we need to continue to the DB tools round.
@@ -2225,10 +2134,6 @@ async def run_agent_stream(
             }
             break
 
-        # For Ollama streaming, the preamble text (e.g. "I'll search for...") was
-        # streamed as tokens. Re-emit it as a status event.
-        if collected_content.strip() and ctx.backend_type == "local":
-            yield {"type": "status", "content": collected_content.strip()}
 
         # Execute tool calls
         # Add the AI message with tool calls to conversation
@@ -2546,8 +2451,6 @@ async def run_agent_stream(
     # clean context (SYNTHESIS_PROMPT + consolidated data + user question)
     # instead of the messy AIMessage/ToolMessage history from Phase 1.
     #
-    # For Ollama, Phase 1 already streams tokens directly to the client so
-    # _text_emitted is True and Phase 2 is skipped.
     if tool_calls_made > 0 and not _text_emitted:
         # Build video_id whitelist from ALL retrieved data — used to filter hallucinated videos.
         # Only video_ids that appeared in retrieved data are allowed.
@@ -2591,7 +2494,6 @@ async def run_agent_stream(
         # Phase 2: two-stage synthesis (prose + marker injection)
         # Stage 1: PROSE_PROMPT + LYRA_PROSE_SCHEMA → plain prose JSON
         # Stage 2: Marker injection → annotated JSON with «s0», «v0» markers
-        # backend_impl handles Anthropic vs local differences.
         _s1_prose: str | None = None
         _s1_off_topic = False
         # If the LLM already made tool calls, it understood the question and
