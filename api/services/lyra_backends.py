@@ -100,172 +100,6 @@ def _langchain_messages_to_openai(messages: list) -> list[dict]:
     return result
 
 
-def _langchain_messages_to_ollama_native(messages: list) -> list[dict]:
-    """Convert LangChain message objects to Ollama native /api/chat format.
-
-    Differs from OpenAI format: no id/type in tool_calls, arguments is an
-    object (not a JSON string), and tool responses omit tool_call_id.
-    """
-    result = []
-    for m in messages:
-        if isinstance(m, SystemMessage):
-            result.append({"role": "system", "content": m.content})
-        elif isinstance(m, HumanMessage):
-            result.append({"role": "user", "content": m.content})
-        elif isinstance(m, AIMessage):
-            msg: dict = {"role": "assistant", "content": m.content or ""}
-            if m.tool_calls:
-                msg["tool_calls"] = [
-                    {
-                        "function": {
-                            "name": tc["name"],
-                            "arguments": tc["args"]
-                            if isinstance(tc["args"], dict)
-                            else json.loads(tc["args"]),
-                        },
-                    }
-                    for tc in m.tool_calls
-                ]
-            result.append(msg)
-        elif isinstance(m, ToolMessage):
-            result.append({"role": "tool", "content": m.content})
-    return result
-
-
-# ---------------------------------------------------------------------------
-# OllamaBackend — raw openai.AsyncOpenAI (preserves reasoning field)
-# ---------------------------------------------------------------------------
-
-
-class OllamaBackend:
-    """Uses Ollama native /api/chat for proper think=true/false support."""
-
-    def __init__(
-        self,
-        model: str,
-        base_url: str,
-        api_key: str,
-        max_tokens: int = 4096,
-        num_ctx: int | None = None,
-    ):
-        self.model = model
-        self.base_url = base_url
-        self.api_key = api_key
-        self.max_tokens = max_tokens
-        self.num_ctx = num_ctx
-
-    async def stream(
-        self, messages: list[BaseMessage], tools: list, enable_thinking: bool = True
-    ) -> AsyncIterator[dict]:
-        """Stream from Ollama via native API (properly handles think param).
-
-        Yields StreamEvent dicts.
-        """
-        import httpx
-
-        openai_messages = _langchain_messages_to_ollama_native(messages)
-        openai_tools = _langchain_tools_to_openai(tools) if tools else []
-
-        body: dict = {
-            "model": self.model,
-            "messages": openai_messages,
-            "think": enable_thinking,
-            "stream": True,
-        }
-        options: dict = {"num_predict": self.max_tokens}
-        if self.num_ctx:
-            options["num_ctx"] = self.num_ctx
-        # Qwen3.5 recommended: lower temperature/top_p when thinking is off
-        if not enable_thinking:
-            options["temperature"] = 0.7
-            options["top_p"] = 0.8
-        body["options"] = options
-        if openai_tools:
-            body["tools"] = openai_tools
-
-        # Derive native API URL from the OpenAI-compat base_url
-        # e.g. "http://host:11435/v1" -> "http://host:11435/api/chat"
-        native_url = self.base_url.replace("/v1", "").rstrip("/") + "/api/chat"
-
-        headers = {}
-        if self.api_key and self.api_key != "unused":
-            headers["Authorization"] = f"Bearer {self.api_key}"
-
-        async with httpx.AsyncClient(timeout=600.0) as http:
-            async with http.stream("POST", native_url, json=body, headers=headers) as resp:
-                resp.raise_for_status()
-                # Collect tool calls across streaming lines — Ollama may send
-                # partial tool_calls in one line and complete them in the next.
-                # Later entries for the same index override earlier ones.
-                pending_tools: dict[int, dict] = {}
-
-                async for line in resp.aiter_lines():
-                    if not line:
-                        continue
-                    data = json.loads(line)
-                    msg = data.get("message", {})
-
-                    # Thinking tokens (only when think=true)
-                    if msg.get("thinking"):
-                        yield {"type": "reasoning", "text": msg["thinking"]}
-
-                    # Content tokens
-                    if msg.get("content"):
-                        yield {"type": "content", "text": msg["content"]}
-
-                    # Collect tool calls (may arrive across multiple lines)
-                    if msg.get("tool_calls"):
-                        for i, tc in enumerate(msg["tool_calls"]):
-                            fn = tc.get("function", {})
-                            name = fn.get("name")
-                            raw_args = fn.get("arguments")
-                            entry = pending_tools.setdefault(i, {})
-                            if name:
-                                entry["name"] = name
-                            if raw_args:
-                                entry["args"] = raw_args
-
-                    # On done: yield finalized tool calls, then usage
-                    if data.get("done"):
-                        for i, tc_data in sorted(pending_tools.items()):
-                            raw_args = tc_data.get("args", {})
-                            args_str = (
-                                json.dumps(raw_args)
-                                if isinstance(raw_args, dict)
-                                else str(raw_args)
-                            )
-                            yield {
-                                "type": "tool_call_chunk",
-                                "index": i,
-                                "id": f"call_{i}",
-                                "name": tc_data.get("name"),
-                                "args": args_str,
-                            }
-                        pending_tools.clear()
-                        yield {
-                            "type": "usage",
-                            "input": data.get("prompt_eval_count", 0),
-                            "output": data.get("eval_count", 0),
-                        }
-
-    async def complete(self, messages: list, response_format: dict | None = None) -> dict:
-        """Not supported for Ollama backend."""
-        raise NotImplementedError("OllamaBackend does not support complete()")
-
-    async def generate(
-        self,
-        messages: list,
-        tools: list | None = None,
-        response_format: dict | None = None,
-        max_tokens: int | None = None,
-        tool_choice: str | None = None,
-        citations: bool = False,
-        web_search: bool = False,
-    ) -> dict:
-        """Not supported for Ollama backend."""
-        raise NotImplementedError("OllamaBackend does not support generate()")
-
-
 # ---------------------------------------------------------------------------
 # AnthropicBackend — Anthropic native SDK (Haiku 4.5 / Sonnet / Opus)
 # ---------------------------------------------------------------------------
@@ -638,49 +472,30 @@ class AnthropicBackend:
 # Backend factory — creates singleton backends keyed by model name
 # ---------------------------------------------------------------------------
 
-# NOTE: Safe while keys are derived from static env vars (~3 entries).
-# If max_tokens/num_ctx ever become user-configurable, add an LRU eviction policy.
 _backends: dict[str, LLMBackend] = {}
 
 
 def get_backend(
     model_name: str,
     backend_type: str,
-    num_ctx: int | None = None,
     max_tokens: int | None = None,
-    base_url: str | None = None,
 ) -> LLMBackend:
     """Get or create a backend instance for the given model.
 
     Args:
-        model_name: The model to use (e.g. "qwen3.5:4b", "claude-haiku-4-5-20251001").
-        backend_type: "local" for OllamaBackend, anything else for AnthropicBackend.
-        num_ctx: Override context window size (local only). Defaults to LYRA_OLLAMA_NUM_CTX env.
-        max_tokens: Override max output tokens (local only). Defaults to 1024.
-        base_url: Override base URL (local only). Bypasses LYRA_OLLAMA_BASE_URL.
+        model_name: The model to use (e.g. "claude-haiku-4-5-20251001").
+        backend_type: Backend identifier (used for cache keying).
+        max_tokens: Override max output tokens.
     """
-    key = f"{backend_type}:{model_name}:{num_ctx}:{max_tokens}:{base_url}"
+    key = f"{backend_type}:{model_name}:{max_tokens}"
     if key not in _backends:
-        if backend_type == "local":
-            ctx = num_ctx or int(os.getenv("LYRA_OLLAMA_NUM_CTX", "4096"))
-            mt = max_tokens or 1024
-            url = base_url if base_url is not None else os.getenv("LYRA_OLLAMA_BASE_URL", "")
-            _backends[key] = OllamaBackend(
-                model=model_name,
-                base_url=url,
-                api_key=os.getenv("LYRA_OLLAMA_API_KEY", "") if not base_url else "",
-                max_tokens=mt,
-                num_ctx=ctx,
-            )
-            logger.info(f"Created OllamaBackend for {model_name} at {url}")
-        else:
-            from pipeline.lyra.config import get_max_tokens
+        from pipeline.lyra.config import get_max_tokens
 
-            api_key = os.getenv("LYRA_ANTHROPIC_API_KEY") or os.getenv("LYRA_API_KEY") or ""
-            _backends[key] = AnthropicBackend(
-                model=model_name,
-                api_key=api_key,
-                max_tokens=max_tokens or get_max_tokens(),
-            )
-            logger.info(f"Created AnthropicBackend for {model_name}")
+        api_key = os.getenv("LYRA_ANTHROPIC_API_KEY") or os.getenv("LYRA_API_KEY") or ""
+        _backends[key] = AnthropicBackend(
+            model=model_name,
+            api_key=api_key,
+            max_tokens=max_tokens or get_max_tokens(),
+        )
+        logger.info(f"Created AnthropicBackend for {model_name}")
     return _backends[key]
