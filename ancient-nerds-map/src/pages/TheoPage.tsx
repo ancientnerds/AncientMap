@@ -1,6 +1,6 @@
 /**
  * TheoPage — Theodore Furcade Research Lab.
- * 4-stage research wizard: Topic+Scope -> Similar (duplicate check) -> Specialists -> Review+Launch
+ * 4-stage research wizard: Topic -> Sources -> Specialists -> Launch
  * Plus results list with live streaming and report overlays.
  * Auth-gated: logged-out users see the public library; logged-in users get the full wizard.
  */
@@ -31,6 +31,14 @@ const SPECIALIST_COUNTS: Record<string, number> = {
   brief: 1, note: 3, article: 5, review: 6, thesis: 8,
 }
 
+const ADAPTER_GROUP_ORDER = ['internal', 'academic', 'heritage', 'web'] as const
+const ADAPTER_GROUP_LABELS: Record<string, string> = {
+  internal: 'Internal',
+  academic: 'Academic',
+  heritage: 'Heritage',
+  web: 'Web',
+}
+
 interface AuthUser {
   username: string
   discord_id: string
@@ -51,6 +59,14 @@ interface SpecialistCategories {
   'Interdisciplinary Science': SpecialistInfo[]
   'Fringe / Alternative': SpecialistInfo[]
 }
+
+interface AdapterInfo {
+  label: string
+  icon: string
+  group: string
+}
+
+type AdapterData = Record<string, AdapterInfo>
 
 interface ResearchItem {
   id: string
@@ -119,24 +135,34 @@ export default function TheoPage() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null)
   const [authChecked, setAuthChecked] = useState(false)
 
-  // Wizard state — step 1.5 is represented as a separate boolean flag
+  // Wizard state — 4 steps: Topic, Sources, Specialists, Launch
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1)
   const [question, setQuestion] = useState(() => sessionStorage.getItem('theo_question') || '')
   const [effort, setEffort] = useState<string>(() => sessionStorage.getItem('theo_effort') || 'article')
-  // Stage 1: YouTube video IDs
+
+  // Stage 2: YouTube video IDs
   const [videoIds, setVideoIds] = useState<string[]>(() => {
     try { return JSON.parse(sessionStorage.getItem('theo_video_ids') || '[]') } catch { return [] }
   })
   const [videoInput, setVideoInput] = useState('')
 
+  // Stage 2: source adapters
+  const [adapterData, setAdapterData] = useState<AdapterData | null>(null)
+  const [loadingAdapters, setLoadingAdapters] = useState(false)
+  const [disabledAdapters, setDisabledAdapters] = useState<Set<string>>(() => {
+    try {
+      const saved = sessionStorage.getItem('theo_disabled_adapters')
+      return saved ? new Set<string>(JSON.parse(saved)) : new Set<string>()
+    } catch { return new Set<string>() }
+  })
+
   // Stage 1: relevance check
   const [checkingRelevance, setCheckingRelevance] = useState(false)
   const [relevanceResult, setRelevanceResult] = useState<{ relevant: boolean; reason: string } | null>(null)
 
-  // Stage 1.5: duplicate detection
+  // Stage 1: duplicate detection (inline)
   const [checkingDuplicates, setCheckingDuplicates] = useState(false)
   const [duplicateMatches, setDuplicateMatches] = useState<DuplicateMatch[] | null>(null)
-  const [showDuplicateStage, setShowDuplicateStage] = useState(false)
 
   // Stage 3: specialists
   const [specialistMode, setSpecialistMode] = useState<'auto' | 'manual'>('auto')
@@ -266,6 +292,20 @@ export default function TheoPage() {
     return () => { if (pollRef.current) clearInterval(pollRef.current) }
   }, [fetchList, authUser])
 
+  // Load adapters on first visit to step 2
+  const loadAdapters = useCallback(async () => {
+    if (adapterData) return
+    setLoadingAdapters(true)
+    try {
+      const resp = await fetch(`${config.api.baseUrl}/theo/adapters`)
+      if (resp.ok) {
+        const data: AdapterData = await resp.json()
+        setAdapterData(data)
+      }
+    } catch { /* ignore */ }
+    setLoadingAdapters(false)
+  }, [adapterData])
+
   // Load specialists on first visit to step 3
   const loadSpecialists = useCallback(async () => {
     if (specialistData) return
@@ -309,11 +349,12 @@ export default function TheoPage() {
     return ids
   }
 
-  // --- Stage 1: Check Relevance ---
+  // --- Stage 1: Check Relevance + Duplicates in sequence ---
   const handleCheckTopic = useCallback(async () => {
     if (question.trim().length < 10) return
     setCheckingRelevance(true)
     setRelevanceResult(null)
+    setDuplicateMatches(null)
     try {
       const resp = await fetch(`${config.api.baseUrl}/theo/check-relevance`, {
         method: 'POST',
@@ -321,8 +362,28 @@ export default function TheoPage() {
         body: JSON.stringify({ question: question.trim() }),
       })
       if (resp.ok) {
-        const data = await resp.json()
+        const data: { relevant: boolean; reason: string } = await resp.json()
         setRelevanceResult(data)
+        if (data.relevant) {
+          // Immediately run duplicate check inline
+          setCheckingDuplicates(true)
+          try {
+            const dupResp = await fetch(`${config.api.baseUrl}/theo/check-duplicates`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+              body: JSON.stringify({ question: question.trim() }),
+            })
+            if (dupResp.ok) {
+              const dupData: { matches: DuplicateMatch[] } = await dupResp.json()
+              setDuplicateMatches(dupData.matches || [])
+            } else {
+              setDuplicateMatches([])
+            }
+          } catch {
+            setDuplicateMatches([])
+          }
+          setCheckingDuplicates(false)
+        }
       } else {
         setRelevanceResult({ relevant: false, reason: 'Failed to check relevance' })
       }
@@ -332,29 +393,11 @@ export default function TheoPage() {
     setCheckingRelevance(false)
   }, [question])
 
-  // --- Stage 1.5: Check Duplicates ---
-  const handleCheckDuplicates = useCallback(async () => {
-    setCheckingDuplicates(true)
-    setDuplicateMatches(null)
-    setShowDuplicateStage(true)
-    try {
-      const resp = await fetch(`${config.api.baseUrl}/theo/check-duplicates`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({ question: question.trim() }),
-      })
-      if (resp.ok) {
-        const data: { matches: DuplicateMatch[] } = await resp.json()
-        setDuplicateMatches(data.matches || [])
-      } else {
-        setDuplicateMatches([])
-      }
-    } catch {
-      setDuplicateMatches([])
-    }
-    setCheckingDuplicates(false)
+  // --- Step 2 transition ---
+  const goToStep2 = useCallback(() => {
     setWizardStep(2)
-  }, [question])
+    loadAdapters()
+  }, [loadAdapters])
 
   // --- Stage 3 transition ---
   const goToStep3 = useCallback(() => {
@@ -371,6 +414,7 @@ export default function TheoPage() {
         question: question.trim(),
         effort,
         ...(videoIds.length > 0 ? { video_ids: videoIds } : {}),
+        ...(disabledAdapters.size > 0 ? { disabled_adapters: Array.from(disabledAdapters) } : {}),
       }
       if (specialistMode === 'manual') {
         // All specialists in the pool
@@ -401,15 +445,16 @@ export default function TheoPage() {
       setVideoIds([])
       setVideoInput('')
       sessionStorage.removeItem('theo_video_ids')
+      setDisabledAdapters(new Set())
+      sessionStorage.removeItem('theo_disabled_adapters')
       setRelevanceResult(null)
       setDuplicateMatches(null)
-      setShowDuplicateStage(false)
       setSpecialistMode('auto')
       fetchList()
     } finally {
       setSubmitting(false)
     }
-  }, [question, effort, videoIds, submitting, specialistMode, selectedSpecialists, excludedSpecialists, specialistData, fetchList])
+  }, [question, effort, videoIds, disabledAdapters, submitting, specialistMode, selectedSpecialists, excludedSpecialists, specialistData, fetchList])
 
   // --- Result actions ---
   const handleCancel = useCallback(async (id: string) => {
@@ -487,8 +532,6 @@ export default function TheoPage() {
     document.title = 'Theodore Furcade — Ancient Nerds Research Lab'
   }, [])
 
-
-
   // Duplicate card: read a public match
   const handleReadDuplicateMatch = useCallback(async (slug: string) => {
     try {
@@ -536,17 +579,36 @@ export default function TheoPage() {
     })
   }, [])
 
+  // Toggle adapter
+  const toggleAdapter = useCallback((key: string) => {
+    setDisabledAdapters(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      sessionStorage.setItem('theo_disabled_adapters', JSON.stringify(Array.from(next)))
+      return next
+    })
+  }, [])
+
   const selectedEffort = EFFORTS.find(e => e.key === effort)
   const activeItems = items.filter(i => i.status === 'queued' || i.status === 'running')
   const doneItems = items.filter(i => i.status !== 'queued' && i.status !== 'running')
 
-  // Wizard step display number (step 2 = "Similar" is stage 1.5)
-  // Steps: 1=Topic, 2=Similar, 3=Specialists, 4=Launch
-  const wizardDisplayStep = wizardStep
-
   // Active running item that is not being watched (for the investigation banner)
   const runningItem = authUser ? items.find(i => i.status === 'running') : null
   const showInvestigatingBanner = !!(runningItem && !liveOverlayId)
+
+  // Adapter group map for Stage 2 render
+  const adaptersByGroup: Record<string, Array<[string, AdapterInfo]>> = {}
+  if (adapterData) {
+    for (const group of ADAPTER_GROUP_ORDER) {
+      adaptersByGroup[group] = Object.entries(adapterData).filter(([, info]) => info.group === group)
+    }
+  }
+
+  // Enabled adapter count for Stage 4 summary
+  const totalAdapters = adapterData ? Object.keys(adapterData).length : 0
+  const enabledAdapters = totalAdapters - disabledAdapters.size
 
   if (!authChecked) {
     return (
@@ -614,36 +676,36 @@ export default function TheoPage() {
       {/* ═══════ LOGGED IN VIEW — Wizard ═══════ */}
       {authUser && (
         <>
-          {/* Wizard Steps Indicator — 4 steps */}
+          {/* Wizard Steps Indicator — 4 steps: Topic, Sources, Specialists, Launch */}
           <div className="theo-wizard-steps">
-            <div className={`theo-step-dot ${wizardDisplayStep >= 1 ? 'active' : ''} ${wizardDisplayStep > 1 ? 'completed' : ''}`}>
+            <div className={`theo-step-dot ${wizardStep >= 1 ? 'active' : ''} ${wizardStep > 1 ? 'completed' : ''}`}>
               <span className="theo-step-num">
-                {wizardDisplayStep > 1 ? (
+                {wizardStep > 1 ? (
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
                 ) : '1'}
               </span>
               <span className="theo-step-label">Topic</span>
             </div>
             <div className="theo-step-line" />
-            <div className={`theo-step-dot ${wizardDisplayStep >= 2 ? 'active' : ''} ${wizardDisplayStep > 2 ? 'completed' : ''}`}>
+            <div className={`theo-step-dot ${wizardStep >= 2 ? 'active' : ''} ${wizardStep > 2 ? 'completed' : ''}`}>
               <span className="theo-step-num">
-                {wizardDisplayStep > 2 ? (
+                {wizardStep > 2 ? (
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
                 ) : '2'}
               </span>
-              <span className="theo-step-label">Similar</span>
+              <span className="theo-step-label">Sources</span>
             </div>
             <div className="theo-step-line" />
-            <div className={`theo-step-dot ${wizardDisplayStep >= 3 ? 'active' : ''} ${wizardDisplayStep > 3 ? 'completed' : ''}`}>
+            <div className={`theo-step-dot ${wizardStep >= 3 ? 'active' : ''} ${wizardStep > 3 ? 'completed' : ''}`}>
               <span className="theo-step-num">
-                {wizardDisplayStep > 3 ? (
+                {wizardStep > 3 ? (
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
                 ) : '3'}
               </span>
               <span className="theo-step-label">Specialists</span>
             </div>
             <div className="theo-step-line" />
-            <div className={`theo-step-dot ${wizardDisplayStep >= 4 ? 'active' : ''}`}>
+            <div className={`theo-step-dot ${wizardStep >= 4 ? 'active' : ''}`}>
               <span className="theo-step-num">4</span>
               <span className="theo-step-label">Launch</span>
             </div>
@@ -658,7 +720,13 @@ export default function TheoPage() {
                   className="theo-input"
                   placeholder="What should Theo investigate?"
                   value={question}
-                  onChange={e => { const v = e.target.value; setQuestion(v); setRelevanceResult(null); sessionStorage.setItem('theo_question', v) }}
+                  onChange={e => {
+                    const v = e.target.value
+                    setQuestion(v)
+                    setRelevanceResult(null)
+                    setDuplicateMatches(null)
+                    sessionStorage.setItem('theo_question', v)
+                  }}
                   rows={3}
                 />
               </div>
@@ -679,6 +747,78 @@ export default function TheoPage() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Relevance check */}
+              <div className="theo-relevance-row">
+                <button
+                  className="theo-check-btn"
+                  disabled={question.trim().length < 10 || checkingRelevance}
+                  onClick={handleCheckTopic}
+                >
+                  {checkingRelevance ? 'Checking...' : 'Check Topic'}
+                </button>
+
+                {relevanceResult && (
+                  <div className={`theo-relevance-result ${relevanceResult.relevant ? 'relevant' : 'irrelevant'}`}>
+                    {relevanceResult.relevant
+                      ? 'Topic accepted'
+                      : relevanceResult.reason}
+                  </div>
+                )}
+
+                {relevanceResult?.relevant && (
+                  <button
+                    className="theo-next-btn"
+                    disabled={checkingDuplicates}
+                    onClick={goToStep2}
+                  >
+                    {checkingDuplicates ? 'Checking...' : 'Next'}
+                  </button>
+                )}
+              </div>
+
+              {/* Inline duplicate results */}
+              {relevanceResult?.relevant && (
+                <>
+                  {checkingDuplicates && (
+                    <div className="theo-auto-info" style={{ marginTop: 12 }}>
+                      Scanning for similar research...
+                    </div>
+                  )}
+                  {!checkingDuplicates && duplicateMatches !== null && duplicateMatches.length > 0 && (
+                    <div className="theo-inline-duplicates">
+                      <div className="theo-inline-dup-header">
+                        Similar research found — review before continuing
+                      </div>
+                      {duplicateMatches.map(match => (
+                        <div key={match.paper_slug} className="theo-inline-dup-card">
+                          <span className="theo-inline-dup-title">{match.paper_title}</span>
+                          <span className="theo-inline-dup-meta">by {match.author_username}</span>
+                          <span className="theo-badge theo-badge-similarity">
+                            {Math.round(match.score * 100)}% similar
+                          </span>
+                          <button
+                            className="theo-inline-dup-read"
+                            onClick={() => handleReadDuplicateMatch(match.paper_slug)}
+                          >
+                            Read
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ═══════ STAGE 2: Sources ═══════ */}
+          {wizardStep === 2 && (
+            <div className="theo-form">
+              <div className="theo-stage-header">
+                <button className="theo-back-btn" onClick={() => setWizardStep(1)}>Back</button>
+                <span className="theo-stage-title">Sources</span>
               </div>
 
               {/* YouTube Sources */}
@@ -752,88 +892,60 @@ export default function TheoPage() {
                 )}
               </div>
 
-              {/* Relevance check */}
-              <div className="theo-relevance-row">
-                <button
-                  className="theo-check-btn"
-                  disabled={question.trim().length < 10 || checkingRelevance}
-                  onClick={handleCheckTopic}
-                >
-                  {checkingRelevance ? 'Checking...' : 'Check Topic'}
-                </button>
-
-                {relevanceResult && (
-                  <div className={`theo-relevance-result ${relevanceResult.relevant ? 'relevant' : 'irrelevant'}`}>
-                    {relevanceResult.relevant
-                      ? 'Topic accepted'
-                      : relevanceResult.reason}
-                  </div>
+              {/* Source Adapter Toggles */}
+              <div className="theo-scope-section">
+                <div className="theo-scope-label">Source Adapters</div>
+                {loadingAdapters && (
+                  <div className="theo-auto-info">Loading adapters...</div>
                 )}
-
-                {relevanceResult?.relevant && (
-                  <button
-                    className="theo-next-btn"
-                    disabled={checkingDuplicates}
-                    onClick={handleCheckDuplicates}
-                  >
-                    {checkingDuplicates ? 'Checking...' : 'Next'}
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ═══════ STAGE 1.5: Duplicate Detection ═══════ */}
-          {wizardStep === 2 && showDuplicateStage && (
-            <div className="theo-form">
-              <div className="theo-stage-header">
-                <button className="theo-back-btn" onClick={() => { setWizardStep(1); setDuplicateMatches(null); setShowDuplicateStage(false) }}>Back</button>
-                <span className="theo-stage-title">Similar Research</span>
-              </div>
-
-              {checkingDuplicates && (
-                <div className="theo-auto-info">Searching for similar research...</div>
-              )}
-
-              {!checkingDuplicates && duplicateMatches !== null && (
-                <>
-                  {duplicateMatches.length === 0 ? (
-                    <div className="theo-duplicate-none">
-                      No similar research found. You are breaking new ground.
-                    </div>
-                  ) : (
-                    <>
-                      <div className="theo-duplicate-intro">
-                        Similar research already exists. Review before continuing.
-                      </div>
-                      <div className="theo-duplicate-list">
-                        {duplicateMatches.map(match => (
-                          <div key={match.paper_slug} className="theo-duplicate-card">
-                            <div className="theo-duplicate-card-top">
-                              <span className="theo-duplicate-title">{match.paper_title}</span>
-                              <span className="theo-badge theo-badge-similarity">
-                                {Math.round(match.score * 100)}% similar
-                              </span>
-                            </div>
-                            <div className="theo-duplicate-card-meta">
-                              by {match.author_username}
-                            </div>
-                            <div className="theo-card-actions">
-                              <button className="theo-btn-view" onClick={() => handleReadDuplicateMatch(match.paper_slug)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Read</button>
-                            </div>
+                {adapterData && (
+                  <div className="theo-adapter-grid">
+                    {ADAPTER_GROUP_ORDER.map(group => {
+                      const entries = adaptersByGroup[group] || []
+                      if (entries.length === 0) return null
+                      return (
+                        <div key={group} className="theo-adapter-group">
+                          <div className="theo-adapter-group-label">{ADAPTER_GROUP_LABELS[group]}</div>
+                          <div className="theo-adapter-cards">
+                            {entries.map(([key, info]) => {
+                              const isEnabled = !disabledAdapters.has(key)
+                              return (
+                                <div
+                                  key={key}
+                                  className={`theo-adapter-card ${isEnabled ? 'enabled' : 'disabled'}`}
+                                  onClick={() => toggleAdapter(key)}
+                                  role="checkbox"
+                                  aria-checked={isEnabled}
+                                  tabIndex={0}
+                                  onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggleAdapter(key) } }}
+                                >
+                                  <span className="theo-adapter-label">{info.label}</span>
+                                  <label className="theo-adapter-toggle" onClick={e => e.stopPropagation()}>
+                                    <input
+                                      type="checkbox"
+                                      checked={isEnabled}
+                                      onChange={() => toggleAdapter(key)}
+                                      aria-label={`Toggle ${info.label}`}
+                                    />
+                                    <span className="theo-adapter-toggle-track" />
+                                    <span className="theo-adapter-toggle-thumb" />
+                                  </label>
+                                </div>
+                              )
+                            })}
                           </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
-
-                  <div className="theo-submit-row">
-                    <button className="theo-next-btn" onClick={goToStep3}>
-                      Continue with my research
-                    </button>
+                        </div>
+                      )
+                    })}
                   </div>
-                </>
-              )}
+                )}
+              </div>
+
+              <div className="theo-submit-row">
+                <button className="theo-next-btn" onClick={goToStep3}>
+                  Next
+                </button>
+              </div>
             </div>
           )}
 
@@ -927,6 +1039,15 @@ export default function TheoPage() {
                   </span>
                 </div>
                 <div className="theo-review-item">
+                  <span className="theo-review-label">Sources</span>
+                  <span className="theo-review-value">
+                    {totalAdapters > 0
+                      ? `${enabledAdapters} of ${totalAdapters} adapters enabled`
+                      : 'All adapters enabled'}
+                    {videoIds.length > 0 && `, ${videoIds.length} YouTube video${videoIds.length > 1 ? 's' : ''}`}
+                  </span>
+                </div>
+                <div className="theo-review-item">
                   <span className="theo-review-label">Specialists</span>
                   <span className="theo-review-value">
                     {specialistMode === 'auto'
@@ -934,6 +1055,12 @@ export default function TheoPage() {
                       : `Manual: ${(specialistData ? Object.values(specialistData).flat().length : 0) - excludedSpecialists.size} included, ${excludedSpecialists.size} excluded`}
                   </span>
                 </div>
+              </div>
+
+              {/* Research prompt preview */}
+              <div style={{ marginTop: 16 }}>
+                <div className="theo-prompt-preview-label">Research prompt</div>
+                <div className="theo-prompt-preview">{question}</div>
               </div>
 
               <div className="theo-tips">
