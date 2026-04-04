@@ -614,6 +614,95 @@
   margin: 2px 0;
 }
 
+/* — Tips toggle (Stage 1) — */
+.theo-tips-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 10px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-dimmed);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s;
+  font-family: var(--font-body);
+}
+
+.theo-tips-toggle:hover {
+  color: var(--text-muted);
+}
+
+.theo-tips-inline {
+  margin-top: 6px;
+  padding: 8px 12px;
+  border: 1px dashed var(--border-default);
+  border-radius: 4px;
+}
+
+/* — Launch page (Stage 4) — */
+.theo-launch-section {
+  margin-bottom: 16px;
+}
+
+.theo-launch-label {
+  font-family: var(--font-heading);
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dimmed);
+  margin-bottom: 8px;
+}
+
+.theo-launch-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.theo-launch-setting {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.theo-launch-setting:last-child {
+  border-bottom: none;
+}
+
+.theo-launch-setting:hover {
+  background: var(--surface-raised);
+}
+
+.theo-launch-setting-label {
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-dimmed);
+  min-width: 80px;
+}
+
+.theo-launch-setting-value {
+  font-size: 13px;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.theo-launch-setting-edit {
+  font-size: 11px;
+  color: var(--brand-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 /* — Queue / Results List — */
 .theo-list {
   max-width: 720px;

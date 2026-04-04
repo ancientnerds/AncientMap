@@ -174,6 +174,7 @@ export default function TheoPage() {
 
   // Submission
   const [submitting, setSubmitting] = useState(false)
+  const [showTips, setShowTips] = useState(false)
 
   // Personal results list
   const [items, setItems] = useState<ResearchItem[]>([])
@@ -732,6 +733,21 @@ export default function TheoPage() {
                 />
               </div>
 
+              <button className="theo-tips-toggle" onClick={() => setShowTips(!showTips)}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                {showTips ? 'Hide tips' : 'Tips for better results'}
+              </button>
+              {showTips && (
+                <div className="theo-tips-inline">
+                  <ul className="theo-tips-list">
+                    <li>Name specific sites, periods, and civilizations</li>
+                    <li>Include the hypothesis you want investigated</li>
+                    <li>Mention specific texts or sources if relevant</li>
+                    <li>Ask about competing theories to get debate</li>
+                  </ul>
+                </div>
+              )}
+
               {/* Tier selector */}
               <div className="theo-scope-section">
                 <div className="theo-scope-label">Scope</div>
@@ -1035,50 +1051,41 @@ export default function TheoPage() {
                 <span className="theo-stage-title">Review & Launch</span>
               </div>
 
-              <div className="theo-review-summary">
-                <div className="theo-review-item">
-                  <span className="theo-review-label">Question</span>
-                  <span className="theo-review-value">{question}</span>
+              {/* Editable research prompt */}
+              <div className="theo-launch-section">
+                <div className="theo-launch-label">Research Prompt</div>
+                <textarea
+                  className="theo-input"
+                  value={question}
+                  onChange={e => { setQuestion(e.target.value); sessionStorage.setItem('theo_question', e.target.value) }}
+                  rows={4}
+                />
+              </div>
+
+              {/* Settings summary — each clickable to jump back */}
+              <div className="theo-launch-settings">
+                <div className="theo-launch-setting" onClick={() => setWizardStep(1)} role="button" tabIndex={0}>
+                  <span className="theo-launch-setting-label">Scope</span>
+                  <span className="theo-launch-setting-value">{selectedEffort?.label} ({selectedEffort?.time})</span>
+                  <span className="theo-launch-setting-edit">change</span>
                 </div>
-                <div className="theo-review-item">
-                  <span className="theo-review-label">Scope</span>
-                  <span className="theo-review-value">
-                    {selectedEffort?.label} ({selectedEffort?.time})
+                <div className="theo-launch-setting" onClick={() => setWizardStep(2)} role="button" tabIndex={0}>
+                  <span className="theo-launch-setting-label">Sources</span>
+                  <span className="theo-launch-setting-value">
+                    {totalAdapters > 0 ? `${enabledAdapters}/${totalAdapters} adapters` : 'All'}
+                    {videoIds.length > 0 && ` + ${videoIds.length} video${videoIds.length > 1 ? 's' : ''}`}
                   </span>
+                  <span className="theo-launch-setting-edit">change</span>
                 </div>
-                <div className="theo-review-item">
-                  <span className="theo-review-label">Sources</span>
-                  <span className="theo-review-value">
-                    {totalAdapters > 0
-                      ? `${enabledAdapters} of ${totalAdapters} adapters enabled`
-                      : 'All adapters enabled'}
-                    {videoIds.length > 0 && `, ${videoIds.length} YouTube video${videoIds.length > 1 ? 's' : ''}`}
-                  </span>
-                </div>
-                <div className="theo-review-item">
-                  <span className="theo-review-label">Specialists</span>
-                  <span className="theo-review-value">
+                <div className="theo-launch-setting" onClick={() => setWizardStep(3)} role="button" tabIndex={0}>
+                  <span className="theo-launch-setting-label">Specialists</span>
+                  <span className="theo-launch-setting-value">
                     {specialistMode === 'auto'
-                      ? 'Auto-selected based on question'
-                      : `Manual: ${(specialistData ? Object.values(specialistData).flat().length : 0) - excludedSpecialists.size} included, ${excludedSpecialists.size} excluded`}
+                      ? 'Auto-selected'
+                      : `${(specialistData ? Object.values(specialistData).flat().length : 0) - excludedSpecialists.size} selected`}
                   </span>
+                  <span className="theo-launch-setting-edit">change</span>
                 </div>
-              </div>
-
-              {/* Research prompt preview */}
-              <div style={{ marginTop: 16 }}>
-                <div className="theo-prompt-preview-label">Research prompt</div>
-                <div className="theo-prompt-preview">{question}</div>
-              </div>
-
-              <div className="theo-tips">
-                <div className="theo-tips-label">Tips for better results</div>
-                <ul className="theo-tips-list">
-                  <li>Name specific sites, periods, and civilizations</li>
-                  <li>Include the hypothesis you want investigated</li>
-                  <li>Mention specific texts or sources if relevant</li>
-                  <li>Ask about competing theories to get debate</li>
-                </ul>
               </div>
 
               <div className="theo-submit-row">
