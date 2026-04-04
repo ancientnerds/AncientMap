@@ -13,9 +13,9 @@ from pipeline.lyra.theo_specialists import (
 # ---------------------------------------------------------------------------
 
 
-def test_pool_has_27_specialists():
-    """SPECIALIST_POOL contains exactly 27 specialists."""
-    assert len(SPECIALIST_POOL) == 27
+def test_pool_has_33_specialists():
+    """SPECIALIST_POOL contains exactly 33 specialists."""
+    assert len(SPECIALIST_POOL) == 33
 
 
 def test_all_ids_unique():
@@ -57,7 +57,7 @@ def test_select_count_exceeds_pool():
         question="general question",
         count=99,
     )
-    assert len(panel) <= 27
+    assert len(panel) <= 33
 
 
 # ---------------------------------------------------------------------------

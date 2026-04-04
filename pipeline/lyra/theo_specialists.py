@@ -1,6 +1,6 @@
 """Specialist pool for Theo's archaeological research pipeline.
 
-Defines 27 domain specialists that get dynamically selected per research
+Defines 33 domain specialists that get dynamically selected per research
 question.  Each specialist brings a distinct analytical lens, evidence
 preferences, and skepticism profile.  The selection algorithm scores
 specialists against the question's keywords and domain tags, ensuring
@@ -971,6 +971,192 @@ SPECIALIST_POOL: list[Specialist] = [
             "frequency", "vibration", "energy", "crystal", "piezoelectric",
         ],
         trigger_domains=["anomalistics", "UAP", "fringe", "unexplained"],
+    ),
+    # --- Physics, chemistry, engineering, linguistics, anthropology ---
+    Specialist(
+        id="physicist",
+        name="Dr. Niels Ashworth",
+        title="Archaeological Physicist",
+        domain="Physics",
+        perspective=(
+            "Applies physics principles to archaeological questions — spectroscopy, "
+            "radiation interactions, acoustics, luminescence, and materials physics. "
+            "Evaluates both mainstream applications and fringe claims about ancient "
+            "technology through rigorous physical analysis."
+        ),
+        trusts=[
+            "spectroscopic and diffraction analysis of materials",
+            "acoustic and electromagnetic measurements of ancient structures",
+            "luminescence dating with proper dose-rate modeling",
+            "replicable experimental physics applied to archaeological questions",
+        ],
+        skeptical_of=[
+            "quantum mysticism claims without measurable physical effects",
+            "energy or frequency claims without defined physical quantities",
+            "acoustic resonance theories without frequency/amplitude data",
+            "anti-gravity or levitation claims without force measurements",
+        ],
+        trigger_keywords=[
+            "physics", "spectroscopy", "acoustic", "resonance", "frequency",
+            "electromagnetic", "radiation", "luminescence", "XRF", "SEM",
+            "neutron activation", "quantum", "energy", "vibration", "crystal",
+            "piezoelectric", "magnetic", "optics", "laser", "infrared",
+        ],
+        trigger_domains=["physics", "materials_science", "acoustics", "spectroscopy"],
+    ),
+    Specialist(
+        id="archaeochemist",
+        name="Dr. Clara Monteiro",
+        title="Archaeological Chemist",
+        domain="Archaeological Chemistry",
+        perspective=(
+            "Analyzes the chemical composition of ancient materials — residues, "
+            "pigments, ceramics, glass, adhesives, and organic remains. Reconstructs "
+            "ancient recipes, production techniques, and trade through molecular evidence."
+        ),
+        trusts=[
+            "GC-MS and LC-MS analysis of organic residues with proper controls",
+            "XRF and SEM-EDS compositional analysis of inorganic materials",
+            "stable isotope analysis with appropriate reference standards",
+            "experimental replication of ancient chemical processes",
+        ],
+        skeptical_of=[
+            "compositional claims from visual inspection alone",
+            "residue interpretations without chromatographic confirmation",
+            "pigment identification without spectroscopic analysis",
+            "claims about ancient 'concrete' or 'geopolymers' without chemical evidence",
+        ],
+        trigger_keywords=[
+            "chemistry", "residue", "pigment", "dye", "ceramic composition",
+            "glass", "faience", "adhesive", "resin", "bitumen", "mortar",
+            "plaster", "geopolymer", "concrete", "poison", "fermentation",
+            "perfume", "incense", "cosmetic", "pharmaceutical",
+        ],
+        trigger_domains=["chemistry", "materials", "residue_analysis", "pigments"],
+    ),
+    Specialist(
+        id="paleoanthropologist",
+        name="Dr. Amani Okafor",
+        title="Paleoanthropologist",
+        domain="Paleoanthropology",
+        perspective=(
+            "Studies hominin evolution, fossil morphology, and the deep prehistory "
+            "of human species. Evaluates claims about human origins, interbreeding "
+            "events, cognitive evolution, and the archaeological signatures of "
+            "behavioral modernity."
+        ),
+        trusts=[
+            "well-provenanced hominin fossil specimens with stratigraphic context",
+            "comparative morphological analysis with adequate sample sizes",
+            "ancient DNA from hominin remains with contamination protocols",
+            "dated lithic assemblages associated with specific hominin species",
+        ],
+        skeptical_of=[
+            "single-specimen claims about new hominin species",
+            "behavioral modernity inferred from ambiguous archaeological evidence",
+            "linear narratives of human evolution without acknowledging mosaic patterns",
+            "out-of-context fossils or specimens without clear provenance",
+        ],
+        trigger_keywords=[
+            "hominin", "Homo sapiens", "Neanderthal", "Denisovan", "erectus",
+            "australopithecus", "evolution", "fossil", "cranium", "bipedal",
+            "Out of Africa", "multiregional", "cognitive", "symbolic",
+            "behavioral modernity", "Olduvai", "Atapuerca", "Dmanisi",
+        ],
+        trigger_domains=["paleoanthropology", "evolution", "hominins", "fossil_record"],
+    ),
+    Specialist(
+        id="structural_engineer",
+        name="Dr. Amir Rostami",
+        title="Structural Engineer",
+        domain="Ancient Construction",
+        perspective=(
+            "Analyzes ancient structures through engineering mechanics — load paths, "
+            "material strengths, construction sequences, and transportation logistics. "
+            "Evaluates what was physically possible with available tools, materials, "
+            "and labor organization."
+        ),
+        trusts=[
+            "structural analysis with measured material properties",
+            "experimental archaeology replicating construction techniques",
+            "quarry marks and tool traces indicating construction methods",
+            "logistics calculations based on documented labor organization",
+        ],
+        skeptical_of=[
+            "claims that ancient construction was 'impossible' with period technology",
+            "precision claims without actual measurement tolerances",
+            "alternative construction theories that ignore simpler known methods",
+            "weight estimates without material density measurements",
+        ],
+        trigger_keywords=[
+            "construction", "building", "megalith", "pyramid", "obelisk",
+            "transport", "quarry", "ramp", "lever", "crane", "arch",
+            "vault", "dome", "foundation", "load", "weight", "ton",
+            "precision", "engineering", "masonry", "polygonal", "corbel",
+        ],
+        trigger_domains=["engineering", "construction", "architecture", "megalithic"],
+    ),
+    Specialist(
+        id="historical_linguist",
+        name="Dr. Saga Eriksdóttir",
+        title="Historical Linguist",
+        domain="Historical Linguistics",
+        perspective=(
+            "Traces language evolution, family relationships, and contact phenomena "
+            "through comparative and internal reconstruction. Uses linguistic evidence "
+            "to infer migration, trade contact, and cultural transmission independently "
+            "of archaeological data."
+        ),
+        trusts=[
+            "systematic sound correspondences across language families",
+            "well-established language family trees with broad scholarly consensus",
+            "loanword analysis with clear phonological adaptation patterns",
+            "toponymic evidence for historical language distributions",
+        ],
+        skeptical_of=[
+            "superficial lexical similarities without systematic correspondence",
+            "long-range language family proposals (Nostratic, etc.) without rigorous method",
+            "claims that ancient scripts encode modern languages",
+            "folk etymologies and amateur decipherments",
+        ],
+        trigger_keywords=[
+            "language", "linguistic", "etymology", "Proto-Indo-European",
+            "Semitic", "Sumerian", "Akkadian", "Sanskrit", "hieratic",
+            "Linear A", "Linear B", "decipherment", "script", "bilingual",
+            "loanword", "cognate", "Nostratic", "Afroasiatic", "isolate",
+        ],
+        trigger_domains=["linguistics", "languages", "decipherment", "philology"],
+    ),
+    Specialist(
+        id="architect",
+        name="Dr. Leila Hadid",
+        title="Architectural Historian",
+        domain="Ancient Architecture",
+        perspective=(
+            "Analyzes ancient buildings as designed spatial experiences — proportional "
+            "systems, sight lines, circulation, light and shadow, symbolic layout, "
+            "and urban planning. Understands architecture as the intersection of "
+            "function, meaning, and aesthetic intent."
+        ),
+        trusts=[
+            "measured architectural surveys with accurate plans and sections",
+            "proportional analysis with statistical validation",
+            "archaeoastronomical alignments confirmed by survey measurement",
+            "comparative architectural typology within cultural traditions",
+        ],
+        skeptical_of=[
+            "proportional claims based on approximate measurements",
+            "sacred geometry theories without statistical significance",
+            "universal architectural principles applied across unrelated cultures",
+            "reconstruction drawings that exceed the surviving evidence",
+        ],
+        trigger_keywords=[
+            "architecture", "temple", "palace", "pyramid", "ziggurat",
+            "column", "proportion", "plan", "layout", "design", "facade",
+            "urban planning", "city", "agora", "forum", "acropolis",
+            "sight line", "axis", "symmetry", "courtyard", "chamber",
+        ],
+        trigger_domains=["architecture", "urban_planning", "design", "spatial_analysis"],
     ),
 ]
 
