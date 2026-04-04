@@ -522,7 +522,7 @@ export default function TheoPage() {
           <img src="/images/theo.png" alt="Theodore Furcade" className="theo-avatar" />
           <div>
             <h1 className="theo-title">Theodore Furcade</h1>
-            <div className="theo-subtitle">Archaeological Research Specialist</div>
+            <div className="theo-subtitle">Archaeological Research Agent</div>
           </div>
         </div>
         <div className="theo-quote">"Give me a question. I'll dig deep."</div>

@@ -284,22 +284,28 @@ export default function TheoResearchLive({ requestId, question, onClose }: TheoR
               </button>
               {showTrace && (
                 <div className="theo-trace-body">
-                  {nodes.map(node => (
-                    <div key={node.instanceId} className="theo-trace-entry">
-                      <span className="theo-trace-stage">
-                        {node.status === 'active' ? '◉ ' :
-                         node.status === 'done' ? '✓ ' :
-                         node.status === 'error' ? '✗ ' : '○ '}
-                        {node.meta?.tool as string || node.stageId.replace(/_/g, ' ')}
-                      </span>
-                      <span className="theo-trace-dur">
-                        {node.duration_ms != null ? formatDurationMs(node.duration_ms) : node.status === 'active' ? '...' : ''}
-                      </span>
-                      {node.status === 'error' && node.meta?.error ? (
-                        <div className="theo-trace-error">{String(node.meta.error)}</div>
-                      ) : null}
-                    </div>
-                  ))}
+                  {(() => {
+                    let cumulative = 0
+                    return nodes.map(node => {
+                      if (node.duration_ms != null) cumulative += node.duration_ms
+                      return (
+                        <div key={node.instanceId} className="theo-trace-entry">
+                          <span className="theo-trace-stage">
+                            {node.status === 'active' ? '◉ ' :
+                             node.status === 'done' ? '✓ ' :
+                             node.status === 'error' ? '✗ ' : '○ '}
+                            {node.meta?.tool as string || node.stageId.replace(/_/g, ' ')}
+                          </span>
+                          <span className="theo-trace-dur">
+                            {node.duration_ms != null ? formatDurationMs(cumulative) : node.status === 'active' ? '...' : ''}
+                          </span>
+                          {node.status === 'error' && node.meta?.error ? (
+                            <div className="theo-trace-error">{String(node.meta.error)}</div>
+                          ) : null}
+                        </div>
+                      )
+                    })
+                  })()}
                 </div>
               )}
             </>
