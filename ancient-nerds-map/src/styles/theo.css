@@ -2069,3 +2069,37 @@
 @media (max-width: 600px) {
   .theo-adapter-cards { grid-template-columns: 1fr; }
 }
+
+/* — Quality Score Badge — */
+.theo-badge-quality {
+  position: relative;
+  border: 1px solid color-mix(in srgb, var(--quality-color) 40%, transparent);
+  color: var(--quality-color);
+  cursor: default;
+}
+
+.theo-badge-quality-dot {
+  font-size: 8px;
+  line-height: 1;
+  opacity: 0.7;
+}
+
+.theo-badge-quality[data-tooltip]:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 7px 10px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  background: var(--surface-deep);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  z-index: 20;
+  pointer-events: none;
+  white-space: pre;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  min-width: 160px;
+}

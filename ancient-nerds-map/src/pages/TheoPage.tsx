@@ -11,6 +11,7 @@ import { formatDurationMs, timeAgo } from '../utils/formatters'
 import AiNoticeBanner from '../components/layout/AiNoticeBanner'
 import PageHeader from '../components/layout/PageHeader'
 import '../styles/theo.css'
+import QualityBadge, { type QualityScore } from '../components/theo/QualityBadge'
 
 const TheoReportOverlay = lazy(() => import('../components/theo/TheoReportOverlay'))
 const TheoResearchLive = lazy(() => import('../components/theo/TheoResearchLive'))
@@ -134,10 +135,11 @@ interface ResearchItem {
   created_at: string | null
   completed_at: string | null
   is_public: boolean
+  quality_score?: QualityScore | null
 }
 
 interface FullResearch extends ResearchItem {
-  result: { report: string; sites_found: number; tools_used: number; total_tokens: number; effort: string; duration_ms: number } | null
+  result: { report: string; sites_found: number; tools_used: number; total_tokens: number; effort: string; duration_ms: number; quality_score?: QualityScore | null } | null
   pipeline_trace: Array<{ stage?: string; status?: string; duration_ms?: number }> | null
   total_tokens: number
 }
@@ -164,6 +166,7 @@ interface PublicPaper {
   duration_ms: number | null
   card_description: string
   cover_url: string
+  quality_score?: QualityScore | null
 }
 
 interface PublicPaperFull {
@@ -172,7 +175,7 @@ interface PublicPaperFull {
   effort: string
   published_by: string
   published_at: string
-  result: { report: string; title?: string; sites_found: number; tools_used: number; total_tokens: number; effort: string; duration_ms: number }
+  result: { report: string; title?: string; sites_found: number; tools_used: number; total_tokens: number; effort: string; duration_ms: number; quality_score?: QualityScore | null }
   sites_found: number
   tools_used: number
   duration_ms: number | null
@@ -1210,6 +1213,7 @@ export default function TheoPage() {
                     {item.is_public && (
                       <span className="theo-badge theo-badge-published">Published</span>
                     )}
+                    <QualityBadge qualityScore={item.quality_score} effort={item.effort} />
                   </div>
                   <div className="theo-card-meta">
                     {item.duration_ms != null && <span>{formatDurationMs(item.duration_ms)}</span>}
@@ -1284,6 +1288,7 @@ export default function TheoPage() {
                         {paper.published_by}
                       </span>
                       <span className="theo-badge theo-badge-effort">{EFFORT_LABELS[paper.effort] || paper.effort}</span>
+                      <QualityBadge qualityScore={paper.quality_score} effort={paper.effort} />
                       <span className="theo-public-card-date">{timeAgo(paper.published_at)}</span>
                       <button
                         className="theo-public-card-share"

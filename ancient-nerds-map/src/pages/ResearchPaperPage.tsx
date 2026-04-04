@@ -9,6 +9,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import AiNoticeBanner from '../components/layout/AiNoticeBanner'
 import PageHeader from '../components/layout/PageHeader'
+import QualityBadge, { type QualityScore } from '../components/theo/QualityBadge'
 import '../styles/theo.css'
 
 const EFFORT_LABELS: Record<string, string> = {
@@ -23,7 +24,11 @@ interface PaperData {
   slug: string
   published_by: string
   published_at: string
-  result: { report: string; title?: string } | null
+  result: {
+    report: string
+    title?: string
+    quality_score?: QualityScore | null
+  } | null
   sites_found: number
   tools_used: number
   duration_ms: number | null
@@ -138,6 +143,7 @@ export default function ResearchPaperPage() {
           <h1 className="theo-paper-title">{title}</h1>
           <div className="theo-paper-meta">
             <span className="theo-badge theo-badge-effort">{EFFORT_LABELS[paper.effort] || paper.effort}</span>
+            <QualityBadge qualityScore={paper.result.quality_score} effort={paper.effort} />
             <span style={{ color: 'var(--text-dimmed)', fontSize: 12 }}>{readingMinutes} min read</span>
             <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
               by {paper.published_by}

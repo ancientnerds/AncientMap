@@ -6,6 +6,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import QualityBadge, { type QualityScore } from './QualityBadge'
 
 interface ResearchResult {
   report: string
@@ -14,6 +15,7 @@ interface ResearchResult {
   total_tokens: number
   effort: string
   duration_ms: number
+  quality_score?: QualityScore | null
 }
 
 interface PipelineEntry {
@@ -112,6 +114,7 @@ export default function TheoReportOverlay({
             </div>
             <div className="theo-report-meta-row">
               <span className="theo-badge theo-badge-effort">{{ brief: 'Brief', note: 'Note', article: 'Article', review: 'Review', thesis: 'Thesis' }[effort] || effort}</span>
+              <QualityBadge qualityScore={result.quality_score} effort={effort} />
               <span className="theo-badge" style={{ border: '1px solid var(--border-default)', color: 'var(--text-dimmed)' }}>
                 {readingMinutes} min read
               </span>
