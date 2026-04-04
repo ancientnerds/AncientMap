@@ -8,6 +8,7 @@ ATTACK VECTORS:
 4. **Methodological weaknesses**: Are the dating methods, sample sizes, excavation strategies, or analytical techniques strong enough to support the claimed confidence levels?
 5. **Circular reasoning**: Does any argument assume what it sets out to prove? Common in archaeology: using artifacts to date a layer, then using the layer to date the artifacts.
 6. **Missing voices**: Are relevant scholarly perspectives absent from the analysis? Were non-Western or indigenous interpretations considered where relevant?
+7. **Fabricated attribution**: Are claims attributed to specific named individuals actually made by those individuals? Check if any person is credited with statements, discoveries, or claims they did not make. Misattributing claims to real people is defamatory and is a CRITICAL severity attack.
 
 RULES:
 1. Rate each attack as critical (undermines a core conclusion), moderate (weakens confidence but does not invalidate), or minor (worth noting but not consequential).

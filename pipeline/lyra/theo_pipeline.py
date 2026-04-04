@@ -101,6 +101,7 @@ class PipelineContext:
     paper_title: str = ""
     card_description: str = ""
     audit_result: dict = field(default_factory=dict)
+    quality_score: dict = field(default_factory=dict)
 
     # Tracking
     total_tokens: int = 0
@@ -235,6 +236,21 @@ class TheoPipeline:
             )
             ctx.paper_text = self._fallback_paper(ctx)
             ctx.paper_title = "Research Findings (unformatted)"
+
+        # Stage 8.5 — quality scoring convergence loop
+        if ctx.tier.quality_score_iterations > 0 and ctx.paper_text:
+            try:
+                await self._stage_8_5_quality(ctx, emit)
+            except Exception as exc:
+                logger.warning("Quality scoring failed (non-fatal): %s", exc)
+                emit(
+                    {
+                        "type": "pipeline",
+                        "stage": "quality_scoring",
+                        "status": "warning",
+                        "warning": f"Quality scoring skipped: {exc}",
+                    }
+                )
 
         # Stage 9 — illustration generation (non-fatal, runs after paper assembly)
         try:
@@ -1420,6 +1436,123 @@ class TheoPipeline:
                     "audit_passed": ctx.audit_result.get("passed", False),
                     "total_citations": ctx.audit_result.get("total_citations", 0),
                     "total_references": ctx.audit_result.get("total_references", 0),
+                },
+            }
+        )
+
+    # ------------------------------------------------------------------
+    # Stage 8.5: Quality scoring convergence loop
+    # ------------------------------------------------------------------
+
+    async def _stage_8_5_quality(
+        self,
+        ctx: PipelineContext,
+        emit: Callable[[dict], None],
+    ) -> None:
+        """Score the paper and regenerate if below threshold."""
+        stage = "quality_scoring"
+        t0 = time.monotonic()
+        emit({"type": "pipeline", "stage": stage, "status": "start"})
+        emit({"type": "status", "content": "Scoring paper quality..."})
+
+        from pipeline.lyra.theo_quality_judge import score_paper
+
+        # Build source snippets for the judge
+        source_snippets = []
+        for sid, num in sorted(ctx.registry.reference_numbers.items(), key=lambda kv: kv[1]):
+            source = ctx.registry.get_reference(sid)
+            if source:
+                source_snippets.append(
+                    {
+                        "ref_num": num,
+                        "title": source.title,
+                        "snippet": source.snippet,
+                    }
+                )
+
+        def _judge(model: str, system: str, user: str, max_tokens: int) -> str:
+            return minimax_chat(self._client, model, system, user, max_tokens)
+
+        max_iterations = ctx.tier.quality_score_iterations
+        paper_system = self._load_prompt(
+            "theo_paper_brief" if ctx.effort == "brief" else "theo_paper_full"
+        )
+
+        for iteration in range(max_iterations + 1):
+            # Score
+            score = score_paper(
+                ctx.paper_text,
+                ctx.question,
+                ctx.audit_result,
+                source_snippets,
+                _judge,
+                self._model,
+            )
+            ctx.quality_score = score
+
+            emit(
+                {
+                    "type": "status",
+                    "content": f"Quality score: {score['total']}/100 ({score['badge']})"
+                    + (f" — iteration {iteration + 1}" if iteration > 0 else ""),
+                }
+            )
+
+            if score["passed"] or iteration >= max_iterations:
+                break
+
+            # Below threshold — regenerate with feedback
+            failures_text = "\n".join(f"- {f}" for f in score.get("failures", []))
+            emit(
+                {
+                    "type": "status",
+                    "content": f"Score {score['total']}/100 below threshold (72). Regenerating with feedback...",
+                }
+            )
+
+            # Re-generate paper with quality feedback
+            ref_map_text = "\n".join(f"[{s['ref_num']}] {s['title']}" for s in source_snippets)
+            feedback_input = (
+                f"## Quality feedback — your previous paper scored {score['total']}/100\n\n"
+                f"Fix these issues:\n{failures_text}\n\n"
+                f"## Research question\n\n{ctx.question}\n\n"
+                f"## Reference map\n\n{ref_map_text}\n\n"
+                f"## Moderated findings\n\n{json.dumps(ctx.moderated_result or ctx.synthesis, indent=2)}\n\n"
+                "Regenerate the paper addressing the quality issues above."
+            )
+
+            raw_paper = await self._m27_call_async(
+                paper_system, feedback_input, ctx.tier.max_tokens_synthesis
+            )
+            ctx.paper_text = raw_paper
+
+            # Re-extract title
+            import re as _re
+
+            title_match = _re.search(r"^#\s+(.+)$", raw_paper, _re.MULTILINE)
+            ctx.paper_title = title_match.group(1).strip() if title_match else ctx.question
+
+            # Re-append references
+            refs_md = ctx.registry.format_references_list()
+            if refs_md:
+                ctx.paper_text += f"\n\n## References\n\n{refs_md}"
+
+            # Re-audit
+            from pipeline.lyra.theo_citations import audit_citations
+
+            ctx.audit_result = audit_citations(ctx.paper_text, ctx.registry)
+
+        ms = int((time.monotonic() - t0) * 1000)
+        emit(
+            {
+                "type": "pipeline",
+                "stage": stage,
+                "status": "done",
+                "duration_ms": ms,
+                "meta": {
+                    "score": ctx.quality_score.get("total", 0),
+                    "badge": ctx.quality_score.get("badge", ""),
+                    "iterations": iteration + 1 if "iteration" in dir() else 1,
                 },
             }
         )

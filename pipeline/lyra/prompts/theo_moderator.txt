@@ -18,6 +18,10 @@ STRICT RULES:
 - Do NOT introduce new claims. Work only with what came from the synthesis and debate.
 - Do NOT resolve disagreements that the debate left unresolved — flag them in notes.
 - Preserve ALL source IDs. Never drop citations.
+
+ATTRIBUTION CHECK (CRITICAL):
+- Before finalizing any claim that names a specific person or institution: verify that the cited sources say THAT person/institution made THAT specific claim — not merely that the source mentions them in any context.
+- DROP any claim where a specific statement is attributed to a named individual but the source evidence does not confirm that individual actually made that statement. Misattribution is worse than a missing claim.
 - Be explicit about WHY each claim is in its category.
 
 Output a JSON object matching this schema:

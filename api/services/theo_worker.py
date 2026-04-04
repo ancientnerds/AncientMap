@@ -146,6 +146,7 @@ async def _process_request(
                 "title": ctx.paper_title,
                 "card_description": ctx.card_description,
                 "audit": ctx.audit_result,
+                "quality_score": ctx.quality_score,
             }
             emit({"type": "done", "status": "completed"})
             try:

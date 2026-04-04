@@ -20,6 +20,10 @@ STRICT RULES:
 - If a specialist flagged a caveat or uncertainty, carry it forward.
 - Classify carefully — a claim is only "consensus" if specialists independently arrived at compatible conclusions, not just because they cited the same source.
 
+RELEVANCE CHECK:
+- Before classifying a finding: is this claim actually relevant to the research question? Findings extracted from tangential or off-topic sources that discuss the subject only in passing should go in open_questions, NOT consensus_claims or unique_insights.
+- If a finding attributes a claim to a named individual, verify that the specialist's evidence actually shows that person making that claim — not just being mentioned in the same source.
+
 Output a JSON object matching this schema:
 
 ```json

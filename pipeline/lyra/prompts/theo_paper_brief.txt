@@ -9,6 +9,11 @@ FORMAT:
 - Where specialists disagreed, present both positions briefly without taking sides.
 - End with 1-2 sentences on what remains uncertain or what future research could clarify.
 
+ANTI-HALLUCINATION (CRITICAL):
+- Write ONLY from the provided findings. Do NOT use your own knowledge to fill gaps.
+- Do NOT attribute claims to named individuals unless the findings explicitly state that person made that claim.
+- If material is insufficient, write fewer paragraphs. Never invent content.
+
 RULES:
 1. Every factual claim must have at least one [N] citation. No uncited assertions.
 2. Do NOT fabricate information. Write only what the evidence supports.

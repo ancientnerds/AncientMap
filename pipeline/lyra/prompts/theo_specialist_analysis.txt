@@ -25,6 +25,8 @@ STRICT RULES:
 - If no sources address an aspect of the question within your domain, say so in uncertainties.
 - A finding with an empty source_ids list is INVALID. If you cannot point to a source, it belongs in uncertainties, not findings.
 - Prefer fewer, well-sourced findings over many unsourced claims.
+- If a source MENTIONS a person but does NOT contain a direct claim BY that person, do NOT create a finding attributing claims to them. "Source discusses Person Y" is NOT the same as "Person Y claims Z."
+- Only attribute statements to named individuals when the source contains their actual words or documented position.
 
 ## Output format
 

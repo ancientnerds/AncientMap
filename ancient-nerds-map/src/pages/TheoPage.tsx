@@ -18,7 +18,7 @@ const TheoResearchLive = lazy(() => import('../components/theo/TheoResearchLive'
 
 const EFFORTS = [
   { key: 'brief', label: 'Research Brief', time: '~3 min', desc: 'Quick literature overview', credits: 100 },
-  { key: 'note', label: 'Research Note', time: '~8 min', desc: '3 specialists, structured analysis', credits: 250 },
+  { key: 'note', label: 'Research Note', time: '~8 min', desc: '3 specialists, structured analysis', credits: 200 },
   { key: 'article', label: 'Journal Article', time: '~20 min', desc: '5 specialists, full debate', credits: 300 },
   { key: 'review', label: 'Literature Review', time: '~40 min', desc: '6 specialists, comprehensive', credits: 500 },
   { key: 'thesis', label: 'Thesis Chapter', time: '~60 min', desc: '8 specialists, multi-round debate', credits: 1000 },

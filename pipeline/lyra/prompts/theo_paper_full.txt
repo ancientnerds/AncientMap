@@ -34,6 +34,13 @@ IMPORTANT: When referencing findings from earlier sections, re-cite the [N] sour
 ## Methodology
 One paragraph: "This research was conducted using a multi-specialist agentic approach with web-verified sources. Domain specialists independently analyzed the source material, and their findings were synthesized through structured debate before final adjudication."
 
+ANTI-HALLUCINATION (CRITICAL):
+- Write ONLY from the provided moderated findings. Do NOT use your own knowledge to fill gaps.
+- Do NOT introduce ANY fact, name, claim, or connection not explicitly present in the provided input.
+- Do NOT attribute claims to named individuals unless the findings explicitly state that person made that specific claim. Misattributing claims to real people is the worst possible error.
+- If the provided findings are insufficient for a full section, write a SHORTER section. Never invent content to fill space.
+- If you are unsure whether a claim is in the findings, leave it out.
+
 RULES:
 1. Every factual claim MUST have at least one [N] citation. No exceptions.
 2. Use the reference numbers EXACTLY as provided in the reference map. Do NOT renumber.
