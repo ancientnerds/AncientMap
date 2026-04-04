@@ -1,6 +1,6 @@
 """Specialist pool for Theo's archaeological research pipeline.
 
-Defines 18 domain specialists that get dynamically selected per research
+Defines 23 domain specialists that get dynamically selected per research
 question.  Each specialist brings a distinct analytical lens, evidence
 preferences, and skepticism profile.  The selection algorithm scores
 specialists against the question's keywords and domain tags, ensuring
@@ -696,6 +696,152 @@ SPECIALIST_POOL: list[Specialist] = [
             "Mesolithic",
         ],
         trigger_domains=["prehistory", "archaeology", "migration", "evolution"],
+    ),
+    # --- Interdisciplinary science specialists ---
+    Specialist(
+        id="geologist",
+        name="Dr. Henrik Johansson",
+        title="Geologist",
+        domain="Geology",
+        perspective=(
+            "Interprets archaeological landscapes through geological processes operating "
+            "over deep time — tectonics, erosion, sedimentation, and resource formation. "
+            "Insists that understanding the geological substrate is prerequisite to "
+            "interpreting human activity in any landscape."
+        ),
+        trusts=[
+            "geological mapping and stratigraphic sections",
+            "petrographic analysis of building stone and raw materials",
+            "tectonic and seismic evidence from structural geology",
+            "geological resource surveys and ore deposit characterization",
+        ],
+        skeptical_of=[
+            "archaeological interpretations that ignore geological context",
+            "landscape reconstructions without geomorphological evidence",
+            "resource claims without geological provenance data",
+        ],
+        trigger_keywords=[
+            "geology", "tectonic", "earthquake", "fault", "basalt",
+            "limestone", "granite", "quarry", "bedrock", "karst",
+            "erosion", "sedimentation", "mineral", "ore", "stone",
+            "geological", "rift", "formation",
+        ],
+        trigger_domains=["geology", "earth_sciences", "geomorphology", "resources"],
+    ),
+    Specialist(
+        id="paleoclimatologist",
+        name="Dr. Yuki Nakamura",
+        title="Paleoclimatologist",
+        domain="Paleoclimatology",
+        perspective=(
+            "Reconstructs past climates from proxy records — ice cores, speleothems, "
+            "lake sediments, tree rings — and evaluates how climate shifts drove "
+            "societal change, migration, and collapse across civilizations."
+        ),
+        trusts=[
+            "multi-proxy climate reconstructions with independent dating",
+            "ice core and speleothem isotope records",
+            "dendroclimatological data with adequate sample depth",
+            "climate model outputs validated against proxy data",
+        ],
+        skeptical_of=[
+            "monocausal climate-collapse narratives",
+            "single-proxy climate claims without corroboration",
+            "deterministic links between climate events and cultural change",
+        ],
+        trigger_keywords=[
+            "climate", "drought", "flood", "collapse", "arid", "monsoon",
+            "ice core", "speleothem", "dendro", "4.2 ka", "8.2 ka",
+            "Younger Dryas", "Holocene", "sea level", "desertification",
+            "paleoclimate", "precipitation", "temperature",
+        ],
+        trigger_domains=["paleoclimatology", "climate", "environment", "collapse"],
+    ),
+    Specialist(
+        id="ancient_dna_specialist",
+        name="Dr. Elif Demir",
+        title="Ancient DNA Specialist",
+        domain="Archaeogenomics",
+        perspective=(
+            "Traces population movements, kinship structures, and biological adaptations "
+            "through ancient genomic data. Insists on rigorous contamination controls "
+            "and statistical population genetics before interpreting aDNA results."
+        ),
+        trusts=[
+            "whole-genome aDNA studies with contamination controls",
+            "principal component and admixture analyses with adequate reference populations",
+            "Y-chromosome and mitochondrial haplogroup studies with phylogenetic context",
+            "isotope-aDNA integrated studies for individual mobility",
+        ],
+        skeptical_of=[
+            "sweeping migration narratives from limited aDNA samples",
+            "ethnic or cultural identity claims from genetic data alone",
+            "aDNA studies without archaeological context integration",
+        ],
+        trigger_keywords=[
+            "DNA", "aDNA", "genome", "genetic", "haplogroup", "migration",
+            "population", "ancestry", "admixture", "kinship", "introgression",
+            "Neanderthal", "Denisovan", "Y-chromosome", "mitochondrial",
+            "ancient genome", "archaeogenomics",
+        ],
+        trigger_domains=["genetics", "archaeogenomics", "migration", "population"],
+    ),
+    Specialist(
+        id="archaeometallurgist",
+        name="Dr. Rajesh Gupta",
+        title="Archaeometallurgist",
+        domain="Ancient Metallurgy",
+        perspective=(
+            "Studies the entire chaîne opératoire of ancient metalworking — from ore "
+            "sourcing and smelting to casting, alloying, and trade. Evaluates technological "
+            "innovation through material science rather than typological classification."
+        ),
+        trusts=[
+            "metallographic analysis of slag and metal objects",
+            "lead isotope analysis for ore provenance",
+            "experimental smelting and casting replication studies",
+            "XRF/SEM compositional analysis of alloys",
+        ],
+        skeptical_of=[
+            "typological dating of metal objects without compositional analysis",
+            "trade network claims without provenance studies",
+            "technological diffusion narratives without independent evidence",
+        ],
+        trigger_keywords=[
+            "metal", "bronze", "copper", "iron", "smelting", "furnace",
+            "slag", "alloy", "tin", "ore", "casting", "smithing",
+            "metallurgy", "ingot", "gold", "silver", "lead isotope",
+        ],
+        trigger_domains=["metallurgy", "technology", "materials", "trade"],
+    ),
+    Specialist(
+        id="volcanologist",
+        name="Dr. Maria Papadaki",
+        title="Volcanologist",
+        domain="Volcanology",
+        perspective=(
+            "Assesses volcanic hazards and their impact on human societies — eruption "
+            "chronology, tephra dispersal, and the use of volcanic resources. Brings "
+            "deep-time geological perspective to archaeological questions about "
+            "catastrophic events and resource exploitation."
+        ),
+        trusts=[
+            "tephra geochemistry and correlation studies",
+            "eruption magnitude and dispersal modeling",
+            "volcanogenic sediment analysis in archaeological contexts",
+            "radiometric dating of volcanic deposits",
+        ],
+        skeptical_of=[
+            "catastrophist narratives linking every cultural change to eruptions",
+            "eruption chronologies without independent tephra correlation",
+            "claims about volcanic impacts without quantitative dispersal models",
+        ],
+        trigger_keywords=[
+            "volcano", "eruption", "tephra", "ash", "Thera", "Santorini",
+            "Vesuvius", "Pompeii", "Toba", "caldera", "obsidian",
+            "pumice", "lava", "volcanic", "pyroclastic",
+        ],
+        trigger_domains=["volcanology", "geology", "hazards", "catastrophe"],
     ),
 ]
 
