@@ -460,7 +460,7 @@ class CoreAdapter(SourceAdapter):
     async def search(self, query: str, max_results: int = 10) -> list[RawSource]:
         def _do() -> list[RawSource]:
             resp = self._client.get(
-                "/search/works",
+                "/search/works/",
                 params={"q": query, "limit": str(max_results)},
             )
             resp.raise_for_status()
