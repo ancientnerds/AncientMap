@@ -20,8 +20,13 @@ import re
 import urllib.parse
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import httpx
+from dotenv import load_dotenv
+
+# Load .env so os.getenv() picks up THEO_* keys
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 from pipeline.lyra.config import LyraSettings
 from pipeline.lyra.minimax_shared import (
@@ -65,9 +70,10 @@ BLOCKED_DOMAINS = frozenset(
 # Source group -> adapter name mapping
 # ---------------------------------------------------------------------------
 SOURCE_GROUPS: dict[str, list[str]] = {
-    "minimal": ["semantic_scholar", "minimax"],
-    "standard": ["semantic_scholar", "openalex", "crossref", "wikipedia", "minimax"],
+    "minimal": ["ancientnerds_db", "semantic_scholar", "minimax"],
+    "standard": ["ancientnerds_db", "semantic_scholar", "openalex", "crossref", "wikipedia", "minimax"],
     "full": [
+        "ancientnerds_db",
         "semantic_scholar",
         "openalex",
         "crossref",
@@ -79,6 +85,7 @@ SOURCE_GROUPS: dict[str, list[str]] = {
         "minimax",
     ],
     "exhaustive": [
+        "ancientnerds_db",
         "semantic_scholar",
         "openalex",
         "crossref",
@@ -997,6 +1004,90 @@ class NewsDataAdapter(SourceAdapter):
 
 
 # ---------------------------------------------------------------------------
+# Internal database adapter — search our own unified_sites
+# ---------------------------------------------------------------------------
+
+
+class UnifiedSitesAdapter(SourceAdapter):
+    """Search the AncientNerds unified_sites database for matching sites.
+
+    Returns our own curated site data as tier-1 sources — these are
+    verified archaeological sites with coordinates, periods, and descriptions.
+    """
+
+    @property
+    def name(self) -> str:
+        return "ancientnerds_db"
+
+    @property
+    def default_tier(self) -> int:
+        return 1  # Our own curated data
+
+    async def search(self, query: str, max_results: int = 10) -> list[RawSource]:
+        def _do() -> list[RawSource]:
+            from sqlalchemy import text as sql_text
+
+            from pipeline.database import get_session
+
+            # Use PostgreSQL full-text search against site names and descriptions
+            with get_session() as session:
+                rows = session.execute(
+                    sql_text("""
+                        SELECT name, description, country, period_name,
+                               period_start, period_end, site_type, source_url,
+                               lat, lon
+                        FROM unified_sites
+                        WHERE to_tsvector('english', coalesce(name, '') || ' ' || coalesce(description, ''))
+                              @@ plainto_tsquery('english', :q)
+                        ORDER BY ts_rank(
+                            to_tsvector('english', coalesce(name, '') || ' ' || coalesce(description, '')),
+                            plainto_tsquery('english', :q)
+                        ) DESC
+                        LIMIT :lim
+                    """),
+                    {"q": query, "lim": max_results},
+                ).fetchall()
+
+            results: list[RawSource] = []
+            for r in rows:
+                period = ""
+                if r.period_name:
+                    period = r.period_name
+                elif r.period_start:
+                    period = f"{r.period_start} — {r.period_end or 'present'}"
+
+                snippet_parts = []
+                if r.description:
+                    snippet_parts.append(r.description[:300])
+                if period:
+                    snippet_parts.append(f"Period: {period}")
+                if r.country:
+                    snippet_parts.append(f"Country: {r.country}")
+                if r.site_type:
+                    snippet_parts.append(f"Type: {r.site_type}")
+                snippet = ". ".join(snippet_parts) if snippet_parts else r.name
+
+                url = r.source_url or f"https://ancientnerds.com/?site={r.name.replace(' ', '+')}"
+
+                results.append(
+                    RawSource(
+                        url=url,
+                        title=f"{r.name} (AncientNerds Database)",
+                        snippet=snippet,
+                        source_api=self.name,
+                        default_tier=self.default_tier,
+                    )
+                )
+            return results
+
+        try:
+            return await asyncio.to_thread(_do)
+        except Exception as exc:
+            logger.warning("UnifiedSites DB search failed for '%s': %s", query, exc)
+            return []
+
+
+# ---------------------------------------------------------------------------
 # Unpaywall enricher (post-search, not a search adapter)
 # ---------------------------------------------------------------------------
 
@@ -1059,6 +1150,7 @@ class MultiSourceSearch:
     def _init_adapters(self) -> None:
         """Initialize all available adapters based on which API keys are set."""
         # Always available (no key required, or key is optional)
+        self._adapters["ancientnerds_db"] = UnifiedSitesAdapter()
         self._adapters["semantic_scholar"] = SemanticScholarAdapter()
         self._adapters["openalex"] = OpenAlexAdapter()
         self._adapters["crossref"] = CrossrefAdapter()
