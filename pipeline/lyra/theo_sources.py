@@ -17,6 +17,7 @@ import asyncio
 import logging
 import os
 import re
+import time
 import urllib.parse
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -41,6 +42,34 @@ logger = logging.getLogger(__name__)
 # Timeout for all academic API calls (seconds)
 # ---------------------------------------------------------------------------
 _API_TIMEOUT = 10.0
+
+
+def _retry_request(
+    client: httpx.Client,
+    method: str,
+    url: str,
+    max_retries: int = 3,
+    **kwargs,
+) -> httpx.Response:
+    """Execute an HTTP request with exponential backoff on 429/5xx."""
+    for attempt in range(max_retries + 1):
+        resp = client.request(method, url, **kwargs)
+        if resp.status_code == 429 or resp.status_code >= 500:
+            if attempt < max_retries:
+                wait = 2**attempt
+                logger.warning(
+                    "Retrying %s %s (status %d, attempt %d, wait %ds)",
+                    method,
+                    url,
+                    resp.status_code,
+                    attempt + 1,
+                    wait,
+                )
+                time.sleep(wait)
+                continue
+        return resp
+    return resp  # unreachable but satisfies type checker
+
 
 # ---------------------------------------------------------------------------
 # Domain blocklist — filter out social media and low-quality sources
@@ -71,7 +100,15 @@ BLOCKED_DOMAINS = frozenset(
 # ---------------------------------------------------------------------------
 SOURCE_GROUPS: dict[str, list[str]] = {
     "minimal": ["ancientnerds_db", "semantic_scholar", "minimax"],
-    "standard": ["ancientnerds_db", "ancientnerds_research", "semantic_scholar", "openalex", "crossref", "wikipedia", "minimax"],
+    "standard": [
+        "ancientnerds_db",
+        "ancientnerds_research",
+        "semantic_scholar",
+        "openalex",
+        "crossref",
+        "wikipedia",
+        "minimax",
+    ],
     "full": [
         "ancientnerds_db",
         "ancientnerds_research",
@@ -235,24 +272,30 @@ class SemanticScholarAdapter(SourceAdapter):
         def _do() -> list[RawSource]:
             self._wait_for_rate_limit()
             resp = self._client.get(
-                "/paper/search",
+                "/paper/search/bulk",
                 params={
                     "query": query,
-                    "fields": "title,abstract,year,citationCount,externalIds,openAccessPdf,venue,authors",
+                    "fields": "title,abstract,publicationDate,publicationTypes,citationCount,influentialCitationCount,referenceCount,externalIds,openAccessPdf,venue,authors,fieldsOfStudy,tldr",
+                    "sort": "citationCount:desc",
+                    "publicationTypes": "JournalArticle,Review,Conference",
+                    "minCitationCount": "1",
+                    "fieldsOfStudy": "History,Art,Philosophy,Sociology,Geography,Environmental Science",
                     "limit": max_results,
                 },
             )
             if resp.status_code == 429:
                 logger.warning("Semantic Scholar rate limited — backing off 5s")
-                import time
-
                 time.sleep(5)
                 self._wait_for_rate_limit()
                 resp = self._client.get(
-                    "/paper/search",
+                    "/paper/search/bulk",
                     params={
                         "query": query,
-                        "fields": "title,abstract,year,citationCount,externalIds,openAccessPdf,venue,authors",
+                        "fields": "title,abstract,publicationDate,publicationTypes,citationCount,influentialCitationCount,referenceCount,externalIds,openAccessPdf,venue,authors,fieldsOfStudy,tldr",
+                        "sort": "citationCount:desc",
+                        "publicationTypes": "JournalArticle,Review,Conference",
+                        "minCitationCount": "1",
+                        "fieldsOfStudy": "History,Art,Philosophy,Sociology,Geography,Environmental Science",
                         "limit": max_results,
                     },
                 )
@@ -279,12 +322,15 @@ class SemanticScholarAdapter(SourceAdapter):
 
                 authors = [a.get("name", "") for a in (paper.get("authors") or []) if a.get("name")]
 
+                # Use full publicationDate (YYYY-MM-DD) if available, else empty
+                date = paper.get("publicationDate") or ""
+
                 results.append(
                     RawSource(
                         url=url,
                         title=paper.get("title") or "",
                         snippet=paper.get("abstract") or "",
-                        date=str(paper.get("year") or ""),
+                        date=date,
                         doi=doi,
                         authors=authors,
                         venue=paper.get("venue") or "",
@@ -337,7 +383,7 @@ class OpenAlexAdapter(SourceAdapter):
         for attempt in range(4):  # initial + 3 retries
             resp = self._client.get("/works", params=params)
             if resp.status_code in (429, 500, 503):
-                wait = 2 ** attempt  # 1, 2, 4 seconds
+                wait = 2**attempt  # 1, 2, 4 seconds
                 logger.info("OpenAlex %d, retrying in %ds...", resp.status_code, wait)
                 _time.sleep(wait)
                 continue
@@ -368,7 +414,13 @@ class OpenAlexAdapter(SourceAdapter):
             results: list[RawSource] = []
             for work in data.get("results", []):
                 doi = (work.get("doi") or "").removeprefix("https://doi.org/")
-                url = work.get("doi") or work.get("id") or ""
+
+                # Prefer open access URL if available
+                oa = work.get("open_access") or {}
+                if oa.get("is_oa") and oa.get("oa_url"):
+                    url = oa["oa_url"]
+                else:
+                    url = work.get("doi") or work.get("id") or ""
                 if not url:
                     continue
 
@@ -436,12 +488,17 @@ class CrossrefAdapter(SourceAdapter):
 
     async def search(self, query: str, max_results: int = 10) -> list[RawSource]:
         def _do() -> list[RawSource]:
-            resp = self._client.get(
+            resp = _retry_request(
+                self._client,
+                "GET",
                 "/works",
                 params={
                     "query": query,
                     "rows": str(max_results),
                     "select": "DOI,title,author,container-title,published,abstract,is-referenced-by-count",
+                    "sort": "is-referenced-by-count",
+                    "order": "desc",
+                    "filter": "has-abstract:true",
                 },
             )
             resp.raise_for_status()
@@ -524,9 +581,15 @@ class CoreAdapter(SourceAdapter):
 
     async def search(self, query: str, max_results: int = 10) -> list[RawSource]:
         def _do() -> list[RawSource]:
-            resp = self._client.get(
+            resp = _retry_request(
+                self._client,
+                "GET",
                 "/search/works/",
-                params={"q": query, "limit": str(max_results)},
+                params={
+                    "q": query,
+                    "limit": str(max_results),
+                    "sort": "citationCount:desc",
+                },
             )
             resp.raise_for_status()
             data = resp.json()
@@ -542,13 +605,26 @@ class CoreAdapter(SourceAdapter):
 
                 authors = [a.get("name", "") for a in (item.get("authors") or []) if a.get("name")]
 
+                # Extract date from yearPublished
+                year = item.get("yearPublished")
+                date = str(year) if year else ""
+
+                # Extract venue from journals
+                venue = ""
+                journals = item.get("journals") or []
+                if journals and isinstance(journals[0], dict):
+                    venue = journals[0].get("title") or ""
+
                 results.append(
                     RawSource(
                         url=url,
                         title=item.get("title") or "",
                         snippet=item.get("abstract") or "",
+                        date=date,
                         doi=item.get("doi") or "",
                         authors=authors,
+                        venue=venue,
+                        citation_count=item.get("citationCount") or 0,
                         source_api=self.name,
                         default_tier=self.default_tier,
                     )
@@ -583,13 +659,16 @@ class EuropeanaAdapter(SourceAdapter):
 
     async def search(self, query: str, max_results: int = 10) -> list[RawSource]:
         def _do() -> list[RawSource]:
-            resp = self._client.get(
+            resp = _retry_request(
+                self._client,
+                "GET",
                 "/search.json",
                 params={
                     "query": query,
                     "rows": str(max_results),
                     "wskey": self._api_key,
-                    "profile": "standard",
+                    "profile": "rich",
+                    "qf": "TYPE:TEXT",
                 },
             )
             resp.raise_for_status()
@@ -695,7 +774,9 @@ class SmithsonianAdapter(SourceAdapter):
 
     async def search(self, query: str, max_results: int = 10) -> list[RawSource]:
         def _do() -> list[RawSource]:
-            resp = self._client.get(
+            resp = _retry_request(
+                self._client,
+                "GET",
                 "/search",
                 params={
                     "q": query,
@@ -733,11 +814,37 @@ class SmithsonianAdapter(SourceAdapter):
                         snippet_parts.append(note)
                 snippet = " ".join(snippet_parts)[:500]
 
+                # Extract date from freetext.date
+                date = ""
+                date_entries = freetext.get("date") or []
+                if isinstance(date_entries, list) and date_entries:
+                    first_date = date_entries[0]
+                    if isinstance(first_date, dict):
+                        date = first_date.get("content", "")
+                    elif isinstance(first_date, str):
+                        date = first_date
+
+                # Extract author from freetext.name
+                authors: list[str] = []
+                name_entries = freetext.get("name") or []
+                if isinstance(name_entries, list) and name_entries:
+                    first_name = name_entries[0]
+                    if isinstance(first_name, dict):
+                        author_name = first_name.get("content", "")
+                    elif isinstance(first_name, str):
+                        author_name = first_name
+                    else:
+                        author_name = ""
+                    if author_name:
+                        authors = [author_name]
+
                 results.append(
                     RawSource(
                         url=url,
                         title=title,
                         snippet=snippet,
+                        date=date,
+                        authors=authors,
                         source_api=self.name,
                         default_tier=self.default_tier,
                     )
@@ -781,6 +888,9 @@ class WikipediaAdapter(SourceAdapter):
                     "list": "search",
                     "srsearch": query,
                     "srlimit": str(max_results),
+                    "srnamespace": "0",
+                    "srprop": "snippet|timestamp",
+                    "srsort": "relevance",
                     "format": "json",
                 },
             )
@@ -793,11 +903,15 @@ class WikipediaAdapter(SourceAdapter):
                 url = f"https://en.wikipedia.org/wiki/{title.replace(' ', '_')}"
                 snippet = _strip_html(item.get("snippet") or "")
 
+                # Extract timestamp (ISO 8601 format from Wikipedia)
+                date = item.get("timestamp") or ""
+
                 results.append(
                     RawSource(
                         url=url,
                         title=title,
                         snippet=snippet,
+                        date=date,
                         source_api=self.name,
                         default_tier=self.default_tier,
                     )
@@ -831,13 +945,16 @@ class InternetArchiveAdapter(SourceAdapter):
 
     async def search(self, query: str, max_results: int = 10) -> list[RawSource]:
         def _do() -> list[RawSource]:
-            resp = self._client.get(
+            resp = _retry_request(
+                self._client,
+                "GET",
                 "/advancedsearch.php",
                 params={
                     "q": query,
                     "output": "json",
                     "rows": str(max_results),
-                    "fl[]": "identifier,title,description,date,creator",
+                    "fl[]": "identifier,title,description,date,creator,subject",
+                    "sort[]": "downloads desc",
                 },
             )
             resp.raise_for_status()
@@ -854,6 +971,15 @@ class InternetArchiveAdapter(SourceAdapter):
                 snippet = doc.get("description") or ""
                 if isinstance(snippet, list):
                     snippet = " ".join(snippet)
+
+                # Fall back to subject if description is empty
+                if not snippet:
+                    subject = doc.get("subject") or ""
+                    if isinstance(subject, list):
+                        snippet = "; ".join(subject)
+                    elif isinstance(subject, str):
+                        snippet = subject
+
                 date = doc.get("date") or ""
 
                 creator = doc.get("creator") or []
