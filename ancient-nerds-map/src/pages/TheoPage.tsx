@@ -31,6 +31,42 @@ const SPECIALIST_COUNTS: Record<string, number> = {
   brief: 1, note: 3, article: 5, review: 6, thesis: 8,
 }
 
+const SPECIALIST_ICONS: Record<string, string> = {
+  field_archaeologist: '\u26cf\ufe0f',     // pick
+  ceramic_analyst: '\ud83c\udffa',         // amphora
+  lithics_specialist: '\ud83e\udea8',      // rock
+  bioarchaeologist: '\ud83e\uddb4',        // bone
+  geoarchaeologist: '\ud83c\udf0d',        // globe
+  dating_specialist: '\u231b',             // hourglass
+  epigrapher: '\ud83d\udcdc',             // scroll
+  ancient_historian: '\ud83d\udcda',       // books
+  anthropologist: '\ud83e\uddd1\u200d\ud83c\udfeb', // teacher
+  underwater_archaeologist: '\ud83c\udf0a', // wave
+  remote_sensing_expert: '\ud83d\udef0\ufe0f', // satellite
+  conservation_specialist: '\ud83d\udee1\ufe0f', // shield
+  archaeobotanist: '\ud83c\udf3f',         // herb
+  numismatist: '\ud83e\ude99',             // coin
+  archaeoastronomer: '\ud83d\udd2d',       // telescope
+  zooarchaeologist: '\ud83e\uddb7',        // mammoth
+  classical_archaeologist: '\ud83c\udfdb\ufe0f', // classical building
+  prehistorian: '\ud83e\uddac',            // bison
+  geologist: '\u26f0\ufe0f',               // mountain
+  paleoclimatologist: '\ud83c\udf21\ufe0f', // thermometer
+  ancient_dna_specialist: '\ud83e\uddec',  // DNA
+  archaeometallurgist: '\u2699\ufe0f',     // gear
+  volcanologist: '\ud83c\udf0b',           // volcano
+  physicist: '\u269b\ufe0f',               // atom
+  archaeochemist: '\ud83e\uddea',          // test tube
+  paleoanthropologist: '\ud83e\uddd1\u200d\ud83d\udd2c', // scientist
+  structural_engineer: '\ud83c\udfd7\ufe0f', // construction
+  historical_linguist: '\ud83d\udde3\ufe0f', // speaking
+  architect: '\ud83d\udcd0',               // triangular ruler
+  alternative_history_researcher: '\ud83d\udd0d', // magnifier
+  comparative_mythologist: '\ud83d\udc09', // dragon
+  esoteric_traditions_scholar: '\u2721\ufe0f', // star of david
+  anomalous_phenomena_analyst: '\ud83d\udef8', // UFO
+}
+
 const ADAPTER_GROUP_ORDER = ['internal', 'academic', 'heritage', 'web'] as const
 const ADAPTER_GROUP_LABELS: Record<string, string> = {
   internal: 'Internal',
@@ -166,9 +202,8 @@ export default function TheoPage() {
   const [duplicateMatches, setDuplicateMatches] = useState<DuplicateMatch[] | null>(null)
 
   // Stage 3: specialists
-  const [specialistMode, setSpecialistMode] = useState<'auto' | 'manual'>('auto')
+  // specialistMode removed — all specialists shown, user deselects to exclude
   const [specialistData, setSpecialistData] = useState<SpecialistCategories | null>(null)
-  const [selectedSpecialists, setSelectedSpecialists] = useState<Set<string>>(new Set())
   const [excludedSpecialists, setExcludedSpecialists] = useState<Set<string>>(new Set())
   const [loadingSpecialists, setLoadingSpecialists] = useState(false)
 
@@ -318,11 +353,6 @@ export default function TheoPage() {
         const data: SpecialistCategories = await resp.json()
         setSpecialistData(data)
         // Default: all selected
-        const allIds = new Set<string>()
-        for (const specs of Object.values(data)) {
-          for (const s of specs) allIds.add(s.id)
-        }
-        setSelectedSpecialists(allIds)
       }
     } catch { /* ignore */ }
     setLoadingSpecialists(false)
@@ -418,15 +448,9 @@ export default function TheoPage() {
         ...(videoIds.length > 0 ? { video_ids: videoIds } : {}),
         ...(disabledAdapters.size > 0 ? { disabled_adapters: Array.from(disabledAdapters) } : {}),
       }
-      if (specialistMode === 'manual') {
-        // All specialists in the pool
-        const allIds = specialistData
-          ? Object.values(specialistData).flat().map(s => s.id)
-          : []
-        const forceInclude = allIds.filter(id => selectedSpecialists.has(id) && !excludedSpecialists.has(id))
-        const forceExclude = allIds.filter(id => excludedSpecialists.has(id))
-        if (forceInclude.length > 0) body.force_include = forceInclude
-        if (forceExclude.length > 0) body.force_exclude = forceExclude
+      // Send excluded specialists if any were deselected
+      if (excludedSpecialists.size > 0) {
+        body.force_exclude = Array.from(excludedSpecialists)
       }
 
       const resp = await fetch(`${config.api.baseUrl}/theo/research`, {
@@ -451,12 +475,12 @@ export default function TheoPage() {
       sessionStorage.removeItem('theo_disabled_adapters')
       setRelevanceResult(null)
       setDuplicateMatches(null)
-      setSpecialistMode('auto')
+      setExcludedSpecialists(new Set())
       fetchList()
     } finally {
       setSubmitting(false)
     }
-  }, [question, effort, videoIds, disabledAdapters, submitting, specialistMode, selectedSpecialists, excludedSpecialists, specialistData, fetchList])
+  }, [question, effort, videoIds, disabledAdapters, submitting, excludedSpecialists, fetchList])
 
   // --- Result actions ---
   const handleCancel = useCallback(async (id: string) => {
@@ -978,62 +1002,42 @@ export default function TheoPage() {
             <div className="theo-form">
               <div className="theo-stage-header">
                 <button className="theo-back-btn" onClick={() => setWizardStep(2)}>Back</button>
-                <span className="theo-stage-title">Specialist Panel</span>
+                <span className="theo-stage-title">AI Specialist Panel</span>
               </div>
 
-              <div className="theo-specialist-toggle">
-                <button
-                  className={`theo-toggle-btn ${specialistMode === 'auto' ? 'active' : ''}`}
-                  onClick={() => setSpecialistMode('auto')}
-                >
-                  Auto-select
-                </button>
-                <button
-                  className={`theo-toggle-btn ${specialistMode === 'manual' ? 'active' : ''}`}
-                  onClick={() => setSpecialistMode('manual')}
-                >
-                  Choose manually
-                </button>
+              <div className="theo-spec-notice">
+                These are AI-generated specialist perspectives, not real humans. Theo auto-selects the most relevant{' '}
+                <strong>{SPECIALIST_COUNTS[effort] ?? '?'}</strong> based on your question.
+                Deselect any you want to exclude.
               </div>
 
-              {specialistMode === 'auto' && (
-                <div className="theo-auto-info">
-                  Specialists are chosen automatically based on your question's domain. The{' '}
-                  <strong>{selectedEffort?.label}</strong> tier uses{' '}
-                  <strong>{selectedEffort?.key === 'brief' ? '1' : selectedEffort?.key === 'note' ? '3' : selectedEffort?.key === 'article' ? '5' : selectedEffort?.key === 'review' ? '6' : '8'}</strong>{' '}
-                  specialists.
-                </div>
-              )}
-
-              {specialistMode === 'manual' && (
-                <div className="theo-specialist-pool">
-                  {loadingSpecialists && <div className="theo-auto-info">Loading specialists...</div>}
-                  {specialistData && (Object.entries(specialistData) as [string, SpecialistInfo[]][]).map(([category, specs]) => (
-                    <div key={category} className="theo-spec-category">
-                      <div className="theo-spec-category-label">
-                        {category} ({specs.length})
-                      </div>
-                      <div className="theo-spec-grid">
-                        {specs.map(s => {
-                          const excluded = excludedSpecialists.has(s.id)
-                          return (
-                            <button
-                              key={s.id}
-                              className={`theo-spec-card ${excluded ? 'excluded' : 'included'}`}
-                              onClick={() => toggleSpecialist(s.id)}
-                              data-tooltip={s.perspective}
-                            >
-                              <span className="theo-spec-name">{s.name}</span>
-                              <span className="theo-spec-title">{s.title}</span>
-                              <span className="theo-spec-domain">{s.domain}</span>
-                            </button>
+              <div className="theo-specialist-pool">
+                {loadingSpecialists && <div className="theo-auto-info">Loading specialists...</div>}
+                {specialistData && (Object.entries(specialistData) as [string, SpecialistInfo[]][]).map(([category, specs]) => (
+                  <div key={category} className="theo-spec-category">
+                    <div className="theo-spec-category-label">
+                      {category} ({specs.length})
+                    </div>
+                    <div className="theo-spec-grid">
+                      {specs.map(s => {
+                        const excluded = excludedSpecialists.has(s.id)
+                        return (
+                          <button
+                            key={s.id}
+                            className={`theo-spec-card ${excluded ? 'excluded' : 'included'}`}
+                            onClick={() => toggleSpecialist(s.id)}
+                            data-tooltip={s.perspective}
+                          >
+                            <span className="theo-spec-icon">{SPECIALIST_ICONS[s.id] || '🔬'}</span>
+                            <span className="theo-spec-name">{s.name}</span>
+                            <span className="theo-spec-title">{s.title}</span>
+                          </button>
                           )
                         })}
                       </div>
                     </div>
                   ))}
-                </div>
-              )}
+              </div>
 
               <div className="theo-submit-row">
                 <button className="theo-next-btn" onClick={() => setWizardStep(4)}>
@@ -1080,9 +1084,9 @@ export default function TheoPage() {
                 <div className="theo-launch-setting" onClick={() => setWizardStep(3)} role="button" tabIndex={0}>
                   <span className="theo-launch-setting-label">Specialists</span>
                   <span className="theo-launch-setting-value">
-                    {specialistMode === 'auto'
-                      ? 'Auto-selected'
-                      : `${(specialistData ? Object.values(specialistData).flat().length : 0) - excludedSpecialists.size} selected`}
+                    {excludedSpecialists.size === 0
+                      ? `Auto (${SPECIALIST_COUNTS[effort] ?? '?'} will be selected)`
+                      : `${excludedSpecialists.size} excluded`}
                   </span>
                   <span className="theo-launch-setting-edit">change</span>
                 </div>

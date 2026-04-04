@@ -554,6 +554,21 @@
   text-transform: uppercase;
 }
 
+.theo-spec-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.theo-spec-notice {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  padding: 10px 14px;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  margin-bottom: 14px;
+}
+
 /* — Review Summary — */
 .theo-review-summary {
   display: flex;
