@@ -102,7 +102,7 @@ interface PublicPaperFull {
   effort: string
   published_by: string
   published_at: string
-  result: { report: string; sites_found: number; tools_used: number; total_tokens: number; effort: string; duration_ms: number }
+  result: { report: string; title?: string; sites_found: number; tools_used: number; total_tokens: number; effort: string; duration_ms: number }
   sites_found: number
   tools_used: number
   duration_ms: number | null
@@ -121,8 +121,8 @@ export default function TheoPage() {
 
   // Wizard state — step 1.5 is represented as a separate boolean flag
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1)
-  const [question, setQuestion] = useState('')
-  const [effort, setEffort] = useState<string>('article')
+  const [question, setQuestion] = useState(() => sessionStorage.getItem('theo_question') || '')
+  const [effort, setEffort] = useState<string>(() => sessionStorage.getItem('theo_effort') || 'article')
 
   // Stage 1: relevance check
   const [checkingRelevance, setCheckingRelevance] = useState(false)
@@ -367,6 +367,8 @@ export default function TheoPage() {
       // Reset wizard
       setQuestion('')
       setWizardStep(1)
+      sessionStorage.removeItem('theo_question')
+      sessionStorage.removeItem('theo_effort')
       setRelevanceResult(null)
       setDuplicateMatches(null)
       setShowDuplicateStage(false)
@@ -450,6 +452,7 @@ export default function TheoPage() {
     setViewingId(null)
     setViewingData(null)
     setPublicReportData(null)
+    document.title = 'Theodore Furcade — Ancient Nerds Research Lab'
   }, [])
 
   // Public library: read a paper
@@ -459,6 +462,8 @@ export default function TheoPage() {
       if (!resp.ok) return
       const data: PublicPaperFull = await resp.json()
       setPublicReportData(data)
+      // Update page title for SEO/sharing
+      document.title = `${data.result?.title || data.question} — Ancient Nerds Research`
     } catch { /* ignore */ }
   }, [])
 
@@ -633,7 +638,7 @@ export default function TheoPage() {
                   className="theo-input"
                   placeholder="What should Theo investigate?"
                   value={question}
-                  onChange={e => { setQuestion(e.target.value); setRelevanceResult(null) }}
+                  onChange={e => { const v = e.target.value; setQuestion(v); setRelevanceResult(null); sessionStorage.setItem('theo_question', v) }}
                   rows={3}
                 />
               </div>
@@ -646,7 +651,7 @@ export default function TheoPage() {
                     <button
                       key={e.key}
                       className={`theo-scope-card${effort === e.key ? ' active' : ''}`}
-                      onClick={() => setEffort(e.key)}
+                      onClick={() => { setEffort(e.key); sessionStorage.setItem('theo_effort', e.key) }}
                     >
                       <span className="theo-scope-name">{e.label}</span>
                       <span className="theo-scope-time">{e.time}</span>
@@ -789,7 +794,7 @@ export default function TheoPage() {
                               key={s.id}
                               className={`theo-spec-card ${excluded ? 'excluded' : 'included'}`}
                               onClick={() => toggleSpecialist(s.id)}
-                              title={s.perspective}
+                              data-tooltip={s.perspective}
                             >
                               <span className="theo-spec-name">{s.name}</span>
                               <span className="theo-spec-title">{s.title}</span>

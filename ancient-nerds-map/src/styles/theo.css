@@ -486,6 +486,7 @@
 }
 
 .theo-spec-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -497,6 +498,25 @@
   transition: all 0.15s;
   text-align: left;
   font-family: var(--font-body);
+}
+
+.theo-spec-card[data-tooltip]:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  padding: 6px 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-primary);
+  background: var(--surface-deep);
+  border: 1px solid var(--theo-amber);
+  border-radius: 4px;
+  z-index: 10;
+  pointer-events: none;
+  white-space: normal;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 
 .theo-spec-card.included {
