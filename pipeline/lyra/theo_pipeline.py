@@ -122,7 +122,7 @@ class TheoPipeline:
         emit: Callable[[dict], None],
     ) -> PipelineContext:
         """Run the full pipeline.  *emit* sends SSE events to the client."""
-        tier = EFFORT_CONFIG.get(effort, EFFORT_CONFIG["paper"])
+        tier = EFFORT_CONFIG.get(effort, EFFORT_CONFIG["article"])
 
         ctx = PipelineContext(
             question=question,
@@ -460,19 +460,31 @@ class TheoPipeline:
         executor = ThreadPoolExecutor(max_workers=_SPECIALIST_WORKERS)
 
         def _run_specialist(spec: Specialist) -> tuple[str, str]:
-            """Synchronous specialist call, returns (specialist_id, raw_json)."""
+            """Synchronous specialist call, returns (specialist_id, raw_json).
+
+            Creates a fresh httpx.Client per call because httpx.Client is not
+            thread-safe and we run multiple specialists in parallel via
+            ThreadPoolExecutor.
+            """
             system_prompt, user_prompt = build_specialist_prompt(
                 spec,
                 ctx.question,
                 ctx.sources_context,
             )
-            raw = minimax_chat(
-                self._client,
-                self._model,
-                system_prompt,
-                user_prompt,
-                ctx.tier.max_tokens_per_call,
+            client = create_minimax_client(
+                self._settings.minimax_base_url,
+                self._settings.minimax_api_key,
             )
+            try:
+                raw = minimax_chat(
+                    client,
+                    self._model,
+                    system_prompt,
+                    user_prompt,
+                    ctx.tier.max_tokens_per_call,
+                )
+            finally:
+                client.close()
             return spec.id, raw
 
         # Launch all specialist calls in parallel
@@ -643,14 +655,11 @@ class TheoPipeline:
                     user_msg,
                     ctx.tier.max_tokens_per_call,
                 )
-                try:
-                    parsed = self._parse_json(raw)
-                    challenges = parsed.get("challenges", [])
-                    for c in challenges:
-                        c["challenger_id"] = spec.id
-                    round_challenges.extend(challenges)
-                except (json.JSONDecodeError, ValueError):
-                    logger.warning("Failed to parse challenges from %s", spec.id)
+                parsed = self._parse_json(raw)
+                challenges = parsed.get("challenges", [])
+                for c in challenges:
+                    c["challenger_id"] = spec.id
+                round_challenges.extend(challenges)
 
             all_challenges.extend(round_challenges)
 
@@ -689,14 +698,11 @@ class TheoPipeline:
                     user_msg,
                     ctx.tier.max_tokens_per_call,
                 )
-                try:
-                    parsed = self._parse_json(raw)
-                    defenses = parsed.get("defenses", [])
-                    for d in defenses:
-                        d["defender_id"] = spec.id
-                    all_defenses.extend(defenses)
-                except (json.JSONDecodeError, ValueError):
-                    logger.warning("Failed to parse defenses from %s", spec.id)
+                parsed = self._parse_json(raw)
+                defenses = parsed.get("defenses", [])
+                for d in defenses:
+                    d["defender_id"] = spec.id
+                all_defenses.extend(defenses)
 
         ctx.debate_result = {
             "rounds": ctx.tier.debate_rounds,
@@ -981,9 +987,9 @@ class TheoPipeline:
                 max_tokens,
             )
 
-            try:
-                critic_result = self._parse_json(critic_raw)
-            except (json.JSONDecodeError, ValueError):
+            critic_result = self._parse_json(critic_raw)
+
+            if not critic_result:
                 # If critic output is unparseable, accept generator output
                 logger.warning("Critic output unparseable in %s, accepting", stage_name)
                 break
@@ -1025,7 +1031,12 @@ class TheoPipeline:
         return path.read_text(encoding="utf-8")
 
     def _parse_json(self, text: str) -> dict | list:
-        """Parse JSON from M2.7 response, handling markdown fencing."""
+        """Parse JSON from M2.7 response, handling markdown fencing.
+
+        Returns an empty dict on parse failure instead of raising, since
+        callers use .get() on the result and the pipeline must not crash
+        on malformed LLM output.
+        """
         cleaned = text.strip()
 
         # Strip markdown code fences
@@ -1035,7 +1046,11 @@ class TheoPipeline:
             # Remove closing fence
             cleaned = cleaned.rsplit("```", 1)[0].strip()
 
-        return json.loads(cleaned)
+        try:
+            return json.loads(cleaned)
+        except (json.JSONDecodeError, ValueError):
+            logger.warning("Failed to parse JSON from M2.7 response: %s", cleaned[:200])
+            return {}
 
     def _format_specialist_analyses(self, ctx: PipelineContext) -> str:
         """Format all specialist analyses into a readable block for synthesis."""
