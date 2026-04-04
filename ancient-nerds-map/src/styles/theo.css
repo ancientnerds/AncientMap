@@ -1009,6 +1009,8 @@
   font-size: 16px;
   line-height: 1.7;
   color: var(--text-body);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 /* THEO IDENTITY — research paper headings stay amber (Theo's voice) */
@@ -1046,6 +1048,8 @@
 .theo-md-body a {
   color: var(--text-link);
   text-decoration: none;
+  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
 .theo-md-body a:hover {
