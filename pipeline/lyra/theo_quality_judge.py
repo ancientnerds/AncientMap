@@ -72,7 +72,7 @@ def score_paper(
     d2 = _score_d2(audit_result)
 
     # D3-D7: bundled LLM judge call
-    d3 = d4 = d5 = d6 = d7 = 5  # defaults if judge fails
+    d3 = d4 = d5 = d6 = d7 = 0  # defaults if judge fails — assume worst case
     judge_data = {}
 
     try:

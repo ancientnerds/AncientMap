@@ -15,7 +15,7 @@ DECISION FRAMEWORK:
 - If multiple specialists challenged the same claim from different angles: the claim needs revision or dropping even if individual challenges were partially rebutted.
 
 STRICT RULES:
-- Do NOT introduce new claims. Work only with what came from the synthesis and debate.
+- Do NOT introduce new claims. Work only with what came from the synthesis and debate. Do NOT use your own knowledge to add, modify, or embellish any claim.
 - Do NOT resolve disagreements that the debate left unresolved — flag them in notes.
 - Preserve ALL source IDs. Never drop citations.
 

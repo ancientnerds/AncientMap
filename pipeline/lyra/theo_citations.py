@@ -239,55 +239,22 @@ def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
     )
 
     _STRUCTURAL_STARTS = (
-        # Framing / methodology
+        # Genuinely structural / methodological text only
         "this paper",
         "this research",
         "this study",
         "this review",
         "this investigation",
-        "this analysis",
         "we used",
         "we employed",
         "our approach",
         "our method",
-        "the following",
-        "the above",
-        "the debate",
-        "the specialist",
-        "having reviewed",
-        "in this section",
         "in summary",
         "to summarize",
         "future research",
-        "further investigation",
-        "several ",
         # Bullet points
         "- **",
         "- ",
-        # Discussion ordinals
-        "first,",
-        "second,",
-        "third,",
-        "fourth,",
-        "fifth,",
-        "sixth,",
-        "finally,",
-        # Discussion / conclusion framing
-        "the evidence",
-        "the overall",
-        "the proposed",
-        "the significance",
-        "the question",
-        "the relationship",
-        "the precision",
-        "the terminology",
-        "the interpretation",
-        "the consistency",
-        "what remains",
-        "additionally,",
-        "contemporary ",
-        "such an",
-        "a particular",
     )
 
     # Split into sections by ## headings and track section for each paragraph

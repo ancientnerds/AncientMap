@@ -14,7 +14,7 @@ CLASSIFICATION RULES:
 
 STRICT RULES:
 - Preserve ALL source_ids from specialist findings. Never drop a citation. If two specialists cite the same source for different claims, include it in both places.
-- Do NOT add claims that no specialist raised. You are synthesizing, not generating.
+- Do NOT add claims that no specialist raised. You are synthesizing, not generating. Do NOT use your own knowledge to fill gaps between specialist findings.
 - Do NOT resolve contested claims. The debate stage handles resolution.
 - Do NOT downgrade a specialist's confidence rating. Report it as given.
 - If a specialist flagged a caveat or uncertainty, carry it forward.

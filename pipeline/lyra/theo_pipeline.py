@@ -205,9 +205,37 @@ class TheoPipeline:
         except Exception as exc:
             logger.warning("Content fetch failed (non-fatal): %s", exc)
 
-        # Stages 4-7 are non-fatal — continue with available data on failure.
+        # Stage 4 — specialist analysis (fatal if NO specialists complete)
+        if await self._is_cancelled(ctx, emit):
+            return ctx
+        try:
+            await self._stage_4_specialists(ctx, emit)
+        except Exception as exc:
+            logger.exception("Fatal failure in specialist_analysis")
+            ctx.error = f"Pipeline failed at specialist_analysis: {exc}"
+            emit(
+                {
+                    "type": "pipeline",
+                    "stage": "specialist_analysis",
+                    "status": "error",
+                    "error": str(exc),
+                }
+            )
+            return ctx
+        if not ctx.specialist_analyses:
+            ctx.error = "No specialist analyses completed — cannot produce a research paper."
+            emit(
+                {
+                    "type": "pipeline",
+                    "stage": "specialist_analysis",
+                    "status": "error",
+                    "error": ctx.error,
+                }
+            )
+            return ctx
+
+        # Stages 5-7 are non-fatal — continue with available data on failure.
         for stage_fn, stage_name in [
-            (self._stage_4_specialists, "specialist_analysis"),
             (self._stage_5_synthesize, "synthesis"),
             (self._stage_6_debate, "debate"),
             (self._stage_7_moderate, "moderator"),
@@ -1503,9 +1531,8 @@ class TheoPipeline:
 
         if ctx.moderated_result:
             cleaned = _replace_source_ids(ctx.moderated_result)
-            paper_input_parts.append(
-                f"## Moderated findings\n\n{json.dumps(cleaned, indent=2)}\n\n"
-            )
+            readable = self._format_moderated_readable(cleaned)
+            paper_input_parts.append(f"## Moderated findings\n\n{readable}\n\n")
         elif ctx.synthesis:
             cleaned = _replace_source_ids(ctx.synthesis)
             paper_input_parts.append(f"## Synthesis\n\n{json.dumps(cleaned, indent=2)}\n\n")
@@ -1616,14 +1643,48 @@ class TheoPipeline:
             if score["passed"] or iteration >= max_iterations:
                 break
 
-            # Below threshold — regenerate with feedback
-            failures_text = "\n".join(f"- {f}" for f in score.get("failures", []))
-            emit(
-                {
-                    "type": "status",
-                    "content": f"Score {score['total']}/100 below threshold (72). Regenerating with feedback...",
-                }
-            )
+            # Below threshold — classify failures and route backward
+            failures = score.get("failures", [])
+            failures_text = "\n".join(f"- {f}" for f in failures)
+
+            # Check if attribution failures exist — these are the most critical
+            attribution_failures = [
+                f for f in failures if "attribution" in f.lower() or "misattribut" in f.lower()
+            ]
+            fidelity_failures = [
+                f for f in failures if "fidelity" in f.lower() or "not support" in f.lower()
+            ]
+
+            if attribution_failures:
+                emit(
+                    {
+                        "type": "status",
+                        "content": f"CRITICAL: {len(attribution_failures)} attribution failure(s) detected. "
+                        "Stripping unverified claims and regenerating...",
+                    }
+                )
+                # Add explicit instructions to REMOVE the failing claims
+                failures_text += (
+                    "\n\nCRITICAL: The claims listed above with attribution failures "
+                    "MUST be completely removed from the paper. Do NOT rephrase them. "
+                    "Do NOT attribute statements to anyone unless you can verify from "
+                    "the source snippets that they actually said it. It is better to "
+                    "have a shorter paper than one with fabricated attributions."
+                )
+            elif fidelity_failures:
+                emit(
+                    {
+                        "type": "status",
+                        "content": f"{len(fidelity_failures)} source fidelity issue(s). Regenerating with corrections...",
+                    }
+                )
+            else:
+                emit(
+                    {
+                        "type": "status",
+                        "content": f"Score {score['total']}/100 below threshold (72). Regenerating with feedback...",
+                    }
+                )
 
             # Re-generate paper with quality feedback
             ref_map_text = "\n".join(f"[{s['ref_num']}] {s['title']}" for s in source_snippets)
@@ -1633,7 +1694,8 @@ class TheoPipeline:
                 f"## Research question\n\n{ctx.question}\n\n"
                 f"## Reference map\n\n{ref_map_text}\n\n"
                 f"## Moderated findings\n\n{json.dumps(ctx.moderated_result or ctx.synthesis, indent=2)}\n\n"
-                "Regenerate the paper addressing the quality issues above."
+                "Regenerate the paper. Remove any claim you cannot verify from the sources. "
+                "A shorter, accurate paper is better than a longer paper with fabrications."
             )
 
             raw_paper = await self._m27_call_async(
@@ -1956,6 +2018,44 @@ class TheoPipeline:
                 f"### {spec.name} ({spec.title}, {spec.domain})\n\n"
                 f"{json.dumps(analysis, indent=2)}\n"
             )
+        return "\n".join(parts)
+
+    @staticmethod
+    def _format_moderated_readable(moderated: dict) -> str:
+        """Convert moderated findings JSON into human-readable text.
+
+        Makes it easier for the paper writer to understand the claims
+        without parsing nested JSON, reducing misinterpretation.
+        """
+        parts: list[str] = []
+
+        for claim in moderated.get("final_claims", []):
+            citations = claim.get("citations", "")
+            conf = claim.get("confidence", "medium")
+            parts.append(
+                f"FINAL CLAIM ({conf} confidence): {claim.get('claim', '')}\n"
+                f"  Sources: {citations}\n"
+                f"  Notes: {claim.get('notes', '')}\n"
+            )
+
+        for claim in moderated.get("revised_claims", []):
+            citations = claim.get("citations", "")
+            parts.append(
+                f"REVISED CLAIM: {claim.get('revised', claim.get('original', ''))}\n"
+                f"  Original: {claim.get('original', '')}\n"
+                f"  Reason for revision: {claim.get('reason', '')}\n"
+                f"  Sources: {citations}\n"
+            )
+
+        for claim in moderated.get("dropped_claims", []):
+            parts.append(
+                f"DROPPED (do NOT include): {claim.get('claim', '')}\n"
+                f"  Reason: {claim.get('reason', '')}\n"
+            )
+
+        if not parts:
+            return json.dumps(moderated, indent=2)
+
         return "\n".join(parts)
 
     def _fallback_paper(self, ctx: PipelineContext) -> str:
