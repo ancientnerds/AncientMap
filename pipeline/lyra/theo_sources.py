@@ -80,7 +80,6 @@ SOURCE_GROUPS: dict[str, list[str]] = {
         "core",
         "europeana",
         "smithsonian",
-        "serpapi",
         "wikipedia",
         "minimax",
     ],
@@ -92,10 +91,8 @@ SOURCE_GROUPS: dict[str, list[str]] = {
         "core",
         "europeana",
         "smithsonian",
-        "serpapi",
         "wikipedia",
         "internet_archive",
-        "newsdata",
         "minimax",
     ],
 }
@@ -1011,8 +1008,8 @@ class NewsDataAdapter(SourceAdapter):
 class UnifiedSitesAdapter(SourceAdapter):
     """Search the AncientNerds unified_sites database for matching sites.
 
-    Returns our own curated site data as tier-1 sources — these are
-    verified archaeological sites with coordinates, periods, and descriptions.
+    Reuses the same search_sites() function that Lyra chat uses — same
+    ILIKE matching, source priority ordering, and deduplication.
     """
 
     @property
@@ -1025,54 +1022,34 @@ class UnifiedSitesAdapter(SourceAdapter):
 
     async def search(self, query: str, max_results: int = 10) -> list[RawSource]:
         def _do() -> list[RawSource]:
-            from sqlalchemy import text as sql_text
+            import json as _json
 
-            from pipeline.database import get_session
+            from api.services.lyra_tools import search_sites
 
-            # Use PostgreSQL full-text search against site names and descriptions
-            with get_session() as session:
-                rows = session.execute(
-                    sql_text("""
-                        SELECT name, description, country, period_name,
-                               period_start, period_end, site_type, source_url,
-                               lat, lon
-                        FROM unified_sites
-                        WHERE to_tsvector('english', coalesce(name, '') || ' ' || coalesce(description, ''))
-                              @@ plainto_tsquery('english', :q)
-                        ORDER BY ts_rank(
-                            to_tsvector('english', coalesce(name, '') || ' ' || coalesce(description, '')),
-                            plainto_tsquery('english', :q)
-                        ) DESC
-                        LIMIT :lim
-                    """),
-                    {"q": query, "lim": max_results},
-                ).fetchall()
+            raw_json = search_sites(query=query, limit=min(max_results, 25))
+            if raw_json.startswith("No sites found"):
+                return []
 
+            sites = _json.loads(raw_json)
             results: list[RawSource] = []
-            for r in rows:
-                period = ""
-                if r.period_name:
-                    period = r.period_name
-                elif r.period_start:
-                    period = f"{r.period_start} — {r.period_end or 'present'}"
-
+            for site in sites:
                 snippet_parts = []
-                if r.description:
-                    snippet_parts.append(r.description[:300])
-                if period:
-                    snippet_parts.append(f"Period: {period}")
-                if r.country:
-                    snippet_parts.append(f"Country: {r.country}")
-                if r.site_type:
-                    snippet_parts.append(f"Type: {r.site_type}")
-                snippet = ". ".join(snippet_parts) if snippet_parts else r.name
+                if site.get("description"):
+                    snippet_parts.append(site["description"])
+                if site.get("period"):
+                    snippet_parts.append(f"Period: {site['period']}")
+                if site.get("country"):
+                    snippet_parts.append(f"Country: {site['country']}")
+                if site.get("type"):
+                    snippet_parts.append(f"Type: {site['type']}")
+                snippet = ". ".join(snippet_parts) if snippet_parts else site.get("name", "")
 
-                url = r.source_url or f"https://ancientnerds.com/?site={r.name.replace(' ', '+')}"
+                url = f"https://ancientnerds.com/?site={site['name'].replace(' ', '+')}"
 
                 results.append(
                     RawSource(
                         url=url,
-                        title=f"{r.name} (AncientNerds Database)",
+                        title=f"{site['name']} (AncientNerds Database)",
                         snippet=snippet,
                         source_api=self.name,
                         default_tier=self.default_tier,
@@ -1174,14 +1151,6 @@ class MultiSourceSearch:
         if smithsonian_key:
             self._adapters["smithsonian"] = SmithsonianAdapter(smithsonian_key)
 
-        serpapi_key = os.getenv("THEO_SERPAPI_KEY", "")
-        if serpapi_key:
-            self._adapters["serpapi"] = SerpAPIGoogleScholarAdapter(serpapi_key)
-
-        newsdata_key = os.getenv("THEO_NEWSDATA_KEY", "")
-        if newsdata_key:
-            self._adapters["newsdata"] = NewsDataAdapter(newsdata_key)
-
         available = list(self._adapters.keys())
         logger.info("MultiSourceSearch initialized with %d adapters: %s", len(available), available)
 
@@ -1193,10 +1162,10 @@ class MultiSourceSearch:
         """Run searches across APIs appropriate for the source_group.
 
         source_group values (from TierConfig.source_apis):
-        - "minimal": Semantic Scholar + MiniMax only
+        - "minimal": AncientNerds DB + Semantic Scholar + MiniMax
         - "standard": + OpenAlex + Wikipedia + Crossref
-        - "full": + CORE + Europeana + Smithsonian + SerpAPI
-        - "exhaustive": all sources + Internet Archive + NewsData + OpenCitations enrichment
+        - "full": + CORE + Europeana + Smithsonian
+        - "exhaustive": all sources + Internet Archive + Unpaywall enrichment
 
         Returns deduplicated list of RawSource, sorted by default_tier then citation_count.
         """
