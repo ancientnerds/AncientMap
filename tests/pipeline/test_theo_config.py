@@ -8,12 +8,18 @@ from api.services.theo_config import EFFORT_CONFIG, TierConfig
 # ---------------------------------------------------------------------------
 
 
-def test_all_tiers_present():
-    """EFFORT_CONFIG has all four expected effort tiers."""
+def test_all_five_tiers_present():
+    """EFFORT_CONFIG has all five expected effort tiers."""
     assert "brief" in EFFORT_CONFIG
-    assert "paper" in EFFORT_CONFIG
+    assert "note" in EFFORT_CONFIG
+    assert "article" in EFFORT_CONFIG
+    assert "review" in EFFORT_CONFIG
     assert "thesis" in EFFORT_CONFIG
-    assert "auto" in EFFORT_CONFIG
+
+
+def test_no_auto_tier():
+    """The old 'auto' tier has been removed from EFFORT_CONFIG."""
+    assert "auto" not in EFFORT_CONFIG
 
 
 # ---------------------------------------------------------------------------
@@ -21,14 +27,50 @@ def test_all_tiers_present():
 # ---------------------------------------------------------------------------
 
 
-def test_brief_no_debate():
-    """brief tier skips the debate stage (debate_rounds=0)."""
-    assert EFFORT_CONFIG["brief"].debate_rounds == 0
+def test_brief_minimal_config():
+    """brief tier uses one specialist, no debate, and minimal source APIs."""
+    cfg = EFFORT_CONFIG["brief"]
+    assert cfg.specialists_count == 1
+    assert cfg.debate_rounds == 0
+    assert cfg.source_apis == "minimal"
 
 
-def test_brief_single_specialist():
-    """brief tier uses exactly one specialist."""
-    assert EFFORT_CONFIG["brief"].specialists_count == 1
+# ---------------------------------------------------------------------------
+# note tier
+# ---------------------------------------------------------------------------
+
+
+def test_note_standard_config():
+    """note tier uses three specialists and standard source APIs."""
+    cfg = EFFORT_CONFIG["note"]
+    assert cfg.specialists_count == 3
+    assert cfg.source_apis == "standard"
+
+
+# ---------------------------------------------------------------------------
+# article tier
+# ---------------------------------------------------------------------------
+
+
+def test_article_standard_config():
+    """article tier uses five specialists, devil's advocate, and standard source APIs."""
+    cfg = EFFORT_CONFIG["article"]
+    assert cfg.specialists_count == 5
+    assert cfg.devils_advocate is True
+    assert cfg.source_apis == "standard"
+
+
+# ---------------------------------------------------------------------------
+# review tier
+# ---------------------------------------------------------------------------
+
+
+def test_review_full_config():
+    """review tier uses six specialists, one debate round, and full source APIs."""
+    cfg = EFFORT_CONFIG["review"]
+    assert cfg.specialists_count == 6
+    assert cfg.debate_rounds == 1
+    assert cfg.source_apis == "full"
 
 
 # ---------------------------------------------------------------------------
@@ -36,28 +78,24 @@ def test_brief_single_specialist():
 # ---------------------------------------------------------------------------
 
 
-def test_thesis_has_debate():
-    """thesis tier runs two debate rounds."""
-    assert EFFORT_CONFIG["thesis"].debate_rounds == 2
+def test_thesis_exhaustive_config():
+    """thesis tier uses eight specialists, two debate rounds, and exhaustive source APIs."""
+    cfg = EFFORT_CONFIG["thesis"]
+    assert cfg.specialists_count == 8
+    assert cfg.debate_rounds == 2
+    assert cfg.source_apis == "exhaustive"
 
 
 # ---------------------------------------------------------------------------
-# auto tier
+# Cross-tier: source_apis field
 # ---------------------------------------------------------------------------
 
 
-def test_auto_matches_paper():
-    """auto tier has the same configuration values as paper tier."""
-    auto = EFFORT_CONFIG["auto"]
-    paper = EFFORT_CONFIG["paper"]
-
-    assert auto.specialists_count == paper.specialists_count
-    assert auto.max_search_queries == paper.max_search_queries
-    assert auto.convergence_stage1 == paper.convergence_stage1
-    assert auto.convergence_stage3 == paper.convergence_stage3
-    assert auto.convergence_stage5 == paper.convergence_stage5
-    assert auto.debate_rounds == paper.debate_rounds
-    assert auto.devils_advocate == paper.devils_advocate
-    assert auto.simplified_moderator == paper.simplified_moderator
-    assert auto.max_tokens_per_call == paper.max_tokens_per_call
-    assert auto.max_tokens_synthesis == paper.max_tokens_synthesis
+def test_tier_config_has_source_apis():
+    """Every tier in EFFORT_CONFIG has a non-empty source_apis field."""
+    valid_groups = {"minimal", "standard", "full", "exhaustive"}
+    for tier_name, cfg in EFFORT_CONFIG.items():
+        assert cfg.source_apis in valid_groups, (
+            f"Tier '{tier_name}' has source_apis={cfg.source_apis!r}, "
+            f"expected one of {valid_groups}"
+        )
