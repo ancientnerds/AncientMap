@@ -92,19 +92,24 @@ async def _process_request(
         duration_ms = int((time.monotonic() - start) * 1000)
 
         if ctx.error:
-            # Pipeline reported a fatal error via ctx.error
-            emit({"type": "done", "status": "failed"})
-            with get_session() as session:
-                session.execute(
-                    text("""
-                        UPDATE research_requests
-                        SET status = 'failed', error_message = :msg, completed_at = NOW()
-                        WHERE id = :id
-                    """),
-                    {"id": request_id, "msg": ctx.error},
-                )
-                session.commit()
-            logger.warning(f"[THEO] Request {request_id} failed: {ctx.error}")
+            if "cancelled" in ctx.error.lower():
+                # Already set to 'cancelled' in the DB by the DELETE endpoint
+                emit({"type": "done", "status": "cancelled"})
+                logger.info(f"[THEO] Request {request_id} cancelled by user")
+            else:
+                # Pipeline reported a fatal error via ctx.error
+                emit({"type": "done", "status": "failed"})
+                with get_session() as session:
+                    session.execute(
+                        text("""
+                            UPDATE research_requests
+                            SET status = 'failed', error_message = :msg, completed_at = NOW()
+                            WHERE id = :id
+                        """),
+                        {"id": request_id, "msg": ctx.error},
+                    )
+                    session.commit()
+                logger.warning(f"[THEO] Request {request_id} failed: {ctx.error}")
         else:
             result = {
                 "report": ctx.paper_text,

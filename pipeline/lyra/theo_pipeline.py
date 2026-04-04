@@ -184,6 +184,8 @@ class TheoPipeline:
             (self._stage_2_search, "web_search"),
             (self._stage_3_audit, "source_audit"),
         ]:
+            if await self._is_cancelled(ctx, emit):
+                return ctx
             try:
                 await stage_fn(ctx, emit)
             except Exception as exc:
@@ -201,6 +203,8 @@ class TheoPipeline:
             (self._stage_6_debate, "debate"),
             (self._stage_7_moderate, "moderator"),
         ]:
+            if await self._is_cancelled(ctx, emit):
+                return ctx
             try:
                 await stage_fn(ctx, emit)
             except Exception as exc:
@@ -215,6 +219,8 @@ class TheoPipeline:
                 )
 
         # Stage 8 — paper assembly.  On failure, dump raw findings.
+        if await self._is_cancelled(ctx, emit):
+            return ctx
         try:
             await self._stage_8_paper(ctx, emit)
         except Exception as exc:
@@ -1439,6 +1445,42 @@ class TheoPipeline:
 
         raw = await self._m27_call_async(system, user_msg, 256)
         ctx.card_description = raw.strip().strip('"')
+
+    # ------------------------------------------------------------------
+    # Cancellation check — polled between stages
+    # ------------------------------------------------------------------
+
+    async def _is_cancelled(
+        self,
+        ctx: PipelineContext,
+        emit: Callable[[dict], None],
+    ) -> bool:
+        """Check if the research request was cancelled by the user.
+
+        Queries the DB for the current status. If cancelled, sets ctx.error
+        and emits a done event. Returns True if cancelled.
+        """
+        if not ctx.request_id:
+            return False
+
+        from sqlalchemy import text as sql_text
+
+        from pipeline.database import get_session
+
+        def _check() -> bool:
+            with get_session() as session:
+                row = session.execute(
+                    sql_text("SELECT status FROM research_requests WHERE id = :id"),
+                    {"id": ctx.request_id},
+                ).fetchone()
+                return row is not None and row.status == "cancelled"
+
+        cancelled = await asyncio.to_thread(_check)
+        if cancelled:
+            ctx.error = "Research cancelled by user"
+            emit({"type": "done", "status": "cancelled"})
+            logger.info("[THEO] Request %s cancelled by user", ctx.request_id)
+        return cancelled
 
     # ------------------------------------------------------------------
     # Relevancy gate — fast pre-check before the expensive pipeline

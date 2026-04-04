@@ -543,10 +543,9 @@ async def delete_research(request_id: str, req: Request):
             raise HTTPException(status_code=404, detail="Not found")
         if row.user_id != user_id:
             raise HTTPException(status_code=403, detail="Not your request")
-        if row.status == "running":
-            raise HTTPException(status_code=409, detail="Cannot delete a running request")
 
-        if row.status == "queued":
+        if row.status in ("queued", "running"):
+            # Cancel — pipeline checks for this between stages
             session.execute(
                 text("UPDATE research_requests SET status = 'cancelled' WHERE id = :id"),
                 {"id": request_id},
