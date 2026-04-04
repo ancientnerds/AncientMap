@@ -40,8 +40,6 @@ export default function TheoReportOverlay({
   pipelineTrace,
   effort,
   durationMs,
-  sitesFound,
-  toolsUsed,
   onClose,
 }: TheoReportOverlayProps) {
   const [showTrace, setShowTrace] = useState(false)
@@ -105,20 +103,10 @@ export default function TheoReportOverlay({
           <div className="theo-report-header-text">
             <div className="theo-report-question">{question}</div>
             <div className="theo-report-meta-row">
-              <span className="theo-badge theo-badge-effort">{effort}</span>
+              <span className="theo-badge theo-badge-effort">{{ brief: 'Brief', note: 'Note', article: 'Article', review: 'Review', thesis: 'Thesis' }[effort] || effort}</span>
               {durationMs != null && (
                 <span className="theo-badge theo-badge-completed">
                   {formatDurationMs(durationMs)}
-                </span>
-              )}
-              {sitesFound > 0 && (
-                <span className="theo-badge" style={{ border: '1px solid var(--border-accent)', color: 'var(--accent-secondary)' }}>
-                  {sitesFound} sites
-                </span>
-              )}
-              {toolsUsed > 0 && (
-                <span className="theo-badge" style={{ border: '1px solid var(--border-default)', color: 'var(--text-muted)' }}>
-                  {toolsUsed} tools
                 </span>
               )}
               <span className="theo-badge" style={{ border: '1px solid var(--border-default)', color: 'var(--text-dimmed)' }}>
