@@ -284,7 +284,7 @@ class OpenAlexAdapter(SourceAdapter):
         def _do() -> list[RawSource]:
             params: dict[str, str] = {
                 "search": query,
-                "select": "id,title,doi,publication_date,cited_by_count,authorships,host_venue,abstract_inverted_index,open_access",
+                "select": "id,title,doi,publication_date,cited_by_count,authorships,primary_location,abstract_inverted_index,open_access",
                 "per_page": str(max_results),
             }
             if self._api_key:
@@ -315,9 +315,10 @@ class OpenAlexAdapter(SourceAdapter):
                         authors.append(name)
 
                 venue = ""
-                host = work.get("host_venue") or {}
-                if host.get("display_name"):
-                    venue = host["display_name"]
+                loc = work.get("primary_location") or {}
+                source_obj = loc.get("source") or {}
+                if source_obj.get("display_name"):
+                    venue = source_obj["display_name"]
 
                 results.append(
                     RawSource(
@@ -695,7 +696,10 @@ class WikipediaAdapter(SourceAdapter):
     def __init__(self) -> None:
         self._client = httpx.Client(
             base_url="https://en.wikipedia.org/w",
-            headers={"Accept": "application/json"},
+            headers={
+                "Accept": "application/json",
+                "User-Agent": "AncientNerdsTheo/1.0 (https://ancientnerds.com; research pipeline)",
+            },
             timeout=_API_TIMEOUT,
         )
 
