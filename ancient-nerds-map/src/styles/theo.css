@@ -47,8 +47,8 @@
   width: 72px;
   height: 72px;
   border-radius: 6px;
-  border: 2px solid var(--theo-amber);
-  box-shadow: 0 0 16px var(--theo-amber-glow-30);
+  border: 2px solid var(--brand-primary);
+  box-shadow: 0 0 16px rgba(192, 32, 35, 0.15);
   object-fit: cover;
   background: var(--theo-surface);
 }
@@ -59,7 +59,7 @@
   font-size: 22px;
   letter-spacing: 3px;
   text-transform: uppercase;
-  color: var(--theo-amber);
+  color: var(--brand-primary);
   margin: 0;
 }
 
@@ -75,7 +75,7 @@
   font-family: 'Cormorant Garamond', Georgia, serif;
   font-style: italic;
   font-size: 18px;
-  color: var(--theo-amber-bright);
+  color: var(--text-primary);
   opacity: 0.7;
   margin: 14px 0 0;
 }
@@ -511,7 +511,7 @@
   line-height: 1.4;
   color: var(--text-primary);
   background: var(--surface-deep);
-  border: 1px solid var(--theo-amber);
+  border: 1px solid var(--brand-primary);
   border-radius: 4px;
   z-index: 10;
   pointer-events: none;
@@ -685,7 +685,7 @@
 /* THEO IDENTITY — keep amber (Theo is working) */
 .theo-badge-running {
   border: 1px solid var(--theo-border);
-  color: var(--theo-amber-bright);
+  color: var(--text-primary);
   animation: theo-pulse 2s ease-in-out infinite;
 }
 
@@ -868,6 +868,21 @@
   color: var(--text-primary);
 }
 
+.theo-report-share {
+  background: none;
+  border: none;
+  color: var(--text-dimmed);
+  cursor: pointer;
+  padding: 4px;
+  transition: color 0.15s;
+  display: inline-flex;
+  align-items: center;
+}
+
+.theo-report-share:hover {
+  color: var(--text-primary);
+}
+
 /* — Shared Markdown Body (used by report + live overlay) — */
 .theo-md-body {
   font-size: 16px;
@@ -879,7 +894,7 @@
 .theo-md-body h1,
 .theo-md-body h2,
 .theo-md-body h3 {
-  color: var(--theo-amber-bright);
+  color: var(--text-primary);
   font-family: var(--font-heading);
   letter-spacing: 1px;
   margin: 20px 0 8px;
@@ -888,7 +903,7 @@
 .theo-md-body h1 { font-size: 22px; }
 .theo-md-body h2 { font-size: 18px; }
 .theo-md-body h3 { font-size: 16px; }
-.theo-md-body h1:first-child,
+.theo-md-body h1:first-child { display: none; }
 .theo-md-body h2:first-child { margin-top: 0; }
 
 .theo-md-body p { margin: 8px 0; }
@@ -928,7 +943,7 @@
 }
 
 .theo-md-body blockquote {
-  border-left: 3px solid var(--theo-amber-dim);
+  border-left: 3px solid var(--text-dimmed);
   padding-left: 14px;
   color: var(--text-muted);
   margin: 12px 0;
@@ -1017,7 +1032,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--theo-amber-bright);
+  background: var(--text-primary);
   animation: theo-pulse 2s ease-in-out infinite;
   flex-shrink: 0;
 }
@@ -1058,8 +1073,8 @@
 
 /* THEO IDENTITY — amber for active stage (Theo is working here) */
 .theo-live-st-active {
-  border-color: var(--theo-amber);
-  color: var(--theo-amber-bright);
+  border-color: var(--brand-primary);
+  color: var(--text-primary);
 }
 
 .theo-live-st-active .theo-live-stage-icon {
@@ -1097,9 +1112,9 @@
   font-size: 12px;
   letter-spacing: 1px;
   text-transform: uppercase;
-  color: var(--theo-amber);
+  color: var(--brand-primary);
   padding: 4px 10px;
-  background: var(--theo-amber-glow-10);
+  background: rgba(192, 32, 35, 0.06);
   border-bottom: 1px solid var(--theo-border);
   cursor: pointer;
   display: flex;
@@ -1393,6 +1408,38 @@
   font-size: 14px;
 }
 
+/* — Dedicated Paper Page — */
+.theo-paper-page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 24px 20px;
+}
+
+.theo-paper-header {
+  margin-bottom: 24px;
+}
+
+.theo-paper-title {
+  font-family: var(--font-heading);
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+  margin: 0 0 12px;
+}
+
+.theo-paper-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.theo-paper-body {
+  border-top: 1px solid var(--border-default);
+  padding-top: 20px;
+}
+
 /* — Publish/Delete/Unpublish Buttons — */
 .theo-btn-publish {
   padding: 7px 16px;
@@ -1557,14 +1604,14 @@
 
 /* — Own card highlight — */
 .theo-public-card--own {
-  border-color: var(--theo-amber);
+  border-color: var(--brand-primary);
 }
 
 /* — Completed wizard step checkmarks — */
 .theo-step-dot.completed .theo-step-num {
-  background: var(--theo-amber-glow-20);
-  border-color: var(--theo-amber);
-  color: var(--theo-amber);
+  background: rgba(192, 32, 35, 0.1);
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
 }
 
 /* — Skeleton loading bars — */
@@ -1588,10 +1635,10 @@
   gap: 8px;
   width: 100%;
   padding: 8px 20px;
-  background: var(--theo-amber-glow-10);
+  background: rgba(192, 32, 35, 0.06);
   border: none;
   border-bottom: 1px solid var(--theo-border);
-  color: var(--theo-amber-bright);
+  color: var(--text-primary);
   font-family: var(--font-body);
   font-size: 13px;
   cursor: pointer;
@@ -1600,7 +1647,7 @@
 }
 
 .theo-investigating-banner:hover {
-  background: var(--theo-amber-glow-20);
+  background: rgba(192, 32, 35, 0.1);
 }
 
 /* — "+ New" shortcut button in results header — */

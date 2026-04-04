@@ -91,6 +91,7 @@ export default defineConfig({
         cards: resolve(__dirname, 'cards.html'),
         game: resolve(__dirname, 'game.html'),
         theo: resolve(__dirname, 'theo.html'),
+        research: resolve(__dirname, 'research.html'),
       },
     },
   },

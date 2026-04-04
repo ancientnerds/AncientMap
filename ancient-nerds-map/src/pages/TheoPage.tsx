@@ -455,17 +455,7 @@ export default function TheoPage() {
     document.title = 'Theodore Furcade — Ancient Nerds Research Lab'
   }, [])
 
-  // Public library: read a paper
-  const handleReadPublicPaper = useCallback(async (slug: string) => {
-    try {
-      const resp = await fetch(`${config.api.baseUrl}/theo/public/${slug}`)
-      if (!resp.ok) return
-      const data: PublicPaperFull = await resp.json()
-      setPublicReportData(data)
-      // Update page title for SEO/sharing
-      document.title = `${data.result?.title || data.question} — Ancient Nerds Research`
-    } catch { /* ignore */ }
-  }, [])
+
 
   // Duplicate card: read a public match
   const handleReadDuplicateMatch = useCallback(async (slug: string) => {
@@ -546,9 +536,7 @@ export default function TheoPage() {
   return (
     <div className="theo-page">
       <PageHeader currentPage="theo">
-        <span style={{ fontSize: 12, color: 'var(--theo-amber, #d4912a)', letterSpacing: 1 }}>
-          Research Lab
-        </span>
+        <span className="page-header-title">Research Lab</span>
       </PageHeader>
       <AiNoticeBanner message="Research papers and illustrations are AI-generated. Always verify claims with original sources." />
 
@@ -981,11 +969,11 @@ export default function TheoPage() {
                 <div
                   key={paper.slug}
                   className={`theo-public-card${authUser?.username === paper.published_by ? ' theo-public-card--own' : ''}`}
-                  onClick={() => handleReadPublicPaper(paper.slug)}
+                  onClick={() => { window.location.href = `/research.html?slug=${paper.slug}` }}
                   role="button"
                   tabIndex={0}
                   aria-label={paper.title}
-                  onKeyDown={e => { if (e.key === 'Enter') handleReadPublicPaper(paper.slug) }}
+                  onKeyDown={e => { if (e.key === 'Enter') window.location.href = `/research.html?slug=${paper.slug}` }}
                 >
                   <div className="theo-public-card-hero">
                     <img src={paper.cover_url} alt="" className="theo-public-card-img" loading="lazy" />
