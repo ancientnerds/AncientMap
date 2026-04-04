@@ -82,6 +82,7 @@ async def _process_request(
             emit,
             force_include=force_include,
             force_exclude=force_exclude,
+            request_id=request_id,
         )
 
         duration_ms = int((time.monotonic() - start) * 1000)

@@ -53,6 +53,7 @@ export const PIPELINE_STAGES: PipelineNodeDef[] = [
   { id: 'debate', label: 'Specialist Debate', sublabel: 'Challenge & defense rounds' },
   { id: 'moderator', label: 'Moderator Review', sublabel: 'Final positions + devil\'s advocate' },
   { id: 'paper_assembly', label: 'Paper Assembly', sublabel: 'Academic formatting + citation audit' },
+  { id: 'image_generation', label: 'Illustrations', sublabel: 'Generating section images' },
 ]
 
 export interface ToolDef {

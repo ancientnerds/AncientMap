@@ -60,6 +60,9 @@ class PipelineContext:
     tier: TierConfig
     registry: CitationRegistry
 
+    # Request identity (set by worker, used for image storage path)
+    request_id: str = ""
+
     # User overrides for specialist selection
     force_include: list[str] = field(default_factory=list)
     force_exclude: list[str] = field(default_factory=list)
@@ -126,6 +129,7 @@ class TheoPipeline:
         emit: Callable[[dict], None],
         force_include: list[str] | None = None,
         force_exclude: list[str] | None = None,
+        request_id: str = "",
     ) -> PipelineContext:
         """Run the full pipeline.  *emit* sends SSE events to the client."""
         tier = EFFORT_CONFIG.get(effort, EFFORT_CONFIG["article"])
@@ -135,6 +139,7 @@ class TheoPipeline:
             effort=effort,
             tier=tier,
             registry=CitationRegistry(),
+            request_id=request_id,
             force_include=force_include or [],
             force_exclude=force_exclude or [],
         )
@@ -198,6 +203,20 @@ class TheoPipeline:
             )
             ctx.paper_text = self._fallback_paper(ctx)
             ctx.paper_title = "Research Findings (unformatted)"
+
+        # Stage 9 — illustration generation (non-fatal, runs after paper assembly)
+        try:
+            await self._stage_9_images(ctx, emit)
+        except Exception as exc:
+            logger.warning("Image generation failed (non-fatal): %s", exc)
+            emit(
+                {
+                    "type": "pipeline",
+                    "stage": "image_generation",
+                    "status": "warning",
+                    "warning": f"Image generation skipped: {exc}",
+                }
+            )
 
         total_ms = int((time.monotonic() - pipeline_start) * 1000)
         emit(
@@ -1028,6 +1047,46 @@ class TheoPipeline:
                     "total_citations": ctx.audit_result.get("total_citations", 0),
                     "total_references": ctx.audit_result.get("total_references", 0),
                 },
+            }
+        )
+
+    # ------------------------------------------------------------------
+    # Stage 9: Illustration generation (post paper assembly)
+    # ------------------------------------------------------------------
+
+    async def _stage_9_images(
+        self,
+        ctx: PipelineContext,
+        emit: Callable[[dict], None],
+    ) -> None:
+        """Generate illustrations for topic sections using MiniMax image-01."""
+        if not ctx.paper_text:
+            return
+
+        stage = "image_generation"
+        t0 = time.monotonic()
+        emit({"type": "pipeline", "stage": stage, "status": "start"})
+
+        from pipeline.lyra.theo_images import (
+            generate_paper_images,
+            insert_images_into_paper,
+        )
+
+        paper_id = ctx.request_id or "unknown"
+        images = await generate_paper_images(paper_id, ctx.paper_text, emit)
+
+        if images:
+            # Insert images into the paper text (before References section)
+            ctx.paper_text = insert_images_into_paper(ctx.paper_text, images)
+
+        ms = int((time.monotonic() - t0) * 1000)
+        emit(
+            {
+                "type": "pipeline",
+                "stage": stage,
+                "status": "done",
+                "duration_ms": ms,
+                "meta": {"images_generated": len(images)},
             }
         )
 

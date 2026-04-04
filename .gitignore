@@ -181,6 +181,7 @@ public/data/links.json
 public/data/links.json.gz
 public/data/content/
 public/data/images/
+public/data/research-images/
 
 # Frontend data dir should NOT exist — all data lives in public/data/
 # (Vite dev server proxies /data/ to public/data/ via plugin)

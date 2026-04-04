@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import { config } from '../config'
 import { formatDurationMs, timeAgo } from '../utils/formatters'
+import AiNoticeBanner from '../components/layout/AiNoticeBanner'
 import PageHeader from '../components/layout/PageHeader'
 import '../styles/theo.css'
 
@@ -497,6 +498,7 @@ export default function TheoPage() {
           Research Lab
         </span>
       </PageHeader>
+      <AiNoticeBanner message="Research papers and illustrations are AI-generated. Always verify claims with original sources." />
 
       {/* Hero */}
       <div className="theo-hero">

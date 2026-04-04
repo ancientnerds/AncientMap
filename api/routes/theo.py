@@ -521,6 +521,14 @@ async def delete_research(request_id: str, req: Request):
         except Exception as exc:
             logger.warning("Qdrant cleanup failed for %s: %s", request_id, exc)
 
+    # Clean up generated images
+    try:
+        from pipeline.lyra.theo_images import delete_paper_images
+
+        delete_paper_images(request_id)
+    except Exception as exc:
+        logger.warning("Image cleanup failed for %s: %s", request_id, exc)
+
     return {"status": "deleted"}
 
 
