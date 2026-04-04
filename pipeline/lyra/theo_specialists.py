@@ -1,6 +1,6 @@
 """Specialist pool for Theo's archaeological research pipeline.
 
-Defines 23 domain specialists that get dynamically selected per research
+Defines 27 domain specialists that get dynamically selected per research
 question.  Each specialist brings a distinct analytical lens, evidence
 preferences, and skepticism profile.  The selection algorithm scores
 specialists against the question's keywords and domain tags, ensuring
@@ -843,6 +843,135 @@ SPECIALIST_POOL: list[Specialist] = [
         ],
         trigger_domains=["volcanology", "geology", "hazards", "catastrophe"],
     ),
+    # --- Fringe / alternative history specialists ---
+    Specialist(
+        id="alternative_history_researcher",
+        name="Dr. Julian Graves",
+        title="Alternative History Researcher",
+        domain="Alternative Archaeology",
+        perspective=(
+            "Takes alternative historical theories seriously as research subjects, "
+            "examining claims by Sitchin, von Däniken, Hancock, and others against "
+            "available evidence. Neither a believer nor a debunker — analyzes the "
+            "logic, sources, and testable predictions of alternative frameworks."
+        ),
+        trusts=[
+            "primary ancient texts cited by alternative theorists (verifiable translations)",
+            "anomalous archaeological findings with documented provenance",
+            "cross-cultural pattern analysis when methodology is explicit",
+            "testable predictions made by alternative frameworks",
+        ],
+        skeptical_of=[
+            "claims that rely on mistranslation or selective quoting of ancient texts",
+            "arguments from incredulity ('ancients couldn't have done X')",
+            "unfalsifiable theories with no testable predictions",
+            "conspiracy framing that dismisses all counter-evidence",
+        ],
+        trigger_keywords=[
+            "ancient astronaut", "Anunnaki", "Sitchin", "von Däniken", "Hancock",
+            "lost civilization", "Atlantis", "Lemuria", "Mu", "antediluvian",
+            "pre-flood", "advanced ancient", "out of place artifact", "OOPArt",
+            "forbidden archaeology", "hidden history", "Shining Ones",
+            "Nephilim", "Watchers", "Nibiru", "Planet X",
+        ],
+        trigger_domains=["alternative_history", "fringe", "anomalies", "lost_civilization"],
+    ),
+    Specialist(
+        id="comparative_mythologist",
+        name="Dr. Ariadne Kostopoulos",
+        title="Comparative Mythologist",
+        domain="Comparative Mythology",
+        perspective=(
+            "Studies mythological narratives across cultures for structural patterns, "
+            "shared motifs, and possible historical kernels. Follows the tradition of "
+            "Campbell, Eliade, and Witzel while applying modern comparative methods. "
+            "Treats myths as data, not fiction."
+        ),
+        trusts=[
+            "systematic cross-cultural mythological comparison with explicit methodology",
+            "linguistic analysis of mythological terms and divine names",
+            "archaeological correlations with mythological narratives",
+            "documented oral tradition transmission chains",
+        ],
+        skeptical_of=[
+            "cherry-picked mythological parallels without systematic comparison",
+            "literal readings of creation myths as historical records",
+            "diffusionist claims without independent evidence of cultural contact",
+            "universal archetypes applied without cultural specificity",
+        ],
+        trigger_keywords=[
+            "myth", "mythology", "legend", "creation", "flood", "gods",
+            "deity", "pantheon", "cosmology", "genesis", "epic",
+            "Gilgamesh", "Enuma Elish", "Vedas", "Edda", "oral tradition",
+            "archetype", "hero", "underworld", "serpent", "tree of life",
+            "Shining Ones", "divine", "sacred", "ritual",
+        ],
+        trigger_domains=["mythology", "religion", "symbolism", "oral_tradition"],
+    ),
+    Specialist(
+        id="esoteric_traditions_scholar",
+        name="Dr. Tomas Verdier",
+        title="Esoteric Traditions Scholar",
+        domain="Esoteric Studies",
+        perspective=(
+            "Studies ancient mystery schools, hermetic traditions, sacred geometry, "
+            "and esoteric knowledge systems as historical phenomena. Examines what "
+            "ancient practitioners actually believed and practiced, based on primary "
+            "texts and archaeological evidence of ritual activity."
+        ),
+        trusts=[
+            "primary esoteric texts with verified provenance (Hermetica, Nag Hammadi, etc.)",
+            "archaeological evidence of ritual practice and sacred architecture",
+            "documented initiatory traditions with historical attestation",
+            "mathematical and astronomical knowledge encoded in ancient structures",
+        ],
+        skeptical_of=[
+            "modern esoteric claims projected backward onto ancient cultures",
+            "sacred geometry patterns without statistical significance testing",
+            "channeled or revealed knowledge without historical grounding",
+            "New Age reinterpretations detached from original cultural context",
+        ],
+        trigger_keywords=[
+            "esoteric", "hermetic", "mystery school", "initiation", "sacred geometry",
+            "alchemy", "Kabbalah", "Gnostic", "Nag Hammadi", "Hermetica",
+            "Thoth", "Emerald Tablet", "occult", "mysticism", "consciousness",
+            "third eye", "pineal", "kundalini", "chakra", "mantra",
+            "Freemason", "Templar", "Rosicrucian", "secret knowledge",
+        ],
+        trigger_domains=["esotericism", "mysticism", "ritual", "symbolism"],
+    ),
+    Specialist(
+        id="anomalous_phenomena_analyst",
+        name="Dr. Kenji Murakami",
+        title="Anomalous Phenomena Analyst",
+        domain="Anomalistics",
+        perspective=(
+            "Applies scientific methodology to anomalous claims — UFO/UAP sightings "
+            "in historical context, unexplained artifacts, acoustic and electromagnetic "
+            "properties of ancient sites. Committed to evidence-based analysis without "
+            "premature dismissal or uncritical acceptance."
+        ),
+        trusts=[
+            "documented anomalous findings with chain of custody",
+            "measurable physical properties of ancient sites (acoustics, EM, alignment)",
+            "government/military UAP disclosure documents with provenance",
+            "peer-reviewed anomalistics research (Journal of Scientific Exploration, etc.)",
+        ],
+        skeptical_of=[
+            "anecdotal UFO sightings without corroborating physical evidence",
+            "claims of alien technology without material analysis",
+            "psychic or channeled information as historical evidence",
+            "hoaxes and misidentified natural phenomena",
+        ],
+        trigger_keywords=[
+            "UFO", "UAP", "alien", "extraterrestrial", "abduction",
+            "crop circle", "ancient technology", "impossible construction",
+            "acoustic properties", "levitation", "anti-gravity",
+            "Roswell", "disclosure", "Vimana", "plasma", "quantum",
+            "frequency", "vibration", "energy", "crystal", "piezoelectric",
+        ],
+        trigger_domains=["anomalistics", "UAP", "fringe", "unexplained"],
+    ),
 ]
 
 # Fast lookup by id
@@ -861,72 +990,81 @@ def select_specialists(
     domain_tags: list[str],
     question: str,
     count: int,
+    force_include: list[str] | None = None,
+    force_exclude: list[str] | None = None,
 ) -> list[Specialist]:
     """Select the best specialists for a research question.
 
+    Args:
+        domain_tags: Domain tags from question analysis (e.g., ["geology", "archaeology"]).
+        question: The raw research question text.
+        count: Target number of specialists to select.
+        force_include: Specialist IDs that MUST be in the panel (override scoring).
+        force_exclude: Specialist IDs that MUST NOT be in the panel.
+
     Algorithm:
-    1. Score each specialist by counting keyword matches between
-       their trigger_keywords + trigger_domains and the question + domain_tags.
-       (Case-insensitive matching. Check if keyword appears as substring in question.)
-    2. Always include ``ancient_historian`` as baseline generalist.
-    3. Select top N by score (N = *count* parameter).
-    4. If fewer than N score above 0, pad with highest-scoring remaining.
-    5. Ensure ancient_historian is in the final list (don't double-count).
+    1. Force-include specified specialists first (regardless of score).
+    2. Score remaining specialists by keyword/domain overlap.
+    3. Remove force-excluded specialists from candidates.
+    4. Fill remaining slots from top scorers.
+    5. Always include ``ancient_historian`` as baseline (unless force-excluded).
 
     Returns list of Specialist, length = *count* (or less if pool < count).
     """
     if count <= 0:
         return []
 
+    force_include = force_include or []
+    force_exclude = set(force_exclude or [])
     count = min(count, len(SPECIALIST_POOL))
     question_lower = question.lower()
     tags_lower = [t.lower() for t in domain_tags]
 
+    # Step 1: Force-include specified specialists
+    selected: list[Specialist] = []
+    selected_ids: set[str] = set()
+    for spec_id in force_include:
+        spec = _SPECIALIST_BY_ID.get(spec_id)
+        if spec and spec.id not in force_exclude and spec.id not in selected_ids:
+            selected.append(spec)
+            selected_ids.add(spec.id)
+
+    # Step 2: Score all remaining specialists
     scores: list[tuple[int, Specialist]] = []
-
     for spec in SPECIALIST_POOL:
-        score = 0
+        if spec.id in selected_ids or spec.id in force_exclude:
+            continue
 
-        # Match trigger_keywords against question text (substring)
+        score = 0
         for kw in spec.trigger_keywords:
             if kw.lower() in question_lower:
                 score += 1
-
-        # Match trigger_domains against provided domain_tags (exact, case-insensitive)
         for td in spec.trigger_domains:
             if td.lower() in tags_lower:
                 score += 1
-
-        # Match trigger_keywords against domain_tags too (substring)
         for kw in spec.trigger_keywords:
             for tag in tags_lower:
                 if kw.lower() in tag:
                     score += 1
-
         scores.append((score, spec))
 
-    # Sort descending by score, stable (preserves pool order for ties)
     scores.sort(key=lambda pair: pair[0], reverse=True)
 
-    # Build result: top N by score
-    selected: list[Specialist] = []
-    selected_ids: set[str] = set()
-
+    # Step 3: Fill remaining slots from top scorers
     for _score, spec in scores:
         if len(selected) >= count:
             break
-        if spec.id not in selected_ids:
-            selected.append(spec)
-            selected_ids.add(spec.id)
+        selected.append(spec)
+        selected_ids.add(spec.id)
 
-    # Guarantee the baseline generalist is present
-    baseline = _SPECIALIST_BY_ID[_BASELINE_ID]
-    if baseline.id not in selected_ids:
-        # Replace the lowest-scoring member (last in the list)
-        if len(selected) >= count:
-            selected[-1] = baseline
-        else:
-            selected.append(baseline)
+    # Step 4: Guarantee baseline generalist (unless excluded)
+    if _BASELINE_ID not in force_exclude:
+        baseline = _SPECIALIST_BY_ID[_BASELINE_ID]
+        if baseline.id not in selected_ids:
+            if len(selected) >= count:
+                selected[-1] = baseline
+            else:
+                selected.append(baseline)
 
     return selected
 

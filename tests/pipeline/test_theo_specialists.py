@@ -13,9 +13,9 @@ from pipeline.lyra.theo_specialists import (
 # ---------------------------------------------------------------------------
 
 
-def test_pool_has_23_specialists():
-    """SPECIALIST_POOL contains exactly 23 specialists."""
-    assert len(SPECIALIST_POOL) == 23
+def test_pool_has_27_specialists():
+    """SPECIALIST_POOL contains exactly 27 specialists."""
+    assert len(SPECIALIST_POOL) == 27
 
 
 def test_all_ids_unique():
@@ -57,7 +57,7 @@ def test_select_count_exceeds_pool():
         question="general question",
         count=99,
     )
-    assert len(panel) <= 23
+    assert len(panel) <= 27
 
 
 # ---------------------------------------------------------------------------
@@ -85,6 +85,55 @@ def test_select_domain_matching():
     )
     ids = [s.id for s in panel]
     assert "underwater_archaeologist" in ids
+
+
+def test_select_fringe_keywords():
+    """Fringe question selects alternative history and mythology specialists."""
+    panel = select_specialists(
+        domain_tags=["fringe", "mythology"],
+        question="Did the Shining Ones from Sumerian texts arrive by UFO?",
+        count=5,
+    )
+    ids = [s.id for s in panel]
+    assert "alternative_history_researcher" in ids
+    assert "comparative_mythologist" in ids
+
+
+def test_force_include():
+    """Force-included specialists appear regardless of keyword match."""
+    panel = select_specialists(
+        domain_tags=[],
+        question="general archaeology question",
+        count=3,
+        force_include=["volcanologist", "paleoclimatologist"],
+    )
+    ids = [s.id for s in panel]
+    assert "volcanologist" in ids
+    assert "paleoclimatologist" in ids
+
+
+def test_force_exclude():
+    """Force-excluded specialists never appear, even if keyword matched."""
+    panel = select_specialists(
+        domain_tags=["dating"],
+        question="radiocarbon dating calibration methods",
+        count=5,
+        force_exclude=["dating_specialist"],
+    )
+    ids = [s.id for s in panel]
+    assert "dating_specialist" not in ids
+
+
+def test_force_exclude_baseline():
+    """Even the baseline generalist can be excluded."""
+    panel = select_specialists(
+        domain_tags=[],
+        question="general question",
+        count=3,
+        force_exclude=["ancient_historian"],
+    )
+    ids = [s.id for s in panel]
+    assert "ancient_historian" not in ids
 
 
 # ---------------------------------------------------------------------------
