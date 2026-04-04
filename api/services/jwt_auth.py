@@ -11,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 import jwt
 from fastapi import Depends, HTTPException, Request
 
+from api.services.theo_config import THEO_RESEARCHER_ROLE_ID
 from pipeline.database import DiscordUser, get_session
 
 logger = logging.getLogger(__name__)
@@ -109,4 +110,11 @@ async def require_founder(user: DiscordUser = Depends(get_current_user)) -> Disc
     """Dependency that requires the user to have the Founder role."""
     if FOUNDER_ROLE_ID not in (user.roles or []):
         raise HTTPException(status_code=403, detail="Founders only")
+    return user
+
+
+async def require_researcher(user: DiscordUser = Depends(get_current_user)) -> DiscordUser:
+    """Dependency that requires the user to have the Theo Researcher role."""
+    if not THEO_RESEARCHER_ROLE_ID or THEO_RESEARCHER_ROLE_ID not in (user.roles or []):
+        raise HTTPException(status_code=403, detail="Researcher role required")
     return user

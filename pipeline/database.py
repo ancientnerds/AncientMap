@@ -1293,6 +1293,11 @@ class ResearchRequest(Base):
     total_tokens: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    specialist_options: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    is_public: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    published_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    slug: Mapped[str | None] = mapped_column(String(300), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -1300,6 +1305,7 @@ class ResearchRequest(Base):
     __table_args__ = (
         Index("idx_research_requests_user_created", "user_id", "created_at"),
         Index("idx_research_requests_status", "status"),
+        Index("idx_research_requests_public", "is_public", "published_at"),
     )
 
     def __repr__(self) -> str:

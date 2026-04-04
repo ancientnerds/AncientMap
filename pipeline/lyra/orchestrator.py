@@ -1619,6 +1619,28 @@ def _run_migrations(engine) -> None:
             text("ALTER TABLE pipeline_heartbeats ADD COLUMN IF NOT EXISTS step_data JSONB")
         )
 
+        # Theo specialist options: force_include / force_exclude
+        conn.execute(
+            text("ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS specialist_options JSONB")
+        )
+
+        # Theo public research library
+        conn.execute(
+            text("ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE")
+        )
+        conn.execute(
+            text("ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS published_at TIMESTAMP")
+        )
+        conn.execute(
+            text("ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS published_by VARCHAR(100)")
+        )
+        conn.execute(
+            text("ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS slug VARCHAR(300)")
+        )
+        conn.execute(
+            text("CREATE INDEX IF NOT EXISTS idx_research_requests_public ON research_requests (is_public, published_at)")
+        )
+
         conn.commit()
 
 

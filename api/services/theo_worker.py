@@ -6,11 +6,13 @@ runs the agent pipeline, and saves structured reports to the DB.
 """
 
 import asyncio
+import json
 import logging
+import time
 
 from sqlalchemy import text
 
-from api.services.theo_config import THEO_PARALLEL_SLOTS
+from api.services.theo_config import RESULT_TTL_HOURS, THEO_PARALLEL_SLOTS
 from pipeline.database import get_session
 
 logger = logging.getLogger(__name__)
@@ -40,21 +42,129 @@ def get_live_events(request_id: str) -> list[dict]:
     return _live_events.get(request_id, [])
 
 
-async def _process_request(request_id: str, question: str, effort: str) -> None:
-    """Process a single research request using the Lyra agent pipeline."""
-    # Phase 2 will wire MiniMax M2.7 here. Until then, fail immediately.
-    _msg = "Theo backend not configured — Phase 2 will wire MiniMax M2.7"
-    logger.warning(f"[THEO] {_msg} (request {request_id})")
+async def _process_request(
+    request_id: str,
+    question: str,
+    effort: str,
+    specialist_options: dict | None = None,
+) -> None:
+    """Process a single research request using the TheoPipeline."""
+    logger.info(f"[THEO] Starting request {request_id} (effort={effort})")
+
+    # Register live events buffer before pipeline starts so SSE streaming works immediately
+    _live_events[request_id] = []
+
+    # Mark request as running
     with get_session() as session:
         session.execute(
-            text("""
-                UPDATE research_requests
-                SET status = 'failed', error_message = :msg, completed_at = NOW()
-                WHERE id = :id
-            """),
-            {"id": request_id, "msg": _msg},
+            text("UPDATE research_requests SET status = 'running' WHERE id = :id"),
+            {"id": request_id},
         )
         session.commit()
+
+    pipeline_trace: list[dict] = []
+    start = time.monotonic()
+
+    def emit(event: dict) -> None:
+        _append_event(request_id, event)
+        pipeline_trace.append(event)
+
+    try:
+        # Lazy import to avoid circular: theo_pipeline -> theo_config -> api -> theo_worker
+        from pipeline.lyra.theo_pipeline import TheoPipeline
+
+        pipeline = TheoPipeline()
+        force_include = (specialist_options or {}).get("force_include", [])
+        force_exclude = (specialist_options or {}).get("force_exclude", [])
+        ctx = await pipeline.run(
+            question,
+            effort,
+            emit,
+            force_include=force_include,
+            force_exclude=force_exclude,
+            request_id=request_id,
+        )
+
+        duration_ms = int((time.monotonic() - start) * 1000)
+
+        if ctx.error:
+            # Pipeline reported a fatal error via ctx.error
+            emit({"type": "done", "status": "failed"})
+            with get_session() as session:
+                session.execute(
+                    text("""
+                        UPDATE research_requests
+                        SET status = 'failed', error_message = :msg, completed_at = NOW()
+                        WHERE id = :id
+                    """),
+                    {"id": request_id, "msg": ctx.error},
+                )
+                session.commit()
+            logger.warning(f"[THEO] Request {request_id} failed: {ctx.error}")
+        else:
+            result = {
+                "report": ctx.paper_text,
+                "title": ctx.paper_title,
+                "audit": ctx.audit_result,
+            }
+            emit({"type": "done", "status": "completed"})
+            try:
+                with get_session() as session:
+                    session.execute(
+                        text("""
+                            UPDATE research_requests
+                            SET status = 'completed',
+                                result_json = :result,
+                                pipeline_trace = :trace,
+                                total_tokens = :tokens,
+                                duration_ms = :duration,
+                                sites_found = :sites,
+                                tools_used = :tools,
+                                completed_at = NOW(),
+                                expires_at = NOW() + (:ttl * INTERVAL '1 hour')
+                            WHERE id = :id
+                        """),
+                        {
+                            "id": request_id,
+                            "result": json.dumps(result),
+                            "trace": json.dumps(pipeline_trace),
+                            "tokens": ctx.total_tokens,
+                            "duration": duration_ms,
+                            "sites": len(ctx.registry.sources),
+                            "tools": len(ctx.specialist_analyses),
+                            "ttl": RESULT_TTL_HOURS,
+                        },
+                    )
+                    session.commit()
+            except Exception as db_exc:
+                logger.error(f"[THEO] DB commit failed for {request_id}: {db_exc}")
+            logger.info(
+                f"[THEO] Request {request_id} completed in {duration_ms}ms"
+                f" ({ctx.total_tokens} tokens)"
+            )
+
+    except Exception as exc:
+        duration_ms = int((time.monotonic() - start) * 1000)
+        logger.error(f"[THEO] Unexpected error for request {request_id}: {exc}", exc_info=True)
+        emit({"type": "done", "status": "failed"})
+        with get_session() as session:
+            session.execute(
+                text("""
+                    UPDATE research_requests
+                    SET status = 'failed', error_message = :msg, completed_at = NOW()
+                    WHERE id = :id
+                """),
+                {"id": request_id, "msg": str(exc)},
+            )
+            session.commit()
+
+    finally:
+        # Delay cleanup so SSE streams have time to read the terminal event
+        try:
+            loop = asyncio.get_running_loop()
+            loop.call_later(10, _live_events.pop, request_id, None)
+        except RuntimeError:
+            _live_events.pop(request_id, None)
 
 
 async def _poll_loop() -> None:
@@ -66,7 +176,7 @@ async def _poll_loop() -> None:
             with get_session() as session:
                 row = session.execute(
                     text("""
-                        SELECT id::text, question, effort
+                        SELECT id::text, question, effort, specialist_options
                         FROM research_requests
                         WHERE status = 'queued'
                         ORDER BY created_at ASC
@@ -76,7 +186,9 @@ async def _poll_loop() -> None:
 
             if row:
                 async with _semaphore:
-                    await _process_request(row.id, row.question, row.effort)
+                    await _process_request(
+                        row.id, row.question, row.effort, row.specialist_options
+                    )
             else:
                 await asyncio.sleep(3)  # No work — wait before polling again
 

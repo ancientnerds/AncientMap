@@ -19,20 +19,18 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import httpx
-
 from pipeline.lyra.config import LyraAPIError, LyraSettings, call_api
+from pipeline.lyra.minimax_shared import (
+    WebSearchResult,
+    create_minimax_client,
+    minimax_chat,
+    minimax_search,
+)
 
 logger = logging.getLogger(__name__)
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 ARTICLE_TIMEOUT = 600.0
-
-# MiniMax search endpoint (Token Plan / Coding Plan)
-MINIMAX_SEARCH_PATH = "/v1/coding_plan/search"
-MINIMAX_SEARCH_TIMEOUT = 15.0
-MINIMAX_CHAT_PATH = "/v1/chat/completions"
-MINIMAX_CHAT_TIMEOUT = 120.0
 
 # M2.7 is a reasoning model — thinking consumes ~2-4K tokens from the budget
 MINIMAX_CLAIM_MAX_TOKENS = 4096
@@ -46,16 +44,6 @@ def _load_prompt(name: str) -> str:
 # ---------------------------------------------------------------------------
 # Data types
 # ---------------------------------------------------------------------------
-
-
-@dataclass
-class WebSearchResult:
-    """A single web search result."""
-
-    title: str
-    url: str
-    snippet: str
-    date: str = ""
 
 
 @dataclass
@@ -171,79 +159,21 @@ class MiniMaxWebResearch(WebResearchBackend):
 
     def __init__(self, settings: LyraSettings):
         self.settings = settings
-        self._client = httpx.Client(
-            base_url=settings.minimax_base_url,
-            headers={
-                "Authorization": f"Bearer {settings.minimax_api_key}",
-                "Content-Type": "application/json",
-            },
-            timeout=MINIMAX_SEARCH_TIMEOUT,
-        )
+        self._client = create_minimax_client(settings.minimax_base_url, settings.minimax_api_key)
 
     # -- Web search --
 
     def _search(self, query: str) -> list[WebSearchResult]:
         """Call MiniMax search endpoint."""
-        try:
-            resp = self._client.post(MINIMAX_SEARCH_PATH, json={"q": query})
-            resp.raise_for_status()
-            data = resp.json()
-        except Exception as e:
-            logger.warning(f"MiniMax search failed for '{query}': {e}")
-            return []
-
-        results = []
-        for item in data.get("organic", []):
-            results.append(
-                WebSearchResult(
-                    title=item.get("title", ""),
-                    url=item.get("link", ""),
-                    snippet=item.get("snippet", ""),
-                    date=item.get("date", ""),
-                )
-            )
-        return results
+        return minimax_search(self._client, query)
 
     # -- M2.7 chat --
 
     def _chat(self, system: str, user_message: str, max_tokens: int) -> str:
-        """Call MiniMax M2.7 chat completion, strip thinking tags.
-
-        Retries up to 3 times on 429 rate limit with exponential backoff.
-        """
-        max_retries = 3
-        for attempt in range(max_retries + 1):
-            try:
-                resp = self._client.post(
-                    MINIMAX_CHAT_PATH,
-                    json={
-                        "model": self.settings.minimax_model,
-                        "messages": [
-                            {"role": "system", "content": system},
-                            {"role": "user", "content": user_message},
-                        ],
-                        "max_tokens": max_tokens,
-                    },
-                    timeout=MINIMAX_CHAT_TIMEOUT,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                break
-            except Exception as e:
-                err_str = str(e)
-                is_retryable = "429" in err_str or "10054" in err_str or "timed out" in err_str
-                if is_retryable and attempt < max_retries:
-                    wait = 3 * (attempt + 1)  # 3, 6, 9 seconds
-                    logger.info(f"MiniMax error ({err_str[:50]}), retrying in {wait}s...")
-                    time.sleep(wait)
-                    continue
-                logger.warning(f"MiniMax M2.7 chat failed: {e}")
-                return ""
-
-        content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-        # M2.7 wraps reasoning in <think>...</think> tags — strip them
-        clean = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
-        return clean
+        """Call MiniMax M2.7 chat completion, strip thinking tags."""
+        return minimax_chat(
+            self._client, self.settings.minimax_model, system, user_message, max_tokens
+        )
 
     # -- Claim extraction --
 
