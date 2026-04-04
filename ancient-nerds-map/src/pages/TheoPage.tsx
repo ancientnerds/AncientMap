@@ -65,18 +65,24 @@ interface FullResearch extends ResearchItem {
 }
 
 interface DuplicateMatch {
-  title: string
-  slug: string
-  published_by: string
-  similarity: number
+  paper_title: string
+  paper_slug: string
+  author_username: string
+  score: number
+  best_section_title: string
+  effort: string
 }
 
 interface PublicPaper {
+  id: string
   slug: string
   title: string
+  question: string
   published_by: string
   effort: string
   published_at: string
+  sites_found: number
+  duration_ms: number | null
 }
 
 interface PublicPaperFull {
@@ -182,10 +188,11 @@ export default function TheoPage() {
     try {
       const resp = await fetch(`${config.api.baseUrl}/theo/public?offset=${offset}&limit=20`)
       if (resp.ok) {
-        const data: PublicPaper[] = await resp.json()
-        setPublicPapers(prev => append ? [...prev, ...data] : data)
-        setPublicHasMore(data.length === 20)
-        setPublicOffset(offset + data.length)
+        const data: { papers: PublicPaper[]; total: number } = await resp.json()
+        const papers = data.papers || []
+        setPublicPapers(prev => append ? [...prev, ...papers] : papers)
+        setPublicHasMore(offset + papers.length < (data.total || 0))
+        setPublicOffset(offset + papers.length)
       }
     } catch { /* ignore */ }
     setLoadingPublic(false)
@@ -286,8 +293,8 @@ export default function TheoPage() {
         body: JSON.stringify({ question: question.trim() }),
       })
       if (resp.ok) {
-        const data: DuplicateMatch[] = await resp.json()
-        setDuplicateMatches(data)
+        const data: { matches: DuplicateMatch[] } = await resp.json()
+        setDuplicateMatches(data.matches || [])
       } else {
         setDuplicateMatches([])
       }
@@ -503,7 +510,7 @@ export default function TheoPage() {
       {/* Hero */}
       <div className="theo-hero">
         <div className="theo-avatar-row">
-          <div className="theo-avatar-placeholder">&#x1f43b;</div>
+          <img src="/images/theo.png" alt="Theodore Furcade" className="theo-avatar" />
           <div>
             <h1 className="theo-title">Theodore Furcade</h1>
             <div className="theo-subtitle">Archaeological Research Specialist</div>
@@ -642,18 +649,18 @@ export default function TheoPage() {
                       </div>
                       <div className="theo-duplicate-list">
                         {duplicateMatches.map(match => (
-                          <div key={match.slug} className="theo-duplicate-card">
+                          <div key={match.paper_slug} className="theo-duplicate-card">
                             <div className="theo-duplicate-card-top">
-                              <span className="theo-duplicate-title">{match.title}</span>
+                              <span className="theo-duplicate-title">{match.paper_title}</span>
                               <span className="theo-badge theo-badge-similarity">
-                                {Math.round(match.similarity * 100)}% similar
+                                {Math.round(match.score * 100)}% similar
                               </span>
                             </div>
                             <div className="theo-duplicate-card-meta">
-                              by {match.published_by}
+                              by {match.author_username}
                             </div>
                             <div className="theo-card-actions">
-                              <button className="theo-btn-view" onClick={() => handleReadDuplicateMatch(match.slug)}>
+                              <button className="theo-btn-view" onClick={() => handleReadDuplicateMatch(match.paper_slug)}>
                                 Read
                               </button>
                             </div>
