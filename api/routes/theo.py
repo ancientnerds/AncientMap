@@ -188,7 +188,7 @@ async def list_specialists():
     """Return the specialist pool for the frontend selection UI."""
     from pipeline.lyra.theo_specialists import SPECIALIST_POOL
 
-    categories = {
+    categories: dict[str, list[dict]] = {
         "Archaeological Core": [],
         "Interdisciplinary Science": [],
         "Fringe / Alternative": [],
