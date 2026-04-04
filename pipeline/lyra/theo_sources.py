@@ -103,6 +103,7 @@ SOURCE_GROUPS: dict[str, list[str]] = {
     "standard": [
         "ancientnerds_db",
         "ancientnerds_research",
+        "youtube_transcripts",
         "semantic_scholar",
         "openalex",
         "crossref",
@@ -112,6 +113,7 @@ SOURCE_GROUPS: dict[str, list[str]] = {
     "full": [
         "ancientnerds_db",
         "ancientnerds_research",
+        "youtube_transcripts",
         "semantic_scholar",
         "openalex",
         "crossref",
@@ -124,6 +126,7 @@ SOURCE_GROUPS: dict[str, list[str]] = {
     "exhaustive": [
         "ancientnerds_db",
         "ancientnerds_research",
+        "youtube_transcripts",
         "semantic_scholar",
         "openalex",
         "crossref",
@@ -1152,6 +1155,72 @@ class PublicResearchAdapter(SourceAdapter):
             return []
 
 
+class TranscriptAdapter(SourceAdapter):
+    """Search YouTube video transcripts in Qdrant for citation use.
+
+    Searches the existing `transcripts` Qdrant collection (populated by both
+    the Lyra news pipeline and user-provided videos in Theo). Returns
+    timestamped YouTube deep links as citations.
+
+    Reuses _hybrid_search() from lyra_tools.py — no duplicate search code.
+    """
+
+    @property
+    def name(self) -> str:
+        return "youtube_transcripts"
+
+    @property
+    def default_tier(self) -> int:
+        return 3  # User-generated content (YouTube)
+
+    async def search(self, query: str, max_results: int = 5) -> list[RawSource]:
+        def _do() -> list[RawSource]:
+            from api.services.lyra_tools import _hybrid_search
+
+            items, _ = _hybrid_search(query, collection="transcripts", limit=max_results)
+
+            results: list[RawSource] = []
+            seen_videos: set[str] = set()
+            for item in items:
+                vid = item.get("video_id", "")
+                if not vid or vid in seen_videos:
+                    continue
+                seen_videos.add(vid)
+
+                start = item.get("start_seconds", 0)
+                end = item.get("end_seconds", 0)
+                title = item.get("video_title", "")
+                channel = item.get("channel", "")
+                text = item.get("text_preview", "")
+                published = item.get("published_at", "")
+
+                # Format timestamp as MM:SS
+                def _fmt(s: int) -> str:
+                    return f"{s // 60}:{s % 60:02d}"
+
+                ts_label = f"[{_fmt(start)}-{_fmt(end)}]" if end > start else f"[{_fmt(start)}]"
+                source_label = f" — {channel}" if channel else ""
+
+                url = f"https://youtu.be/{vid}?t={start}"
+                results.append(
+                    RawSource(
+                        url=url,
+                        title=f"{title} {ts_label}{source_label} (YouTube)",
+                        snippet=text[:500],
+                        date=published[:10] if published else "",
+                        source_api=self.name,
+                        default_tier=self.default_tier,
+                    )
+                )
+            return results
+
+        try:
+            return await asyncio.to_thread(_do)
+        except Exception as exc:
+            logger.warning("Transcript search failed for '%s': %s", query, exc)
+            return []
+
+
 # ---------------------------------------------------------------------------
 # Unpaywall enricher (post-search, not a search adapter)
 # ---------------------------------------------------------------------------
@@ -1217,6 +1286,7 @@ class MultiSourceSearch:
         # Always available (no key required, or key is optional)
         self._adapters["ancientnerds_db"] = UnifiedSitesAdapter()
         self._adapters["ancientnerds_research"] = PublicResearchAdapter()
+        self._adapters["youtube_transcripts"] = TranscriptAdapter()
         self._adapters["semantic_scholar"] = SemanticScholarAdapter()
         self._adapters["openalex"] = OpenAlexAdapter()
         self._adapters["crossref"] = CrossrefAdapter()

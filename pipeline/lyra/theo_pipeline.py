@@ -67,6 +67,9 @@ class PipelineContext:
     force_include: list[str] = field(default_factory=list)
     force_exclude: list[str] = field(default_factory=list)
 
+    # User-provided YouTube video IDs for transcript extraction
+    video_ids: list[str] = field(default_factory=list)
+
     # Stage 1 outputs
     domain_tags: list[str] = field(default_factory=list)
     sub_questions: list[str] = field(default_factory=list)
@@ -131,6 +134,7 @@ class TheoPipeline:
         force_include: list[str] | None = None,
         force_exclude: list[str] | None = None,
         request_id: str = "",
+        video_ids: list[str] | None = None,
     ) -> PipelineContext:
         """Run the full pipeline.  *emit* sends SSE events to the client."""
         tier = EFFORT_CONFIG.get(effort, EFFORT_CONFIG["article"])
@@ -143,6 +147,7 @@ class TheoPipeline:
             request_id=request_id,
             force_include=force_include or [],
             force_exclude=force_exclude or [],
+            video_ids=video_ids or [],
         )
 
         pipeline_start = time.monotonic()
@@ -152,6 +157,21 @@ class TheoPipeline:
         if rejection:
             ctx.error = rejection
             return ctx
+
+        # Stage 0.5 — Extract transcripts for user-provided YouTube videos
+        if ctx.video_ids:
+            try:
+                await self._stage_0_transcripts(ctx, emit)
+            except Exception as exc:
+                logger.warning("Transcript extraction failed (non-fatal): %s", exc)
+                emit(
+                    {
+                        "type": "pipeline",
+                        "stage": "transcript_extraction",
+                        "status": "warning",
+                        "warning": f"Transcript extraction failed: {exc}",
+                    }
+                )
 
         # Stages 1-3 are fatal — if they fail the pipeline cannot continue.
         for stage_fn, stage_name in [
@@ -240,6 +260,292 @@ class TheoPipeline:
             }
         )
         return ctx
+
+    # ------------------------------------------------------------------
+    # Stage 0.5: YouTube transcript extraction for user-provided videos
+    # ------------------------------------------------------------------
+
+    async def _stage_0_transcripts(
+        self,
+        ctx: PipelineContext,
+        emit: Callable[[dict], None],
+    ) -> None:
+        """Extract transcripts for user-provided YouTube videos.
+
+        Reuses the Lyra news pipeline infrastructure:
+        - transcript_fetcher.fetch_transcript() for extraction
+        - transcript_fetcher._fetch_metadata_youtube_api() for metadata
+        - build_lyra_index._chunk_transcript() pattern for Qdrant indexing
+        - Stores in news_videos table (same as news pipeline)
+        """
+        import re as _re
+        import uuid as _uuid
+
+        from sqlalchemy import text as sql_text
+
+        from pipeline.database import get_session
+
+        stage = "transcript_extraction"
+        t0 = time.monotonic()
+        emit({"type": "pipeline", "stage": stage, "status": "start"})
+        emit(
+            {
+                "type": "status",
+                "content": f"Extracting transcripts from {len(ctx.video_ids)} video(s)...",
+            }
+        )
+
+        extracted = 0
+        skipped = 0
+
+        for vid in ctx.video_ids[:5]:
+            # Check if already in database
+            with get_session() as session:
+                exists = session.execute(
+                    sql_text(
+                        "SELECT 1 FROM news_videos WHERE id = :vid AND status = 'transcribed'"
+                    ),
+                    {"vid": vid},
+                ).fetchone()
+
+            if exists:
+                skipped += 1
+                emit({"type": "status", "content": f"Video {vid} already indexed, skipping."})
+                continue
+
+            try:
+                # Fetch metadata first for relevancy check
+                from pipeline.lyra.transcript_fetcher import (
+                    _fetch_metadata_youtube_api,
+                    fetch_transcript,
+                )
+
+                meta = await asyncio.to_thread(
+                    _fetch_metadata_youtube_api, vid, self._settings.youtube_api_key
+                )
+                title = meta.get("title", "") if meta else ""
+                description = meta.get("description", "")[:500] if meta else ""
+                tags = ", ".join(meta.get("tags", [])[:10]) if meta else ""
+
+                # Quick relevancy check on metadata
+                relevance_input = f"Title: {title}\nDescription: {description}\nTags: {tags}"
+                rejection = await self._check_relevance(relevance_input, lambda _: None)
+                if rejection:
+                    emit(
+                        {
+                            "type": "status",
+                            "content": f"Video '{title[:60]}' rejected: not related to archaeology.",
+                        }
+                    )
+                    continue
+
+                emit({"type": "status", "content": f"Extracting transcript: {title[:60]}..."})
+
+                # Extract transcript (reuses full pipeline: fetch + clean + timestamp)
+                transcript_text, duration_min = await asyncio.to_thread(
+                    fetch_transcript, vid, self._settings
+                )
+
+                if not transcript_text:
+                    emit({"type": "status", "content": f"No transcript available for {vid}."})
+                    continue
+
+                # Store in news_videos table (same as news pipeline)
+                thumbnail = meta.get("thumbnail", "") if meta else ""
+                with get_session() as session:
+                    session.execute(
+                        sql_text("""
+                            INSERT INTO news_videos (
+                                id, title, description, transcript_text, duration_minutes,
+                                thumbnail_url, tags, status, published_at, processed_at
+                            ) VALUES (
+                                :id, :title, :desc, :transcript, :duration,
+                                :thumb, :tags, 'transcribed', NOW(), NOW()
+                            ) ON CONFLICT (id) DO UPDATE SET
+                                transcript_text = :transcript,
+                                status = 'transcribed',
+                                processed_at = NOW()
+                        """),
+                        {
+                            "id": vid,
+                            "title": title,
+                            "desc": description,
+                            "transcript": transcript_text,
+                            "duration": duration_min,
+                            "thumb": thumbnail,
+                            "tags": json.dumps(meta.get("tags", []) if meta else []),
+                        },
+                    )
+                    session.commit()
+
+                # Index in Qdrant transcripts collection
+                await self._index_transcript_chunks(vid, title, transcript_text, "")
+
+                extracted += 1
+                emit(
+                    {
+                        "type": "status",
+                        "content": f"Transcript extracted: {title[:60]} ({duration_min:.0f} min)",
+                    }
+                )
+
+            except Exception as exc:
+                logger.warning("Failed to extract transcript for %s: %s", vid, exc)
+                emit(
+                    {
+                        "type": "status",
+                        "content": f"Failed to extract transcript for {vid}: {exc}",
+                    }
+                )
+
+        ms = int((time.monotonic() - t0) * 1000)
+        emit(
+            {
+                "type": "pipeline",
+                "stage": stage,
+                "status": "done",
+                "duration_ms": ms,
+                "meta": {"extracted": extracted, "skipped": skipped},
+            }
+        )
+
+    async def _index_transcript_chunks(
+        self,
+        video_id: str,
+        video_title: str,
+        transcript_text: str,
+        channel: str,
+    ) -> None:
+        """Chunk a transcript and upsert to the Qdrant transcripts collection.
+
+        Reuses the same chunking pattern and point ID scheme as
+        scripts/build_lyra_index.py so chunks are deduplicated correctly.
+        """
+        import re as _re
+        import uuid as _uuid
+
+        from qdrant_client.models import PointStruct
+
+        from api.services.lyra_embeddings import (
+            get_embeddings,
+            get_qdrant_client,
+            get_sparse_model,
+        )
+
+        def _parse_ts(ts: str) -> int:
+            parts = ts.split(":")
+            if len(parts) == 3:
+                return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+            return int(parts[0]) * 60 + int(parts[1])
+
+        # Chunk the transcript (inline, same logic as build_lyra_index._chunk_transcript)
+        lines = transcript_text.strip().split("\n")
+        ts_pat = _re.compile(r"\[(\d+:\d{2}(?::\d{2})?)\]")
+        chunks: list[dict] = []
+        chunk_idx = 0
+        start_line = 0
+        chunk_size = 2000
+        overlap = 500
+
+        parsed_lines: list[tuple[str, int | None]] = []
+        for line in lines:
+            m = ts_pat.match(line)
+            secs = _parse_ts(m.group(1)) if m else None
+            parsed_lines.append((line, secs))
+
+        while start_line < len(parsed_lines):
+            current_text = ""
+            end_line = start_line
+            while end_line < len(parsed_lines):
+                candidate = current_text + parsed_lines[end_line][0] + "\n"
+                if len(candidate) > chunk_size and end_line > start_line:
+                    break
+                current_text = candidate
+                end_line += 1
+
+            if not current_text.strip():
+                start_line = end_line
+                continue
+
+            start_secs = None
+            end_secs = None
+            for i in range(start_line, end_line):
+                s = parsed_lines[i][1]
+                if s is not None:
+                    if start_secs is None:
+                        start_secs = s
+                    end_secs = s
+
+            chunks.append(
+                {
+                    "text": current_text.strip(),
+                    "start_seconds": start_secs or 0,
+                    "end_seconds": end_secs or 0,
+                    "chunk_index": chunk_idx,
+                }
+            )
+            chunk_idx += 1
+
+            if end_line >= len(parsed_lines):
+                break
+            overlap_text = ""
+            overlap_start = end_line
+            for j in range(end_line - 1, start_line - 1, -1):
+                overlap_text = parsed_lines[j][0] + "\n" + overlap_text
+                if len(overlap_text) >= overlap:
+                    overlap_start = j
+                    break
+            start_line = overlap_start if overlap_start > start_line else end_line
+
+        if not chunks:
+            return
+
+        def _do_index() -> None:
+            embedder = get_embeddings("index")
+            sparse_model = get_sparse_model()
+            client = get_qdrant_client()
+
+            texts = [f"{video_title} | {c['text']}" for c in chunks]
+            dense_vecs = embedder.embed_documents(texts)
+            sparse_vecs = list(sparse_model.embed(texts))
+
+            points = []
+            for i, chunk in enumerate(chunks):
+                point_id = str(
+                    _uuid.uuid5(
+                        _uuid.NAMESPACE_URL, f"transcript-{video_id}-{chunk['chunk_index']}"
+                    )
+                )
+                from qdrant_client.models import SparseVector
+
+                points.append(
+                    PointStruct(
+                        id=point_id,
+                        vector={
+                            "dense": dense_vecs[i],
+                            "bm25": SparseVector(
+                                indices=sparse_vecs[i].indices.tolist(),
+                                values=sparse_vecs[i].values.tolist(),
+                            ),
+                        },
+                        payload={
+                            "video_id": video_id,
+                            "video_title": video_title,
+                            "channel": channel,
+                            "start_seconds": chunk["start_seconds"],
+                            "end_seconds": chunk["end_seconds"],
+                            "chunk_index": chunk["chunk_index"],
+                            "published_at": "",
+                            "text_preview": chunk["text"][:2000],
+                            "content_hash": "",
+                        },
+                    )
+                )
+
+            client.upsert(collection_name="transcripts", points=points)
+            logger.info("Indexed %d transcript chunks for video %s", len(points), video_id)
+
+        await asyncio.to_thread(_do_index)
 
     # ------------------------------------------------------------------
     # Stage 1: Question analysis + specialist selection

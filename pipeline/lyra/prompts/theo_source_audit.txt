@@ -8,9 +8,9 @@ TIER CRITERIA:
 
 Tier 1 — Academic: DOI from peer-reviewed journal, academic database (semanticscholar, openalex, core.ac.uk), .edu/.ac.uk, journal publishers (JSTOR, Cambridge UP, Oxford UP, Springer, Elsevier), academic repos (ResearchGate, Academia.edu, arXiv), museum/heritage (Smithsonian, British Museum, UNESCO, Europeana).
 
-Tier 2 — Reputable: Major news with editorial standards, popular science (NatGeo, Archaeology Magazine), credentialed author blogs, educational platforms, Wikipedia.
+Tier 2 — Reputable: Major news with editorial standards, popular science (NatGeo, Archaeology Magazine), credentialed author blogs, educational platforms, Wikipedia. Known archaeology YouTube channels with significant followings and credentialed presenters (youtu.be links).
 
-Tier 3 — General: Personal blogs, commercial/travel sites, forums, self-published, news aggregators.
+Tier 3 — General: Personal blogs, commercial/travel sites, forums, self-published, news aggregators. General YouTube content without verified archaeological credentials.
 
 REJECT: Social media (Reddit, Facebook, X/Twitter, TikTok), content farms, no-author sites, conspiracy sites, AI-generated aggregators.
 

@@ -76,6 +76,7 @@ async def _process_request(
         pipeline = TheoPipeline()
         force_include = (specialist_options or {}).get("force_include", [])
         force_exclude = (specialist_options or {}).get("force_exclude", [])
+        video_ids = (specialist_options or {}).get("video_ids", [])
         ctx = await pipeline.run(
             question,
             effort,
@@ -83,6 +84,7 @@ async def _process_request(
             force_include=force_include,
             force_exclude=force_exclude,
             request_id=request_id,
+            video_ids=video_ids,
         )
 
         duration_ms = int((time.monotonic() - start) * 1000)
