@@ -99,7 +99,17 @@ export default function TheoReportOverlay({
         <div className="theo-report-header">
           <img src="/images/theo.png" alt="Theo" className="theo-avatar" style={{ width: 48, height: 48 }} />
           <div className="theo-report-header-text">
-            <div className="theo-report-question">{question}</div>
+            <div className="theo-report-question">
+              {question.length > 200 ? question.slice(0, 200) + '...' : question}
+              <button
+                className="theo-copy-question"
+                onClick={() => navigator.clipboard.writeText(question)}
+                title="Copy full prompt"
+                aria-label="Copy full prompt"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
             <div className="theo-report-meta-row">
               <span className="theo-badge theo-badge-effort">{{ brief: 'Brief', note: 'Note', article: 'Article', review: 'Review', thesis: 'Thesis' }[effort] || effort}</span>
               <span className="theo-badge" style={{ border: '1px solid var(--border-default)', color: 'var(--text-dimmed)' }}>

@@ -31,6 +31,23 @@ const SPECIALIST_COUNTS: Record<string, number> = {
   brief: 1, note: 3, article: 5, review: 6, thesis: 8,
 }
 
+function TruncatedQuestion({ text, max = 200 }: { text: string; max?: number }) {
+  const truncated = text.length > max ? text.slice(0, max) + '...' : text
+  return (
+    <span className="theo-card-question">
+      {truncated}
+      <button
+        className="theo-copy-question"
+        onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(text) }}
+        title="Copy full prompt"
+        aria-label="Copy full prompt"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      </button>
+    </span>
+  )
+}
+
 const SPECIALIST_ICONS: Record<string, string> = {
   field_archaeologist: '\u26cf\ufe0f',     // pick
   ceramic_analyst: '\ud83c\udffa',         // amphora
@@ -1137,7 +1154,7 @@ export default function TheoPage() {
               {activeItems.map(item => (
                 <div key={item.id} className="theo-card">
                   <div className="theo-card-top">
-                    <span className="theo-card-question">{item.question}</span>
+                    <TruncatedQuestion text={item.question} />
                     <span className="theo-badge theo-badge-effort">{EFFORT_LABELS[item.effort] || item.effort}</span>
                     <span className={`theo-badge theo-badge-status theo-badge-${item.status}`}>
                       {item.status === 'running' ? <>● Running</> : <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0}}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>{`#${activeItems.indexOf(item) + 1} Queued`}</>}
@@ -1183,7 +1200,7 @@ export default function TheoPage() {
               doneItems.map(item => (
                 <div key={item.id} className="theo-card">
                   <div className="theo-card-top">
-                    <span className="theo-card-question">{item.question}</span>
+                    <TruncatedQuestion text={item.question} />
                     <span className="theo-badge theo-badge-effort">{EFFORT_LABELS[item.effort] || item.effort}</span>
                     <span className={`theo-badge theo-badge-status theo-badge-${item.status}`}>
                       {item.status === 'completed' ? <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0}}><polyline points="20 6 9 17 4 12"/></svg>Done</> :

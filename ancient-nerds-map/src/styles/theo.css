@@ -759,6 +759,23 @@
   line-height: 1.4;
 }
 
+.theo-copy-question {
+  background: none;
+  border: none;
+  color: var(--text-dimmed);
+  cursor: pointer;
+  padding: 2px 4px;
+  margin-left: 4px;
+  vertical-align: middle;
+  transition: color 0.15s;
+  display: inline-flex;
+  align-items: center;
+}
+
+.theo-copy-question:hover {
+  color: var(--text-primary);
+}
+
 .theo-badge {
   display: inline-flex;
   align-items: center;
