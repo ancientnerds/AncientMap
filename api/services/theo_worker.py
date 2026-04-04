@@ -6,12 +6,15 @@ runs the agent pipeline, and saves structured reports to the DB.
 """
 
 import asyncio
+import json
 import logging
+import time
 
 from sqlalchemy import text
 
-from api.services.theo_config import THEO_PARALLEL_SLOTS
+from api.services.theo_config import RESULT_TTL_HOURS, THEO_PARALLEL_SLOTS
 from pipeline.database import get_session
+from pipeline.lyra.theo_pipeline import TheoPipeline
 
 logger = logging.getLogger(__name__)
 
@@ -41,20 +44,100 @@ def get_live_events(request_id: str) -> list[dict]:
 
 
 async def _process_request(request_id: str, question: str, effort: str) -> None:
-    """Process a single research request using the Lyra agent pipeline."""
-    # Phase 2 will wire MiniMax M2.7 here. Until then, fail immediately.
-    _msg = "Theo backend not configured — Phase 2 will wire MiniMax M2.7"
-    logger.warning(f"[THEO] {_msg} (request {request_id})")
+    """Process a single research request using the TheoPipeline."""
+    logger.info(f"[THEO] Starting request {request_id} (effort={effort})")
+
+    # Register live events buffer before pipeline starts so SSE streaming works immediately
+    _live_events[request_id] = []
+
+    # Mark request as running
     with get_session() as session:
         session.execute(
-            text("""
-                UPDATE research_requests
-                SET status = 'failed', error_message = :msg, completed_at = NOW()
-                WHERE id = :id
-            """),
-            {"id": request_id, "msg": _msg},
+            text("UPDATE research_requests SET status = 'running' WHERE id = :id"),
+            {"id": request_id},
         )
         session.commit()
+
+    pipeline_trace: list[dict] = []
+    start = time.monotonic()
+
+    def emit(event: dict) -> None:
+        _append_event(request_id, event)
+        pipeline_trace.append(event)
+
+    try:
+        pipeline = TheoPipeline()
+        ctx = await pipeline.run(question, effort, emit)
+
+        duration_ms = int((time.monotonic() - start) * 1000)
+
+        if ctx.error:
+            # Pipeline reported a fatal error via ctx.error
+            emit({"type": "done", "status": "failed"})
+            with get_session() as session:
+                session.execute(
+                    text("""
+                        UPDATE research_requests
+                        SET status = 'failed', error_message = :msg, completed_at = NOW()
+                        WHERE id = :id
+                    """),
+                    {"id": request_id, "msg": ctx.error},
+                )
+                session.commit()
+            logger.warning(f"[THEO] Request {request_id} failed: {ctx.error}")
+        else:
+            result = {
+                "report": ctx.paper_text,
+                "title": ctx.paper_title,
+                "audit": ctx.audit_result,
+            }
+            emit({"type": "done", "status": "completed"})
+            with get_session() as session:
+                session.execute(
+                    text("""
+                        UPDATE research_requests
+                        SET status = 'completed',
+                            result_json = :result,
+                            pipeline_trace = :trace,
+                            total_tokens = :tokens,
+                            duration_ms = :duration,
+                            completed_at = NOW(),
+                            expires_at = NOW() + (:ttl * INTERVAL '1 hour')
+                        WHERE id = :id
+                    """),
+                    {
+                        "id": request_id,
+                        "result": json.dumps(result),
+                        "trace": json.dumps(pipeline_trace),
+                        "tokens": ctx.total_tokens,
+                        "duration": duration_ms,
+                        "ttl": RESULT_TTL_HOURS,
+                    },
+                )
+                session.commit()
+            logger.info(
+                f"[THEO] Request {request_id} completed in {duration_ms}ms"
+                f" ({ctx.total_tokens} tokens)"
+            )
+
+    except Exception as exc:
+        duration_ms = int((time.monotonic() - start) * 1000)
+        logger.error(f"[THEO] Unexpected error for request {request_id}: {exc}", exc_info=True)
+        emit({"type": "done", "status": "failed"})
+        with get_session() as session:
+            session.execute(
+                text("""
+                    UPDATE research_requests
+                    SET status = 'failed', error_message = :msg, completed_at = NOW()
+                    WHERE id = :id
+                """),
+                {"id": request_id, "msg": str(exc)},
+            )
+            session.commit()
+
+    finally:
+        # Remove live events buffer — no more streaming after completion
+        _live_events.pop(request_id, None)
 
 
 async def _poll_loop() -> None:
