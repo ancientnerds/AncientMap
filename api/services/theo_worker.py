@@ -179,7 +179,8 @@ async def _process_request(
 
 async def _poll_loop() -> None:
     """Main polling loop — picks up queued requests and processes them."""
-    logger.info("[THEO] Worker started (polling for research requests)")
+    print("[THEO] Worker poll loop started", flush=True)
+    logger.info("[THEO] Worker poll loop started")
     while not _shutdown:
         try:
             # Find the oldest queued request
@@ -239,6 +240,16 @@ async def start_worker() -> None:
     except Exception as e:
         logger.warning(f"[THEO] Recovery check failed: {e}")
 
-    asyncio.create_task(_poll_loop())
+    async def _safe_poll_loop() -> None:
+        """Wrapper that restarts _poll_loop on crash."""
+        while not _shutdown:
+            try:
+                await _poll_loop()
+            except Exception as exc:
+                logger.error(f"[THEO] Poll loop crashed, restarting in 10s: {exc}", exc_info=True)
+                await asyncio.sleep(10)
+
+    asyncio.create_task(_safe_poll_loop())
     asyncio.create_task(cleanup_expired())
+    print("[THEO] Background worker tasks created", flush=True)
     logger.info("[THEO] Background worker tasks created")
