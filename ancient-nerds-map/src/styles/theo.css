@@ -1667,3 +1667,82 @@
 .theo-new-research-btn:hover {
   color: var(--text-primary);
 }
+
+/* — YouTube Sources Section — */
+.theo-video-section {
+  margin-top: 18px;
+}
+
+.theo-video-label {
+  font-family: var(--font-heading);
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dimmed);
+  margin-bottom: 10px;
+}
+
+.theo-video-input {
+  width: 100%;
+  background: var(--theo-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 14px;
+  padding: 10px 14px;
+  resize: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+  min-height: 0;
+}
+
+.theo-video-input:focus {
+  outline: none;
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 8px rgba(192, 32, 35, 0.12);
+}
+
+.theo-video-input:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.theo-video-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.theo-video-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px 3px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: 3px;
+  background: var(--surface-raised);
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--text-muted);
+  letter-spacing: 0.3px;
+}
+
+.theo-video-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text-dimmed);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.theo-video-chip-remove:hover {
+  color: var(--status-error-soft);
+}

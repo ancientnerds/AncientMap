@@ -123,6 +123,11 @@ export default function TheoPage() {
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1)
   const [question, setQuestion] = useState(() => sessionStorage.getItem('theo_question') || '')
   const [effort, setEffort] = useState<string>(() => sessionStorage.getItem('theo_effort') || 'article')
+  // Stage 1: YouTube video IDs
+  const [videoIds, setVideoIds] = useState<string[]>(() => {
+    try { return JSON.parse(sessionStorage.getItem('theo_video_ids') || '[]') } catch { return [] }
+  })
+  const [videoInput, setVideoInput] = useState('')
 
   // Stage 1: relevance check
   const [checkingRelevance, setCheckingRelevance] = useState(false)
@@ -281,6 +286,29 @@ export default function TheoPage() {
     setLoadingSpecialists(false)
   }, [specialistData])
 
+  // --- YouTube URL parser ---
+  function parseYouTubeIds(text: string): string[] {
+    const patterns: RegExp[] = [
+      /(?:youtube\.com\/(?:watch\?(?:[^&]*&)*v=|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/g,
+    ]
+    const ids: string[] = []
+    for (const pattern of patterns) {
+      let m: RegExpExecArray | null
+      while ((m = pattern.exec(text)) !== null) {
+        const id = m[1]
+        if (!ids.includes(id)) ids.push(id)
+      }
+    }
+    // Also match bare 11-char IDs not already captured
+    const barePattern = /(?<![A-Za-z0-9_-])([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])/g
+    let bm: RegExpExecArray | null
+    while ((bm = barePattern.exec(text)) !== null) {
+      const id = bm[1]
+      if (!ids.includes(id)) ids.push(id)
+    }
+    return ids
+  }
+
   // --- Stage 1: Check Relevance ---
   const handleCheckTopic = useCallback(async () => {
     if (question.trim().length < 10) return
@@ -342,6 +370,7 @@ export default function TheoPage() {
       const body: Record<string, unknown> = {
         question: question.trim(),
         effort,
+        ...(videoIds.length > 0 ? { video_ids: videoIds } : {}),
       }
       if (specialistMode === 'manual') {
         // All specialists in the pool
@@ -369,6 +398,9 @@ export default function TheoPage() {
       setWizardStep(1)
       sessionStorage.removeItem('theo_question')
       sessionStorage.removeItem('theo_effort')
+      setVideoIds([])
+      setVideoInput('')
+      sessionStorage.removeItem('theo_video_ids')
       setRelevanceResult(null)
       setDuplicateMatches(null)
       setShowDuplicateStage(false)
@@ -377,7 +409,7 @@ export default function TheoPage() {
     } finally {
       setSubmitting(false)
     }
-  }, [question, effort, submitting, specialistMode, selectedSpecialists, excludedSpecialists, specialistData, fetchList])
+  }, [question, effort, videoIds, submitting, specialistMode, selectedSpecialists, excludedSpecialists, specialistData, fetchList])
 
   // --- Result actions ---
   const handleCancel = useCallback(async (id: string) => {
@@ -647,6 +679,77 @@ export default function TheoPage() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* YouTube Sources */}
+              <div className="theo-video-section">
+                <div className="theo-video-label">YouTube Sources <span style={{ opacity: 0.5, fontWeight: 400 }}>(optional)</span></div>
+                <textarea
+                  className="theo-video-input"
+                  placeholder="Paste YouTube URLs here (max 5)"
+                  value={videoInput}
+                  disabled={videoIds.length >= 5}
+                  rows={2}
+                  onChange={e => {
+                    const text = e.target.value
+                    setVideoInput(text)
+                  }}
+                  onPaste={e => {
+                    e.preventDefault()
+                    const pasted = e.clipboardData.getData('text')
+                    const parsed = parseYouTubeIds(pasted)
+                    if (parsed.length > 0) {
+                      setVideoIds(prev => {
+                        const merged = [...prev]
+                        for (const id of parsed) {
+                          if (!merged.includes(id) && merged.length < 5) merged.push(id)
+                        }
+                        sessionStorage.setItem('theo_video_ids', JSON.stringify(merged))
+                        return merged
+                      })
+                      setVideoInput('')
+                    } else {
+                      setVideoInput(pasted)
+                    }
+                  }}
+                  onBlur={e => {
+                    const text = e.target.value.trim()
+                    if (!text) return
+                    const parsed = parseYouTubeIds(text)
+                    if (parsed.length > 0) {
+                      setVideoIds(prev => {
+                        const merged = [...prev]
+                        for (const id of parsed) {
+                          if (!merged.includes(id) && merged.length < 5) merged.push(id)
+                        }
+                        sessionStorage.setItem('theo_video_ids', JSON.stringify(merged))
+                        return merged
+                      })
+                      setVideoInput('')
+                    }
+                  }}
+                />
+                {videoIds.length > 0 && (
+                  <div className="theo-video-chips">
+                    {videoIds.map(id => (
+                      <span key={id} className="theo-video-chip">
+                        {id}
+                        <button
+                          type="button"
+                          className="theo-video-chip-remove"
+                          onClick={() => {
+                            setVideoIds(prev => {
+                              const next = prev.filter(v => v !== id)
+                              sessionStorage.setItem('theo_video_ids', JSON.stringify(next))
+                              return next
+                            })
+                          }}
+                          aria-label={"Remove video " + id}
+                        >&#x2715;</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Relevance check */}
