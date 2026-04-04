@@ -23,6 +23,14 @@ const EFFORTS = [
   { key: 'thesis', label: 'Thesis Chapter', time: '~60 min', desc: '8 specialists, multi-round debate' },
 ] as const
 
+const EFFORT_LABELS: Record<string, string> = {
+  brief: 'Brief', note: 'Note', article: 'Article', review: 'Review', thesis: 'Thesis',
+}
+
+const SPECIALIST_COUNTS: Record<string, number> = {
+  brief: 1, note: 3, article: 5, review: 6, thesis: 8,
+}
+
 interface AuthUser {
   username: string
   discord_id: string
@@ -671,9 +679,7 @@ export default function TheoPage() {
                               by {match.author_username}
                             </div>
                             <div className="theo-card-actions">
-                              <button className="theo-btn-view" onClick={() => handleReadDuplicateMatch(match.paper_slug)}>
-                                Read
-                              </button>
+                              <button className="theo-btn-view" onClick={() => handleReadDuplicateMatch(match.paper_slug)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Read</button>
                             </div>
                           </div>
                         ))}
@@ -820,14 +826,14 @@ export default function TheoPage() {
                 <div key={item.id} className="theo-card">
                   <div className="theo-card-top">
                     <span className="theo-card-question">{item.question}</span>
-                    <span className="theo-badge theo-badge-effort">{item.effort}</span>
+                    <span className="theo-badge theo-badge-effort">{EFFORT_LABELS[item.effort] || item.effort}</span>
                     <span className={`theo-badge theo-badge-status theo-badge-${item.status}`}>
-                      {item.status === 'running' ? '&#x25cf; Running' : `#${activeItems.indexOf(item) + 1} Queued`}
+                      {item.status === 'running' ? <>● Running</> : <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0}}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>{`#${activeItems.indexOf(item) + 1} Queued`}</>}
                     </span>
                   </div>
                   {item.status === 'running' && (
                     <div className="theo-card-actions">
-                      <button className="theo-btn-view" onClick={() => handleWatchLive(item)}>Watch Live</button>
+                      <button className="theo-btn-view" onClick={() => handleWatchLive(item)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Live</button>
                       <button className="theo-btn-cancel" onClick={() => handleCancel(item.id)}>Cancel</button>
                     </div>
                   )}
@@ -855,11 +861,11 @@ export default function TheoPage() {
                 <div key={item.id} className="theo-card">
                   <div className="theo-card-top">
                     <span className="theo-card-question">{item.question}</span>
-                    <span className="theo-badge theo-badge-effort">{item.effort}</span>
+                    <span className="theo-badge theo-badge-effort">{EFFORT_LABELS[item.effort] || item.effort}</span>
                     <span className={`theo-badge theo-badge-status theo-badge-${item.status}`}>
-                      {item.status === 'completed' ? 'Done' :
-                       item.status === 'failed' ? 'Failed' :
-                       item.status === 'cancelled' ? 'Cancelled' : item.status}
+                      {item.status === 'completed' ? <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0}}><polyline points="20 6 9 17 4 12"/></svg>Done</> :
+                       item.status === 'failed' ? <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0}}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Failed</> :
+                       item.status === 'cancelled' ? <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0}}><line x1="5" y1="12" x2="19" y2="12"/></svg>Cancelled</> : item.status}
                     </span>
                     {item.is_public && (
                       <span className="theo-badge theo-badge-published">Published</span>
@@ -867,17 +873,16 @@ export default function TheoPage() {
                   </div>
                   <div className="theo-card-meta">
                     {item.duration_ms != null && <span>{formatDurationMs(item.duration_ms)}</span>}
-                    {item.sites_found > 0 && <span>{item.sites_found} sites</span>}
-                    {item.tools_used > 0 && <span>{item.tools_used} tools</span>}
+                    <span>{SPECIALIST_COUNTS[item.effort] ?? '?'} specialists</span>
                     {item.created_at && <span>{timeAgo(item.created_at)}</span>}
                   </div>
                   <div className="theo-card-actions">
                     {item.status === 'completed' && (
-                      <button className="theo-btn-view" onClick={() => handleView(item.id)}>View Report</button>
+                      <button className="theo-btn-view" onClick={() => handleView(item.id)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Report</button>
                     )}
                     {item.status === 'failed' && (
                       <>
-                        <button className="theo-btn-retry" onClick={() => handleRetry(item)}>Retry</button>
+                        <button className="theo-btn-retry" onClick={() => handleRetry(item)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Retry</button>
                         {item.error_message && (
                           <span style={{ fontSize: 10, color: 'var(--status-error-soft)', marginLeft: 4 }}>
                             {item.error_message.substring(0, 80)}
@@ -886,13 +891,13 @@ export default function TheoPage() {
                       </>
                     )}
                     {item.status === 'completed' && authUser.has_researcher_role && !item.is_public && (
-                      <button className="theo-btn-publish" onClick={() => handlePublish(item.id)}>Publish</button>
+                      <button className="theo-btn-publish" onClick={() => handlePublish(item.id)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Publish</button>
                     )}
                     {item.status === 'completed' && item.is_public && (
-                      <button className="theo-btn-unpublish" onClick={() => handleUnpublish(item.id)}>Unpublish</button>
+                      <button className="theo-btn-unpublish" onClick={() => handleUnpublish(item.id)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>Unpublish</button>
                     )}
                     {(item.status === 'completed' || item.status === 'failed' || item.status === 'cancelled') && (
-                      <button className="theo-btn-delete" onClick={() => handleDelete(item.id)}>Delete</button>
+                      <button className="theo-btn-delete" onClick={() => handleDelete(item.id)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Delete</button>
                     )}
                   </div>
                 </div>
@@ -930,7 +935,7 @@ export default function TheoPage() {
                     )}
                     <div className="theo-public-card-footer">
                       <span className="theo-public-card-author">by {paper.published_by}</span>
-                      <span className="theo-badge theo-badge-effort">{paper.effort}</span>
+                      <span className="theo-badge theo-badge-effort">{EFFORT_LABELS[paper.effort] || paper.effort}</span>
                       <span className="theo-public-card-date">{timeAgo(paper.published_at)}</span>
                     </div>
                   </div>

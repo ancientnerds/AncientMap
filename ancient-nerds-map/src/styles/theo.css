@@ -679,6 +679,11 @@
   color: var(--status-error-soft);
 }
 
+.theo-badge-cancelled {
+  border: 1px solid rgba(100, 100, 100, 0.2);
+  color: var(--text-dimmed);
+}
+
 @keyframes theo-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
@@ -715,6 +720,9 @@
   font-size: 13px;
   cursor: pointer;
   transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .theo-btn-view:hover {
@@ -747,6 +755,9 @@
   font-size: 13px;
   cursor: pointer;
   transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .theo-btn-retry:hover {
@@ -1363,6 +1374,9 @@
   font-size: 13px;
   cursor: pointer;
   transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .theo-btn-publish:hover {
@@ -1379,6 +1393,9 @@
   font-size: 13px;
   cursor: pointer;
   transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .theo-btn-unpublish:hover {
@@ -1396,6 +1413,9 @@
   font-size: 13px;
   cursor: pointer;
   transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .theo-btn-delete:hover {
