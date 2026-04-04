@@ -31,7 +31,12 @@ from sqlalchemy import text
 
 from api.services.jwt_auth import get_current_user, get_optional_user
 from api.services.rate_limiter import RateLimiter, get_client_ip
-from api.services.theo_config import EFFORT_CONFIG, MAX_REQUESTS_PER_USER, THEO_RESEARCHER_ROLE_ID
+from api.services.theo_config import (
+    EFFORT_CONFIG,
+    MAX_REQUESTS_PER_USER,
+    THEO_CREDIT_COSTS,
+    THEO_RESEARCHER_ROLE_ID,
+)
 from api.services.theo_worker import get_live_events
 from pipeline.database import DiscordUser, get_session
 
@@ -389,8 +394,9 @@ async def submit_research(body: ResearchSubmitRequest, req: Request):
         raise HTTPException(status_code=400, detail=f"Invalid effort: {body.effort}")
 
     user_id = _get_user_id(req)
+    credit_cost = THEO_CREDIT_COSTS.get(body.effort, 300)
 
-    # Check user's active request count
+    # Check user's active request count + credit balance
     with get_session() as session:
         count = session.execute(
             text("""
@@ -404,6 +410,23 @@ async def submit_research(body: ResearchSubmitRequest, req: Request):
             raise HTTPException(
                 status_code=429,
                 detail=f"Max {MAX_REQUESTS_PER_USER} concurrent requests per user",
+            )
+
+        # Credit check — deduct upfront (refund on failure/cancel)
+        user_row = session.execute(
+            text("SELECT credits, is_unlimited FROM discord_users WHERE discord_id = :uid"),
+            {"uid": user_id},
+        ).fetchone()
+
+        if user_row and not user_row.is_unlimited:
+            if user_row.credits < credit_cost:
+                raise HTTPException(
+                    status_code=402,
+                    detail=f"Not enough credits. {body.effort.title()} costs {credit_cost} credits, you have {user_row.credits}.",
+                )
+            session.execute(
+                text("UPDATE discord_users SET credits = credits - :cost WHERE discord_id = :uid"),
+                {"uid": user_id, "cost": credit_cost},
             )
 
         # Build specialist options JSON (only if non-empty)

@@ -14,6 +14,15 @@ THEO_RESEARCHER_ROLE_ID = os.getenv("THEO_RESEARCHER_ROLE_ID", "")
 RESULT_TTL_HOURS = 24
 MAX_REQUESTS_PER_USER = 1
 
+# Credit cost per research tier
+THEO_CREDIT_COSTS: dict[str, int] = {
+    "brief": 100,
+    "note": 250,
+    "article": 300,
+    "review": 500,
+    "thesis": 1000,
+}
+
 # M2.7 token budget per individual call (not total).
 # M2.7 reasoning consumes ~2-6K tokens from this budget before output starts.
 # 16384 leaves ~10-14K for actual JSON/text output after reasoning.

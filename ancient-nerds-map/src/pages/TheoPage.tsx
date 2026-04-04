@@ -16,11 +16,11 @@ const TheoReportOverlay = lazy(() => import('../components/theo/TheoReportOverla
 const TheoResearchLive = lazy(() => import('../components/theo/TheoResearchLive'))
 
 const EFFORTS = [
-  { key: 'brief', label: 'Research Brief', time: '~3 min', desc: 'Quick literature overview' },
-  { key: 'note', label: 'Research Note', time: '~8 min', desc: '3 specialists, structured analysis' },
-  { key: 'article', label: 'Journal Article', time: '~20 min', desc: '5 specialists, full debate' },
-  { key: 'review', label: 'Literature Review', time: '~40 min', desc: '6 specialists, comprehensive' },
-  { key: 'thesis', label: 'Thesis Chapter', time: '~60 min', desc: '8 specialists, multi-round debate' },
+  { key: 'brief', label: 'Research Brief', time: '~3 min', desc: 'Quick literature overview', credits: 100 },
+  { key: 'note', label: 'Research Note', time: '~8 min', desc: '3 specialists, structured analysis', credits: 250 },
+  { key: 'article', label: 'Journal Article', time: '~20 min', desc: '5 specialists, full debate', credits: 300 },
+  { key: 'review', label: 'Literature Review', time: '~40 min', desc: '6 specialists, comprehensive', credits: 500 },
+  { key: 'thesis', label: 'Thesis Chapter', time: '~60 min', desc: '8 specialists, multi-round debate', credits: 1000 },
 ] as const
 
 const EFFORT_LABELS: Record<string, string> = {
@@ -806,7 +806,7 @@ export default function TheoPage() {
                       onClick={() => { setEffort(e.key); sessionStorage.setItem('theo_effort', e.key) }}
                     >
                       <span className="theo-scope-name">{e.label}</span>
-                      <span className="theo-scope-time">{e.time}</span>
+                      <span className="theo-scope-time">{e.time} &middot; {e.credits} credits</span>
                       <span className="theo-scope-desc">{e.desc}</span>
                     </button>
                   ))}
@@ -1124,7 +1124,7 @@ export default function TheoPage() {
                   disabled={submitting}
                   onClick={handleSubmit}
                 >
-                  {submitting ? 'Submitting...' : 'Start Research'}
+                  {submitting ? 'Submitting...' : `Start Research (${selectedEffort?.credits ?? 0} credits)`}
                 </button>
               </div>
             </div>

@@ -12,10 +12,39 @@ import time
 
 from sqlalchemy import text
 
-from api.services.theo_config import RESULT_TTL_HOURS, THEO_PARALLEL_SLOTS
+from api.services.theo_config import RESULT_TTL_HOURS, THEO_CREDIT_COSTS, THEO_PARALLEL_SLOTS
 from pipeline.database import get_session
 
 logger = logging.getLogger(__name__)
+
+
+def _refund_credits(request_id: str, effort: str) -> None:
+    """Refund credits to the user when a research request fails or is cancelled."""
+    cost = THEO_CREDIT_COSTS.get(effort, 0)
+    if cost <= 0:
+        return
+    try:
+        with get_session() as session:
+            # Find the user who submitted this request
+            row = session.execute(
+                text("SELECT user_id FROM research_requests WHERE id = :id"),
+                {"id": request_id},
+            ).fetchone()
+            if not row:
+                return
+            # Refund (only for non-unlimited users — unlimited weren't charged)
+            session.execute(
+                text("""
+                    UPDATE discord_users SET credits = credits + :cost
+                    WHERE discord_id = :uid AND is_unlimited = FALSE
+                """),
+                {"uid": row.user_id, "cost": cost},
+            )
+            session.commit()
+            logger.info(f"[THEO] Refunded {cost} credits to user {row.user_id} for {request_id}")
+    except Exception as exc:
+        logger.warning(f"[THEO] Credit refund failed for {request_id}: {exc}")
+
 
 # Single-slot semaphore — only 1 research request at a time
 _semaphore = asyncio.Semaphore(THEO_PARALLEL_SLOTS)
@@ -92,12 +121,13 @@ async def _process_request(
         duration_ms = int((time.monotonic() - start) * 1000)
 
         if ctx.error:
+            # Refund credits on failure/cancel
+            _refund_credits(request_id, effort)
+
             if "cancelled" in ctx.error.lower():
-                # Already set to 'cancelled' in the DB by the DELETE endpoint
                 emit({"type": "done", "status": "cancelled"})
                 logger.info(f"[THEO] Request {request_id} cancelled by user")
             else:
-                # Pipeline reported a fatal error via ctx.error
                 emit({"type": "done", "status": "failed"})
                 with get_session() as session:
                     session.execute(
@@ -156,6 +186,7 @@ async def _process_request(
     except Exception as exc:
         duration_ms = int((time.monotonic() - start) * 1000)
         logger.error(f"[THEO] Unexpected error for request {request_id}: {exc}", exc_info=True)
+        _refund_credits(request_id, effort)
         emit({"type": "done", "status": "failed"})
         with get_session() as session:
             session.execute(
