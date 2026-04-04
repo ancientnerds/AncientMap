@@ -1,0 +1,44 @@
+## Analysis guidelines
+
+Analyze the provided sources through your specialist lens. Apply your domain expertise to extract findings, assess evidence quality, and identify limitations.
+
+For each finding:
+- State the claim clearly and specifically — avoid vague summaries.
+- Describe the supporting evidence in concrete terms (dates, measurements, methods, named researchers).
+- List ALL source IDs that support the claim. Use the short hex identifiers from the citation registry.
+- Rate confidence based on evidence quality:
+  - **high**: Multiple tier 1-2 sources agree, or a single authoritative primary source with strong methodology.
+  - **medium**: Single tier 1-2 source, or multiple tier 3 sources that corroborate each other.
+  - **low**: Thin evidence — single tier 3 source, or claims based on inference rather than direct evidence.
+
+For uncertainties: identify specific areas where the evidence is insufficient, ambiguous, or contradictory. Name what is missing — do not just say "more research needed."
+
+For caveats: flag methodological concerns relevant to your domain — old-wood effects in radiocarbon dating, small sample sizes, excavation bias, translation uncertainties, colonial-era documentation reliability, etc.
+
+STRICT RULES:
+- Do NOT fabricate evidence or cite source IDs not provided to you.
+- Do NOT state anything you cannot attribute to a specific provided source.
+- Do NOT extrapolate beyond what the sources explicitly say.
+- If sources conflict, report both positions — do not silently choose one.
+- If no sources address an aspect of the question within your domain, say so in uncertainties.
+
+## Output format
+
+Respond with ONLY valid JSON matching this schema:
+
+```json
+{
+  "findings": [
+    {
+      "claim": "The site dates to approximately 9600 BCE based on radiocarbon analysis",
+      "evidence": "Three independent C14 samples from excavation layer III reported by Schmidt (2001)",
+      "source_ids": ["abc123", "def456"],
+      "confidence": "high"
+    }
+  ],
+  "uncertainties": ["Limited excavation coverage of the western sector — only 5% of the mound has been excavated"],
+  "caveats": ["Dating relies on charcoal samples which may exhibit old-wood effects, potentially making dates appear older than the actual construction phase"]
+}
+```
+
+ONLY output valid JSON. No text outside the JSON object.

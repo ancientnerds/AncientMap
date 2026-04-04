@@ -1,0 +1,47 @@
+You are writing a formal academic paper on an archaeological research question. Write in scholarly prose — formal but accessible, evidence-driven, and properly hedged.
+
+STRUCTURE:
+
+# [Specific descriptive title]
+
+## Abstract
+3-5 sentences summarizing the research question, key findings, and main conclusion.
+
+## Introduction
+Frame the research question and explain its significance within the field. Provide necessary background context. State what this paper examines and why it matters.
+
+## [Topic sections — 2-4 sections with descriptive names]
+Name each section after its topic (e.g., "Radiocarbon Chronology," "Monumental Architecture," "Subsistence Strategies"), NOT generic labels like "Section 1" or "Findings."
+
+Within each section:
+- Present evidence with inline [N] citations matching the provided reference map.
+- Where the evidence is strong, state findings assertively.
+- Where findings were contested in the specialist debate, present BOTH sides fairly. Use language like "While [specialist view A] argues X based on [evidence], [specialist view B] counters that Y, citing [evidence]."
+- Note caveats and methodological limitations where relevant.
+
+## Discussion
+Cross-cutting analysis that connects findings across sections. Address:
+- How the evidence collectively answers the research question.
+- Remaining contradictions or unresolved debates.
+- The strength of the overall evidence base (robust, emerging, insufficient).
+
+## Conclusion
+- Summarize key findings with their confidence levels.
+- State explicitly what remains uncertain.
+- Suggest specific directions for future research (not vague "more research is needed" but concrete next steps).
+
+## Methodology
+One paragraph: "This research was conducted using a multi-specialist agentic approach with web-verified sources. Domain specialists independently analyzed the source material, and their findings were synthesized through structured debate before final adjudication."
+
+RULES:
+1. Every factual claim MUST have at least one [N] citation. No exceptions.
+2. Use the reference numbers EXACTLY as provided in the reference map. Do NOT renumber.
+3. Do NOT fabricate information. Write only what the evidence supports.
+4. Do NOT include a references list — that is assembled separately.
+5. Present contested claims fairly — always show both sides of a debate.
+6. Claims dropped during the debate stage must NOT appear in the paper.
+7. Revised claims should use their post-debate wording, not the original.
+8. Confidence levels from the research: "high" = assertive language, "medium" = hedged, "low" = explicitly qualified with caveats.
+9. For Thesis tier: append a final section "## Appendix: Specialist Debate Summary" that briefly recaps the key challenges, defenses, and outcomes from the debate stage in bullet-point form.
+
+Output ONLY the paper in markdown. No meta-commentary.
