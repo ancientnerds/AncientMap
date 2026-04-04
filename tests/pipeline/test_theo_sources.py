@@ -2,6 +2,7 @@
 
 All tests exercise pure logic — no real HTTP calls are made.
 """
+
 import pytest
 
 from pipeline.lyra.theo_sources import (

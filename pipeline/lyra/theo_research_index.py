@@ -22,11 +22,13 @@ COLLECTION_NAME = "theo_research_sections"
 VECTOR_DIM = 1024  # voyage-4-large output dimension
 
 # Sections to skip — not useful for semantic matching or citation
-_SKIP_SECTIONS = frozenset({
-    "references",
-    "methodology",
-    "appendix: specialist debate summary",
-})
+_SKIP_SECTIONS = frozenset(
+    {
+        "references",
+        "methodology",
+        "appendix: specialist debate summary",
+    }
+)
 
 
 def _split_sections(paper_text: str) -> list[dict]:
@@ -47,11 +49,13 @@ def _split_sections(paper_text: str) -> list[dict]:
             if current_title and current_lines:
                 text = "\n".join(current_lines).strip()
                 if text and current_title.lower() not in _SKIP_SECTIONS:
-                    sections.append({
-                        "title": current_title,
-                        "text": text[:2000],  # truncate huge sections
-                        "index": index,
-                    })
+                    sections.append(
+                        {
+                            "title": current_title,
+                            "text": text[:2000],  # truncate huge sections
+                            "index": index,
+                        }
+                    )
                     index += 1
             current_title = heading_match.group(1).strip()
             current_lines = []
@@ -65,11 +69,13 @@ def _split_sections(paper_text: str) -> list[dict]:
     if current_title and current_lines:
         text = "\n".join(current_lines).strip()
         if text and current_title.lower() not in _SKIP_SECTIONS:
-            sections.append({
-                "title": current_title,
-                "text": text[:2000],
-                "index": index,
-            })
+            sections.append(
+                {
+                    "title": current_title,
+                    "text": text[:2000],
+                    "index": index,
+                }
+            )
 
     return sections
 
@@ -150,9 +156,7 @@ def index_paper(
 
     client = get_qdrant_client()
     client.upsert(collection_name=COLLECTION_NAME, points=points)
-    logger.info(
-        "Indexed %d sections for paper %s (%s)", len(points), paper_id, paper_title
-    )
+    logger.info("Indexed %d sections for paper %s (%s)", len(points), paper_id, paper_title)
     return len(points)
 
 

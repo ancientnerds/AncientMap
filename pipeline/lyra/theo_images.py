@@ -122,10 +122,12 @@ async def generate_cover_image(
             "[THEO] MiniMax image quota too low (%d remaining), skipping cover",
             remaining,
         )
-        emit({
-            "type": "status",
-            "content": f"Image quota low ({remaining} remaining), skipping cover image.",
-        })
+        emit(
+            {
+                "type": "status",
+                "content": f"Image quota low ({remaining} remaining), skipping cover image.",
+            }
+        )
         return ""
 
     emit({"type": "status", "content": "Generating cover illustration..."})

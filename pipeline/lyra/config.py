@@ -154,13 +154,8 @@ class LyraSettings(BaseSettings):
     # YouTube Data API key (for video metadata — no cookies/OAuth needed)
     youtube_api_key: str = ""
 
-    # LLM backend: "anthropic" (default) or "ollama" (local)
+    # LLM backend: "anthropic" (default) or "minimax"
     llm_backend: str = "anthropic"
-
-    # Ollama endpoint (OpenAI-compatible API, used when llm_backend="ollama")
-    ollama_base_url: str = ""
-    ollama_api_key: str = ""
-    ollama_model: str = "qwen3:8b"
 
     # MiniMax Token Plan (web search + M2.7 for article verification)
     minimax_api_key: str = ""
@@ -226,8 +221,6 @@ def mark_api_key_exhausted() -> str:
 # ---------------------------------------------------------------------------
 _cached_anthropic_client = None
 _cached_anthropic_key: str = ""
-_cached_ollama_client = None
-_cached_ollama_key: str = ""
 
 
 def _get_anthropic_client(api_key: str):
@@ -240,24 +233,6 @@ def _get_anthropic_client(api_key: str):
         _cached_anthropic_client = anthropic.Anthropic(api_key=api_key, timeout=120.0)
         _cached_anthropic_key = api_key
     return _cached_anthropic_client
-
-
-def _get_ollama_client(settings: LyraSettings):
-    """Return a cached OpenAI client for the Ollama backend."""
-    global _cached_ollama_client, _cached_ollama_key
-
-    from openai import OpenAI
-
-    cache_key = f"{settings.ollama_api_key}:{settings.ollama_base_url}"
-    if _cached_ollama_client is None or _cached_ollama_key != cache_key:
-        _cached_ollama_client = OpenAI(
-            base_url=settings.ollama_base_url,
-            api_key=settings.ollama_api_key,
-            timeout=300.0,
-            max_retries=3,
-        )
-        _cached_ollama_key = cache_key
-    return _cached_ollama_client
 
 
 def _call_anthropic_api(
@@ -409,65 +384,6 @@ def _normalize_anthropic_response(response) -> NormalizedResponse:
     )
 
 
-def _call_ollama_api(
-    settings: LyraSettings,
-    *,
-    prefill: str | None = None,
-    **kwargs,
-) -> NormalizedResponse:
-    """Call Ollama via OpenAI-compatible SDK and return a NormalizedResponse."""
-    from openai import OpenAI
-
-    client = _get_ollama_client(settings)
-
-    messages: list[dict] = []
-    system_blocks = kwargs.pop("system", None)
-    if system_blocks:
-        if isinstance(system_blocks, str):
-            messages.append({"role": "system", "content": system_blocks})
-        elif isinstance(system_blocks, list):
-            system_text = "\n\n".join(
-                b["text"] if isinstance(b, dict) else str(b) for b in system_blocks
-            )
-            messages.append({"role": "system", "content": system_text})
-
-    for msg in kwargs.pop("messages", []):
-        messages.append({"role": msg["role"], "content": msg["content"]})
-
-    kwargs.pop("thinking", None)
-    kwargs.pop("tool_choice", None)
-    kwargs.pop("tools", None)
-    kwargs.pop("reasoning_effort", None)
-    kwargs.pop("temperature", None)
-
-    model = settings.ollama_model
-    kwargs.pop("model", None)
-    max_tokens = min(kwargs.pop("max_tokens", 4096), 4096)
-
-    create_kwargs: dict = {
-        "model": model,
-        "messages": messages,
-        "max_tokens": max_tokens,
-    }
-
-    response = client.chat.completions.create(**create_kwargs)
-    choice = response.choices[0] if response.choices else None
-    text = choice.message.content or "" if choice else ""
-    finish = choice.finish_reason if choice else "stop"
-    stop_reason = "max_tokens" if finish == "length" else "end_turn"
-    return NormalizedResponse(
-        content=[TextBlock(text=text)],
-        stop_reason=stop_reason,
-        model=response.model or "",
-        usage={
-            "input_tokens": getattr(response.usage, "prompt_tokens", 0) if response.usage else 0,
-            "output_tokens": getattr(response.usage, "completion_tokens", 0)
-            if response.usage
-            else 0,
-        },
-    )
-
-
 _cached_minimax_client = None
 _cached_minimax_key: str = ""
 
@@ -604,7 +520,7 @@ def call_api(
     timeout: float | None = None,
     **kwargs,
 ) -> NormalizedResponse:
-    """Unified LLM call — dispatches to Anthropic, MiniMax, or Ollama.
+    """Unified LLM call — dispatches to Anthropic or MiniMax.
 
     Args:
         prefill: Prefix for the response (e.g. "{" for JSON).
@@ -618,8 +534,6 @@ def call_api(
     backend = settings.llm_backend
 
     try:
-        if backend == "ollama":
-            return _call_ollama_api(settings, prefill=prefill, **kwargs)
         if backend == "minimax":
             return _call_minimax_api(settings, prefill=prefill, timeout=timeout, **kwargs)
         return _call_anthropic_api(

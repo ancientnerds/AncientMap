@@ -186,9 +186,7 @@ async def _poll_loop() -> None:
 
             if row:
                 async with _semaphore:
-                    await _process_request(
-                        row.id, row.question, row.effort, row.specialist_options
-                    )
+                    await _process_request(row.id, row.question, row.effort, row.specialist_options)
             else:
                 await asyncio.sleep(3)  # No work — wait before polling again
 

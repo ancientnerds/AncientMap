@@ -117,11 +117,7 @@ async def _refresh_roles(user: DiscordUser) -> list[str]:
         if resp.status_code == 200:
             fresh_roles = resp.json().get("roles", fresh_roles)
             with get_session() as session:
-                db_user = (
-                    session.query(DiscordUser)
-                    .filter(DiscordUser.id == user.id)
-                    .first()
-                )
+                db_user = session.query(DiscordUser).filter(DiscordUser.id == user.id).first()
                 if db_user:
                     db_user.roles = fresh_roles
                     session.commit()
@@ -147,8 +143,7 @@ async def theo_me(user: DiscordUser = Depends(get_current_user)):
     avatar_url = None
     if user.avatar_hash:
         avatar_url = (
-            f"https://cdn.discordapp.com/avatars/{user.discord_id}"
-            f"/{user.avatar_hash}.png?size=128"
+            f"https://cdn.discordapp.com/avatars/{user.discord_id}/{user.avatar_hash}.png?size=128"
         )
 
     return {
@@ -199,14 +194,23 @@ async def list_specialists():
         "Fringe / Alternative": [],
     }
     science_ids = {
-        "geologist", "paleoclimatologist", "adna_specialist",
-        "archaeometallurgist", "volcanologist", "physicist",
-        "archaeochemist", "paleoanthropologist", "structural_engineer",
-        "historical_linguist", "architect",
+        "geologist",
+        "paleoclimatologist",
+        "adna_specialist",
+        "archaeometallurgist",
+        "volcanologist",
+        "physicist",
+        "archaeochemist",
+        "paleoanthropologist",
+        "structural_engineer",
+        "historical_linguist",
+        "architect",
     }
     fringe_ids = {
-        "alternative_history_researcher", "comparative_mythologist",
-        "esoteric_traditions_scholar", "anomalous_phenomena_analyst",
+        "alternative_history_researcher",
+        "comparative_mythologist",
+        "esoteric_traditions_scholar",
+        "anomalous_phenomena_analyst",
     }
 
     for s in SPECIALIST_POOL:
@@ -261,10 +265,12 @@ async def submit_research(body: ResearchSubmitRequest, req: Request):
         # Build specialist options JSON (only if non-empty)
         spec_opts = None
         if body.force_include or body.force_exclude:
-            spec_opts = json.dumps({
-                "force_include": body.force_include,
-                "force_exclude": body.force_exclude,
-            })
+            spec_opts = json.dumps(
+                {
+                    "force_include": body.force_include,
+                    "force_exclude": body.force_exclude,
+                }
+            )
 
         # Insert new request
         request_id = str(uuid.uuid4())
@@ -695,7 +701,9 @@ async def list_public_research(
         ).fetchall()
 
         total = session.execute(
-            text("SELECT COUNT(*) FROM research_requests WHERE is_public = TRUE AND status = 'completed'")
+            text(
+                "SELECT COUNT(*) FROM research_requests WHERE is_public = TRUE AND status = 'completed'"
+            )
         ).scalar()
 
     papers = []
@@ -708,17 +716,19 @@ async def list_public_research(
         except (json.JSONDecodeError, TypeError, ValueError):
             pass
 
-        papers.append({
-            "id": r.id,
-            "title": title,
-            "question": r.question,
-            "effort": r.effort,
-            "slug": r.slug,
-            "published_by": r.published_by,
-            "published_at": r.published_at.isoformat() if r.published_at else None,
-            "sites_found": r.sites_found,
-            "duration_ms": r.duration_ms,
-        })
+        papers.append(
+            {
+                "id": r.id,
+                "title": title,
+                "question": r.question,
+                "effort": r.effort,
+                "slug": r.slug,
+                "published_by": r.published_by,
+                "published_at": r.published_at.isoformat() if r.published_at else None,
+                "sites_found": r.sites_found,
+                "duration_ms": r.duration_ms,
+            }
+        )
 
     return {"papers": papers, "total": total}
 

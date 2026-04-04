@@ -359,9 +359,7 @@ class TheoPipeline:
         ctx.sources_context = "\n".join(lines)
 
         total_results = len(ctx.registry.sources)
-        academic_count = sum(
-            1 for s in ctx.registry.sources.values() if s.reliability_tier == 1
-        )
+        academic_count = sum(1 for s in ctx.registry.sources.values() if s.reliability_tier == 1)
 
         ms = int((time.monotonic() - t0) * 1000)
         emit(
@@ -402,15 +400,13 @@ class TheoPipeline:
         source_items = list(ctx.registry.sources.items())
         batch_size = 20
         batches = [
-            source_items[i : i + batch_size]
-            for i in range(0, len(source_items), batch_size)
+            source_items[i : i + batch_size] for i in range(0, len(source_items), batch_size)
         ]
 
         emit(
             {
                 "type": "status",
-                "content": f"Auditing {len(source_items)} sources "
-                f"in {len(batches)} batch(es)...",
+                "content": f"Auditing {len(source_items)} sources in {len(batches)} batch(es)...",
             }
         )
 
@@ -477,9 +473,7 @@ class TheoPipeline:
                     }
                 )
 
-                gap_results = await self._searcher.search(
-                    gaps[:3], ctx.tier.source_apis
-                )
+                gap_results = await self._searcher.search(gaps[:3], ctx.tier.source_apis)
                 for r in gap_results:
                     sid = ctx.registry.register_source(
                         url=r.url,
@@ -650,8 +644,21 @@ class TheoPipeline:
 
         if not ctx.specialist_analyses:
             logger.warning("[THEO] Stage 5: No specialist analyses — using empty synthesis")
-            ctx.synthesis = {"consensus_claims": [], "contested_claims": [], "unique_insights": [], "open_questions": []}
-            emit({"type": "pipeline", "stage": stage, "status": "done", "duration_ms": 0, "meta": {"consensus": 0, "contested": 0, "unique": 0}})
+            ctx.synthesis = {
+                "consensus_claims": [],
+                "contested_claims": [],
+                "unique_insights": [],
+                "open_questions": [],
+            }
+            emit(
+                {
+                    "type": "pipeline",
+                    "stage": stage,
+                    "status": "done",
+                    "duration_ms": 0,
+                    "meta": {"consensus": 0, "contested": 0, "unique": 0},
+                }
+            )
             return
 
         emit({"type": "status", "content": "Synthesizing specialist findings..."})
