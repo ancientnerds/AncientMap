@@ -12,7 +12,7 @@ THEO_PARALLEL_SLOTS = 1
 # If left empty, the researcher gate is disabled (403 for all users).
 THEO_RESEARCHER_ROLE_ID = os.getenv("THEO_RESEARCHER_ROLE_ID", "")
 RESULT_TTL_HOURS = 24
-MAX_REQUESTS_PER_USER = 5
+MAX_REQUESTS_PER_USER = 1
 
 # M2.7 token budget per individual call (not total).
 # M2.7 reasoning consumes ~2-6K tokens from this budget before output starts.

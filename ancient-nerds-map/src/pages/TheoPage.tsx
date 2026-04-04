@@ -365,6 +365,7 @@ export default function TheoPage() {
   }, [fetchList])
 
   const handleDelete = useCallback(async (id: string) => {
+    if (!confirm('Delete this research? This cannot be undone.')) return
     try {
       await fetch(`${config.api.baseUrl}/theo/research/${id}`, {
         method: 'DELETE', headers: getAuthHeaders(),
@@ -374,15 +375,23 @@ export default function TheoPage() {
   }, [fetchList])
 
   const handlePublish = useCallback(async (id: string) => {
+    if (!confirm('Publish this research to the public library?\n\nIt will be visible to everyone on the site with your name as author, and used as a citation source in future research.')) return
     try {
-      await fetch(`${config.api.baseUrl}/theo/research/${id}/publish`, {
+      const resp = await fetch(`${config.api.baseUrl}/theo/research/${id}/publish`, {
         method: 'POST', headers: getAuthHeaders(),
       })
+      if (resp.ok) {
+        alert('Published! Your research is now in the public library.')
+      } else {
+        const err = await resp.json().catch(() => ({ detail: 'Failed to publish' }))
+        alert(err.detail || 'Failed to publish')
+      }
       fetchList()
     } catch { /* ignore */ }
   }, [fetchList])
 
   const handleUnpublish = useCallback(async (id: string) => {
+    if (!confirm('Remove this paper from the public library? It will remain in your private results.')) return
     try {
       await fetch(`${config.api.baseUrl}/theo/research/${id}/unpublish`, {
         method: 'POST', headers: getAuthHeaders(),

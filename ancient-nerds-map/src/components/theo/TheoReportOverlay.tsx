@@ -92,9 +92,7 @@ export default function TheoReportOverlay({
       <div className="theo-overlay-inner" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="theo-report-header">
-          <div className="theo-avatar-placeholder" style={{ width: 48, height: 48, fontSize: 24 }}>
-            🐻
-          </div>
+          <img src="/images/theo.png" alt="Theo" className="theo-avatar" style={{ width: 48, height: 48 }} />
           <div className="theo-report-header-text">
             <div className="theo-report-question">{question}</div>
             <div className="theo-report-meta-row">

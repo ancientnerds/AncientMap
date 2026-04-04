@@ -209,9 +209,7 @@ export default function TheoResearchLive({ requestId, question, onClose }: TheoR
       <div className="theo-overlay-inner" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="theo-live-header">
-          <div className="theo-avatar-placeholder" style={{ width: 40, height: 40, fontSize: 20, flexShrink: 0 }}>
-            🐻
-          </div>
+          <img src="/images/theo.png" alt="Theo" className="theo-avatar" style={{ width: 40, height: 40, flexShrink: 0 }} />
           <div className="theo-live-header-text">
             <div className="theo-live-question">{question}</div>
             <div className="theo-live-counters" style={{ marginTop: 6 }}>
@@ -234,6 +232,12 @@ export default function TheoResearchLive({ requestId, question, onClose }: TheoR
             ✕
           </button>
         </div>
+
+        {!done && (
+          <div style={{ textAlign: 'center', padding: '4px 12px', fontSize: 11, color: 'var(--text-dimmed)', borderBottom: '1px solid var(--border-default)' }}>
+            You can close this window — research continues in the background. Come back anytime.
+          </div>
+        )}
 
         {/* Body — scrollable markdown area */}
         <div className="theo-live-body theo-md-body" ref={bodyRef}>
@@ -289,7 +293,7 @@ export default function TheoResearchLive({ requestId, question, onClose }: TheoR
                         {node.meta?.tool as string || node.stageId.replace(/_/g, ' ')}
                       </span>
                       <span className="theo-trace-dur">
-                        {node.duration_ms != null ? `${node.duration_ms}ms` : node.status === 'active' ? '...' : ''}
+                        {node.duration_ms != null ? formatDurationMs(node.duration_ms) : node.status === 'active' ? '...' : ''}
                       </span>
                       {node.status === 'error' && node.meta?.error ? (
                         <div className="theo-trace-error">{String(node.meta.error)}</div>
