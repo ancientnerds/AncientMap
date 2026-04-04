@@ -158,10 +158,21 @@ export default function TheoPage() {
   const [publicHasMore, setPublicHasMore] = useState(false)
   const [loadingPublic, setLoadingPublic] = useState(false)
   const [publicReportData, setPublicReportData] = useState<PublicPaperFull | null>(null)
+  const [publicTotal, setPublicTotal] = useState(0)
+
+  // Toast notifications
+  const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'error' } | null>(null)
 
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const prevStatusRef = useRef<Map<string, string>>(new Map())
+
+  // Auto-dismiss toast after 3 seconds
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 3000)
+    return () => clearTimeout(t)
+  }, [toast])
 
   // Check auth on mount
   useEffect(() => {
@@ -204,6 +215,7 @@ export default function TheoPage() {
         setPublicPapers(prev => append ? [...prev, ...papers] : papers)
         setPublicHasMore(offset + papers.length < (data.total || 0))
         setPublicOffset(offset + papers.length)
+        setPublicTotal(data.total || 0)
       }
     } catch { /* ignore */ }
     setLoadingPublic(false)
@@ -349,7 +361,7 @@ export default function TheoPage() {
       })
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({ detail: 'Failed to submit' }))
-        alert(err.detail || 'Failed to submit')
+        setToast({ msg: err.detail || 'Failed to submit', type: 'error' })
         return
       }
       // Reset wizard
@@ -392,10 +404,10 @@ export default function TheoPage() {
         method: 'POST', headers: getAuthHeaders(),
       })
       if (resp.ok) {
-        alert('Published! Your research is now in the public library.')
+        setToast({ msg: 'Published to the public library', type: 'ok' })
       } else {
         const err = await resp.json().catch(() => ({ detail: 'Failed to publish' }))
-        alert(err.detail || 'Failed to publish')
+        setToast({ msg: err.detail || 'Failed to publish', type: 'error' })
       }
       fetchList()
     } catch { /* ignore */ }
@@ -505,6 +517,10 @@ export default function TheoPage() {
   // Steps: 1=Topic, 2=Similar, 3=Specialists, 4=Launch
   const wizardDisplayStep = wizardStep
 
+  // Active running item that is not being watched (for the investigation banner)
+  const runningItem = authUser ? items.find(i => i.status === 'running') : null
+  const showInvestigatingBanner = !!(runningItem && !liveOverlayId)
+
   if (!authChecked) {
     return (
       <div className="theo-page">
@@ -513,7 +529,11 @@ export default function TheoPage() {
             Research Lab
           </span>
         </PageHeader>
-        <div className="theo-auth-loading">Loading...</div>
+        <div className="theo-auth-loading">
+          <div className="theo-skeleton-bar" style={{ width: '60%', margin: '0 auto 10px' }} />
+          <div className="theo-skeleton-bar" style={{ width: '40%', margin: '0 auto 10px' }} />
+          <div className="theo-skeleton-bar" style={{ width: '50%', margin: '0 auto' }} />
+        </div>
       </div>
     )
   }
@@ -526,6 +546,17 @@ export default function TheoPage() {
         </span>
       </PageHeader>
       <AiNoticeBanner message="Research papers and illustrations are AI-generated. Always verify claims with original sources." />
+
+      {/* Investigating banner — shown when research is running and live overlay is closed */}
+      {showInvestigatingBanner && (
+        <button
+          className="theo-investigating-banner"
+          onClick={() => handleWatchLive(runningItem!)}
+        >
+          <span className="theo-live-dot" style={{ display: 'inline-block' }} />
+          Theo is investigating... Watch live
+        </button>
+      )}
 
       {/* Hero */}
       <div className="theo-hero">
@@ -560,18 +591,30 @@ export default function TheoPage() {
         <>
           {/* Wizard Steps Indicator — 4 steps */}
           <div className="theo-wizard-steps">
-            <div className={`theo-step-dot ${wizardDisplayStep >= 1 ? 'active' : ''}`}>
-              <span className="theo-step-num">1</span>
+            <div className={`theo-step-dot ${wizardDisplayStep >= 1 ? 'active' : ''} ${wizardDisplayStep > 1 ? 'completed' : ''}`}>
+              <span className="theo-step-num">
+                {wizardDisplayStep > 1 ? (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                ) : '1'}
+              </span>
               <span className="theo-step-label">Topic</span>
             </div>
             <div className="theo-step-line" />
-            <div className={`theo-step-dot ${wizardDisplayStep >= 2 ? 'active' : ''}`}>
-              <span className="theo-step-num">2</span>
+            <div className={`theo-step-dot ${wizardDisplayStep >= 2 ? 'active' : ''} ${wizardDisplayStep > 2 ? 'completed' : ''}`}>
+              <span className="theo-step-num">
+                {wizardDisplayStep > 2 ? (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                ) : '2'}
+              </span>
               <span className="theo-step-label">Similar</span>
             </div>
             <div className="theo-step-line" />
-            <div className={`theo-step-dot ${wizardDisplayStep >= 3 ? 'active' : ''}`}>
-              <span className="theo-step-num">3</span>
+            <div className={`theo-step-dot ${wizardDisplayStep >= 3 ? 'active' : ''} ${wizardDisplayStep > 3 ? 'completed' : ''}`}>
+              <span className="theo-step-num">
+                {wizardDisplayStep > 3 ? (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                ) : '3'}
+              </span>
               <span className="theo-step-label">Specialists</span>
             </div>
             <div className="theo-step-line" />
@@ -850,8 +893,19 @@ export default function TheoPage() {
 
           {/* ═══════ Completed Results ═══════ */}
           <div className="theo-list">
-            <div className="theo-list-header">
-              {doneItems.length > 0 ? `Results (${doneItems.length})` : 'Results'}
+            <div className="theo-list-header" style={{ display: 'flex', alignItems: 'center' }}>
+              <span>{doneItems.length > 0 ? `Results (${doneItems.length})` : 'Results'}</span>
+              {doneItems.length > 0 && (
+                <button
+                  className="theo-new-research-btn"
+                  onClick={() => {
+                    setWizardStep(1)
+                    setTimeout(() => inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50)
+                  }}
+                >
+                  + New
+                </button>
+              )}
             </div>
             {doneItems.length === 0 ? (
               <div className="theo-empty">
@@ -910,7 +964,9 @@ export default function TheoPage() {
 
       {/* ═══════ Public Research Library ═══════ */}
       <div className="theo-list theo-public-library">
-        <div className="theo-list-header">Public Research Library</div>
+        <div className="theo-list-header">
+          {publicTotal > 0 ? `Public Research Library (${publicTotal})` : 'Public Research Library'}
+        </div>
         {publicPapers.length === 0 && !loadingPublic ? (
           <div className="theo-empty">No published research yet.</div>
         ) : (
@@ -919,10 +975,11 @@ export default function TheoPage() {
               {publicPapers.map(paper => (
                 <div
                   key={paper.slug}
-                  className="theo-public-card"
+                  className={`theo-public-card${authUser?.username === paper.published_by ? ' theo-public-card--own' : ''}`}
                   onClick={() => handleReadPublicPaper(paper.slug)}
                   role="button"
                   tabIndex={0}
+                  aria-label={paper.title}
                   onKeyDown={e => { if (e.key === 'Enter') handleReadPublicPaper(paper.slug) }}
                 >
                   <div className="theo-public-card-hero">
@@ -943,6 +1000,18 @@ export default function TheoPage() {
                       </span>
                       <span className="theo-badge theo-badge-effort">{EFFORT_LABELS[paper.effort] || paper.effort}</span>
                       <span className="theo-public-card-date">{timeAgo(paper.published_at)}</span>
+                      <button
+                        className="theo-public-card-share"
+                        aria-label="Copy link"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          navigator.clipboard.writeText(window.location.origin + '/theo.html#' + paper.slug)
+                          setToast({ msg: 'Link copied!', type: 'ok' })
+                        }}
+                        title="Copy link"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1004,6 +1073,13 @@ export default function TheoPage() {
             onClose={handleCloseLive}
           />
         </Suspense>
+      )}
+
+      {/* Toast notifications */}
+      {toast && (
+        <div className={`theo-toast theo-toast-${toast.type}`}>
+          {toast.msg}
+        </div>
       )}
     </div>
   )

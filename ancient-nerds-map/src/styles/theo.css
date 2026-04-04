@@ -1479,3 +1479,124 @@
     justify-content: center;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   QUICK WINS — toast, share, skeleton, banner, checkmarks
+   ═══════════════════════════════════════════════════════════════ */
+
+/* — Toast notifications — */
+.theo-toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  padding: 10px 20px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: var(--font-body);
+  letter-spacing: 0.3px;
+  pointer-events: none;
+  animation: theo-toast-in 0.18s ease;
+  white-space: nowrap;
+}
+
+.theo-toast-ok {
+  background: rgba(0, 204, 102, 0.12);
+  border: 1px solid rgba(0, 204, 102, 0.3);
+  color: var(--accent-primary);
+}
+
+.theo-toast-error {
+  background: rgba(255, 68, 68, 0.1);
+  border: 1px solid rgba(255, 68, 68, 0.3);
+  color: var(--status-error-soft);
+}
+
+@keyframes theo-toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* — Share button on public cards — */
+.theo-public-card-share {
+  background: none;
+  border: none;
+  color: var(--text-dimmed);
+  cursor: pointer;
+  padding: 2px;
+  transition: color 0.15s;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.theo-public-card-share:hover {
+  color: var(--text-primary);
+}
+
+/* — Own card highlight — */
+.theo-public-card--own {
+  border-color: var(--theo-amber);
+}
+
+/* — Completed wizard step checkmarks — */
+.theo-step-dot.completed .theo-step-num {
+  background: var(--theo-amber-glow-20);
+  border-color: var(--theo-amber);
+  color: var(--theo-amber);
+}
+
+/* — Skeleton loading bars — */
+.theo-skeleton-bar {
+  height: 14px;
+  border-radius: 4px;
+  background: var(--surface-raised);
+  animation: theo-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes theo-shimmer {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.7; }
+}
+
+/* — "Theo is investigating..." banner — */
+.theo-investigating-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 20px;
+  background: var(--theo-amber-glow-10);
+  border: none;
+  border-bottom: 1px solid var(--theo-border);
+  color: var(--theo-amber-bright);
+  font-family: var(--font-body);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+  letter-spacing: 0.3px;
+}
+
+.theo-investigating-banner:hover {
+  background: var(--theo-amber-glow-20);
+}
+
+/* — "+ New" shortcut button in results header — */
+.theo-new-research-btn {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--text-dimmed);
+  font-family: var(--font-body);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 6px;
+  letter-spacing: 0.5px;
+  transition: color 0.15s;
+}
+
+.theo-new-research-btn:hover {
+  color: var(--text-primary);
+}

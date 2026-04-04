@@ -61,6 +61,13 @@ export default function TheoResearchLive({ requestId, question, onClose }: TheoR
     if (nearBottom) el.scrollTop = el.scrollHeight
   }, [displayText])
 
+  // Escape key to close
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [onClose])
+
   // SSE connection
   useEffect(() => {
     const controller = new AbortController()

@@ -3,7 +3,7 @@
  * Uses ReactMarkdown with custom site: link handling (same as LyraChatModal).
  */
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { formatDurationMs } from '../../utils/formatters'
@@ -46,6 +46,13 @@ export default function TheoReportOverlay({
 }: TheoReportOverlayProps) {
   const [showTrace, setShowTrace] = useState(false)
 
+  // Escape key to close
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [onClose])
+
   const handleBackdropClick = useCallback((e: React.MouseEvent) => {
     if (e.target === e.currentTarget) onClose()
   }, [onClose])
@@ -87,6 +94,8 @@ export default function TheoReportOverlay({
 
   const doneStages = pipelineTrace?.filter(e => e.status === 'done' && e.stage) ?? []
 
+  const readingMinutes = Math.ceil(result.report.split(/\s+/).length / 200)
+
   return (
     <div className="theo-overlay" onClick={handleBackdropClick}>
       <div className="theo-overlay-inner" onClick={e => e.stopPropagation()}>
@@ -112,6 +121,9 @@ export default function TheoReportOverlay({
                   {toolsUsed} tools
                 </span>
               )}
+              <span className="theo-badge" style={{ border: '1px solid var(--border-default)', color: 'var(--text-dimmed)' }}>
+                {readingMinutes} min read
+              </span>
             </div>
           </div>
           <button className="theo-report-close" onClick={onClose} aria-label="Close report">
