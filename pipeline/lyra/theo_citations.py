@@ -224,23 +224,55 @@ def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
         issues.append(f"[{n}] assigned as reference but never cited in text")
 
     # 3. Uncited paragraphs — factual claim paragraphs with no [N]
-    # Exempt structural text: headings, intros, methodology, transitions,
-    # bullet points, debate summaries — these don't make factual claims.
+    #
+    # Section-aware: exempt Abstract, Introduction, and Methodology entirely
+    # (these are framing sections that don't require per-paragraph citations).
+    # For body/discussion/conclusion sections, apply structural-start heuristic
+    # to skip transitions, ordinals, and non-factual framing text.
+
+    _EXEMPT_SECTIONS = frozenset({
+        "abstract", "introduction", "methodology",
+    })
+
     _STRUCTURAL_STARTS = (
+        # Framing / methodology
         "this paper", "this research", "this study", "this review",
+        "this investigation", "this analysis",
         "we used", "we employed", "our approach", "our method",
         "the following", "the above", "the debate", "the specialist",
         "having reviewed", "in this section", "in summary", "to summarize",
         "future research", "further investigation", "several ",
-        "- **",  # bullet points with bold
-        "- ",    # plain bullet points
+        # Bullet points
+        "- **", "- ",
+        # Discussion ordinals
+        "first,", "second,", "third,", "fourth,", "fifth,",
+        "sixth,", "finally,",
+        # Discussion / conclusion framing
+        "the evidence", "the overall", "the proposed", "the significance",
+        "the question", "the relationship", "the precision", "the terminology",
+        "the interpretation", "the consistency",
+        "what remains", "additionally,", "contemporary ",
+        "such an", "a particular",
     )
-    paragraphs = [p.strip() for p in paper_text.split("\n\n") if p.strip()]
+
+    # Split into sections by ## headings and track section for each paragraph
+    current_section = ""
+    paragraphs_with_section: list[tuple[str, str]] = []
+    for block in paper_text.split("\n\n"):
+        block = block.strip()
+        if not block:
+            continue
+        heading_match = re.match(r"^##\s+(.+)$", block, re.MULTILINE)
+        if heading_match:
+            current_section = heading_match.group(1).strip().lower()
+        elif not block.startswith("#"):
+            paragraphs_with_section.append((current_section, block))
+
     factual_paragraphs = [
         p
-        for p in paragraphs
+        for section, p in paragraphs_with_section
         if len(p) > 50
-        and not p.startswith("#")
+        and section not in _EXEMPT_SECTIONS
         and not p.lower().startswith(_STRUCTURAL_STARTS)
     ]
     uncited_paragraphs = sum(

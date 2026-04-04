@@ -12,11 +12,13 @@ CHECK FOR:
 
 5. **Lost caveats**: Specialists flagged uncertainties or methodological concerns — are these reflected in the synthesis? Important caveats should not be silently dropped.
 
-6. **Source ID completeness**: Source IDs from specialist findings should all appear in the synthesis. Spot-check a few findings to verify IDs were carried through.
+6. **Source ID completeness**: Source IDs from specialist findings should all appear in the synthesis. Check EVERY consensus claim and unique insight — verify that ALL source_ids from the specialist findings were carried through. Missing even one source_id is a FAIL.
 
-PASS if: the synthesis faithfully represents the specialist analyses — all major findings are present, disagreements are preserved, and citations are intact.
+7. **Empty source_ids**: Any claim with an empty source_ids list is an automatic FAIL. Every claim in the synthesis must trace to at least one source.
 
-FAIL if: claims are unsourced, contradictions are hidden, significant findings are dropped, or classifications are wrong.
+PASS if: the synthesis faithfully represents the specialist analyses — all major findings are present, disagreements are preserved, and ALL citations are intact (no dropped source_ids).
+
+FAIL if: claims are unsourced, contradictions are hidden, significant findings are dropped, classifications are wrong, OR source_ids were lost during synthesis.
 
 Output a JSON object matching this schema:
 

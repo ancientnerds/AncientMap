@@ -60,6 +60,10 @@ class PipelineContext:
     tier: TierConfig
     registry: CitationRegistry
 
+    # User overrides for specialist selection
+    force_include: list[str] = field(default_factory=list)
+    force_exclude: list[str] = field(default_factory=list)
+
     # Stage 1 outputs
     domain_tags: list[str] = field(default_factory=list)
     sub_questions: list[str] = field(default_factory=list)
@@ -120,6 +124,8 @@ class TheoPipeline:
         question: str,
         effort: str,
         emit: Callable[[dict], None],
+        force_include: list[str] | None = None,
+        force_exclude: list[str] | None = None,
     ) -> PipelineContext:
         """Run the full pipeline.  *emit* sends SSE events to the client."""
         tier = EFFORT_CONFIG.get(effort, EFFORT_CONFIG["article"])
@@ -129,6 +135,8 @@ class TheoPipeline:
             effort=effort,
             tier=tier,
             registry=CitationRegistry(),
+            force_include=force_include or [],
+            force_exclude=force_exclude or [],
         )
 
         pipeline_start = time.monotonic()
@@ -251,6 +259,8 @@ class TheoPipeline:
             domain_tags=ctx.domain_tags,
             question=ctx.question,
             count=ctx.tier.specialists_count,
+            force_include=ctx.force_include or None,
+            force_exclude=ctx.force_exclude or None,
         )
 
         ms = int((time.monotonic() - t0) * 1000)

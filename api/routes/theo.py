@@ -35,9 +35,15 @@ _theo_limiter = RateLimiter(max_requests=5, window_seconds=300, namespace="theo_
 # ---------------------------------------------------------------------------
 
 
+class RelevanceCheckRequest(BaseModel):
+    question: str = Field(..., min_length=10, max_length=4000)
+
+
 class ResearchSubmitRequest(BaseModel):
     question: str = Field(..., min_length=10, max_length=4000)
     effort: str = Field(default="article")
+    force_include: list[str] = Field(default_factory=list)
+    force_exclude: list[str] = Field(default_factory=list)
 
 
 class ResearchSubmitResponse(BaseModel):
@@ -75,6 +81,72 @@ def _estimate_minutes(effort: str, queue_position: int) -> int:
 
 
 # ---------------------------------------------------------------------------
+# POST /theo/check-relevance — Quick relevancy gate (no DB, no queue)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/check-relevance")
+async def check_relevance(body: RelevanceCheckRequest, req: Request):
+    """Run the relevancy gate standalone — fast M2.7 call, ~2-3 seconds."""
+    _theo_limiter.check(get_client_ip(req))
+
+    from pipeline.lyra.theo_pipeline import TheoPipeline
+
+    pipeline = TheoPipeline()
+    rejection = await pipeline._check_relevance(
+        body.question,
+        emit=lambda _: None,  # discard SSE events
+    )
+    if rejection:
+        return {"relevant": False, "reason": rejection}
+    return {"relevant": True, "reason": ""}
+
+
+# ---------------------------------------------------------------------------
+# GET /theo/specialists — Specialist pool for manual selection UI
+# ---------------------------------------------------------------------------
+
+
+@router.get("/specialists")
+async def list_specialists():
+    """Return the specialist pool for the frontend selection UI."""
+    from pipeline.lyra.theo_specialists import SPECIALIST_POOL
+
+    categories = {
+        "Archaeological Core": [],
+        "Interdisciplinary Science": [],
+        "Fringe / Alternative": [],
+    }
+    science_ids = {
+        "geologist", "paleoclimatologist", "adna_specialist",
+        "archaeometallurgist", "volcanologist", "physicist",
+        "archaeochemist", "paleoanthropologist", "structural_engineer",
+        "historical_linguist", "architect",
+    }
+    fringe_ids = {
+        "alternative_history_researcher", "comparative_mythologist",
+        "esoteric_traditions_scholar", "anomalous_phenomena_analyst",
+    }
+
+    for s in SPECIALIST_POOL:
+        entry = {
+            "id": s.id,
+            "name": s.name,
+            "title": s.title,
+            "domain": s.domain,
+            "perspective": s.perspective[:120],
+        }
+        if s.id in fringe_ids:
+            categories["Fringe / Alternative"].append(entry)
+        elif s.id in science_ids:
+            categories["Interdisciplinary Science"].append(entry)
+        else:
+            categories["Archaeological Core"].append(entry)
+
+    return categories
+
+
+# ---------------------------------------------------------------------------
 # POST /theo/research — Submit new research request
 # ---------------------------------------------------------------------------
 
@@ -105,18 +177,28 @@ async def submit_research(body: ResearchSubmitRequest, req: Request):
                 detail=f"Max {MAX_REQUESTS_PER_USER} concurrent requests per user",
             )
 
+        # Build specialist options JSON (only if non-empty)
+        spec_opts = None
+        if body.force_include or body.force_exclude:
+            spec_opts = json.dumps({
+                "force_include": body.force_include,
+                "force_exclude": body.force_exclude,
+            })
+
         # Insert new request
         request_id = str(uuid.uuid4())
         session.execute(
             text("""
-                INSERT INTO research_requests (id, user_id, question, effort, status, created_at)
-                VALUES (:id, :uid, :q, :effort, 'queued', NOW())
+                INSERT INTO research_requests
+                    (id, user_id, question, effort, status, specialist_options, created_at)
+                VALUES (:id, :uid, :q, :effort, 'queued', :spec_opts, NOW())
             """),
             {
                 "id": request_id,
                 "uid": user_id,
                 "q": body.question,
                 "effort": body.effort,
+                "spec_opts": spec_opts,
             },
         )
         session.commit()

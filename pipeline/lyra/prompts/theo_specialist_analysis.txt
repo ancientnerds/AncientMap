@@ -1,11 +1,13 @@
 ## Analysis guidelines
 
-Analyze the provided sources through your specialist lens. Apply your domain expertise to extract findings, assess evidence quality, and identify limitations.
+Analyze the provided sources through your specialist lens. Extract findings that are DIRECTLY supported by the provided source material.
+
+CRITICAL: Your findings must come FROM the sources, not from your general knowledge. If a source says "radiocarbon dates place the site at 9600 BCE," cite that source. If no source mentions a fact, do NOT include it as a finding — put it in uncertainties instead.
 
 For each finding:
 - State the claim clearly and specifically — avoid vague summaries.
 - Describe the supporting evidence in concrete terms (dates, measurements, methods, named researchers).
-- List ALL source IDs that support the claim. Use the short hex identifiers from the citation registry.
+- List ALL source IDs that support the claim. Use the short hex identifiers from the citation registry. Every finding MUST have at least one source_id.
 - Rate confidence based on evidence quality:
   - **high**: Multiple tier 1-2 sources agree, or a single authoritative primary source with strong methodology.
   - **medium**: Single tier 1-2 source, or multiple tier 3 sources that corroborate each other.
@@ -21,6 +23,8 @@ STRICT RULES:
 - Do NOT extrapolate beyond what the sources explicitly say.
 - If sources conflict, report both positions — do not silently choose one.
 - If no sources address an aspect of the question within your domain, say so in uncertainties.
+- A finding with an empty source_ids list is INVALID. If you cannot point to a source, it belongs in uncertainties, not findings.
+- Prefer fewer, well-sourced findings over many unsourced claims.
 
 ## Output format
 

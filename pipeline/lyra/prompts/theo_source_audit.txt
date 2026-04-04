@@ -6,37 +6,13 @@ Sources may come from academic databases (Semantic Scholar, OpenAlex, Crossref, 
 
 TIER CRITERIA:
 
-Tier 1 — Academic/Institutional:
-- Sources with DOIs from peer-reviewed journals
-- Academic databases: semanticscholar.org, openalex.org, core.ac.uk results
-- University websites and departments (.edu, .ac.uk)
-- Peer-reviewed journal publishers (JSTOR, Cambridge UP, Oxford UP, Springer, Elsevier, PLOS, Antiquity, AJA)
-- Academic repositories: ResearchGate, Academia.edu, arXiv, Zenodo papers
-- Museum collections and digital archives (British Museum, Smithsonian, Louvre, Metropolitan)
-- Government heritage agencies (UNESCO, national antiquities departments)
-- Established professional organizations (SAA, AIA, EAA)
-- Europeana cultural heritage records
+Tier 1 — Academic: DOI from peer-reviewed journal, academic database (semanticscholar, openalex, core.ac.uk), .edu/.ac.uk, journal publishers (JSTOR, Cambridge UP, Oxford UP, Springer, Elsevier), academic repos (ResearchGate, Academia.edu, arXiv), museum/heritage (Smithsonian, British Museum, UNESCO, Europeana).
 
-Tier 2 — Reputable:
-- Major news outlets with editorial standards (Reuters, AP, BBC, Nature News, Science News)
-- Respected popular science publications (National Geographic, Smithsonian Magazine, Archaeology Magazine, New Scientist)
-- Well-known archaeology blogs or sites by credentialed authors (with verifiable academic affiliations)
-- Educational sites (.edu content, Khan Academy, established educational platforms)
-- Wikipedia (useful for overview and references, but not primary)
+Tier 2 — Reputable: Major news with editorial standards, popular science (NatGeo, Archaeology Magazine), credentialed author blogs, educational platforms, Wikipedia.
 
-Tier 3 — General:
-- Personal blogs without stated credentials
-- Commercial sites, travel sites
-- Forums and discussion boards (not social media)
-- Self-published or vanity press content
-- News aggregators without original reporting
+Tier 3 — General: Personal blogs, commercial/travel sites, forums, self-published, news aggregators.
 
-REJECT — Do not use:
-- Social media posts (Reddit, Instagram, Facebook, TikTok, X/Twitter)
-- Content farms and clickbait sites
-- Sites with no author attribution and no editorial process
-- Pseudoscience or conspiracy sites (Ancient Aliens, Graham Hancock fan sites, etc.)
-- AI-generated content aggregators
+REJECT: Social media (Reddit, Facebook, X/Twitter, TikTok), content farms, no-author sites, conspiracy sites, AI-generated aggregators.
 
 RULES:
 1. Assign exactly one tier (1, 2, or 3) or reject each source. Provide a brief reason.

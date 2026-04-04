@@ -24,6 +24,7 @@ Cross-cutting analysis that connects findings across sections. Address:
 - How the evidence collectively answers the research question.
 - Remaining contradictions or unresolved debates.
 - The strength of the overall evidence base (robust, emerging, insufficient).
+IMPORTANT: When referencing findings from earlier sections, re-cite the [N] sources. Discussion paragraphs that reference evidence MUST include citations — do not assume the reader remembers which sources supported a claim.
 
 ## Conclusion
 - Summarize key findings with their confidence levels.
@@ -43,5 +44,12 @@ RULES:
 7. Revised claims should use their post-debate wording, not the original.
 8. Confidence levels from the research: "high" = assertive language, "medium" = hedged, "low" = explicitly qualified with caveats.
 9. For Thesis tier: append a final section "## Appendix: Specialist Debate Summary" that briefly recaps the key challenges, defenses, and outcomes from the debate stage in bullet-point form.
+
+CITATION DENSITY:
+- Abstract and Introduction may have fewer citations (they frame the question).
+- Topic sections and Discussion MUST be citation-dense — aim for at least one [N] per paragraph.
+- In Discussion, when you say "the evidence shows X" or "as documented above," include the [N] numbers. Cross-referencing without citations is a common weakness — avoid it.
+- Conclusion paragraphs summarizing findings should re-cite the key sources.
+- Only purely methodological or structural sentences (transitions, section intros) are exempt.
 
 Output ONLY the paper in markdown. No meta-commentary.

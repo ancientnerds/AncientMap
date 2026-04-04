@@ -18,5 +18,6 @@ RULES:
 6. Confidence levels from the research: present "high" confidence findings assertively, "medium" with hedging, and "low" with explicit qualification.
 7. If a claim was dropped during the debate stage, do NOT include it.
 8. Use the reference numbers EXACTLY as provided in the reference map. Do NOT renumber them.
+9. Aim for at least one [N] citation per paragraph. The opening sentence can set context without a citation, but the paragraph must include citations for any factual content.
 
 Output ONLY the paper in markdown. No meta-commentary.

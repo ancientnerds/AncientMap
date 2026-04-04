@@ -42,7 +42,12 @@ def get_live_events(request_id: str) -> list[dict]:
     return _live_events.get(request_id, [])
 
 
-async def _process_request(request_id: str, question: str, effort: str) -> None:
+async def _process_request(
+    request_id: str,
+    question: str,
+    effort: str,
+    specialist_options: dict | None = None,
+) -> None:
     """Process a single research request using the TheoPipeline."""
     logger.info(f"[THEO] Starting request {request_id} (effort={effort})")
 
@@ -69,7 +74,15 @@ async def _process_request(request_id: str, question: str, effort: str) -> None:
         from pipeline.lyra.theo_pipeline import TheoPipeline
 
         pipeline = TheoPipeline()
-        ctx = await pipeline.run(question, effort, emit)
+        force_include = (specialist_options or {}).get("force_include", [])
+        force_exclude = (specialist_options or {}).get("force_exclude", [])
+        ctx = await pipeline.run(
+            question,
+            effort,
+            emit,
+            force_include=force_include,
+            force_exclude=force_exclude,
+        )
 
         duration_ms = int((time.monotonic() - start) * 1000)
 
@@ -162,7 +175,7 @@ async def _poll_loop() -> None:
             with get_session() as session:
                 row = session.execute(
                     text("""
-                        SELECT id::text, question, effort
+                        SELECT id::text, question, effort, specialist_options
                         FROM research_requests
                         WHERE status = 'queued'
                         ORDER BY created_at ASC
@@ -172,7 +185,9 @@ async def _poll_loop() -> None:
 
             if row:
                 async with _semaphore:
-                    await _process_request(row.id, row.question, row.effort)
+                    await _process_request(
+                        row.id, row.question, row.effort, row.specialist_options
+                    )
             else:
                 await asyncio.sleep(3)  # No work — wait before polling again
 

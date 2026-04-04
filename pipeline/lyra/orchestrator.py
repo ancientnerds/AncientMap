@@ -1619,6 +1619,11 @@ def _run_migrations(engine) -> None:
             text("ALTER TABLE pipeline_heartbeats ADD COLUMN IF NOT EXISTS step_data JSONB")
         )
 
+        # Theo specialist options: force_include / force_exclude
+        conn.execute(
+            text("ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS specialist_options JSONB")
+        )
+
         conn.commit()
 
 
