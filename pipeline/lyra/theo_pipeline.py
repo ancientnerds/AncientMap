@@ -321,16 +321,22 @@ class TheoPipeline:
 
             if exists:
                 skipped += 1
-                emit({"type": "status", "content": f"Video {vid} already indexed, skipping."})
+                emit(
+                    {
+                        "type": "status",
+                        "content": f"[{vid}] Already in database — skipping extraction.",
+                    }
+                )
                 continue
 
             try:
-                # Fetch metadata first for relevancy check
                 from pipeline.lyra.transcript_fetcher import (
                     _fetch_metadata_youtube_api,
                     fetch_transcript,
                 )
 
+                # Step 1: Fetch video metadata
+                emit({"type": "status", "content": f"[{vid}] Fetching video metadata..."})
                 meta = await asyncio.to_thread(
                     _fetch_metadata_youtube_api, vid, self._settings.youtube_api_key
                 )
@@ -338,30 +344,64 @@ class TheoPipeline:
                 description = meta.get("description", "")[:500] if meta else ""
                 tags = ", ".join(meta.get("tags", [])[:10]) if meta else ""
 
-                # Quick relevancy check on metadata
+                if title:
+                    emit({"type": "status", "content": f'[{vid}] Found: "{title[:80]}"'})
+                else:
+                    emit(
+                        {
+                            "type": "status",
+                            "content": f"[{vid}] Could not fetch metadata — skipping.",
+                        }
+                    )
+                    continue
+
+                # Step 2: Relevancy gate on metadata
+                emit(
+                    {
+                        "type": "status",
+                        "content": f"[{vid}] Running relevancy gate on title + description + tags...",
+                    }
+                )
                 relevance_input = f"Title: {title}\nDescription: {description}\nTags: {tags}"
                 rejection = await self._check_relevance(relevance_input, lambda _: None)
                 if rejection:
                     emit(
                         {
                             "type": "status",
-                            "content": f"Video '{title[:60]}' rejected: not related to archaeology.",
+                            "content": f"[{vid}] Rejected — not related to archaeology/history.",
                         }
                     )
                     continue
+                emit({"type": "status", "content": f"[{vid}] Relevancy check passed."})
 
-                emit({"type": "status", "content": f"Extracting transcript: {title[:60]}..."})
-
-                # Extract transcript (reuses full pipeline: fetch + clean + timestamp)
+                # Step 3: Extract transcript
+                emit(
+                    {
+                        "type": "status",
+                        "content": f"[{vid}] Extracting transcript (this may take 10-30s)...",
+                    }
+                )
                 transcript_text, duration_min = await asyncio.to_thread(
                     fetch_transcript, vid, self._settings
                 )
 
                 if not transcript_text:
-                    emit({"type": "status", "content": f"No transcript available for {vid}."})
+                    emit(
+                        {
+                            "type": "status",
+                            "content": f"[{vid}] No transcript available (no captions on this video).",
+                        }
+                    )
                     continue
+                emit(
+                    {
+                        "type": "status",
+                        "content": f"[{vid}] Transcript extracted: {duration_min:.0f} min, {len(transcript_text)} chars.",
+                    }
+                )
 
-                # Store in news_videos table (same as news pipeline)
+                # Step 4: Store in database
+                emit({"type": "status", "content": f"[{vid}] Saving to database..."})
                 thumbnail = meta.get("thumbnail", "") if meta else ""
                 with get_session() as session:
                     session.execute(
@@ -389,25 +429,26 @@ class TheoPipeline:
                     )
                     session.commit()
 
-                # Index in Qdrant transcripts collection
+                # Step 5: Index in Qdrant for search
+                emit(
+                    {
+                        "type": "status",
+                        "content": f"[{vid}] Indexing transcript chunks in vector database...",
+                    }
+                )
                 await self._index_transcript_chunks(vid, title, transcript_text, "")
 
                 extracted += 1
                 emit(
                     {
                         "type": "status",
-                        "content": f"Transcript extracted: {title[:60]} ({duration_min:.0f} min)",
+                        "content": f"[{vid}] Done — {duration_min:.0f} min transcript ready for research.",
                     }
                 )
 
             except Exception as exc:
                 logger.warning("Failed to extract transcript for %s: %s", vid, exc)
-                emit(
-                    {
-                        "type": "status",
-                        "content": f"Failed to extract transcript for {vid}: {exc}",
-                    }
-                )
+                emit({"type": "status", "content": f"[{vid}] Error: {exc}"})
 
         ms = int((time.monotonic() - t0) * 1000)
         emit(
