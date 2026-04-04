@@ -63,6 +63,7 @@ interface SpecialistCategories {
 interface AdapterInfo {
   label: string
   icon: string
+  favicon: string
   group: string
 }
 
@@ -919,6 +920,13 @@ export default function TheoPage() {
                                   tabIndex={0}
                                   onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggleAdapter(key) } }}
                                 >
+                                  {info.favicon ? (
+                                    <img src={info.favicon} alt="" className="theo-adapter-favicon" />
+                                  ) : key === 'ancientnerds_db' ? (
+                                    <svg className="theo-adapter-favicon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                                  ) : key === 'ancientnerds_research' ? (
+                                    <svg className="theo-adapter-favicon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                                  ) : null}
                                   <span className="theo-adapter-label">{info.label}</span>
                                   <label className="theo-adapter-toggle" onClick={e => e.stopPropagation()}>
                                     <input

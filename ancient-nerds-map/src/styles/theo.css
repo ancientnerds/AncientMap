@@ -1807,6 +1807,13 @@
   background: var(--surface-raised);
 }
 
+.theo-adapter-favicon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
 .theo-adapter-label {
   font-size: 13px;
   color: var(--text-primary);

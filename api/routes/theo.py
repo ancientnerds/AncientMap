@@ -188,31 +188,80 @@ async def check_relevance(body: RelevanceCheckRequest, req: Request):
 @router.get("/adapters")
 async def list_adapters():
     """Return available source adapters with their names and descriptions."""
+    _icons = "/images/adapters"
     adapter_info: dict[str, dict[str, str]] = {
         "ancientnerds_db": {
             "label": "AncientNerds Database",
-            "icon": "database",
+            "icon": "",
+            "favicon": "",
             "group": "internal",
         },
         "ancientnerds_research": {
             "label": "Public Research Papers",
-            "icon": "file-text",
+            "icon": "",
+            "favicon": "",
             "group": "internal",
         },
         "youtube_transcripts": {
             "label": "YouTube Transcripts",
-            "icon": "video",
+            "icon": "",
+            "favicon": f"{_icons}/youtube.png",
             "group": "internal",
         },
-        "semantic_scholar": {"label": "Semantic Scholar", "icon": "academic", "group": "academic"},
-        "openalex": {"label": "OpenAlex", "icon": "academic", "group": "academic"},
-        "crossref": {"label": "Crossref", "icon": "academic", "group": "academic"},
-        "core": {"label": "CORE", "icon": "academic", "group": "academic"},
-        "europeana": {"label": "Europeana", "icon": "heritage", "group": "heritage"},
-        "smithsonian": {"label": "Smithsonian", "icon": "heritage", "group": "heritage"},
-        "wikipedia": {"label": "Wikipedia", "icon": "globe", "group": "web"},
-        "internet_archive": {"label": "Internet Archive", "icon": "archive", "group": "web"},
-        "minimax": {"label": "Web Search", "icon": "search", "group": "web"},
+        "semantic_scholar": {
+            "label": "Semantic Scholar",
+            "icon": "",
+            "favicon": f"{_icons}/semantic-scholar.png",
+            "group": "academic",
+        },
+        "openalex": {
+            "label": "OpenAlex",
+            "icon": "",
+            "favicon": f"{_icons}/openalex.png",
+            "group": "academic",
+        },
+        "crossref": {
+            "label": "Crossref",
+            "icon": "",
+            "favicon": f"{_icons}/crossref.png",
+            "group": "academic",
+        },
+        "core": {
+            "label": "CORE",
+            "icon": "",
+            "favicon": f"{_icons}/core.png",
+            "group": "academic",
+        },
+        "europeana": {
+            "label": "Europeana",
+            "icon": "",
+            "favicon": f"{_icons}/europeana.png",
+            "group": "heritage",
+        },
+        "smithsonian": {
+            "label": "Smithsonian",
+            "icon": "",
+            "favicon": f"{_icons}/smithsonian.png",
+            "group": "heritage",
+        },
+        "wikipedia": {
+            "label": "Wikipedia",
+            "icon": "",
+            "favicon": f"{_icons}/wikipedia.png",
+            "group": "web",
+        },
+        "internet_archive": {
+            "label": "Internet Archive",
+            "icon": "",
+            "favicon": f"{_icons}/internet-archive.png",
+            "group": "web",
+        },
+        "minimax": {
+            "label": "Web Search",
+            "icon": "",
+            "favicon": f"{_icons}/minimax.png",
+            "group": "web",
+        },
     }
     return adapter_info
 
