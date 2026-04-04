@@ -11,19 +11,24 @@ Endpoints:
 
 import json
 import logging
+import os
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, HTTPException, Request
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from api.services.jwt_auth import get_optional_user
+from api.services.jwt_auth import get_current_user, get_optional_user
 from api.services.rate_limiter import RateLimiter, get_client_ip
-from api.services.theo_config import EFFORT_CONFIG, MAX_REQUESTS_PER_USER
+from api.services.theo_config import EFFORT_CONFIG, MAX_REQUESTS_PER_USER, THEO_RESEARCHER_ROLE_ID
 from api.services.theo_worker import get_live_events
-from pipeline.database import get_session
+from pipeline.database import DiscordUser, get_session
+
+DISCORD_GUILD_ID = os.getenv("DISCORD_GUILD_ID", "932330696956063765")
+DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "")
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -78,6 +83,59 @@ def _estimate_minutes(effort: str, queue_position: int) -> int:
     """Rough estimate based on effort and queue position."""
     base = {"brief": 3, "note": 8, "article": 20, "review": 40, "thesis": 60}.get(effort, 20)
     return base * max(queue_position, 1)
+
+
+# ---------------------------------------------------------------------------
+# GET /theo/me — Current user's Theo profile with fresh roles
+# ---------------------------------------------------------------------------
+
+
+@router.get("/me")
+async def theo_me(user: DiscordUser = Depends(get_current_user)):
+    """Return the user's Theo profile and refresh their Discord roles from the bot."""
+    # Refresh roles from Discord using the bot token
+    fresh_roles = user.roles or []
+    if DISCORD_BOT_TOKEN and user.discord_id:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"https://discord.com/api/v10/guilds/{DISCORD_GUILD_ID}/members/{user.discord_id}",
+                headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
+                timeout=5.0,
+            )
+        if resp.status_code == 200:
+            fresh_roles = resp.json().get("roles", fresh_roles)
+            with get_session() as session:
+                db_user = (
+                    session.query(DiscordUser)
+                    .filter(DiscordUser.id == user.id)
+                    .first()
+                )
+                if db_user:
+                    db_user.roles = fresh_roles
+                    session.commit()
+        else:
+            logger.warning(
+                "Discord bot member fetch failed for %s: %s",
+                user.discord_id,
+                resp.status_code,
+            )
+
+    has_researcher_role = bool(
+        THEO_RESEARCHER_ROLE_ID and THEO_RESEARCHER_ROLE_ID in fresh_roles
+    )
+    avatar_url = None
+    if user.avatar_hash:
+        avatar_url = (
+            f"https://cdn.discordapp.com/avatars/{user.discord_id}"
+            f"/{user.avatar_hash}.png?size=128"
+        )
+
+    return {
+        "username": user.username,
+        "discord_id": user.discord_id,
+        "avatar_url": avatar_url,
+        "has_researcher_role": has_researcher_role,
+    }
 
 
 # ---------------------------------------------------------------------------

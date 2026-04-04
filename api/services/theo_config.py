@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 THEO_PARALLEL_SLOTS = 1
+
+# Discord role ID that grants access to Theo Research Lab.
+# Set THEO_RESEARCHER_ROLE_ID in .env to the role ID.
+# If left empty, the researcher gate is disabled (403 for all users).
+THEO_RESEARCHER_ROLE_ID = os.getenv("THEO_RESEARCHER_ROLE_ID", "")
 RESULT_TTL_HOURS = 24
 MAX_REQUESTS_PER_USER = 5
 
