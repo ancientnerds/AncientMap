@@ -14,7 +14,6 @@ from sqlalchemy import text
 
 from api.services.theo_config import RESULT_TTL_HOURS, THEO_PARALLEL_SLOTS
 from pipeline.database import get_session
-from pipeline.lyra.theo_pipeline import TheoPipeline
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +65,9 @@ async def _process_request(request_id: str, question: str, effort: str) -> None:
         pipeline_trace.append(event)
 
     try:
+        # Lazy import to avoid circular: theo_pipeline -> theo_config -> api -> theo_worker
+        from pipeline.lyra.theo_pipeline import TheoPipeline
+
         pipeline = TheoPipeline()
         ctx = await pipeline.run(question, effort, emit)
 
