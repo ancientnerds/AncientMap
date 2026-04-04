@@ -70,7 +70,7 @@ def _get_user_id(req: Request) -> str:
 
 def _estimate_minutes(effort: str, queue_position: int) -> int:
     """Rough estimate based on effort and queue position."""
-    base = {"quick": 3, "deep": 10, "full": 20, "auto": 8}.get(effort, 8)
+    base = {"brief": 2, "paper": 7, "thesis": 15, "auto": 7}.get(effort, 7)
     return base * max(queue_position, 1)
 
 
