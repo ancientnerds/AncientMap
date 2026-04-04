@@ -1184,3 +1184,281 @@
     justify-content: center;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Auth / Login Prompt
+   ═══════════════════════════════════════════════════════════════ */
+
+.theo-auth-loading {
+  text-align: center;
+  color: var(--text-dimmed);
+  font-size: 14px;
+  padding: 60px 20px;
+}
+
+.theo-login-prompt {
+  max-width: 720px;
+  margin: 24px auto 0;
+  padding: 28px 32px;
+  border: 1px solid var(--theo-border);
+  border-radius: 8px;
+  background: var(--theo-surface);
+  text-align: center;
+}
+
+.theo-login-prompt-title {
+  font-family: var(--font-heading);
+  font-size: 16px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--theo-amber);
+  margin-bottom: 10px;
+}
+
+.theo-login-prompt-desc {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.theo-login-btn {
+  display: inline-block;
+  padding: 11px 32px;
+  border: 1px solid var(--theo-amber);
+  border-radius: 4px;
+  background: var(--theo-amber-glow-15);
+  color: var(--theo-amber-bright);
+  font-family: var(--font-heading);
+  font-size: 13px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.theo-login-btn:hover {
+  background: var(--theo-amber-glow-30);
+  box-shadow: 0 0 16px var(--theo-amber-glow-20);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Stage 1.5 — Duplicate Detection
+   ═══════════════════════════════════════════════════════════════ */
+
+.theo-duplicate-none {
+  font-size: 14px;
+  color: var(--accent-primary);
+  padding: 14px 16px;
+  border: 1px solid rgba(0, 204, 102, 0.2);
+  border-radius: 6px;
+  background: rgba(0, 204, 102, 0.06);
+  margin-bottom: 16px;
+}
+
+.theo-duplicate-intro {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+}
+
+.theo-duplicate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.theo-duplicate-card {
+  padding: 14px 16px;
+  border: 1px solid var(--theo-border);
+  border-radius: 6px;
+  background: var(--theo-surface);
+}
+
+.theo-duplicate-card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.theo-duplicate-title {
+  font-size: 15px;
+  color: var(--text-primary);
+  flex: 1;
+  min-width: 160px;
+  line-height: 1.4;
+}
+
+.theo-duplicate-card-meta {
+  font-size: 12px;
+  color: var(--text-dimmed);
+  margin-bottom: 10px;
+}
+
+.theo-badge-similarity {
+  border: 1px solid var(--theo-border);
+  color: var(--theo-amber);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Personal Card — Publish / Unpublish / Delete buttons
+   ═══════════════════════════════════════════════════════════════ */
+
+.theo-badge-published {
+  border: 1px solid rgba(212, 145, 42, 0.35);
+  background: var(--theo-amber-glow-10);
+  color: var(--theo-amber-bright);
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.theo-btn-publish {
+  padding: 7px 16px;
+  border: 1px solid var(--theo-border);
+  border-radius: 3px;
+  background: var(--theo-amber-glow-10);
+  color: var(--theo-amber);
+  font-family: var(--font-body);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.theo-btn-publish:hover {
+  background: var(--theo-amber-glow-20);
+  border-color: var(--theo-amber);
+  color: var(--theo-amber-bright);
+}
+
+.theo-btn-unpublish {
+  padding: 7px 16px;
+  border: 1px solid var(--theo-border);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.theo-btn-unpublish:hover {
+  border-color: var(--theo-border-hover);
+  color: var(--text-primary);
+}
+
+.theo-btn-delete {
+  padding: 7px 16px;
+  border: 1px solid rgba(255, 68, 68, 0.15);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-dimmed);
+  font-family: var(--font-body);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.theo-btn-delete:hover {
+  border-color: rgba(255, 68, 68, 0.35);
+  color: var(--status-error-soft);
+  background: rgba(255, 68, 68, 0.06);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Public Research Library
+   ═══════════════════════════════════════════════════════════════ */
+
+.theo-public-library {
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 1px solid var(--theo-border);
+}
+
+.theo-public-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+}
+
+.theo-public-card {
+  padding: 16px 18px;
+  border: 1px solid var(--theo-border);
+  border-radius: 6px;
+  background: var(--theo-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.2s;
+}
+
+.theo-public-card:hover {
+  border-color: var(--theo-border-hover);
+}
+
+.theo-public-card-title {
+  font-size: 15px;
+  color: var(--text-primary);
+  line-height: 1.4;
+  font-weight: 500;
+}
+
+.theo-public-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.theo-public-card-author {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.theo-public-card-date {
+  font-size: 12px;
+  color: var(--text-dimmed);
+  margin-left: auto;
+}
+
+.theo-load-more-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.theo-load-more-btn {
+  padding: 9px 28px;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.theo-load-more-btn:hover:not(:disabled) {
+  border-color: var(--theo-border-hover);
+  color: var(--text-primary);
+}
+
+.theo-load-more-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* — Responsive additions — */
+@media (max-width: 600px) {
+  .theo-login-prompt { padding: 20px 16px; }
+  .theo-public-grid { grid-template-columns: 1fr; }
+  .theo-wizard-steps { max-width: 340px; }
+}

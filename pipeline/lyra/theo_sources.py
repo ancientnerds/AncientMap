@@ -71,9 +71,10 @@ BLOCKED_DOMAINS = frozenset(
 # ---------------------------------------------------------------------------
 SOURCE_GROUPS: dict[str, list[str]] = {
     "minimal": ["ancientnerds_db", "semantic_scholar", "minimax"],
-    "standard": ["ancientnerds_db", "semantic_scholar", "openalex", "crossref", "wikipedia", "minimax"],
+    "standard": ["ancientnerds_db", "ancientnerds_research", "semantic_scholar", "openalex", "crossref", "wikipedia", "minimax"],
     "full": [
         "ancientnerds_db",
+        "ancientnerds_research",
         "semantic_scholar",
         "openalex",
         "crossref",
@@ -85,6 +86,7 @@ SOURCE_GROUPS: dict[str, list[str]] = {
     ],
     "exhaustive": [
         "ancientnerds_db",
+        "ancientnerds_research",
         "semantic_scholar",
         "openalex",
         "crossref",
@@ -951,6 +953,48 @@ class UnifiedSitesAdapter(SourceAdapter):
             return []
 
 
+class PublicResearchAdapter(SourceAdapter):
+    """Search published Theo research papers in Qdrant for citation use.
+
+    Finds relevant sections from public papers and returns them as sources
+    that specialists can cite. Same Qdrant collection used for duplicate
+    detection and future Lyra RAG.
+    """
+
+    @property
+    def name(self) -> str:
+        return "ancientnerds_research"
+
+    @property
+    def default_tier(self) -> int:
+        return 2  # Reputable — curated with debate + audit, but not peer-reviewed
+
+    async def search(self, query: str, max_results: int = 3) -> list[RawSource]:
+        def _do() -> list[RawSource]:
+            from pipeline.lyra.theo_research_index import search_sections
+
+            hits = search_sections(query, limit=min(max_results, 3))
+            results: list[RawSource] = []
+            for hit in hits:
+                url = f"https://ancientnerds.com/theo/public/{hit['paper_slug']}"
+                results.append(
+                    RawSource(
+                        url=url,
+                        title=f"{hit['paper_title']} — {hit['section_title']} (AncientNerds Research)",
+                        snippet=hit["section_text"][:500],
+                        source_api=self.name,
+                        default_tier=self.default_tier,
+                    )
+                )
+            return results
+
+        try:
+            return await asyncio.to_thread(_do)
+        except Exception as exc:
+            logger.warning("PublicResearch search failed for '%s': %s", query, exc)
+            return []
+
+
 # ---------------------------------------------------------------------------
 # Unpaywall enricher (post-search, not a search adapter)
 # ---------------------------------------------------------------------------
@@ -1015,6 +1059,7 @@ class MultiSourceSearch:
         """Initialize all available adapters based on which API keys are set."""
         # Always available (no key required, or key is optional)
         self._adapters["ancientnerds_db"] = UnifiedSitesAdapter()
+        self._adapters["ancientnerds_research"] = PublicResearchAdapter()
         self._adapters["semantic_scholar"] = SemanticScholarAdapter()
         self._adapters["openalex"] = OpenAlexAdapter()
         self._adapters["crossref"] = CrossrefAdapter()

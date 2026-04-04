@@ -2,21 +2,28 @@
 API routes for Theodore Furcade — async archaeological research agent.
 
 Endpoints:
-  POST   /theo/research          — Submit a new research request
-  GET    /theo/research          — List user's requests (last 24h)
-  GET    /theo/research/{id}     — Get single request with full report
+  POST   /theo/research             — Submit a new research request
+  GET    /theo/research             — List user's requests (last 24h)
+  GET    /theo/research/{id}        — Get single request with full report
   GET    /theo/research/{id}/stream — SSE stream for live progress
-  DELETE /theo/research/{id}     — Cancel a queued request
+  DELETE /theo/research/{id}        — Delete a request (queued/completed/failed)
+  POST   /theo/research/{id}/publish   — Publish to public library
+  POST   /theo/research/{id}/unpublish — Remove from public library
+  GET    /theo/public               — Browse public research papers
+  GET    /theo/public/{slug}        — Read a single public paper
+  POST   /theo/check-duplicates     — Find similar public papers
+  GET    /theo/me                   — User profile with fresh Discord roles
 """
 
 import json
 import logging
 import os
+import re
 import uuid
 from datetime import UTC, datetime
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -79,21 +86,26 @@ def _get_user_id(req: Request) -> str:
     return get_client_ip(req)
 
 
+class DuplicateCheckRequest(BaseModel):
+    question: str = Field(..., min_length=10, max_length=4000)
+
+
 def _estimate_minutes(effort: str, queue_position: int) -> int:
     """Rough estimate based on effort and queue position."""
     base = {"brief": 3, "note": 8, "article": 20, "review": 40, "thesis": 60}.get(effort, 20)
     return base * max(queue_position, 1)
 
 
-# ---------------------------------------------------------------------------
-# GET /theo/me — Current user's Theo profile with fresh roles
-# ---------------------------------------------------------------------------
+def _make_slug(title: str) -> str:
+    """Generate a URL-friendly slug from a paper title."""
+    slug = title.lower().strip()
+    slug = re.sub(r"[^a-z0-9\s-]", "", slug)
+    slug = re.sub(r"[\s-]+", "-", slug).strip("-")
+    return slug[:250]
 
 
-@router.get("/me")
-async def theo_me(user: DiscordUser = Depends(get_current_user)):
-    """Return the user's Theo profile and refresh their Discord roles from the bot."""
-    # Refresh roles from Discord using the bot token
+async def _refresh_roles(user: DiscordUser) -> list[str]:
+    """Refresh a user's Discord roles via bot API. Returns fresh roles list."""
     fresh_roles = user.roles or []
     if DISCORD_BOT_TOKEN and user.discord_id:
         async with httpx.AsyncClient() as client:
@@ -115,14 +127,23 @@ async def theo_me(user: DiscordUser = Depends(get_current_user)):
                     session.commit()
         else:
             logger.warning(
-                "Discord bot member fetch failed for %s: %s",
+                "Discord role refresh failed for %s: %s",
                 user.discord_id,
                 resp.status_code,
             )
+    return fresh_roles
 
-    has_researcher_role = bool(
-        THEO_RESEARCHER_ROLE_ID and THEO_RESEARCHER_ROLE_ID in fresh_roles
-    )
+
+# ---------------------------------------------------------------------------
+# GET /theo/me — Current user's Theo profile with fresh roles
+# ---------------------------------------------------------------------------
+
+
+@router.get("/me")
+async def theo_me(user: DiscordUser = Depends(get_current_user)):
+    """Return the user's Theo profile and refresh their Discord roles from the bot."""
+    fresh_roles = await _refresh_roles(user)
+
     avatar_url = None
     if user.avatar_hash:
         avatar_url = (
@@ -134,7 +155,9 @@ async def theo_me(user: DiscordUser = Depends(get_current_user)):
         "username": user.username,
         "discord_id": user.discord_id,
         "avatar_url": avatar_url,
-        "has_researcher_role": has_researcher_role,
+        "has_researcher_role": bool(
+            THEO_RESEARCHER_ROLE_ID and THEO_RESEARCHER_ROLE_ID in fresh_roles
+        ),
     }
 
 
@@ -294,13 +317,13 @@ async def list_research(req: Request):
         rows = session.execute(
             text("""
                 SELECT id::text, question, effort, status, sites_found, tools_used,
-                       duration_ms, error_message, created_at, completed_at
+                       duration_ms, error_message, is_public, created_at, completed_at
                 FROM research_requests
                 WHERE user_id = :uid
-                  AND (expires_at IS NULL OR expires_at > NOW())
-                  AND created_at > NOW() - INTERVAL '24 hours'
+                  AND (is_public = TRUE OR expires_at IS NULL OR expires_at > NOW())
+                  AND (is_public = TRUE OR created_at > NOW() - INTERVAL '24 hours')
                 ORDER BY created_at DESC
-                LIMIT 20
+                LIMIT 50
             """),
             {"uid": user_id},
         ).fetchall()
@@ -315,6 +338,7 @@ async def list_research(req: Request):
             "tools_used": r.tools_used,
             "duration_ms": r.duration_ms,
             "error_message": r.error_message,
+            "is_public": r.is_public,
             "created_at": r.created_at.isoformat() if r.created_at else None,
             "completed_at": r.completed_at.isoformat() if r.completed_at else None,
         }
@@ -452,19 +476,19 @@ async def stream_research(request_id: str, req: Request):
 
 
 # ---------------------------------------------------------------------------
-# DELETE /theo/research/{id} — Cancel a queued request
+# DELETE /theo/research/{id} — Delete/cancel a request
 # ---------------------------------------------------------------------------
 
 
 @router.delete("/research/{request_id}")
-async def cancel_research(request_id: str, req: Request):
-    """Cancel a queued research request. Cannot cancel running requests."""
+async def delete_research(request_id: str, req: Request):
+    """Delete a research request. Queued → cancel. Completed/failed → delete. Running → error."""
     _validate_uuid(request_id)
     user_id = _get_user_id(req)
 
     with get_session() as session:
         row = session.execute(
-            text("SELECT user_id, status FROM research_requests WHERE id = :id"),
+            text("SELECT user_id, status, is_public FROM research_requests WHERE id = :id"),
             {"id": request_id},
         ).fetchone()
 
@@ -472,15 +496,282 @@ async def cancel_research(request_id: str, req: Request):
             raise HTTPException(status_code=404, detail="Not found")
         if row.user_id != user_id:
             raise HTTPException(status_code=403, detail="Not your request")
-        if row.status != "queued":
-            raise HTTPException(
-                status_code=409, detail=f"Cannot cancel request in '{row.status}' state"
+        if row.status == "running":
+            raise HTTPException(status_code=409, detail="Cannot delete a running request")
+
+        if row.status == "queued":
+            session.execute(
+                text("UPDATE research_requests SET status = 'cancelled' WHERE id = :id"),
+                {"id": request_id},
             )
+        else:
+            # completed, failed, cancelled — actually delete
+            session.execute(
+                text("DELETE FROM research_requests WHERE id = :id"),
+                {"id": request_id},
+            )
+        session.commit()
+
+    # Clean up Qdrant if it was public
+    if row.is_public:
+        try:
+            from pipeline.lyra.theo_research_index import delete_paper
+
+            delete_paper(request_id)
+        except Exception as exc:
+            logger.warning("Qdrant cleanup failed for %s: %s", request_id, exc)
+
+    return {"status": "deleted"}
+
+
+# ---------------------------------------------------------------------------
+# POST /theo/research/{id}/publish — Publish to public library
+# ---------------------------------------------------------------------------
+
+
+@router.post("/research/{request_id}/publish")
+async def publish_research(
+    request_id: str,
+    user: DiscordUser = Depends(get_current_user),
+):
+    """Publish a completed research paper to the public library."""
+    _validate_uuid(request_id)
+
+    # Refresh roles from Discord and verify Researcher role
+    fresh_roles = await _refresh_roles(user)
+    if not THEO_RESEARCHER_ROLE_ID or THEO_RESEARCHER_ROLE_ID not in fresh_roles:
+        raise HTTPException(status_code=403, detail="Researcher role required to publish")
+
+    with get_session() as session:
+        row = session.execute(
+            text("""
+                SELECT id::text, user_id, status, is_public, result_json, question
+                FROM research_requests WHERE id = :id
+            """),
+            {"id": request_id},
+        ).fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Not found")
+        if row.user_id != user.discord_id:
+            raise HTTPException(status_code=403, detail="Not your request")
+        if row.status != "completed":
+            raise HTTPException(status_code=409, detail="Only completed research can be published")
+        if row.is_public:
+            raise HTTPException(status_code=409, detail="Already published")
+
+        # Parse result to get paper title for slug
+        try:
+            result = json.loads(row.result_json) if row.result_json else {}
+        except (json.JSONDecodeError, TypeError):
+            result = {}
+
+        paper_title = result.get("title", row.question)
+        slug = _make_slug(paper_title)
+
+        # Ensure slug uniqueness by appending short ID if needed
+        existing = session.execute(
+            text("SELECT id FROM research_requests WHERE slug = :slug AND id != :id"),
+            {"slug": slug, "id": request_id},
+        ).fetchone()
+        if existing:
+            slug = f"{slug}-{request_id[:8]}"
 
         session.execute(
-            text("UPDATE research_requests SET status = 'cancelled' WHERE id = :id"),
+            text("""
+                UPDATE research_requests
+                SET is_public = TRUE,
+                    published_at = NOW(),
+                    published_by = :username,
+                    slug = :slug,
+                    expires_at = NULL
+                WHERE id = :id
+            """),
+            {"id": request_id, "username": user.username, "slug": slug},
+        )
+        session.commit()
+
+    # Index in Qdrant
+    paper_text = result.get("report", "")
+    if paper_text:
+        try:
+            from pipeline.lyra.theo_research_index import index_paper
+
+            indexed = index_paper(
+                paper_id=request_id,
+                paper_text=paper_text,
+                paper_title=paper_title,
+                paper_slug=slug,
+                author_username=user.username,
+                author_discord_id=user.discord_id,
+                effort=row.status,
+                published_at=datetime.now(UTC).isoformat(),
+            )
+            logger.info("Published %s: %d sections indexed", request_id, indexed)
+        except Exception as exc:
+            logger.error("Qdrant indexing failed for %s: %s", request_id, exc)
+
+    return {"status": "published", "slug": slug}
+
+
+# ---------------------------------------------------------------------------
+# POST /theo/research/{id}/unpublish — Remove from public library
+# ---------------------------------------------------------------------------
+
+
+@router.post("/research/{request_id}/unpublish")
+async def unpublish_research(
+    request_id: str,
+    user: DiscordUser = Depends(get_current_user),
+):
+    """Remove a paper from the public library (keeps the private result)."""
+    _validate_uuid(request_id)
+
+    with get_session() as session:
+        row = session.execute(
+            text("SELECT user_id, is_public FROM research_requests WHERE id = :id"),
+            {"id": request_id},
+        ).fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Not found")
+        if row.user_id != user.discord_id:
+            raise HTTPException(status_code=403, detail="Not your request")
+        if not row.is_public:
+            raise HTTPException(status_code=409, detail="Not currently published")
+
+        session.execute(
+            text("""
+                UPDATE research_requests
+                SET is_public = FALSE, published_at = NULL, slug = NULL
+                WHERE id = :id
+            """),
             {"id": request_id},
         )
         session.commit()
 
-    return {"status": "cancelled"}
+    # Remove from Qdrant
+    try:
+        from pipeline.lyra.theo_research_index import delete_paper
+
+        delete_paper(request_id)
+    except Exception as exc:
+        logger.warning("Qdrant cleanup on unpublish failed for %s: %s", request_id, exc)
+
+    return {"status": "unpublished"}
+
+
+# ---------------------------------------------------------------------------
+# GET /theo/public — Browse public research papers
+# ---------------------------------------------------------------------------
+
+
+@router.get("/public")
+async def list_public_research(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=50),
+):
+    """List published research papers. No auth required."""
+    with get_session() as session:
+        rows = session.execute(
+            text("""
+                SELECT id::text, question, effort, slug, published_by, published_at,
+                       sites_found, tools_used, duration_ms,
+                       LEFT(result_json::text, 500) AS result_excerpt
+                FROM research_requests
+                WHERE is_public = TRUE AND status = 'completed'
+                ORDER BY published_at DESC
+                OFFSET :offset LIMIT :limit
+            """),
+            {"offset": offset, "limit": limit},
+        ).fetchall()
+
+        total = session.execute(
+            text("SELECT COUNT(*) FROM research_requests WHERE is_public = TRUE AND status = 'completed'")
+        ).scalar()
+
+    papers = []
+    for r in rows:
+        # Extract title from result JSON excerpt
+        title = r.question
+        try:
+            excerpt = json.loads(r.result_excerpt) if r.result_excerpt else {}
+            title = excerpt.get("title", r.question)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+
+        papers.append({
+            "id": r.id,
+            "title": title,
+            "question": r.question,
+            "effort": r.effort,
+            "slug": r.slug,
+            "published_by": r.published_by,
+            "published_at": r.published_at.isoformat() if r.published_at else None,
+            "sites_found": r.sites_found,
+            "duration_ms": r.duration_ms,
+        })
+
+    return {"papers": papers, "total": total}
+
+
+# ---------------------------------------------------------------------------
+# GET /theo/public/{slug} — Read a single public paper
+# ---------------------------------------------------------------------------
+
+
+@router.get("/public/{slug}")
+async def get_public_research(slug: str):
+    """Get a single public paper by slug. No auth required."""
+    with get_session() as session:
+        row = session.execute(
+            text("""
+                SELECT id::text, question, effort, slug, published_by, published_at,
+                       result_json, sites_found, tools_used, duration_ms
+                FROM research_requests
+                WHERE slug = :slug AND is_public = TRUE AND status = 'completed'
+            """),
+            {"slug": slug},
+        ).fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    try:
+        result = json.loads(row.result_json) if row.result_json else None
+    except (json.JSONDecodeError, TypeError):
+        result = None
+
+    return {
+        "id": row.id,
+        "question": row.question,
+        "effort": row.effort,
+        "slug": row.slug,
+        "published_by": row.published_by,
+        "published_at": row.published_at.isoformat() if row.published_at else None,
+        "result": result,
+        "sites_found": row.sites_found,
+        "tools_used": row.tools_used,
+        "duration_ms": row.duration_ms,
+    }
+
+
+# ---------------------------------------------------------------------------
+# POST /theo/check-duplicates — Find similar public papers
+# ---------------------------------------------------------------------------
+
+
+@router.post("/check-duplicates")
+async def check_duplicates(body: DuplicateCheckRequest, req: Request):
+    """Search for public papers similar to a research question."""
+    _theo_limiter.check(get_client_ip(req))
+
+    try:
+        from pipeline.lyra.theo_research_index import search_similar
+
+        matches = search_similar(body.question, limit=5)
+    except Exception as exc:
+        logger.warning("Duplicate check failed: %s", exc)
+        matches = []
+
+    return {"matches": matches}
