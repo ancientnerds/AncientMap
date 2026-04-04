@@ -70,6 +70,9 @@ class PipelineContext:
     # User-provided YouTube video IDs for transcript extraction
     video_ids: list[str] = field(default_factory=list)
 
+    # User-disabled source adapters (e.g. ["wikipedia", "minimax"])
+    disabled_adapters: list[str] = field(default_factory=list)
+
     # Stage 1 outputs
     domain_tags: list[str] = field(default_factory=list)
     sub_questions: list[str] = field(default_factory=list)
@@ -135,6 +138,7 @@ class TheoPipeline:
         force_exclude: list[str] | None = None,
         request_id: str = "",
         video_ids: list[str] | None = None,
+        disabled_adapters: list[str] | None = None,
     ) -> PipelineContext:
         """Run the full pipeline.  *emit* sends SSE events to the client."""
         tier = EFFORT_CONFIG.get(effort, EFFORT_CONFIG["article"])
@@ -148,6 +152,7 @@ class TheoPipeline:
             force_include=force_include or [],
             force_exclude=force_exclude or [],
             video_ids=video_ids or [],
+            disabled_adapters=disabled_adapters or [],
         )
 
         pipeline_start = time.monotonic()
@@ -635,7 +640,9 @@ class TheoPipeline:
         )
 
         # Run multi-source parallel search
-        raw_sources = await self._searcher.search(queries, source_group)
+        raw_sources = await self._searcher.search(
+            queries, source_group, disabled_adapters=ctx.disabled_adapters
+        )
 
         if not raw_sources:
             ctx.error = "No sources found — all search APIs returned zero results."

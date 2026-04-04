@@ -1317,6 +1317,7 @@ class MultiSourceSearch:
         self,
         queries: list[str],
         source_group: str,
+        disabled_adapters: list[str] | None = None,
     ) -> list[RawSource]:
         """Run searches across APIs appropriate for the source_group.
 
@@ -1329,8 +1330,13 @@ class MultiSourceSearch:
         Returns deduplicated list of RawSource, sorted by default_tier then citation_count.
         """
         # 1. Determine which adapters to use
+        skip = set(disabled_adapters or [])
         wanted_names = SOURCE_GROUPS.get(source_group, SOURCE_GROUPS["minimal"])
-        active_adapters = [self._adapters[name] for name in wanted_names if name in self._adapters]
+        active_adapters = [
+            self._adapters[name]
+            for name in wanted_names
+            if name in self._adapters and name not in skip
+        ]
 
         if not active_adapters:
             logger.warning("No adapters available for source_group '%s'", source_group)

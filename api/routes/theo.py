@@ -57,6 +57,7 @@ class ResearchSubmitRequest(BaseModel):
     force_include: list[str] = Field(default_factory=list)
     force_exclude: list[str] = Field(default_factory=list)
     video_ids: list[str] = Field(default_factory=list, max_length=5)
+    disabled_adapters: list[str] = Field(default_factory=list)
 
 
 class ResearchSubmitResponse(BaseModel):
@@ -180,6 +181,43 @@ async def check_relevance(body: RelevanceCheckRequest, req: Request):
 
 
 # ---------------------------------------------------------------------------
+# GET /theo/adapters — Available source adapters for Sources stage
+# ---------------------------------------------------------------------------
+
+
+@router.get("/adapters")
+async def list_adapters():
+    """Return available source adapters with their names and descriptions."""
+    adapter_info: dict[str, dict[str, str]] = {
+        "ancientnerds_db": {
+            "label": "AncientNerds Database",
+            "icon": "database",
+            "group": "internal",
+        },
+        "ancientnerds_research": {
+            "label": "Public Research Papers",
+            "icon": "file-text",
+            "group": "internal",
+        },
+        "youtube_transcripts": {
+            "label": "YouTube Transcripts",
+            "icon": "video",
+            "group": "internal",
+        },
+        "semantic_scholar": {"label": "Semantic Scholar", "icon": "academic", "group": "academic"},
+        "openalex": {"label": "OpenAlex", "icon": "academic", "group": "academic"},
+        "crossref": {"label": "Crossref", "icon": "academic", "group": "academic"},
+        "core": {"label": "CORE", "icon": "academic", "group": "academic"},
+        "europeana": {"label": "Europeana", "icon": "heritage", "group": "heritage"},
+        "smithsonian": {"label": "Smithsonian", "icon": "heritage", "group": "heritage"},
+        "wikipedia": {"label": "Wikipedia", "icon": "globe", "group": "web"},
+        "internet_archive": {"label": "Internet Archive", "icon": "archive", "group": "web"},
+        "minimax": {"label": "Web Search", "icon": "search", "group": "web"},
+    }
+    return adapter_info
+
+
+# ---------------------------------------------------------------------------
 # GET /theo/specialists — Specialist pool for manual selection UI
 # ---------------------------------------------------------------------------
 
@@ -265,12 +303,13 @@ async def submit_research(body: ResearchSubmitRequest, req: Request):
 
         # Build specialist options JSON (only if non-empty)
         spec_opts = None
-        if body.force_include or body.force_exclude or body.video_ids:
+        if body.force_include or body.force_exclude or body.video_ids or body.disabled_adapters:
             spec_opts = json.dumps(
                 {
                     "force_include": body.force_include,
                     "force_exclude": body.force_exclude,
                     "video_ids": body.video_ids,
+                    "disabled_adapters": body.disabled_adapters,
                 }
             )
 
