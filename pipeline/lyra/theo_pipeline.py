@@ -368,9 +368,10 @@ class TheoPipeline:
             emit({"type": "pipeline", "stage": stage, "status": "error"})
             return
 
-        # Batch sources into chunks of 40 to avoid M2.7 timeout on large sets
+        # Batch sources into chunks of 20 — M2.7 reasoning consumes ~3-5K tokens
+        # from the budget, so smaller batches = more room for complete JSON output
         source_items = list(ctx.registry.sources.items())
-        batch_size = 40
+        batch_size = 20
         batches = [
             source_items[i : i + batch_size]
             for i in range(0, len(source_items), batch_size)

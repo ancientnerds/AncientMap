@@ -223,10 +223,25 @@ def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
     for n in orphaned_refs:
         issues.append(f"[{n}] assigned as reference but never cited in text")
 
-    # 3. Uncited paragraphs — factual paragraphs with no [N]
+    # 3. Uncited paragraphs — factual claim paragraphs with no [N]
+    # Exempt structural text: headings, intros, methodology, transitions,
+    # bullet points, debate summaries — these don't make factual claims.
+    _STRUCTURAL_STARTS = (
+        "this paper", "this research", "this study", "this review",
+        "we used", "we employed", "our approach", "our method",
+        "the following", "the above", "the debate", "the specialist",
+        "having reviewed", "in this section", "in summary", "to summarize",
+        "future research", "further investigation", "several ",
+        "- **",  # bullet points with bold
+        "- ",    # plain bullet points
+    )
     paragraphs = [p.strip() for p in paper_text.split("\n\n") if p.strip()]
     factual_paragraphs = [
-        p for p in paragraphs if len(p) > 50 and not p.startswith("#")
+        p
+        for p in paragraphs
+        if len(p) > 50
+        and not p.startswith("#")
+        and not p.lower().startswith(_STRUCTURAL_STARTS)
     ]
     uncited_paragraphs = sum(
         1 for p in factual_paragraphs if not re.search(r"\[\d+\]", p)

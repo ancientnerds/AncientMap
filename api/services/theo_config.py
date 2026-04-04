@@ -8,9 +8,11 @@ THEO_PARALLEL_SLOTS = 1
 RESULT_TTL_HOURS = 24
 MAX_REQUESTS_PER_USER = 5
 
-# M2.7 token budget per individual call (not total)
-THEO_MAX_TOKENS = 8192
-THEO_MAX_TOKENS_SYNTHESIS = 16384  # synthesis + debate need more room
+# M2.7 token budget per individual call (not total).
+# M2.7 reasoning consumes ~2-6K tokens from this budget before output starts.
+# 16384 leaves ~10-14K for actual JSON/text output after reasoning.
+THEO_MAX_TOKENS = 16384
+THEO_MAX_TOKENS_SYNTHESIS = 16384
 
 
 @dataclass(frozen=True)
@@ -80,9 +82,9 @@ EFFORT_CONFIG: dict[str, TierConfig] = {
         max_search_queries=15,
         convergence_stage1=2,
         convergence_stage3=True,
-        convergence_stage5=2,
+        convergence_stage5=1,  # 1 is safe within timeout
         debate_rounds=1,
-        devils_advocate=False,  # full moderator
+        devils_advocate=True,
         simplified_moderator=False,
         max_tokens_per_call=THEO_MAX_TOKENS,
         max_tokens_synthesis=THEO_MAX_TOKENS_SYNTHESIS,
@@ -94,9 +96,9 @@ EFFORT_CONFIG: dict[str, TierConfig] = {
         max_search_queries=20,
         convergence_stage1=3,
         convergence_stage3=True,
-        convergence_stage5=2,
+        convergence_stage5=1,  # 2 iterations + reasoning = timeout risk; 1 is safe
         debate_rounds=2,
-        devils_advocate=False,  # full moderator
+        devils_advocate=True,
         simplified_moderator=False,
         max_tokens_per_call=THEO_MAX_TOKENS,
         max_tokens_synthesis=THEO_MAX_TOKENS_SYNTHESIS,
