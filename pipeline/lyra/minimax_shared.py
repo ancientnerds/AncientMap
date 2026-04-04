@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 MINIMAX_SEARCH_PATH = "/v1/coding_plan/search"
 MINIMAX_SEARCH_TIMEOUT = 15.0
 MINIMAX_CHAT_PATH = "/v1/chat/completions"
-MINIMAX_CHAT_TIMEOUT = 120.0
+MINIMAX_CHAT_TIMEOUT = 300.0  # 5 min — M2.7 reasoning + long paper generation needs time
 
 
 @dataclass
