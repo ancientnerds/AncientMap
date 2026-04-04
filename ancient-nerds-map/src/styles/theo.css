@@ -19,7 +19,8 @@
 }
 
 .theo-page {
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
   background: var(--surface-page);
   overflow-y: auto;
   padding-bottom: 60px;
@@ -41,6 +42,7 @@
   margin-bottom: 12px;
 }
 
+/* THEO IDENTITY — keep amber */
 .theo-avatar {
   width: 72px;
   height: 72px;
@@ -65,6 +67,7 @@
   line-height: 1;
 }
 
+/* THEO IDENTITY — keep amber */
 .theo-title {
   font-family: var(--font-heading);
   font-size: 22px;
@@ -81,6 +84,7 @@
   margin-top: 2px;
 }
 
+/* THEO IDENTITY — keep amber */
 .theo-quote {
   font-family: 'Cormorant Garamond', Georgia, serif;
   font-style: italic;
@@ -99,15 +103,15 @@
 
 .theo-input-wrap {
   position: relative;
-  border: 1px solid var(--theo-border);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
   background: var(--theo-surface);
   transition: border-color 0.2s;
 }
 
 .theo-input-wrap:focus-within {
-  border-color: var(--theo-amber);
-  box-shadow: 0 0 12px var(--theo-amber-glow-15);
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 12px rgba(192, 32, 35, 0.15);
 }
 
 .theo-input {
@@ -156,15 +160,15 @@
 }
 
 .theo-effort-btn:hover {
-  border-color: var(--theo-border-hover);
+  border-color: var(--border-hover);
   color: var(--text-primary);
 }
 
 .theo-effort-btn.active {
-  border-color: var(--theo-amber);
-  background: var(--theo-amber-glow-15);
-  color: var(--theo-amber-bright);
-  box-shadow: 0 0 8px var(--theo-amber-glow-10);
+  border-color: var(--brand-primary);
+  background: rgba(192, 32, 35, 0.1);
+  color: var(--text-primary);
+  box-shadow: 0 0 8px rgba(192, 32, 35, 0.1);
 }
 
 .theo-effort-time {
@@ -182,10 +186,10 @@
 
 .theo-submit-btn {
   padding: 10px 28px;
-  border: 1px solid var(--theo-amber);
+  border: 1px solid var(--brand-primary);
   border-radius: 4px;
-  background: var(--theo-amber-glow-15);
-  color: var(--theo-amber-bright);
+  background: rgba(192, 32, 35, 0.1);
+  color: var(--text-primary);
   font-family: var(--font-heading);
   font-size: 13px;
   letter-spacing: 2px;
@@ -195,8 +199,8 @@
 }
 
 .theo-submit-btn:hover:not(:disabled) {
-  background: var(--theo-amber-glow-30);
-  box-shadow: 0 0 16px var(--theo-amber-glow-20);
+  background: rgba(192, 32, 35, 0.2);
+  box-shadow: 0 0 16px rgba(192, 32, 35, 0.15);
 }
 
 .theo-submit-btn:disabled {
@@ -232,32 +236,34 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  border: 1px solid var(--theo-amber);
+  border: 1px solid var(--border-default);
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: var(--font-heading);
   font-size: 12px;
-  color: var(--theo-amber);
+  color: var(--text-muted);
   letter-spacing: 0;
 }
 
 .theo-step-dot.active .theo-step-num {
-  background: var(--theo-amber-glow-20);
-  box-shadow: 0 0 8px var(--theo-amber-glow-15);
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
+  background: rgba(192, 32, 35, 0.1);
+  box-shadow: 0 0 8px rgba(192, 32, 35, 0.1);
 }
 
 .theo-step-label {
   font-size: 11px;
   letter-spacing: 1px;
   text-transform: uppercase;
-  color: var(--theo-amber);
+  color: var(--text-muted);
 }
 
 .theo-step-line {
   flex: 1;
   height: 1px;
-  background: var(--theo-border);
+  background: var(--border-default);
   margin: 0 8px;
   margin-bottom: 18px;
 }
@@ -297,13 +303,13 @@
 }
 
 .theo-scope-card:hover {
-  border-color: var(--theo-border-hover);
+  border-color: var(--border-hover);
 }
 
 .theo-scope-card.active {
-  border-color: var(--theo-amber);
-  background: var(--theo-amber-glow-15);
-  box-shadow: 0 0 8px var(--theo-amber-glow-10);
+  border-color: var(--brand-primary);
+  background: rgba(192, 32, 35, 0.1);
+  box-shadow: 0 0 8px rgba(192, 32, 35, 0.08);
 }
 
 .theo-scope-name {
@@ -313,7 +319,7 @@
 }
 
 .theo-scope-card.active .theo-scope-name {
-  color: var(--theo-amber-bright);
+  color: var(--text-primary);
 }
 
 .theo-scope-time {
@@ -338,10 +344,10 @@
 
 .theo-check-btn {
   padding: 9px 22px;
-  border: 1px solid var(--theo-amber);
+  border: 1px solid var(--brand-primary);
   border-radius: 4px;
-  background: var(--theo-amber-glow-10);
-  color: var(--theo-amber-bright);
+  background: rgba(192, 32, 35, 0.08);
+  color: var(--text-primary);
   font-family: var(--font-heading);
   font-size: 13px;
   letter-spacing: 1.5px;
@@ -352,7 +358,7 @@
 }
 
 .theo-check-btn:hover:not(:disabled) {
-  background: var(--theo-amber-glow-20);
+  background: rgba(192, 32, 35, 0.18);
 }
 
 .theo-check-btn:disabled {
@@ -380,10 +386,10 @@
 
 .theo-next-btn {
   padding: 9px 28px;
-  border: 1px solid var(--theo-amber);
+  border: 1px solid var(--brand-primary);
   border-radius: 4px;
-  background: var(--theo-amber-glow-15);
-  color: var(--theo-amber-bright);
+  background: rgba(192, 32, 35, 0.1);
+  color: var(--text-primary);
   font-family: var(--font-heading);
   font-size: 13px;
   letter-spacing: 2px;
@@ -394,8 +400,8 @@
 }
 
 .theo-next-btn:hover {
-  background: var(--theo-amber-glow-30);
-  box-shadow: 0 0 12px var(--theo-amber-glow-15);
+  background: rgba(192, 32, 35, 0.2);
+  box-shadow: 0 0 12px rgba(192, 32, 35, 0.12);
 }
 
 /* — Stage Header (Back + Title) — */
@@ -419,7 +425,7 @@
 }
 
 .theo-back-btn:hover {
-  border-color: var(--theo-border-hover);
+  border-color: var(--border-hover);
   color: var(--text-primary);
 }
 
@@ -428,7 +434,7 @@
   font-size: 14px;
   letter-spacing: 2px;
   text-transform: uppercase;
-  color: var(--theo-amber);
+  color: var(--text-primary);
 }
 
 /* — Specialist Mode Toggle — */
@@ -454,8 +460,8 @@
 }
 
 .theo-toggle-btn.active {
-  background: var(--theo-amber-glow-15);
-  color: var(--theo-amber-bright);
+  background: rgba(192, 32, 35, 0.12);
+  color: var(--text-primary);
 }
 
 .theo-toggle-btn:not(.active):hover {
@@ -537,7 +543,7 @@
 
 .theo-spec-domain {
   font-size: 10px;
-  color: var(--theo-amber-dim);
+  color: var(--text-dimmed);
   letter-spacing: 0.5px;
   text-transform: uppercase;
 }
@@ -548,7 +554,7 @@
   flex-direction: column;
   gap: 10px;
   padding: 16px;
-  border: 1px solid var(--theo-border);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
   background: var(--theo-surface);
 }
@@ -577,7 +583,7 @@
 .theo-tips {
   margin-top: 16px;
   padding: 14px 16px;
-  border: 1px dashed var(--theo-border);
+  border: 1px dashed var(--border-default);
   border-radius: 6px;
 }
 
@@ -586,7 +592,7 @@
   font-size: 11px;
   letter-spacing: 2px;
   text-transform: uppercase;
-  color: var(--theo-amber-dim);
+  color: var(--text-dimmed);
   margin-bottom: 8px;
 }
 
@@ -656,8 +662,8 @@
 }
 
 .theo-badge-effort {
-  border: 1px solid var(--theo-border);
-  color: var(--theo-amber);
+  border: 1px solid var(--border-default);
+  color: var(--text-muted);
   text-transform: uppercase;
 }
 
@@ -670,6 +676,7 @@
   color: var(--text-muted);
 }
 
+/* THEO IDENTITY — keep amber (Theo is working) */
 .theo-badge-running {
   border: 1px solid var(--theo-border);
   color: var(--theo-amber-bright);
@@ -714,10 +721,10 @@
 
 .theo-btn-view {
   padding: 7px 16px;
-  border: 1px solid var(--theo-amber);
+  border: 1px solid var(--brand-primary);
   border-radius: 3px;
-  background: var(--theo-amber-glow-10);
-  color: var(--theo-amber-bright);
+  background: rgba(192, 32, 35, 0.08);
+  color: var(--text-primary);
   font-family: var(--font-body);
   font-size: 13px;
   cursor: pointer;
@@ -725,7 +732,7 @@
 }
 
 .theo-btn-view:hover {
-  background: var(--theo-amber-glow-20);
+  background: rgba(192, 32, 35, 0.18);
 }
 
 .theo-btn-cancel {
@@ -746,10 +753,10 @@
 
 .theo-btn-retry {
   padding: 7px 16px;
-  border: 1px solid var(--theo-border);
+  border: 1px solid var(--border-default);
   border-radius: 3px;
   background: transparent;
-  color: var(--theo-amber);
+  color: var(--text-muted);
   font-family: var(--font-body);
   font-size: 13px;
   cursor: pointer;
@@ -757,7 +764,7 @@
 }
 
 .theo-btn-retry:hover {
-  background: var(--theo-amber-glow-10);
+  background: var(--surface-raised);
 }
 
 .theo-empty {
@@ -792,12 +799,12 @@
   max-width: 800px;
   max-height: 90vh;
   background: var(--surface-deep);
-  border: 1px solid var(--theo-border);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 0 40px var(--theo-amber-glow-10);
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.4);
 }
 
 .theo-report-header {
@@ -851,6 +858,7 @@
   color: var(--text-body);
 }
 
+/* THEO IDENTITY — research paper headings stay amber (Theo's voice) */
 .theo-md-body h1,
 .theo-md-body h2,
 .theo-md-body h3 {
@@ -951,7 +959,7 @@
 }
 
 .theo-trace-stage {
-  color: var(--theo-amber);
+  color: var(--text-muted);
   min-width: 120px;
 }
 
@@ -980,6 +988,7 @@
   gap: 4px;
 }
 
+/* THEO IDENTITY — amber pulse (Theo actively working) */
 .theo-live-dot {
   width: 6px;
   height: 6px;
@@ -1023,6 +1032,7 @@
   font-size: 10px;
 }
 
+/* THEO IDENTITY — amber for active stage (Theo is working here) */
 .theo-live-st-active {
   border-color: var(--theo-amber);
   color: var(--theo-amber-bright);
@@ -1052,6 +1062,7 @@
   font-style: italic;
 }
 
+/* THEO IDENTITY — amber for thinking block (Theo's thoughts) */
 .theo-live-thinking {
   border: 1px solid var(--theo-border);
   border-radius: 4px;
@@ -1062,7 +1073,7 @@
   font-size: 12px;
   letter-spacing: 1px;
   text-transform: uppercase;
-  color: var(--theo-amber-dim);
+  color: var(--theo-amber);
   padding: 4px 10px;
   background: var(--theo-amber-glow-10);
   border-bottom: 1px solid var(--theo-border);
@@ -1194,271 +1205,4 @@
   color: var(--text-dimmed);
   font-size: 14px;
   padding: 60px 20px;
-}
-
-.theo-login-prompt {
-  max-width: 720px;
-  margin: 24px auto 0;
-  padding: 28px 32px;
-  border: 1px solid var(--theo-border);
-  border-radius: 8px;
-  background: var(--theo-surface);
-  text-align: center;
-}
-
-.theo-login-prompt-title {
-  font-family: var(--font-heading);
-  font-size: 16px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--theo-amber);
-  margin-bottom: 10px;
-}
-
-.theo-login-prompt-desc {
-  font-size: 14px;
-  color: var(--text-muted);
-  line-height: 1.6;
-  margin-bottom: 20px;
-}
-
-.theo-login-btn {
-  display: inline-block;
-  padding: 11px 32px;
-  border: 1px solid var(--theo-amber);
-  border-radius: 4px;
-  background: var(--theo-amber-glow-15);
-  color: var(--theo-amber-bright);
-  font-family: var(--font-heading);
-  font-size: 13px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  text-decoration: none;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.theo-login-btn:hover {
-  background: var(--theo-amber-glow-30);
-  box-shadow: 0 0 16px var(--theo-amber-glow-20);
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   Stage 1.5 — Duplicate Detection
-   ═══════════════════════════════════════════════════════════════ */
-
-.theo-duplicate-none {
-  font-size: 14px;
-  color: var(--accent-primary);
-  padding: 14px 16px;
-  border: 1px solid rgba(0, 204, 102, 0.2);
-  border-radius: 6px;
-  background: rgba(0, 204, 102, 0.06);
-  margin-bottom: 16px;
-}
-
-.theo-duplicate-intro {
-  font-size: 14px;
-  color: var(--text-muted);
-  margin-bottom: 14px;
-}
-
-.theo-duplicate-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 16px;
-}
-
-.theo-duplicate-card {
-  padding: 14px 16px;
-  border: 1px solid var(--theo-border);
-  border-radius: 6px;
-  background: var(--theo-surface);
-}
-
-.theo-duplicate-card-top {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 4px;
-}
-
-.theo-duplicate-title {
-  font-size: 15px;
-  color: var(--text-primary);
-  flex: 1;
-  min-width: 160px;
-  line-height: 1.4;
-}
-
-.theo-duplicate-card-meta {
-  font-size: 12px;
-  color: var(--text-dimmed);
-  margin-bottom: 10px;
-}
-
-.theo-badge-similarity {
-  border: 1px solid var(--theo-border);
-  color: var(--theo-amber);
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   Personal Card — Publish / Unpublish / Delete buttons
-   ═══════════════════════════════════════════════════════════════ */
-
-.theo-badge-published {
-  border: 1px solid rgba(212, 145, 42, 0.35);
-  background: var(--theo-amber-glow-10);
-  color: var(--theo-amber-bright);
-  font-size: 11px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-}
-
-.theo-btn-publish {
-  padding: 7px 16px;
-  border: 1px solid var(--theo-border);
-  border-radius: 3px;
-  background: var(--theo-amber-glow-10);
-  color: var(--theo-amber);
-  font-family: var(--font-body);
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.theo-btn-publish:hover {
-  background: var(--theo-amber-glow-20);
-  border-color: var(--theo-amber);
-  color: var(--theo-amber-bright);
-}
-
-.theo-btn-unpublish {
-  padding: 7px 16px;
-  border: 1px solid var(--theo-border);
-  border-radius: 3px;
-  background: transparent;
-  color: var(--text-muted);
-  font-family: var(--font-body);
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.theo-btn-unpublish:hover {
-  border-color: var(--theo-border-hover);
-  color: var(--text-primary);
-}
-
-.theo-btn-delete {
-  padding: 7px 16px;
-  border: 1px solid rgba(255, 68, 68, 0.15);
-  border-radius: 3px;
-  background: transparent;
-  color: var(--text-dimmed);
-  font-family: var(--font-body);
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.theo-btn-delete:hover {
-  border-color: rgba(255, 68, 68, 0.35);
-  color: var(--status-error-soft);
-  background: rgba(255, 68, 68, 0.06);
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   Public Research Library
-   ═══════════════════════════════════════════════════════════════ */
-
-.theo-public-library {
-  margin-top: 48px;
-  padding-top: 24px;
-  border-top: 1px solid var(--theo-border);
-}
-
-.theo-public-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 12px;
-}
-
-.theo-public-card {
-  padding: 16px 18px;
-  border: 1px solid var(--theo-border);
-  border-radius: 6px;
-  background: var(--theo-surface);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  transition: border-color 0.2s;
-}
-
-.theo-public-card:hover {
-  border-color: var(--theo-border-hover);
-}
-
-.theo-public-card-title {
-  font-size: 15px;
-  color: var(--text-primary);
-  line-height: 1.4;
-  font-weight: 500;
-}
-
-.theo-public-card-meta {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.theo-public-card-author {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.theo-public-card-date {
-  font-size: 12px;
-  color: var(--text-dimmed);
-  margin-left: auto;
-}
-
-.theo-load-more-row {
-  display: flex;
-  justify-content: center;
-  margin-top: 16px;
-}
-
-.theo-load-more-btn {
-  padding: 9px 28px;
-  border: 1px solid var(--border-default);
-  border-radius: 4px;
-  background: var(--surface-raised);
-  color: var(--text-muted);
-  font-family: var(--font-body);
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.theo-load-more-btn:hover:not(:disabled) {
-  border-color: var(--theo-border-hover);
-  color: var(--text-primary);
-}
-
-.theo-load-more-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* — Responsive additions — */
-@media (max-width: 600px) {
-  .theo-login-prompt { padding: 20px 16px; }
-  .theo-public-grid { grid-template-columns: 1fr; }
-  .theo-wizard-steps { max-width: 340px; }
 }
