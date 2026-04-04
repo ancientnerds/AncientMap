@@ -1059,7 +1059,7 @@ class TheoPipeline:
         ctx: PipelineContext,
         emit: Callable[[dict], None],
     ) -> None:
-        """Generate illustrations for topic sections using MiniMax image-01."""
+        """Generate a cover image for the paper using MiniMax image-01."""
         if not ctx.paper_text:
             return
 
@@ -1067,17 +1067,13 @@ class TheoPipeline:
         t0 = time.monotonic()
         emit({"type": "pipeline", "stage": stage, "status": "start"})
 
-        from pipeline.lyra.theo_images import (
-            generate_paper_images,
-            insert_images_into_paper,
-        )
+        from pipeline.lyra.theo_images import generate_cover_image, insert_cover_image
 
         paper_id = ctx.request_id or "unknown"
-        images = await generate_paper_images(paper_id, ctx.paper_text, emit)
+        cover_url = await generate_cover_image(paper_id, ctx.paper_text, emit)
 
-        if images:
-            # Insert images into the paper text (before References section)
-            ctx.paper_text = insert_images_into_paper(ctx.paper_text, images)
+        if cover_url:
+            ctx.paper_text = insert_cover_image(ctx.paper_text, cover_url)
 
         ms = int((time.monotonic() - t0) * 1000)
         emit(
@@ -1086,7 +1082,7 @@ class TheoPipeline:
                 "stage": stage,
                 "status": "done",
                 "duration_ms": ms,
-                "meta": {"images_generated": len(images)},
+                "meta": {"cover_image": bool(cover_url)},
             }
         )
 

@@ -1,14 +1,14 @@
-"""Image generation for Theo research papers.
+"""Title image generation for Theo research papers.
 
-Generates section illustrations using MiniMax image-01, downloads
-them to local storage, and returns markdown image tags for embedding.
+Generates a single cover illustration using MiniMax image-01, downloads
+it to local storage, and returns the URL for embedding above the abstract.
 
-Storage: public/data/research-images/{paper_id}/section-{index}.png
-Served at: /data/research-images/{paper_id}/section-{index}.png
+Storage: public/data/research-images/{paper_id}/cover.png
+Served at: /data/research-images/{paper_id}/cover.png
 
 Usage:
-    from pipeline.lyra.theo_images import generate_paper_images
-    images = await generate_paper_images(paper_id, sections, emit)
+    from pipeline.lyra.theo_images import generate_cover_image
+    url = await generate_cover_image(paper_id, paper_title, emit)
 """
 
 from __future__ import annotations
@@ -38,18 +38,8 @@ STYLE_SUFFIX = (
     "concept art quality, matte painting aesthetic, high contrast"
 )
 
-# Sections that don't get images
-_SKIP_SECTIONS = frozenset({
-    "abstract",
-    "introduction",
-    "methodology",
-    "conclusion",
-    "references",
-    "appendix: specialist debate summary",
-})
-
-# Minimum remaining image quota to proceed with generation
-_MIN_QUOTA = 5
+# Minimum remaining image quota to proceed
+_MIN_QUOTA = 3
 
 
 def _get_api_key() -> str:
@@ -77,7 +67,6 @@ async def check_image_quota() -> int:
                 logger.warning("MiniMax quota check failed: %s", resp.status_code)
                 return -1
             data = resp.json()
-            # Find image-01 in the remains response
             for item in data.get("data", {}).get("detail", []):
                 if item.get("model") == "image-01":
                     return item.get("remains", 0)
@@ -89,113 +78,79 @@ async def check_image_quota() -> int:
     return await asyncio.to_thread(_check)
 
 
-def _extract_topic_sections(paper_text: str) -> list[dict]:
-    """Extract topic section titles from paper markdown.
-
-    Returns [{title, index}] for sections that should get images.
-    """
-    sections: list[dict] = []
-    index = 0
+def _extract_title(paper_text: str) -> str:
+    """Extract the # title from paper markdown."""
     for line in paper_text.split("\n"):
-        heading = re.match(r"^##\s+(.+)$", line)
-        if heading:
-            title = heading.group(1).strip()
-            if title.lower() not in _SKIP_SECTIONS:
-                sections.append({"title": title, "index": index})
-                index += 1
-    return sections
+        match = re.match(r"^#\s+(.+)$", line)
+        if match:
+            return match.group(1).strip()
+    return ""
 
 
-def _build_image_prompt(section_title: str) -> str:
-    """Build an image generation prompt from a section title."""
+def _build_cover_prompt(title: str) -> str:
+    """Build an image generation prompt from the paper title."""
     return (
-        f"Archaeological illustration: {section_title}. "
+        f"Archaeological illustration: {title}. "
         f"Ancient ruins, artifacts, or landscape relevant to this topic. "
         f"No text, no labels, no watermarks"
         f"{STYLE_SUFFIX}"
     )
 
 
-async def generate_paper_images(
+async def generate_cover_image(
     paper_id: str,
     paper_text: str,
     emit: callable,
-) -> dict[str, str]:
-    """Generate images for each topic section of a paper.
+) -> str:
+    """Generate a single cover image for a research paper.
 
-    Returns a dict mapping section title -> local image path (relative URL).
-    Skips if API key missing, quota too low, or generation fails.
+    Returns the relative URL of the image, or empty string on failure/skip.
     """
     api_key = _get_api_key()
     if not api_key:
-        logger.info("[THEO] No MiniMax API key — skipping image generation")
-        return {}
+        logger.info("[THEO] No MiniMax API key — skipping cover image")
+        return ""
 
-    sections = _extract_topic_sections(paper_text)
-    if not sections:
-        return {}
+    title = _extract_title(paper_text)
+    if not title:
+        return ""
 
     # Check quota
     remaining = await check_image_quota()
     if remaining != -1 and remaining < _MIN_QUOTA:
         logger.warning(
-            "[THEO] MiniMax image quota too low (%d remaining), skipping images",
+            "[THEO] MiniMax image quota too low (%d remaining), skipping cover",
             remaining,
         )
         emit({
             "type": "status",
-            "content": f"Image quota low ({remaining} remaining), skipping illustrations.",
+            "content": f"Image quota low ({remaining} remaining), skipping cover image.",
         })
-        return {}
+        return ""
 
-    if remaining != -1 and remaining < len(sections) + _MIN_QUOTA:
-        # Limit to what we can afford while keeping a buffer
-        sections = sections[: max(remaining - _MIN_QUOTA, 1)]
+    emit({"type": "status", "content": "Generating cover illustration..."})
 
-    emit({
-        "type": "status",
-        "content": f"Generating {len(sections)} section illustrations...",
-    })
+    prompt = _build_cover_prompt(title)
 
-    # Create output directory
-    paper_dir = IMAGES_DIR / paper_id
-    paper_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        image_url = await _generate_one(api_key, prompt)
+        if not image_url:
+            return ""
 
-    images: dict[str, str] = {}
+        # Download and save
+        paper_dir = IMAGES_DIR / paper_id
+        paper_dir.mkdir(parents=True, exist_ok=True)
+        local_path = paper_dir / "cover.png"
+        await _download_image(image_url, local_path)
 
-    for section in sections:
-        title = section["title"]
-        idx = section["index"]
-        prompt = _build_image_prompt(title)
+        relative_url = f"/data/research-images/{paper_id}/cover.png"
+        logger.info("[THEO] Generated cover image: %s", relative_url)
+        emit({"type": "status", "content": "Cover illustration ready."})
+        return relative_url
 
-        emit({
-            "type": "status",
-            "content": f"Generating image for: {title}...",
-        })
-
-        try:
-            image_url = await _generate_one(api_key, prompt)
-            if not image_url:
-                continue
-
-            # Download and save
-            local_path = paper_dir / f"section-{idx}.png"
-            await _download_image(image_url, local_path)
-
-            # Return relative URL for markdown embedding
-            relative_url = f"/data/research-images/{paper_id}/section-{idx}.png"
-            images[title] = relative_url
-            logger.info("[THEO] Generated image for '%s': %s", title, relative_url)
-
-        except Exception as exc:
-            logger.warning("[THEO] Image generation failed for '%s': %s", title, exc)
-            continue
-
-    emit({
-        "type": "status",
-        "content": f"Generated {len(images)}/{len(sections)} illustrations.",
-    })
-    return images
+    except Exception as exc:
+        logger.warning("[THEO] Cover image generation failed: %s", exc)
+        return ""
 
 
 async def _generate_one(api_key: str, prompt: str) -> str | None:
@@ -251,16 +206,9 @@ async def _download_image(url: str, output_path: Path) -> None:
     await asyncio.to_thread(_dl)
 
 
-def insert_images_into_paper(paper_text: str, images: dict[str, str]) -> str:
-    """Insert image markdown tags after each matching ## section heading.
-
-    Args:
-        paper_text: The paper markdown
-        images: {section_title: relative_url}
-
-    Returns modified paper text with images embedded.
-    """
-    if not images:
+def insert_cover_image(paper_text: str, cover_url: str) -> str:
+    """Insert cover image after the # title, before ## Abstract."""
+    if not cover_url:
         return paper_text
 
     lines = paper_text.split("\n")
@@ -268,13 +216,11 @@ def insert_images_into_paper(paper_text: str, images: dict[str, str]) -> str:
 
     for line in lines:
         result.append(line)
-        heading = re.match(r"^##\s+(.+)$", line)
-        if heading:
-            title = heading.group(1).strip()
-            if title in images:
-                result.append("")
-                result.append(f"![{title}]({images[title]})")
-                result.append("")
+        # Insert after the # title line
+        if re.match(r"^#\s+.+$", line) and not line.startswith("##"):
+            result.append("")
+            result.append(f"![Cover]({cover_url})")
+            result.append("")
 
     return "\n".join(result)
 
