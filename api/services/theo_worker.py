@@ -94,29 +94,36 @@ async def _process_request(request_id: str, question: str, effort: str) -> None:
                 "audit": ctx.audit_result,
             }
             emit({"type": "done", "status": "completed"})
-            with get_session() as session:
-                session.execute(
-                    text("""
-                        UPDATE research_requests
-                        SET status = 'completed',
-                            result_json = :result,
-                            pipeline_trace = :trace,
-                            total_tokens = :tokens,
-                            duration_ms = :duration,
-                            completed_at = NOW(),
-                            expires_at = NOW() + (:ttl * INTERVAL '1 hour')
-                        WHERE id = :id
-                    """),
-                    {
-                        "id": request_id,
-                        "result": json.dumps(result),
-                        "trace": json.dumps(pipeline_trace),
-                        "tokens": ctx.total_tokens,
-                        "duration": duration_ms,
-                        "ttl": RESULT_TTL_HOURS,
-                    },
-                )
-                session.commit()
+            try:
+                with get_session() as session:
+                    session.execute(
+                        text("""
+                            UPDATE research_requests
+                            SET status = 'completed',
+                                result_json = :result,
+                                pipeline_trace = :trace,
+                                total_tokens = :tokens,
+                                duration_ms = :duration,
+                                sites_found = :sites,
+                                tools_used = :tools,
+                                completed_at = NOW(),
+                                expires_at = NOW() + (:ttl * INTERVAL '1 hour')
+                            WHERE id = :id
+                        """),
+                        {
+                            "id": request_id,
+                            "result": json.dumps(result),
+                            "trace": json.dumps(pipeline_trace),
+                            "tokens": ctx.total_tokens,
+                            "duration": duration_ms,
+                            "sites": len(ctx.registry.sources),
+                            "tools": len(ctx.specialist_analyses),
+                            "ttl": RESULT_TTL_HOURS,
+                        },
+                    )
+                    session.commit()
+            except Exception as db_exc:
+                logger.error(f"[THEO] DB commit failed for {request_id}: {db_exc}")
             logger.info(
                 f"[THEO] Request {request_id} completed in {duration_ms}ms"
                 f" ({ctx.total_tokens} tokens)"
@@ -138,8 +145,12 @@ async def _process_request(request_id: str, question: str, effort: str) -> None:
             session.commit()
 
     finally:
-        # Remove live events buffer — no more streaming after completion
-        _live_events.pop(request_id, None)
+        # Delay cleanup so SSE streams have time to read the terminal event
+        try:
+            loop = asyncio.get_running_loop()
+            loop.call_later(10, _live_events.pop, request_id, None)
+        except RuntimeError:
+            _live_events.pop(request_id, None)
 
 
 async def _poll_loop() -> None:

@@ -295,6 +295,11 @@ class TheoPipeline:
         # Run multi-source parallel search
         raw_sources = await self._searcher.search(queries, source_group)
 
+        if not raw_sources:
+            ctx.error = "No sources found — all search APIs returned zero results."
+            emit({"type": "status", "content": "No sources found in any search API."})
+            return
+
         # Register all sources in the citation registry
         for r in raw_sources:
             sid = ctx.registry.register_source(
@@ -357,6 +362,12 @@ class TheoPipeline:
         stage = "source_audit"
         t0 = time.monotonic()
         emit({"type": "pipeline", "stage": stage, "status": "start"})
+
+        if not ctx.sources_context.strip():
+            ctx.error = "No sources available for reliability audit."
+            emit({"type": "pipeline", "stage": stage, "status": "error"})
+            return
+
         emit({"type": "status", "content": "Auditing source reliability..."})
 
         system = self._load_prompt("theo_source_audit")
@@ -561,6 +572,13 @@ class TheoPipeline:
         stage = "synthesis"
         t0 = time.monotonic()
         emit({"type": "pipeline", "stage": stage, "status": "start"})
+
+        if not ctx.specialist_analyses:
+            logger.warning("[THEO] Stage 5: No specialist analyses — using empty synthesis")
+            ctx.synthesis = {"consensus_claims": [], "contested_claims": [], "unique_insights": [], "open_questions": []}
+            emit({"type": "pipeline", "stage": stage, "status": "done", "duration_ms": 0, "meta": {"consensus": 0, "contested": 0, "unique": 0}})
+            return
+
         emit({"type": "status", "content": "Synthesizing specialist findings..."})
 
         system = self._load_prompt("theo_synthesis")

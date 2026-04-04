@@ -212,7 +212,10 @@ async def get_research(request_id: str, req: Request):
     if row.expires_at and row.expires_at.replace(tzinfo=UTC) < datetime.now(UTC):
         raise HTTPException(status_code=410, detail="Research report expired")
 
-    result = json.loads(row.result_json) if row.result_json else None
+    try:
+        result = json.loads(row.result_json) if row.result_json else None
+    except (json.JSONDecodeError, TypeError):
+        result = None
 
     return {
         "id": row.id,
