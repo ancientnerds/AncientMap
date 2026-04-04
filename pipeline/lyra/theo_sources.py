@@ -846,88 +846,6 @@ class InternetArchiveAdapter(SourceAdapter):
             return []
 
 
-class SerpAPIGoogleScholarAdapter(SourceAdapter):
-    """SerpAPI Google Scholar — requires API key."""
-
-    @property
-    def name(self) -> str:
-        return "serpapi"
-
-    @property
-    def default_tier(self) -> int:
-        return 1
-
-    def __init__(self, api_key: str) -> None:
-        self._api_key = api_key
-        self._client = httpx.Client(
-            base_url="https://serpapi.com",
-            headers={"Accept": "application/json"},
-            timeout=_API_TIMEOUT,
-        )
-
-    async def search(self, query: str, max_results: int = 10) -> list[RawSource]:
-        def _do() -> list[RawSource]:
-            resp = self._client.get(
-                "/search",
-                params={
-                    "engine": "google_scholar",
-                    "q": query,
-                    "num": str(max_results),
-                    "api_key": self._api_key,
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
-
-            results: list[RawSource] = []
-            for item in data.get("organic_results", []):
-                url = item.get("link") or ""
-                if not url:
-                    continue
-
-                title = item.get("title") or ""
-                snippet = item.get("snippet") or ""
-
-                # Parse authors/venue from publication_info.summary
-                authors: list[str] = []
-                venue = ""
-                pub_info = item.get("publication_info") or {}
-                summary = pub_info.get("summary") or ""
-                if summary:
-                    # Typical format: "A Author, B Author - Journal Name, Year"
-                    parts = summary.split(" - ", 1)
-                    if len(parts) == 2:
-                        author_str, venue_str = parts
-                        authors = [a.strip() for a in author_str.split(",") if a.strip()]
-                        venue = venue_str.split(",")[0].strip()
-
-                citation_count = 0
-                inline_links = item.get("inline_links") or {}
-                cited_by = inline_links.get("cited_by") or {}
-                if cited_by.get("total"):
-                    citation_count = int(cited_by["total"])
-
-                results.append(
-                    RawSource(
-                        url=url,
-                        title=title,
-                        snippet=snippet,
-                        authors=authors,
-                        venue=venue,
-                        citation_count=citation_count,
-                        source_api=self.name,
-                        default_tier=self.default_tier,
-                    )
-                )
-            return results
-
-        try:
-            return await asyncio.to_thread(_do)
-        except Exception as exc:
-            logger.warning("SerpAPI search failed for '%s': %s", query, exc)
-            return []
-
-
 class MiniMaxSearchAdapter(SourceAdapter):
     """MiniMax web search — reuses minimax_shared.py."""
 
@@ -968,65 +886,6 @@ class MiniMaxSearchAdapter(SourceAdapter):
             return []
 
 
-class NewsDataAdapter(SourceAdapter):
-    """NewsData.io API — requires API key."""
-
-    @property
-    def name(self) -> str:
-        return "newsdata"
-
-    @property
-    def default_tier(self) -> int:
-        return 2
-
-    def __init__(self, api_key: str) -> None:
-        self._api_key = api_key
-        self._client = httpx.Client(
-            base_url="https://newsdata.io/api/1",
-            headers={"Accept": "application/json"},
-            timeout=_API_TIMEOUT,
-        )
-
-    async def search(self, query: str, max_results: int = 10) -> list[RawSource]:
-        def _do() -> list[RawSource]:
-            resp = self._client.get(
-                "/news",
-                params={
-                    "q": query,
-                    "apikey": self._api_key,
-                    "language": "en",
-                    "category": "science",
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
-
-            results: list[RawSource] = []
-            for item in (data.get("results") or [])[:max_results]:
-                url = item.get("link") or ""
-                if not url:
-                    continue
-
-                results.append(
-                    RawSource(
-                        url=url,
-                        title=item.get("title") or "",
-                        snippet=item.get("description") or "",
-                        date=item.get("pubDate") or "",
-                        venue=item.get("source_name") or "",
-                        source_api=self.name,
-                        default_tier=self.default_tier,
-                    )
-                )
-            return results
-
-        try:
-            return await asyncio.to_thread(_do)
-        except Exception as exc:
-            logger.warning("NewsData search failed for '%s': %s", query, exc)
-            return []
-
-
 # ---------------------------------------------------------------------------
 # Internal database adapter — search our own unified_sites
 # ---------------------------------------------------------------------------
@@ -1053,7 +912,8 @@ class UnifiedSitesAdapter(SourceAdapter):
 
             from api.services.lyra_tools import search_sites
 
-            raw_json = search_sites(query=query, limit=min(max_results, 25))
+            # search_sites is a LangChain @tool — use .invoke()
+            raw_json = search_sites.invoke({"query": query, "limit": min(max_results, 25)})
             if raw_json.startswith("No sites found"):
                 return []
 

@@ -315,8 +315,13 @@ class TheoPipeline:
                 source.reliability_tier = r.default_tier
 
         # Build formatted sources_context for specialist prompts
+        # Sort by tier (academic first) and cap at 60 to avoid M2.7 timeout
+        sorted_sources = sorted(
+            ctx.registry.sources.items(),
+            key=lambda kv: kv[1].reliability_tier if kv[1].reliability_tier > 0 else 99,
+        )
         lines: list[str] = []
-        for sid, source in ctx.registry.sources.items():
+        for sid, source in sorted_sources[:60]:
             tier_str = ""
             if source.reliability_tier == 1:
                 tier_str = " [Academic]"
