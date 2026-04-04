@@ -5,7 +5,6 @@ import pytest
 
 from pipeline.lyra.theo_citations import CitationRegistry, audit_citations
 
-
 # ---------------------------------------------------------------------------
 # register_source
 # ---------------------------------------------------------------------------

@@ -3,7 +3,6 @@ import pytest
 
 from api.services.theo_config import EFFORT_CONFIG, TierConfig
 
-
 # ---------------------------------------------------------------------------
 # Tier presence
 # ---------------------------------------------------------------------------

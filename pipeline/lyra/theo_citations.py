@@ -20,7 +20,6 @@ import urllib.parse
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-
 # ---------------------------------------------------------------------------
 # Data structures
 # ---------------------------------------------------------------------------
