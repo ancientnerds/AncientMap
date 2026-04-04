@@ -189,7 +189,12 @@ def _is_blocked(url: str) -> bool:
 
 
 class SemanticScholarAdapter(SourceAdapter):
-    """Semantic Scholar API — free tier with optional API key."""
+    """Semantic Scholar API — with API key and strict 1 req/sec rate limit.
+
+    Rate limit: 1 request per second cumulative across all endpoints.
+    We enforce this with a threading lock + timestamp tracking to ensure
+    parallel query execution (via MultiSourceSearch) never exceeds the limit.
+    """
 
     @property
     def name(self) -> str:
@@ -200,6 +205,8 @@ class SemanticScholarAdapter(SourceAdapter):
         return 1
 
     def __init__(self) -> None:
+        import threading
+
         headers = {"Accept": "application/json"}
         api_key = os.getenv("THEO_SEMANTIC_SCHOLAR_KEY", "")
         if api_key:
@@ -209,9 +216,24 @@ class SemanticScholarAdapter(SourceAdapter):
             headers=headers,
             timeout=_API_TIMEOUT,
         )
+        # Rate limiter: 1 request per second (strict, to avoid ban)
+        self._rate_lock = threading.Lock()
+        self._last_request_time = 0.0
+
+    def _wait_for_rate_limit(self) -> None:
+        """Ensure at least 1.1 seconds between requests (with margin)."""
+        import time
+
+        with self._rate_lock:
+            now = time.monotonic()
+            elapsed = now - self._last_request_time
+            if elapsed < 1.1:
+                time.sleep(1.1 - elapsed)
+            self._last_request_time = time.monotonic()
 
     async def search(self, query: str, max_results: int = 10) -> list[RawSource]:
         def _do() -> list[RawSource]:
+            self._wait_for_rate_limit()
             resp = self._client.get(
                 "/paper/search",
                 params={
@@ -220,6 +242,20 @@ class SemanticScholarAdapter(SourceAdapter):
                     "limit": max_results,
                 },
             )
+            if resp.status_code == 429:
+                logger.warning("Semantic Scholar rate limited — backing off 5s")
+                import time
+
+                time.sleep(5)
+                self._wait_for_rate_limit()
+                resp = self._client.get(
+                    "/paper/search",
+                    params={
+                        "query": query,
+                        "fields": "title,abstract,year,citationCount,externalIds,openAccessPdf,venue,authors",
+                        "limit": max_results,
+                    },
+                )
             resp.raise_for_status()
             data = resp.json()
 
