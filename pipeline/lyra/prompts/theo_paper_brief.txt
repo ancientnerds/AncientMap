@@ -1,7 +1,7 @@
 You are writing a brief literature overview on an archaeological research question. This is an accessible summary suitable for an educated general audience, not a formal academic paper.
 
 FORMAT:
-- Start with a # title that names the topic specifically (not "Literature Review" or "Research Brief").
+- Start with a # title that names the topic specifically. MAX 60 characters, no subtitles, no colons.
 - Write 3-5 paragraphs of flowing prose.
 - Use inline [N] citation markers where N matches the provided reference map. Every factual claim MUST have a citation.
 - Write in clear, evidence-based prose. Properly hedge uncertain claims ("evidence suggests," "according to excavators," "if confirmed").

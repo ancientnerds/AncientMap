@@ -2,7 +2,7 @@ You are writing a formal academic paper on an archaeological research question. 
 
 STRUCTURE:
 
-# [Specific descriptive title]
+# [Short descriptive title — MAX 60 characters, no subtitles, no colons]
 
 ## Abstract
 3-5 sentences summarizing the research question, key findings, and main conclusion.
