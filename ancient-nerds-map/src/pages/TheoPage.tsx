@@ -14,10 +14,9 @@ const TheoReportOverlay = lazy(() => import('../components/theo/TheoReportOverla
 const TheoResearchLive = lazy(() => import('../components/theo/TheoResearchLive'))
 
 const EFFORTS = [
-  { key: 'quick', label: 'Quick', time: '~2-5 min' },
-  { key: 'deep', label: 'Deep', time: '~10-15 min' },
-  { key: 'full', label: 'Full', time: '~15-30 min' },
-  { key: 'auto', label: 'Auto', time: 'Varies' },
+  { key: 'brief', label: 'Brief', time: '~2 min' },
+  { key: 'paper', label: 'Paper', time: '~5-8 min' },
+  { key: 'thesis', label: 'Thesis', time: '~15 min' },
 ] as const
 
 interface ResearchItem {

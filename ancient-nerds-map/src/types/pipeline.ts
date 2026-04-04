@@ -44,6 +44,15 @@ export const PIPELINE_STAGES: PipelineNodeDef[] = [
   { id: 'llm_round', label: 'LLM Round', sublabel: 'Streaming + reasoning', isRepeatable: true },
   { id: 'tool_call', label: 'Tool Call', parentId: 'llm_round', isRepeatable: true },
   { id: 'done_credits', label: 'Done', sublabel: 'Credits + achievements' },
+  // Theo research pipeline stages
+  { id: 'question_analysis', label: 'Question Analysis', sublabel: 'Decomposition + specialist selection' },
+  { id: 'web_search', label: 'Web Research', sublabel: 'MiniMax search API' },
+  { id: 'source_audit', label: 'Source Audit', sublabel: 'Reliability scoring' },
+  { id: 'specialist_analysis', label: 'Specialist Analysis', sublabel: 'Per-specialist M2.7 analysis', isRepeatable: true },
+  { id: 'synthesis', label: 'Cross-Source Synthesis', sublabel: 'Argument mapping' },
+  { id: 'debate', label: 'Specialist Debate', sublabel: 'Challenge & defense rounds' },
+  { id: 'moderator', label: 'Moderator Review', sublabel: 'Final positions + devil\'s advocate' },
+  { id: 'paper_assembly', label: 'Paper Assembly', sublabel: 'Academic formatting + citation audit' },
 ]
 
 export interface ToolDef {
