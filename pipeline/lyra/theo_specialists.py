@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Data structure
@@ -1511,21 +1512,11 @@ def build_specialist_prompt(
     trusted = ", ".join(specialist.trusts)
     skeptical = ", ".join(specialist.skeptical_of)
 
-    output_schema = json.dumps(
-        {
-            "findings": [
-                {
-                    "claim": "string — a single factual finding",
-                    "evidence": "string — the evidence supporting this claim",
-                    "source_ids": ["string — CitationRegistry source IDs"],
-                    "confidence": "high | medium | low",
-                }
-            ],
-            "uncertainties": ["string — areas where the evidence is insufficient or ambiguous"],
-            "caveats": ["string — methodological or interpretive cautions"],
-        },
-        indent=2,
-    )
+    # Load the analysis prompt file — contains anti-hallucination rules,
+    # output schema, and citation instructions. This was previously dead
+    # code (never loaded); the inline prompt had NONE of these protections.
+    prompt_path = Path(__file__).parent / "prompts" / "theo_specialist_analysis.txt"
+    analysis_rules = prompt_path.read_text(encoding="utf-8")
 
     system_prompt = (
         f"You are {specialist.name}, {specialist.title}, "
@@ -1534,22 +1525,7 @@ def build_specialist_prompt(
         "## Analytical framework\n\n"
         f"**Evidence you trust:** {trusted}\n\n"
         f"**Claims you challenge:** {skeptical}\n\n"
-        "## Instructions\n\n"
-        "Analyze the provided sources from your domain perspective. "
-        "For each finding:\n"
-        "- State the claim clearly and specifically.\n"
-        "- Cite the supporting evidence, referencing source IDs "
-        "(the short hex identifiers from the citation registry).\n"
-        "- Rate your confidence as **high**, **medium**, or **low** "
-        "based on the quality and quantity of evidence.\n"
-        "- Note any uncertainties — gaps in evidence, alternative "
-        "interpretations, or areas needing further investigation.\n"
-        "- Add caveats about methodological limitations or interpretive "
-        "risks relevant to your domain.\n\n"
-        "## Output format\n\n"
-        "Respond with ONLY valid JSON matching this schema:\n\n"
-        f"```json\n{output_schema}\n```\n\n"
-        "Do not include any text outside the JSON object."
+        f"{analysis_rules}"
     )
 
     user_prompt = f"## Research question\n\n{question}\n\n## Sources\n\n{sources_context}"

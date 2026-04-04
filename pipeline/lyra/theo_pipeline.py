@@ -24,6 +24,8 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import httpx
+
 from api.services.theo_config import EFFORT_CONFIG, TierConfig
 from pipeline.lyra.config import LyraSettings, _get_settings
 from pipeline.lyra.minimax_shared import (
@@ -196,6 +198,12 @@ class TheoPipeline:
                     {"type": "pipeline", "stage": stage_name, "status": "error", "error": str(exc)}
                 )
                 return ctx
+
+        # Stage 3.5 — Fetch actual content from source URLs
+        try:
+            await self._stage_3_5_fetch_content(ctx, emit)
+        except Exception as exc:
+            logger.warning("Content fetch failed (non-fatal): %s", exc)
 
         # Stages 4-7 are non-fatal — continue with available data on failure.
         for stage_fn, stage_name in [
@@ -909,6 +917,113 @@ class TheoPipeline:
                     "rejected": len(rejected_ids),
                     "coverage_sufficient": coverage_sufficient,
                 },
+            }
+        )
+
+    # ------------------------------------------------------------------
+    # Stage 3.5: Fetch actual content from source URLs
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _extract_text_from_html(html: str) -> str:
+        """Extract readable text from HTML, strip tags."""
+        # Remove script and style tags with their content
+        text = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", html, flags=re.DOTALL | re.IGNORECASE)
+        # Remove all remaining HTML tags
+        text = re.sub(r"<[^>]+>", " ", text)
+        # Collapse whitespace
+        text = re.sub(r"\s+", " ", text).strip()
+        return text
+
+    async def _stage_3_5_fetch_content(
+        self,
+        ctx: PipelineContext,
+        emit: Callable[[dict], None],
+    ) -> None:
+        """Fetch full page content for Tier 1 and Tier 2 sources.
+
+        Replaces short search snippets with up to 2000 chars of actual page text
+        so specialists have real source material instead of 1-3 sentence abstracts.
+        Skips doi.org (paywalls), youtube.com (already have transcripts), and
+        wikipedia.org (API snippets are already high quality).
+        """
+        stage = "content_fetch"
+        t0 = time.monotonic()
+
+        # Collect sources eligible for content fetch
+        _SKIP_DOMAINS = {"doi.org", "youtube.com", "youtu.be", "wikipedia.org"}
+
+        candidates = [
+            (sid, source)
+            for sid, source in ctx.registry.sources.items()
+            if source.reliability_tier in (1, 2)
+            and not any(skip in source.url for skip in _SKIP_DOMAINS)
+        ]
+
+        if not candidates:
+            return
+
+        emit(
+            {
+                "type": "status",
+                "content": f"Fetching content from {len(candidates)} sources...",
+            }
+        )
+        emit({"type": "pipeline", "stage": stage, "status": "start"})
+
+        semaphore = asyncio.Semaphore(10)
+
+        async def _fetch_one(sid: str, url: str) -> tuple[str, str | None]:
+            """Fetch URL and return (sid, extracted_text | None)."""
+            async with semaphore:
+                try:
+                    async with httpx.AsyncClient(
+                        timeout=15.0,
+                        follow_redirects=True,
+                        headers={"User-Agent": "Mozilla/5.0 (research bot)"},
+                    ) as client:
+                        resp = await client.get(url)
+                        if resp.status_code == 200:
+                            content_type = resp.headers.get("content-type", "")
+                            if "html" in content_type or not content_type:
+                                text = self._extract_text_from_html(resp.text)
+                                return sid, text[:2000] if text else None
+                except Exception as exc:
+                    logger.debug("Content fetch failed for %s: %s", url, exc)
+            return sid, None
+
+        tasks = [_fetch_one(sid, source.url) for sid, source in candidates]
+        results = await asyncio.gather(*tasks)
+
+        fetched = 0
+        for sid, text in results:
+            if text and len(text) > len(ctx.registry.sources[sid].snippet):
+                ctx.registry.sources[sid].snippet = text
+                fetched += 1
+
+        # Rebuild sources_context with enriched snippets
+        lines: list[str] = []
+        for sid, source in ctx.registry.sources.items():
+            tier_str = ""
+            if source.reliability_tier == 1:
+                tier_str = " [Academic]"
+            elif source.reliability_tier == 2:
+                tier_str = " [Reputable]"
+            lines.append(
+                f"Source [{sid}]: {source.title}{tier_str}\n"
+                f"URL: {source.url}\n"
+                f"Snippet: {source.snippet}\n"
+            )
+        ctx.sources_context = "\n".join(lines)
+
+        ms = int((time.monotonic() - t0) * 1000)
+        emit(
+            {
+                "type": "pipeline",
+                "stage": stage,
+                "status": "done",
+                "duration_ms": ms,
+                "meta": {"candidates": len(candidates), "fetched": fetched},
             }
         )
 

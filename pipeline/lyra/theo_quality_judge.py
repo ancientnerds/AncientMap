@@ -80,16 +80,16 @@ def score_paper(
 
         # Build source context for the judge (top 20 referenced snippets)
         source_context = "\n".join(
-            f"[{s['ref_num']}] {s['title']}\nSnippet: {s['snippet'][:300]}\n"
+            f"[{s['ref_num']}] {s['title']}\nSnippet: {s['snippet'][:500]}\n"
             for s in source_snippets[:20]
         )
 
-        # Truncate paper to 5K chars for token budget
-        paper_excerpt = paper_text[:5000]
+        # Truncate paper to 12K chars so judge sees most of the paper
+        paper_excerpt = paper_text[:12000]
 
         user_msg = (
             f"## Research question\n\n{question}\n\n"
-            f"## Paper text (first 5000 chars)\n\n{paper_excerpt}\n\n"
+            f"## Paper text (first 12000 chars)\n\n{paper_excerpt}\n\n"
             f"## Source snippets (for verification)\n\n{source_context}"
         )
 
