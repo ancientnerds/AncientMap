@@ -29,15 +29,15 @@ from datetime import UTC, datetime
 class CitedSource:
     """A web source found during research, tracked through the pipeline."""
 
-    id: str                     # deterministic: sha256(url)[:12]
+    id: str  # deterministic: sha256(url)[:12]
     url: str
     title: str
     snippet: str
     date: str = ""
-    domain: str = ""            # extracted from URL (e.g. "en.wikipedia.org")
-    reliability_tier: int = 0   # 1=academic/institutional, 2=reputable, 3=general, 0=unscored
+    domain: str = ""  # extracted from URL (e.g. "en.wikipedia.org")
+    reliability_tier: int = 0  # 1=academic/institutional, 2=reputable, 3=general, 0=unscored
     access_timestamp: str = ""  # ISO timestamp when searched
-    search_query: str = ""      # which query found this source
+    search_query: str = ""  # which query found this source
 
 
 @dataclass
@@ -45,8 +45,8 @@ class ClaimCitation:
     """Links a factual claim to its supporting sources."""
 
     claim_text: str
-    source_ids: list[str]       # CitedSource.id values
-    specialist_id: str = ""     # which specialist made this claim
+    source_ids: list[str]  # CitedSource.id values
+    specialist_id: str = ""  # which specialist made this claim
     confidence: str = "medium"  # "high", "medium", "low"
 
 
@@ -54,9 +54,9 @@ class ClaimCitation:
 class CitationRegistry:
     """Global citation state passed through the entire pipeline."""
 
-    sources: dict[str, CitedSource] = field(default_factory=dict)   # id -> CitedSource
+    sources: dict[str, CitedSource] = field(default_factory=dict)  # id -> CitedSource
     claims: list[ClaimCitation] = field(default_factory=list)
-    reference_numbers: dict[str, int] = field(default_factory=dict) # source_id -> [N]
+    reference_numbers: dict[str, int] = field(default_factory=dict)  # source_id -> [N]
     _next_ref: int = field(default=1, repr=False)
 
     # ---------------------------------------------------------------------------
@@ -230,29 +230,64 @@ def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
     # For body/discussion/conclusion sections, apply structural-start heuristic
     # to skip transitions, ordinals, and non-factual framing text.
 
-    _EXEMPT_SECTIONS = frozenset({
-        "abstract", "introduction", "methodology",
-    })
+    _EXEMPT_SECTIONS = frozenset(
+        {
+            "abstract",
+            "introduction",
+            "methodology",
+        }
+    )
 
     _STRUCTURAL_STARTS = (
         # Framing / methodology
-        "this paper", "this research", "this study", "this review",
-        "this investigation", "this analysis",
-        "we used", "we employed", "our approach", "our method",
-        "the following", "the above", "the debate", "the specialist",
-        "having reviewed", "in this section", "in summary", "to summarize",
-        "future research", "further investigation", "several ",
+        "this paper",
+        "this research",
+        "this study",
+        "this review",
+        "this investigation",
+        "this analysis",
+        "we used",
+        "we employed",
+        "our approach",
+        "our method",
+        "the following",
+        "the above",
+        "the debate",
+        "the specialist",
+        "having reviewed",
+        "in this section",
+        "in summary",
+        "to summarize",
+        "future research",
+        "further investigation",
+        "several ",
         # Bullet points
-        "- **", "- ",
+        "- **",
+        "- ",
         # Discussion ordinals
-        "first,", "second,", "third,", "fourth,", "fifth,",
-        "sixth,", "finally,",
+        "first,",
+        "second,",
+        "third,",
+        "fourth,",
+        "fifth,",
+        "sixth,",
+        "finally,",
         # Discussion / conclusion framing
-        "the evidence", "the overall", "the proposed", "the significance",
-        "the question", "the relationship", "the precision", "the terminology",
-        "the interpretation", "the consistency",
-        "what remains", "additionally,", "contemporary ",
-        "such an", "a particular",
+        "the evidence",
+        "the overall",
+        "the proposed",
+        "the significance",
+        "the question",
+        "the relationship",
+        "the precision",
+        "the terminology",
+        "the interpretation",
+        "the consistency",
+        "what remains",
+        "additionally,",
+        "contemporary ",
+        "such an",
+        "a particular",
     )
 
     # Split into sections by ## headings and track section for each paragraph
@@ -275,9 +310,7 @@ def audit_citations(paper_text: str, registry: CitationRegistry) -> dict:
         and section not in _EXEMPT_SECTIONS
         and not p.lower().startswith(_STRUCTURAL_STARTS)
     ]
-    uncited_paragraphs = sum(
-        1 for p in factual_paragraphs if not re.search(r"\[\d+\]", p)
-    )
+    uncited_paragraphs = sum(1 for p in factual_paragraphs if not re.search(r"\[\d+\]", p))
     if uncited_paragraphs:
         issues.append(
             f"{uncited_paragraphs} paragraph(s) longer than 50 chars contain no citation marker"
