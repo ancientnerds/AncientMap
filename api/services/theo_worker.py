@@ -105,6 +105,7 @@ async def _process_request(
             result = {
                 "report": ctx.paper_text,
                 "title": ctx.paper_title,
+                "card_description": ctx.card_description,
                 "audit": ctx.audit_result,
             }
             emit({"type": "done", "status": "completed"})

@@ -83,6 +83,8 @@ interface PublicPaper {
   published_at: string
   sites_found: number
   duration_ms: number | null
+  card_description: string
+  cover_url: string
 }
 
 interface PublicPaperFull {
@@ -909,17 +911,28 @@ export default function TheoPage() {
           <>
             <div className="theo-public-grid">
               {publicPapers.map(paper => (
-                <div key={paper.slug} className="theo-public-card">
-                  <div className="theo-public-card-title">{paper.title}</div>
-                  <div className="theo-public-card-meta">
-                    <span className="theo-badge theo-badge-effort">{paper.effort}</span>
-                    <span className="theo-public-card-author">by {paper.published_by}</span>
-                    <span className="theo-public-card-date">{timeAgo(paper.published_at)}</span>
+                <div
+                  key={paper.slug}
+                  className="theo-public-card"
+                  onClick={() => handleReadPublicPaper(paper.slug)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={e => { if (e.key === 'Enter') handleReadPublicPaper(paper.slug) }}
+                >
+                  <div className="theo-public-card-hero">
+                    <img src={paper.cover_url} alt="" className="theo-public-card-img" loading="lazy" />
+                    <div className="theo-public-card-vignette" />
+                    <div className="theo-public-card-title">{paper.title}</div>
                   </div>
-                  <div className="theo-card-actions">
-                    <button className="theo-btn-view" onClick={() => handleReadPublicPaper(paper.slug)}>
-                      Read
-                    </button>
+                  <div className="theo-public-card-body">
+                    {paper.card_description && (
+                      <p className="theo-public-card-desc">{paper.card_description}</p>
+                    )}
+                    <div className="theo-public-card-footer">
+                      <span className="theo-public-card-author">by {paper.published_by}</span>
+                      <span className="theo-badge theo-badge-effort">{paper.effort}</span>
+                      <span className="theo-public-card-date">{timeAgo(paper.published_at)}</span>
+                    </div>
                   </div>
                 </div>
               ))}

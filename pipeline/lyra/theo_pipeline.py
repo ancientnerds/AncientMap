@@ -93,6 +93,7 @@ class PipelineContext:
     # Stage 8 outputs
     paper_text: str = ""
     paper_title: str = ""
+    card_description: str = ""
     audit_result: dict = field(default_factory=dict)
 
     # Tracking
@@ -217,6 +218,12 @@ class TheoPipeline:
                     "warning": f"Image generation skipped: {exc}",
                 }
             )
+
+        # Stage 10 — card description (1-3 sentence summary for library cards)
+        try:
+            await self._stage_10_card_description(ctx, emit)
+        except Exception as exc:
+            logger.warning("Card description failed (non-fatal): %s", exc)
 
         total_ms = int((time.monotonic() - pipeline_start) * 1000)
         emit(
@@ -1092,6 +1099,33 @@ class TheoPipeline:
                 "meta": {"cover_image": bool(cover_url)},
             }
         )
+
+    # ------------------------------------------------------------------
+    # Stage 10: Card description (1-3 sentence summary for library cards)
+    # ------------------------------------------------------------------
+
+    async def _stage_10_card_description(
+        self,
+        ctx: PipelineContext,
+        emit: Callable[[dict], None],
+    ) -> None:
+        """Generate a 1-3 sentence card description for the public library."""
+        if not ctx.paper_text or not ctx.paper_title:
+            return
+
+        emit({"type": "status", "content": "Writing card description..."})
+
+        system = (
+            "Write a 1-3 sentence description of this research paper for a card preview. "
+            "Be specific about what was investigated and what was found. "
+            "Write in third person. No citations, no markdown. Plain text only."
+        )
+        # Send just the title + abstract (first 1000 chars) to keep it fast
+        abstract = ctx.paper_text[:1000]
+        user_msg = f"Title: {ctx.paper_title}\n\n{abstract}"
+
+        raw = await self._m27_call_async(system, user_msg, 256)
+        ctx.card_description = raw.strip().strip('"')
 
     # ------------------------------------------------------------------
     # Relevancy gate — fast pre-check before the expensive pipeline

@@ -691,7 +691,8 @@ async def list_public_research(
             text("""
                 SELECT id::text, question, effort, slug, published_by, published_at,
                        sites_found, tools_used, duration_ms,
-                       LEFT(result_json::text, 500) AS result_excerpt
+                       result_json::jsonb->>'title' AS paper_title,
+                       result_json::jsonb->>'card_description' AS card_description
                 FROM research_requests
                 WHERE is_public = TRUE AND status = 'completed'
                 ORDER BY published_at DESC
@@ -708,18 +709,13 @@ async def list_public_research(
 
     papers = []
     for r in rows:
-        # Extract title from result JSON excerpt
-        title = r.question
-        try:
-            excerpt = json.loads(r.result_excerpt) if r.result_excerpt else {}
-            title = excerpt.get("title", r.question)
-        except (json.JSONDecodeError, TypeError, ValueError):
-            pass
+        # Cover image URL: /data/research-images/{id}/cover.png
+        cover_url = f"/data/research-images/{r.id}/cover.png"
 
         papers.append(
             {
                 "id": r.id,
-                "title": title,
+                "title": r.paper_title or r.question,
                 "question": r.question,
                 "effort": r.effort,
                 "slug": r.slug,
@@ -727,6 +723,8 @@ async def list_public_research(
                 "published_at": r.published_at.isoformat() if r.published_at else None,
                 "sites_found": r.sites_found,
                 "duration_ms": r.duration_ms,
+                "card_description": r.card_description or "",
+                "cover_url": cover_url,
             }
         )
 
