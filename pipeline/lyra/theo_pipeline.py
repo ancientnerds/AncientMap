@@ -133,6 +133,12 @@ class TheoPipeline:
 
         pipeline_start = time.monotonic()
 
+        # Relevancy gate — reject questions unrelated to archaeology/history
+        rejection = await self._check_relevance(question, emit)
+        if rejection:
+            ctx.error = rejection
+            return ctx
+
         # Stages 1-3 are fatal — if they fail the pipeline cannot continue.
         for stage_fn, stage_name in [
             (self._stage_1_analyze, "question_analysis"),
@@ -927,6 +933,57 @@ class TheoPipeline:
                     "total_references": ctx.audit_result.get("total_references", 0),
                 },
             }
+        )
+
+    # ------------------------------------------------------------------
+    # Relevancy gate — fast pre-check before the expensive pipeline
+    # ------------------------------------------------------------------
+
+    async def _check_relevance(
+        self,
+        question: str,
+        emit: Callable[[dict], None],
+    ) -> str:
+        """Return an error message if the question is off-topic, or '' if relevant.
+
+        Accepts anything connected to the ancient/historical world:
+        archaeology, ancient history, prehistory, mythology, ancient civilizations,
+        geological history, heritage, anthropology, paleontology, ancient technology,
+        alternative/fringe ancient history (e.g. Ancient Astronauts, lost civilizations).
+        """
+        system = (
+            "You are a relevancy filter for an archaeological research platform. "
+            "Decide whether the user's question is related to ANY of these topics:\n"
+            "- Archaeology, excavations, archaeological sites\n"
+            "- Ancient history, prehistory, historical civilizations\n"
+            "- Mythology, ancient religions, ancient texts\n"
+            "- Geology and earth sciences related to human history\n"
+            "- Anthropology, ancient cultures, migration\n"
+            "- Paleontology, human evolution\n"
+            "- Ancient technology, architecture, engineering\n"
+            "- Heritage, conservation, museums\n"
+            "- Numismatics, epigraphy, ancient languages\n"
+            "- Alternative/fringe theories about ancient history "
+            "(Ancient Astronauts, lost civilizations, Atlantis, Nibiru, etc.)\n\n"
+            "Be VERY inclusive — if there is ANY plausible connection to the "
+            "ancient or historical world, it is relevant. Only reject questions "
+            "that have absolutely nothing to do with history or archaeology.\n\n"
+            'Output ONLY: {"relevant": true} or {"relevant": false, "reason": "brief explanation"}'
+        )
+
+        raw = await self._m27_call_async(system, question, 256)
+        parsed = self._parse_json(raw)
+
+        if parsed.get("relevant", True):
+            return ""
+
+        reason = parsed.get("reason", "Question is not related to archaeology or ancient history")
+        logger.info("[THEO] Relevancy gate rejected: %s — %s", question[:80], reason)
+        emit({"type": "status", "content": f"Off-topic: {reason}"})
+        emit({"type": "done", "status": "failed"})
+        return (
+            f"This question doesn't appear to be related to archaeology, "
+            f"ancient history, or the ancient world. {reason}"
         )
 
     # ==================================================================
