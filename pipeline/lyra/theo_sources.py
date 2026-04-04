@@ -258,52 +258,47 @@ class SemanticScholarAdapter(SourceAdapter):
         self._last_request_time = 0.0
 
     def _wait_for_rate_limit(self) -> None:
-        """Ensure at least 1.1 seconds between requests (with margin)."""
+        """Ensure at least 1.1 seconds between requests (with margin).
+
+        Claims a time slot under the lock, then sleeps outside it so
+        other threads can claim their own slots without waiting for
+        this thread's sleep to finish.
+        """
         import time
 
         with self._rate_lock:
             now = time.monotonic()
             elapsed = now - self._last_request_time
-            if elapsed < 1.1:
-                time.sleep(1.1 - elapsed)
-            self._last_request_time = time.monotonic()
+            sleep_time = max(0.0, 1.1 - elapsed)
+            self._last_request_time = now + sleep_time
+        if sleep_time > 0:
+            time.sleep(sleep_time)
 
     async def search(self, query: str, max_results: int = 10) -> list[RawSource]:
         def _do() -> list[RawSource]:
+            import time
+
+            # Bulk endpoint has no limit param — returns up to 1000, we slice
+            _s2_params = {
+                "query": query,
+                "fields": "title,abstract,publicationDate,publicationTypes,citationCount,influentialCitationCount,referenceCount,externalIds,openAccessPdf,venue,authors,fieldsOfStudy,tldr",
+                "sort": "citationCount:desc",
+                "publicationTypes": "JournalArticle,Review,Conference",
+                "minCitationCount": "1",
+                "fieldsOfStudy": "History,Art,Philosophy,Sociology,Geography,Environmental Science",
+            }
             self._wait_for_rate_limit()
-            resp = self._client.get(
-                "/paper/search/bulk",
-                params={
-                    "query": query,
-                    "fields": "title,abstract,publicationDate,publicationTypes,citationCount,influentialCitationCount,referenceCount,externalIds,openAccessPdf,venue,authors,fieldsOfStudy,tldr",
-                    "sort": "citationCount:desc",
-                    "publicationTypes": "JournalArticle,Review,Conference",
-                    "minCitationCount": "1",
-                    "fieldsOfStudy": "History,Art,Philosophy,Sociology,Geography,Environmental Science",
-                    "limit": max_results,
-                },
-            )
+            resp = self._client.get("/paper/search/bulk", params=_s2_params)
             if resp.status_code == 429:
                 logger.warning("Semantic Scholar rate limited — backing off 5s")
                 time.sleep(5)
                 self._wait_for_rate_limit()
-                resp = self._client.get(
-                    "/paper/search/bulk",
-                    params={
-                        "query": query,
-                        "fields": "title,abstract,publicationDate,publicationTypes,citationCount,influentialCitationCount,referenceCount,externalIds,openAccessPdf,venue,authors,fieldsOfStudy,tldr",
-                        "sort": "citationCount:desc",
-                        "publicationTypes": "JournalArticle,Review,Conference",
-                        "minCitationCount": "1",
-                        "fieldsOfStudy": "History,Art,Philosophy,Sociology,Geography,Environmental Science",
-                        "limit": max_results,
-                    },
-                )
+                resp = self._client.get("/paper/search/bulk", params=_s2_params)
             resp.raise_for_status()
             data = resp.json()
 
             results: list[RawSource] = []
-            for paper in data.get("data", []):
+            for paper in data.get("data", [])[:max_results]:
                 doi = ""
                 ext_ids = paper.get("externalIds") or {}
                 if ext_ids.get("DOI"):
@@ -588,7 +583,7 @@ class CoreAdapter(SourceAdapter):
                 params={
                     "q": query,
                     "limit": str(max_results),
-                    "sort": "citationCount:desc",
+                    # CORE v3 has no sort parameter — returns by relevance
                 },
             )
             resp.raise_for_status()
