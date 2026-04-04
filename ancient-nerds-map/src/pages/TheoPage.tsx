@@ -87,6 +87,7 @@ interface PublicPaper {
   title: string
   question: string
   published_by: string
+  author_avatar: string | null
   effort: string
   published_at: string
   sites_found: number
@@ -934,7 +935,12 @@ export default function TheoPage() {
                       <p className="theo-public-card-desc">{paper.card_description}</p>
                     )}
                     <div className="theo-public-card-footer">
-                      <span className="theo-public-card-author">by {paper.published_by}</span>
+                      <span className="theo-public-card-author">
+                        {paper.author_avatar && (
+                          <img src={paper.author_avatar} alt="" className="theo-author-avatar" />
+                        )}
+                        {paper.published_by}
+                      </span>
                       <span className="theo-badge theo-badge-effort">{EFFORT_LABELS[paper.effort] || paper.effort}</span>
                       <span className="theo-public-card-date">{timeAgo(paper.published_at)}</span>
                     </div>

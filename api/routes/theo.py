@@ -689,13 +689,16 @@ async def list_public_research(
     with get_session() as session:
         rows = session.execute(
             text("""
-                SELECT id::text, question, effort, slug, published_by, published_at,
-                       sites_found, tools_used, duration_ms,
-                       result_json::jsonb->>'title' AS paper_title,
-                       result_json::jsonb->>'card_description' AS card_description
-                FROM research_requests
-                WHERE is_public = TRUE AND status = 'completed'
-                ORDER BY published_at DESC
+                SELECT r.id::text, r.question, r.effort, r.slug, r.published_by, r.published_at,
+                       r.sites_found, r.tools_used, r.duration_ms,
+                       r.result_json::jsonb->>'title' AS paper_title,
+                       r.result_json::jsonb->>'card_description' AS card_description,
+                       u.discord_id AS author_discord_id,
+                       u.avatar_hash AS author_avatar_hash
+                FROM research_requests r
+                LEFT JOIN discord_users u ON u.discord_id = r.user_id
+                WHERE r.is_public = TRUE AND r.status = 'completed'
+                ORDER BY r.published_at DESC
                 OFFSET :offset LIMIT :limit
             """),
             {"offset": offset, "limit": limit},
@@ -709,8 +712,13 @@ async def list_public_research(
 
     papers = []
     for r in rows:
-        # Cover image URL: /data/research-images/{id}/cover.png
         cover_url = f"/data/research-images/{r.id}/cover.png"
+        author_avatar = None
+        if r.author_avatar_hash and r.author_discord_id:
+            author_avatar = (
+                f"https://cdn.discordapp.com/avatars/"
+                f"{r.author_discord_id}/{r.author_avatar_hash}.png?size=64"
+            )
 
         papers.append(
             {
@@ -720,6 +728,7 @@ async def list_public_research(
                 "effort": r.effort,
                 "slug": r.slug,
                 "published_by": r.published_by,
+                "author_avatar": author_avatar,
                 "published_at": r.published_at.isoformat() if r.published_at else None,
                 "sites_found": r.sites_found,
                 "duration_ms": r.duration_ms,

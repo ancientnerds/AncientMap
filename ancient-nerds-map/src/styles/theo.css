@@ -1270,8 +1270,18 @@
 }
 
 .theo-public-card-author {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-size: 11px;
   color: var(--text-muted);
+}
+
+.theo-author-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  object-fit: cover;
 }
 
 .theo-public-card-date {
