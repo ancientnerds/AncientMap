@@ -314,14 +314,9 @@ class TheoPipeline:
             if source and source.reliability_tier == 0:
                 source.reliability_tier = r.default_tier
 
-        # Build formatted sources_context for specialist prompts
-        # Sort by tier (academic first) and cap at 60 to avoid M2.7 timeout
-        sorted_sources = sorted(
-            ctx.registry.sources.items(),
-            key=lambda kv: kv[1].reliability_tier if kv[1].reliability_tier > 0 else 99,
-        )
+        # Build formatted sources_context for specialist prompts — ALL sources
         lines: list[str] = []
-        for sid, source in sorted_sources[:60]:
+        for sid, source in ctx.registry.sources.items():
             tier_str = ""
             if source.reliability_tier == 1:
                 tier_str = " [Academic]"
@@ -373,26 +368,71 @@ class TheoPipeline:
             emit({"type": "pipeline", "stage": stage, "status": "error"})
             return
 
-        emit({"type": "status", "content": "Auditing source reliability..."})
+        # Batch sources into chunks of 40 to avoid M2.7 timeout on large sets
+        source_items = list(ctx.registry.sources.items())
+        batch_size = 40
+        batches = [
+            source_items[i : i + batch_size]
+            for i in range(0, len(source_items), batch_size)
+        ]
+
+        emit(
+            {
+                "type": "status",
+                "content": f"Auditing {len(source_items)} sources "
+                f"in {len(batches)} batch(es)...",
+            }
+        )
 
         system = self._load_prompt("theo_source_audit")
-        user_msg = f"## Research question\n\n{ctx.question}\n\n## Sources\n\n{ctx.sources_context}"
-
-        raw = await self._m27_call_async(system, user_msg, ctx.tier.max_tokens_per_call)
-        parsed = self._parse_json(raw)
-
-        # Apply reliability tiers
-        scored = parsed.get("scored_sources", [])
         rejected_ids: set[str] = set()
-        for entry in scored:
-            sid = entry.get("id", "")
-            tier_val = entry.get("reliability_tier", 0)
-            source = ctx.registry.sources.get(sid)
-            if source:
-                source.reliability_tier = tier_val
+        total_scored = 0
 
-        for entry in parsed.get("rejected_sources", []):
-            rejected_ids.add(entry.get("id", ""))
+        for batch_idx, batch in enumerate(batches):
+            # Format this batch
+            batch_lines = []
+            for sid, source in batch:
+                tier_str = ""
+                if source.reliability_tier == 1:
+                    tier_str = " [Academic]"
+                elif source.reliability_tier == 2:
+                    tier_str = " [Reputable]"
+                batch_lines.append(
+                    f"Source [{sid}]: {source.title}{tier_str}\n"
+                    f"URL: {source.url}\nSnippet: {source.snippet}\n"
+                )
+            batch_context = "\n".join(batch_lines)
+            user_msg = (
+                f"## Research question\n\n{ctx.question}\n\n"
+                f"## Sources (batch {batch_idx + 1}/{len(batches)})\n\n{batch_context}"
+            )
+
+            if len(batches) > 1:
+                emit(
+                    {
+                        "type": "status",
+                        "content": f"Auditing batch {batch_idx + 1}/{len(batches)} "
+                        f"({len(batch)} sources)...",
+                    }
+                )
+
+            raw = await self._m27_call_async(system, user_msg, ctx.tier.max_tokens_per_call)
+            parsed = self._parse_json(raw)
+
+            # Apply reliability tiers from this batch
+            for entry in parsed.get("scored_sources", []):
+                sid = entry.get("id", "")
+                tier_val = entry.get("reliability_tier", 0)
+                source = ctx.registry.sources.get(sid)
+                if source:
+                    source.reliability_tier = tier_val
+                    total_scored += 1
+
+            for entry in parsed.get("rejected_sources", []):
+                rejected_ids.add(entry.get("id", ""))
+
+        # Use coverage from the last batch (it sees the final state)
+        parsed = self._parse_json(raw) if raw else {}
 
         coverage_sufficient = parsed.get("coverage_sufficient", True)
 
@@ -458,7 +498,7 @@ class TheoPipeline:
                 "status": "done",
                 "duration_ms": ms,
                 "meta": {
-                    "scored": len(scored),
+                    "scored": total_scored,
                     "rejected": len(rejected_ids),
                     "coverage_sufficient": coverage_sufficient,
                 },
