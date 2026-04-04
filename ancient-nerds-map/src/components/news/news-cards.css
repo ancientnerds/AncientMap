@@ -34,7 +34,7 @@
 
 .news-card-channel {
   color: var(--brand-primary);
-  opacity: 0.8;
+  font-weight: 700;
 }
 
 .news-card-post-text {
