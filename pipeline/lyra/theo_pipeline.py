@@ -27,12 +27,11 @@ from pathlib import Path
 from api.services.theo_config import EFFORT_CONFIG, TierConfig
 from pipeline.lyra.config import LyraSettings, _get_settings
 from pipeline.lyra.minimax_shared import (
-    WebSearchResult,
     create_minimax_client,
     minimax_chat,
-    minimax_search,
 )
 from pipeline.lyra.theo_citations import CitationRegistry, audit_citations
+from pipeline.lyra.theo_sources import MultiSourceSearch
 from pipeline.lyra.theo_specialists import (
     Specialist,
     build_specialist_prompt,
@@ -110,6 +109,7 @@ class TheoPipeline:
             self._settings.minimax_api_key,
         )
         self._model = self._settings.minimax_model
+        self._searcher = MultiSourceSearch(self._settings)
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -263,7 +263,7 @@ class TheoPipeline:
         )
 
     # ------------------------------------------------------------------
-    # Stage 2: Web research via MiniMax search
+    # Stage 2: Multi-source academic + web research
     # ------------------------------------------------------------------
 
     async def _stage_2_search(
@@ -276,49 +276,52 @@ class TheoPipeline:
         emit({"type": "pipeline", "stage": stage, "status": "start"})
 
         queries = ctx.search_queries[: ctx.tier.max_search_queries]
-        seen_urls: set[str] = set()
-        total_results = 0
+        source_group = ctx.tier.source_apis
 
-        for i, query in enumerate(queries, 1):
-            emit({"type": "status", "content": f"Searching ({i}/{len(queries)}): {query[:80]}..."})
+        emit(
+            {
+                "type": "status",
+                "content": f"Searching {len(queries)} queries across "
+                f"{source_group} source group...",
+            }
+        )
 
-            results = await asyncio.to_thread(minimax_search, self._client, query)
+        # Run multi-source parallel search
+        raw_sources = await self._searcher.search(queries, source_group)
 
-            # If zero results, try reformulation
-            if not results:
-                reformulated = f"{query} archaeology"
-                emit(
-                    {
-                        "type": "status",
-                        "content": f"No results, reformulating: {reformulated[:80]}...",
-                    }
-                )
-                results = await asyncio.to_thread(
-                    minimax_search,
-                    self._client,
-                    reformulated,
-                )
-
-            for r in results:
-                if r.url in seen_urls:
-                    continue
-                seen_urls.add(r.url)
-                ctx.registry.register_source(
-                    url=r.url,
-                    title=r.title,
-                    snippet=r.snippet,
-                    date=r.date,
-                    search_query=query,
-                )
-                total_results += 1
+        # Register all sources in the citation registry
+        for r in raw_sources:
+            sid = ctx.registry.register_source(
+                url=r.url,
+                title=r.title,
+                snippet=r.snippet,
+                date=r.date,
+                search_query="",
+            )
+            # Apply default tier from the source API
+            source = ctx.registry.get_reference(sid)
+            if source and source.reliability_tier == 0:
+                source.reliability_tier = r.default_tier
 
         # Build formatted sources_context for specialist prompts
         lines: list[str] = []
         for sid, source in ctx.registry.sources.items():
+            tier_str = ""
+            if source.reliability_tier == 1:
+                tier_str = " [Academic]"
+            elif source.reliability_tier == 2:
+                tier_str = " [Reputable]"
             lines.append(
-                f"Source [{sid}]: {source.title}\nURL: {source.url}\nSnippet: {source.snippet}\n"
+                f"Source [{sid}]: {source.title}{tier_str}\n"
+                f"URL: {source.url}\n"
+                f"Snippet: {source.snippet}\n"
             )
         ctx.sources_context = "\n".join(lines)
+
+        total_results = len(ctx.registry.sources)
+        academic_count = sum(
+            1 for s in ctx.registry.sources.values() if s.reliability_tier == 1
+        )
 
         ms = int((time.monotonic() - t0) * 1000)
         emit(
@@ -327,7 +330,12 @@ class TheoPipeline:
                 "stage": stage,
                 "status": "done",
                 "duration_ms": ms,
-                "meta": {"queries_run": len(queries), "unique_sources": total_results},
+                "meta": {
+                    "queries_run": len(queries),
+                    "unique_sources": total_results,
+                    "academic_sources": academic_count,
+                    "source_group": source_group,
+                },
             }
         )
 
@@ -377,24 +385,20 @@ class TheoPipeline:
                     }
                 )
 
-                seen_urls = {s.url for s in ctx.registry.sources.values()}
-                for gap_query in gaps[:3]:  # cap at 3 gap queries
-                    results = await asyncio.to_thread(
-                        minimax_search,
-                        self._client,
-                        gap_query,
+                gap_results = await self._searcher.search(
+                    gaps[:3], ctx.tier.source_apis
+                )
+                for r in gap_results:
+                    sid = ctx.registry.register_source(
+                        url=r.url,
+                        title=r.title,
+                        snippet=r.snippet,
+                        date=r.date,
+                        search_query="gap_fill",
                     )
-                    for r in results:
-                        if r.url in seen_urls:
-                            continue
-                        seen_urls.add(r.url)
-                        ctx.registry.register_source(
-                            url=r.url,
-                            title=r.title,
-                            snippet=r.snippet,
-                            date=r.date,
-                            search_query=gap_query,
-                        )
+                    source = ctx.registry.get_reference(sid)
+                    if source and source.reliability_tier == 0:
+                        source.reliability_tier = r.default_tier
 
                 # Rebuild sources_context with new sources
                 lines: list[str] = []
