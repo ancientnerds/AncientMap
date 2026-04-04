@@ -37,7 +37,7 @@ _theo_limiter = RateLimiter(max_requests=5, window_seconds=300, namespace="theo_
 
 class ResearchSubmitRequest(BaseModel):
     question: str = Field(..., min_length=10, max_length=4000)
-    effort: str = Field(default="auto")
+    effort: str = Field(default="article")
 
 
 class ResearchSubmitResponse(BaseModel):
@@ -70,7 +70,7 @@ def _get_user_id(req: Request) -> str:
 
 def _estimate_minutes(effort: str, queue_position: int) -> int:
     """Rough estimate based on effort and queue position."""
-    base = {"brief": 2, "paper": 7, "thesis": 15, "auto": 7}.get(effort, 7)
+    base = {"brief": 3, "note": 8, "article": 20, "review": 40, "thesis": 60}.get(effort, 20)
     return base * max(queue_position, 1)
 
 

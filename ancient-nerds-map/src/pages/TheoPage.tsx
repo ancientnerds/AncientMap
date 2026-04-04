@@ -14,9 +14,11 @@ const TheoReportOverlay = lazy(() => import('../components/theo/TheoReportOverla
 const TheoResearchLive = lazy(() => import('../components/theo/TheoResearchLive'))
 
 const EFFORTS = [
-  { key: 'brief', label: 'Brief', time: '~2 min' },
-  { key: 'paper', label: 'Paper', time: '~5-8 min' },
-  { key: 'thesis', label: 'Thesis', time: '~15 min' },
+  { key: 'brief', label: 'Research Brief', time: '~3 min' },
+  { key: 'note', label: 'Research Note', time: '~8 min' },
+  { key: 'article', label: 'Journal Article', time: '~20 min' },
+  { key: 'review', label: 'Literature Review', time: '~40 min' },
+  { key: 'thesis', label: 'Thesis Chapter', time: '~60 min' },
 ] as const
 
 interface ResearchItem {
@@ -46,7 +48,7 @@ function getAuthHeaders(): Record<string, string> {
 
 export default function TheoPage() {
   const [question, setQuestion] = useState('')
-  const [effort, setEffort] = useState<string>('auto')
+  const [effort, setEffort] = useState<string>('article')
   const [submitting, setSubmitting] = useState(false)
   const [items, setItems] = useState<ResearchItem[]>([])
   const [viewingId, setViewingId] = useState<string | null>(null)
