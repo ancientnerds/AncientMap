@@ -265,7 +265,15 @@ class SemanticScholarAdapter(SourceAdapter):
 
 
 class OpenAlexAdapter(SourceAdapter):
-    """OpenAlex API — free, optionally polite pool via email."""
+    """OpenAlex API — $1/day free with key, full-text search, sorted by impact.
+
+    Follows the LLM quick reference at developers.openalex.org/guides/llm-quick-reference:
+    - Uses api_key param (not just mailto) for $1/day free credit
+    - Uses search= for full-text across title/abstract/fulltext
+    - Sorts by cited_by_count:desc for highest-impact papers first
+    - Filters out paratext (editorials, TOCs, etc.)
+    - Exponential backoff on 429/500
+    """
 
     @property
     def name(self) -> str:
@@ -281,24 +289,43 @@ class OpenAlexAdapter(SourceAdapter):
         self._client = httpx.Client(
             base_url="https://api.openalex.org",
             headers={"Accept": "application/json"},
-            timeout=_API_TIMEOUT,
+            timeout=30.0,  # OpenAlex recommends 30s timeout
         )
+
+    def _request_with_retry(self, params: dict) -> dict:
+        """GET /works with exponential backoff on 429/500."""
+        import time as _time
+
+        for attempt in range(4):  # initial + 3 retries
+            resp = self._client.get("/works", params=params)
+            if resp.status_code in (429, 500, 503):
+                wait = 2 ** attempt  # 1, 2, 4 seconds
+                logger.info("OpenAlex %d, retrying in %ds...", resp.status_code, wait)
+                _time.sleep(wait)
+                continue
+            resp.raise_for_status()
+            return resp.json()
+        # Final attempt — let it raise
+        resp = self._client.get("/works", params=params)
+        resp.raise_for_status()
+        return resp.json()
 
     async def search(self, query: str, max_results: int = 10) -> list[RawSource]:
         def _do() -> list[RawSource]:
             params: dict[str, str] = {
                 "search": query,
+                "filter": "type:!paratext",
                 "select": "id,title,doi,publication_date,cited_by_count,authorships,primary_location,abstract_inverted_index,open_access",
-                "per_page": str(max_results),
+                "sort": "cited_by_count:desc",
+                "per_page": str(min(max_results, 100)),
             }
+            # api_key gives $1/day free; mailto gives polite pool only
             if self._api_key:
                 params["api_key"] = self._api_key
-            elif self._email:
+            if self._email:
                 params["mailto"] = self._email
 
-            resp = self._client.get("/works", params=params)
-            resp.raise_for_status()
-            data = resp.json()
+            data = self._request_with_retry(params)
 
             results: list[RawSource] = []
             for work in data.get("results", []):
@@ -314,9 +341,9 @@ class OpenAlexAdapter(SourceAdapter):
                 authors = []
                 for authorship in work.get("authorships") or []:
                     author_obj = authorship.get("author") or {}
-                    name = author_obj.get("display_name", "")
-                    if name:
-                        authors.append(name)
+                    aname = author_obj.get("display_name", "")
+                    if aname:
+                        authors.append(aname)
 
                 venue = ""
                 loc = work.get("primary_location") or {}
