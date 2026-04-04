@@ -929,34 +929,56 @@ class TheoPipeline:
         for insight in ctx.synthesis.get("unique_insights", []):
             all_source_ids.update(insight.get("source_ids", []))
 
-        # Assign reference numbers
+        # Assign reference numbers to all cited sources
         ref_map_lines: list[str] = []
+        sid_to_num: dict[str, int] = {}
         for sid in sorted(all_source_ids):
             source = ctx.registry.get_reference(sid)
             if source is None:
                 continue
             num = ctx.registry.assign_reference_number(sid)
-            ref_map_lines.append(f"[{num}] = source {sid}: {source.title} ({source.url})")
+            sid_to_num[sid] = num
+            ref_map_lines.append(f"[{num}] {source.title} — {source.url}")
 
         ref_map_text = "\n".join(ref_map_lines) if ref_map_lines else "(no references)"
 
-        # Build the paper input
+        # Replace source_ids with [N] numbers in findings so the LLM
+        # only ever sees [N] format — same pattern as article pipeline
+        def _replace_source_ids(obj: dict | list) -> dict | list:
+            """Recursively replace source_ids lists with [N] citation strings."""
+            if isinstance(obj, dict):
+                result = {}
+                for k, v in obj.items():
+                    if k == "source_ids" and isinstance(v, list):
+                        result["citations"] = " ".join(
+                            f"[{sid_to_num[sid]}]" for sid in v if sid in sid_to_num
+                        )
+                    else:
+                        result[k] = _replace_source_ids(v)
+                return result
+            elif isinstance(obj, list):
+                return [_replace_source_ids(item) for item in obj]
+            return obj
+
+        # Build the paper input — findings have [N] citations, not source IDs
         paper_input_parts = [
             f"## Research question\n\n{ctx.question}\n\n",
-            f"## Reference map\n\n{ref_map_text}\n\n",
+            f"## Reference map (use ONLY these [N] numbers for citations)\n\n{ref_map_text}\n\n",
         ]
 
-        # Use moderated result if available, otherwise synthesis
         if ctx.moderated_result:
+            cleaned = _replace_source_ids(ctx.moderated_result)
             paper_input_parts.append(
-                f"## Moderated findings\n\n{json.dumps(ctx.moderated_result, indent=2)}\n\n"
+                f"## Moderated findings\n\n{json.dumps(cleaned, indent=2)}\n\n"
             )
         elif ctx.synthesis:
-            paper_input_parts.append(f"## Synthesis\n\n{json.dumps(ctx.synthesis, indent=2)}\n\n")
+            cleaned = _replace_source_ids(ctx.synthesis)
+            paper_input_parts.append(f"## Synthesis\n\n{json.dumps(cleaned, indent=2)}\n\n")
 
         if ctx.debate_result:
+            cleaned_debate = _replace_source_ids(ctx.debate_result)
             paper_input_parts.append(
-                f"## Debate summary\n\n{json.dumps(ctx.debate_result, indent=2)}\n\n"
+                f"## Debate summary\n\n{json.dumps(cleaned_debate, indent=2)}\n\n"
             )
 
         paper_input = "".join(paper_input_parts)
