@@ -1,0 +1,666 @@
+"""Synchronous research functions for the weekly journal pipeline.
+
+Wraps Theo pipeline components (search, audit, specialist analysis,
+synthesis, quality judge) into a simple sync interface that
+``article_generator.py`` calls per research cluster.
+
+Usage:
+    from pipeline.lyra.research_stages import research_cluster, ClusterResult
+
+    result = research_cluster(
+        question="What is known about the 13,500-year-old settlement at Sahout?",
+        youtube_facts=[...],
+        settings=settings,
+    )
+    if result.passed:
+        use(result.prose, result.sources)
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import re
+import time
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from pipeline.lyra.config import LyraSettings, _get_settings
+from pipeline.lyra.minimax_shared import minimax_chat_anthropic
+from pipeline.lyra.theo_citations import CitationRegistry, audit_citations
+from pipeline.lyra.theo_quality_judge import get_restart_stage, judge_paper
+from pipeline.lyra.theo_sources import MultiSourceSearch
+from pipeline.lyra.theo_specialists import build_specialist_prompt, select_specialists
+
+logger = logging.getLogger(__name__)
+
+PROMPTS_DIR = Path(__file__).parent / "prompts"
+
+# ---------------------------------------------------------------------------
+# Journal-tier config (based on "note" tier, with reduced retries)
+# ---------------------------------------------------------------------------
+_SPECIALISTS_COUNT = 3
+_MAX_SEARCH_QUERIES = 8
+_MAX_TOKENS_PER_CALL = 16384
+_MAX_TOKENS_SYNTHESIS = 16384
+_SOURCE_APIS = "standard"
+_MAX_PIPELINE_ITERATIONS = 2
+_MAX_PARALLEL_AUDIT = 10
+_QUALITY_PASS_THRESHOLD = 72
+
+
+# ---------------------------------------------------------------------------
+# Return type
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ClusterResult:
+    """Result of researching a single question cluster."""
+
+    prose: str
+    sources: list[dict]
+    score: int
+    passed: bool
+    error: str = ""
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
+def _load_prompt(name: str) -> str:
+    """Load a prompt file from pipeline/lyra/prompts/."""
+    path = PROMPTS_DIR / f"{name}.txt"
+    return path.read_text(encoding="utf-8")
+
+
+def _parse_json(text: str) -> dict | list:
+    """Parse JSON from M2.7 response, handling markdown fencing."""
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+        cleaned = cleaned.rsplit("```", 1)[0].strip()
+    try:
+        return json.loads(cleaned)
+    except (json.JSONDecodeError, ValueError):
+        logger.warning("Failed to parse JSON from M2.7 response: %s", cleaned[:200])
+        return {}
+
+
+def _classify_source_type(url: str) -> str:
+    """Classify a URL into a source type label."""
+    domain = url.lower()
+    if "youtube.com" in domain or "youtu.be" in domain:
+        return "youtube"
+    if "wikipedia.org" in domain:
+        return "wiki"
+    if any(
+        d in domain
+        for d in (
+            "semanticscholar.org",
+            "doi.org",
+            "jstor.org",
+            "arxiv.org",
+            "springer.com",
+            "elsevier.com",
+            "cambridge.org",
+            "oxford",
+            "wiley.com",
+            "researchgate.net",
+            "academia.edu",
+            "core.ac.uk",
+            "openalex.org",
+            ".edu",
+            ".ac.uk",
+        )
+    ):
+        return "academic"
+    return "news"
+
+
+def _build_sources_context(registry: CitationRegistry) -> str:
+    """Format all registry sources into a text block for prompts."""
+    lines: list[str] = []
+    for sid, source in registry.sources.items():
+        tier_str = ""
+        if source.reliability_tier == 1:
+            tier_str = " [Academic]"
+        elif source.reliability_tier == 2:
+            tier_str = " [Reputable]"
+        lines.append(
+            f"Source [{sid}]: {source.title}{tier_str}\n"
+            f"URL: {source.url}\n"
+            f"Snippet: {source.snippet}\n"
+        )
+    return "\n".join(lines)
+
+
+def _build_source_list(registry: CitationRegistry) -> list[dict]:
+    """Build the unified sources list for ClusterResult."""
+    result: list[dict] = []
+    for sid, num in sorted(registry.reference_numbers.items(), key=lambda kv: kv[1]):
+        source = registry.get_reference(sid)
+        if source is None:
+            continue
+        result.append(
+            {
+                "citation": num,
+                "url": source.url,
+                "label": source.title,
+                "type": _classify_source_type(source.url),
+            }
+        )
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Stage implementations
+# ---------------------------------------------------------------------------
+
+
+def _stage_search(
+    queries: list[str],
+    registry: CitationRegistry,
+    settings: LyraSettings,
+) -> str:
+    """Stage 2: Multi-source search. Returns sources_context string."""
+    t0 = time.monotonic()
+    logger.info("[journal] Search: running %d queries across %s", len(queries), _SOURCE_APIS)
+
+    searcher = MultiSourceSearch(settings)
+    raw_sources = asyncio.run(searcher.search(queries[:_MAX_SEARCH_QUERIES], _SOURCE_APIS))
+
+    if not raw_sources:
+        logger.warning("[journal] Search returned zero results")
+        return ""
+
+    for r in raw_sources:
+        sid = registry.register_source(
+            url=r.url,
+            title=r.title,
+            snippet=r.snippet,
+            date=r.date,
+        )
+        source = registry.get_reference(sid)
+        if source and source.reliability_tier == 0:
+            source.reliability_tier = r.default_tier
+
+    ms = int((time.monotonic() - t0) * 1000)
+    logger.info(
+        "[journal] Search done in %dms: %d unique sources (%d academic)",
+        ms,
+        len(registry.sources),
+        sum(1 for s in registry.sources.values() if s.reliability_tier == 1),
+    )
+    return _build_sources_context(registry)
+
+
+def _stage_audit(
+    question: str,
+    registry: CitationRegistry,
+    settings: LyraSettings,
+) -> str:
+    """Stage 3: Source reliability audit. Returns updated sources_context."""
+    t0 = time.monotonic()
+    source_items = list(registry.sources.items())
+    if not source_items:
+        return ""
+
+    logger.info("[journal] Audit: evaluating %d sources", len(source_items))
+
+    system = _load_prompt("theo_source_audit")
+    rejected_ids: set[str] = set()
+    total_scored = 0
+
+    def _audit_one(sid: str, source) -> dict | list:
+        tier_str = ""
+        if source.reliability_tier == 1:
+            tier_str = " [Academic]"
+        elif source.reliability_tier == 2:
+            tier_str = " [Reputable]"
+        user_msg = (
+            f"## Research question\n\n{question}\n\n"
+            f"## Source to evaluate\n\n"
+            f"Source [{sid}]: {source.title}{tier_str}\n"
+            f"URL: {source.url}\n"
+            f"Snippet: {source.snippet}\n"
+        )
+        raw = minimax_chat_anthropic(system, user_msg, _MAX_TOKENS_PER_CALL, settings=settings)
+        parsed = _parse_json(raw)
+        if isinstance(parsed, dict):
+            parsed["_sid"] = sid
+        return parsed
+
+    # Run audits in parallel batches
+    with ThreadPoolExecutor(max_workers=_MAX_PARALLEL_AUDIT) as pool:
+        futures = {pool.submit(_audit_one, sid, source): sid for sid, source in source_items}
+        for future in futures:
+            try:
+                parsed = future.result(timeout=120)
+            except Exception as exc:
+                logger.warning("[journal] Audit call failed for %s: %s", futures[future], exc)
+                continue
+            if not isinstance(parsed, dict):
+                continue
+            original_sid = parsed.get("_sid", "")
+            for entry in parsed.get("scored_sources", []):
+                sid = entry.get("id", "") or original_sid
+                tier_val = entry.get("reliability_tier", 0)
+                source = registry.sources.get(sid)
+                if source:
+                    source.reliability_tier = tier_val
+                    total_scored += 1
+            for entry in parsed.get("rejected_sources", []):
+                rid = entry.get("id", "") or original_sid
+                if rid:
+                    rejected_ids.add(rid)
+
+    # Remove rejected sources
+    for rid in rejected_ids:
+        registry.sources.pop(rid, None)
+
+    ms = int((time.monotonic() - t0) * 1000)
+    logger.info(
+        "[journal] Audit done in %dms: %d scored, %d rejected, %d remaining",
+        ms,
+        total_scored,
+        len(rejected_ids),
+        len(registry.sources),
+    )
+    return _build_sources_context(registry)
+
+
+def _stage_specialists(
+    question: str,
+    sources_context: str,
+    registry: CitationRegistry,
+    settings: LyraSettings,
+) -> dict[str, dict]:
+    """Stage 4: Parallel specialist analysis. Returns {specialist_id: analysis_dict}."""
+    t0 = time.monotonic()
+
+    # Use the question itself as a domain hint — select_specialists extracts
+    # keywords from the question text.
+    specialists = select_specialists(
+        domain_tags=[],
+        question=question,
+        count=_SPECIALISTS_COUNT,
+    )
+    logger.info(
+        "[journal] Specialists: selected %s",
+        [s.id for s in specialists],
+    )
+
+    analyses: dict[str, dict] = {}
+
+    def _run_one(spec):
+        system_prompt, user_prompt = build_specialist_prompt(spec, question, sources_context)
+        raw = minimax_chat_anthropic(
+            system_prompt, user_prompt, _MAX_TOKENS_PER_CALL, settings=settings
+        )
+        return spec.id, raw
+
+    with ThreadPoolExecutor(max_workers=_SPECIALISTS_COUNT) as pool:
+        futures = [pool.submit(_run_one, spec) for spec in specialists]
+        for future in futures:
+            try:
+                spec_id, raw = future.result(timeout=180)
+            except Exception as exc:
+                logger.warning("[journal] Specialist call failed: %s", exc)
+                continue
+            parsed = _parse_json(raw)
+            if not isinstance(parsed, dict) or not parsed:
+                logger.warning("[journal] Specialist %s returned unparseable output", spec_id)
+                continue
+            analyses[spec_id] = parsed
+
+            # Register claims
+            for finding in parsed.get("findings", []):
+                registry.add_claim(
+                    claim_text=finding.get("claim", ""),
+                    source_ids=finding.get("source_ids", []),
+                    specialist_id=spec_id,
+                    confidence=finding.get("confidence", "medium"),
+                )
+
+    ms = int((time.monotonic() - t0) * 1000)
+    logger.info(
+        "[journal] Specialists done in %dms: %d/%d completed",
+        ms,
+        len(analyses),
+        len(specialists),
+    )
+    return analyses
+
+
+def _stage_synthesis(
+    question: str,
+    specialist_analyses: dict[str, dict],
+    settings: LyraSettings,
+) -> dict:
+    """Stage 5: Cross-source synthesis. Returns synthesis dict."""
+    t0 = time.monotonic()
+    logger.info("[journal] Synthesis: combining %d specialist analyses", len(specialist_analyses))
+
+    system = _load_prompt("theo_synthesis")
+
+    # Format analyses
+    parts: list[str] = []
+    for spec_id, analysis in specialist_analyses.items():
+        parts.append(f"### Specialist: {spec_id}\n\n{json.dumps(analysis, indent=2)}\n")
+    analyses_text = "\n".join(parts)
+
+    user_msg = f"## Research question\n\n{question}\n\n## Specialist analyses\n\n{analyses_text}"
+    raw = minimax_chat_anthropic(system, user_msg, _MAX_TOKENS_SYNTHESIS, settings=settings)
+    result = _parse_json(raw)
+    if not isinstance(result, dict):
+        result = {}
+
+    ms = int((time.monotonic() - t0) * 1000)
+    logger.info(
+        "[journal] Synthesis done in %dms: %d consensus, %d contested, %d unique",
+        ms,
+        len(result.get("consensus_claims", [])),
+        len(result.get("contested_claims", [])),
+        len(result.get("unique_insights", [])),
+    )
+    return result
+
+
+def _stage_write_section(
+    question: str,
+    synthesis: dict,
+    registry: CitationRegistry,
+    settings: LyraSettings,
+) -> str:
+    """Write the journal section prose with [N] citations."""
+    t0 = time.monotonic()
+    logger.info("[journal] Writing section prose...")
+
+    # Assign reference numbers to all cited source_ids from synthesis
+    all_source_ids: set[str] = set()
+    for claim in synthesis.get("consensus_claims", []):
+        all_source_ids.update(claim.get("source_ids", []))
+    for insight in synthesis.get("unique_insights", []):
+        all_source_ids.update(insight.get("source_ids", []))
+    for claim in registry.claims:
+        all_source_ids.update(claim.source_ids)
+
+    ref_map_lines: list[str] = []
+    sid_to_num: dict[str, int] = {}
+    for sid in sorted(all_source_ids):
+        source = registry.get_reference(sid)
+        if source is None:
+            continue
+        num = registry.assign_reference_number(sid)
+        sid_to_num[sid] = num
+        ref_map_lines.append(f"[{num}] {source.title} - {source.url}")
+
+    ref_map_text = "\n".join(ref_map_lines) if ref_map_lines else "(no references)"
+
+    # Replace source_ids with [N] numbers in synthesis
+    def _replace_source_ids(obj):
+        if isinstance(obj, dict):
+            result = {}
+            for k, v in obj.items():
+                if k == "source_ids" and isinstance(v, list):
+                    result["citations"] = " ".join(
+                        f"[{sid_to_num[sid]}]" for sid in v if sid in sid_to_num
+                    )
+                else:
+                    result[k] = _replace_source_ids(v)
+            return result
+        elif isinstance(obj, list):
+            return [_replace_source_ids(item) for item in obj]
+        return obj
+
+    cleaned_synthesis = _replace_source_ids(synthesis)
+
+    system = _load_prompt("journal_section")
+    user_msg = (
+        f"## Research question\n\n{question}\n\n"
+        f"## Reference map (use ONLY these [N] numbers for citations)\n\n{ref_map_text}\n\n"
+        f"## Synthesized findings\n\n{json.dumps(cleaned_synthesis, indent=2)}"
+    )
+
+    prose = minimax_chat_anthropic(system, user_msg, _MAX_TOKENS_SYNTHESIS, settings=settings)
+
+    ms = int((time.monotonic() - t0) * 1000)
+    logger.info("[journal] Section written in %dms (%d chars)", ms, len(prose))
+    return prose
+
+
+def _stage_judge(
+    prose: str,
+    question: str,
+    registry: CitationRegistry,
+    settings: LyraSettings,
+) -> dict:
+    """Run the quality judge on the written section."""
+    t0 = time.monotonic()
+
+    # Append references for the citation audit
+    refs_md = registry.format_references_list()
+    full_text = prose
+    if refs_md:
+        full_text += f"\n\n## References\n\n{refs_md}"
+
+    audit_result = audit_citations(full_text, registry)
+
+    # Build source snippets for the judge
+    source_snippets = []
+    for sid, num in sorted(registry.reference_numbers.items(), key=lambda kv: kv[1]):
+        source = registry.get_reference(sid)
+        if source:
+            source_snippets.append(
+                {
+                    "ref_num": num,
+                    "title": source.title,
+                    "snippet": source.snippet,
+                }
+            )
+
+    def _chat(_model, system, user, max_tokens):
+        return minimax_chat_anthropic(system, user, max_tokens, settings=settings)
+
+    result = judge_paper(
+        paper_text=full_text,
+        question=question,
+        audit_result=audit_result,
+        source_snippets=source_snippets,
+        chat_fn=_chat,
+        model="MiniMax-M2.7",
+    )
+
+    ms = int((time.monotonic() - t0) * 1000)
+    logger.info(
+        "[journal] Quality judge in %dms: score=%d passed=%s badge=%s",
+        ms,
+        result.get("score", 0),
+        result.get("passed", False),
+        result.get("badge", ""),
+    )
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Main entry point
+# ---------------------------------------------------------------------------
+
+
+def research_cluster(
+    question: str,
+    youtube_facts: list[dict],
+    settings: LyraSettings | None = None,
+) -> ClusterResult:
+    """Run a single research question through all stages.
+
+    Stages: search -> audit -> specialists -> synthesis -> write -> judge.
+    Retries from the failing stage on quality judge failure (max 2 iterations).
+
+    Args:
+        question: Research question (e.g., "What is known about the
+            13,500-year-old settlement at Sahout?")
+        youtube_facts: Pre-existing facts from YouTube. Each dict has keys:
+            title, url, snippet, facts, video_id, timestamp_seconds, channel_name.
+        settings: LyraSettings instance (uses default if None).
+
+    Returns:
+        ClusterResult with prose, sources, score, passed, and error fields.
+    """
+    if settings is None:
+        settings = _get_settings()
+
+    t0 = time.monotonic()
+    logger.info("[journal] === research_cluster START: %s ===", question[:80])
+
+    registry = CitationRegistry()
+
+    # Register YouTube facts as pre-existing Tier 2 sources
+    for fact in youtube_facts:
+        url = fact.get("url", "")
+        if not url:
+            vid = fact.get("video_id", "")
+            ts = fact.get("timestamp_seconds", 0)
+            url = f"https://youtube.com/watch?v={vid}&t={ts}" if vid else ""
+        if not url:
+            continue
+        sid = registry.register_source(
+            url=url,
+            title=fact.get("title", "YouTube"),
+            snippet=fact.get("snippet", ""),
+        )
+        source = registry.get_reference(sid)
+        if source:
+            source.reliability_tier = 2
+
+    # Build initial search queries from the question
+    search_queries = [question]
+    # Add a few variant queries for broader coverage
+    # Strip question marks and split long questions
+    clean_q = question.rstrip("?").strip()
+    if len(clean_q.split()) > 8:
+        # Take key noun phrases as a shorter query
+        words = clean_q.split()
+        search_queries.append(" ".join(words[:6]))
+        search_queries.append(" ".join(words[-6:]))
+
+    # ---- Stage 2: Search ----
+    sources_context = _stage_search(search_queries, registry, settings)
+    if not sources_context and not registry.sources:
+        total_ms = int((time.monotonic() - t0) * 1000)
+        logger.warning("[journal] No sources found, aborting cluster (%dms)", total_ms)
+        return ClusterResult(
+            prose="",
+            sources=[],
+            score=0,
+            passed=False,
+            error="No sources found for this research question.",
+        )
+
+    # ---- Stage 3: Audit ----
+    sources_context = _stage_audit(question, registry, settings)
+    if not registry.sources:
+        # All sources rejected
+        total_ms = int((time.monotonic() - t0) * 1000)
+        logger.warning("[journal] All sources rejected by audit (%dms)", total_ms)
+        return ClusterResult(
+            prose="",
+            sources=[],
+            score=0,
+            passed=False,
+            error="All sources were rejected during reliability audit.",
+        )
+
+    # ---- MASTER CONVERGENCE LOOP ----
+    best_prose = ""
+    best_score = 0
+    best_passed = False
+    specialist_analyses: dict[str, dict] = {}
+    synthesis: dict = {}
+
+    for iteration in range(_MAX_PIPELINE_ITERATIONS):
+        if iteration > 0:
+            logger.info(
+                "[journal] Retry iteration %d/%d",
+                iteration + 1,
+                _MAX_PIPELINE_ITERATIONS,
+            )
+
+        # ---- Stage 4: Specialists ----
+        specialist_analyses = _stage_specialists(question, sources_context, registry, settings)
+        if not specialist_analyses:
+            total_ms = int((time.monotonic() - t0) * 1000)
+            logger.warning("[journal] No specialist analyses completed (%dms)", total_ms)
+            return ClusterResult(
+                prose=best_prose,
+                sources=_build_source_list(registry),
+                score=best_score,
+                passed=False,
+                error="All specialist analyses failed.",
+            )
+
+        # ---- Stage 5: Synthesis ----
+        synthesis = _stage_synthesis(question, specialist_analyses, settings)
+
+        # ---- Write section ----
+        prose = _stage_write_section(question, synthesis, registry, settings)
+        if not prose:
+            logger.warning("[journal] Section writing returned empty prose")
+            continue
+
+        # ---- Quality judge ----
+        judge_result = _stage_judge(prose, question, registry, settings)
+        score = judge_result.get("score", 0)
+        passed = judge_result.get("passed", False)
+
+        # Track best attempt
+        if score > best_score:
+            best_prose = prose
+            best_score = score
+            best_passed = passed
+
+        if passed:
+            logger.info("[journal] Quality judge PASSED on iteration %d", iteration + 1)
+            break
+
+        # Judge failed — check if we should retry
+        if iteration >= _MAX_PIPELINE_ITERATIONS - 1:
+            logger.info(
+                "[journal] Max iterations reached (score=%d), shipping best attempt",
+                best_score,
+            )
+            break
+
+        problems = judge_result.get("problems", [])
+        if not problems:
+            logger.info("[journal] Judge failed but no actionable problems, shipping as-is")
+            break
+
+        restart_stage = get_restart_stage(problems)
+        problem_types = [p.get("type", "unknown") for p in problems[:3]]
+        logger.info(
+            "[journal] Judge failed (score=%d), problems: %s, restarting from stage %d",
+            score,
+            problem_types,
+            restart_stage,
+        )
+
+    total_ms = int((time.monotonic() - t0) * 1000)
+    logger.info(
+        "[journal] === research_cluster DONE in %dms: score=%d passed=%s ===",
+        total_ms,
+        best_score,
+        best_passed,
+    )
+
+    return ClusterResult(
+        prose=best_prose,
+        sources=_build_source_list(registry),
+        score=best_score,
+        passed=best_passed,
+    )
