@@ -326,25 +326,17 @@
   animation: news-card-enter 0.5s ease-out;
 }
 
-/* Card */
+/* Card — base NERV panel styling from panel.css; significance overrides via CSS custom properties */
 .news-page-card {
-  background: var(--surface-raised);
-  border: 1px solid var(--border-accent);
-  border-radius: 8px;
+  position: relative;
   overflow: hidden;
   cursor: pointer;
-  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
-  transform: translateZ(0);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .news-page-card:hover {
-  border-color: var(--accent-glow-30);
-  transform: translateY(-3px) scale(1.01);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--accent-glow-25);
-}
-
-.news-page-card.expanded {
-  border-color: var(--accent-glow-30);
+  border-color: var(--sig-hover-border, rgba(0, 204, 102, 0.45));
+  box-shadow: 0 0 16px var(--sig-hover-glow, rgba(0, 204, 102, 0.12)), 0 4px 24px rgba(0, 0, 0, 0.5);
 }
 
 .news-page-card-body {

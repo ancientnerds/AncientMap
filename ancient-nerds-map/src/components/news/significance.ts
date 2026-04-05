@@ -34,6 +34,39 @@ export function getSignificanceCardStyle(level: number): React.CSSProperties {
   return { background: 'rgba(255, 255, 255, 0.03)', borderColor: 'rgba(255, 255, 255, 0.08)' }
 }
 
+/** NERV panel card style — overrides border, corner brackets, and hover glow with significance color. */
+export function getSignificanceNervStyle(level: number): React.CSSProperties | undefined {
+  if (level >= 9) return {
+    background: 'rgba(192, 32, 35, 0.22)',
+    borderColor: 'rgba(192, 32, 35, 0.35)',
+    '--nerv-cb-color': 'rgba(192, 32, 35, 0.5)',
+    '--sig-hover-border': 'rgba(192, 32, 35, 0.55)',
+    '--sig-hover-glow': 'rgba(192, 32, 35, 0.15)',
+  } as React.CSSProperties
+  if (level >= 7) return {
+    background: 'rgba(212, 98, 42, 0.18)',
+    borderColor: 'rgba(212, 98, 42, 0.30)',
+    '--nerv-cb-color': 'rgba(212, 98, 42, 0.45)',
+    '--sig-hover-border': 'rgba(212, 98, 42, 0.50)',
+    '--sig-hover-glow': 'rgba(212, 98, 42, 0.12)',
+  } as React.CSSProperties
+  if (level >= 5) return {
+    background: 'rgba(212, 168, 67, 0.12)',
+    borderColor: 'rgba(212, 168, 67, 0.22)',
+    '--nerv-cb-color': 'rgba(212, 168, 67, 0.38)',
+    '--sig-hover-border': 'rgba(212, 168, 67, 0.40)',
+    '--sig-hover-glow': 'rgba(212, 168, 67, 0.10)',
+  } as React.CSSProperties
+  if (level >= 3) return {
+    background: 'rgba(91, 138, 114, 0.08)',
+    borderColor: 'rgba(91, 138, 114, 0.16)',
+    '--nerv-cb-color': 'rgba(91, 138, 114, 0.35)',
+    '--sig-hover-border': 'rgba(91, 138, 114, 0.30)',
+    '--sig-hover-glow': 'rgba(91, 138, 114, 0.08)',
+  } as React.CSSProperties
+  return undefined
+}
+
 const CATEGORY_LABELS: Record<string, string> = {
   excavation: 'Excavation',
   artifact: 'Artifact',

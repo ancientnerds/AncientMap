@@ -16,7 +16,7 @@ import PageStatsBar from '../components/layout/PageStatsBar'
 import type { StatItem } from '../components/layout/PageStatsBar'
 import AiNoticeBanner from '../components/layout/AiNoticeBanner'
 import NewsCard from '../components/news/NewsCard'
-import { getNewsCategoryLabel, getTopicColor, sortTopics } from '../components/news/significance'
+import { getNewsCategoryLabel, getTopicColor, sortTopics, getSignificanceNervStyle } from '../components/news/significance'
 import '../components/news/news-cards.css'
 
 const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
@@ -631,7 +631,7 @@ export default function NewsFeedPage() {
               const deepLink = item.youtube_deep_url || item.youtube_url || '#'
 
               return (
-                <div key={item.id} className="news-page-card">
+                <div key={item.id} className="news-page-card" style={item.significance != null ? getSignificanceNervStyle(item.significance) : undefined}>
                   <div className="news-page-card-body">
                     <NewsCard
                       size="lg"

@@ -59,7 +59,8 @@ body.satellite-mode {
 .nerv-lb,
 .search-bar-inner,
 .search-filters,
-.site-card {
+.site-card,
+.news-page-card {
   background: var(--nerv-panel-bg);
   backdrop-filter: blur(var(--nerv-panel-blur));
   -webkit-backdrop-filter: blur(var(--nerv-panel-blur));
@@ -128,7 +129,8 @@ body.satellite-mode {
 .nerv-lb::before,
 .search-bar-inner::before,
 .search-filters::before,
-.site-card::before {
+.site-card::before,
+.news-page-card::before {
   content: '';
   position: absolute;
   inset: 0;
