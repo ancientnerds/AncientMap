@@ -80,6 +80,13 @@ class PipelineContext:
     # User-disabled source adapters (e.g. ["wikipedia", "minimax"])
     disabled_adapters: list[str] = field(default_factory=list)
 
+    # Track what was already searched/fetched (avoid re-doing work on re-runs)
+    searched_queries: set = field(default_factory=set)
+    fetched_urls: set = field(default_factory=set)
+
+    # Pipeline iteration tracking
+    pipeline_iteration: int = 0
+
     # Stage 1 outputs
     domain_tags: list[str] = field(default_factory=list)
     sub_questions: list[str] = field(default_factory=list)
@@ -197,28 +204,20 @@ class TheoPipeline:
 
         pipeline_start = time.monotonic()
 
-        # Relevancy gate — reject questions unrelated to archaeology/history
+        # Relevancy gate
         rejection = await self._check_relevance(question, emit)
         if rejection:
             ctx.error = rejection
             return ctx
 
-        # Stage 0.5 — Extract transcripts for user-provided YouTube videos
+        # Stage 0.5 — YouTube transcripts (runs once)
         if ctx.video_ids:
             try:
                 await self._stage_0_transcripts(ctx, emit)
             except Exception as exc:
                 logger.warning("Transcript extraction failed (non-fatal): %s", exc)
-                emit(
-                    {
-                        "type": "pipeline",
-                        "stage": "transcript_extraction",
-                        "status": "warning",
-                        "warning": f"Transcript extraction failed: {exc}",
-                    }
-                )
 
-        # Register user-provided web URLs as sources (pre-seeded before search)
+        # Register user-provided web URLs
         if ctx.web_urls:
             emit(
                 {
@@ -230,16 +229,12 @@ class TheoPipeline:
                 ctx.registry.register_source(
                     url=url,
                     title=url.split("/")[-1].replace("-", " ").replace("_", " ")[:80] or url[:80],
-                    snippet="User-provided source — content will be fetched in Stage 3.5",
+                    snippet="User-provided source — content will be fetched",
                     search_query="user_provided",
                 )
 
-        # Stages 1-3 are fatal — if they fail the pipeline cannot continue.
-        for stage_fn, stage_name in [
-            (self._stage_1_analyze, "question_analysis"),
-            (self._stage_2_search, "web_search"),
-            (self._stage_3_audit, "source_audit"),
-        ]:
+        # Stage 1 — Question analysis (runs ONCE, never re-runs)
+        for stage_fn, stage_name in [(self._stage_1_analyze, "question_analysis")]:
             if await self._is_cancelled(ctx, emit):
                 return ctx
             try:
@@ -248,120 +243,188 @@ class TheoPipeline:
                 logger.exception("Fatal failure in %s", stage_name)
                 ctx.error = f"Pipeline failed at {stage_name}: {exc}"
                 emit(
-                    {"type": "pipeline", "stage": stage_name, "status": "error", "error": str(exc)}
+                    {
+                        "type": "pipeline",
+                        "stage": stage_name,
+                        "status": "error",
+                        "error": str(exc),
+                    }
                 )
                 return ctx
-            # Also catch soft errors (stage sets ctx.error and returns normally)
             if ctx.error:
-                emit(
-                    {"type": "pipeline", "stage": stage_name, "status": "error", "error": ctx.error}
-                )
-                return ctx
-
-        # Stage 3.5 — Fetch actual content from source URLs
-        try:
-            await self._stage_3_5_fetch_content(ctx, emit)
-        except Exception as exc:
-            logger.warning("Content fetch failed (non-fatal): %s", exc)
-
-        # Stage 4 — specialist analysis (fatal if NO specialists complete)
-        if await self._is_cancelled(ctx, emit):
-            return ctx
-        try:
-            await self._stage_4_specialists(ctx, emit)
-        except Exception as exc:
-            logger.exception("Fatal failure in specialist_analysis")
-            ctx.error = f"Pipeline failed at specialist_analysis: {exc}"
-            emit(
-                {
-                    "type": "pipeline",
-                    "stage": "specialist_analysis",
-                    "status": "error",
-                    "error": str(exc),
-                }
-            )
-            return ctx
-        if not ctx.specialist_analyses:
-            ctx.error = "No specialist analyses completed — cannot produce a research paper."
-            emit(
-                {
-                    "type": "pipeline",
-                    "stage": "specialist_analysis",
-                    "status": "error",
-                    "error": ctx.error,
-                }
-            )
-            return ctx
-
-        # Stages 5-7 are non-fatal — continue with available data on failure.
-        for stage_fn, stage_name in [
-            (self._stage_5_synthesize, "synthesis"),
-            (self._stage_6_debate, "debate"),
-            (self._stage_7_moderate, "moderator"),
-        ]:
-            if await self._is_cancelled(ctx, emit):
-                return ctx
-            try:
-                await stage_fn(ctx, emit)
-            except Exception as exc:
-                logger.exception("Non-fatal failure in %s", stage_name)
                 emit(
                     {
                         "type": "pipeline",
                         "stage": stage_name,
-                        "status": "warning",
-                        "warning": f"Stage {stage_name} failed: {exc}",
+                        "status": "error",
+                        "error": ctx.error,
                     }
                 )
+                return ctx
 
-        # Stage 8 — paper assembly.  On failure, dump raw findings.
-        if await self._is_cancelled(ctx, emit):
-            return ctx
-        try:
-            await self._stage_8_paper(ctx, emit)
-        except Exception as exc:
-            logger.exception("Paper assembly failed, dumping raw findings")
-            emit(
-                {
-                    "type": "pipeline",
-                    "stage": "paper_assembly",
-                    "status": "warning",
-                    "warning": f"Paper assembly failed: {exc}",
-                }
-            )
-            ctx.paper_text = self._fallback_paper(ctx)
-            ctx.paper_title = "Research Findings (unformatted)"
+        # Track searched queries to avoid re-searching on loop iterations
+        ctx.searched_queries = set(ctx.search_queries)
 
-        # Stage 8.5 — quality scoring convergence loop
-        if ctx.tier.quality_score_iterations > 0 and ctx.paper_text:
-            try:
-                await self._stage_8_5_quality(ctx, emit)
-            except Exception as exc:
-                logger.warning("Quality scoring failed (non-fatal): %s", exc)
+        # ====== MASTER CONVERGENCE LOOP ======
+        max_iterations = ctx.tier.max_pipeline_iterations
+        restart_stage = 2  # start from search
+
+        for iteration in range(max_iterations):
+            ctx.pipeline_iteration = iteration + 1
+            if await self._is_cancelled(ctx, emit):
+                return ctx
+
+            if iteration > 0:
                 emit(
                     {
-                        "type": "pipeline",
-                        "stage": "quality_scoring",
-                        "status": "warning",
-                        "warning": f"Quality scoring skipped: {exc}",
+                        "type": "status",
+                        "content": f"Pipeline iteration {iteration + 1}/{max_iterations} "
+                        f"— re-running from stage {restart_stage}...",
                     }
                 )
 
-        # Stage 9 — illustration generation (non-fatal, runs after paper assembly)
+            # Stage 2: Search
+            if restart_stage <= 2:
+                if await self._is_cancelled(ctx, emit):
+                    return ctx
+                try:
+                    await self._stage_2_search(ctx, emit)
+                except Exception as exc:
+                    logger.exception("Fatal failure in web_search")
+                    ctx.error = f"Pipeline failed at web_search: {exc}"
+                    return ctx
+                if ctx.error:
+                    return ctx
+
+            # Stage 3: Audit + remove rejected
+            if restart_stage <= 3:
+                if await self._is_cancelled(ctx, emit):
+                    return ctx
+                try:
+                    await self._stage_3_audit(ctx, emit)
+                except Exception as exc:
+                    logger.exception("Fatal failure in source_audit")
+                    ctx.error = f"Pipeline failed at source_audit: {exc}"
+                    return ctx
+                if ctx.error:
+                    return ctx
+
+            # Stage 3.5: Content fetch
+            if restart_stage <= 3:
+                try:
+                    await self._stage_3_5_fetch_content(ctx, emit)
+                except Exception as exc:
+                    logger.warning("Content fetch failed (non-fatal): %s", exc)
+
+            # Stage 4: Specialists (fatal if none complete)
+            if restart_stage <= 4:
+                if await self._is_cancelled(ctx, emit):
+                    return ctx
+                try:
+                    await self._stage_4_specialists(ctx, emit)
+                except Exception as exc:
+                    logger.exception("Fatal failure in specialist_analysis")
+                    ctx.error = f"Pipeline failed at specialist_analysis: {exc}"
+                    return ctx
+                if not ctx.specialist_analyses:
+                    ctx.error = "No specialist analyses completed"
+                    return ctx
+
+            # Stage 5: Synthesis
+            if restart_stage <= 5:
+                if await self._is_cancelled(ctx, emit):
+                    return ctx
+                try:
+                    await self._stage_5_synthesize(ctx, emit)
+                except Exception:
+                    logger.exception("Non-fatal failure in synthesis")
+
+            # Stage 6: Debate
+            if restart_stage <= 6:
+                if await self._is_cancelled(ctx, emit):
+                    return ctx
+                try:
+                    await self._stage_6_debate(ctx, emit)
+                except Exception:
+                    logger.exception("Non-fatal failure in debate")
+
+            # Stage 7: Moderator
+            if restart_stage <= 7:
+                if await self._is_cancelled(ctx, emit):
+                    return ctx
+                try:
+                    await self._stage_7_moderate(ctx, emit)
+                except Exception:
+                    logger.exception("Non-fatal failure in moderator")
+
+            # Stage 8: Paper assembly (always runs)
+            if await self._is_cancelled(ctx, emit):
+                return ctx
+            try:
+                await self._stage_8_paper(ctx, emit)
+            except Exception:
+                logger.exception("Paper assembly failed, dumping raw findings")
+                ctx.paper_text = self._fallback_paper(ctx)
+                ctx.paper_title = "Research Findings (unformatted)"
+
+            # ====== JUDGE ======
+            judge_result = await self._judge_paper(ctx, emit)
+            ctx.quality_score = {
+                "total": judge_result.get("score", 0),
+                "badge": judge_result.get("badge", "Unverified"),
+                "passed": judge_result.get("passed", False),
+                "dimensions": judge_result.get("dimensions", {}),
+            }
+
+            if judge_result.get("passed", False):
+                emit(
+                    {
+                        "type": "status",
+                        "content": f"Quality judge PASSED: {judge_result['score']}/100 "
+                        f"({judge_result['badge']})",
+                    }
+                )
+                break
+
+            # Judge failed — route backward
+            problems = judge_result.get("problems", [])
+            if not problems or iteration >= max_iterations - 1:
+                emit(
+                    {
+                        "type": "status",
+                        "content": f"Quality score {judge_result['score']}/100 "
+                        "— max iterations reached, shipping as-is.",
+                    }
+                )
+                break
+
+            # Apply feedback and determine restart stage
+            from pipeline.lyra.theo_quality_judge import (
+                apply_feedback_to_context,
+                get_restart_stage,
+            )
+
+            restart_stage = get_restart_stage(problems)
+            apply_feedback_to_context(ctx, problems)
+
+            problem_summary = ", ".join(f"{p['type']}" for p in problems[:3])
+            emit(
+                {
+                    "type": "status",
+                    "content": f"Quality score {judge_result['score']}/100 — "
+                    f"found {len(problems)} problem(s) ({problem_summary}). "
+                    f"Re-running from stage {restart_stage}...",
+                }
+            )
+
+        # ====== POST-LOOP STAGES (run once) ======
+        # Stage 9 — Cover image
         try:
             await self._stage_9_images(ctx, emit)
         except Exception as exc:
             logger.warning("Image generation failed (non-fatal): %s", exc)
-            emit(
-                {
-                    "type": "pipeline",
-                    "stage": "image_generation",
-                    "status": "warning",
-                    "warning": f"Image generation skipped: {exc}",
-                }
-            )
 
-        # Stage 10 — card description (1-3 sentence summary for library cards)
+        # Stage 10 — Card description
         try:
             await self._stage_10_card_description(ctx, emit)
         except Exception as exc:
@@ -945,62 +1008,31 @@ class TheoPipeline:
                     if rid:
                         rejected_ids.add(rid)
 
-        # Coverage: assessed across all results (no single "last batch" anymore)
-        parsed = {}
+        # REMOVE rejected sources — specialists must NEVER see them
+        if rejected_ids:
+            for rid in rejected_ids:
+                ctx.registry.sources.pop(rid, None)
+            emit(
+                {
+                    "type": "status",
+                    "content": f"Removed {len(rejected_ids)} rejected sources from pool.",
+                }
+            )
 
-        coverage_sufficient = parsed.get("coverage_sufficient", True)
-
-        # Convergence: if coverage insufficient and tier allows retry, fill gaps
-        if not coverage_sufficient and ctx.tier.convergence_stage3:
-            gaps = parsed.get("coverage_gaps", [])
-            if gaps:
-                emit(
-                    {
-                        "type": "status",
-                        "content": "Coverage gaps found, running supplementary searches...",
-                    }
-                )
-
-                gap_results = await self._searcher.search(gaps[:3], ctx.tier.source_apis)
-                for r in gap_results:
-                    sid = ctx.registry.register_source(
-                        url=r.url,
-                        title=r.title,
-                        snippet=r.snippet,
-                        date=r.date,
-                        search_query="gap_fill",
-                    )
-                    source = ctx.registry.get_reference(sid)
-                    if source and source.reliability_tier == 0:
-                        source.reliability_tier = r.default_tier
-
-                # Rebuild sources_context with new sources
-                lines: list[str] = []
-                for sid, source in ctx.registry.sources.items():
-                    lines.append(
-                        f"Source [{sid}]: {source.title}\n"
-                        f"URL: {source.url}\n"
-                        f"Snippet: {source.snippet}\n"
-                    )
-                ctx.sources_context = "\n".join(lines)
-
-                # Re-audit the expanded source set
-                emit({"type": "status", "content": "Re-auditing expanded source set..."})
-                user_msg_2 = (
-                    f"## Research question\n\n{ctx.question}\n\n## Sources\n\n{ctx.sources_context}"
-                )
-                raw_2 = await self._m27_call_async(
-                    system,
-                    user_msg_2,
-                    ctx.tier.max_tokens_per_call,
-                )
-                parsed_2 = self._parse_json(raw_2)
-                for entry in parsed_2.get("scored_sources", []):
-                    sid = entry.get("id", "")
-                    tier_val = entry.get("reliability_tier", 0)
-                    source = ctx.registry.sources.get(sid)
-                    if source:
-                        source.reliability_tier = tier_val
+        # Rebuild sources_context without rejected sources
+        lines: list[str] = []
+        for sid, source in ctx.registry.sources.items():
+            tier_str = ""
+            if source.reliability_tier == 1:
+                tier_str = " [Academic]"
+            elif source.reliability_tier == 2:
+                tier_str = " [Reputable]"
+            lines.append(
+                f"Source [{sid}]: {source.title}{tier_str}\n"
+                f"URL: {source.url}\n"
+                f"Snippet: {source.snippet}\n"
+            )
+        ctx.sources_context = "\n".join(lines)
 
         ms = int((time.monotonic() - t0) * 1000)
         emit(
@@ -1655,21 +1687,20 @@ class TheoPipeline:
         )
 
     # ------------------------------------------------------------------
-    # Stage 8.5: Quality scoring convergence loop
+    # Quality judge (called inside the master convergence loop)
     # ------------------------------------------------------------------
 
-    async def _stage_8_5_quality(
+    async def _judge_paper(
         self,
         ctx: PipelineContext,
         emit: Callable[[dict], None],
-    ) -> None:
-        """Score the paper and regenerate if below threshold."""
-        stage = "quality_scoring"
+    ) -> dict:
+        """Run the quality judge on the assembled paper. Returns routing decisions."""
+        emit({"type": "pipeline", "stage": "quality_judge", "status": "start"})
+        emit({"type": "status", "content": "Running quality judge..."})
         t0 = time.monotonic()
-        emit({"type": "pipeline", "stage": stage, "status": "start"})
-        emit({"type": "status", "content": "Scoring paper quality..."})
 
-        from pipeline.lyra.theo_quality_judge import score_paper
+        from pipeline.lyra.theo_quality_judge import judge_paper
 
         # Build source snippets for the judge
         source_snippets = []
@@ -1684,127 +1715,34 @@ class TheoPipeline:
                     }
                 )
 
-        def _judge(model: str, system: str, user: str, max_tokens: int) -> str:
+        def _chat(model, system, user, max_tokens):
             return minimax_chat(self._client, model, system, user, max_tokens)
 
-        max_iterations = ctx.tier.quality_score_iterations
-        paper_system = self._load_prompt(
-            "theo_paper_brief" if ctx.effort == "brief" else "theo_paper_full"
+        result = judge_paper(
+            ctx.paper_text,
+            ctx.question,
+            ctx.audit_result,
+            source_snippets,
+            _chat,
+            self._model,
         )
-
-        for iteration in range(max_iterations + 1):
-            # Score
-            score = score_paper(
-                ctx.paper_text,
-                ctx.question,
-                ctx.audit_result,
-                source_snippets,
-                _judge,
-                self._model,
-            )
-            ctx.quality_score = score
-
-            emit(
-                {
-                    "type": "status",
-                    "content": f"Quality score: {score['total']}/100 ({score['badge']})"
-                    + (f" — iteration {iteration + 1}" if iteration > 0 else ""),
-                }
-            )
-
-            if score["passed"] or iteration >= max_iterations:
-                break
-
-            # Below threshold — classify failures and route backward
-            failures = score.get("failures", [])
-            failures_text = "\n".join(f"- {f}" for f in failures)
-
-            # Check if attribution failures exist — these are the most critical
-            attribution_failures = [
-                f for f in failures if "attribution" in f.lower() or "misattribut" in f.lower()
-            ]
-            fidelity_failures = [
-                f for f in failures if "fidelity" in f.lower() or "not support" in f.lower()
-            ]
-
-            if attribution_failures:
-                emit(
-                    {
-                        "type": "status",
-                        "content": f"CRITICAL: {len(attribution_failures)} attribution failure(s) detected. "
-                        "Stripping unverified claims and regenerating...",
-                    }
-                )
-                # Add explicit instructions to REMOVE the failing claims
-                failures_text += (
-                    "\n\nCRITICAL: The claims listed above with attribution failures "
-                    "MUST be completely removed from the paper. Do NOT rephrase them. "
-                    "Do NOT attribute statements to anyone unless you can verify from "
-                    "the source snippets that they actually said it. It is better to "
-                    "have a shorter paper than one with fabricated attributions."
-                )
-            elif fidelity_failures:
-                emit(
-                    {
-                        "type": "status",
-                        "content": f"{len(fidelity_failures)} source fidelity issue(s). Regenerating with corrections...",
-                    }
-                )
-            else:
-                emit(
-                    {
-                        "type": "status",
-                        "content": f"Score {score['total']}/100 below threshold (72). Regenerating with feedback...",
-                    }
-                )
-
-            # Re-generate paper with quality feedback
-            ref_map_text = "\n".join(f"[{s['ref_num']}] {s['title']}" for s in source_snippets)
-            feedback_input = (
-                f"## Quality feedback — your previous paper scored {score['total']}/100\n\n"
-                f"Fix these issues:\n{failures_text}\n\n"
-                f"## Research question\n\n{ctx.question}\n\n"
-                f"## Reference map\n\n{ref_map_text}\n\n"
-                f"## Moderated findings\n\n{json.dumps(ctx.moderated_result or ctx.synthesis, indent=2)}\n\n"
-                "Regenerate the paper. Remove any claim you cannot verify from the sources. "
-                "A shorter, accurate paper is better than a longer paper with fabrications."
-            )
-
-            raw_paper = await self._m27_call_async(
-                paper_system, feedback_input, ctx.tier.max_tokens_synthesis
-            )
-            ctx.paper_text = raw_paper
-
-            # Re-extract title
-            import re as _re
-
-            title_match = _re.search(r"^#\s+(.+)$", raw_paper, _re.MULTILINE)
-            ctx.paper_title = title_match.group(1).strip() if title_match else ctx.question
-
-            # Re-append references
-            refs_md = ctx.registry.format_references_list()
-            if refs_md:
-                ctx.paper_text += f"\n\n## References\n\n{refs_md}"
-
-            # Re-audit
-            from pipeline.lyra.theo_citations import audit_citations
-
-            ctx.audit_result = audit_citations(ctx.paper_text, ctx.registry)
 
         ms = int((time.monotonic() - t0) * 1000)
         emit(
             {
                 "type": "pipeline",
-                "stage": stage,
+                "stage": "quality_judge",
                 "status": "done",
                 "duration_ms": ms,
                 "meta": {
-                    "score": ctx.quality_score.get("total", 0),
-                    "badge": ctx.quality_score.get("badge", ""),
-                    "iterations": iteration + 1,
+                    "score": result.get("score", 0),
+                    "badge": result.get("badge", ""),
+                    "passed": result.get("passed", False),
+                    "problems": len(result.get("problems", [])),
                 },
             }
         )
+        return result
 
     # ------------------------------------------------------------------
     # Stage 9: Illustration generation (post paper assembly)

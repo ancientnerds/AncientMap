@@ -47,7 +47,7 @@ class TierConfig:
     max_tokens_per_call: int  # M2.7 max_tokens for most calls
     max_tokens_synthesis: int  # M2.7 max_tokens for synthesis/debate
     source_apis: str  # which API group: "minimal", "standard", "full", "exhaustive"
-    quality_score_iterations: int = 0  # 0 = skip quality loop, 1-2 = max retries
+    max_pipeline_iterations: int = 1  # master convergence loop iterations
 
 
 EFFORT_CONFIG: dict[str, TierConfig] = {
@@ -64,7 +64,7 @@ EFFORT_CONFIG: dict[str, TierConfig] = {
         max_tokens_per_call=THEO_MAX_TOKENS,
         max_tokens_synthesis=THEO_MAX_TOKENS,
         source_apis="minimal",
-        quality_score_iterations=0,  # skip for briefs
+        max_pipeline_iterations=2,
     ),
     "note": TierConfig(
         academic_format="Research Note",
@@ -79,7 +79,7 @@ EFFORT_CONFIG: dict[str, TierConfig] = {
         max_tokens_per_call=THEO_MAX_TOKENS,
         max_tokens_synthesis=THEO_MAX_TOKENS_SYNTHESIS,
         source_apis="standard",
-        quality_score_iterations=0,  # skip for notes
+        max_pipeline_iterations=3,
     ),
     "article": TierConfig(
         academic_format="Journal Article",
@@ -94,7 +94,7 @@ EFFORT_CONFIG: dict[str, TierConfig] = {
         max_tokens_per_call=THEO_MAX_TOKENS,
         max_tokens_synthesis=THEO_MAX_TOKENS_SYNTHESIS,
         source_apis="standard",
-        quality_score_iterations=1,  # 1 retry for articles
+        max_pipeline_iterations=5,
     ),
     "review": TierConfig(
         academic_format="Literature Review",
@@ -109,7 +109,7 @@ EFFORT_CONFIG: dict[str, TierConfig] = {
         max_tokens_per_call=THEO_MAX_TOKENS,
         max_tokens_synthesis=THEO_MAX_TOKENS_SYNTHESIS,
         source_apis="full",
-        quality_score_iterations=2,  # 2 retries for reviews
+        max_pipeline_iterations=5,
     ),
     "thesis": TierConfig(
         academic_format="Thesis Chapter",
@@ -124,6 +124,6 @@ EFFORT_CONFIG: dict[str, TierConfig] = {
         max_tokens_per_call=THEO_MAX_TOKENS,
         max_tokens_synthesis=THEO_MAX_TOKENS_SYNTHESIS,
         source_apis="exhaustive",
-        quality_score_iterations=2,  # 2 retries for thesis
+        max_pipeline_iterations=5,
     ),
 }

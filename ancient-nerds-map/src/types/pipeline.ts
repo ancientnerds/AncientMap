@@ -53,7 +53,7 @@ export const PIPELINE_STAGES: PipelineNodeDef[] = [
   { id: 'debate', label: 'Specialist Debate', sublabel: 'Challenge & defense rounds' },
   { id: 'moderator', label: 'Moderator Review', sublabel: 'Final positions + devil\'s advocate' },
   { id: 'paper_assembly', label: 'Paper Assembly', sublabel: 'Academic formatting + citation audit' },
-  { id: 'quality_scoring', label: 'Quality Check', sublabel: 'Hallucination detection + scoring' },
+  { id: 'quality_judge', label: 'Quality Judge', sublabel: 'Verification + backward routing' },
   { id: 'image_generation', label: 'Illustrations', sublabel: 'Generating cover image' },
 ]
 
