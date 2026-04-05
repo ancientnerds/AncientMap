@@ -1,25 +1,12 @@
-"""Quality scoring for Theo research papers.
+"""Quality judge with backward routing for the Theo agentic pipeline.
 
-Evaluates papers across 7 dimensions (2 mechanical + 5 LLM-judged)
-and produces a 0-100 quality score. Used in the convergence loop
-to detect hallucinations and trigger regeneration.
+Evaluates papers and returns structured routing decisions that tell the
+master convergence loop which stage to re-run and what to fix.
 
-Dimensions:
-  D1 Citation Coverage (2x weight) — mechanical, from audit_citations()
-  D2 Reference Integrity (1x) — mechanical, from audit_citations()
-  D3 Attribution Accuracy (1x) — LLM judge, quote-based verification
-  D4 Source Fidelity (1x) — LLM judge, claim vs source snippet
-  D5 Hedging Appropriateness (1x) — LLM judge
-  D6 Logical Coherence (1x) — LLM judge
-  D7 Research Question Fidelity (1x) — LLM judge
+The judge scores 7 dimensions (D1-D7) AND identifies specific problems
+with their pipeline stage origin and remediation action.
 
-Score formula: round((D1*2 + D2 + D3 + D4 + D5 + D6 + D7) / 80 * 100)
-
-Badge tiers:
-  90-100: Verified (green)
-  72-89:  Reviewed (amber)
-  55-71:  Provisional (orange)
-  0-54:   Unverified (red)
+Pass condition: score >= 72 AND zero attribution/fidelity failures.
 """
 
 from __future__ import annotations
@@ -32,6 +19,17 @@ logger = logging.getLogger(__name__)
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 PASS_THRESHOLD = 72
+
+# Stage number mapping for backward routing
+STAGE_NUMBERS = {
+    "web_search": 2,
+    "source_audit": 3,
+    "specialist_analysis": 4,
+    "synthesis": 5,
+    "debate": 6,
+    "moderator": 7,
+    "paper_assembly": 8,
+}
 
 
 def _score_d1(audit_result: dict) -> int:
@@ -47,7 +45,7 @@ def _score_d2(audit_result: dict) -> int:
     return max(0, 10 - invalid - orphaned)
 
 
-def score_paper(
+def judge_paper(
     paper_text: str,
     question: str,
     audit_result: dict,
@@ -55,36 +53,34 @@ def score_paper(
     chat_fn,
     model: str,
 ) -> dict:
-    """Score a research paper across all 7 dimensions.
+    """Judge a research paper and return routing decisions.
 
-    Args:
-        paper_text: The full paper markdown
-        question: The original research question
-        audit_result: Output from audit_citations()
-        source_snippets: List of {ref_num, title, snippet} for top sources
-        chat_fn: Callable(client, model, system, user, max_tokens) -> str
-        model: M2.7 model name
-
-    Returns dict with total score, dimension scores, badge, and rationales.
+    Returns dict with:
+        score: int (0-100)
+        passed: bool
+        problems: list[dict] — each with type, stage, claim, action
+        dimensions: dict — D1-D7 scores
+        badge: str — Verified/Reviewed/Provisional/Unverified
     """
     # D1 + D2: mechanical scoring from audit
     d1 = _score_d1(audit_result)
     d2 = _score_d2(audit_result)
 
-    # D3-D7: bundled LLM judge call
-    d3 = d4 = d5 = d6 = d7 = 0  # defaults if judge fails — assume worst case
-    judge_data = {}
+    # D3-D7: LLM judge call with routing
+    d3 = d4 = d5 = d6 = d7 = 0  # worst case if judge fails
+    problems: list[dict] = []
+    judge_data: dict = {}
 
     try:
         system = (PROMPTS_DIR / "theo_quality_judge.txt").read_text(encoding="utf-8")
 
-        # Build source context for the judge (top 20 referenced snippets)
+        # Build source context for the judge
         source_context = "\n".join(
             f"[{s['ref_num']}] {s['title']}\nSnippet: {s['snippet'][:500]}\n"
             for s in source_snippets[:20]
         )
 
-        # Truncate paper to 12K chars so judge sees most of the paper
+        # Send full paper (up to 12K) for thorough review
         paper_excerpt = paper_text[:12000]
 
         user_msg = (
@@ -103,11 +99,16 @@ def score_paper(
 
         judge_data = json.loads(cleaned)
 
-        d3 = min(10, max(0, judge_data.get("d3_attribution", {}).get("score", 5)))
-        d4 = min(10, max(0, judge_data.get("d4_fidelity", {}).get("score", 5)))
-        d5 = min(10, max(0, judge_data.get("d5_hedging", {}).get("score", 5)))
-        d6 = min(10, max(0, judge_data.get("d6_coherence", {}).get("score", 5)))
-        d7 = min(10, max(0, judge_data.get("d7_question_fidelity", {}).get("score", 5)))
+        # Extract dimension scores
+        dims = judge_data.get("dimensions", {})
+        d3 = min(10, max(0, dims.get("attribution_accuracy", 0)))
+        d4 = min(10, max(0, dims.get("source_fidelity", 0)))
+        d5 = min(10, max(0, dims.get("hedging", 0)))
+        d6 = min(10, max(0, dims.get("coherence", 0)))
+        d7 = min(10, max(0, dims.get("question_fidelity", 0)))
+
+        # Extract problems
+        problems = judge_data.get("problems", [])
 
     except Exception as exc:
         logger.warning("Quality judge call failed: %s", exc)
@@ -126,28 +127,17 @@ def score_paper(
     else:
         badge = "Unverified"
 
-    # Build failure summary for convergence feedback
-    failures: list[str] = []
-    if d1 < 8:
-        failures.append(
-            f"Citation coverage: {audit_result.get('uncited_paragraphs', 0)} uncited paragraphs"
-        )
-    if d2 < 8:
-        failures.append(
-            f"Reference integrity: {len(audit_result.get('invalid_markers', []))} invalid, {len(audit_result.get('orphaned_refs', []))} orphaned"
-        )
-    for dim_key, dim_label in [
-        ("d3_attribution", "Attribution accuracy"),
-        ("d4_fidelity", "Source fidelity"),
-    ]:
-        dim_data = judge_data.get(dim_key, {})
-        for f in dim_data.get("failures", []):
-            failures.append(f"{dim_label}: {f}")
+    # Pass requires score >= 72 AND zero critical failures
+    critical_failures = [
+        p for p in problems if p.get("type") in ("attribution_failure", "source_fidelity_failure")
+    ]
+    passed = total >= PASS_THRESHOLD and len(critical_failures) == 0
 
     return {
-        "total": total,
+        "score": total,
+        "passed": passed,
         "badge": badge,
-        "passed": total >= PASS_THRESHOLD,
+        "problems": problems,
         "dimensions": {
             "citation_coverage": d1 * 2,
             "reference_integrity": d2,
@@ -157,15 +147,48 @@ def score_paper(
             "coherence": d6,
             "question_fidelity": d7,
         },
-        "failures": failures,
-        "rationales": {
-            dim_key: judge_data.get(dim_key, {}).get("rationale", "")
-            for dim_key in [
-                "d3_attribution",
-                "d4_fidelity",
-                "d5_hedging",
-                "d6_coherence",
-                "d7_question_fidelity",
-            ]
-        },
     }
+
+
+def get_restart_stage(problems: list[dict]) -> int:
+    """Determine which stage to restart from based on judge problems.
+
+    Returns the LOWEST stage number that needs re-running.
+    If no problems or only paper_assembly issues, returns 8.
+    """
+    if not problems:
+        return 8
+
+    min_stage = 8
+    for problem in problems:
+        stage_name = problem.get("stage", "paper_assembly")
+        stage_num = STAGE_NUMBERS.get(stage_name, 8)
+        if stage_num < min_stage:
+            min_stage = stage_num
+
+    return min_stage
+
+
+def apply_feedback_to_context(ctx, problems: list[dict]) -> None:
+    """Apply judge feedback to the pipeline context.
+
+    Strips bad claims from specialist analyses for attribution/fidelity failures.
+    Appends search queries for source gaps.
+    """
+    for problem in problems:
+        action = problem.get("action", "")
+
+        if action == "strip_claim" and problem.get("claim"):
+            # Remove the offending claim from specialist analyses
+            claim_text = problem["claim"].lower()
+            for _spec_id, analysis in ctx.specialist_analyses.items():
+                findings = analysis.get("findings", [])
+                analysis["findings"] = [
+                    f for f in findings if claim_text not in f.get("claim", "").lower()
+                ]
+
+        elif action == "search_more" and problem.get("suggested_queries"):
+            # Append new search queries
+            for q in problem["suggested_queries"]:
+                if q not in ctx.searched_queries:
+                    ctx.search_queries.append(q)

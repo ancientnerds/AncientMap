@@ -1044,7 +1044,6 @@ class TheoPipeline:
                 "meta": {
                     "scored": total_scored,
                     "rejected": len(rejected_ids),
-                    "coverage_sufficient": coverage_sufficient,
                 },
             }
         )
