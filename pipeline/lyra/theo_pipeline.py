@@ -841,18 +841,16 @@ class TheoPipeline:
             emit({"type": "pipeline", "stage": stage, "status": "error"})
             return
 
-        # Batch sources into chunks of 20 — M2.7 reasoning consumes ~3-5K tokens
-        # from the budget, so smaller batches = more room for complete JSON output
+        # 1 source per prompt, 10 parallel — quality over speed.
+        # MiniMax Token Plan has no per-second limit (15K req/5hr on Max plan).
         source_items = list(ctx.registry.sources.items())
-        batch_size = 20
-        batches = [
-            source_items[i : i + batch_size] for i in range(0, len(source_items), batch_size)
-        ]
+        max_parallel = 10
 
         emit(
             {
                 "type": "status",
-                "content": f"Auditing {len(source_items)} sources in {len(batches)} batch(es)...",
+                "content": f"Auditing {len(source_items)} sources individually "
+                f"({max_parallel} parallel)...",
             }
         )
 
@@ -860,51 +858,63 @@ class TheoPipeline:
         rejected_ids: set[str] = set()
         total_scored = 0
 
-        for batch_idx, batch in enumerate(batches):
-            # Format this batch
-            batch_lines = []
-            for sid, source in batch:
-                tier_str = ""
-                if source.reliability_tier == 1:
-                    tier_str = " [Academic]"
-                elif source.reliability_tier == 2:
-                    tier_str = " [Reputable]"
-                batch_lines.append(
-                    f"Source [{sid}]: {source.title}{tier_str}\n"
-                    f"URL: {source.url}\nSnippet: {source.snippet}\n"
-                )
-            batch_context = "\n".join(batch_lines)
+        async def _audit_one(sid: str, source) -> dict:
+            """Audit a single source with full LLM attention."""
+            tier_str = ""
+            if source.reliability_tier == 1:
+                tier_str = " [Academic]"
+            elif source.reliability_tier == 2:
+                tier_str = " [Reputable]"
             user_msg = (
                 f"## Research question\n\n{ctx.question}\n\n"
-                f"## Sources (batch {batch_idx + 1}/{len(batches)})\n\n{batch_context}"
+                f"## Source to evaluate\n\n"
+                f"Source [{sid}]: {source.title}{tier_str}\n"
+                f"URL: {source.url}\n"
+                f"Snippet: {source.snippet}\n"
             )
-
-            if len(batches) > 1:
-                emit(
-                    {
-                        "type": "status",
-                        "content": f"Auditing batch {batch_idx + 1}/{len(batches)} "
-                        f"({len(batch)} sources)...",
-                    }
-                )
-
             raw = await self._m27_call_async(system, user_msg, ctx.tier.max_tokens_per_call)
             parsed = self._parse_json(raw)
+            parsed["_sid"] = sid
+            return parsed
 
-            # Apply reliability tiers from this batch
-            for entry in parsed.get("scored_sources", []):
-                sid = entry.get("id", "")
-                tier_val = entry.get("reliability_tier", 0)
-                source = ctx.registry.sources.get(sid)
-                if source:
-                    source.reliability_tier = tier_val
-                    total_scored += 1
+        # Run in parallel groups of 10
+        for group_start in range(0, len(source_items), max_parallel):
+            group = source_items[group_start : group_start + max_parallel]
 
-            for entry in parsed.get("rejected_sources", []):
-                rejected_ids.add(entry.get("id", ""))
+            done_count = group_start + len(group)
+            emit(
+                {
+                    "type": "status",
+                    "content": f"Auditing sources {group_start + 1}-{done_count}"
+                    f" of {len(source_items)}...",
+                }
+            )
 
-        # Use coverage from the last batch (it sees the final state)
-        parsed = self._parse_json(raw) if raw else {}
+            results = await asyncio.gather(
+                *[_audit_one(sid, source) for sid, source in group],
+                return_exceptions=True,
+            )
+
+            for result in results:
+                if isinstance(result, Exception):
+                    logger.warning("Audit source failed: %s", result)
+                    continue
+                parsed = result
+                original_sid = parsed.get("_sid", "")
+                for entry in parsed.get("scored_sources", []):
+                    sid = entry.get("id", "") or original_sid
+                    tier_val = entry.get("reliability_tier", 0)
+                    source = ctx.registry.sources.get(sid)
+                    if source:
+                        source.reliability_tier = tier_val
+                        total_scored += 1
+                for entry in parsed.get("rejected_sources", []):
+                    rid = entry.get("id", "") or original_sid
+                    if rid:
+                        rejected_ids.add(rid)
+
+        # Coverage: assessed across all results (no single "last batch" anymore)
+        parsed = {}
 
         coverage_sufficient = parsed.get("coverage_sufficient", True)
 
