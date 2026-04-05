@@ -439,6 +439,41 @@ def _get_client(settings: LyraSettings):
     return _get_anthropic_client(settings.anthropic_api_key)
 
 
+# ---------------------------------------------------------------------------
+# Structured output via tool-use trick (MiniMax)
+# ---------------------------------------------------------------------------
+
+def _build_structured_output_tool(schema: dict) -> dict:
+    """Build an Anthropic tool definition that forces JSON matching the schema.
+
+    MiniMax's Anthropic endpoint doesn't support output_config/json_schema,
+    so we force the model to "call" a tool whose input_schema IS the schema.
+    Combined with tool_choice={"type": "tool", "name": "structured_output"},
+    the model must produce valid JSON matching the schema.
+    """
+    return {
+        "name": "structured_output",
+        "description": (
+            "Return the result as structured JSON. "
+            "All fields are required and must match the schema exactly."
+        ),
+        "input_schema": schema,
+    }
+
+
+def _extract_tool_use_json(content: list) -> str | None:
+    """Extract JSON string from a tool_use block in the response.
+
+    Scans content blocks (skipping thinking blocks) for a tool_use block
+    named 'structured_output'. Returns the input as a JSON string,
+    or None if no tool_use block is found.
+    """
+    for block in content:
+        if getattr(block, "type", None) == "tool_use" and getattr(block, "name", None) == "structured_output":
+            return json.dumps(block.input)
+    return None
+
+
 def _call_minimax_api(
     settings: LyraSettings,
     *,
