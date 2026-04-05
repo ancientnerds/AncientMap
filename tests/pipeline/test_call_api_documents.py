@@ -8,7 +8,7 @@ from pipeline.lyra.config import _call_anthropic_api, LyraSettings
 
 @pytest.fixture
 def settings():
-    return LyraSettings(anthropic_api_key="test-key")
+    return LyraSettings(anthropic_api_key="test-key", llm_backend="anthropic")
 
 
 def test_documents_become_content_blocks(settings):
@@ -25,7 +25,7 @@ def test_documents_become_content_blocks(settings):
         mock_resp.usage.output_tokens = 5
         return mock_resp
 
-    with patch("pipeline.lyra.config._get_anthropic_client") as mock_client:
+    with patch("pipeline.lyra.config._get_client") as mock_client:
         mock_client.return_value.messages.create = fake_create
         _call_anthropic_api(
             settings,
@@ -60,7 +60,7 @@ def test_no_documents_unchanged(settings):
         mock_resp.usage.output_tokens = 5
         return mock_resp
 
-    with patch("pipeline.lyra.config._get_anthropic_client") as mock_client:
+    with patch("pipeline.lyra.config._get_client") as mock_client:
         mock_client.return_value.messages.create = fake_create
         _call_anthropic_api(
             settings,

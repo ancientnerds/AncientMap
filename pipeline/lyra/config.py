@@ -243,10 +243,14 @@ def _call_anthropic_api(
     timeout: float | None = None,
     **kwargs,
 ) -> NormalizedResponse:
-    """Call Anthropic API synchronously and return a NormalizedResponse."""
-    client = _get_anthropic_client(settings.anthropic_api_key)
+    """Call LLM via Anthropic SDK — works for both Anthropic and MiniMax backends.
 
-    # Extract system blocks
+    MiniMax adaptation points are clearly marked with # [MINIMAX].
+    """
+    is_minimax = settings.llm_backend == "minimax"
+    client = _get_client(settings)
+
+    # --- Extract params from kwargs ---
     system_blocks = kwargs.pop("system", None)
     system_text = ""
     if system_blocks:
@@ -257,12 +261,40 @@ def _call_anthropic_api(
                 b["text"] if isinstance(b, dict) else str(b) for b in system_blocks
             )
 
-    # Build messages list
     messages: list[dict] = []
     for msg in kwargs.pop("messages", []):
         messages.append({"role": msg["role"], "content": msg["content"]})
 
-    # If caller provided source documents, wrap last user message as content blocks
+    response_format = kwargs.pop("response_format", None)
+    thinking_config = kwargs.pop("thinking", None)
+    tool_choice = kwargs.pop("tool_choice", None)
+    tools = kwargs.pop("tools", None)
+    kwargs.pop("reasoning_effort", None)
+
+    model = kwargs.pop("model", settings.model_summarize)
+    max_tokens = kwargs.pop("max_tokens", settings.max_tokens)
+    temperature = kwargs.pop("temperature", None)
+
+    # [MINIMAX] Adaptation 1: Model override — all calls use MiniMax-M2.7
+    if is_minimax:
+        model = "MiniMax-M2.7"
+
+    # [MINIMAX] Adaptation 2: Documents — inline into user message
+    # (MiniMax doesn't support document content blocks or citations)
+    if documents and is_minimax:
+        docs_text = "\n\n".join(
+            f"--- {doc.get('title', 'Source')} ---\n{doc['data']}"
+            for doc in documents
+        )
+        for i in range(len(messages) - 1, -1, -1):
+            if messages[i]["role"] == "user":
+                original = messages[i]["content"]
+                if isinstance(original, str):
+                    messages[i]["content"] = f"{docs_text}\n\n{original}"
+                break
+        documents = None  # consumed
+
+    # Anthropic: wrap documents as content blocks with citations
     if documents:
         for i in range(len(messages) - 1, -1, -1):
             if messages[i]["role"] == "user":
@@ -285,38 +317,38 @@ def _call_anthropic_api(
                     messages[i]["content"] = content_blocks
                 break
 
-    # Extract all non-standard params before building create_kwargs
-    response_format = kwargs.pop("response_format", None)
-    thinking_config = kwargs.pop("thinking", None)
-    tool_choice = kwargs.pop("tool_choice", None)
-    tools = kwargs.pop("tools", None)
-    kwargs.pop("reasoning_effort", None)
-
-    model = kwargs.pop("model", settings.model_summarize)
-    max_tokens = kwargs.pop("max_tokens", settings.max_tokens)
-    temperature = kwargs.pop("temperature", None)
-
     # Extended thinking is incompatible with prefill and temperature
     if thinking_config is not None:
         prefill = None
 
-    # Native structured output: API guarantees valid JSON matching schema.
-    # Replaces the old "{" prefill hack that caused parse failures.
+    # --- Structured output handling ---
     use_structured_output = response_format and response_format.get("type") == "json_schema"
-    if use_structured_output:
-        prefill = None  # structured output is incompatible with prefill
+    use_tool_trick = False
 
-    # Handle prefill — append as assistant message
+    if use_structured_output:
+        prefill = None
+        schema = response_format["json_schema"]["schema"]
+
+        if is_minimax:
+            # [MINIMAX] Adaptation 3: Structured output via tool-use trick
+            tool = _build_structured_output_tool(schema)
+            tools = [tool] if not tools else [tool] + list(tools)
+            tool_choice = {"type": "tool", "name": "structured_output"}
+            use_tool_trick = True
+
+    # Handle prefill
     if prefill:
         messages.append({"role": "assistant", "content": prefill})
 
+    # --- Build request kwargs ---
     create_kwargs: dict = {
         "model": model,
         "messages": messages,
         "max_tokens": max_tokens,
     }
 
-    if use_structured_output:
+    # Anthropic native structured output
+    if use_structured_output and not use_tool_trick:
         js = response_format["json_schema"]
         create_kwargs["output_config"] = {
             "format": {
@@ -324,6 +356,7 @@ def _call_anthropic_api(
                 "schema": js["schema"],
             }
         }
+
     if tools:
         create_kwargs["tools"] = tools
     if tool_choice:
@@ -339,16 +372,39 @@ def _call_anthropic_api(
 
     if thinking_config is not None:
         create_kwargs["thinking"] = thinking_config
-        # Temperature must be omitted when thinking is enabled
     elif temperature is not None:
-        create_kwargs["temperature"] = max(settings.temperature_min, temperature)
+        # [MINIMAX] Adaptation 4: Temperature clamping (0,1] — exclusive of 0
+        if is_minimax and temperature <= 0.0:
+            temperature = 0.01
+        else:
+            temperature = max(settings.temperature_min, temperature)
+        create_kwargs["temperature"] = temperature
 
     if timeout is not None:
         import httpx
 
         create_kwargs["timeout"] = httpx.Timeout(timeout, connect=30.0)
 
+    # --- Make the API call ---
     response = client.messages.create(**create_kwargs)
+
+    # --- Normalize the response ---
+    # [MINIMAX] Adaptation 5: Extract tool result if tool-use trick was used
+    if use_tool_trick:
+        tool_json = _extract_tool_use_json(response.content)
+        if tool_json is not None:
+            stop_reason = response.stop_reason or "end_turn"
+            return NormalizedResponse(
+                content=[TextBlock(text=tool_json)],
+                stop_reason=stop_reason,
+                model=response.model or "",
+                usage={
+                    "input_tokens": response.usage.input_tokens if response.usage else 0,
+                    "output_tokens": response.usage.output_tokens if response.usage else 0,
+                },
+            )
+        logger.warning("MiniMax did not return tool_use block — falling back to text response")
+
     return _normalize_anthropic_response(response)
 
 
