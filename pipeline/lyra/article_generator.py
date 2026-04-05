@@ -654,6 +654,76 @@ def _verify_article(
     return article_text if article_text else full_body
 
 
+def _assess_journal(
+    body: str,
+    unified_sources: list[dict],
+    settings: LyraSettings,
+) -> str:
+    """Final quality check: fix proper nouns, misspellings, factual errors.
+
+    Uses MiniMax M2.7 via minimax_shared to cross-check the journal text
+    against the source list.  Returns the corrected body.
+    """
+    from pipeline.lyra.minimax_shared import create_minimax_client, minimax_chat
+
+    if not settings.minimax_api_key:
+        logger.info("Assess step skipped — no MiniMax API key")
+        return body
+
+    system = _load_prompt("journal_assess.txt")
+
+    # Build a compact source reference for the LLM
+    source_lines = []
+    for src in unified_sources:
+        source_lines.append(f"[{src['citation']}] {src['label']}")
+    sources_text = "\n".join(source_lines)
+
+    user_message = f"<journal>\n{body}\n</journal>\n\n<sources>\n{sources_text}\n</sources>"
+
+    client = create_minimax_client(settings.minimax_base_url, settings.minimax_api_key)
+    text = minimax_chat(client, "MiniMax-M2.7", system, user_message, 8192)
+
+    if not text:
+        logger.warning("Assess step: empty response from M2.7")
+        return body
+
+    # Parse corrections array
+    try:
+        cleaned = text.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+            cleaned = cleaned.rsplit("```", 1)[0].strip()
+        corrections = json.loads(cleaned)
+    except (json.JSONDecodeError, ValueError):
+        logger.warning(f"Assess step: failed to parse JSON: {text[:200]}")
+        return body
+
+    if not isinstance(corrections, list) or not corrections:
+        logger.info("Assess step: no corrections needed")
+        return body
+
+    # Apply corrections
+    corrected = body
+    applied = 0
+    for c in corrections:
+        if not isinstance(c, dict):
+            continue
+        find = c.get("find", "")
+        replace = c.get("replace", "")
+        reason = c.get("reason", "")
+        if not find or not replace or find == replace:
+            continue
+        if find in corrected:
+            corrected = corrected.replace(find, replace, 1)
+            applied += 1
+            logger.info(f"Assess fix: {find!r} → {replace!r} ({reason})")
+        else:
+            logger.debug(f"Assess correction target not found: {find[:60]}")
+
+    logger.info(f"Assess step: applied {applied}/{len(corrections)} corrections")
+    return corrected
+
+
 def _generate_headline_tldr(
     body: str,
     settings: LyraSettings,
@@ -1110,6 +1180,20 @@ def generate_weekly_article(
 
         # Merge YouTube [N] + web [a]-[z] into unified [1]-[N] sequence
         polished_body, unified_sources = _merge_all_citations(polished_body, sources, web_citations)
+
+        # -- assess (final quality check with MiniMax) --
+        _write_article_heartbeat(step_data, "assess", t0_total)
+        logger.info("Running final quality assessment (MiniMax M2.7)")
+        t0 = time.time()
+        assessed_body = _assess_journal(polished_body, unified_sources, settings)
+        changed = assessed_body != polished_body
+        step_data["assess"] = {
+            "count": 1 if changed else 0,
+            "elapsed": round(time.time() - t0, 1),
+            "status": "done",
+        }
+        if changed:
+            polished_body = assessed_body
 
         # -- headline --
         _write_article_heartbeat(step_data, "headline", t0_total)

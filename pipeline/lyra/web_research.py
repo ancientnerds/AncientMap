@@ -271,8 +271,15 @@ class MiniMaxWebResearch(WebResearchBackend):
                 continue
 
             # Build the replacement — append [wN] marker if we have a valid URL
-            # Filter out unreliable sources (social media, forums)
-            BLOCKED_DOMAINS = ("reddit.com", "instagram.com", "facebook.com", "tiktok.com")
+            # Filter out unreliable sources (social media, forums, tourism, fringe)
+            BLOCKED_DOMAINS = (
+                "reddit.com", "instagram.com", "facebook.com", "tiktok.com",
+                "twitter.com", "x.com", "pinterest.com", "linkedin.com",
+                "quora.com", "medium.com", "tumblr.com", "4chan.org",
+                "tripadvisor.com", "yelp.com", "booking.com",
+                "gaia.com", "ancient-origins.net", "ancient-code.com",
+                "amazon.com", "ebay.com", "etsy.com",
+            )  # fmt: skip
             replacement = replace if not is_confirmation else find
             is_reliable = (
                 source_url
