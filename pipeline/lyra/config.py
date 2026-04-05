@@ -407,6 +407,38 @@ def _get_minimax_client(settings: LyraSettings):
     return _cached_minimax_client
 
 
+# ---------------------------------------------------------------------------
+# MiniMax Anthropic-compatible client (cached)
+# ---------------------------------------------------------------------------
+_cached_minimax_anthropic_client = None
+_cached_minimax_anthropic_key: str = ""
+
+
+def _get_minimax_anthropic_client(settings: LyraSettings):
+    """Return a cached Anthropic client pointed at MiniMax's Anthropic endpoint."""
+    global _cached_minimax_anthropic_client, _cached_minimax_anthropic_key
+
+    import anthropic
+
+    cache_key = f"{settings.minimax_api_key}:{settings.minimax_base_url}"
+    if _cached_minimax_anthropic_client is None or _cached_minimax_anthropic_key != cache_key:
+        _cached_minimax_anthropic_client = anthropic.Anthropic(
+            api_key=settings.minimax_api_key,
+            base_url=settings.minimax_base_url,
+            timeout=600.0,
+            max_retries=2,
+        )
+        _cached_minimax_anthropic_key = cache_key
+    return _cached_minimax_anthropic_client
+
+
+def _get_client(settings: LyraSettings):
+    """Return the appropriate Anthropic SDK client for the configured backend."""
+    if settings.llm_backend == "minimax":
+        return _get_minimax_anthropic_client(settings)
+    return _get_anthropic_client(settings.anthropic_api_key)
+
+
 def _call_minimax_api(
     settings: LyraSettings,
     *,
