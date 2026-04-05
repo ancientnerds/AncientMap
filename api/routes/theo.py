@@ -852,6 +852,80 @@ async def unpublish_research(
 
 
 # ---------------------------------------------------------------------------
+# PATCH /theo/research/{id} — Edit report text (owner-only, not-public)
+# ---------------------------------------------------------------------------
+
+
+class EditReportRequest(BaseModel):
+    report: str = Field(..., min_length=10)
+
+
+@router.patch("/research/{request_id}")
+async def edit_research(
+    request_id: str,
+    body: EditReportRequest,
+    user: DiscordUser = Depends(get_current_user),
+):
+    """Edit the report text of a completed research paper. Must be unpublished."""
+    _validate_uuid(request_id)
+
+    with get_session() as session:
+        row = session.execute(
+            text(
+                "SELECT user_id, status, is_public, result_json "
+                "FROM research_requests WHERE id = :id"
+            ),
+            {"id": request_id},
+        ).fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Research request not found")
+        if row.user_id != user.discord_id:
+            raise HTTPException(status_code=403, detail="Not your research request")
+        if row.status != "completed":
+            raise HTTPException(status_code=409, detail="Only completed research can be edited")
+        if row.is_public:
+            raise HTTPException(status_code=409, detail="Unpublish before editing")
+
+        # Load existing result, update report field
+        try:
+            result = json.loads(row.result_json) if row.result_json else {}
+        except (json.JSONDecodeError, TypeError):
+            result = {}
+
+        result["report"] = body.report
+
+        # Re-audit citations on the new text
+        try:
+            from pipeline.lyra.theo_citations import CitationRegistry, audit_citations
+
+            registry = CitationRegistry()
+            # Rebuild registry from stored references if available
+            refs = result.get("audit", {}).get("references", [])
+            if isinstance(refs, list):
+                for ref in refs:
+                    if isinstance(ref, dict) and ref.get("id") and ref.get("title"):
+                        registry.add_source(
+                            source_id=ref["id"],
+                            title=ref.get("title", ""),
+                            url=ref.get("url", ""),
+                            snippet=ref.get("snippet", ""),
+                        )
+            audit = audit_citations(body.report, registry)
+            result["audit"] = audit
+        except Exception as exc:
+            logger.warning("Citation re-audit failed for %s: %s", request_id, exc)
+
+        session.execute(
+            text("UPDATE research_requests SET result_json = :result WHERE id = :id"),
+            {"id": request_id, "result": json.dumps(result)},
+        )
+        session.commit()
+
+    return {"status": "updated", "result": result}
+
+
+# ---------------------------------------------------------------------------
 # GET /theo/public — Browse public research papers
 # ---------------------------------------------------------------------------
 

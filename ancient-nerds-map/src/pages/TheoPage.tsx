@@ -625,6 +625,32 @@ export default function TheoPage() {
     document.title = 'Theodore Furcade — Ancient Nerds Research Lab'
   }, [])
 
+  const handleSaveEdit = useCallback(async (markdown: string) => {
+    if (!viewingId) return
+    try {
+      const resp = await fetch(`${config.api.baseUrl}/theo/research/${viewingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ report: markdown }),
+      })
+      if (resp.ok) {
+        // Update local state with new report text
+        setViewingData(prev => {
+          if (!prev || !prev.result) return prev
+          return { ...prev, result: { ...prev.result, report: markdown } }
+        })
+        // Refresh the list to pick up any changes
+        fetchList()
+        setToast({ msg: 'Paper saved', type: 'ok' })
+      } else {
+        const err = await resp.json().catch(() => ({ detail: 'Failed to save' }))
+        setToast({ msg: err.detail || 'Failed to save', type: 'error' })
+      }
+    } catch {
+      setToast({ msg: 'Network error saving paper', type: 'error' })
+    }
+  }, [viewingId, fetchList])
+
   // Duplicate card: read a public match
   const handleReadDuplicateMatch = useCallback(async (slug: string) => {
     try {
@@ -1433,6 +1459,9 @@ export default function TheoPage() {
             sitesFound={viewingData.sites_found}
             toolsUsed={viewingData.tools_used}
             onClose={handleCloseReport}
+            isOwner={true}
+            isPublic={viewingData.is_public}
+            onSaveEdit={handleSaveEdit}
           />
         </Suspense>
       )}
@@ -1449,6 +1478,7 @@ export default function TheoPage() {
             sitesFound={publicReportData.sites_found}
             toolsUsed={publicReportData.tools_used}
             onClose={handleCloseReport}
+            isOwner={false}
           />
         </Suspense>
       )}

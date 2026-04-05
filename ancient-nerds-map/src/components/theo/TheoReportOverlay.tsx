@@ -1,12 +1,15 @@
 /**
  * TheoReportOverlay — Full-screen report viewer for completed research.
  * Uses ReactMarkdown with custom site: link handling (same as LyraChatModal).
+ * Supports inline WYSIWYG editing via TheoEditor when isOwner is true.
  */
 
-import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import QualityBadge, { type QualityScore } from './QualityBadge'
+
+const TheoEditor = lazy(() => import('./TheoEditor'))
 
 interface ResearchResult {
   report: string
@@ -33,6 +36,9 @@ interface TheoReportOverlayProps {
   sitesFound: number
   toolsUsed: number
   onClose: () => void
+  isOwner?: boolean
+  isPublic?: boolean
+  onSaveEdit?: (report: string) => void
 }
 
 export default function TheoReportOverlay({
@@ -41,19 +47,38 @@ export default function TheoReportOverlay({
   pipelineTrace,
   effort,
   onClose,
+  isOwner,
+  isPublic,
+  onSaveEdit,
 }: TheoReportOverlayProps) {
   const [showTrace, setShowTrace] = useState(false)
+  const [editing, setEditing] = useState(false)
 
-  // Escape key to close
+  // Escape key to close (not while editing)
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (editing) return
+        onClose()
+      }
+    }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [onClose])
+  }, [onClose, editing])
 
   const handleBackdropClick = useCallback((e: React.MouseEvent) => {
+    if (editing) return
     if (e.target === e.currentTarget) onClose()
-  }, [onClose])
+  }, [onClose, editing])
+
+  const handleSaveEdit = useCallback((markdown: string) => {
+    onSaveEdit?.(markdown)
+    setEditing(false)
+  }, [onSaveEdit])
+
+  const handleDiscardEdit = useCallback(() => {
+    setEditing(false)
+  }, [])
 
   const mdComponents = useMemo(() => ({
     a: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
@@ -128,20 +153,47 @@ export default function TheoReportOverlay({
               </button>
             </div>
           </div>
+
+          {/* Edit button — only for owner, disabled when public */}
+          {isOwner && (
+            <button
+              className="theo-edit-btn"
+              onClick={() => setEditing(true)}
+              disabled={isPublic}
+              title={isPublic ? 'Unpublish to edit' : 'Edit paper'}
+              aria-label={isPublic ? 'Unpublish to edit' : 'Edit paper'}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+          )}
+
           <button className="theo-report-close" onClick={onClose} aria-label="Close report">
             ✕
           </button>
         </div>
 
-        {/* Report Body */}
-        <div className="theo-report-body theo-md-body">
-          <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-            {result.report}
-          </ReactMarkdown>
-        </div>
+        {/* Report Body — editor or reader */}
+        {editing ? (
+          <Suspense fallback={<div className="theo-report-body" style={{ padding: 20, color: 'var(--text-dimmed)' }}>Loading editor...</div>}>
+            <TheoEditor
+              content={result.report}
+              onSave={handleSaveEdit}
+              onDiscard={handleDiscardEdit}
+            />
+          </Suspense>
+        ) : (
+          <div className="theo-report-body theo-md-body">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+              {result.report}
+            </ReactMarkdown>
+          </div>
+        )}
 
-        {/* Pipeline Trace (collapsible) */}
-        {doneStages.length > 0 && (
+        {/* Pipeline Trace (collapsible) — hidden during editing */}
+        {!editing && doneStages.length > 0 && (
           <>
             <button
               className="theo-trace-toggle"
