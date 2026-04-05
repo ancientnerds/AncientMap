@@ -203,6 +203,12 @@ export default function TheoPage() {
   })
   const [videoInput, setVideoInput] = useState('')
 
+  // Web URLs
+  const [webUrls, setWebUrls] = useState<string[]>(() => {
+    try { return JSON.parse(sessionStorage.getItem('theo_web_urls') || '[]') } catch { return [] }
+  })
+  const [webUrlInput, setWebUrlInput] = useState('')
+
   // Stage 2: source adapters
   const [adapterData, setAdapterData] = useState<AdapterData | null>(null)
   const [loadingAdapters, setLoadingAdapters] = useState(false)
@@ -404,6 +410,19 @@ export default function TheoPage() {
     return ids
   }
 
+  function parseWebUrls(text: string): string[] {
+    const urlPattern = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi
+    const urls: string[] = []
+    let m: RegExpExecArray | null
+    while ((m = urlPattern.exec(text)) !== null) {
+      const url = m[0].replace(/[.,;:!?)]+$/, '') // trim trailing punctuation
+      // Skip YouTube URLs (handled separately)
+      if (/youtube\.com|youtu\.be/i.test(url)) continue
+      if (!urls.includes(url)) urls.push(url)
+    }
+    return urls
+  }
+
   // --- Stage 1: Check Relevance + Duplicates in sequence ---
   const handleCheckTopic = useCallback(async () => {
     if (question.trim().length < 10) return
@@ -489,6 +508,7 @@ export default function TheoPage() {
         question: finalPrompt,
         effort,
         ...(videoIds.length > 0 ? { video_ids: videoIds } : {}),
+        ...(webUrls.length > 0 ? { web_urls: webUrls } : {}),
         ...(disabledAdapters.size > 0 ? { disabled_adapters: Array.from(disabledAdapters) } : {}),
       }
       // Send excluded specialists if any were deselected
@@ -514,6 +534,9 @@ export default function TheoPage() {
       setVideoIds([])
       setVideoInput('')
       sessionStorage.removeItem('theo_video_ids')
+      setWebUrls([])
+      setWebUrlInput('')
+      sessionStorage.removeItem('theo_web_urls')
       setDisabledAdapters(new Set())
       sessionStorage.removeItem('theo_disabled_adapters')
       setRelevanceResult(null)
@@ -975,6 +998,79 @@ export default function TheoPage() {
                         >&#x2715;</button>
                       </span>
                     ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Web Article Sources */}
+              <div className="theo-video-section">
+                <div className="theo-video-label">Web Sources <span style={{ opacity: 0.5, fontWeight: 400 }}>(optional, max 10)</span></div>
+                <textarea
+                  className="theo-video-input"
+                  placeholder="Paste article URLs here (research papers, blog posts, news articles)"
+                  value={webUrlInput}
+                  disabled={webUrls.length >= 10}
+                  rows={2}
+                  onChange={e => setWebUrlInput(e.target.value)}
+                  onPaste={e => {
+                    e.preventDefault()
+                    const pasted = e.clipboardData.getData('text')
+                    const parsed = parseWebUrls(pasted)
+                    if (parsed.length > 0) {
+                      setWebUrls(prev => {
+                        const merged = [...prev]
+                        for (const url of parsed) {
+                          if (!merged.includes(url) && merged.length < 10) merged.push(url)
+                        }
+                        sessionStorage.setItem('theo_web_urls', JSON.stringify(merged))
+                        return merged
+                      })
+                      setWebUrlInput('')
+                    } else {
+                      setWebUrlInput(pasted)
+                    }
+                  }}
+                  onBlur={() => {
+                    const text = webUrlInput.trim()
+                    if (!text) return
+                    const parsed = parseWebUrls(text)
+                    if (parsed.length > 0) {
+                      setWebUrls(prev => {
+                        const merged = [...prev]
+                        for (const url of parsed) {
+                          if (!merged.includes(url) && merged.length < 10) merged.push(url)
+                        }
+                        sessionStorage.setItem('theo_web_urls', JSON.stringify(merged))
+                        return merged
+                      })
+                      setWebUrlInput('')
+                    }
+                  }}
+                />
+                {webUrls.length > 0 && (
+                  <div className="theo-video-chips">
+                    {webUrls.map(url => {
+                      // Show just the domain + path tail for readability
+                      let label = url
+                      try { label = new URL(url).hostname + new URL(url).pathname.slice(0, 30) } catch { /* keep full */ }
+                      return (
+                        <span key={url} className="theo-video-chip" title={url}>
+                          {label.length > 40 ? label.slice(0, 37) + '...' : label}
+                          <button
+                            type="button"
+                            className="theo-video-chip-remove"
+                            onClick={() => {
+                              setWebUrls(prev => {
+                                const next = prev.filter(u => u !== url)
+                                sessionStorage.setItem('theo_web_urls', JSON.stringify(next))
+                                return next
+                              })
+                            }}
+                            aria-label="Remove URL"
+                          >&#x2715;</button>
+                        </span>
+                      )
+                    })}
                   </div>
                 )}
               </div>

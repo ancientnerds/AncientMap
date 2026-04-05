@@ -106,6 +106,7 @@ async def _process_request(
         force_include = (specialist_options or {}).get("force_include", [])
         force_exclude = (specialist_options or {}).get("force_exclude", [])
         video_ids = (specialist_options or {}).get("video_ids", [])
+        web_urls = (specialist_options or {}).get("web_urls", [])
         disabled_adapters = (specialist_options or {}).get("disabled_adapters", [])
         ctx = await pipeline.run(
             question,
@@ -115,6 +116,7 @@ async def _process_request(
             force_exclude=force_exclude,
             request_id=request_id,
             video_ids=video_ids,
+            web_urls=web_urls,
             disabled_adapters=disabled_adapters,
         )
 

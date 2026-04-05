@@ -72,6 +72,9 @@ class PipelineContext:
     # User-provided YouTube video IDs for transcript extraction
     video_ids: list[str] = field(default_factory=list)
 
+    # User-provided web article URLs to include as sources
+    web_urls: list[str] = field(default_factory=list)
+
     # User-disabled source adapters (e.g. ["wikipedia", "minimax"])
     disabled_adapters: list[str] = field(default_factory=list)
 
@@ -141,6 +144,7 @@ class TheoPipeline:
         force_exclude: list[str] | None = None,
         request_id: str = "",
         video_ids: list[str] | None = None,
+        web_urls: list[str] | None = None,
         disabled_adapters: list[str] | None = None,
     ) -> PipelineContext:
         """Run the full pipeline.  *emit* sends SSE events to the client."""
@@ -155,6 +159,7 @@ class TheoPipeline:
             force_include=force_include or [],
             force_exclude=force_exclude or [],
             video_ids=video_ids or [],
+            web_urls=web_urls or [],
             disabled_adapters=disabled_adapters or [],
         )
 
@@ -179,6 +184,22 @@ class TheoPipeline:
                         "status": "warning",
                         "warning": f"Transcript extraction failed: {exc}",
                     }
+                )
+
+        # Register user-provided web URLs as sources (pre-seeded before search)
+        if ctx.web_urls:
+            emit(
+                {
+                    "type": "status",
+                    "content": f"Adding {len(ctx.web_urls)} user-provided web source(s)...",
+                }
+            )
+            for url in ctx.web_urls[:10]:
+                ctx.registry.register_source(
+                    url=url,
+                    title=url.split("/")[-1].replace("-", " ").replace("_", " ")[:80] or url[:80],
+                    snippet="User-provided source — content will be fetched in Stage 3.5",
+                    search_query="user_provided",
                 )
 
         # Stages 1-3 are fatal — if they fail the pipeline cannot continue.

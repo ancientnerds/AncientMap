@@ -63,6 +63,7 @@ class ResearchSubmitRequest(BaseModel):
     force_include: list[str] = Field(default_factory=list)
     force_exclude: list[str] = Field(default_factory=list)
     video_ids: list[str] = Field(default_factory=list, max_length=5)
+    web_urls: list[str] = Field(default_factory=list, max_length=10)
     disabled_adapters: list[str] = Field(default_factory=list)
 
 
@@ -431,12 +432,19 @@ async def submit_research(body: ResearchSubmitRequest, req: Request):
 
         # Build specialist options JSON (only if non-empty)
         spec_opts = None
-        if body.force_include or body.force_exclude or body.video_ids or body.disabled_adapters:
+        if (
+            body.force_include
+            or body.force_exclude
+            or body.video_ids
+            or body.web_urls
+            or body.disabled_adapters
+        ):
             spec_opts = json.dumps(
                 {
                     "force_include": body.force_include,
                     "force_exclude": body.force_exclude,
                     "video_ids": body.video_ids,
+                    "web_urls": body.web_urls,
                     "disabled_adapters": body.disabled_adapters,
                 }
             )
