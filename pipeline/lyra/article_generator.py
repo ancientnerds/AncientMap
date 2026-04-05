@@ -558,10 +558,9 @@ def _write_article_body(
         f"Sections in order:\n{section_list}\n\n"
         f"Write all sections in this exact order. Each section uses facts "
         f"from its corresponding source material only.\n\n"
-        f"IMPORTANT: Write a LONG, detailed article. Each section should have "
-        f"2-4 substantial paragraphs (150-300 words each). Use ALL the key facts "
-        f"from the source material — do not summarize or condense. The full article "
-        f"should be 4000-8000 words. This is a flagship weekly digest, not a summary.\n\n"
+        f"Each section should have 1-2 focused paragraphs (100-200 words each). "
+        f"Cover the most important facts — don't pad or repeat. "
+        f"The full article should be 1500-2500 words total.\n\n"
         f"<source_material>\n{source_material}\n</source_material>"
     )
 
