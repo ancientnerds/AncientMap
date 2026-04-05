@@ -285,7 +285,7 @@ function SourcesAttribution({ citationItems }: { citationItems: Map<number, News
     <div className="articles-attribution">
       <h3 id="sources" className="articles-attribution-heading">Sources & Attribution</h3>
       <p className="articles-attribution-thanks">
-        This article wouldn&rsquo;t exist without these incredible creators who bring archaeology and ancient
+        This journal wouldn&rsquo;t exist without these incredible creators who bring archaeology and ancient
         history to life. We are deeply grateful for their work &mdash; please visit their channels, like,
         subscribe, and support them.
       </p>
@@ -442,7 +442,7 @@ function ShareButton({ article }: { article: Article }) {
   }
 
   return (
-    <button className="articles-share-btn" onClick={handleShare} title="Share article">
+    <button className="articles-share-btn" onClick={handleShare} title="Share journal">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" />
         <polyline points="16 6 12 2 8 6" />
@@ -681,18 +681,18 @@ export default function ArticlesPage() {
   return (
     <div className="articles-page">
       <PageHeader
-        speechBubble="I write weekly digests from the latest archaeology videos"
+        speechBubble="I write a weekly journal from the latest archaeology videos"
         onAvatarClick={() => setShowLyraProfile(true)}
         currentPage="articles"
       >
         {view === 'listing' ? (
-          <span className="page-header-title">Articles</span>
+          <span className="page-header-title">Weekly Journal</span>
         ) : (
           <button className="articles-page-back-btn" onClick={backToListing}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6" />
             </svg>
-            All Articles
+            All Journals
           </button>
         )}
       </PageHeader>
@@ -700,7 +700,7 @@ export default function ArticlesPage() {
       {/* Stats bar — listing view only */}
       {view === 'listing' && !loading && !error && articles.length > 0 && (
         <PageStatsBar items={[
-          { value: articles.length, label: 'articles' } as StatItem,
+          { value: articles.length, label: 'journals' } as StatItem,
           { value: formatDateRange(articles[articles.length - 1].week_start, articles[0].week_end), label: '', sep: '·' } as StatItem,
         ]} />
       )}
@@ -710,12 +710,12 @@ export default function ArticlesPage() {
           <div className="articles-progress-track">
             <div className="articles-progress-bar" style={{ width: `${readProgress}%` }} />
           </div>
-          <AiNoticeBanner message="This article is AI-generated from YouTube video content. Always verify with original sources." />
+          <AiNoticeBanner message="This journal is AI-generated from YouTube video content. Always verify with original sources." />
         </>
       )}
 
       <main className="articles-page-content">
-        {loading && <div className="articles-page-loading">Loading articles...</div>}
+        {loading && <div className="articles-page-loading">Loading journals...</div>}
         {error && (
           <div className="articles-page-error">
             {error}
@@ -723,7 +723,7 @@ export default function ArticlesPage() {
           </div>
         )}
         {!loading && !error && articles.length === 0 && (
-          <div className="articles-page-empty">No articles yet. Check back soon.</div>
+          <div className="articles-page-empty">No journals yet. Check back soon.</div>
         )}
 
         {/* ── Listing view: hero + grid ── */}
@@ -753,7 +753,7 @@ export default function ArticlesPage() {
               </div>
               <div className="articles-hero-actions">
                 <button className="articles-hero-cta" onClick={(e) => { e.stopPropagation(); openArticle(hero) }}>
-                  Read Article
+                  Read Journal
                 </button>
                 <div onClick={e => e.stopPropagation()}>
                   <ShareButton article={hero} />
@@ -763,7 +763,7 @@ export default function ArticlesPage() {
 
             {older.length > 0 && (
               <section className="articles-grid-section">
-                <span className="articles-grid-label">PREVIOUS ARTICLES</span>
+                <span className="articles-grid-label">PREVIOUS JOURNALS</span>
                 <div className="articles-grid">
                   {older.map(article => (
                     <article
@@ -831,7 +831,7 @@ export default function ArticlesPage() {
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="15 18 9 12 15 6" />
                   </svg>
-                  Back to all articles
+                  Back to all journals
                 </button>
               </footer>
             </article>

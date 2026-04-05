@@ -152,7 +152,7 @@ def _nav_html() -> str:
         <a href="/" class="nav-brand">ANCIENT NERDS</a>
         <a href="/globe.html">Globe</a>
         <a href="/news.html">News</a>
-        <a href="/articles/">Articles</a>
+        <a href="/articles/">Journal</a>
         <a href="/news-archive/">News Archive</a>
         <a href="/radar.html">Radar</a>
     </nav>"""
@@ -165,7 +165,7 @@ def _footer_html() -> str:
         <p>&copy; 2024-2026 Ancient Nerds &mdash;
         <a href="/">Home</a> &middot;
         <a href="/globe.html">Interactive Globe</a> &middot;
-        <a href="/articles/">Articles</a> &middot;
+        <a href="/articles/">Journal</a> &middot;
         <a href="/news-archive/">News Archive</a></p>
     </footer>"""
 
@@ -250,7 +250,7 @@ def render_article_html(
             <div class="meta">
                 {f'<time datetime="{pub_date}">{pub_display}</time>' if pub_date else ""}
                 {f" &middot; Week of {date_range}" if date_range else ""}
-                &middot; <a href="/articles/">All Articles</a>
+                &middot; <a href="/articles/">All Journals</a>
                 &middot; <a href="/articles/{slug}/medium" style="color:#c02023">Copy for Medium</a>
                 &middot; <button onclick="copyLink()" class="copy-link-btn" title="Copy shareable link">Copy Link</button>
                 <span class="copy-ok" id="copyOk">Copied!</span>
@@ -301,20 +301,20 @@ def render_article_listing_html(
             <h2><a href="/articles/{slug}">{e_title}</a></h2>
             <div class="meta"><time datetime="{pub}">{pub_display}</time></div>
             <p>{e_summary}</p>
-            <a href="/articles/{slug}" class="read-more">Read full article &rarr;</a>
+            <a href="/articles/{slug}" class="read-more">Read full journal &rarr;</a>
             <div style="margin-top:8px;font-size:13px;color:#506870">
                 Share: <code style="background:#132830;padding:2px 8px;border-radius:3px;user-select:all;color:#90a8b0">{article_url}</code>
             </div>
         </div>""")
 
-    cards_html = "\n".join(cards) if cards else "<p>No articles published yet. Check back soon!</p>"
+    cards_html = "\n".join(cards) if cards else "<p>No journals published yet. Check back soon!</p>"
 
     canonical = f"{BASE_URL}/articles/"
     schema = f"""{{
         "@context": "https://schema.org",
         "@type": "CollectionPage",
-        "name": "Weekly Archaeology Articles",
-        "description": "In-depth weekly articles covering the biggest archaeological discoveries worldwide.",
+        "name": "Weekly Archaeology Journal",
+        "description": "In-depth weekly journal covering the biggest archaeological discoveries worldwide.",
         "url": "{canonical}",
         "publisher": {{"@type": "Organization", "name": "Ancient Nerds", "url": "{BASE_URL}"}}
     }}"""
@@ -324,16 +324,16 @@ def render_article_listing_html(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Weekly Archaeology Articles | Ancient Nerds</title>
-    <meta name="description" content="In-depth weekly articles covering the biggest archaeological discoveries. Deep dives into new excavations, lost civilizations, and breakthroughs in ancient history research.">
+    <title>Weekly Archaeology Journal | Ancient Nerds</title>
+    <meta name="description" content="In-depth weekly journal covering the biggest archaeological discoveries. Deep dives into new excavations, lost civilizations, and breakthroughs in ancient history research.">
     <meta name="robots" content="index, follow, max-image-preview:large">
     <link rel="canonical" href="{canonical}">
 
     <meta property="og:type" content="website">
     <meta property="og:url" content="{canonical}">
     <meta property="og:site_name" content="Ancient Nerds">
-    <meta property="og:title" content="Weekly Archaeology Articles | Ancient Nerds">
-    <meta property="og:description" content="In-depth weekly articles covering the biggest archaeological discoveries worldwide.">
+    <meta property="og:title" content="Weekly Archaeology Journal | Ancient Nerds">
+    <meta property="og:description" content="In-depth weekly journal covering the biggest archaeological discoveries worldwide.">
     <meta property="og:image" content="{BASE_URL}/landing/og-image.png">
 
     <meta name="twitter:card" content="summary_large_image">

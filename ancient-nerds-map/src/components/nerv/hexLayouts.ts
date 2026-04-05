@@ -72,7 +72,7 @@ export const ARTICLE_LAYOUT: HexLayoutConfig = {
   hiveHeight: 326,
   sourceNode: { id: '_source', label: 'Items', icon: '\u25BD', dataType: 'db', stepNumber: 'SRC', position: { left: 0, top: 0 } },
   sinkNodes: [
-    { id: '_article', label: 'Article', icon: '\u2261', dataType: 'db', stepNumber: 'OUT', position: { left: 224, top: 196 } },
+    { id: '_article', label: 'Journal', icon: '\u2261', dataType: 'db', stepNumber: 'OUT', position: { left: 224, top: 196 } },
   ],
   nodes: [
     { id: 'collect', label: 'Collect', icon: '\u21E3', dataType: 'db', stepNumber: '01', position: { left: 112, top: 0 }, ragPhase: 'R' },
