@@ -345,7 +345,7 @@ async def list_specialists():
     science_ids = {
         "geologist",
         "paleoclimatologist",
-        "adna_specialist",
+        "ancient_dna_specialist",
         "archaeometallurgist",
         "volcanologist",
         "physicist",
@@ -727,7 +727,7 @@ async def publish_research(
     with get_session() as session:
         row = session.execute(
             text("""
-                SELECT id::text, user_id, status, is_public, result_json, question
+                SELECT id::text, user_id, status, effort, is_public, result_json, question
                 FROM research_requests WHERE id = :id
             """),
             {"id": request_id},
@@ -786,7 +786,7 @@ async def publish_research(
                 paper_slug=slug,
                 author_username=user.username,
                 author_discord_id=user.discord_id,
-                effort=row.status,
+                effort=row.effort,
                 published_at=datetime.now(UTC).isoformat(),
             )
             logger.info("Published %s: %d sections indexed", request_id, indexed)

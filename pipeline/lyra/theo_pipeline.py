@@ -198,6 +198,12 @@ class TheoPipeline:
                     {"type": "pipeline", "stage": stage_name, "status": "error", "error": str(exc)}
                 )
                 return ctx
+            # Also catch soft errors (stage sets ctx.error and returns normally)
+            if ctx.error:
+                emit(
+                    {"type": "pipeline", "stage": stage_name, "status": "error", "error": ctx.error}
+                )
+                return ctx
 
         # Stage 3.5 — Fetch actual content from source URLs
         try:
@@ -1729,7 +1735,7 @@ class TheoPipeline:
                 "meta": {
                     "score": ctx.quality_score.get("total", 0),
                     "badge": ctx.quality_score.get("badge", ""),
-                    "iterations": iteration + 1 if "iteration" in dir() else 1,
+                    "iterations": iteration + 1,
                 },
             }
         )
