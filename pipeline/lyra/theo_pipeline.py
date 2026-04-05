@@ -167,7 +167,7 @@ class TheoPipeline:
             self._settings.minimax_base_url,
             self._settings.minimax_api_key,
         )
-        self._model = self._settings.minimax_model
+        self._model = "MiniMax-M2.7"
         self._searcher = MultiSourceSearch(self._settings)
 
     # ------------------------------------------------------------------

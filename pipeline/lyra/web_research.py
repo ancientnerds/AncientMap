@@ -171,9 +171,7 @@ class MiniMaxWebResearch(WebResearchBackend):
 
     def _chat(self, system: str, user_message: str, max_tokens: int) -> str:
         """Call MiniMax M2.7 chat completion, strip thinking tags."""
-        return minimax_chat(
-            self._client, self.settings.minimax_model, system, user_message, max_tokens
-        )
+        return minimax_chat(self._client, "MiniMax-M2.7", system, user_message, max_tokens)
 
     # -- Claim extraction --
 

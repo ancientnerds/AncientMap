@@ -33,7 +33,15 @@ class WebSearchResult:
 
 
 def create_minimax_client(base_url: str, api_key: str) -> httpx.Client:
-    """Create an httpx client configured for MiniMax API calls."""
+    """Create an httpx client configured for MiniMax API calls.
+
+    Strips /anthropic suffix if present — this client uses the OpenAI-compatible
+    endpoints (/v1/coding_plan/search, /v1/chat/completions), not the Anthropic
+    endpoint.  The setting minimax_base_url may point to the Anthropic endpoint
+    for the Anthropic SDK, but raw httpx callers need the base URL.
+    """
+    if base_url.endswith("/anthropic"):
+        base_url = base_url.removesuffix("/anthropic")
     return httpx.Client(
         base_url=base_url,
         headers={
