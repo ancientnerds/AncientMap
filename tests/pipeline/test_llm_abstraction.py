@@ -5,9 +5,11 @@ import pytest
 
 from pipeline.lyra.config import (
     LyraSettings,
+    LyraAPIError,
     NormalizedResponse,
     TextBlock,
     _call_anthropic_api,
+    call_api,
 )
 
 
@@ -332,3 +334,41 @@ class TestUnifiedDispatch:
 
         assert captured["thinking"] == {"type": "adaptive"}
         assert captured["model"] == "MiniMax-M2.7"
+
+
+class TestCallApiDispatch:
+    def test_call_api_minimax_backend(self, minimax_settings):
+        """call_api() dispatches through the unified path for MiniMax."""
+        captured = {}
+
+        def fake_create(**kwargs):
+            captured.update(kwargs)
+            return _make_mock_text_response("ok")
+
+        with (
+            patch("pipeline.lyra.config._get_settings", return_value=minimax_settings),
+            patch("pipeline.lyra.config._get_client") as mock_get,
+        ):
+            mock_get.return_value.messages.create = fake_create
+            resp = call_api(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=1000,
+                messages=[{"role": "user", "content": "test"}],
+            )
+
+        assert captured["model"] == "MiniMax-M2.7"
+        assert resp.text == "ok"
+
+    def test_call_api_wraps_errors(self, minimax_settings):
+        """call_api() wraps exceptions as LyraAPIError."""
+        with (
+            patch("pipeline.lyra.config._get_settings", return_value=minimax_settings),
+            patch("pipeline.lyra.config._get_client") as mock_get,
+        ):
+            mock_get.return_value.messages.create.side_effect = Exception("network error")
+            with pytest.raises(LyraAPIError, match="network error"):
+                call_api(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=1000,
+                    messages=[{"role": "user", "content": "test"}],
+                )

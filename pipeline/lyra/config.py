@@ -157,10 +157,9 @@ class LyraSettings(BaseSettings):
     # LLM backend: "anthropic" (default) or "minimax"
     llm_backend: str = "anthropic"
 
-    # MiniMax Token Plan (web search + M2.7 for article verification)
+    # MiniMax via Anthropic-compatible endpoint (all calls use the Anthropic SDK)
     minimax_api_key: str = ""
-    minimax_base_url: str = "https://api.minimax.io"
-    minimax_model: str = "MiniMax-M2.7"
+    minimax_base_url: str = "https://api.minimax.io/anthropic"
 
     # Article web verification backend: "minimax" (MiniMax search API + M2.7
     # per-section structured corrections) or "anthropic" (Opus + web_search tool)
@@ -440,29 +439,6 @@ def _normalize_anthropic_response(response) -> NormalizedResponse:
     )
 
 
-_cached_minimax_client = None
-_cached_minimax_key: str = ""
-
-
-def _get_minimax_client(settings: LyraSettings):
-    """Return a cached OpenAI client for the MiniMax Token Plan backend."""
-    global _cached_minimax_client, _cached_minimax_key
-
-    from openai import OpenAI
-
-    base_url = f"{settings.minimax_base_url}/v1"
-    cache_key = f"{settings.minimax_api_key}:{base_url}"
-    if _cached_minimax_client is None or _cached_minimax_key != cache_key:
-        _cached_minimax_client = OpenAI(
-            base_url=base_url,
-            api_key=settings.minimax_api_key,
-            timeout=600.0,
-            max_retries=2,
-        )
-        _cached_minimax_key = cache_key
-    return _cached_minimax_client
-
-
 # ---------------------------------------------------------------------------
 # MiniMax Anthropic-compatible client (cached)
 # ---------------------------------------------------------------------------
@@ -530,91 +506,6 @@ def _extract_tool_use_json(content: list) -> str | None:
     return None
 
 
-def _call_minimax_api(
-    settings: LyraSettings,
-    *,
-    prefill: str | None = None,
-    timeout: float | None = None,
-    **kwargs,
-) -> NormalizedResponse:
-    """Call MiniMax M2.7 via OpenAI-compatible SDK and return a NormalizedResponse.
-
-    M2.7 is a reasoning model — thinking tokens are included in the response
-    wrapped in <think>...</think> tags.  These are stripped before returning.
-    """
-    import re as _re
-
-    client = _get_minimax_client(settings)
-
-    messages: list[dict] = []
-    system_blocks = kwargs.pop("system", None)
-    if system_blocks:
-        if isinstance(system_blocks, str):
-            messages.append({"role": "system", "content": system_blocks})
-        elif isinstance(system_blocks, list):
-            system_text = "\n\n".join(
-                b["text"] if isinstance(b, dict) else str(b) for b in system_blocks
-            )
-            messages.append({"role": "system", "content": system_text})
-
-    for msg in kwargs.pop("messages", []):
-        messages.append({"role": msg["role"], "content": msg["content"]})
-
-    # Consume Anthropic-specific params that MiniMax doesn't support
-    kwargs.pop("thinking", None)
-    kwargs.pop("tool_choice", None)
-    kwargs.pop("tools", None)
-    kwargs.pop("reasoning_effort", None)
-    kwargs.pop("response_format", None)
-    kwargs.pop("temperature", None)
-    kwargs.pop("model", None)
-
-    # M2.7 reasoning tokens share the max_tokens budget.
-    # Reasoning uses 2-10K tokens depending on complexity.
-    # Small calls (clustering, headline): floor at 16K so reasoning doesn't starve output.
-    # Large calls (article body, verify): keep the requested budget (128K) — plenty of room.
-    requested_max = kwargs.pop("max_tokens", 8192)
-    max_tokens = max(requested_max, 16384)
-
-    # Detect stop_reason=length (output truncated) — caller should know
-    # This happens when reasoning + output exceeds max_tokens
-
-    create_kwargs: dict = {
-        "model": settings.minimax_model,
-        "messages": messages,
-        "max_tokens": max_tokens,
-    }
-
-    response = client.chat.completions.create(**create_kwargs)
-    choice = response.choices[0] if response.choices else None
-    raw_text = choice.message.content or "" if choice else ""
-
-    # Strip <think>...</think> reasoning blocks
-    clean_text = _re.sub(r"<think>.*?</think>", "", raw_text, flags=_re.DOTALL).strip()
-
-    # If M2.7 used all tokens on reasoning (clean_text empty) and we have budget,
-    # log a warning so callers can handle gracefully
-    if not clean_text and raw_text:
-        logger.warning(
-            "MiniMax M2.7 produced only reasoning (no output text) with %d tokens",
-            max_tokens,
-        )
-
-    finish = choice.finish_reason if choice else "stop"
-    stop_reason = "max_tokens" if finish == "length" else "end_turn"
-    return NormalizedResponse(
-        content=[TextBlock(text=clean_text)],
-        stop_reason=stop_reason,
-        model=response.model or "",
-        usage={
-            "input_tokens": getattr(response.usage, "prompt_tokens", 0) if response.usage else 0,
-            "output_tokens": getattr(response.usage, "completion_tokens", 0)
-            if response.usage
-            else 0,
-        },
-    )
-
-
 def parse_json_response(text: str) -> dict:
     """Parse JSON from an LLM response, stripping markdown fences if present."""
     cleaned = text.strip()
@@ -643,24 +534,19 @@ def call_api(
     timeout: float | None = None,
     **kwargs,
 ) -> NormalizedResponse:
-    """Unified LLM call — dispatches to Anthropic or MiniMax.
+    """Unified LLM call — dispatches to Anthropic or MiniMax via Anthropic SDK.
 
-    Args:
-        prefill: Prefix for the response (e.g. "{" for JSON).
-        reasoning_effort: Ignored — kept for call-site compat.
-        documents: Optional list of source documents to pass as Anthropic content blocks.
-            Each dict has shape {"title": str, "data": str}. Anthropic only.
-        timeout: Per-request timeout in seconds. Overrides client default (120s).
-        **kwargs: model, max_tokens, messages, system, temperature, response_format, etc.
+    Both backends use the same code path. MiniMax differences (model override,
+    structured output via tool trick, temperature clamping) are handled inside
+    _call_anthropic_api().
     """
     settings = _get_settings()
-    backend = settings.llm_backend
 
     try:
-        if backend == "minimax":
-            return _call_minimax_api(settings, prefill=prefill, timeout=timeout, **kwargs)
         return _call_anthropic_api(
             settings, prefill=prefill, documents=documents, timeout=timeout, **kwargs
         )
+    except LyraAPIError:
+        raise
     except Exception as e:
-        raise LyraAPIError(f"{backend.title()} API error: {e}") from e
+        raise LyraAPIError(f"{settings.llm_backend.title()} API error: {e}") from e
