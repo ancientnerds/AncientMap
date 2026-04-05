@@ -225,8 +225,6 @@ export default function TheoPage() {
 
   // Stage 1: duplicate detection (inline)
   const [checkingDuplicates, setCheckingDuplicates] = useState(false)
-  const [enrichedPrompt, setEnrichedPrompt] = useState('')
-  const [enrichingPrompt, setEnrichingPrompt] = useState(false)
   const [duplicateMatches, setDuplicateMatches] = useState<DuplicateMatch[] | null>(null)
 
   // Stage 3: specialists
@@ -457,25 +455,6 @@ export default function TheoPage() {
             setDuplicateMatches([])
           }
           setCheckingDuplicates(false)
-
-          // Enrich the prompt in parallel
-          setEnrichingPrompt(true)
-          try {
-            const enrichResp = await fetch(`${config.api.baseUrl}/theo/enrich-prompt`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-              body: JSON.stringify({ question: question.trim(), effort }),
-            })
-            if (enrichResp.ok) {
-              const enrichData: { enriched: string } = await enrichResp.json()
-              setEnrichedPrompt(enrichData.enriched || question)
-            } else {
-              setEnrichedPrompt(question)
-            }
-          } catch {
-            setEnrichedPrompt(question)
-          }
-          setEnrichingPrompt(false)
         }
       } else {
         setRelevanceResult({ relevant: false, reason: 'Failed to check relevance' })
@@ -503,7 +482,7 @@ export default function TheoPage() {
     if (question.trim().length < 10 || submitting) return
     setSubmitting(true)
     try {
-      const finalPrompt = (enrichedPrompt || question).trim()
+      const finalPrompt = question.trim()
       const body: Record<string, unknown> = {
         question: finalPrompt,
         effort,
@@ -541,7 +520,6 @@ export default function TheoPage() {
       sessionStorage.removeItem('theo_disabled_adapters')
       setRelevanceResult(null)
       setDuplicateMatches(null)
-      setEnrichedPrompt('')
       setExcludedSpecialists(new Set())
       fetchList()
     } finally {
@@ -1227,12 +1205,11 @@ export default function TheoPage() {
               <div className="theo-launch-section">
                 <div className="theo-launch-label">
                   Research Prompt
-                  {enrichingPrompt && <span style={{ fontSize: 11, color: 'var(--text-dimmed)', marginLeft: 8 }}>enriching...</span>}
                 </div>
                 <textarea
                   className="theo-input"
-                  value={enrichedPrompt || question}
-                  onChange={e => setEnrichedPrompt(e.target.value)}
+                  value={question}
+                  onChange={e => { setQuestion(e.target.value); sessionStorage.setItem('theo_question', e.target.value) }}
                   rows={10}
                   disabled={activeItems.length > 0}
                   style={activeItems.length > 0 ? { opacity: 0.5 } : undefined}

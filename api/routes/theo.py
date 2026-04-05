@@ -189,62 +189,6 @@ async def check_relevance(body: RelevanceCheckRequest, req: Request):
 
 
 # ---------------------------------------------------------------------------
-# POST /theo/enrich-prompt — Expand casual question into structured research prompt
-# ---------------------------------------------------------------------------
-
-
-class EnrichPromptRequest(BaseModel):
-    question: str = Field(..., min_length=10, max_length=4000)
-    effort: str = Field(default="article")
-
-
-@router.post("/enrich-prompt")
-async def enrich_prompt(body: EnrichPromptRequest, req: Request):
-    """Expand a casual question into a structured research prompt."""
-    if not _theo_limiter.check(get_client_ip(req)):
-        raise HTTPException(status_code=429, detail="Too many requests. Please wait.")
-
-    from pipeline.lyra.config import _get_settings
-    from pipeline.lyra.minimax_shared import create_minimax_client, minimax_chat
-
-    settings = _get_settings()
-    client = create_minimax_client(settings.minimax_base_url, settings.minimax_api_key)
-
-    effort_label = {
-        "brief": "a brief literature overview",
-        "note": "a research note with 3 specialists",
-        "article": "a journal article with 5 specialists and debate",
-        "review": "a comprehensive literature review with 6 specialists",
-        "thesis": "a thesis chapter with 8 specialists and multi-round debate",
-    }.get(body.effort, "a research paper")
-
-    system = (
-        "You are a research prompt engineer for an archaeological research pipeline. "
-        "Take the user's casual question and expand it into a clear, structured research prompt "
-        "that will produce better academic results. The output is " + effort_label + ".\n\n"
-        "Rules:\n"
-        "- Preserve the user's original intent and scope\n"
-        "- Add specificity: name time periods, regions, key concepts\n"
-        "- Frame it as an investigation with clear angles to explore\n"
-        "- Mention competing theories or debates if relevant\n"
-        "- Keep it under 300 words\n"
-        "- Write in third person ('This paper investigates...' not 'I want to know...')\n"
-        "- Output ONLY the enriched prompt, no meta-commentary"
-    )
-
-    try:
-        enriched = await asyncio.to_thread(
-            minimax_chat, client, settings.minimax_model, system, body.question, 1024
-        )
-        client.close()
-        return {"enriched": enriched.strip()}
-    except Exception as exc:
-        logger.warning("Prompt enrichment failed: %s", exc)
-        client.close()
-        return {"enriched": body.question}
-
-
-# ---------------------------------------------------------------------------
 # GET /theo/adapters — Available source adapters for Sources stage
 # ---------------------------------------------------------------------------
 
@@ -645,8 +589,6 @@ async def stream_research(request_id: str, req: Request):
 
     async def _stream_gen():
         """Stream live events, polling the event buffer."""
-        import asyncio
-
         cursor = 0
         idle_count = 0
         max_idle = 300  # 5 minutes of no events → close
