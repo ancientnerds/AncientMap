@@ -23,8 +23,6 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
   const [displayText, setDisplayText] = useState('')
   const [displayThinking, setDisplayThinking] = useState('')
   const [statusMsg, setStatusMsg] = useState('')
-  const [sitesFound, setSitesFound] = useState(0)
-  const [toolsUsed, setToolsUsed] = useState(0)
   const [elapsedMs, setElapsedMs] = useState(0)
   const [done, setDone] = useState(false)
   const [showThinking, setShowThinking] = useState(true)
@@ -134,9 +132,6 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
         }
         setNodes(prev => applyPipelineEvent(prev, pEvent))
 
-        if (pEvent.stage === 'tool_call' && pEvent.status === 'done') {
-          setToolsUsed(prev => prev + 1)
-        }
         break
       }
       case 'token':
@@ -148,11 +143,8 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
       case 'status':
         setStatusMsg(data.content as string || '')
         break
-      case 'sites': {
-        const sites = data.sites as unknown[]
-        if (sites) setSitesFound(prev => prev + sites.length)
+      case 'sites':
         break
-      }
       case 'done':
       case 'error':
       case 'timeout':
@@ -225,15 +217,6 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
                 <span className="theo-live-dot" />
                 {formatDurationMs(elapsedMs)}
               </span>
-              {doneNodes.length > 0 && (
-                <span className="theo-live-counter">{doneNodes.length} stages</span>
-              )}
-              {toolsUsed > 0 && (
-                <span className="theo-live-counter">{toolsUsed} tools</span>
-              )}
-              {sitesFound > 0 && (
-                <span className="theo-live-counter">{sitesFound} sites</span>
-              )}
             </div>
           </div>
           <button className="theo-live-close" onClick={onClose} aria-label="Close live view">

@@ -15,12 +15,13 @@ RESULT_TTL_HOURS = 24
 MAX_REQUESTS_PER_USER = 1
 
 # Credit cost per research tier
+# Linear scale: 100 credits per 5 minutes of estimated time
 THEO_CREDIT_COSTS: dict[str, int] = {
-    "brief": 100,
-    "note": 200,
-    "article": 300,
-    "review": 500,
-    "thesis": 1000,
+    "brief": 100,    # ~5 min
+    "note": 300,     # ~15 min
+    "article": 600,  # ~30 min
+    "review": 1000,  # ~50 min
+    "thesis": 1800,  # ~90 min
 }
 
 # M2.7 token budget per individual call (not total).

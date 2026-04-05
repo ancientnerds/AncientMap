@@ -18,10 +18,10 @@ const TheoResearchLive = lazy(() => import('../components/theo/TheoResearchLive'
 
 const EFFORTS = [
   { key: 'brief', label: 'Research Brief', time: '~5 min', desc: 'Quick literature overview', credits: 100 },
-  { key: 'note', label: 'Research Note', time: '~15 min', desc: '3 specialists, structured analysis', credits: 200 },
-  { key: 'article', label: 'Journal Article', time: '~30 min', desc: '5 specialists, quality verified', credits: 300 },
-  { key: 'review', label: 'Literature Review', time: '~50 min', desc: '6 specialists, debate + verification', credits: 500 },
-  { key: 'thesis', label: 'Thesis Chapter', time: '~90 min', desc: '8 specialists, multi-round debate', credits: 1000 },
+  { key: 'note', label: 'Research Note', time: '~15 min', desc: '3 specialists, structured analysis', credits: 300 },
+  { key: 'article', label: 'Journal Article', time: '~30 min', desc: '5 specialists, quality verified', credits: 600 },
+  { key: 'review', label: 'Literature Review', time: '~50 min', desc: '6 specialists, debate + verification', credits: 1000 },
+  { key: 'thesis', label: 'Thesis Chapter', time: '~90 min', desc: '8 specialists, multi-round debate', credits: 1800 },
 ] as const
 
 const EFFORT_LABELS: Record<string, string> = {
@@ -1233,7 +1233,9 @@ export default function TheoPage() {
                   className="theo-input"
                   value={enrichedPrompt || question}
                   onChange={e => setEnrichedPrompt(e.target.value)}
-                  rows={6}
+                  rows={10}
+                  disabled={activeItems.length > 0}
+                  style={activeItems.length > 0 ? { opacity: 0.5 } : undefined}
                 />
               </div>
 
@@ -1266,7 +1268,7 @@ export default function TheoPage() {
               <div className="theo-submit-row">
                 <button
                   className="theo-submit-btn"
-                  disabled={submitting}
+                  disabled={submitting || activeItems.length > 0}
                   onClick={handleSubmit}
                 >
                   {submitting ? 'Submitting...' : `Start Research (${selectedEffort?.credits ?? 0} credits)`}
