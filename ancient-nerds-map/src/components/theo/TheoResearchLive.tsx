@@ -14,10 +14,11 @@ import { formatDurationMs } from '../../utils/formatters'
 interface TheoResearchLiveProps {
   requestId: string
   question: string
+  startedAt?: string
   onClose: () => void
 }
 
-export default function TheoResearchLive({ requestId, question, onClose }: TheoResearchLiveProps) {
+export default function TheoResearchLive({ requestId, question, startedAt, onClose }: TheoResearchLiveProps) {
   const [nodes, setNodes] = useState<PipelineNodeInstance[]>([])
   const [displayText, setDisplayText] = useState('')
   const [displayThinking, setDisplayThinking] = useState('')
@@ -31,17 +32,17 @@ export default function TheoResearchLive({ requestId, question, onClose }: TheoR
 
   const reportTextRef = useRef('')
   const thinkingRef = useRef('')
-  const startRef = useRef(performance.now())
   const bodyRef = useRef<HTMLDivElement>(null)
 
-  // Elapsed timer
+  // Elapsed timer — uses the actual request creation time so it persists across open/close
+  const startEpoch = startedAt ? new Date(startedAt).getTime() : Date.now()
   useEffect(() => {
     if (done) return
     const iv = setInterval(() => {
-      setElapsedMs(performance.now() - startRef.current)
+      setElapsedMs(Date.now() - startEpoch)
     }, 500)
     return () => clearInterval(iv)
-  }, [done])
+  }, [done, startEpoch])
 
   // Throttled display sync — max 5 renders/sec
   useEffect(() => {

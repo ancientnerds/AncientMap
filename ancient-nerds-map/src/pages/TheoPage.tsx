@@ -240,6 +240,7 @@ export default function TheoPage() {
   const [notifGranted, setNotifGranted] = useState(false)
   const [liveOverlayId, setLiveOverlayId] = useState<string | null>(null)
   const [liveOverlayQuestion, setLiveOverlayQuestion] = useState('')
+  const [liveOverlayStartedAt, setLiveOverlayStartedAt] = useState('')
   const [liveOverlayClosed, setLiveOverlayClosed] = useState<Set<string>>(new Set())
 
   // Public library
@@ -617,6 +618,7 @@ export default function TheoPage() {
     if (running && liveOverlayId !== running.id) {
       setLiveOverlayId(running.id)
       setLiveOverlayQuestion(running.question)
+      setLiveOverlayStartedAt(running.created_at || '')
     }
   }, [items, liveOverlayClosed, liveOverlayId])
 
@@ -636,6 +638,7 @@ export default function TheoPage() {
     })
     setLiveOverlayId(item.id)
     setLiveOverlayQuestion(item.question)
+    setLiveOverlayStartedAt(item.created_at || '')
   }, [])
 
   // Toggle specialist in manual mode
@@ -1360,6 +1363,7 @@ export default function TheoPage() {
           <TheoResearchLive
             requestId={liveOverlayId}
             question={liveOverlayQuestion}
+            startedAt={liveOverlayStartedAt}
             onClose={handleCloseLive}
           />
         </Suspense>
