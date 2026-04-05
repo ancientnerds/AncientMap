@@ -119,3 +119,42 @@ def minimax_chat(
     # M2.7 wraps reasoning in <think>...</think> tags -- strip them
     clean = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
     return clean
+
+
+def minimax_chat_anthropic(
+    system: str,
+    user_message: str,
+    max_tokens: int,
+    settings=None,
+) -> str:
+    """Call MiniMax M2.7 via the Anthropic SDK (unified path).
+
+    This replaces the old httpx-based minimax_chat() for the Theo pipeline.
+    Uses the same Anthropic SDK client as the Lyra pipeline.
+    """
+    from pipeline.lyra.config import _get_minimax_anthropic_client, _get_settings
+
+    if settings is None:
+        settings = _get_settings()
+
+    client = _get_minimax_anthropic_client(settings)
+
+    try:
+        response = client.messages.create(
+            model="MiniMax-M2.7",
+            max_tokens=max_tokens,
+            system=system,
+            messages=[{"role": "user", "content": user_message}],
+        )
+        # Extract text from response, skipping ThinkingBlock objects
+        parts = []
+        for block in response.content or []:
+            if hasattr(block, "text"):
+                parts.append(block.text)
+        content = "\n".join(parts)
+        # M2.7 may still wrap reasoning in <think>...</think> tags -- strip them
+        clean = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+        return clean
+    except Exception as e:
+        logger.warning(f"MiniMax M2.7 Anthropic SDK call failed: {e}")
+        return ""

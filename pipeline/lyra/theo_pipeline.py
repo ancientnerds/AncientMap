@@ -33,6 +33,7 @@ from pipeline.lyra.config import LyraSettings, _get_settings
 from pipeline.lyra.minimax_shared import (
     create_minimax_client,
     minimax_chat,
+    minimax_chat_anthropic,
 )
 from pipeline.lyra.theo_citations import CitationRegistry, audit_citations
 from pipeline.lyra.theo_sources import MultiSourceSearch
@@ -163,10 +164,6 @@ class TheoPipeline:
 
     def __init__(self, settings: LyraSettings | None = None) -> None:
         self._settings = settings or _get_settings()
-        self._client = create_minimax_client(
-            self._settings.minimax_base_url,
-            self._settings.minimax_api_key,
-        )
         self._model = "MiniMax-M2.7"
         self._searcher = MultiSourceSearch(self._settings)
 
@@ -1177,29 +1174,20 @@ class TheoPipeline:
         def _run_specialist(spec: Specialist) -> tuple[str, str]:
             """Synchronous specialist call, returns (specialist_id, raw_json).
 
-            Creates a fresh httpx.Client per call because httpx.Client is not
-            thread-safe and we run multiple specialists in parallel via
-            ThreadPoolExecutor.
+            Uses minimax_chat_anthropic which is thread-safe (each call
+            creates its own request via the Anthropic SDK).
             """
             system_prompt, user_prompt = build_specialist_prompt(
                 spec,
                 ctx.question,
                 ctx.sources_context,
             )
-            client = create_minimax_client(
-                self._settings.minimax_base_url,
-                self._settings.minimax_api_key,
+            raw = minimax_chat_anthropic(
+                system_prompt,
+                user_prompt,
+                ctx.tier.max_tokens_per_call,
+                settings=self._settings,
             )
-            try:
-                raw = minimax_chat(
-                    client,
-                    self._model,
-                    system_prompt,
-                    user_prompt,
-                    ctx.tier.max_tokens_per_call,
-                )
-            finally:
-                client.close()
             return spec.id, raw
 
         # Launch all specialist calls in parallel
@@ -1715,7 +1703,7 @@ class TheoPipeline:
                 )
 
         def _chat(model, system, user, max_tokens):
-            return minimax_chat(self._client, model, system, user, max_tokens)
+            return minimax_chat_anthropic(system, user, max_tokens, settings=self._settings)
 
         result = judge_paper(
             ctx.paper_text,
@@ -1898,13 +1886,12 @@ class TheoPipeline:
     # ==================================================================
 
     def _m27_call(self, system: str, user_message: str, max_tokens: int) -> str:
-        """Synchronous M2.7 call via minimax_chat."""
-        return minimax_chat(
-            self._client,
-            self._model,
+        """Synchronous M2.7 call via Anthropic SDK (unified path)."""
+        return minimax_chat_anthropic(
             system,
             user_message,
             max_tokens,
+            settings=self._settings,
         )
 
     async def _m27_call_async(
