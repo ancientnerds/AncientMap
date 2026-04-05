@@ -965,6 +965,121 @@ def _format_all_sources(unified_sources: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _formulate_question(item: dict) -> str:
+    """Convert a news item into a research question for Theo stages."""
+    headline = item["headline"]
+    site = item.get("site_name") or ""
+    facts_str = "; ".join(item.get("facts", [])[:3])
+
+    if site:
+        return (
+            f"What is known about {headline.rstrip('.')}? "
+            f"Context: site {site}. Key facts: {facts_str}"
+        )
+    return f"What is known about {headline.rstrip('.')}? Key facts: {facts_str}"
+
+
+def _build_youtube_facts(item: dict) -> list[dict]:
+    """Build YouTube facts list for research_cluster()."""
+    facts = []
+    ts = item.get("timestamp_seconds", 0)
+    vid = item["video_id"]
+    snippet = "; ".join(item.get("facts", []))
+
+    facts.append(
+        {
+            "title": f'{item["channel_name"]} \u2014 "{item["video_title"]}"',
+            "url": (
+                f"https://youtube.com/watch?v={vid}&t={ts}"
+                if ts
+                else f"https://youtube.com/watch?v={vid}"
+            ),
+            "snippet": snippet,
+            "facts": item.get("facts", []),
+            "video_id": vid,
+            "timestamp_seconds": ts,
+            "channel_name": item["channel_name"],
+        }
+    )
+
+    # Include merged sources too
+    for ms in item.get("merged_sources", []):
+        ms_ts = ms.get("timestamp_seconds", 0)
+        ms_vid = ms["video_id"]
+        ms_snippet = "; ".join(ms.get("facts", []))
+        facts.append(
+            {
+                "title": f'{ms["channel_name"]} \u2014 "{ms["video_title"]}"',
+                "url": (
+                    f"https://youtube.com/watch?v={ms_vid}&t={ms_ts}"
+                    if ms_ts
+                    else f"https://youtube.com/watch?v={ms_vid}"
+                ),
+                "snippet": ms_snippet,
+                "facts": ms.get("facts", []),
+                "video_id": ms_vid,
+                "timestamp_seconds": ms_ts,
+                "channel_name": ms["channel_name"],
+            }
+        )
+
+    return facts
+
+
+def _assemble_from_clusters(
+    section_results: list[tuple[str, str, object]],
+) -> tuple[str, list[dict]]:
+    """Assemble per-cluster results into journal body + unified source list.
+
+    Groups results by category label, renumbers citations to be globally unique,
+    and builds a unified sources list.  Each entry in *section_results* is
+    ``(category, label, ClusterResult)``.
+
+    Returns (body_markdown, unified_sources).
+    """
+    from collections import OrderedDict
+
+    label_groups: OrderedDict[str, list[object]] = OrderedDict()
+    for _cat, label, result in section_results:
+        label_groups.setdefault(label, []).append(result)
+
+    body_parts: list[str] = []
+    unified_sources: list[dict] = []
+    next_citation = 1
+
+    for label, results in label_groups.items():
+        body_parts.append(f"## {label}\n")
+
+        for result in results:
+            # Build citation remapping: old [N] -> new [N]
+            remap: dict[int, int] = {}
+            for src in result.sources:
+                old_num = src["citation"]
+                remap[old_num] = next_citation
+                unified_sources.append(
+                    {
+                        "citation": next_citation,
+                        "url": src["url"],
+                        "label": src["label"],
+                        "type": src.get("type", "news"),
+                    }
+                )
+                next_citation += 1
+
+            # Renumber citations in prose
+            prose = result.prose
+            # Replace in reverse order to avoid [1] matching part of [10]
+            for old_num in sorted(remap.keys(), reverse=True):
+                prose = prose.replace(f"[{old_num}]", f"[__CITE_{remap[old_num]}__]")
+            for new_num in sorted(remap.values()):
+                prose = prose.replace(f"[__CITE_{new_num}__]", f"[{new_num}]")
+
+            body_parts.append(prose)
+            body_parts.append("")  # blank line between clusters in same section
+
+    return "\n".join(body_parts).strip(), unified_sources
+
+
 def _assemble_article(
     tldr: str,
     body: str,
@@ -1042,6 +1157,10 @@ def generate_weekly_article(
 ) -> bool:
     """Generate a weekly article from this week's NewsItems.
 
+    Uses Theo research stages (search, audit, specialists, synthesis,
+    write, judge) per-cluster instead of the old single-pass
+    write/verify/web_verify/assess flow.
+
     Args:
         settings: Pipeline settings.
         week_override: Optional (week_start, week_end) to generate for a past week.
@@ -1049,8 +1168,14 @@ def generate_weekly_article(
     Returns True if an article was created.
     """
     if not settings.anthropic_api_key:
-        logger.error("No LLM API key configured")
+        logger.error("No LLM API key configured — required for polish and headline steps")
         return False
+
+    if not settings.minimax_api_key:
+        logger.error("No MiniMax API key configured — required for Theo research stages")
+        return False
+
+    from pipeline.lyra.research_stages import ClusterResult, research_cluster
 
     t0_total = time.time()
     step_data: dict = {}
@@ -1090,75 +1215,59 @@ def generate_weekly_article(
 
         logger.info(f"Collected {len(items)} items for article generation")
 
-        # Group and assign citations
-        sections, speculative, sources = _group_and_cite(items)
+        # Group and assign citations — filter out speculative items
+        sections, _speculative, _sources = _group_and_cite(items)
 
-        # Build facts lookup for verification (including merged sources)
-        all_items = [i for s in sections for i in s["items"]] + speculative
-        facts_by_citation: dict[int, list[str]] = {}
-        for item in all_items:
-            if item.get("facts"):
-                facts_by_citation[item["citation"]] = item["facts"]
-            for ms in item.get("merged_sources", []):
-                if ms.get("facts"):
-                    facts_by_citation[ms["citation"]] = ms["facts"]
+        # Build all_items for video_ids collection (mainstream only)
+        all_items = [i for s in sections for i in s["items"]]
 
-        # -- write --
-        _write_article_heartbeat(step_data, "write", t0_total)
-        section_labels = [s["label"] for s in sections]
-        if speculative:
-            section_labels.append("Beyond the Mainstream")
-        logger.info(f"Writing article body: {', '.join(section_labels)}")
-        t0 = time.time()
-        draft_body = _write_article_body(sections, speculative, settings)
-        step_data["write"] = {
-            "count": len(draft_body),
-            "elapsed": round(time.time() - t0, 1),
-            "status": "done" if draft_body else "fail",
-        }
+        # -- research (per cluster via Theo stages) --
+        section_results: list[tuple[str, str, ClusterResult]] = []
 
-        if not draft_body:
-            logger.error("Article body generation returned empty")
-            _write_final_heartbeat(step_data, t0_total, error="Write step returned empty")
+        for section in sections:
+            label = section["label"]
+            _write_article_heartbeat(step_data, f"research_{label[:20]}", t0_total)
+
+            for item in section["items"]:
+                question = _formulate_question(item)
+                youtube_facts = _build_youtube_facts(item)
+
+                logger.info("Researching: %s", question[:80])
+                t0 = time.time()
+                result = research_cluster(question, youtube_facts, settings)
+
+                step_key = f"research_{item['headline'][:30]}"
+                step_data[step_key] = {
+                    "count": len(result.sources),
+                    "score": result.score,
+                    "elapsed": round(time.time() - t0, 1),
+                    "status": "done" if result.passed else "partial",
+                }
+
+                if result.prose:
+                    section_results.append((section["category"], label, result))
+                else:
+                    logger.warning("Cluster returned empty prose: %s", question[:60])
+
+        if not section_results:
+            _write_final_heartbeat(step_data, t0_total, error="All clusters failed")
             return False
 
-        # -- verify --
-        _write_article_heartbeat(step_data, "verify", t0_total)
-        logger.info("Verifying article against source facts (extended thinking)")
-        logger.info("Draft body length: %d chars", len(draft_body))
+        # -- assemble --
+        _write_article_heartbeat(step_data, "assemble", t0_total)
         t0 = time.time()
-        verified_body = _verify_article(draft_body, facts_by_citation, settings)
-        step_data["verify"] = {
-            "count": len(verified_body),
+        body, unified_sources = _assemble_from_clusters(section_results)
+        step_data["assemble"] = {
+            "count": len(unified_sources),
             "elapsed": round(time.time() - t0, 1),
-            "status": "done" if verified_body else "fail",
+            "status": "done",
         }
-        logger.info("Verified body length: %d chars", len(verified_body))
-
-        # -- web verify (convergence loop) --
-        _write_article_heartbeat(step_data, "web_verify", t0_total)
-        logger.info(
-            "Web-grounded fact-check (%s)",
-            settings.article_web_backend,
-        )
-        t0 = time.time()
-        web_verified_body, web_citations = _web_verify_article(verified_body, settings)
-        step_data["web_verify"] = {
-            "count": len(web_citations),
-            "elapsed": round(time.time() - t0, 1),
-            "status": "done" if web_verified_body != verified_body else "skip",
-        }
-        logger.info(
-            "Web-verified body length: %d chars, %d web refs",
-            len(web_verified_body),
-            len(web_citations),
-        )
 
         # -- polish --
         _write_article_heartbeat(step_data, "polish", t0_total)
         logger.info("Polishing article for coherence")
         t0 = time.time()
-        polished_body = _polish_article(web_verified_body, settings)
+        polished_body = _polish_article(body, settings)
         step_data["polish"] = {
             "count": len(polished_body),
             "elapsed": round(time.time() - t0, 1),
@@ -1174,26 +1283,6 @@ def generate_weekly_article(
             )
             _write_final_heartbeat(step_data, t0_total, error=error_msg)
             return False
-
-        # Remove uncited YouTube sources, renumber to sequential
-        polished_body, sources = _cleanup_citations(polished_body, sources)
-
-        # Merge YouTube [N] + web [a]-[z] into unified [1]-[N] sequence
-        polished_body, unified_sources = _merge_all_citations(polished_body, sources, web_citations)
-
-        # -- assess (final quality check with MiniMax) --
-        _write_article_heartbeat(step_data, "assess", t0_total)
-        logger.info("Running final quality assessment (MiniMax M2.7)")
-        t0 = time.time()
-        assessed_body = _assess_journal(polished_body, unified_sources, settings)
-        changed = assessed_body != polished_body
-        step_data["assess"] = {
-            "count": 1 if changed else 0,
-            "elapsed": round(time.time() - t0, 1),
-            "status": "done",
-        }
-        if changed:
-            polished_body = assessed_body
 
         # -- headline --
         _write_article_heartbeat(step_data, "headline", t0_total)
@@ -1213,7 +1302,7 @@ def generate_weekly_article(
         # Assemble final markdown
         article_content = _assemble_article(tldr, polished_body, sources_md)
 
-        # Collect unique video IDs
+        # Collect unique video IDs from original items
         video_ids = list({item["video_id"] for item in all_items})
 
         article = NewsArticle(
