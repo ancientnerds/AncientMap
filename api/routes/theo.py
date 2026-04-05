@@ -895,22 +895,22 @@ async def edit_research(
 
         result["report"] = body.report
 
-        # Re-audit citations on the new text
+        # Re-audit citations on the new text (mechanical check only)
         try:
             from pipeline.lyra.theo_citations import CitationRegistry, audit_citations
 
             registry = CitationRegistry()
-            # Rebuild registry from stored references if available
-            refs = result.get("audit", {}).get("references", [])
-            if isinstance(refs, list):
-                for ref in refs:
-                    if isinstance(ref, dict) and ref.get("id") and ref.get("title"):
-                        registry.add_source(
-                            source_id=ref["id"],
-                            title=ref.get("title", ""),
-                            url=ref.get("url", ""),
-                            snippet=ref.get("snippet", ""),
-                        )
+            # Register all [N] references found in the text
+            import re as _re
+
+            for num in {int(m) for m in _re.findall(r"\[(\d+)\]", body.report)}:
+                sid = f"ref_{num}"
+                registry.register_source(
+                    url=f"#ref-{num}",
+                    title=f"Reference {num}",
+                    snippet="",
+                )
+                registry.reference_numbers[sid] = num
             audit = audit_citations(body.report, registry)
             result["audit"] = audit
         except Exception as exc:
