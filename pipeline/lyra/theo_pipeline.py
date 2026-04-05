@@ -15,10 +15,12 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import json
 import logging
 import re
 import time
+import urllib.parse
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -112,6 +114,36 @@ class PipelineContext:
     total_tokens: int = 0
     pipeline_trace: list[dict] = field(default_factory=list)
     error: str = ""
+
+
+# ---------------------------------------------------------------------------
+# SSRF protection
+# ---------------------------------------------------------------------------
+
+
+def _is_safe_url(url: str) -> bool:
+    """Block SSRF: reject internal IPs, non-HTTP schemes, metadata endpoints."""
+    try:
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False
+        hostname = parsed.hostname or ""
+        # Block cloud metadata
+        if hostname in ("169.254.169.254", "metadata.google.internal"):
+            return False
+        # Block localhost
+        if hostname in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
+            return False
+        # Block private IPs
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback or ip.is_link_local:
+                return False
+        except ValueError:
+            pass  # hostname is a domain, not an IP — OK
+        return True
+    except Exception:
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -1040,6 +1072,9 @@ class TheoPipeline:
 
         async def _fetch_one(sid: str, url: str) -> tuple[str, str | None]:
             """Fetch URL and return (sid, extracted_text | None)."""
+            if not _is_safe_url(url):
+                logger.debug("SSRF check blocked URL: %s", url)
+                return sid, None
             async with semaphore:
                 try:
                     async with httpx.AsyncClient(

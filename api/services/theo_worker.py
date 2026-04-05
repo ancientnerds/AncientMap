@@ -18,32 +18,56 @@ from pipeline.database import get_session
 logger = logging.getLogger(__name__)
 
 
-def _refund_credits(request_id: str, effort: str) -> None:
-    """Refund credits to the user when a research request fails or is cancelled."""
+def _release_reservation(request_id: str, effort: str) -> None:
+    """Release reserved credits when a research request fails or is cancelled."""
     cost = THEO_CREDIT_COSTS.get(effort, 0)
     if cost <= 0:
         return
     try:
         with get_session() as session:
-            # Find the user who submitted this request
             row = session.execute(
                 text("SELECT user_id FROM research_requests WHERE id = :id"),
                 {"id": request_id},
             ).fetchone()
             if not row:
                 return
-            # Refund (only for non-unlimited users — unlimited weren't charged)
             session.execute(
                 text("""
-                    UPDATE discord_users SET credits = credits + :cost
+                    UPDATE discord_users SET reserved_credits = GREATEST(reserved_credits - :cost, 0)
                     WHERE discord_id = :uid AND is_unlimited = FALSE
                 """),
                 {"uid": row.user_id, "cost": cost},
             )
             session.commit()
-            logger.info(f"[THEO] Refunded {cost} credits to user {row.user_id} for {request_id}")
     except Exception as exc:
-        logger.warning(f"[THEO] Credit refund failed for {request_id}: {exc}")
+        logger.warning(f"[THEO] Reservation release failed for {request_id}: {exc}")
+
+
+def _deduct_credits(request_id: str, effort: str) -> None:
+    """Deduct credits and release reservation on successful completion."""
+    cost = THEO_CREDIT_COSTS.get(effort, 0)
+    if cost <= 0:
+        return
+    try:
+        with get_session() as session:
+            row = session.execute(
+                text("SELECT user_id FROM research_requests WHERE id = :id"),
+                {"id": request_id},
+            ).fetchone()
+            if not row:
+                return
+            session.execute(
+                text("""
+                    UPDATE discord_users
+                    SET credits = credits - :cost,
+                        reserved_credits = GREATEST(reserved_credits - :cost, 0)
+                    WHERE discord_id = :uid AND is_unlimited = FALSE
+                """),
+                {"uid": row.user_id, "cost": cost},
+            )
+            session.commit()
+    except Exception as exc:
+        logger.warning(f"[THEO] Credit deduction failed for {request_id}: {exc}")
 
 
 # Single-slot semaphore — only 1 research request at a time
@@ -123,8 +147,8 @@ async def _process_request(
         duration_ms = int((time.monotonic() - start) * 1000)
 
         if ctx.error:
-            # Refund credits on failure/cancel
-            _refund_credits(request_id, effort)
+            # Release reserved credits on failure/cancel
+            _release_reservation(request_id, effort)
 
             if "cancelled" in ctx.error.lower():
                 emit({"type": "done", "status": "cancelled"})
@@ -143,6 +167,9 @@ async def _process_request(
                     session.commit()
                 logger.warning(f"[THEO] Request {request_id} failed: {ctx.error}")
         else:
+            # Deduct credits and release reservation on success
+            _deduct_credits(request_id, effort)
+
             result = {
                 "report": ctx.paper_text,
                 "title": ctx.paper_title,
@@ -189,7 +216,7 @@ async def _process_request(
     except Exception as exc:
         duration_ms = int((time.monotonic() - start) * 1000)
         logger.error(f"[THEO] Unexpected error for request {request_id}: {exc}", exc_info=True)
-        _refund_credits(request_id, effort)
+        _release_reservation(request_id, effort)
         emit({"type": "done", "status": "failed"})
         with get_session() as session:
             session.execute(

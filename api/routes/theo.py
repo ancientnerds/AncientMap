@@ -173,7 +173,8 @@ async def theo_me(user: DiscordUser = Depends(get_current_user)):
 @router.post("/check-relevance")
 async def check_relevance(body: RelevanceCheckRequest, req: Request):
     """Run the relevancy gate standalone — fast M2.7 call, ~2-3 seconds."""
-    _theo_limiter.check(get_client_ip(req))
+    if not _theo_limiter.check(get_client_ip(req)):
+        raise HTTPException(status_code=429, detail="Too many requests. Please wait.")
 
     from pipeline.lyra.theo_pipeline import TheoPipeline
 
@@ -200,7 +201,8 @@ class EnrichPromptRequest(BaseModel):
 @router.post("/enrich-prompt")
 async def enrich_prompt(body: EnrichPromptRequest, req: Request):
     """Expand a casual question into a structured research prompt."""
-    _theo_limiter.check(get_client_ip(req))
+    if not _theo_limiter.check(get_client_ip(req)):
+        raise HTTPException(status_code=429, detail="Too many requests. Please wait.")
 
     from pipeline.lyra.config import _get_settings
     from pipeline.lyra.minimax_shared import create_minimax_client, minimax_chat
@@ -387,24 +389,28 @@ async def list_specialists():
 
 
 @router.post("/research", response_model=ResearchSubmitResponse)
-async def submit_research(body: ResearchSubmitRequest, req: Request):
+async def submit_research(
+    body: ResearchSubmitRequest,
+    req: Request,
+    user: DiscordUser = Depends(get_current_user),
+):
     """Submit a new research question for Theo to investigate."""
-    _theo_limiter.check(get_client_ip(req))
+    if not _theo_limiter.check(get_client_ip(req)):
+        raise HTTPException(status_code=429, detail="Too many requests. Please wait.")
 
     if body.effort not in EFFORT_CONFIG:
         raise HTTPException(status_code=400, detail=f"Invalid effort: {body.effort}")
 
-    user_id = _get_user_id(req)
     credit_cost = THEO_CREDIT_COSTS.get(body.effort, 300)
 
-    # Check user's active request count + credit balance
+    # Check user's active request count + atomic credit reservation
     with get_session() as session:
         count = session.execute(
             text("""
                 SELECT COUNT(*) FROM research_requests
                 WHERE user_id = :uid AND status IN ('queued', 'running')
             """),
-            {"uid": user_id},
+            {"uid": user.discord_id},
         ).scalar()
 
         if count >= MAX_REQUESTS_PER_USER:
@@ -413,22 +419,39 @@ async def submit_research(body: ResearchSubmitRequest, req: Request):
                 detail=f"Max {MAX_REQUESTS_PER_USER} concurrent requests per user",
             )
 
-        # Credit check — deduct upfront (refund on failure/cancel)
-        user_row = session.execute(
-            text("SELECT credits, is_unlimited FROM discord_users WHERE discord_id = :uid"),
-            {"uid": user_id},
-        ).fetchone()
-
-        if user_row and not user_row.is_unlimited:
-            if user_row.credits < credit_cost:
+        # Atomic credit reservation — single UPDATE, no race condition
+        result = session.execute(
+            text("""
+                UPDATE discord_users
+                SET reserved_credits = reserved_credits + :cost
+                WHERE discord_id = :uid
+                  AND is_unlimited = FALSE
+                  AND credits - reserved_credits >= :cost
+                RETURNING credits - reserved_credits - :cost AS remaining
+            """),
+            {"uid": user.discord_id, "cost": credit_cost},
+        )
+        reserved = result.fetchone()
+        if reserved is None:
+            # Check if user is unlimited
+            is_unlimited = session.execute(
+                text("SELECT is_unlimited FROM discord_users WHERE discord_id = :uid"),
+                {"uid": user.discord_id},
+            ).scalar()
+            if not is_unlimited:
+                user_credits = (
+                    session.execute(
+                        text(
+                            "SELECT credits - reserved_credits FROM discord_users WHERE discord_id = :uid"
+                        ),
+                        {"uid": user.discord_id},
+                    ).scalar()
+                    or 0
+                )
                 raise HTTPException(
                     status_code=402,
-                    detail=f"Not enough credits. {body.effort.title()} costs {credit_cost} credits, you have {user_row.credits}.",
+                    detail=f"Not enough credits. {body.effort.title()} costs {credit_cost} credits, you have {user_credits} available.",
                 )
-            session.execute(
-                text("UPDATE discord_users SET credits = credits - :cost WHERE discord_id = :uid"),
-                {"uid": user_id, "cost": credit_cost},
-            )
 
         # Build specialist options JSON (only if non-empty)
         spec_opts = None
@@ -459,7 +482,7 @@ async def submit_research(body: ResearchSubmitRequest, req: Request):
             """),
             {
                 "id": request_id,
-                "uid": user_id,
+                "uid": user.discord_id,
                 "q": body.question,
                 "effort": body.effort,
                 "spec_opts": spec_opts,
@@ -857,7 +880,7 @@ async def unpublish_research(
 
 
 class EditReportRequest(BaseModel):
-    report: str = Field(..., min_length=10)
+    report: str = Field(..., min_length=10, max_length=100000)
 
 
 @router.patch("/research/{request_id}")
@@ -1039,7 +1062,8 @@ async def get_public_research(slug: str):
 @router.post("/check-duplicates")
 async def check_duplicates(body: DuplicateCheckRequest, req: Request):
     """Search for public papers similar to a research question."""
-    _theo_limiter.check(get_client_ip(req))
+    if not _theo_limiter.check(get_client_ip(req)):
+        raise HTTPException(status_code=429, detail="Too many requests. Please wait.")
 
     try:
         from pipeline.lyra.theo_research_index import search_similar

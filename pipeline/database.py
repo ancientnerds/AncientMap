@@ -1080,6 +1080,7 @@ class DiscordUser(Base):
     avatar_hash: Mapped[str | None] = mapped_column(String(100), nullable=True)
     roles: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     credits: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    reserved_credits: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     is_unlimited: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="false", nullable=False
     )

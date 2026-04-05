@@ -1619,6 +1619,13 @@ def _run_migrations(engine) -> None:
             text("ALTER TABLE pipeline_heartbeats ADD COLUMN IF NOT EXISTS step_data JSONB")
         )
 
+        # Credit reservation model: reserve credits atomically on submit, deduct on completion
+        conn.execute(
+            text(
+                "ALTER TABLE discord_users ADD COLUMN IF NOT EXISTS reserved_credits INTEGER DEFAULT 0"
+            )
+        )
+
         # Theo specialist options: force_include / force_exclude
         conn.execute(
             text("ALTER TABLE research_requests ADD COLUMN IF NOT EXISTS specialist_options JSONB")
