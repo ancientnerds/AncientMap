@@ -282,8 +282,7 @@ def _call_anthropic_api(
     # (MiniMax doesn't support document content blocks or citations)
     if documents and is_minimax:
         docs_text = "\n\n".join(
-            f"--- {doc.get('title', 'Source')} ---\n{doc['data']}"
-            for doc in documents
+            f"--- {doc.get('title', 'Source')} ---\n{doc['data']}" for doc in documents
         )
         for i in range(len(messages) - 1, -1, -1):
             if messages[i]["role"] == "user":
@@ -475,6 +474,7 @@ def _get_client(settings: LyraSettings):
 # Structured output via tool-use trick (MiniMax)
 # ---------------------------------------------------------------------------
 
+
 def _build_structured_output_tool(schema: dict) -> dict:
     """Build an Anthropic tool definition that forces JSON matching the schema.
 
@@ -501,7 +501,10 @@ def _extract_tool_use_json(content: list) -> str | None:
     or None if no tool_use block is found.
     """
     for block in content:
-        if getattr(block, "type", None) == "tool_use" and getattr(block, "name", None) == "structured_output":
+        if (
+            getattr(block, "type", None) == "tool_use"
+            and getattr(block, "name", None) == "structured_output"
+        ):
             return json.dumps(block.input)
     return None
 
