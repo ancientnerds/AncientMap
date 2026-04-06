@@ -60,7 +60,10 @@ body.satellite-mode {
 .search-bar-inner,
 .search-filters,
 .site-card,
-.news-page-card {
+.news-page-card,
+.articles-hero,
+.articles-grid-card,
+.articles-attribution-channel {
   background: var(--nerv-panel-bg);
   backdrop-filter: blur(var(--nerv-panel-blur));
   -webkit-backdrop-filter: blur(var(--nerv-panel-blur));
@@ -130,7 +133,10 @@ body.satellite-mode {
 .search-bar-inner::before,
 .search-filters::before,
 .site-card::before,
-.news-page-card::before {
+.news-page-card::before,
+.articles-hero::before,
+.articles-grid-card::before,
+.articles-attribution-channel::before {
   content: '';
   position: absolute;
   inset: 0;
