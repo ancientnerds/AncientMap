@@ -55,9 +55,9 @@ CATEGORY_LABELS = {
 # Desired section ordering (categories not listed here go after these)
 CATEGORY_ORDER = list(CATEGORY_LABELS.keys())
 
-MAX_ITEMS = 25
-SAME_VIDEO_PENALTY = 3
-SAME_CATEGORY_PENALTY = 1
+MAX_ITEMS = 15
+SAME_VIDEO_PENALTY = 2
+SAME_CATEGORY_PENALTY = 0.5
 
 # Source tier system — calibrates LLM confidence language per channel.
 # Tier 1: Credentialed archaeologists / academic channels
@@ -271,7 +271,7 @@ def _collect_article_items(
     week_end: datetime,
     session,
     settings: LyraSettings,
-    min_items: int = 5,
+    min_items: int = 8,
 ) -> list[dict]:
     """Query top NewsItems for the week, ordered by significance.
 
@@ -1082,51 +1082,58 @@ def _assemble_from_clusters(
 
 
 def _inject_screenshots(body: str, items: list[dict]) -> str:
-    """Insert one screenshot per section from the original news items.
+    """Insert a screenshot after each cluster's first paragraph.
 
-    Finds the first ``## Heading`` for each section, then inserts a screenshot
-    image after the first paragraph in that section.  Only items with a
-    ``screenshot_url`` and ``significance >= 5`` are considered.
+    Each news item has a headline that appears somewhere in the body
+    (as part of the prose the LLM wrote about it).  We fuzzy-match item
+    headlines to body paragraphs and insert the screenshot after the first
+    paragraph that matches.
     """
-    # Build screenshot lookup: headline -> screenshot markdown
-    screenshots: list[tuple[str, str]] = []
+    # Build list of (keywords, screenshot_markdown) from items that have screenshots
+    screenshot_entries: list[tuple[set[str], str]] = []
     for item in items:
         url = item.get("screenshot_url")
-        if not url or (item.get("significance") or 0) < 3:
+        if not url:
             continue
         alt = item.get("headline", "")
-        screenshots.append((alt, f"\n![{alt}]({url})\n"))
+        # Extract significant keywords (4+ chars) for fuzzy matching
+        keywords = {w.lower() for w in alt.split() if len(w) >= 4}
+        if keywords:
+            screenshot_entries.append((keywords, f"\n![{alt}]({url})\n"))
 
-    if not screenshots:
+    if not screenshot_entries:
         return body
 
-    # Find each ## section and insert a screenshot after its first paragraph
-    lines = body.split("\n")
-    result: list[str] = []
-    ss_idx = 0
-    in_section = False
-    found_paragraph = False
+    # Split body into paragraphs (separated by blank lines)
+    paragraphs = re.split(r"\n\n+", body)
+    used: set[int] = set()  # track which screenshots have been inserted
+    result_parts: list[str] = []
 
-    for line in lines:
-        result.append(line)
+    for para in paragraphs:
+        result_parts.append(para)
 
-        if line.startswith("## "):
-            in_section = True
-            found_paragraph = False
+        # Skip headings and short lines
+        if para.startswith("#") or len(para) < 100:
             continue
 
-        # After a section heading, look for the first blank line after content
-        # (that marks the end of the first paragraph)
-        if in_section and not found_paragraph:
-            if line.strip() == "" and len(result) >= 2 and result[-2].strip():
-                # End of first paragraph — inject screenshot
-                if ss_idx < len(screenshots):
-                    alt, img_md = screenshots[ss_idx]
-                    result.append(img_md)
-                    ss_idx += 1
-                    found_paragraph = True
+        # Find the best matching screenshot for this paragraph
+        para_lower = para.lower()
+        best_idx = -1
+        best_score = 0
+        for idx, (keywords, _img) in enumerate(screenshot_entries):
+            if idx in used:
+                continue
+            score = sum(1 for kw in keywords if kw in para_lower)
+            if score > best_score and score >= 2:  # at least 2 keyword matches
+                best_score = score
+                best_idx = idx
 
-    return "\n".join(result)
+        if best_idx >= 0:
+            _kw, img_md = screenshot_entries[best_idx]
+            result_parts.append(img_md)
+            used.add(best_idx)
+
+    return "\n\n".join(result_parts)
 
 
 def _assemble_article(
@@ -1376,5 +1383,5 @@ def generate_weekly_article(
 
 def should_generate_article() -> bool:
     """Check if it's time to generate a weekly article (Sunday evening)."""
-    now = datetime.now(UTC)
-    return now.weekday() == 6 and now.hour >= 20  # Sunday 8 PM UTC
+    # TEMP: force regeneration — revert after rebuild
+    return True
