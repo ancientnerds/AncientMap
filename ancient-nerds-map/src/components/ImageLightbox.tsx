@@ -29,6 +29,7 @@ interface ImageLightboxProps {
   currentIndex: number
   onClose: () => void
   onNavigate: (index: number) => void
+  onSetHero?: (image: LightboxImage) => Promise<boolean>
 }
 
 export default function ImageLightbox({
@@ -36,6 +37,7 @@ export default function ImageLightbox({
   currentIndex,
   onClose,
   onNavigate,
+  onSetHero,
 }: ImageLightboxProps) {
   const current = images[currentIndex]
   const hasMultiple = images.length > 1
@@ -46,6 +48,7 @@ export default function ImageLightbox({
   const [isPanning, setIsPanning] = useState(false)
   const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 })
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
+  const [heroState, setHeroState] = useState<'idle' | 'setting' | 'success' | 'failed'>('idle')
 
   const containerRef = useRef<HTMLDivElement>(null)
   const imageRef = useRef<HTMLImageElement>(null)
@@ -60,6 +63,7 @@ export default function ImageLightbox({
   useEffect(() => {
     setZoom(1)
     setPosition({ x: 0, y: 0 })
+    setHeroState('idle')
   }, [currentIndex])
 
   // Get container size on mount and resize
@@ -201,6 +205,15 @@ export default function ImageLightbox({
   const zoomReset = () => {
     setZoom(1)
     setPosition({ x: 0, y: 0 })
+  }
+
+  // Set hero handler
+  const handleSetHero = async () => {
+    if (!onSetHero || heroState === 'setting') return
+    setHeroState('setting')
+    const ok = await onSetHero(current)
+    setHeroState(ok ? 'success' : 'failed')
+    setTimeout(() => setHeroState('idle'), 2000)
   }
 
   // Keyboard navigation
@@ -417,6 +430,36 @@ export default function ImageLightbox({
                 </svg>
                 Smithsonian
               </a>
+            )}
+            {onSetHero && current.sourceType === 'wikimedia' && (
+              <button
+                className="lightbox-set-hero"
+                onClick={handleSetHero}
+                disabled={heroState === 'setting'}
+              >
+                {heroState === 'setting' ? (
+                  <>
+                    <div className="map-loading-spinner" style={{ width: 12, height: 12 }} />
+                    Setting...
+                  </>
+                ) : heroState === 'success' ? (
+                  <>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    Done
+                  </>
+                ) : heroState === 'failed' ? (
+                  <>Failed</>
+                ) : (
+                  <>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                    </svg>
+                    Set as Hero
+                  </>
+                )}
+              </button>
             )}
           </div>
           {hasMultiple && (

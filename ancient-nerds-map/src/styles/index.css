@@ -9132,6 +9132,29 @@ body.hud-hidden .empire-borders-window {
   gap: 4px;
 }
 
+.lightbox-set-hero {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--nerv-o, #FF9830);
+  background: none;
+  border: 1px solid rgba(255, 152, 48, 0.3);
+  padding: 3px 10px;
+  margin-left: 8px;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.lightbox-set-hero:hover:not(:disabled) {
+  border-color: rgba(255, 152, 48, 0.6);
+  background: rgba(255, 152, 48, 0.06);
+  color: #ffb060;
+}
+
+.lightbox-set-hero:disabled {
+  opacity: 0.6;
+}
+
 /* ==========================================================================
    Gallery Source Badges (Wikipedia)
    ========================================================================== */
