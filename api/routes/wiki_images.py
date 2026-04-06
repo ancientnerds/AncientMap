@@ -144,8 +144,8 @@ async def set_hero(
         else:
             db.execute(
                 text("""
-                    INSERT INTO wiki_images (site_id, filename, original_url, commons_page_url, is_hero, is_lead, source_type, width, height)
-                    VALUES (:sid, 'hero.webp', :orig, :attr, true, false, 'manual', :w, :h)
+                    INSERT INTO wiki_images (site_id, filename, original_url, commons_page_url, is_hero, is_lead, sort_order, source_type, width, height)
+                    VALUES (:sid, 'hero.webp', :orig, :attr, true, false, 0, 'manual', :w, :h)
                 """),
                 {
                     "sid": site_id,
