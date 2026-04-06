@@ -3,10 +3,12 @@ import type { GalleryImage } from '../../ImageGallery'
 import type { GalleryTab, UnifiedGalleryItem } from '../types'
 import { contentService, type ContentTier } from '../../../services/connectors'
 import { fetchSiteImages } from '../../../services/imageService'
+import { config } from '../../../config'
 import { useTieredFetch } from './useTieredFetch'
 import { useWebcamData } from './useWebcamData'
 import { dedupePhotos, selectCurrentItems } from './galleryUtils'
 import type { GalleryHookReturn, SketchfabModelCompat } from './galleryTypes'
+import type { NewsItemData } from '../../../types/news'
 
 interface UseGalleryDataOptions {
   siteId: string
@@ -74,6 +76,24 @@ export function useGalleryData({
 
   const { webcamItems, isLoadingWebcams } = useWebcamData({ lat, lng, isOffline })
 
+  // Stories: fetch news items linked to this site
+  const [storiesItems, setStoriesItems] = useState<NewsItemData[]>([])
+  const [isLoadingStories, setIsLoadingStories] = useState(false)
+
+  useEffect(() => {
+    if (!siteId || isOffline) return
+    setIsLoadingStories(true)
+    const controller = new AbortController()
+    fetch(`${config.api.baseUrl}/news/feed?site_id=${encodeURIComponent(siteId)}&page_size=20&sort=significance`, {
+      signal: controller.signal,
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.items) setStoriesItems(data.items) })
+      .catch(() => {})
+      .finally(() => setIsLoadingStories(false))
+    return () => controller.abort()
+  }, [siteId, isOffline])
+
   // Merge Wikipedia images with backend photos (deduped)
   const wikiItems: UnifiedGalleryItem[] = useMemo(() =>
     wikiImages.map((img, i) => ({
@@ -135,7 +155,7 @@ export function useGalleryData({
     activeGalleryTab, setActiveGalleryTab,
     isGalleryExpanded, setIsGalleryExpanded,
     sketchfabCategoryFilter, setSketchfabCategoryFilter,
-    photoItems, videoItems, mapItems, sketchfabItems, artifactItems, artworkItems, bookItems, paperItems, mythItems, webcamItems,
+    photoItems, videoItems, mapItems, sketchfabItems, artifactItems, artworkItems, bookItems, paperItems, mythItems, webcamItems, storiesItems,
     currentItems,
     isLoadingImages: isLoadingWikiImages || tiered.tier1Loading,
     isLoadingVideos: tiered.tier2Loading,
@@ -145,6 +165,7 @@ export function useGalleryData({
     isLoadingBooks: tiered.tier4Loading,
     isLoadingPapers: tiered.tier4Loading,
     isLoadingWebcams,
+    isLoadingStories,
     isLoading: tiered.isLoading,
     heroImage,
     heroImageSrc,

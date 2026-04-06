@@ -810,6 +810,8 @@ export default function SitePopup({
             paperCount={galleryHook.paperItems.length}
             mythCount={galleryHook.mythItems.length}
             webcamCount={galleryHook.webcamItems.length}
+            storyCount={galleryHook.storiesItems.length}
+            isLoadingStories={galleryHook.isLoadingStories}
             isLoadingWebcams={galleryHook.isLoadingWebcams}
             isLoadingImages={galleryHook.isLoadingImages}
             isLoadingVideos={galleryHook.isLoadingVideos}
@@ -852,6 +854,8 @@ export default function SitePopup({
           isExpanded={galleryHook.isGalleryExpanded}
           sketchfabCategoryFilter={galleryHook.sketchfabCategoryFilter}
           onSketchfabCategoryFilterChange={galleryHook.setSketchfabCategoryFilter}
+          storiesItems={galleryHook.storiesItems}
+          isLoadingStories={galleryHook.isLoadingStories}
         />
 
         {/* Gallery Footer: Connector Status + Dev Warning */}

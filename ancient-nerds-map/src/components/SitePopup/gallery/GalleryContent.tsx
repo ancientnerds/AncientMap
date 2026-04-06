@@ -2,6 +2,8 @@ import { GalleryGrid } from './GalleryGrid'
 import { WebcamGallery } from './WebcamGallery'
 import { SourceFavicon } from './galleryUtils'
 import LazyImage from '../../LazyImage'
+import NewsCard from '../../news/NewsCard'
+import { config } from '../../../config'
 import type { GalleryContentProps } from '../types'
 
 // Text item structure (from unified connectors or legacy)
@@ -26,11 +28,84 @@ export function GalleryContent({
   isExpanded,
   sketchfabCategoryFilter,
   onSketchfabCategoryFilterChange,
+  storiesItems,
+  isLoadingStories,
 }: GalleryContentProps) {
 
   // Webcams tab - custom rendering with WebcamGallery
   if (activeTab === 'webcams') {
     return <WebcamGallery items={items} isLoading={isLoading} isOffline={isOffline} />
+  }
+
+  // Stories tab — news cards linked to this site
+  if (activeTab === 'stories') {
+    if (isOffline) {
+      return (
+        <div className="gallery-grid-container">
+          <div className="gallery-empty gallery-offline-notice">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.5">
+              <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path>
+              <line x1="2" y1="2" x2="22" y2="22" strokeWidth="2"/>
+            </svg>
+            <span>Stories require internet</span>
+          </div>
+        </div>
+      )
+    }
+
+    if (isLoadingStories && (!storiesItems || storiesItems.length === 0)) {
+      return (
+        <div className="gallery-grid-container">
+          <div className="gallery-loading">
+            <div className="map-loading-spinner" />
+          </div>
+        </div>
+      )
+    }
+
+    if (!isLoadingStories && (!storiesItems || storiesItems.length === 0)) {
+      return (
+        <div className="gallery-grid-container">
+          <div className="gallery-empty">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.5">
+              <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path>
+            </svg>
+            <span>No stories found for this site</span>
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <div className="gallery-grid-container gallery-stories-list">
+        {storiesItems!.map(item => {
+          const screenshotUrl = item.screenshot_url
+            ? `${config.api.baseUrl}${item.screenshot_url.replace('/api', '')}`
+            : item.video.thumbnail_url
+          const deepLink = item.youtube_deep_url || item.youtube_url || '#'
+          return (
+            <NewsCard
+              key={item.id}
+              size="sm"
+              headline={item.headline}
+              postText={item.post_text}
+              channelName={item.video.channel_name}
+              publishedAt={item.video.published_at}
+              significance={item.significance}
+              newsCategory={item.news_category}
+              speculativeTag={item.speculative_tag}
+              screenshotUrl={screenshotUrl}
+              deepLink={deepLink}
+              videoId={item.video.id}
+              videoTitle={item.video.title}
+              durationMinutes={item.video.duration_minutes}
+              timestampSeconds={item.timestamp_seconds}
+              facts={item.facts}
+            />
+          )
+        })}
+      </div>
+    )
   }
 
   // Videos tab - grid with play overlay on each thumbnail

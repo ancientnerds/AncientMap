@@ -39,6 +39,10 @@ export interface GalleryHookReturn {
   webcamItems: UnifiedGalleryItem[]
   currentItems: UnifiedGalleryItem[]
 
+  // Stories (separate from gallery items — uses NewsItemData)
+  storiesItems: import('../../../types/news').NewsItemData[]
+  isLoadingStories: boolean
+
   // Loading states (names match GalleryTabs props directly)
   isLoadingImages: boolean
   isLoadingVideos: boolean
