@@ -301,7 +301,7 @@ export default function SitePopup({
   // Lightbox state
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [lightboxItems, setLightboxItems] = useState<LightboxImage[]>([])
-  const [, setIsSettingHero] = useState(false)
+  const [isSettingHero, setIsSettingHero] = useState(false)
 
   // Model viewer state
   const [modelViewerIndex, setModelViewerIndex] = useState<number | null>(null)
@@ -548,6 +548,7 @@ export default function SitePopup({
             title={displaySite.title}
             heroImageSrc={galleryHook.heroImageSrc}
             isLoadingImages={galleryHook.isLoadingImages}
+            isSettingHero={isSettingHero}
             sourceInfo={sourceInfo}
             sourceName={sourceName}
             sourceColor={sourceColor}

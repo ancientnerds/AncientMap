@@ -8,6 +8,7 @@ export function HeroHeader({
   title,
   heroImageSrc,
   isLoadingImages = false,
+  isSettingHero = false,
   sourceInfo,
   sourceName,
   sourceColor,
@@ -176,7 +177,13 @@ export function HeroHeader({
           draggable={false}
           onError={(e) => { e.currentTarget.style.display = 'none' }}
         />
-      ) : isLoadingImages ? (
+      ) : null}
+      {isSettingHero && (
+        <div className="popup-hero-loading" style={{ background: 'rgba(0,0,0,0.5)' }}>
+          <div className="map-loading-spinner" />
+        </div>
+      )}
+      {!heroImageSrc && isLoadingImages ? (
         <div className="popup-hero-loading">
           <div className="popup-hero-shimmer" />
         </div>
