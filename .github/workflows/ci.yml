@@ -161,6 +161,8 @@ jobs:
               git pull origin main
             }
             git lfs pull
+            echo "==> Fixing wiki image permissions for API container..."
+            chmod -R a+w public/data/images/wiki/ 2>/dev/null || true
             echo "==> Restoring snapshots..."
             mkdir -p public/data/snapshots
             cp -r /tmp/snapshots_backup/* public/data/snapshots/ 2>/dev/null || true
