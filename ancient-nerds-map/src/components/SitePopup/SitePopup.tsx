@@ -462,7 +462,12 @@ export default function SitePopup({
       }
       const data = await res.json()
       if (data.path) {
-        galleryHook.setHeroImageSrc?.(data.path + '?t=' + Date.now())
+        const newUrl = data.path + '?t=' + Date.now()
+        galleryHook.setHeroImageSrc?.(newUrl)
+        // Persist to site data so it survives popup close/reopen
+        if (onSiteUpdate) {
+          onSiteUpdate(displaySite.id, { ...displaySite, image: newUrl })
+        }
       }
       return true
     } catch {
