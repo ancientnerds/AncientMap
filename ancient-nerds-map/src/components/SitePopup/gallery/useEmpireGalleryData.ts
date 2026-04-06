@@ -164,6 +164,7 @@ export function useEmpireGalleryData({
     isLoadingStories: false,
     isLoading,
     heroImage, heroImageSrc,
+    setHeroImageSrc: undefined,
     sketchfabModels,
     sourcesSearched: tiered.sourcesSearched,
     sourcesFailed: tiered.sourcesFailed,

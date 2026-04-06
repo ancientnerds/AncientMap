@@ -39,6 +39,9 @@ export function useGalleryData({
   const [wikiImages, setWikiImages] = useState<GalleryImage[]>([])
   const [isLoadingWikiImages, setIsLoadingWikiImages] = useState(false)
 
+  // Hero image override (set when user picks a new hero via lightbox)
+  const [heroImageOverride, setHeroImageOverride] = useState<string | null>(null)
+
   useEffect(() => {
     if (!siteId || isOffline) return
     setIsLoadingWikiImages(true)
@@ -140,7 +143,8 @@ export function useGalleryData({
 
   const wikiHero = wikiImages[0] || null
   // Curated thumbnail (card image) takes priority to avoid hero swap on popup open
-  const heroImageSrc = thumbnailUrl || wikiHero?.full || photoItems[0]?.full
+  // heroImageOverride takes top priority (user just set a new hero via lightbox)
+  const heroImageSrc = heroImageOverride || thumbnailUrl || wikiHero?.full || photoItems[0]?.full
   // Only attach wiki metadata when the displayed hero is actually from wiki images
   const heroImage = (!thumbnailUrl && wikiHero) ? {
     thumb: wikiHero.thumb,
@@ -169,6 +173,7 @@ export function useGalleryData({
     isLoading: tiered.isLoading,
     heroImage,
     heroImageSrc,
+    setHeroImageSrc: setHeroImageOverride,
     sketchfabModels,
     sourcesSearched: tiered.sourcesSearched,
     sourcesFailed: tiered.sourcesFailed,

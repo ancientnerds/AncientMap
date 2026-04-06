@@ -301,6 +301,7 @@ export default function SitePopup({
   // Lightbox state
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [lightboxItems, setLightboxItems] = useState<LightboxImage[]>([])
+  const [, setIsSettingHero] = useState(false)
 
   // Model viewer state
   const [modelViewerIndex, setModelViewerIndex] = useState<number | null>(null)
@@ -437,6 +438,35 @@ export default function SitePopup({
     setLightboxItems(lightboxImages)
     setLightboxIndex(index)
   }
+
+  // Handle setting a hero image via the lightbox
+  const handleSetHero = useCallback(async (image: LightboxImage): Promise<boolean> => {
+    if (!authToken || !isFounder || !displaySite.id) return false
+    setIsSettingHero(true)
+    try {
+      const res = await fetch(`${config.api.baseUrl}/wiki-images/${displaySite.id}/set-hero`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          image_url: image.src,
+          attribution_url: image.sourceUrl || '',
+        }),
+      })
+      if (!res.ok) return false
+      const data = await res.json()
+      if (data.thumbnail_url) {
+        galleryHook.setHeroImageSrc?.(data.thumbnail_url + '?t=' + Date.now())
+      }
+      return true
+    } catch {
+      return false
+    } finally {
+      setIsSettingHero(false)
+    }
+  }, [authToken, isFounder, displaySite.id])
 
   // Popup content
   const popupContent = (
@@ -887,6 +917,7 @@ export default function SitePopup({
       currentIndex={lightboxIndex}
       onClose={() => setLightboxIndex(null)}
       onNavigate={setLightboxIndex}
+      onSetHero={isFounder ? handleSetHero : undefined}
     />,
     document.body
   )

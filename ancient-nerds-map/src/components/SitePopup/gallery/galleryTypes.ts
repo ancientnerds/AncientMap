@@ -57,6 +57,7 @@ export interface GalleryHookReturn {
   // Hero
   heroImage: HeroImage | null
   heroImageSrc: string | undefined
+  setHeroImageSrc: ((src: string) => void) | undefined
 
   // Compat for ModelViewer
   sketchfabModels: SketchfabModelCompat[]
