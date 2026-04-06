@@ -77,7 +77,7 @@ export function GalleryContent({
     }
 
     return (
-      <div className="gallery-grid-container gallery-stories-list">
+      <div className="gallery-stories-list">
         {storiesItems!.map(item => {
           const screenshotUrl = item.screenshot_url
             ? `${config.api.baseUrl}${item.screenshot_url.replace('/api', '')}`

@@ -9812,6 +9812,67 @@ body.hud-hidden .empire-borders-window {
   border-radius: 3px;
 }
 
+/* Stories tab — horizontal scroll of compact news cards */
+.gallery-stories-list {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 12px;
+  scroll-snap-type: x mandatory;
+}
+
+.gallery-stories-list .news-feed-item {
+  flex: 0 0 220px;
+  scroll-snap-align: start;
+  border-bottom: none;
+  border: 1px solid var(--nerv-panel-border);
+  background: var(--nerv-panel-bg);
+  padding: 10px 12px;
+  font-size: 11px;
+}
+
+.gallery-stories-list .news-card-post-text {
+  font-size: 11px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.gallery-stories-list .news-card-meta {
+  font-size: 9px;
+}
+
+.gallery-stories-list .news-card-thumb {
+  aspect-ratio: 16 / 9;
+}
+
+.gallery-stories-list::-webkit-scrollbar {
+  height: 6px;
+}
+
+.gallery-stories-list::-webkit-scrollbar-track {
+  background: rgba(192, 32, 35, 0.05);
+}
+
+.gallery-stories-list::-webkit-scrollbar-thumb {
+  background: rgba(192, 32, 35, 0.3);
+}
+
+/* Expanded: wrap into grid */
+.popup-gallery-section.expanded .gallery-stories-list {
+  flex-wrap: wrap;
+  overflow: visible;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.popup-gallery-section.expanded .gallery-stories-list .news-feed-item {
+  flex: none;
+}
+
 /* Gallery expanded state */
 .popup-gallery-section.expanded {
   position: absolute !important;
