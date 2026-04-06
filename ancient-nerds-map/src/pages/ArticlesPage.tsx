@@ -74,13 +74,14 @@ function parseWebCitations(content: string): Map<number, string> {
 
 function enrichCitations(content: string, webCites: Map<number, string>): string {
   // Replace [N] with links — web citations get direct URLs, YouTube get #sources
+  // Use [\[N\]] so markdown renders the brackets as link text
   return content.replace(/(?<!\[)\[(\d+)\](?!\()/g, (_match, numStr) => {
     const num = parseInt(numStr, 10)
     const webUrl = webCites.get(num)
     if (webUrl) {
-      return `[${num}](${webUrl})`
+      return `[\\[${num}\\]](${webUrl})`
     }
-    return `[${num}](#sources)`
+    return `[\\[${num}\\]](#sources)`
   })
 }
 
