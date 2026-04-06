@@ -72,7 +72,10 @@ async def set_hero(
         print(f"[set-hero] Loading image: {body.image_url}", flush=True)
         if body.image_url.startswith("/data/"):
             local_path = Path("/app/public") / body.image_url.lstrip("/")
-            print(f"[set-hero] Resolved local path: {local_path} (exists={local_path.exists()})", flush=True)
+            print(
+                f"[set-hero] Resolved local path: {local_path} (exists={local_path.exists()})",
+                flush=True,
+            )
             if not local_path.exists():
                 raise HTTPException(status_code=400, detail=f"Local image not found: {local_path}")
             image_bytes = local_path.read_bytes()
