@@ -120,26 +120,18 @@ async def set_hero(
             {"sid": site_id},
         )
 
-        # Check if a manual hero row already exists
+        # Check if this image already has a row (unique on site_id + original_url)
         existing = db.execute(
-            text(
-                "SELECT id FROM wiki_images WHERE site_id = :sid AND source_type = 'manual' AND filename = 'hero.webp'"
-            ),
-            {"sid": site_id},
+            text("SELECT id FROM wiki_images WHERE site_id = :sid AND original_url = :orig"),
+            {"sid": site_id, "orig": body.image_url},
         ).fetchone()
 
         if existing:
             db.execute(
                 text(
-                    "UPDATE wiki_images SET original_url = :orig, commons_page_url = :attr, is_hero = true, width = :w, height = :h WHERE id = :id"
+                    "UPDATE wiki_images SET filename = 'hero.webp', is_hero = true, source_type = 'manual', width = :w, height = :h WHERE id = :id"
                 ),
-                {
-                    "id": existing[0],
-                    "orig": body.image_url,
-                    "attr": body.attribution_url,
-                    "w": final_width,
-                    "h": final_height,
-                },
+                {"id": existing[0], "w": final_width, "h": final_height},
             )
         else:
             db.execute(
