@@ -1,9 +1,4 @@
-"""
-Wiki Images API Routes.
-
-Serves locally cached Wikipedia/Wikimedia Commons image metadata for sites.
-Images are served as static files by FastAPI at /data/images/wiki/.
-"""
+"""Wiki images API — hero management and local image cache."""
 
 import logging
 from io import BytesIO
@@ -12,11 +7,11 @@ from pathlib import Path
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from PIL import Image
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from api.services.jwt_auth import require_founder
+from api.auth import require_founder
 from pipeline.database import DiscordUser, get_db
 
 logger = logging.getLogger(__name__)
@@ -74,7 +69,7 @@ async def set_hero(
     if body.image_url.startswith("/data/"):
         local_path = Path("/app/public") / body.image_url.lstrip("/")
         if not local_path.exists():
-            raise HTTPException(status_code=400, detail="Local image not found")
+            raise HTTPException(status_code=400, detail=f"Local image not found: {local_path}")
         image_bytes = local_path.read_bytes()
     else:
         async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
@@ -105,43 +100,49 @@ async def set_hero(
     img.save(buf, format="WEBP", quality=WEBP_QUALITY, method=4)
     hero_path.write_bytes(buf.getvalue())
 
-    # Clear existing hero flags for this site
-    db.execute(
-        text("UPDATE wiki_images SET is_hero = false WHERE site_id = :sid AND is_hero = true"),
-        {"sid": site_id},
-    )
-
-    # Upsert wiki_images row
-    db.execute(
-        text("""
-        INSERT INTO wiki_images (site_id, filename, original_url, commons_page_url, is_hero, source_type, width, height)
-        VALUES (:sid, 'hero.webp', :orig, :attr, true, 'manual', :w, :h)
-        ON CONFLICT ON CONSTRAINT uq_wiki_image_site_url
-        DO UPDATE SET
-            filename = 'hero.webp',
-            commons_page_url = :attr,
-            is_hero = true,
-            source_type = 'manual',
-            width = :w,
-            height = :h
-    """),
-        {
-            "sid": site_id,
-            "orig": body.image_url,
-            "attr": body.attribution_url,
-            "w": final_width,
-            "h": final_height,
-        },
-    )
-
-    # Update thumbnail_url on unified_sites
     thumb_path = f"/data/images/wiki/{site_id_short}/hero.webp"
-    db.execute(
-        text("UPDATE unified_sites SET thumbnail_url = :thumb WHERE id = :sid"),
-        {"thumb": thumb_path, "sid": site_id},
-    )
 
-    db.commit()
+    try:
+        # Clear existing hero flags for this site
+        db.execute(
+            text("UPDATE wiki_images SET is_hero = false WHERE site_id = :sid AND is_hero = true"),
+            {"sid": site_id},
+        )
+
+        # Upsert wiki_images row
+        db.execute(
+            text("""
+            INSERT INTO wiki_images (site_id, filename, original_url, commons_page_url, is_hero, source_type, width, height)
+            VALUES (:sid, 'hero.webp', :orig, :attr, true, 'manual', :w, :h)
+            ON CONFLICT (site_id, original_url)
+            DO UPDATE SET
+                filename = 'hero.webp',
+                commons_page_url = :attr,
+                is_hero = true,
+                source_type = 'manual',
+                width = :w,
+                height = :h
+        """),
+            {
+                "sid": site_id,
+                "orig": body.image_url,
+                "attr": body.attribution_url,
+                "w": final_width,
+                "h": final_height,
+            },
+        )
+
+        # Update thumbnail_url on unified_sites
+        db.execute(
+            text("UPDATE unified_sites SET thumbnail_url = :thumb WHERE id = :sid"),
+            {"thumb": thumb_path, "sid": site_id},
+        )
+
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"[set-hero] DB error: {e}", flush=True)
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
     return {"success": True, "path": thumb_path}
 
