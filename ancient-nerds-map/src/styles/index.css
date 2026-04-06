@@ -9823,11 +9823,16 @@ body.hud-hidden .empire-borders-window {
 }
 
 .gallery-stories-list .news-feed-item {
-  flex: 0 0 300px;
+  flex: 0 0 150px;
   scroll-snap-align: start;
   border-bottom: none;
   border: 1px solid var(--nerv-panel-border);
   background: var(--nerv-panel-bg);
+  transform: scale(0.5);
+  transform-origin: top left;
+  width: 300px;
+  margin-right: -150px;
+  margin-bottom: -50%;
 }
 
 .gallery-stories-list::-webkit-scrollbar {
@@ -9845,7 +9850,7 @@ body.hud-hidden .empire-borders-window {
 /* Expanded: wrap into grid */
 .popup-gallery-section.expanded .gallery-stories-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   overflow: visible;
 }
 
