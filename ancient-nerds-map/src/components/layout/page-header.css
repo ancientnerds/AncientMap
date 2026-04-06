@@ -106,7 +106,7 @@
   gap: 5px;
   padding: 3px 8px;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 0;
   transition: background 0.15s;
 }
 .page-header-live:hover {

@@ -889,7 +889,7 @@ export default function AccountPage() {
                             padding: '6px 14px',
                             background: '#f96854',
                             color: '#fff',
-                            borderRadius: '6px',
+                            borderRadius: 0,
                             fontSize: '0.85em',
                             textDecoration: 'none',
                           }}

@@ -55,7 +55,7 @@
   font-weight: 700;
   letter-spacing: 1px;
   padding: 2px 8px;
-  border-radius: 2px;
+  border-radius: 0;
 }
 .sdp-badge-done { background: var(--nerv-g); color: #000; }
 .sdp-badge-fail { background: var(--nerv-o); color: #000; }

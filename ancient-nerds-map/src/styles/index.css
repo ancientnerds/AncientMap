@@ -315,7 +315,6 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   padding: 8px 12px;
   background: var(--surface-crt);
   border: 1px solid var(--border-accent-medium);
-  border-radius: 6px;
   color: var(--crt-600);
   font-size: 11px;
   cursor: pointer;
@@ -1302,7 +1301,6 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   height: 12px;
   background: rgba(0, 20, 25, 0.6);
   border: 1px solid var(--crt-700);
-  border-radius: 2px;
   cursor: pointer;
   position: relative;
   flex-shrink: 0;
@@ -1361,7 +1359,6 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   color: var(--crt-600);
   background: rgba(0, 20, 25, 0.6);
   border: 1px solid var(--crt-700);
-  border-radius: 4px;
   cursor: pointer;
   transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
 }
@@ -1436,7 +1433,6 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   gap: 0;
   margin-bottom: 12px;
   border: 1px solid var(--border-accent);
-  border-radius: 4px;
   overflow: hidden;
 }
 
@@ -1581,7 +1577,6 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   padding: 10px 12px;
   background: rgba(0, 20, 25, 0.6);
   border: 1px solid var(--border-accent);
-  border-radius: 4px;
   color: var(--crt-600);
   font-size: 11px;
   cursor: pointer;
@@ -1717,7 +1712,6 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   padding: 8px 14px;
   background: rgba(0, 20, 25, 0.6);
   border: 1px solid var(--border-accent);
-  border-radius: 6px;
   color: var(--text-primary);
   font-size: 12px;
   cursor: pointer;
@@ -1757,7 +1751,6 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   gap: 2px;
   background: rgba(0, 20, 25, 0.6);
   border: 1px solid var(--border-accent);
-  border-radius: 4px;
   padding: 2px;
 }
 
@@ -1765,7 +1758,6 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   padding: 4px 10px;
   background: transparent;
   border: none;
-  border-radius: 3px;
   color: var(--text-secondary);
   font-size: 11px;
   font-weight: 500;
@@ -1813,7 +1805,6 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   padding: 2px 8px;
   background: transparent;
   border: 1px solid var(--crt-700);
-  border-radius: 3px;
   color: var(--brand-primary);
   font-size: 10px;
   cursor: pointer;
@@ -1867,7 +1858,6 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   height: 24px;
   background: transparent;
   border: none;
-  border-radius: 4px;
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s ease;
@@ -3410,7 +3400,6 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   margin: 0;
   background: rgba(0, 20, 25, 0.6);
   border: 1px solid var(--accent-glow-30);
-  border-radius: 2px;
   cursor: pointer;
   position: relative;
   transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
@@ -3453,7 +3442,6 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   padding: 4px 8px;
   background: transparent;
   border: 1px solid var(--border-accent);
-  border-radius: 3px;
   color: var(--text-secondary);
   font-family: 'Orbitron', monospace;
   font-size: 10px;
@@ -3507,7 +3495,6 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   margin: 0;
   background: rgba(0, 20, 25, 0.6);
   border: 1px solid var(--accent-glow-30);
-  border-radius: 2px;
   cursor: pointer;
   position: relative;
   transition: background 0.2s ease, border-color 0.2s ease;
@@ -5523,7 +5510,6 @@ a.popup-window-btn {
   height: 14px;
   background: rgba(0, 20, 25, 0.6);
   border: 1px solid var(--accent-glow-30);
-  border-radius: 2px;
   cursor: pointer;
   position: relative;
   transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
@@ -5579,7 +5565,6 @@ a.popup-window-btn {
   padding: 8px 12px;
   background: transparent;
   border: 1px solid var(--accent-glow-20);
-  border-radius: 2px;
   color: var(--text-secondary);
   font-size: 11px;
   cursor: pointer;
@@ -5675,7 +5660,6 @@ a.popup-window-btn {
   height: 14px;
   background: rgba(0, 20, 25, 0.6);
   border: 1px solid var(--accent-glow-30);
-  border-radius: 2px;
   cursor: pointer;
   position: relative;
   transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
@@ -5752,7 +5736,6 @@ a.popup-window-btn {
   gap: 4px;
   cursor: pointer;
   padding: 2px 4px;
-  border-radius: 3px;
   transition: background 0.15s;
 }
 
@@ -5766,7 +5749,6 @@ a.popup-window-btn {
   width: 10px;
   height: 10px;
   border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 2px;
   background: transparent;
   cursor: pointer;
   position: relative;
@@ -6081,7 +6063,6 @@ a.popup-window-btn {
   height: 14px;
   background: rgba(0, 20, 25, 0.6);
   border: 1px solid var(--accent-glow-30);
-  border-radius: 2px;
   cursor: pointer;
   position: relative;
   transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
@@ -6189,7 +6170,6 @@ a.popup-window-btn {
   height: 14px;
   background: rgba(0, 20, 25, 0.6);
   border: 1px solid var(--accent-glow-30);
-  border-radius: 2px;
   cursor: pointer;
   position: relative;
   transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
@@ -6554,7 +6534,6 @@ a.popup-window-btn {
   height: 14px;
   background: rgba(0, 20, 25, 0.6);
   border: 1px solid var(--accent-glow-30);
-  border-radius: 2px;
   cursor: pointer;
   position: relative;
   transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
@@ -13431,7 +13410,6 @@ body.news-feed-open .empire-borders-window {
 .news-page-chip {
   flex-shrink: 0;
   padding: 4px 12px;
-  border-radius: 14px;
   border: 1px solid var(--accent-glow-20);
   background: transparent;
   color: var(--text-secondary);
@@ -17311,7 +17289,6 @@ div.lyra-inline-video-wrap {
   color: var(--accent-primary);
   cursor: pointer;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
-  clip-path: polygon(0 0, calc(100% - 4px) 0, 100% 4px, 100% 100%, 4px 100%, 0 calc(100% - 4px));
 }
 
 .articles-hero-cta:hover {
@@ -17414,7 +17391,6 @@ div.lyra-inline-video-wrap {
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s, background 0.15s;
   white-space: nowrap;
-  clip-path: polygon(0 0, calc(100% - 3px) 0, 100% 3px, 100% 100%, 3px 100%, 0 calc(100% - 3px));
 }
 
 .articles-share-btn:hover {
@@ -17977,7 +17953,6 @@ div.lyra-inline-video-wrap {
   pointer-events: none;
   transition: opacity 0.25s, border-color 0.15s, color 0.15s;
   box-shadow: var(--nerv-panel-shadow), 0 4px 12px rgba(0, 0, 0, 0.4);
-  clip-path: polygon(0 0, calc(100% - 4px) 0, 100% 4px, 100% 100%, 4px 100%, 0 calc(100% - 4px));
 }
 
 .articles-back-to-top.visible {

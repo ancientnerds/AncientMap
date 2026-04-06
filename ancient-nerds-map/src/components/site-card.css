@@ -254,7 +254,6 @@
   font-weight: 700;
   font-family: var(--font-stamp, 'Saira Extra Condensed', sans-serif);
   white-space: nowrap;
-  clip-path: polygon(0 0, calc(100% - 3px) 0, 100% 3px, 100% 100%, 3px 100%, 0 calc(100% - 3px));
 }
 
 .site-card-action-link,

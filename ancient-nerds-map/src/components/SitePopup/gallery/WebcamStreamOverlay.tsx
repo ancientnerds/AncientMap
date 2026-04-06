@@ -333,7 +333,7 @@ export function WebcamStreamOverlay({ item, onClose }: WebcamStreamOverlayProps)
   }, [])
 
   const flagImg = flag
-    ? <img src={`https://flagcdn.com/16x12/${flag}.png`} alt="" style={{ height: 10, borderRadius: 1, marginRight: 4, verticalAlign: 'middle' }} />
+    ? <img src={`https://flagcdn.com/16x12/${flag}.png`} alt="" style={{ height: 10, borderRadius: 0, marginRight: 4, verticalAlign: 'middle' }} />
     : null
 
   return createPortal(

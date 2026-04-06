@@ -63,7 +63,7 @@
   border: 1px solid var(--accent-glow-10);
   color: var(--text-secondary);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 0;
   transition: all 0.2s ease;
   flex-shrink: 0;
   margin-left: 12px;
@@ -116,7 +116,7 @@
 
 .dm-mode-btn {
   padding: 8px 16px;
-  border-radius: 4px;
+  border-radius: 0;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -159,7 +159,7 @@
 .storage-bar {
   height: 6px;
   background: var(--accent-glow-10);
-  border-radius: 3px;
+  border-radius: 0;
   overflow: hidden;
   position: relative;
 }
@@ -167,7 +167,7 @@
 .storage-used {
   height: 100%;
   background: linear-gradient(90deg, var(--brand-primary), #ff4040);
-  border-radius: 3px;
+  border-radius: 0;
   transition: width 0.3s ease;
   position: absolute;
   left: 0;
@@ -177,7 +177,7 @@
 .storage-preview {
   height: 100%;
   background: linear-gradient(90deg, var(--status-warning), var(--accent-amber));
-  border-radius: 3px;
+  border-radius: 0;
   position: absolute;
   top: 0;
   transition: all 0.3s ease;
@@ -290,7 +290,7 @@
   padding: 4px 10px;
   background: var(--accent-glow-15);
   border: 1px solid var(--accent-glow-30);
-  border-radius: 4px;
+  border-radius: 0;
   color: var(--accent-primary);
   font-size: 10px;
   cursor: pointer;
@@ -333,7 +333,7 @@
   padding: 8px 10px;
   background: var(--accent-glow-06);
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: 0;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -358,7 +358,7 @@
   width: 16px;
   height: 16px;
   border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 3px;
+  border-radius: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -380,7 +380,7 @@
 .item-color {
   width: 10px;
   height: 10px;
-  border-radius: 2px;
+  border-radius: 0;
   flex-shrink: 0;
 }
 
@@ -400,7 +400,7 @@
   padding: 2px 6px;
   background: rgba(74, 222, 128, 0.15);
   border: 1px solid rgba(74, 222, 128, 0.3);
-  border-radius: 3px;
+  border-radius: 0;
   font-size: 9px;
   color: var(--status-ok-light);
   text-transform: uppercase;
@@ -412,7 +412,7 @@
   padding: 3px 8px;
   background: rgba(59, 130, 246, 0.15);
   border: 1px solid rgba(59, 130, 246, 0.4);
-  border-radius: 3px;
+  border-radius: 0;
   font-size: 9px;
   color: var(--accent-blue);
   cursor: pointer;
@@ -469,7 +469,7 @@
 .progress-bar {
   height: 8px;
   background: var(--accent-glow-10);
-  border-radius: 4px;
+  border-radius: 0;
   overflow: hidden;
   position: relative;
 }
@@ -477,7 +477,7 @@
 .progress-fill {
   height: 100%;
   background: linear-gradient(90deg, var(--status-warning), var(--accent-amber));
-  border-radius: 4px;
+  border-radius: 0;
   transition: width 0.15s ease-out;
   position: relative;
 }
@@ -550,7 +550,7 @@
   padding: 6px 12px;
   background: transparent;
   border: 1px solid rgba(255, 100, 100, 0.3);
-  border-radius: 4px;
+  border-radius: 0;
   color: var(--status-error-soft);
   font-size: 11px;
   cursor: pointer;
@@ -571,7 +571,7 @@
   padding: 6px 16px;
   background: var(--brand-primary);
   border: none;
-  border-radius: 4px;
+  border-radius: 0;
   color: white;
   font-size: 11px;
   font-weight: 500;
@@ -599,7 +599,7 @@
 
 .dm-content::-webkit-scrollbar-thumb {
   background: rgba(192, 32, 35, 0.4);
-  border-radius: 3px;
+  border-radius: 0;
 }
 
 .dm-content::-webkit-scrollbar-thumb:hover {
@@ -667,7 +667,7 @@
   padding: 8px 20px;
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
+  border-radius: 0;
   color: var(--text-secondary);
   font-size: 12px;
   cursor: pointer;
@@ -684,7 +684,7 @@
   padding: 8px 20px;
   background: linear-gradient(135deg, #dc2626, #b91c1c);
   border: none;
-  border-radius: 4px;
+  border-radius: 0;
   color: white;
   font-size: 12px;
   font-weight: 500;

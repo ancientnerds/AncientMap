@@ -129,7 +129,7 @@
   line-height: 1;
   padding: 1px 3px;
   background: #000;
-  border-radius: 1px;
+  border-radius: 0;
 }
 .hx-rag-R { color: #ff2080; }
 .hx-rag-A { color: #ff8800; }

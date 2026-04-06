@@ -85,7 +85,6 @@
   border: 1px solid var(--border-accent);
   color: var(--text-primary);
   padding: 6px 16px;
-  border-radius: 6px;
   cursor: pointer;
   font-size: 0.85rem;
   transition: border-color 0.2s, background 0.2s;
@@ -240,7 +239,6 @@
   border: 1px solid var(--border-accent);
   color: var(--text-secondary);
   padding: 4px 10px;
-  border-radius: 12px;
   font-size: 0.72rem;
   font-family: inherit;
   cursor: pointer;
@@ -283,7 +281,6 @@
   padding: 5px 10px;
   background: var(--surface-raised);
   border: 1px solid var(--border-accent);
-  border-radius: 6px;
   color: var(--text-primary);
   font-size: 0.82rem;
   font-family: inherit;
@@ -330,7 +327,6 @@
   max-height: 320px;
   background: rgba(0, 15, 20, 0.97);
   border: 1px solid var(--border-accent);
-  border-radius: 8px;
   backdrop-filter: blur(16px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   display: flex;
@@ -396,7 +392,6 @@
   margin: 0;
   background: rgba(0, 20, 25, 0.6);
   border: 1px solid rgba(192, 32, 35, 0.3);
-  border-radius: 2px;
   cursor: pointer;
   position: relative;
   transition: background 0.2s ease, border-color 0.2s ease;
