@@ -9815,23 +9815,24 @@ body.hud-hidden .empire-borders-window {
 /* Stories tab — horizontal scroll of news cards (same size as Stories page) */
 .gallery-stories-list {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: 12px;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 12px;
-  scroll-snap-type: x mandatory;
+  max-height: 300px;
 }
 
 .gallery-stories-list .news-feed-item {
-  flex: 0 0 300px;
-  scroll-snap-align: start;
+  flex: 0 0 auto;
+  width: 300px;
   border-bottom: none;
   zoom: 0.65;
 }
 
 .gallery-stories-list::-webkit-scrollbar {
-  height: 6px;
+  width: 6px;
 }
 
 .gallery-stories-list::-webkit-scrollbar-track {
