@@ -80,7 +80,12 @@ async def set_hero(
                 raise HTTPException(status_code=400, detail=f"Local image not found: {local_path}")
             image_bytes = local_path.read_bytes()
         else:
-            async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+            headers = {
+                "User-Agent": "AncientNerds/1.0 (https://ancientnerds.com; hero-image-download)"
+            }
+            async with httpx.AsyncClient(
+                timeout=30, follow_redirects=True, headers=headers
+            ) as client:
                 resp = await client.get(body.image_url)
             if resp.status_code != 200:
                 raise HTTPException(
