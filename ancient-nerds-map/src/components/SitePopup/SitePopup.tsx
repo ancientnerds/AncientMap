@@ -455,10 +455,14 @@ export default function SitePopup({
           attribution_url: image.sourceUrl || '',
         }),
       })
-      if (!res.ok) return false
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '')
+        console.error(`Set hero failed: ${res.status}`, errText)
+        return false
+      }
       const data = await res.json()
-      if (data.thumbnail_url) {
-        galleryHook.setHeroImageSrc?.(data.thumbnail_url + '?t=' + Date.now())
+      if (data.path) {
+        galleryHook.setHeroImageSrc?.(data.path + '?t=' + Date.now())
       }
       return true
     } catch {
