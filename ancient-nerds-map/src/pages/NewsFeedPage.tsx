@@ -334,7 +334,7 @@ export default function NewsFeedPage() {
         onAvatarClick={() => setShowLyraProfile(true)}
         currentPage="news"
       >
-        <span className="page-header-title">News Feed</span>
+        <span className="page-header-title">Stories</span>
       </PageHeader>
 
       {/* Ticker tape */}

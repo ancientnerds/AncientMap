@@ -84,7 +84,7 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
             <path d="M18 14v4h4"></path>
             <circle cx="18" cy="18" r="4"></circle>
           </svg>
-          <span>News Feed</span>
+          <span>Stories</span>
           {totalCount > 0 && <span className="news-feed-badge">{totalCount}</span>}
         </div>
         <div className={`news-feed-live${online ? '' : ' offline'}`}>
@@ -92,7 +92,7 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
           <span className="news-feed-live-text">{online ? 'LIVE' : 'OFFLINE'}</span>
         </div>
         <div className="news-feed-actions">
-          <button className="news-feed-btn" onClick={onClose} title="Close" aria-label="Close news feed">
+          <button className="news-feed-btn" onClick={onClose} title="Close" aria-label="Close stories">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18"></line>
               <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -126,7 +126,7 @@ export default function NewsFeedPanel({ onClose, onSiteHover, onSiteClick, onAsk
           <polyline points="15 3 21 3 21 9"></polyline>
           <line x1="10" y1="14" x2="21" y2="3"></line>
         </svg>
-        Open full news page
+        Open full stories page
       </a>
 
       {/* Content */}

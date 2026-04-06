@@ -9,7 +9,7 @@ interface LyraWelcomeProps {
 
 const CAPABILITIES = [
   { icon: '\uD83D\uDD0D', label: 'Site Search', desc: 'Search 40K+ archaeological sites', prompt: 'Find megalithic temples in Malta' },
-  { icon: '\uD83D\uDCE1', label: 'News Radar', desc: 'Recent discoveries from YouTube', prompt: "What has Lyra discovered on her radar this week?" },
+  { icon: '\uD83D\uDCE1', label: 'Story Radar', desc: 'Recent discoveries from YouTube', prompt: "What has Lyra discovered on her radar this week?" },
   { icon: '\uD83D\uDC51', label: 'Empire Intelligence', desc: '46 civilizations with warfare & economy data', prompt: 'Compare the military tech of Rome and the Mongol Empire' },
   { icon: '\uD83D\uDCF7', label: 'Visual Research', desc: 'Photos, transcripts, and deep-dive articles', prompt: 'Show me photos of Pompeii' },
 ]

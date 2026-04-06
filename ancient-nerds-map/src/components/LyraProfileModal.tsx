@@ -242,8 +242,8 @@ export default function LyraProfileModal({ onClose }: Props) {
                 <span className="lyra-poster-ability-desc">Query 5K+ archaeological sites by period, type, location</span>
               </div>
               <div className="lyra-poster-ability">
-                <span className="lyra-poster-ability-name">News Intelligence</span>
-                <span className="lyra-poster-ability-desc">Search recent discoveries from the news pipeline</span>
+                <span className="lyra-poster-ability-name">Story Intelligence</span>
+                <span className="lyra-poster-ability-desc">Search recent discoveries from the story pipeline</span>
               </div>
               <div className="lyra-poster-ability">
                 <span className="lyra-poster-ability-name">Empire Knowledge</span>
