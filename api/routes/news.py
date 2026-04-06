@@ -497,9 +497,22 @@ async def get_news_articles(
 # Regex to parse citation lines from the ### Sources section:
 # e.g. "1. [Channel — "Title"](https://youtu.be/VIDEO_ID?t=123) (2:03)"
 _CITATION_RE = re.compile(
-    r"^(\d+)\.\s*\[.*?\]\(https?://youtu\.be/([^?\s)]+)(?:\?t=(\d+))?\)",
+    r"^(\d+)\.\s*\[.*?\]\("
+    r"https?://(?:youtu\.be/([^?\s)]+)(?:\?t=(\d+))?|"
+    r"(?:www\.)?youtube\.com/watch\?v=([^&\s)]+)(?:&t=(\d+))?)"
+    r"\)",
     re.MULTILINE,
 )
+
+
+def _parse_citation_match(m: re.Match) -> tuple[int, str, int | None]:
+    """Extract (citation_num, video_id, timestamp) from either URL format."""
+    cit = int(m.group(1))
+    if m.group(2):  # youtu.be format
+        return cit, m.group(2), int(m.group(3)) if m.group(3) else None
+    if m.group(4):  # youtube.com format
+        return cit, m.group(4), int(m.group(5)) if m.group(5) else None
+    return cit, "", None
 
 
 @router.get("/articles/{article_id}/citations")
@@ -519,10 +532,8 @@ async def article_citations(article_id: int, db: Session = Depends(get_db)):
     if sources_idx == -1:
         return {}
     sources_text = article.content[sources_idx:]
-    parsed = [
-        (int(m.group(1)), m.group(2), int(m.group(3)) if m.group(3) else None)
-        for m in _CITATION_RE.finditer(sources_text)
-    ]
+    parsed = [_parse_citation_match(m) for m in _CITATION_RE.finditer(sources_text)]
+    parsed = [(c, v, t) for c, v, t in parsed if v]  # filter empty video_ids
     if not parsed:
         return {}
 

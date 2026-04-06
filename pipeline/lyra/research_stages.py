@@ -526,7 +526,7 @@ def research_cluster(
         if not url:
             vid = fact.get("video_id", "")
             ts = fact.get("timestamp_seconds", 0)
-            url = f"https://youtube.com/watch?v={vid}&t={ts}" if vid else ""
+            url = f"https://youtu.be/{vid}?t={ts}" if vid else ""
         if not url:
             continue
         sid = registry.register_source(

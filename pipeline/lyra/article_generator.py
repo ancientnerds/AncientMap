@@ -961,7 +961,12 @@ def _format_all_sources(unified_sources: list[dict]) -> str:
     """Build numbered markdown list of all sources (YouTube + web)."""
     lines = []
     for src in unified_sources:
-        lines.append(f"{src['citation']}. {src['label']}")
+        url = src.get("url", "")
+        label = src.get("label", "")
+        if url:
+            lines.append(f"{src['citation']}. [{label}]({url})")
+        else:
+            lines.append(f"{src['citation']}. {label}")
     return "\n".join(lines)
 
 
@@ -989,11 +994,7 @@ def _build_youtube_facts(item: dict) -> list[dict]:
     facts.append(
         {
             "title": f'{item["channel_name"]} \u2014 "{item["video_title"]}"',
-            "url": (
-                f"https://youtube.com/watch?v={vid}&t={ts}"
-                if ts
-                else f"https://youtube.com/watch?v={vid}"
-            ),
+            "url": (f"https://youtu.be/{vid}?t={ts}" if ts else f"https://youtu.be/{vid}"),
             "snippet": snippet,
             "facts": item.get("facts", []),
             "video_id": vid,
@@ -1011,9 +1012,9 @@ def _build_youtube_facts(item: dict) -> list[dict]:
             {
                 "title": f'{ms["channel_name"]} \u2014 "{ms["video_title"]}"',
                 "url": (
-                    f"https://youtube.com/watch?v={ms_vid}&t={ms_ts}"
+                    f"https://youtu.be/{ms_vid}?t={ms_ts}"
                     if ms_ts
-                    else f"https://youtube.com/watch?v={ms_vid}"
+                    else f"https://youtu.be/{ms_vid}"
                 ),
                 "snippet": ms_snippet,
                 "facts": ms.get("facts", []),
