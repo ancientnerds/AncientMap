@@ -9815,6 +9815,7 @@ body.hud-hidden .empire-borders-window {
 /* Stories tab — horizontal scroll of news cards (same size as Stories page) */
 .gallery-stories-list {
   display: flex;
+  align-items: flex-start;
   gap: 12px;
   overflow-x: auto;
   overflow-y: hidden;
@@ -9826,8 +9827,6 @@ body.hud-hidden .empire-borders-window {
   flex: 0 0 300px;
   scroll-snap-align: start;
   border-bottom: none;
-  border: 1px solid var(--nerv-panel-border);
-  background: var(--nerv-panel-bg);
   zoom: 0.5;
 }
 
