@@ -457,7 +457,7 @@ export default function ImageLightbox({
                 Smithsonian
               </a>
             )}
-            {onSetHero && current.sourceType === 'wikimedia' && (
+            {onSetHero && (
               <button
                 className="lightbox-set-hero"
                 onClick={handleSetHero}
