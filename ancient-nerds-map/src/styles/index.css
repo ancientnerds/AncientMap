@@ -9155,6 +9155,27 @@ body.hud-hidden .empire-borders-window {
   opacity: 0.6;
 }
 
+.lightbox-remove-image {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--brand-primary, #c02023);
+  background: none;
+  border: 1px solid rgba(192, 32, 35, 0.3);
+  padding: 3px 10px;
+  margin-left: 8px;
+}
+
+.lightbox-remove-image:hover:not(:disabled) {
+  border-color: rgba(192, 32, 35, 0.6);
+  background: rgba(192, 32, 35, 0.06);
+}
+
+.lightbox-remove-image:disabled {
+  opacity: 0.6;
+}
+
 /* ==========================================================================
    Gallery Source Badges (Wikipedia)
    ========================================================================== */

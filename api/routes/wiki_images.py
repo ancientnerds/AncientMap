@@ -167,6 +167,50 @@ async def set_hero(
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}") from None
 
 
+class RemoveImageRequest(BaseModel):
+    image_url: str
+
+
+@router.post("/{site_id}/remove-image")
+async def remove_image(
+    site_id: str,
+    body: RemoveImageRequest,
+    db: Session = Depends(get_db),
+    _user: DiscordUser = Depends(require_founder),
+):
+    """Remove a wiki image from a site (DB row + file on disk)."""
+    try:
+        # Find the image row
+        row = db.execute(
+            text(
+                "SELECT id, filename FROM wiki_images WHERE site_id = :sid AND original_url = :url"
+            ),
+            {"sid": site_id, "url": body.image_url},
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Image not found")
+
+        # Delete file from disk
+        site_id_short = site_id.replace("-", "")[:8]
+        file_path = IMAGE_DIR / site_id_short / row[1]
+        if file_path.exists():
+            file_path.unlink()
+            print(f"[remove-image] Deleted file: {file_path}", flush=True)
+
+        # Delete DB row
+        db.execute(text("DELETE FROM wiki_images WHERE id = :id"), {"id": row[0]})
+        db.commit()
+        print(f"[remove-image] Deleted row id={row[0]} for site {site_id}", flush=True)
+        return {"success": True}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        print(f"[remove-image] FAILED: {e}", flush=True)
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}") from None
+
+
 @router.get("/{site_id}")
 async def get_wiki_images(site_id: str, db: Session = Depends(get_db)):
     """Get locally cached wiki images for a site."""

@@ -472,6 +472,23 @@ export default function SitePopup({
     }
   }, [authToken, isFounder, displaySite.id])
 
+  const handleRemoveImage = useCallback(async (image: LightboxImage): Promise<boolean> => {
+    if (!authToken || !isFounder || !displaySite.id) return false
+    try {
+      const res = await fetch(`${config.api.baseUrl}/wiki-images/${displaySite.id}/remove-image`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ image_url: image.originalUrl || image.src }),
+      })
+      return res.ok
+    } catch {
+      return false
+    }
+  }, [authToken, isFounder, displaySite.id])
+
   // Popup content
   const popupContent = (
     <div
@@ -923,6 +940,7 @@ export default function SitePopup({
       onClose={() => setLightboxIndex(null)}
       onNavigate={setLightboxIndex}
       onSetHero={isFounder ? handleSetHero : undefined}
+      onRemoveImage={isFounder ? handleRemoveImage : undefined}
     />,
     document.body
   )

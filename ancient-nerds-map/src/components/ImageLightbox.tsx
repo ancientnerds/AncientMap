@@ -31,6 +31,7 @@ interface ImageLightboxProps {
   onClose: () => void
   onNavigate: (index: number) => void
   onSetHero?: (image: LightboxImage) => Promise<boolean>
+  onRemoveImage?: (image: LightboxImage) => Promise<boolean>
 }
 
 export default function ImageLightbox({
@@ -39,6 +40,7 @@ export default function ImageLightbox({
   onClose,
   onNavigate,
   onSetHero,
+  onRemoveImage,
 }: ImageLightboxProps) {
   const current = images[currentIndex]
   const hasMultiple = images.length > 1
@@ -50,6 +52,7 @@ export default function ImageLightbox({
   const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 })
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
   const [heroState, setHeroState] = useState<'idle' | 'setting' | 'success' | 'failed'>('idle')
+  const [removeState, setRemoveState] = useState<'idle' | 'removing' | 'done' | 'failed'>('idle')
 
   const containerRef = useRef<HTMLDivElement>(null)
   const imageRef = useRef<HTMLImageElement>(null)
@@ -65,6 +68,7 @@ export default function ImageLightbox({
     setZoom(1)
     setPosition({ x: 0, y: 0 })
     setHeroState('idle')
+    setRemoveState('idle')
   }, [currentIndex])
 
   // Get container size on mount and resize
@@ -215,6 +219,27 @@ export default function ImageLightbox({
     const ok = await onSetHero(current)
     setHeroState(ok ? 'success' : 'failed')
     setTimeout(() => setHeroState('idle'), 2000)
+  }
+
+  // Remove image handler
+  const handleRemoveImage = async () => {
+    if (!onRemoveImage || removeState === 'removing') return
+    if (!confirm('Remove this image from the gallery?')) return
+    setRemoveState('removing')
+    const ok = await onRemoveImage(current)
+    if (ok) {
+      setRemoveState('done')
+      // Navigate away from removed image
+      if (hasMultiple) {
+        const newIndex = currentIndex > 0 ? currentIndex - 1 : 0
+        onNavigate(newIndex)
+      } else {
+        onClose()
+      }
+    } else {
+      setRemoveState('failed')
+      setTimeout(() => setRemoveState('idle'), 2000)
+    }
   }
 
   // Keyboard navigation
@@ -458,6 +483,30 @@ export default function ImageLightbox({
                       <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                     </svg>
                     Set as Hero
+                  </>
+                )}
+              </button>
+            )}
+            {onRemoveImage && (
+              <button
+                className="lightbox-remove-image"
+                onClick={handleRemoveImage}
+                disabled={removeState === 'removing'}
+              >
+                {removeState === 'removing' ? (
+                  <>
+                    <div className="map-loading-spinner" style={{ width: 12, height: 12 }} />
+                    Removing...
+                  </>
+                ) : removeState === 'failed' ? (
+                  <>Failed</>
+                ) : (
+                  <>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    </svg>
+                    Remove
                   </>
                 )}
               </button>
