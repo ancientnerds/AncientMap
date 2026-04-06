@@ -57,52 +57,60 @@ async def set_hero(
     _user: DiscordUser = Depends(require_founder),
 ):
     """Download an image and set it as hero for a site."""
-    # Validate site exists
-    site_row = db.execute(
-        text("SELECT id FROM unified_sites WHERE id = :id"),
-        {"id": site_id},
-    ).fetchone()
-    if not site_row:
-        raise HTTPException(status_code=404, detail="Site not found")
-
-    # Load the image: local path or remote URL
-    if body.image_url.startswith("/data/"):
-        local_path = Path("/app/public") / body.image_url.lstrip("/")
-        if not local_path.exists():
-            raise HTTPException(status_code=400, detail=f"Local image not found: {local_path}")
-        image_bytes = local_path.read_bytes()
-    else:
-        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-            resp = await client.get(body.image_url)
-        if resp.status_code != 200:
-            raise HTTPException(
-                status_code=400, detail=f"Failed to download image: HTTP {resp.status_code}"
-            )
-        image_bytes = resp.content
-
-    # Process with PIL: resize + convert to WebP
-    img = Image.open(BytesIO(image_bytes))
-    if img.mode in ("RGBA", "P"):
-        img = img.convert("RGB")
-    if img.width > HERO_WIDTH:
-        ratio = HERO_WIDTH / img.width
-        img = img.resize((HERO_WIDTH, int(img.height * ratio)), Image.LANCZOS)
-
-    final_width, final_height = img.size
-
-    # Save to disk
-    site_id_short = site_id.replace("-", "")[:8]
-    site_dir = IMAGE_DIR / site_id_short
-    site_dir.mkdir(parents=True, exist_ok=True)
-    hero_path = site_dir / "hero.webp"
-
-    buf = BytesIO()
-    img.save(buf, format="WEBP", quality=WEBP_QUALITY, method=4)
-    hero_path.write_bytes(buf.getvalue())
-
-    thumb_path = f"/data/images/wiki/{site_id_short}/hero.webp"
+    import traceback
 
     try:
+        # Validate site exists
+        site_row = db.execute(
+            text("SELECT id FROM unified_sites WHERE id = :id"),
+            {"id": site_id},
+        ).fetchone()
+        if not site_row:
+            raise HTTPException(status_code=404, detail="Site not found")
+
+        # Load the image: local path or remote URL
+        print(f"[set-hero] Loading image: {body.image_url}", flush=True)
+        if body.image_url.startswith("/data/"):
+            local_path = Path("/app/public") / body.image_url.lstrip("/")
+            print(f"[set-hero] Resolved local path: {local_path} (exists={local_path.exists()})", flush=True)
+            if not local_path.exists():
+                raise HTTPException(status_code=400, detail=f"Local image not found: {local_path}")
+            image_bytes = local_path.read_bytes()
+        else:
+            async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+                resp = await client.get(body.image_url)
+            if resp.status_code != 200:
+                raise HTTPException(
+                    status_code=400, detail=f"Failed to download image: HTTP {resp.status_code}"
+                )
+            image_bytes = resp.content
+
+        print(f"[set-hero] Loaded {len(image_bytes)} bytes", flush=True)
+
+        # Process with PIL: resize + convert to WebP
+        img = Image.open(BytesIO(image_bytes))
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+        if img.width > HERO_WIDTH:
+            ratio = HERO_WIDTH / img.width
+            img = img.resize((HERO_WIDTH, int(img.height * ratio)), Image.LANCZOS)
+
+        final_width, final_height = img.size
+        print(f"[set-hero] Processed image: {final_width}x{final_height}", flush=True)
+
+        # Save to disk
+        site_id_short = site_id.replace("-", "")[:8]
+        site_dir = IMAGE_DIR / site_id_short
+        site_dir.mkdir(parents=True, exist_ok=True)
+        hero_path = site_dir / "hero.webp"
+
+        buf = BytesIO()
+        img.save(buf, format="WEBP", quality=WEBP_QUALITY, method=4)
+        hero_path.write_bytes(buf.getvalue())
+        print(f"[set-hero] Saved hero to {hero_path}", flush=True)
+
+        thumb_path = f"/data/images/wiki/{site_id_short}/hero.webp"
+
         # Clear existing hero flags for this site
         db.execute(
             text("UPDATE wiki_images SET is_hero = false WHERE site_id = :sid AND is_hero = true"),
@@ -139,12 +147,16 @@ async def set_hero(
         )
 
         db.commit()
+        print(f"[set-hero] Success! thumbnail_url={thumb_path}", flush=True)
+        return {"success": True, "path": thumb_path}
+
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
-        print(f"[set-hero] DB error: {e}", flush=True)
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}") from None
-
-    return {"success": True, "path": thumb_path}
+        tb = traceback.format_exc()
+        print(f"[set-hero] FAILED: {e}\n{tb}", flush=True)
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}") from None
 
 
 @router.get("/{site_id}")
