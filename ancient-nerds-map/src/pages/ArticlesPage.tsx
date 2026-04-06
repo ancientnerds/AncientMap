@@ -73,15 +73,16 @@ function parseWebCitations(content: string): Map<number, string> {
 }
 
 function enrichCitations(content: string, webCites: Map<number, string>): string {
-  // Replace [N] with links — web citations get direct URLs, YouTube get #sources
-  // Use [\[N\]] so markdown renders the brackets as link text
+  // Replace [N] with markdown links.
+  // Link text uses Unicode brackets ［N］ to avoid markdown parsing issues,
+  // then the 'a' renderer displays them as normal [N].
   return content.replace(/(?<!\[)\[(\d+)\](?!\()/g, (_match, numStr) => {
     const num = parseInt(numStr, 10)
     const webUrl = webCites.get(num)
     if (webUrl) {
-      return `[\\[${num}\\]](${webUrl})`
+      return `[［${num}］](${webUrl})`
     }
-    return `[\\[${num}\\]](#sources)`
+    return `[［${num}］](#sources)`
   })
 }
 
@@ -392,25 +393,27 @@ function makeArticleComponents(
       <ArticleScreenshot src={src || ''} alt={alt || ''} citationItems={citationItems} />
     ),
     a: ({ href, children }) => {
-      if (href === '#sources') {
-        const num = parseInt(String(children).replace(/[[\]]/g, ''), 10)
+      // Detect citation links — both YouTube (#sources) and web (external URL)
+      const text = String(children).trim()
+      const numMatch = text.match(/[［\[]*(\d+)[］\]]*/)
+      if (numMatch && (href === '#sources' || /^\d+$/.test(text.replace(/[[\]／（））［］\\]/g, '')))) {
+        const num = parseInt(numMatch[1], 10)
+        const displayText = `[${num}]`
         const hasCard = citationItems.has(num)
+        const isYoutube = href === '#sources'
         return (
           <a
             href={href}
+            target={isYoutube ? undefined : '_blank'}
+            rel={isYoutube ? undefined : 'noopener noreferrer'}
             className={`article-citation-link${hasCard ? ' has-popover' : ''}`}
             onMouseEnter={hasCard ? (e) => onCitationEnter(num, e.currentTarget.getBoundingClientRect()) : undefined}
             onMouseLeave={hasCard ? onCitationLeave : undefined}
             onClick={hasCard ? (e) => { e.preventDefault(); onCitationClick(num, e.currentTarget.getBoundingClientRect()) } : undefined}
           >
-            {children}
+            {displayText}
           </a>
         )
-      }
-      // Web citation links — same superscript style as YouTube citations
-      const text = String(children).trim()
-      if (/\[\d+\]/.test(text) || /^\\\[\d+\\\]$/.test(text)) {
-        return <a href={href} target="_blank" rel="noopener noreferrer" className="article-citation-link">{children}</a>
       }
       return <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
     },
