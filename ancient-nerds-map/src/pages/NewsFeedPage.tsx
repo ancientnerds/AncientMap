@@ -12,8 +12,7 @@ import type { NewsItemData, NewsStats, NewsFilters, ActiveFilters } from '../typ
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
 import { SitePopupOverlay } from '../components/SitePopupOverlay'
 import PageHeader from '../components/layout/PageHeader'
-import PageStatsBar from '../components/layout/PageStatsBar'
-import type { StatItem } from '../components/layout/PageStatsBar'
+import NewsTicker from '../components/layout/NewsTicker'
 import AiNoticeBanner from '../components/layout/AiNoticeBanner'
 import NewsCard from '../components/news/NewsCard'
 import { getNewsCategoryLabel, getTopicColor, sortTopics, getSignificanceNervStyle } from '../components/news/significance'
@@ -338,14 +337,8 @@ export default function NewsFeedPage() {
         <span className="page-header-title">News Feed</span>
       </PageHeader>
 
-      {/* Stats bar */}
-      {stats && (
-        <PageStatsBar items={[
-          { value: stats.total_videos, label: 'videos processed' } as StatItem,
-          { value: stats.total_items, label: 'stories', sep: '→', title: stats.rejected ? `Filtered out: ${stats.rejected.low_significance} low significance, ${stats.rejected.duplicate} duplicates, ${stats.rejected.verified_rejected} verification failures` : undefined } as StatItem,
-          { value: stats.total_channels, label: 'channels', sep: '·' } as StatItem,
-        ]} />
-      )}
+      {/* Ticker tape */}
+      <NewsTicker stats={stats} totalDisplayed={items.length} />
 
       {/* Multi-dimension filter section */}
       {filters && (

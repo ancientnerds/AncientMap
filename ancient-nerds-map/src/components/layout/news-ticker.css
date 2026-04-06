@@ -1,0 +1,60 @@
+/* ═══════════════════════════════════════════
+   NERV Ticker Tape — scrolling stats readout
+   ═══════════════════════════════════════════ */
+
+.news-ticker {
+  padding: 4px 0;
+  font-size: 9px;
+  color: rgba(0, 204, 102, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  background: rgba(0, 204, 102, 0.02);
+  overflow: hidden;
+  white-space: nowrap;
+  position: relative;
+  border-bottom: 1px solid var(--border-accent-subtle);
+}
+
+.news-ticker-track {
+  display: flex;
+  width: max-content;
+  animation: nerv-ticker-crawl 40s linear infinite;
+  will-change: transform;
+}
+
+.news-ticker-track span {
+  padding: 0 2.5em;
+}
+
+@keyframes nerv-ticker-crawl {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* Subtle scan line sweeping across */
+.news-ticker::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(0, 204, 102, 0.25), transparent);
+  opacity: 0.3;
+  animation: nerv-ticker-scan 4s linear infinite;
+  pointer-events: none;
+  will-change: transform;
+}
+
+@keyframes nerv-ticker-scan {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Mobile: smaller */
+@media (max-width: 640px) {
+  .news-ticker {
+    font-size: 7px;
+    padding: 3px 0;
+  }
+}
