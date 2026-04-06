@@ -9,7 +9,9 @@ Write 1-2 focused paragraphs (150-250 words total) covering the key findings.
 
 Rules:
 - Use ONLY facts from the provided findings — do not add your own knowledge
-- Preserve ALL [N] citation markers from the findings
+- Use 2-3 citations per paragraph — cite the MOST important sources, not every one
+- Prefer the YouTube source [N] (channel name in the reference map) as primary citation
+- Add 1-2 academic/news citations alongside the YouTube one for corroboration
 - Write in clear, engaging prose suitable for an educated general audience
 - Do not use academic paper structure (no Abstract, Introduction, etc.)
 - Lead with the most significant finding

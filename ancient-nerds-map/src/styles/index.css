@@ -17556,12 +17556,13 @@ div.lyra-inline-video-wrap {
 
 /* Inline citation links [1] */
 .articles-reader-body .article-citation-link {
-  font-size: 11px;
+  font-size: 0.55em;
   vertical-align: super;
   line-height: 0;
   color: var(--accent-primary);
   text-decoration: none;
-  padding: 0 1px;
+  opacity: 0.7;
+  padding: 0 0.5px;
 }
 
 .articles-reader-body .article-citation-link:hover {
