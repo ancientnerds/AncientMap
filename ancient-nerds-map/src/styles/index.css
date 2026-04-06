@@ -9843,18 +9843,19 @@ body.hud-hidden .empire-borders-window {
   background: rgba(192, 32, 35, 0.3);
 }
 
-/* Clicked card: stay at thumbnail zoom to prevent layout jump */
+/* Clicked card: expand to full size */
+.gallery-stories-list .news-feed-item.expanded {
+  zoom: 1;
+}
 
-/* Gallery expanded: wrap into grid at full size */
+/* Gallery expanded: more space, keep thumbnail zoom */
 .popup-gallery-section.expanded .gallery-stories-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  overflow: visible;
+  max-height: none;
+  overflow: auto;
 }
 
 .popup-gallery-section.expanded .gallery-stories-list .news-feed-item {
-  flex: none;
-  zoom: 1;
+  flex: 0 0 auto;
 }
 
 /* Gallery expanded state */
