@@ -76,6 +76,7 @@ def _retry_request(
 # ---------------------------------------------------------------------------
 BLOCKED_DOMAINS = frozenset(
     {
+        # Social media
         "reddit.com",
         "old.reddit.com",
         "quora.com",
@@ -92,6 +93,17 @@ BLOCKED_DOMAINS = frozenset(
         "medium.com",
         "tumblr.com",
         "4chan.org",
+        # Tourism / e-commerce
+        "tripadvisor.com",
+        "yelp.com",
+        "booking.com",
+        "amazon.com",
+        "ebay.com",
+        "etsy.com",
+        # Fringe / low-quality archaeology
+        "gaia.com",
+        "ancient-origins.net",
+        "ancient-code.com",
     }
 )
 
