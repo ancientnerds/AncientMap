@@ -3,6 +3,7 @@
 @import './nerv-ui/input.css';
 @import './nerv-ui/slider.css';
 @import './nerv-ui/panel.css';
+@import './nerv-ui/button.css';
 @import './nerv-ui/hover.css';
 @import './nerv-shapes.css';
 @import './nerv-animations.css';
@@ -3445,7 +3446,6 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   color: var(--text-secondary);
   font-family: 'Orbitron', monospace;
   font-size: 10px;
-  cursor: pointer;
   transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
 }
 
@@ -15263,14 +15263,11 @@ div.lyra-inline-video-wrap {
   gap: 5px;
   padding: 4px 10px;
   font-size: 11px;
-  font-weight: 600;
   color: rgba(0, 200, 200, 0.9);
   background: var(--accent-glow-08);
   border: 1px solid var(--border-accent);
   border-radius: 4px;
-  cursor: pointer;
   transition: all 0.15s;
-  text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
@@ -17278,16 +17275,12 @@ div.lyra-inline-video-wrap {
 }
 
 .articles-hero-cta {
-  font-family: var(--font-heading);
   font-size: 11px;
-  font-weight: 600;
   letter-spacing: 1.5px;
-  text-transform: uppercase;
   padding: 10px 24px;
   border: 1px solid var(--accent-primary);
   background: transparent;
   color: var(--accent-primary);
-  cursor: pointer;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 
@@ -17382,14 +17375,8 @@ div.lyra-inline-video-wrap {
   border: 1px solid var(--nerv-panel-border);
   background: transparent;
   color: var(--text-secondary);
-  font-family: var(--font-heading);
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  text-transform: uppercase;
   padding: 5px 12px;
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s, background 0.15s;
   white-space: nowrap;
 }
 

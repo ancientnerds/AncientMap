@@ -235,7 +235,6 @@
   border: 1px solid var(--accent-glow-40);
   border-radius: 0;
   padding: 3px 8px;
-  cursor: pointer;
   transition: all 0.2s;
   width: fit-content;
   font-family: inherit;

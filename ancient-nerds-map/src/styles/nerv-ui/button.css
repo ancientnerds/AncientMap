@@ -1,0 +1,84 @@
+/* ═══════════════════════════════════════════
+   NERV-UI · Button
+   Single source of truth for ALL button styling.
+   Change here → updates everywhere.
+   Size, color, padding stay in each button's
+   own CSS file.
+   ═══════════════════════════════════════════ */
+
+/* ── Action buttons ─────────────────────────
+   Bordered, uppercase, NERV heading font.
+   Individual rules override color/padding/size. */
+.offline-mode-btn,
+.random-site-btn,
+.proximity-btn,
+.measure-toggle-btn,
+.unit-btn,
+.clear-all-btn,
+.measurement-delete-btn,
+.base-btn,
+.lod-btn,
+.filter-btn,
+.clear-btn,
+.toggle-btn,
+.search-bar-random-btn,
+.search-bar-filter-btn,
+.search-bar-clear,
+.articles-hero-cta,
+.articles-share-btn,
+.articles-back-to-top,
+.articles-reader-back-link,
+.news-page-chip,
+.news-card-watch,
+.news-feed-map-link,
+.news-feed-load-more,
+.ask-lyra-btn,
+.theo-effort-btn,
+.theo-submit-btn,
+.theo-check-btn,
+.theo-next-btn,
+.theo-back-btn,
+.theo-btn-view,
+.theo-btn-cancel,
+.theo-btn-retry,
+.theo-btn-publish,
+.theo-btn-unpublish,
+.theo-btn-delete,
+.theo-load-more-btn,
+.theo-login-btn,
+.theo-new-research-btn,
+.theo-editor-btn,
+.db-unlock-btn,
+.db-export-btn,
+.account-discord-btn,
+.account-action-btn,
+.account-logout-btn,
+.account-expand-btn,
+.dm-close-btn,
+.dm-mode-btn,
+.dm-download-btn,
+.dm-clear-btn,
+.dm-select-all-btn,
+.dm-confirm-cancel,
+.dm-confirm-delete,
+.dm-download-images-btn {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+/* ── Link buttons ───────────────────────────
+   Inline text actions (no uppercase). */
+.site-card-globe-link,
+.site-card-action-link,
+.hero-action-btn,
+.title-action-btn,
+.connector-link {
+  font-family: var(--font-heading);
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s;
+}
