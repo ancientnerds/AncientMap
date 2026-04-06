@@ -31,17 +31,6 @@ class SetHeroRequest(BaseModel):
     image_url: str
     attribution_url: str
 
-    @field_validator("image_url")
-    @classmethod
-    def validate_image_url(cls, v: str) -> str:
-        from urllib.parse import urlparse
-
-        parsed = urlparse(v)
-        allowed = ("upload.wikimedia.org", "commons.wikimedia.org", "i.imgur.com")
-        if parsed.scheme != "https" or parsed.hostname not in allowed:
-            raise ValueError(f"URL must be HTTPS from: {', '.join(allowed)}")
-        return v
-
 
 @router.get("/hero-status")
 async def get_hero_status(db: Session = Depends(get_db)):
@@ -81,16 +70,23 @@ async def set_hero(
     if not site_row:
         raise HTTPException(status_code=404, detail="Site not found")
 
-    # Download the image
-    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-        resp = await client.get(body.image_url)
-    if resp.status_code != 200:
-        raise HTTPException(
-            status_code=400, detail=f"Failed to download image: HTTP {resp.status_code}"
-        )
+    # Load the image: local path or remote URL
+    if body.image_url.startswith("/data/"):
+        local_path = Path("public") / body.image_url.lstrip("/")
+        if not local_path.exists():
+            raise HTTPException(status_code=400, detail="Local image not found")
+        image_bytes = local_path.read_bytes()
+    else:
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+            resp = await client.get(body.image_url)
+        if resp.status_code != 200:
+            raise HTTPException(
+                status_code=400, detail=f"Failed to download image: HTTP {resp.status_code}"
+            )
+        image_bytes = resp.content
 
     # Process with PIL: resize + convert to WebP
-    img = Image.open(BytesIO(resp.content))
+    img = Image.open(BytesIO(image_bytes))
     if img.mode in ("RGBA", "P"):
         img = img.convert("RGB")
     if img.width > HERO_WIDTH:
