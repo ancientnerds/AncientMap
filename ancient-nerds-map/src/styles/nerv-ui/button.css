@@ -4,11 +4,43 @@
    Change here → updates everywhere.
    Size, color, padding stay in each button's
    own CSS file.
+
+   Three tiers:
+   1. Action — prominent CTAs, uppercase heading font
+   2. Control — compact utility buttons, normal case
+   3. Link — inline text actions, lighter weight
    ═══════════════════════════════════════════ */
 
-/* ── Action buttons ─────────────────────────
-   Bordered, uppercase, NERV heading font.
-   Individual rules override color/padding/size. */
+/* ── 1. Action buttons ──────────────────────
+   Prominent, bordered, uppercase. Used for
+   page-level CTAs and modal actions. */
+.articles-hero-cta,
+.articles-share-btn,
+.articles-back-to-top,
+.search-bar-random-btn,
+.search-bar-filter-btn,
+.news-page-chip,
+.news-feed-load-more,
+.theo-submit-btn,
+.theo-login-btn,
+.theo-new-research-btn,
+.db-unlock-btn,
+.account-discord-btn,
+.dm-confirm-cancel,
+.dm-confirm-delete {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+/* ── 2. Control buttons ─────────────────────
+   Compact utility controls: toggles, filter
+   chips, tool buttons, icon buttons. Heading
+   font for consistency but normal case and
+   tighter spacing for readability at small sizes. */
 .offline-mode-btn,
 .random-site-btn,
 .proximity-btn,
@@ -21,20 +53,11 @@
 .filter-btn,
 .clear-btn,
 .toggle-btn,
-.search-bar-random-btn,
-.search-bar-filter-btn,
 .search-bar-clear,
-.articles-hero-cta,
-.articles-share-btn,
-.articles-back-to-top,
-.articles-reader-back-link,
-.news-page-chip,
 .news-card-watch,
 .news-feed-map-link,
-.news-feed-load-more,
 .ask-lyra-btn,
 .theo-effort-btn,
-.theo-submit-btn,
 .theo-check-btn,
 .theo-next-btn,
 .theo-back-btn,
@@ -45,33 +68,27 @@
 .theo-btn-unpublish,
 .theo-btn-delete,
 .theo-load-more-btn,
-.theo-login-btn,
-.theo-new-research-btn,
 .theo-editor-btn,
-.db-unlock-btn,
 .db-export-btn,
-.account-discord-btn,
 .account-action-btn,
 .account-logout-btn,
 .account-expand-btn,
+.articles-reader-back-link,
 .dm-close-btn,
 .dm-mode-btn,
 .dm-download-btn,
 .dm-clear-btn,
 .dm-select-all-btn,
-.dm-confirm-cancel,
-.dm-confirm-delete,
 .dm-download-images-btn {
   font-family: var(--font-heading);
-  font-weight: 600;
-  letter-spacing: 1px;
-  text-transform: uppercase;
+  font-weight: 500;
+  letter-spacing: 0.3px;
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s, background 0.15s;
 }
 
-/* ── Link buttons ───────────────────────────
-   Inline text actions (no uppercase). */
+/* ── 3. Link buttons ────────────────────────
+   Inline text actions (no border, light weight). */
 .site-card-globe-link,
 .site-card-action-link,
 .hero-action-btn,

@@ -15266,7 +15266,6 @@ div.lyra-inline-video-wrap {
   color: rgba(0, 200, 200, 0.9);
   background: var(--accent-glow-08);
   border: 1px solid var(--border-accent);
-  border-radius: 4px;
   transition: all 0.15s;
   letter-spacing: 0.05em;
 }
