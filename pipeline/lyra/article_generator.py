@@ -1081,6 +1081,54 @@ def _assemble_from_clusters(
     return "\n".join(body_parts).strip(), unified_sources
 
 
+def _inject_screenshots(body: str, items: list[dict]) -> str:
+    """Insert one screenshot per section from the original news items.
+
+    Finds the first ``## Heading`` for each section, then inserts a screenshot
+    image after the first paragraph in that section.  Only items with a
+    ``screenshot_url`` and ``significance >= 5`` are considered.
+    """
+    # Build screenshot lookup: headline -> screenshot markdown
+    screenshots: list[tuple[str, str]] = []
+    for item in items:
+        url = item.get("screenshot_url")
+        if not url or (item.get("significance") or 0) < 3:
+            continue
+        alt = item.get("headline", "")
+        screenshots.append((alt, f"\n![{alt}]({url})\n"))
+
+    if not screenshots:
+        return body
+
+    # Find each ## section and insert a screenshot after its first paragraph
+    lines = body.split("\n")
+    result: list[str] = []
+    ss_idx = 0
+    in_section = False
+    found_paragraph = False
+
+    for line in lines:
+        result.append(line)
+
+        if line.startswith("## "):
+            in_section = True
+            found_paragraph = False
+            continue
+
+        # After a section heading, look for the first blank line after content
+        # (that marks the end of the first paragraph)
+        if in_section and not found_paragraph:
+            if line.strip() == "" and len(result) >= 2 and result[-2].strip():
+                # End of first paragraph — inject screenshot
+                if ss_idx < len(screenshots):
+                    alt, img_md = screenshots[ss_idx]
+                    result.append(img_md)
+                    ss_idx += 1
+                    found_paragraph = True
+
+    return "\n".join(result)
+
+
 def _assemble_article(
     tldr: str,
     body: str,
@@ -1258,6 +1306,10 @@ def generate_weekly_article(
         _write_article_heartbeat(step_data, "assemble", t0_total)
         t0 = time.time()
         body, unified_sources = _assemble_from_clusters(section_results)
+
+        # Inject screenshots from original news items
+        body = _inject_screenshots(body, all_items)
+
         step_data["assemble"] = {
             "count": len(unified_sources),
             "elapsed": round(time.time() - t0, 1),
@@ -1324,5 +1376,5 @@ def generate_weekly_article(
 
 def should_generate_article() -> bool:
     """Check if it's time to generate a weekly article (Sunday evening)."""
-    # TEMP: force regeneration, revert after article #24 is rebuilt
-    return True
+    now = datetime.now(UTC)
+    return now.weekday() == 6 and now.hour >= 20  # Sunday 8 PM UTC
