@@ -22,7 +22,7 @@ from pipeline.database import DiscordUser, get_db
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-IMAGE_DIR = Path("public/data/images/wiki")
+IMAGE_DIR = Path("/app/public/data/images/wiki")
 HERO_WIDTH = 800
 WEBP_QUALITY = 82
 
@@ -72,7 +72,7 @@ async def set_hero(
 
     # Load the image: local path or remote URL
     if body.image_url.startswith("/data/"):
-        local_path = Path("public") / body.image_url.lstrip("/")
+        local_path = Path("/app/public") / body.image_url.lstrip("/")
         if not local_path.exists():
             raise HTTPException(status_code=400, detail="Local image not found")
         image_bytes = local_path.read_bytes()
