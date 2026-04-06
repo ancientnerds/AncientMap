@@ -54,6 +54,7 @@ export function useGalleryData({
           photographer: img.author,
           photographerUrl: img.authorUrl,
           wikimediaUrl: img.sourceUrl,
+          originalUrl: img.originalUrl,
           license: img.license,
           source: 'wikipedia' as const,
         })))

@@ -10,6 +10,7 @@ export interface LightboxImage {
   sourceType?: 'wikimedia' | 'david-rumsey' | 'met-museum' | 'smithsonian'
              | 'europeana' | 'loc' | 'british-museum' | 'sketchfab' | string
   sourceUrl?: string
+  originalUrl?: string
   license?: string
   mediaType?: 'image' | 'video'
 }

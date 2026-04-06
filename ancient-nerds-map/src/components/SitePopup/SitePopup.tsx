@@ -451,7 +451,7 @@ export default function SitePopup({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          image_url: image.src,
+          image_url: image.originalUrl || image.src,
           attribution_url: image.sourceUrl || '',
         }),
       })

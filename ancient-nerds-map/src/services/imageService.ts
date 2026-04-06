@@ -21,6 +21,7 @@ export interface ImageResult {
   author?: string
   authorUrl?: string
   sourceUrl?: string
+  originalUrl?: string
   license?: string
   source: 'wikipedia' | 'europeana' | 'local'
   isLeadImage?: boolean
@@ -56,6 +57,7 @@ async function fetchLocalImages(siteId: string): Promise<ImageResult[] | null> {
       author?: string
       authorUrl?: string
       commonsUrl?: string
+      originalUrl?: string
       license?: string
       isHero?: boolean
       isLead?: boolean
@@ -67,6 +69,7 @@ async function fetchLocalImages(siteId: string): Promise<ImageResult[] | null> {
       author: img.author,
       authorUrl: img.authorUrl,
       sourceUrl: img.commonsUrl,
+      originalUrl: img.originalUrl,
       license: img.license,
       source: 'local' as const,
       isLeadImage: img.isLead || img.isHero || false,

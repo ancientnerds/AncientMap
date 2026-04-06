@@ -173,6 +173,7 @@ export function toLightboxImages(items: UnifiedGalleryItem[]): LightboxImage[] {
       sourceUrl: original?.sourceUrl as string ||
                  original?.webUrl as string ||
                  original?.wikimediaUrl as string,
+      originalUrl: original?.originalUrl as string || undefined,
       license: original?.license as string || undefined,
     }
   })

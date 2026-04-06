@@ -9,6 +9,7 @@ export interface GalleryImage {
   photographer?: string
   photographerUrl?: string
   wikimediaUrl?: string
+  originalUrl?: string
   license?: string
   source?: 'local' | 'wikipedia'
 }

@@ -180,6 +180,7 @@ async def get_wiki_images(site_id: str, db: Session = Depends(get_db)):
                 "license": row.license,
                 "licenseUrl": row.license_url,
                 "commonsUrl": row.commons_page_url,
+                "originalUrl": row.original_url,
                 "isHero": row.is_hero,
                 "isLead": row.is_lead,
                 "width": row.width,
