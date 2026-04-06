@@ -114,34 +114,47 @@ async def set_hero(
 
         thumb_path = f"/data/images/wiki/{site_id_short}/hero.webp"
 
-        # Clear existing hero flags for this site
+        # Clear all hero flags for this site
         db.execute(
             text("UPDATE wiki_images SET is_hero = false WHERE site_id = :sid AND is_hero = true"),
             {"sid": site_id},
         )
 
-        # Upsert wiki_images row
-        db.execute(
-            text("""
-            INSERT INTO wiki_images (site_id, filename, original_url, commons_page_url, is_hero, source_type, width, height)
-            VALUES (:sid, 'hero.webp', :orig, :attr, true, 'manual', :w, :h)
-            ON CONFLICT (site_id, original_url)
-            DO UPDATE SET
-                filename = 'hero.webp',
-                commons_page_url = :attr,
-                is_hero = true,
-                source_type = 'manual',
-                width = :w,
-                height = :h
-        """),
-            {
-                "sid": site_id,
-                "orig": body.image_url,
-                "attr": body.attribution_url,
-                "w": final_width,
-                "h": final_height,
-            },
-        )
+        # Check if a manual hero row already exists
+        existing = db.execute(
+            text(
+                "SELECT id FROM wiki_images WHERE site_id = :sid AND source_type = 'manual' AND filename = 'hero.webp'"
+            ),
+            {"sid": site_id},
+        ).fetchone()
+
+        if existing:
+            db.execute(
+                text(
+                    "UPDATE wiki_images SET original_url = :orig, commons_page_url = :attr, is_hero = true, width = :w, height = :h WHERE id = :id"
+                ),
+                {
+                    "id": existing[0],
+                    "orig": body.image_url,
+                    "attr": body.attribution_url,
+                    "w": final_width,
+                    "h": final_height,
+                },
+            )
+        else:
+            db.execute(
+                text("""
+                    INSERT INTO wiki_images (site_id, filename, original_url, commons_page_url, is_hero, source_type, width, height)
+                    VALUES (:sid, 'hero.webp', :orig, :attr, true, 'manual', :w, :h)
+                """),
+                {
+                    "sid": site_id,
+                    "orig": body.image_url,
+                    "attr": body.attribution_url,
+                    "w": final_width,
+                    "h": final_height,
+                },
+            )
 
         # Update thumbnail_url on unified_sites
         db.execute(
