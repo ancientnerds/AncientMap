@@ -9827,7 +9827,7 @@ body.hud-hidden .empire-borders-window {
   flex: 0 0 300px;
   scroll-snap-align: start;
   border-bottom: none;
-  zoom: 0.5;
+  zoom: 0.65;
 }
 
 .gallery-stories-list::-webkit-scrollbar {
