@@ -1383,5 +1383,5 @@ def generate_weekly_article(
 
 def should_generate_article() -> bool:
     """Check if it's time to generate a weekly article (Sunday evening)."""
-    # TEMP: force regeneration — revert after rebuild
-    return True
+    now = datetime.now(UTC)
+    return now.weekday() == 6 and now.hour >= 20  # Sunday 8 PM UTC
