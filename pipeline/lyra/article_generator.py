@@ -1239,7 +1239,8 @@ def generate_weekly_article(
     if week_override:
         week_start, week_end = week_override
     else:
-        week_start, week_end = _get_week_range()
+        # TEMP: use last week override — revert after
+        week_start, week_end = _get_week_range_override()
 
     with get_session() as session:
         existing = (
@@ -1383,5 +1384,13 @@ def generate_weekly_article(
 
 def should_generate_article() -> bool:
     """Check if it's time to generate a weekly article (Sunday evening)."""
-    now = datetime.now(UTC)
-    return now.weekday() == 6 and now.hour >= 20  # Sunday 8 PM UTC
+    # TEMP: force for last week — revert after
+    return True
+
+
+def _get_week_range_override():
+    """TEMP: return last week (March 30 - April 5)."""
+    return (
+        datetime(2026, 3, 30, 0, 0, 0, tzinfo=UTC),
+        datetime(2026, 4, 5, 23, 59, 59, tzinfo=UTC),
+    )
