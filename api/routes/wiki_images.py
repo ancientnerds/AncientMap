@@ -142,7 +142,7 @@ async def set_hero(
     except Exception as e:
         db.rollback()
         print(f"[set-hero] DB error: {e}", flush=True)
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}") from None
 
     return {"success": True, "path": thumb_path}
 
