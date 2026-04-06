@@ -1574,12 +1574,12 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 10px 12px;
+  gap: 4px;
+  padding: 5px 8px;
   background: rgba(0, 20, 25, 0.6);
   border: 1px solid var(--border-accent);
   color: var(--crt-600);
-  font-size: 11px;
+  font-size: 10px;
   cursor: pointer;
   transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
 }

@@ -321,24 +321,41 @@ function FilterPanel({
   // Proximity handlers
   const [locationError, setLocationError] = useState<string | null>(null)
 
-  // IP-based geolocation using ipwho.is
+  // IP-based geolocation using ipwho.is with geojs.io fallback
   const getLocationByIP = async () => {
+    // Try ipwho.is first
     try {
       const response = await fetch('https://ipwho.is/')
-      if (!response.ok) throw new Error('IP lookup failed')
-      const data = await response.json()
-      if (data.success && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
-        setCoordInput(formatCoordinate(data.longitude, data.latitude))
-        onProximityCenterChange([data.longitude, data.latitude])
-        setLocationError(null)
-      } else {
-        setLocationError('Could not determine location')
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
+          setCoordInput(formatCoordinate(data.longitude, data.latitude))
+          onProximityCenterChange([data.longitude, data.latitude])
+          setLocationError(null)
+          setIsGettingLocation(false)
+          return
+        }
       }
-    } catch {
-      setLocationError('Location lookup failed')
-    } finally {
-      setIsGettingLocation(false)
-    }
+    } catch { /* fall through to fallback */ }
+
+    // Fallback: geojs.io
+    try {
+      const response = await fetch('https://get.geojs.io/v1/ip/geo.json')
+      if (!response.ok) throw new Error()
+      const data = await response.json()
+      const lat = parseFloat(data.latitude)
+      const lng = parseFloat(data.longitude)
+      if (!isNaN(lat) && !isNaN(lng)) {
+        setCoordInput(formatCoordinate(lng, lat))
+        onProximityCenterChange([lng, lat])
+        setLocationError(null)
+        setIsGettingLocation(false)
+        return
+      }
+    } catch { /* fall through to error */ }
+
+    setLocationError('Location lookup failed')
+    setIsGettingLocation(false)
   }
 
   const handleUseMyLocation = () => {
