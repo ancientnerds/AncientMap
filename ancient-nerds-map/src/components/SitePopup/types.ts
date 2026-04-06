@@ -139,6 +139,7 @@ export interface HeroHeaderProps {
   title: string
   heroImageSrc?: string
   isLoadingImages?: boolean
+  isSettingHero?: boolean
   sourceInfo: { name: string; url?: string } | undefined
   sourceName: string
   sourceColor: string
@@ -273,6 +274,7 @@ export interface GalleryTabsProps {
   webcamCount: number
   isLoadingWebcams?: boolean
   isLoadingImages?: boolean
+  isSettingHero?: boolean
   isLoadingVideos?: boolean
   isLoadingMaps?: boolean
   isLoadingModels?: boolean
