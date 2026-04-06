@@ -9843,10 +9843,7 @@ body.hud-hidden .empire-borders-window {
   background: rgba(192, 32, 35, 0.3);
 }
 
-/* Clicked card: expand to full size */
-.gallery-stories-list .news-feed-item.expanded {
-  zoom: 1;
-}
+/* Clicked card: stay at thumbnail zoom to prevent layout jump */
 
 /* Gallery expanded: wrap into grid at full size */
 .popup-gallery-section.expanded .gallery-stories-list {
