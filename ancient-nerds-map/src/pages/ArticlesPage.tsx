@@ -406,6 +406,11 @@ function makeArticleComponents(
           </a>
         )
       }
+      // Web citation links — same superscript style as YouTube citations
+      const text = String(children)
+      if (/^\[\d+\]$/.test(text.trim())) {
+        return <a href={href} target="_blank" rel="noopener noreferrer" className="article-citation-link">{children}</a>
+      }
       return <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
     },
     h2: ({ children }) => {
