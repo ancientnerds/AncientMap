@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from api.auth import require_founder
+from api.services.jwt_auth import require_founder
 from pipeline.database import DiscordUser, get_db
 
 logger = logging.getLogger(__name__)
