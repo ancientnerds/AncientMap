@@ -145,7 +145,10 @@ def _parse_sources_from_content(content: str) -> list[dict]:
     """Extract sources list from journal content's ### Sources section."""
     import re
 
+    # Try both ### Sources and ## Sources headers
     idx = content.find("### Sources")
+    if idx == -1:
+        idx = content.find("## Sources")
     if idx == -1:
         return []
 

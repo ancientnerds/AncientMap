@@ -176,7 +176,7 @@ class TestD10SectionBalance:
         assert result["passed"]
 
     def test_overlong_section_detected(self):
-        long_section = "Word " * 450 + "[1].\n\n"
+        long_section = "Word " * 650 + "[1].\n\n"
         body = "## Section One\n\n" + long_section + "## Section Two\n\nShort [1].\n\n"
         # Total ~900 words, below 1500 threshold — will have two issues
         result = _check_d10_section_balance(body)

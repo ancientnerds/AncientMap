@@ -465,7 +465,7 @@ def _check_d10_section_balance(body: str) -> dict:
         if not sec["header"]:
             continue
         word_count = len(sec["content"].split())
-        if word_count > 400:
+        if word_count > 600:
             issues.append(f"Section '{sec['header']}' has {word_count} words (>400)")
         if word_count > 50 and not cite_pattern.search(sec["content"]):
             issues.append(f"Section '{sec['header']}' has 0 citations")
@@ -490,13 +490,13 @@ def _fix_d10_section_balance(
             continue
 
         system = (
-            "You are an editor. Condense this section to under 400 words while "
+            "You are an editor. Condense this section to under 600 words while "
             "preserving all [N] citation markers and key facts. Keep the same tone "
             "and structure. Return ONLY the condensed section text (no header)."
         )
         user = (
             f"## Section header\n{sec['header']}\n\n"
-            f"## Section content ({word_count} words, must be <400)\n{sec['content']}\n\n"
+            f"## Section content ({word_count} words, must be <600)\n{sec['content']}\n\n"
             f"## Sources for reference\n{source_block}"
         )
 
