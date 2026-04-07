@@ -1323,6 +1323,27 @@ def generate_weekly_article(
             "status": "done",
         }
 
+        # -- assess (quality convergence loop) --
+        _write_article_heartbeat(step_data, "assess", t0_total)
+        logger.info("Running quality assessment convergence loop")
+        t0 = time.time()
+        from pipeline.lyra.journal_assessor import assess_and_fix
+
+        body, assess_result = assess_and_fix(
+            body, unified_sources, week_start=week_start, settings=settings
+        )
+        step_data["assess"] = {
+            "count": assess_result.score,
+            "elapsed": round(time.time() - t0, 1),
+            "status": "done" if assess_result.passed else "partial",
+        }
+        logger.info(
+            "Assessment: %d/10 in %d iterations, %d fixes applied",
+            assess_result.score,
+            assess_result.iteration,
+            len(assess_result.fixes_applied),
+        )
+
         # -- polish --
         _write_article_heartbeat(step_data, "polish", t0_total)
         logger.info("Polishing article for coherence")
