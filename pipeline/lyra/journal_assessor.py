@@ -66,16 +66,17 @@ _MAX_TOKENS = 32768  # M2.7 supports 131K output, use 32K for assessor
 
 
 def _llm_call(system: str, user: str, settings: LyraSettings, max_tokens: int = 0) -> str:
-    """Make an LLM call via the unified call_api path (uses tool-use trick on MiniMax)."""
+    """Make an LLM call via the unified call_api path with timeout protection."""
     try:
         response = call_api(
             system=system,
             messages=[{"role": "user", "content": user}],
             max_tokens=max_tokens or _MAX_TOKENS,
             temperature=0.0,
+            timeout=120.0,  # 2 min max per call
         )
         return response.text or ""
-    except LyraAPIError as e:
+    except (LyraAPIError, Exception) as e:
         logger.warning("[assessor] LLM call failed: %s", e)
         return ""
 
@@ -639,7 +640,7 @@ def assess_and_fix(
     sources: list[dict],
     week_start: datetime | None = None,
     settings: LyraSettings | None = None,
-    max_iterations: int = 5,
+    max_iterations: int = 2,
 ) -> tuple[str, AssessmentResult]:
     """Assess journal quality and fix issues. Returns (fixed_body, result).
 
