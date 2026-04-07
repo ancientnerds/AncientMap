@@ -188,15 +188,6 @@ jobs:
             done
             echo "==> Migrations done."
 
-            # One-shot hero scripts
-            if [ -f scripts/set_hero_gobekli.sh ]; then
-              echo "==> Running hero script..."
-              bash scripts/set_hero_gobekli.sh
-              rm -f scripts/set_hero_gobekli.sh
-              git add -A scripts/set_hero_gobekli.sh 2>/dev/null || true
-              echo "    Hero script done."
-            fi
-
             # Update nginx config if changed
             if echo "$CHANGED" | grep -q "^ancientnerds-nginx-config"; then
               echo "==> Updating nginx config..."
