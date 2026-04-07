@@ -996,15 +996,14 @@ def assess_and_fix(
                 "[assessor] D3: fixing %d academic citations", len(d3["academic_citations"])
             )
 
-        # D2: Citation coverage
+        # D2: Citation coverage (check only — fixing is destructive, LLM injects garbage)
         d2 = _check_d2_citation_coverage(best_body, sources)
         dims["D2_citation_coverage"] = d2["passed"]
         if not d2["passed"]:
-            best_body = _fix_d2_citation_coverage(
-                best_body, sources, d2["uncited_paragraphs"], settings
+            logger.info(
+                "[assessor] D2: %d uncited paragraphs (check only, no fix)",
+                len(d2["uncited_paragraphs"]),
             )
-            all_fixes.append({"dimension": "D2", "uncited": len(d2["uncited_paragraphs"])})
-            logger.info("[assessor] D2: re-citing %d paragraphs", len(d2["uncited_paragraphs"]))
 
         # D10: Section balance
         d10 = _check_d10_section_balance(best_body)
