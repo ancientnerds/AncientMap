@@ -62,7 +62,59 @@ SPELLING_FIXES = {
     "Epipalaeolithic": "Epipaleolithic",
 }
 
-_MAX_TOKENS = 32768  # M2.7 supports 131K output, use 32K for assessor
+_MAX_TOKENS = 16384
+
+# JSON schema for the combined D1+D4+D6+D9 assessment (enforced via tool-use trick)
+_ASSESS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "d1_proper_nouns": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "find": {"type": "string"},
+                    "replace": {"type": "string"},
+                    "reason": {"type": "string"},
+                },
+                "required": ["find", "replace"],
+            },
+        },
+        "d4_screenshots": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "image_alt": {"type": "string"},
+                    "correct_position": {"type": "string"},
+                    "reason": {"type": "string"},
+                },
+                "required": ["image_alt"],
+            },
+        },
+        "d6_spelling": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "find": {"type": "string"},
+                    "replace": {"type": "string"},
+                },
+                "required": ["find", "replace"],
+            },
+        },
+        "d9_summary": {
+            "type": "object",
+            "properties": {
+                "accurate": {"type": "boolean"},
+                "issues": {"type": "array", "items": {"type": "string"}},
+                "corrected_summary": {"type": "string"},
+            },
+            "required": ["accurate"],
+        },
+    },
+    "required": ["d1_proper_nouns", "d4_screenshots", "d6_spelling", "d9_summary"],
+}
 
 
 def _llm_call(system: str, user: str, settings: LyraSettings, max_tokens: int = 0) -> str:
@@ -532,7 +584,28 @@ def _check_d1_d4_d6_d9(
 
     user = f"## Journal Body\n{body}\n\n## Source List\n{source_block}"
 
-    raw = _llm_call(prompt, user, settings)
+    # Use structured output (tool-use trick on MiniMax) for reliable JSON
+    try:
+        response = call_api(
+            system=prompt,
+            messages=[{"role": "user", "content": user}],
+            max_tokens=_MAX_TOKENS,
+            temperature=0.0,
+            timeout=180.0,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "JournalAssessment",
+                    "strict": True,
+                    "schema": _ASSESS_SCHEMA,
+                },
+            },
+        )
+        raw = response.text or ""
+    except (LyraAPIError, Exception) as e:
+        logger.warning("[assessor] D1+D4+D6+D9 LLM call failed: %s", e)
+        raw = ""
+
     parsed = _parse_json(raw)
     if not isinstance(parsed, dict):
         logger.warning("[assessor] D1+D4+D6+D9: LLM returned non-dict, treating as pass")
