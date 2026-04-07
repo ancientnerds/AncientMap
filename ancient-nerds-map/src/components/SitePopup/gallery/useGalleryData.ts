@@ -42,6 +42,9 @@ export function useGalleryData({
   // Hero image override (set when user picks a new hero via lightbox)
   const [heroImageOverride, setHeroImageOverride] = useState<string | null>(null)
 
+  // Excluded image URLs (soft-deleted, should be hidden from all tabs)
+  const [excludedUrls, setExcludedUrls] = useState<string[]>([])
+
   useEffect(() => {
     if (!siteId || isOffline) return
     setIsLoadingWikiImages(true)
@@ -58,6 +61,7 @@ export function useGalleryData({
           license: img.license,
           source: 'wikipedia' as const,
         })))
+        setExcludedUrls(result.excludedUrls || [])
       })
       .catch(() => setWikiImages([]))
       .finally(() => setIsLoadingWikiImages(false))
@@ -112,7 +116,7 @@ export function useGalleryData({
   )
 
   const photoItems = useMemo(
-    () => dedupePhotos(wikiItems, tiered.grouped.photos),
+    () => dedupePhotos(wikiItems, tiered.grouped.photos, excludedUrls),
     [wikiItems, tiered.grouped.photos]
   )
 

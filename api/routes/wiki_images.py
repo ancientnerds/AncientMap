@@ -262,4 +262,13 @@ async def get_wiki_images(site_id: str, db: Session = Depends(get_db)):
             }
         )
 
-    return images
+    # Also return excluded URLs so frontend can filter connector results
+    excluded_rows = db.execute(
+        text(
+            "SELECT original_url FROM wiki_images WHERE site_id = :site_id AND is_excluded = true"
+        ),
+        {"site_id": site_id},
+    )
+    excluded = [r[0] for r in excluded_rows]
+
+    return {"images": images, "excluded": excluded}

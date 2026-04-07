@@ -30,6 +30,7 @@ export interface ImageResult {
 export interface FetchSiteImagesResult {
   wikipedia: ImageResult[]
   europeana: ImageResult[]
+  excludedUrls: string[]
 }
 
 // =============================================================================
@@ -44,13 +45,15 @@ const EXCLUDED_EXT = /\.svg$/i
 // =============================================================================
 
 /** Fetch locally cached wiki images for a site from the API. */
-async function fetchLocalImages(siteId: string): Promise<ImageResult[] | null> {
+async function fetchLocalImages(siteId: string): Promise<{ images: ImageResult[]; excluded: string[] } | null> {
   try {
     const resp = await fetch(`/api/wiki-images/${siteId}`)
     if (!resp.ok) return null
-    const images = await resp.json()
-    if (!images.length) return null
-    return images.map((img: {
+    const data = await resp.json()
+    const imageList = data.images || data  // handle both new { images, excluded } and old array format
+    const excluded: string[] = data.excluded || []
+    if (!imageList.length) return excluded.length > 0 ? { images: [], excluded } : null
+    const images = imageList.map((img: {
       url: string
       thumb?: string
       title?: string
@@ -74,6 +77,7 @@ async function fetchLocalImages(siteId: string): Promise<ImageResult[] | null> {
       source: 'local' as const,
       isLeadImage: img.isLead || img.isHero || false,
     }))
+    return { images, excluded }
   } catch {
     return null
   }
@@ -99,9 +103,9 @@ export async function fetchSiteImages(
     // Check local images first (cached from wiki_images table via API)
     if (options.siteId) {
       const local = await fetchLocalImages(options.siteId)
-      if (local && local.length > 0) {
-        local.sort((a, b) => (b.isLeadImage ? 1 : 0) - (a.isLeadImage ? 1 : 0))
-        return { wikipedia: local, europeana: [] }
+      if (local) {
+        local.images.sort((a, b) => (b.isLeadImage ? 1 : 0) - (a.isLeadImage ? 1 : 0))
+        return { wikipedia: local.images, europeana: [], excludedUrls: local.excluded }
       }
     }
 
@@ -118,10 +122,10 @@ export async function fetchSiteImages(
     // Lead image first, then the rest
     images.sort((a, b) => (b.isLeadImage ? 1 : 0) - (a.isLeadImage ? 1 : 0))
 
-    return { wikipedia: images, europeana: [] }
+    return { wikipedia: images, europeana: [], excludedUrls: [] }
   } catch (err) {
     console.warn('[imageService] Failed:', err)
-    return { wikipedia: [], europeana: [] }
+    return { wikipedia: [], europeana: [], excludedUrls: [] }
   }
 }
 

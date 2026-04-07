@@ -8,14 +8,21 @@ import type { GroupedGalleryItems } from '../../../services/connectors'
  */
 export function dedupePhotos(
   priorityItems: UnifiedGalleryItem[],
-  connectorPhotos: UnifiedGalleryItem[]
+  connectorPhotos: UnifiedGalleryItem[],
+  excludedUrls: string[] = []
 ): UnifiedGalleryItem[] {
   const titles = new Set(priorityItems.map(p => p.title?.toLowerCase()).filter(Boolean))
   const urls = new Set(priorityItems.map(p => p.full?.toLowerCase()).filter(Boolean))
+  const excluded = new Set(excludedUrls.map(u => u.toLowerCase()))
 
   const deduped = connectorPhotos.filter(p => {
     if (p.title && titles.has(p.title.toLowerCase())) return false
     if (p.full && urls.has(p.full.toLowerCase())) return false
+    // Check excluded URLs against both full URL and original data
+    if (p.full && excluded.has(p.full.toLowerCase())) return false
+    const orig = p.original as Record<string, unknown>
+    const origUrl = (orig?.sourceUrl as string) || (orig?.webUrl as string) || ''
+    if (origUrl && excluded.has(origUrl.toLowerCase())) return false
     return true
   })
 
