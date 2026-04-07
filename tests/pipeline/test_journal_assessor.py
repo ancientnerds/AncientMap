@@ -84,17 +84,18 @@ class TestD8WeekDate:
 
 class TestD2CitationCoverage:
     def test_uncited_paragraph_detected(self):
-        body = (
-            "Short para.\n\n"
+        # Need 4+ uncited paragraphs to fail (up to 3 allowed)
+        long_para = (
             "This is a long paragraph with more than three hundred characters that "
             "makes factual claims about archaeological sites without any citation "
             "markers anywhere in the text. It describes excavation findings from "
             "multiple seasons of fieldwork at a prehistoric settlement where "
             "researchers uncovered artifacts dating back thousands of years."
         )
+        body = "\n\n".join([long_para] * 4)
         result = _check_d2_citation_coverage(body, [{"citation": 1}])
         assert not result["passed"]
-        assert len(result["uncited_paragraphs"]) == 1
+        assert len(result["uncited_paragraphs"]) == 4
 
     def test_cited_paragraph_passes(self):
         body = (

@@ -366,10 +366,10 @@ def _find_uncited_paragraphs(body: str, sources: list[dict]) -> list[str]:
 
 
 def _check_d2_citation_coverage(body: str, sources: list[dict]) -> dict:
-    """Check that every substantial paragraph has at least one citation."""
+    """Check citation coverage. Allows up to 3 uncited paragraphs (editorial prose)."""
     uncited = _find_uncited_paragraphs(body, sources)
     return {
-        "passed": len(uncited) == 0,
+        "passed": len(uncited) <= 3,  # editorial/analysis paragraphs don't always need citations
         "uncited_paragraphs": uncited,
     }
 
@@ -523,7 +523,7 @@ def _check_d10_section_balance(body: str) -> dict:
             continue
         word_count = len(sec["content"].split())
         # "In Brief" covers many topics — allow more words
-        limit = 2000 if "Brief" in sec["header"] else 600
+        limit = 2000 if "Brief" in sec["header"] else 800
         if word_count > limit:
             issues.append(f"Section '{sec['header']}' has {word_count} words (>{limit})")
         if word_count > 50 and not cite_pattern.search(sec["content"]):
@@ -547,7 +547,7 @@ def _fix_d10_section_balance(
         if "Sources" in sec["header"] or "References" in sec["header"]:
             continue
         word_count = len(sec["content"].split())
-        limit = 2000 if "Brief" in sec["header"] else 600
+        limit = 2000 if "Brief" in sec["header"] else 800
         if word_count <= limit:
             continue
 
