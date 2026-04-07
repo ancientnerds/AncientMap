@@ -1985,16 +1985,16 @@ function AppContent() {
                 updateSelection([id])
               }
             }}
-            onSiteUpdate={async (id, updated) => {
-              // Immediately update local state for instant feedback
+            onSiteUpdate={(id, updated) => {
+              // Update sites array so globe dots use fresh data
               setSites(prev => prev.map(s => s.id === id ? updated : s))
-              // Also refresh from API to ensure persistence
-              try {
-                const freshData = await fetchSites()
-                setSites(freshData)
-              } catch {
-                // Refresh from API failed, local state is still updated
-              }
+              // Update the popup's stored site so close/reopen keeps the change
+              setOpenPopups(prev => {
+                const next = new Map(prev)
+                const existing = next.get(id)
+                if (existing) next.set(id, { ...existing, site: updated })
+                return next
+              })
             }}
             onAskLyra={(ctxType, ctxId, ctxYear) => {
               setLyraChatContext({ type: ctxType, id: ctxId, year: ctxYear })
