@@ -62,17 +62,16 @@ SPELLING_FIXES = {
     "Epipalaeolithic": "Epipaleolithic",
 }
 
-_MAX_TOKENS_ASSESS = 8192
-_MAX_TOKENS_FIX = 8192
+_MAX_TOKENS = 32768  # M2.7 supports 131K output, use 32K for assessor
 
 
-def _llm_call(system: str, user: str, settings: LyraSettings) -> str:
+def _llm_call(system: str, user: str, settings: LyraSettings, max_tokens: int = 0) -> str:
     """Make an LLM call via the unified call_api path (uses tool-use trick on MiniMax)."""
     try:
         response = call_api(
             system=system,
             messages=[{"role": "user", "content": user}],
-            max_tokens=_MAX_TOKENS_FIX,
+            max_tokens=max_tokens or _MAX_TOKENS,
             temperature=0.0,
         )
         return response.text or ""
@@ -640,7 +639,7 @@ def assess_and_fix(
     sources: list[dict],
     week_start: datetime | None = None,
     settings: LyraSettings | None = None,
-    max_iterations: int = 3,
+    max_iterations: int = 5,
 ) -> tuple[str, AssessmentResult]:
     """Assess journal quality and fix issues. Returns (fixed_body, result).
 
